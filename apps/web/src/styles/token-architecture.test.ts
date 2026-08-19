@@ -257,6 +257,58 @@ describe.each(FAMILIES)('the [data-surface="%s"] rule', (family) => {
   });
 });
 
+describe('the typeface is chosen, shipped, and legible in a table', () => {
+  it('names a real face and self-hosts it', () => {
+    // **Until ADR-0097 this product had never chosen a typeface.** There was no `@font-face`
+    // anywhere and no font file in the repository; `--font-sans` merely NAMED 'Inter' first in
+    // a fallback stack, so the product's face was whatever each reader's machine happened to
+    // have — and every width measurement here was taken in whichever face resolved on the CI
+    // runner. A value that looked decided, was cited, and had never been set.
+    const css = readGlobalsCss();
+    expect(css).toMatch(/@font-face\s*\{/);
+    expect(themeTokens(':root').get('--font-sans')).toContain('Space Grotesk');
+  });
+
+  it('serves the face from this origin, because the CSP allows no other', () => {
+    // Not a preference. `docker-compose.yml`'s policy is `font-src 'self'` (ADR-0074), so a
+    // Google Fonts URL fails CLOSED and SILENTLY — before first paint, in enforce mode only,
+    // on the deployed origin only. The symptom is the fallback stack, which looks like a
+    // design choice rather than a blocked request.
+    const css = readGlobalsCss();
+    const sources = [...css.matchAll(/@font-face[^}]*?src:\s*url\(([^)]*)\)/gs)].map(
+      (match) => match[1]!,
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) {
+      expect(source, `${source} is not same-origin`).not.toMatch(/^['"]?https?:/);
+    }
+  });
+
+  it('sets tabular figures wherever a number is data', () => {
+    // **Load-bearing for THIS face rather than a refinement.** Space Grotesk's digits are
+    // proportional by default and dramatically so: its `1` is 404 units against the `0`'s 638,
+    // a 58% difference. Measured with fontTools before the face was committed. Without
+    // `tabular-nums` a column of dates does not line up and a duration ticking from `9 d` to
+    // `10 d` shifts everything after it — which reads as a rendering bug, not a font setting.
+    //
+    // This gate exists because the next person to change the typeface will not know that, and
+    // the failure is quiet: the columns simply stop aligning.
+    const css = readGlobalsCss();
+    expect(css).toMatch(/font-variant-numeric:\s*tabular-nums/);
+    const base = blockBody('@layer base');
+    expect(base, 'table cells do not opt into tabular figures').toMatch(/th,\s*\n?\s*td,/);
+  });
+
+  it('does not force tabular figures on running text', () => {
+    // The other half, and the reason the rule is scoped rather than global: the even spacing
+    // that aligns a column reads as gappy in a sentence. A `body { font-variant-numeric }`
+    // would pass the assertion above and be the wrong answer.
+    const base = blockBody('@layer base');
+    const body = /body\s*\{([^}]*)\}/.exec(base)?.[1] ?? '';
+    expect(body).not.toMatch(/font-variant-numeric/);
+  });
+});
+
 describe('the auth scope earns its keep', () => {
   /** Perceptual distance between two OKLCH colours — ΔL plus the chroma vector difference. */
   function oklchDistance(a: string, b: string): number | null {
