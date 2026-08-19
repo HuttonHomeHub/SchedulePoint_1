@@ -8,8 +8,16 @@ import type { ResourceStripPalette, TsldPalette, WbsBandPalette } from './paint'
  * `--color-*` custom properties off the document root; call again on a theme change to
  * repaint with the new values. Falls back to sensible values when the DOM/tokens are
  * unavailable (e.g. jsdom in unit tests).
+ *
+ * **`root` is REQUIRED, and that is the guard** (ADR-0097 Landing E). It defaulted to
+ * `document.documentElement` and every one of the nine production call sites took the default — so
+ * all 86 token reads below resolved against the PAGE, on a ground that is not the page. A default
+ * makes that failure silent: the diagram paints plausible colours and nothing anywhere reports it.
+ * Removing the default turns a missed call site into a compile error, which is the ADR-0070
+ * `hoursPerDay` precedent adopted for the same class of bug — a value that is wrong rather than
+ * absent, and therefore invisible.
  */
-export function resolveTsldPalette(root: Element = document.documentElement): TsldPalette {
+export function resolveTsldPalette(root: Element): TsldPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -109,7 +117,7 @@ export interface PrintPalette extends TsldPalette {
  * this is one of the places that needs it back** — paper wants light whatever the screen is doing,
  * and the trick is recorded here rather than left to be rediscovered.
  */
-export function resolvePrintPalette(root: Element = document.documentElement): PrintPalette {
+export function resolvePrintPalette(root: Element): PrintPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -170,9 +178,7 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
  * (Canvas 2D `fillStyle` can't take a `var()`). Falls back to sensible values when the DOM/tokens are
  * unavailable (jsdom in unit tests).
  */
-export function resolveResourceStripPalette(
-  root: Element = document.documentElement,
-): ResourceStripPalette {
+export function resolveResourceStripPalette(root: Element): ResourceStripPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -194,7 +200,7 @@ export function resolveResourceStripPalette(
  * chart tokens deterministically; `neutral` is the muted "uncomputed / ungrouped" colour. Call again on
  * a theme change to repaint. Falls back to sensible values when the DOM/tokens are unavailable (jsdom).
  */
-export function resolveLensPalette(root: Element = document.documentElement): LensPalette {
+export function resolveLensPalette(root: Element): LensPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -298,7 +304,7 @@ export function lensLegendVarPalette(): LensPalette {
  * not read as the same kind of object. It is the muted token rather than a tint of the primary,
  * so the difference survives a theme switch instead of depending on one theme's contrast.
  */
-export function resolveWbsBandPalette(root: Element = document.documentElement): WbsBandPalette {
+export function resolveWbsBandPalette(root: Element): WbsBandPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -321,8 +327,6 @@ export function resolveWbsBandPalette(root: Element = document.documentElement):
  * had stopped using. It used to clear a `.dark` class first — see {@link resolvePrintPalette} for
  * why that is gone and when it would need to come back.
  */
-export function resolvePrintWbsBandPalette(
-  root: Element = document.documentElement,
-): WbsBandPalette {
+export function resolvePrintWbsBandPalette(root: Element): WbsBandPalette {
   return resolveWbsBandPalette(root);
 }

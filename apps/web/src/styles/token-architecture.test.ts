@@ -307,6 +307,59 @@ describe.each(THEME_SELECTORS)('%s declares complete surface families', (selecto
   });
 });
 
+/**
+ * **The `canvas` scope, which is deliberately NOT in `FAMILIES`** (ADR-0097 Landing E, L1).
+ *
+ * The other four scopes rebind onto their own `--<family>-*` value set, and the gate above asserts
+ * that prefix. `canvas` cannot use one, and the reason is a genuine collision rather than a
+ * shortcut: `--canvas` and `--canvas-band` already exist as the **PLOT pack**, are deliberately
+ * exposed in `@theme inline` so `bg-canvas` compiles and the painter can read
+ * `--color-canvas-band`, and the sweep at "no family leaks into @theme inline" asserts that
+ * `--color-<family>-` is ABSENT. Adding `canvas` there would make two assertions in this file
+ * contradict each other.
+ *
+ * So at L1 the scope rebinds every closure name onto the **page's** values, plus `--background`
+ * onto the ground the container already painted. That is byte-identical arrival by construction:
+ * the painter reads the same numbers it read yesterday, and only the element it reads them from
+ * has moved. The values are L4-1, in their own commit, so a reader can see which change moved a
+ * colour — and that is when the scope earns a value set of its own and joins `FAMILIES`.
+ *
+ * Completeness is still asserted, because it is the property that matters and it is independent of
+ * where the values come from: no pair a compiled utility can composite may be split across two
+ * scopes, and the ADR-0092 dock, the create popover and the bulk-selection bar are all DOM inside
+ * this container.
+ */
+describe("the [data-surface='canvas'] rule", () => {
+  const rebinds = declarations(blockBody("[data-surface='canvas']"));
+
+  it('rebinds exactly the closure, all 31 of it', () => {
+    expect([...rebinds.keys()].sort()).toEqual([...REBOUND_NAMES].sort());
+  });
+
+  it('reads from the page, except the ground, which reads the plot pack', () => {
+    for (const [name, value] of rebinds) {
+      if (name === '--background') {
+        // The one binding that is not a pass-through, and the whole point of the scope: inside it
+        // `bg-background` IS the diagram's ground, which is what makes the container's `bg-canvas`
+        // redundant rather than merely duplicated.
+        expect(value, 'the ground must be the plot pack, not the page').toBe('var(--canvas)');
+        continue;
+      }
+      expect(value, `${name} should pass the page value through at L1`).toMatch(
+        /^var\(--page-[a-z-]+\)$/,
+      );
+    }
+  });
+
+  it('does not shadow a name it fails to rebind', () => {
+    // The trap this scope exists to close, asserted from the other direction: a name the block
+    // omits keeps whatever `:root` gave it, which for a diagram ink means a value validated
+    // against `--background` painted on a ground that is not `--background`. Measured at 1.02:1
+    // today, so nobody could see it — which is why it is a gate and not a review note.
+    expect(rebinds.size).toBe(REBOUND_NAMES.length);
+  });
+});
+
 describe.each(FAMILIES)('the [data-surface="%s"] rule', (family) => {
   const rebinds = declarations(blockBody(`[data-surface='${family}']`));
 

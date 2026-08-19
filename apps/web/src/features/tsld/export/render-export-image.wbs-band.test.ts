@@ -81,7 +81,7 @@ function input(over: Partial<RenderExportImageInput> = {}): RenderExportImageInp
     size: { width: 400, height: 300 },
     dpr: DPR,
     topBand: TOP_BAND,
-    palette: resolvePrintPalette(),
+    palette: resolvePrintPalette(document.documentElement),
     scaledToFit: false,
     meta: { planName: 'North Tower', dataDate: '2026-01-01', generatedAtIso: '2026-07-30' },
     ...over,

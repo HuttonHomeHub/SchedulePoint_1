@@ -247,7 +247,18 @@ be — a check that only ever reports faults reads as fault-finding rather than 
   the change is genuinely the argument at each call site plus the `<Surface>` wrapper, exactly as
   condition 5 claims, with no signature churn.
 
-  **The count was wrong and is corrected here: nine production call sites, not six.** The first pass
+  **And the resolver count was wrong too — SIX, not five — which is worse, because it was
+  re-verified twice.** §1.2's condition 4 says five and names them; the re-verification block below
+  re-derived five and called the claim accurate. `resolvePrintWbsBandPalette` (`palette.ts:330`) is
+  a sixth, and it is **also on the export path**. It was found by the compiler, not by either read:
+  removing the defaults turned every unpassed call site into a type error, and it appeared in the
+  list. Both reads had grepped for the five names they already believed in — which finds exactly
+  what it is looking for and nothing else. That is the ADR-0076 Class 3 shape inside the check
+  written to prevent it, and the instrument that caught it is the one this landing adopts as its
+  guard.
+
+  **The count was wrong and is corrected here: nine production call sites, not six** (eleven with
+  the sixth resolver's two). The first pass
   listed `TsldPanel.tsx:1081,1086` and `TsldCanvas.tsx:669,687,1555,1559`, and missed
   `TsldCanvas.tsx:675,1558` (`resolveResourceStripPalette`, both of them) and
   `toolbar/commands/use-diagram-image.ts:103` (`resolvePrintPalette`). The last is the one that

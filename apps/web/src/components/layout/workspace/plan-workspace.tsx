@@ -1,6 +1,8 @@
 import { ToolbarPlanWorkspace } from './plan-workspace-toolbar';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 
+import { CanvasSurfaceProvider } from '@/features/tsld/render/canvas-surface';
+
 /**
  * The plan workspace surface.
  *
@@ -20,5 +22,16 @@ export function PlanWorkspace({
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
 }): React.ReactElement {
-  return <ToolbarPlanWorkspace model={model} plan={plan} />;
+  // **`CanvasSurfaceProvider` sits HERE and not in `plan-workspace-toolbar.tsx`** (ADR-0097
+  // Landing E). The toolbar file's root `<div>` is the obvious home and is the wrong one:
+  // `useTsldToolbarContext` is called at `plan-workspace-toolbar.tsx:282`, in
+  // `ToolbarPlanWorkspace`'s OWN body, and a provider rendered in that component's JSX does not
+  // cover a hook called in the same component. That hook is what reaches `resolvePrintPalette` —
+  // the export path — so getting this wrong would leave a delivered PDF painted in page colours
+  // with every screen looking correct.
+  return (
+    <CanvasSurfaceProvider>
+      <ToolbarPlanWorkspace model={model} plan={plan} />
+    </CanvasSurfaceProvider>
+  );
 }

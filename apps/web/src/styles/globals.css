@@ -794,6 +794,75 @@
 }
 
 /* ------------------------------------------------------------------------- */
+/* The DIAGRAM's scope (ADR-0097 Landing E).                                  */
+/*                                                                            */
+/* ADR-0055's original defect, surviving in the one place ADR-0055 never      */
+/* reached. `render/palette.ts` makes 86 token reads, every one of them       */
+/* against `:root` — so a bar's fill is the PAGE's `--primary`, painted on a  */
+/* ground that is not the page, and the contrast matrix had no canvas pair at */
+/* all. The painter does not change a line: only the element handed to        */
+/* `getComputedStyle` does.                                                    */
+/*                                                                            */
+/* **It arrives byte-identical, deliberately.** Every name below binds to the */
+/* same source `:root` gives it, and `--background` binds to `--canvas`, which */
+/* is what the diagram container already painted as `bg-canvas`. So this      */
+/* commit is a seam and not a repaint; the VALUES are L4-1, with their own    */
+/* diff, so a reader can see which change moved a colour. The live defect     */
+/* those values fix is `--warning` against `--destructive` at **1.34:1** —    */
+/* near-critical against critical, the two states a planner scans a wall of   */
+/* bars to tell apart. (`diagnosis.md` §3.3 leads on 1.27:1; that was a       */
+/* Light-theme figure and went with its theme.)                               */
+/*                                                                            */
+/* All 31 closure names, not 18: a scope is complete when no pair a compiled  */
+/* utility can composite is split across two scopes, and the ADR-0092 dock,   */
+/* the create popover and the bulk-selection bar are all DOM inside this      */
+/* container, every one of them able to render a `destructive` or `secondary` */
+/* button. `token-architecture.test.ts` asserts the set, so a missing member  */
+/* fails rather than lurking.                                                  */
+/* ------------------------------------------------------------------------- */
+[data-surface='canvas'] {
+  /* The ground. `--canvas` rather than `--page-background` — this is the one
+     binding that is not a straight pass-through, and it is what makes the
+     container's `bg-background` inside the scope identical to the `bg-canvas`
+     it replaces. Measured 1.02:1 against the page today, i.e. two greys nobody
+     can tell apart, which is exactly why the trap has never shown. */
+  --background: var(--canvas);
+  --foreground: var(--page-foreground);
+  --muted: var(--page-muted);
+  --muted-foreground: var(--page-muted-foreground);
+  --border: var(--page-border);
+  --input: var(--page-input);
+  --accent: var(--page-accent);
+  --accent-foreground: var(--page-accent-foreground);
+  --primary: var(--page-primary);
+  --primary-foreground: var(--page-primary-foreground);
+  --field: var(--page-field);
+  --field-foreground: var(--page-field-foreground);
+  --field-muted-foreground: var(--page-field-muted-foreground);
+  --destructive-text: var(--page-destructive-text);
+  --success-text: var(--page-success-text);
+  --warning-text: var(--page-warning-text);
+  --info-text: var(--page-info-text);
+  --ring: var(--page-ring);
+  /* The closure members. Not optional for this scope and the argument is not
+     "a status fill never appears on a diagram" — the dock, the create popover
+     and the selection bar are DOM inside this container. */
+  --destructive: var(--page-destructive);
+  --destructive-foreground: var(--page-destructive-foreground);
+  --destructive-hover: var(--page-destructive-hover);
+  --secondary: var(--page-secondary);
+  --secondary-foreground: var(--page-secondary-foreground);
+  --success: var(--page-success);
+  --success-foreground: var(--page-success-foreground);
+  --warning: var(--page-warning);
+  --warning-foreground: var(--page-warning-foreground);
+  --info: var(--page-info);
+  --info-foreground: var(--page-info-foreground);
+  --primary-hover: var(--page-primary-hover);
+  --secondary-hover: var(--page-secondary-hover);
+}
+
+/* ------------------------------------------------------------------------- */
 /* Map tokens into Tailwind's theme so utilities (bg-*, text-*, etc.) resolve */
 /* ------------------------------------------------------------------------- */
 @theme inline {

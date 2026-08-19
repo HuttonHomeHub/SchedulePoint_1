@@ -16,8 +16,8 @@ import { blockBody, declarations, THEME_SELECTORS, themeTokens } from '@/test/cs
  * checked the moment they add a value, without anyone remembering to extend this file.
  */
 
-type Scope = 'page' | 'chrome' | 'panel' | 'brand' | 'auth';
-const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand', 'auth'];
+type Scope = 'page' | 'chrome' | 'panel' | 'brand' | 'auth' | 'canvas';
+const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand', 'auth', 'canvas'];
 
 /**
  * Resolve the tokens a component would actually see, given a theme and a surface scope —
