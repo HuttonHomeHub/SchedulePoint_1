@@ -103,6 +103,74 @@ object identity re-seeds its forms on every recalculation anywhere in the plan. 
 re-seed on `(activityId, version)`. Resources/Cost tabs must lazy-mount, not fetch on every
 canvas click.
 
+### A11. The rail's letter shortcuts are a WCAG failure as specified (accessibility)
+
+`V A L M N` as bare accelerators with no focus scoping is **SC 2.1.4 Character Key
+Shortcuts (A)**. Typing "a" in the drawer's Name field, a Duration input or the Filter box
+would re-arm the Add tool and eat the keystroke. This app has shipped this exact defect
+once — ADR-0079's Escape handler was a `window` listener that fired regardless of focus,
+and lost a planner the Link tool mid-search. Single letters are strictly worse than Escape.
+**Required: the same target guard, plus either a remap or restriction to stage focus.**
+
+### A12. The trailing rail is Tab-order-last after an entire Gantt grid (accessibility)
+
+DOM-order-matches-visual (A4) fixes the _sequencing_ criterion but creates an operability
+problem it does not solve: a keyboard planner reaches the five tools only after the toolbar,
+~15 drawer fields and a `treegrid` that can hold hundreds of virtualized rows. Two
+mitigations, both required: the rail gets **its own labelled landmark** so AT can jump
+straight to it, and **arming a tool moves focus to the stage** rather than stranding it at
+the far right. The guarded shortcuts stop being a convenience and become the primary route.
+
+### A13. Magnification loses the armed-tool state (accessibility)
+
+At 200–400 % a magnifier user viewing the grid on the left cannot see the rail on the
+right, so discovering which tool is live means panning the full viewport after every mode
+change. ADR-0064 already built the fix for exactly this — the **mode statement band in the
+chrome above the scene**. Graphite keeps it; it is not redundant with the rail's
+`aria-pressed`.
+
+### A14. The status bar will race its own announcements (accessibility)
+
+`announcer.tsx` is a **single shared app-wide polite region** that clears-then-sets on an
+animation frame. Wire the whole status bar to it and one recalculation — which changes
+finish, critical count and save state together — drops at least one message silently. Only
+**transitions that need proactive notice** announce; facts a reader can look at do not; and
+where several must change together they compose into **one** sentence through **one**
+`announce()`.
+
+### A15. The Gantt split is a fork in component shape, not a styling choice (accessibility)
+
+Today the Gantt is one `role="treegrid"` whose rows already span grid and timeline. Split
+into two panes it must be either **one row spanning both via CSS Grid** or an explicit
+`aria-owns`/`aria-rowindex` association. Two visually-aligned tables would break row/bar
+correspondence the moment they scroll a row apart. **Decide before either is built.** The
+splitter is an APG window-splitter — `role="separator"`, `aria-valuenow`, arrow-key
+resize — not a mouse-only handle (SC 2.1.1).
+
+### A16. The drawer's Escape, focus and empty state are all unspecified (accessibility)
+
+There is **no existing non-modal persistent panel in this codebase** — `Dialog` and `Sheet`
+are both native `<dialog>` + `showModal()`. So the drawer is a genuinely new pattern and
+inherits none of the modal's free protections. Required commitments: Escape becomes an
+explicit rung in ADR-0080's existing ladder using ADR-0079's target guard, never a new
+listener; **focus stays on the stage** on selection change (moving it into the drawer would
+yank focus on every chain-nav keystroke), with the subject change carried by the existing
+`describeActivity` announcement rather than a second competing one; an explicit **empty
+state**, never stale data from the last selection; ADR-0093's exact plural phrasing when
+N > 1; and below `lg`, where it must overlay, it becomes **modal** — reuse `Sheet`, do not
+invent a second overlay contract.
+
+### A17. The warm hue is already doing six jobs (accessibility)
+
+Critical fill, today, conflict badge, near-critical fill, over-allocation badge,
+lane-overlap badge — disambiguated **only by shape**, at 7–9 px badge sizes. The proposal
+is a **two-tone split within warm**: red-orange for "the schedule is in trouble" (critical,
+today, conflict), amber for "resource/placement caution" (near-critical, over-allocation,
+lane-overlap) — as a **redundant** cue on top of the shapes, which stay load-bearing. And a
+hard rule: the solid/dashed **outline cue must survive any repaint**. It is the only thing
+making a 1.5–1.70:1 lightness-only separation satisfy SC 1.4.1 at all. A tidier borderless
+bar silently reopens the defect M1 fixed.
+
 ---
 
 ## B. The gate that comes before everything
@@ -182,3 +250,11 @@ the other document changes in the same commit.
   lacks.
 - Overlaying the drawer over the stage to keep the toolbar fixed. It works, and it
   reintroduces the obstruction ADR-0092 removed. The grid does the same job for free.
+
+**D5 — The Gantt split's row model.** One `role="row"` spanning grid and chart via CSS
+Grid, or two containers joined by `aria-owns`. Different component shapes; deciding after
+building means rebuilding.
+
+**D6 — Two-tone warm.** Split the warm family so critical/today/conflict and
+near-critical/over-allocation/lane-overlap read differently, or keep one warm hue carrying
+six meanings separated by shape alone at badge size.
