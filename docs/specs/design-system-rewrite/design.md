@@ -17,7 +17,7 @@ works.
 
 | Axis                          | Today                                                     | After                                                                  |
 | ----------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Colour**, scoped by surface | 5 scopes × 18 tokens × 3 themes. Works. Gated.            | 5 scopes (the diagram joins, `auth` retires) + **role packs**          |
+| **Colour**, scoped by surface | 5 scopes × 18 tokens × 3 themes. Works. Gated.            | **6** scopes × **29** tokens × 1 theme + **role packs** (§1.4)         |
 | **Metric**, scoped by density | Does not exist. Five disagreeing constants in five files. | `[data-density]`, the `[data-surface]` mechanism reused                |
 | **Type**, two ramps           | One ramp, top unused, data half absent                    | A prose ramp with a top, and a **data ramp** that owns tabular figures |
 | **Meaning on the diagram**    | Borrowed from the page, ungated                           | A validated family, its own separation matrix, its own geometry tokens |
@@ -35,18 +35,26 @@ follows is what it **dissolves**, checked rather than assumed, and what it **mus
 
 ### 0.5.1 What it dissolves
 
-| Dissolved                                                                       | Was                                                                                   |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `.dark`'s ~117 declarations, and their maintenance on every future value change | `globals.css:278-482`                                                                 |
-| Two of the three sweeps in the contrast matrix                                  | `token-contrast.test.ts:155` — 3 themes × 2 flag states × 5 scopes                    |
-| **The `auth` scope, entirely — 18 tokens** (`screens.md` §7)                    | It existed **only** because ADR-0077 §2's pinning was applied to half a screen (§8.3) |
-| ADR-0077 §2's theme-invariance argument for `brand`                             | `brand` survives on the ordinary ADR-0055 argument: navy panel, off-white page        |
-| Every "which theme is this bad in?" negotiation on every colour                 | The reason the palette reads as compromised rather than chosen                        |
-| The theme picker in the account menu                                            | `account-chip.tsx:197` — a picker with one entry is a lit-but-inert control           |
+| Dissolved                                                                            | Was                                                                            |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `.dark`'s ~117 declarations, and their maintenance on every future value change      | `globals.css:278-482`                                                          |
+| Two of the three sweeps in the contrast matrix                                       | `token-contrast.test.ts:155` — 3 themes × 2 flag states × 5 scopes             |
+| ~~The `auth` scope, entirely — 18 tokens~~ **WITHDRAWN — measured, it stays** (§1.4) | The theme collapse removes its **original** reason, not its **values**         |
+| ADR-0077 §2's theme-invariance argument for `brand`                                  | `brand` survives on the ordinary ADR-0055 argument: navy panel, off-white page |
+| Every "which theme is this bad in?" negotiation on every colour                      | The reason the palette reads as compromised rather than chosen                 |
+| The theme picker in the account menu                                                 | `account-chip.tsx:197` — a picker with one entry is a lit-but-inert control    |
 
-Token maintenance drops from **5 families × 18 × 3 themes + packs** to **5 families × 18 × 1 + packs**
-— roughly a third of the surface, and every value in it is now chosen for one target and can be
-chosen well.
+Token maintenance drops from **5 families × 18 × 3 themes + packs** to **6 families × 29 × 1 +
+packs** — 270 declarations becoming 174, so a little under two thirds rather than "a third of the
+surface", and every value in it is now chosen for one target and can be chosen well.
+
+> **Both multipliers changed after this paragraph was written, and the corrected figure is above
+> (re-derived from `globals.css`, 2026-08-19).** `auth` was measured and stays, so it is six
+> families and not five; and §1.5's closure grew a family from 18 names to **29** — the eleven
+> status fills — which is visible in the shipped `chrome` rebind block at `globals.css:496-532`.
+> **The saving is real and it is half what this paragraph originally claimed.** What it bought is
+> the reason it shrank less: six live WCAG 1.4.11 failures on the navy scopes that nobody had
+> raised (`closure-measurement.md` §2).
 
 **The two flagged value layers go with it.** `[data-designed-chrome]` and
 `[data-canvas-visual-language]` exist to hold Light's and Dark's chrome and Corporate's canvas
@@ -229,25 +237,51 @@ So: ordinary bar → `--primary`. Critical → `--destructive`. Near-critical �
 → `--foreground`. Non-working wash → `--muted`. Ground → `--background`. Month band → `PLOT`,
 because "the alternating stripe under the diagram" is not any of the eighteen names.
 
-### 1.4 Five scopes, and the ceiling
+### 1.4 Six scopes, and the ceiling
 
-`page`, `chrome`, `panel`, `brand`, `canvas`. **The diagram joins and `auth` retires** (§0.5.1) — so
-the count goes _down_ while gaining the surface that most needed one, which is the clearest available
-evidence that the single-theme decision and the canvas scope are the two right moves.
+`page`, `chrome`, `panel`, `brand`, `auth`, `canvas`. **The diagram joins; `auth` stays.**
 
-That is 5 × 18 = **90 base declarations, once**, plus packs — against today's 5 × 18 × 3. The
-`brand`/`auth` per-theme repetition that `diagnosis.md` §4.4 records as a real ongoing cost, and the
-assertion at `token-architecture.test.ts:72-80` that exists **because the completeness sweep
-structurally cannot see it**, both disappear: with one theme there is nothing to keep identical
-across blocks.
+> **Corrected 2026-08-19. This section said five, and said the count "goes _down_ while gaining the
+> surface that most needed one", which it called "the clearest available evidence that the
+> single-theme decision and the canvas scope are the two right moves".** The premise was that
+> `auth` retires. `migration.md` A rightly made that a **check rather than an assumption**, and the
+> check came back the other way: comparing every `--auth-*` token against its page counterpart in
+> OKLCH, **15 of 18 differ and 12 are perceptible (Δ ≥ 0.02)**, led by `--auth-ring` at **Δ 0.39** —
+> the amber ring ADR-0077 M7 derived up from the old app's 2.02:1 to 3.01–3.36:1 so it would clear
+> WCAG 1.4.11. Retiring the scope discards that derivation along with the tinted field fill, four
+> status inks and the white card that separates the login from an off-white page.
+>
+> **Losing its original reason is not the same as having none.** The theme collapse dissolves
+> ADR-0077 §2's theme-invariance argument, because nothing is invariant against anything now. What
+> is left is the ordinary ADR-0055 argument, which `auth` passes on measured values: it is the
+> front door, and it is designed. So the count goes **up**, five to six, and the rhetorical claim
+> above is withdrawn — the single-theme decision and the canvas scope stand on their own arguments,
+> which never needed a scoreboard.
 
-**A sixth scope must show, in an ADR, what the fifth could not do for it**, in addition to
+That is 6 × 29 = **174 base declarations, once**, plus packs — against today's 5 × 18 × 3 = 270.
+(29, not 18: §1.5's closure adds eleven status fills to every family. The count is now an **output**
+of the closure, which is the whole point of §1.5, so a section that quotes it has to re-derive it.)
+The `brand`/`auth` per-theme repetition that `diagnosis.md` §4.4 records as a real ongoing cost does
+disappear, because with one theme there is nothing to keep identical across blocks.
+
+> **But the assertion that guarded it did not disappear — it went vacuous, and that is worse.**
+> `token-architecture.test.ts:75-83` sweeps `THEME_SELECTORS`, which is now a one-element list, so
+> _"declares --brand… in all three theme blocks, identically"_ asserts that one value equals
+> itself. It passes for a reason unrelated to what its name claims. Landing A owes it a decision:
+> delete it, or re-point it at something still true.
+
+**A seventh scope must show, in an ADR, what the sixth could not do for it**, in addition to
 ADR-0077 §1's five conditions — noting that condition 2 has just lost its most-used justification,
 because "theme-invariance" is not a property any region can now claim. Two candidates that will be
 proposed and should be refused unless they clear that bar: a `dialog` scope (portals already leave
 every scope — a dialog is the page, and that is correct), and a `print` scope (the print path is a
 _palette_, not a surface; it forces light values, and giving it a scope means every future value
 change is applied twice).
+
+**And the bar is now materially higher than when it was written**, which is worth saying out loud:
+a scope costs **29 declarations** rather than 18, each of the eleven new ones requiring a derived
+value that clears 4:1 against that surface's fill. The seventh scope is a bigger commitment than
+the sixth was, and the closure is what made it so.
 
 ### 1.5 What belongs in the rebound family — a closure, not a longer list
 
@@ -534,21 +568,37 @@ two typefaces, and every vertical-rhythm and toolbar-width measurement in this r
 in whichever face that machine resolved. **This is the type equivalent of the `--canvas` finding: the
 document names one thing and the product ships another, and nothing says so.**
 
-**Decision: self-host one variable family, subset to Latin.**
+**Decision: self-host one variable family, subset to Latin. The family is SPACE GROTESK** — decided
+by the product owner on 2026-08-19 from four candidates rendered on real product chrome, **against
+this document's recommendation**, which was the Manrope / Instrument Serif pairing. The full
+specimen, the reasoning and the reservation are in [`typeface.md`](./typeface.md); what follows is
+what the choice changes here.
 
-- **The family is Inter**, and the reasoning is a design argument rather than a default. A scheduling
-  tool's type has one hard job: be unambiguous at 12–13 px in dense numeric columns, in a product
-  whose content is dates, durations, floats, lags and counts. Inter has **real tabular figures** and a
-  slashed-zero stylistic set — which the data ramp below structurally depends on, because
-  `font-variant-numeric: tabular-nums` does nothing if the font has no `tnum` table. It is OFL, so it
-  clears `PROJECT_BRIEF.md` §18's permissive-licence constraint. And it is already the declared
-  intent, so this decision **makes the document true** rather than changing the product's face for
-  everyone who currently sees it.
-- **Distinctiveness belongs in the brand panel, not the data grid.** The instinct under a
-  "best in class" mandate is to pick something with more personality. The counter-argument is that
-  the one screen where personality pays — the login — already carries a photograph and a navy wash
-  doing that work. **No second display face**, and if the brand panel needs one after its redesign it
-  is a route-scoped load on the public routes only, costed then.
+- ~~**The family is Inter**~~ — **superseded.** The clause that argued it (_"it is already the
+  declared intent, so this decision makes the document true rather than changing the product's face
+  for everyone who currently sees it"_) was the weakest reason in this document, and the mandate was
+  _"something with more character"_. It is struck rather than deleted because the **requirement**
+  under it survives and is now load-bearing: a scheduling tool's type must be unambiguous at
+  12–13 px in dense numeric columns, and the data ramp below structurally depends on the font
+  _having_ a `tnum` table.
+- **Tabular figures went from a nicety to a gate, and that was measured before the face was
+  committed.** Space Grotesk's digits are proportional **by default and dramatically so** — the `1`
+  is 404 units against the `0`'s 638, a **58 % difference** (`fontTools`, `typeface.md` §3). Left
+  alone, a column of dates does not line up and a duration ticking `9 d → 10 d` shifts everything
+  after it. It ships a real `tnum`, so the fix is one rule — but for **this** face the rule is
+  load-bearing in a way it would not have been for the safe candidates, so it is gated
+  (`token-architecture.test.ts:358-375`), scoped to `th`/`td` plus an opt-in class, with a **second**
+  assertion that it is not applied to running text.
+- ~~**Distinctiveness belongs in the brand panel, not the data grid.**~~ **Overruled on the merits,
+  not by oversight.** This was the argument the recommendation rested on. The reservation behind it
+  is not withdrawn and becomes a thing to watch rather than to re-argue: distinctive numerals appear
+  in every date of a 2,000-row table, and character in a glyph is character you scan past a thousand
+  times. If a planner reports the tables feeling tiring, that is the first place to look, and the
+  remedy is a **numeral-only fallback**, not reopening the face.
+- **"No second display face" survives, and the decision satisfies it** from the other end: one face
+  with enough character to carry the login and the grid, rather than a pairing that costs a second
+  download on the coldest screen in the product. There is no serif and nothing in `screens.md`
+  depends on one — see §4.1a for what carries hierarchy instead.
 - **`--font-mono` is not self-hosted.** Eight call sites use it for identifiers and codes; the system
   stack compares characters perfectly well. 30 kB for eight sites is not a trade worth making, and
   saying so is cheaper than discovering it in a bundle review.
@@ -559,12 +609,13 @@ external origins** — `font-src 'self'` (ADR-0074 §4). So a webfont must be se
 this decision does; **the CSP needs no change at all**, which is worth stating because "add a font"
 usually means "add a CDN" and here it cannot.
 
-| term                          | figure                                                                                             |
-| ----------------------------- | -------------------------------------------------------------------------------------------------- |
-| Latin-subset variable `woff2` | **~35–45 kB**, one file, both axes                                                                 |
-| Where it lands                | **`/sign-in`** — the LCP path of the coldest screen in the product (ADR-0077's front door)         |
-| Loading                       | `<link rel="preload" as="font" crossorigin>` + `font-display: swap`                                |
-| Layout shift                  | Mitigated by `size-adjust` / `ascent-override` on a local fallback face, **measured, not assumed** |
+| term                         | figure                                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Variable `woff2`, as shipped | **41 kB for the whole family** (weight axis 300–700), split Latin / Latin-Extended so the common case never downloads the accented characters  |
+| Where it lands               | **`/sign-in`** — the LCP path of the coldest screen in the product (ADR-0077's front door)                                                     |
+| Loading                      | `<link rel="preload" as="font" crossorigin>` + `font-display: swap`                                                                            |
+| Layout shift                 | Mitigated by `size-adjust` / `ascent-override` on a local fallback face, **measured, not assumed**                                             |
+| Weight ceiling               | **700.** Nothing in `apps/web/src` uses `font-extrabold` or `font-black` (checked), so the axis covers every call site and nothing synthesises |
 
 `swap` rather than `optional` deliberately: `optional` means a first-time visitor may never see the
 face at all, which reintroduces "the product looks different depending on your machine" through a new
@@ -593,6 +644,43 @@ cell, the table cell and the bar label finally agree.
 **One nuance worth keeping:** `--font-mono` is used at 8 sites for identifiers and codes. That stays
 separate. Tabular figures are for _quantities in columns_; monospace is for _strings you compare
 character by character_. Two jobs, two tools.
+
+### 4.1a Weight is now a hierarchy channel, and it is the one axis with no token
+
+**Added 2026-08-19, as a direct consequence of the typeface decision** (§4.0). This is the part of
+the design the reversal actually changes, and it was not visible until the reversal happened.
+
+A sans/serif pairing gives hierarchy a **categorical** channel: a page title is a different _kind_
+of type from a table cell, and the reader sees the rank before reading the word. With one face
+that channel does not exist, and hierarchy is carried entirely by **weight, size, tracking, colour
+and space**. Four of those five now have a token — the ramp owns size, line-height and tracking
+(and the negative tracking at the large end is precisely the display-tier compensation a grotesque
+needs); colour has had one since ADR-0055; space is `--gutter-*` in §3.2.
+
+**Weight has none, and it is the least-tokenised axis in the product:** `font-medium |
+font-semibold | font-bold | font-light` appears **183 times across 85 non-test files** (185/87
+including tests — counted, not estimated), with no token, no pairing to a ramp step, and no gate.
+That is the `tabular-nums` finding (29 sites, 18 files) one
+axis along — and it is worse, because a weight is a **judgement about rank** rather than a
+formatting detail, so 185 independent judgements is 185 chances for a section heading to outrank
+a page title.
+
+So Landing A owes three things it was not previously asked for:
+
+1. **`--weight-*` tokens declared inside the theme block** (§0.5.3's rule: no design token outside
+   a theme or scope-rebind block, and a weight is a design token). The scale is bounded by the
+   file: **300–700**, nothing above.
+2. **A default weight per ramp step**, so `--text-page` carries its weight rather than every call
+   site choosing one. This is §9 mechanism 4 — remove the decision from the call site — applied to
+   the axis that now does the most work.
+3. **The rhythm ratchet extended to weight**, at its measured floor of **183**, never up (the
+   ADR-0058 pattern §8.3 already uses for arbitrary sizing values). Not zero: a gate that fails on
+   day one gets deleted rather than fixed.
+
+**What this is not.** It is not a re-scaling. §4.1's sizes deliberately land at today's values, and
+so should the weights: this task takes **ownership** of the axis so a later, measured decision can
+change it. Shipping a token and a new weight in one commit is the mistake ADR-0055 §8.1 exists to
+prevent.
 
 ### 4.2 Elevation — kept, and given a token so a theme can say which mechanism it uses
 
@@ -658,9 +746,25 @@ The vocabulary `diagnosis.md` §1.2 says does not exist:
   currently "wherever the route put it" — `clients.tsx:14-17` puts it in a `justify-between` flex,
   `project-detail.tsx` does something else.
 - **`SectionCard`** — a named section of a content screen: `Card`'s composition contract plus a real
-  heading rank. `CardTitle` gains `level?: 1 | 2 | 3` defaulting to **2**, which deletes
-  `staff.tsx:117-118`'s written workaround and fixes the `<h1>`-per-page violation everywhere else at
-  the same time.
+  heading rank. `CardTitle` gains `level?: 1 | 2 | 3`.
+
+  > **The default is `1`, not `2` — reversed 2026-08-19, and the reversal dissolves a collision.**
+  > This said "defaulting to **2**, which deletes `staff.tsx:117-118`'s written workaround and fixes
+  > the `<h1>`-per-page violation everywhere else at the same time". `docs/specs/organisation-landing/`
+  > §4.6 independently specified the same prop **defaulting to `1`, so every existing consumer is
+  > byte-identical** — two specs, one prop, opposite defaults, and whichever landed first would have
+  > silently decided it.
+  >
+  > Theirs is right and mine was wrong for a reason worth keeping: `CardTitle` renders `<h1>` today
+  > (`card.tsx:50`), so defaulting to `2` **re-ranks every Card in the product** in the landing whose
+  > whole claim is that almost nothing changes — a change to the AT heading tree, invisible on screen,
+  > in a commit nobody would look at for it. And it was never necessary: **`SectionCard` owns its own
+  > rank**, so a section heading is an `<h2>` because the archetype says so, not because a shared
+  > primitive's default moved underneath forty call sites. `staff.tsx`'s workaround is deleted either
+  > way — by passing `level`, or by using `SectionCard`. The `<h1>`-per-page violations are then fixed
+  > **visibly, per screen, in Landing F**, with the structural test from §8.4 as the gate rather than
+  > a default change as the mechanism.
+
 - **`EmptyState`** — icon, one-line explanation, one action. `docs/TECH_DEBT.md` #21(d), overdue, and
   the organisation landing needs three of them on the first screen a new customer sees.
 - **`Skeleton`** — mirrors the final layout, first loads only. `docs/UX_STANDARDS.md` has required
@@ -686,13 +790,49 @@ Its §0.3 lists five things the current vocabulary cannot express and asks that 
 on this rewrite rather than a one-off. Answering all five by name, so that epic can consume rather
 than bridge:
 
-| It needs                                          | This design supplies                                                                                                                                 |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| An empty state                                    | `EmptyState` (§5). Lands in **L3**.                                                                                                                  |
-| A skeleton                                        | `Skeleton` (§5). Lands in **L3**.                                                                                                                    |
-| A page-section archetype with a real heading rank | `SectionCard` + `CardTitle level` (§5). The bridge that spec proposed **is** the answer; it does not need to be temporary.                           |
-| A list / feed row                                 | `ListRow` (§5).                                                                                                                                      |
-| Density as a system concept                       | `[data-density]` (§3). Its observation was right: **the landing page is `default` density** — reading, not cockpit — and it now has a word for that. |
+| It needs                                          | This design supplies                                                                                                                                                        |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An empty state                                    | `EmptyState` (§5). Lands in **Landing A** — see §6.1 for the variant axis it needs and did not have.                                                                        |
+| A skeleton                                        | `Skeleton` (§5). Lands in **Landing A** — see §6.1: a block is not enough.                                                                                                  |
+| A page-section archetype with a real heading rank | `SectionCard` + `CardTitle level` (§5). The bridge that spec proposed **is** the answer; it does not need to be temporary. **The prop's default is theirs, not mine** (§5). |
+| A list / feed row                                 | `ListRow` (§5).                                                                                                                                                             |
+| Density as a system concept                       | `[data-density]` (§3). Its observation was right: **the landing page is `default` density** — reading, not cockpit — and it now has a word for that.                        |
+
+### 6.1 What Landing B needs that Landing A does not deliver
+
+**Added 2026-08-19 by reading `docs/specs/organisation-landing/feature-spec.md` §2 and §4.6 against
+the archetype list, rather than trusting the five-row table above.** `migration.md` B's condition is
+that the screen is built from the archetypes and that _"if the screen needs something the vocabulary
+does not have, that is a requirement on A"_. A gap discovered **during** B is the failure that
+condition exists to prevent, so it is worth finding them now. Four, and the first two are real.
+
+1. **A skeleton block is not a skeleton.** `docs/UX_STANDARDS.md` requires _"skeleton and final
+   layout identical"_, and B's §4.6 asks for skeletons on three sections of `ListRow`s. A generic
+   `Skeleton` rectangle satisfies neither: it produces a grey box that reflows into a row of a
+   different shape. **`ListRow` (and `DataTable`) must own their own loading render** — `ListRow`
+   gains a `loading` state, `Skeleton` stays the shape primitive underneath. Without this the first
+   consumer hand-rolls a row-shaped skeleton, which is a one-off on the LCP screen.
+2. **`EmptyState` needs two axes §5 does not give it.** B has **five** empty states of two
+   different sizes and three different shapes: three page-level organisation states (one of which
+   is **role-gated and offers no action at all** — a Viewer is told to ask a Planner), two
+   section-level ones, and a settled one-line _"Nothing needs you right now."_ which is **not** an
+   empty state and must not render as one. So: `action` is **optional, not decorative**, and there
+   is a **size/prominence** axis (page vs section). §5's "icon, one-line explanation, one action"
+   describes exactly one of those five.
+3. **`PageContainer` must not render a landmark.** B _"sits inside the shell's existing `<main>` and
+   adds no landmark"_ (§4.6). §5 says `PageContainer` owns the measure cap, the gutter and the
+   scroll relationship and is silent on the element — and the obvious implementation of "the page
+   frame" is a `<main>`. If it renders one, B ships two `main` landmarks on the first screen after
+   sign-in. One sentence in the primitive's docblock, decided now rather than found by an
+   accessibility review.
+4. **Relative time is on its fifth implementation** (lower confidence, and not blocking A). B adds
+   `model/relative-time.ts`; `NoteItem`, `staff.tsx`'s retention copy and `lock-copy` each already
+   format one. It is a formatting concern rather than a layout archetype, so it does not obviously
+   belong in `components/ui/` — but "the fifth place doing this" is how §9's inventory problem
+   starts, and somebody should decide rather than let B be the fifth by default.
+
+**And one thing B needs that A must NOT deliver:** `screens.md` §6 proposed a metrics strip for this
+screen. That is withdrawn — see the note there.
 
 And one thing it did not ask for but will need on its first draft: **the accent rule** (§2.2). A
 landing page is where somebody reaches for a brand colour to make a section feel important. Under the

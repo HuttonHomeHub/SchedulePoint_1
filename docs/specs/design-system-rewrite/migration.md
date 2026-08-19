@@ -37,14 +37,15 @@ So the sequence is arranged around **one question: how soon can somebody look at
 the new language?** The answer is **after two landings**, and the screen is the organisation landing
 page.
 
-| Landing                                  | What it is                                                 | Visible?              | Rollback              |
-| ---------------------------------------- | ---------------------------------------------------------- | --------------------- | --------------------- |
-| **A — Foundations**                      | one theme, the closure, type + metric + the six archetypes | Almost nothing        | free (mostly no-op)   |
-| **B — The landing page, fully realised** | **the first screen in the new language — the early look**  | **Yes, entirely**     | one screen            |
-| **C — The command surface**              | measure, then the menubar                                  | Yes, the workspace    | revert a named commit |
-| **D — The workspace shape**              | one band, the rail as sole navigator, the activity panel   | Yes, substantially    | revert a named range  |
-| **E — The diagram**                      | the canvas scope, plot separations, the Gantt              | Yes, the primary view | revert a named range  |
-| **F — The remaining screens, and docs**  | tables, editor, staff, public; documents re-derived        | Yes, incrementally    | free                  |
+| Landing                                  | What it is                                                 | Visible?                                                       | Rollback              |
+| ---------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------- | --------------------- |
+| **A — Foundations**                      | one theme, the closure, type + metric + the six archetypes | Almost nothing                                                 | free (mostly no-op)   |
+| **B — The landing page, fully realised** | **the first screen in the new language — the early look**  | **Yes, entirely**                                              | one screen            |
+| **C — The command surface**              | measure, then the menubar                                  | Yes, the workspace                                             | revert a named commit |
+| **D — The workspace shape**              | one band, the rail as sole navigator, the activity panel   | Yes, substantially                                             | revert a named range  |
+| **E — The diagram**                      | the canvas scope, plot separations, the Gantt              | Yes, the primary view                                          | revert a named range  |
+| **F1 — Controls and interaction**        | `<select>` → `Combobox`, row actions → APG `Menu`          | **Yes — and it moves affordances people know the position of** | per screen            |
+| **F2 — Screens and documents**           | tables, editor, staff, public; documents re-derived        | Yes, incrementally                                             | free                  |
 
 **A and B together are the smallest useful pair**, and they are deliberately the two with the least
 risk in the epic: A is nearly all no-op re-expression, and B is a screen that does not exist yet.
@@ -71,7 +72,15 @@ risk in the epic: A is nearly all no-op re-expression, and B is a screen that do
   contract, the "no token outside a theme or scope block" assertion, the rhythm ratchet at its
   measured floor of **27** arbitrary sizing values. Each **verified red first**.
 - **The type ramp and the self-hosted typeface** (`design.md` §4.0–4.1) — including the finding that
-  the product has never actually shipped Inter.
+  the product had never actually chosen a typeface at all. **Landed: Space Grotesk**
+  (`typeface.md`), the product owner's choice over this epic's recommended pairing, with tabular
+  figures gated because that face's digits are proportional by 58 %. **It adds a task to A that was
+  not here before:** with one face and no serif, hierarchy is carried by weight — and weight is
+  **183 untokenised classNames across 85 non-test files** (`design.md` §4.1a).
+- **Every width figure in this epic is now stale, and C is where that lands.** `typeface.md` §5:
+  the toolbar ladder, the four band floors, `CHROME_RESIDUAL_PX` and `e2e-toolbar-fit`'s thresholds
+  are all arithmetic over rendered text widths, and until this landed there was no stable face
+  underneath any of them. The gates pass today — checked — but "passes" is not "was re-derived".
 - **The metric tokens**, frozen at today's values except `--row-h` at 28 (CQ-B) and the 40 → 36
   control move (CQ-C), which is its own commit with its own measurement (below).
 - **The six archetypes**: `PageContainer`, `PageHeader`, `SectionCard`, `EmptyState`, `Skeleton`,
@@ -95,14 +104,14 @@ becomes the first fully-realised screen in the new language.**
 
 ### The reasoning
 
-| Why it, rather than any other screen                                                                                                                                                               |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **It is new.** No legacy DOM, no journey asserting its structure, no parity suite to preserve. Every other candidate — the clients list, the workspace — has all three.                            |
-| **It is the screen the product owner opened this thread about**, and the one they will see first after sign-in.                                                                                    |
-| **Its API half is genuinely independent.** Indexes have landed and the read model is next; nothing in this epic touches either.                                                                    |
-| **It needs precisely the six archetypes.** Its own §0.3 lists five gaps and four of them are `EmptyState`, `Skeleton`, a section archetype with a real heading rank, and a list-row archetype.     |
-| **It is the right size to be a proof.** Multiple sections, three empty states, a feed, a metrics strip, links into the hierarchy — large enough to be real, small enough to land in one milestone. |
-| **It does not depend on the hard, slow work.** No canvas scope, no painter, no plot separation matrix, no toolbar arithmetic. It can be finished while all of that is still in flight.             |
+| Why it, rather than any other screen                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **It is new.** No legacy DOM, no journey asserting its structure, no parity suite to preserve. Every other candidate — the clients list, the workspace — has all three.                                                                                                                                                    |
+| **It is the screen the product owner opened this thread about**, and the one they will see first after sign-in.                                                                                                                                                                                                            |
+| **Its API half is genuinely independent.** Indexes have landed and the read model is next; nothing in this epic touches either.                                                                                                                                                                                            |
+| **It needs precisely the six archetypes.** Its own §0.3 lists five gaps and four of them are `EmptyState`, `Skeleton`, a section archetype with a real heading rank, and a list-row archetype.                                                                                                                             |
+| **It is the right size to be a proof.** Three sections, **five** empty states of two sizes, a feed, links into the hierarchy — large enough to be real, small enough to land in one milestone. _(A metrics strip was listed here and is withdrawn: that screen's own spec rejects count tiles by name — `screens.md` §6.)_ |
+| **It does not depend on the hard, slow work.** No canvas scope, no painter, no plot separation matrix, no toolbar arithmetic. It can be finished while all of that is still in flight.                                                                                                                                     |
 
 ### The condition, and it is not negotiable
 
@@ -111,6 +120,15 @@ beautiful one-off on the flagship screen would falsify this epic's entire thesis
 outing — and it is exactly the failure mode `docs/specs/organisation-landing/` §0.3 was written to
 avoid, one level up. If the screen needs something the vocabulary does not have, **that is a
 requirement on A**, and A is one landing away rather than five.
+
+> **Four such requirements have already been found, by reading that spec rather than trusting this
+> one's list** (`design.md` §6.1). Two are real: a generic `Skeleton` block cannot satisfy
+> `UX_STANDARDS`' _"skeleton and final layout identical"_ for a list of `ListRow`s, so **`ListRow`
+> owns its own loading render**; and `EmptyState` as specified — _"icon, one-line explanation, one
+> action"_ — describes **one** of this screen's five empty states, so it needs an optional action
+> and a page-vs-section size. Both are cheap in A and are a one-off on the LCP screen if found in B.
+> **This is the condition working**, and it only worked because somebody opened §4.6 — the failure
+> it guards against would not have announced itself.
 
 ### What I recommend be put to the product owner
 
@@ -134,6 +152,20 @@ offer if the answer is "sooner".
 ---
 
 ## C — The command surface
+
+> **Recommended change, 2026-08-19: run C's measurement during A or B, not at the head of C.**
+> Two things make the current placement uncomfortable. **C is the only landing that can be
+> withdrawn by its own numbers** — the falsification condition below says so — and **D is costed
+> against it landing**: `screens.md` §1.2's one-band arithmetic (~1677 against 1646, 31 px short)
+> takes the collapse from 32 stops to 5 menus + 8 commands as an input, so a withdrawn C does not
+> merely delay D, it removes D's premise. Second, that measurement just became more expensive and
+> less predictable: **every width input to it predates a stable typeface** (`typeface.md` §5), so
+> M0 is no longer "check two estimates" but "re-derive three epics' figures in the face the product
+> now ships". The measurement itself needs no menubar, no renderer and nothing from A beyond the
+> control height — it renders five labelled triggers and an eight-item strip into the existing
+> harness. Running it early costs a day and tells the epic whether D is affordable before D is
+> planned; running it at the head of C means finding out after B has shipped and the workspace work
+> is next. **The build order is unchanged; only the measurement moves.**
 
 **Measure first, and the falsification condition is written before the measurement**
 (`command-surface.md` §6): render five labelled menu triggers and the eight-item strip into the
@@ -178,14 +210,67 @@ become the epic that answers it.
 
 ---
 
-## F — The remaining screens, and the documents
+## F — The remaining screens, the controls, and the documents
 
-Tables, the Project Explorer's zones, the staff console, the public screens, the dialog set. Then
-`docs/DESIGN_SYSTEM.md` **re-derived from the gates** — it is currently wrong about the type scale
-(`text-3xl`, unused), the control scale, the table primitive, the scope count (§230 says three, §267
-says five) and the family size (§246 says 17, the gate says 18). `CLAUDE.md` §16 and
-`docs/adr/README.md` gain ADR-0097 **in the same commit as the ADR file**, because
-`scripts/check-counts.mjs:55` re-derives the count from `docs/adr/`.
+> **F is now two landings, and this is a change of shape rather than a change of size.** The product
+> owner's decision of 2026-08-19 — _"the scope on existing screens is **controls and interaction**,
+> not paint"_ — turns the back half of this epic from a restyle into a **correction of interaction
+> that has drifted from the documented standard**. Counted rather than estimated: **~20
+> `<SelectField>` call sites across 10 non-test files** plus a further ~15 raw `Select`/`<select>`
+> usages, and **~10 tables carrying bare per-row text actions** (`CalendarsTable.tsx:233-281` alone
+> renders five buttons per row) where `docs/UX_STANDARDS.md` "Row / node actions" specifies the APG
+> row menu. Each conversion changes the **accessibility tree** and therefore the locators of the
+> journeys over it — which is a different risk class from changing a colour, and it does not belong
+> in the same landing as the documentation sweep.
+
+### F1 — Controls and interaction
+
+The `<select>` → `Combobox` conversions and the row-action → `Menu` conversions, each carrying the
+ADR-0082 reason wiring so a shaded action keeps its explanation. Journeys are re-run per screen, not
+at the end.
+
+**Two things must be decided before the first conversion, and neither is decided today.**
+
+1. **A discriminator for `Select` vs `Combobox`.** `combobox.tsx:12-15` states its own reason for
+   existing narrowly: _"a native `<select>` cannot do what a library picker needs at scale —
+   type-ahead filtering against the server, a 'load more' page, and options that carry a tier/state
+   annotation"_. A dependency type (FS/SS/FF/SF), a constraint type or an accrual type has none of
+   those properties, and replacing a four-option native select with a hand-rolled listbox is
+   replacing a correct control with a heavier one. The decision named the **library screens**
+   specifically; the principle behind it is general, so the general form needs a written rule or it
+   will over-apply. **Proposed:** a `Combobox` when the option set is server-paged, searchable, or
+   annotated; a native `Select` otherwise.
+2. **What a hand-rolled combobox costs on a touch device.** A native `<select>` gets the platform's
+   own picker — the iOS wheel, the Android sheet — which is the single best mobile control in the
+   product and is free. A `Combobox` gets an in-flow listbox competing with a virtual keyboard.
+   `design.md` §3.3 resolves `comfortable` density under `@media (pointer: coarse)`, so this
+   collides with a decision this epic has already taken, and `docs/TECH_DEBT.md` #133 records that
+   **no toolbar measurement in this repository has ever been taken with a coarse pointer**. This is
+   an `accessibility-reviewer` and `ux-reviewer` question **before** the conversions, not after.
+
+### F2 — The documents
+
+`docs/DESIGN_SYSTEM.md` **re-derived from the gates**. Its drift list has grown since this was
+written and two entries are now **live rather than pending**, because Landing A shipped underneath
+them:
+
+- §268 says _"There are five scopes"_ — it is six.
+- §272-277 explains `brand` and `auth` as _"theme-invariant, identical in Light, Dark and
+  Corporate, because a signed-out visitor cannot choose a theme"_. **There is no Light and no Dark.**
+  That paragraph is not stale-in-waiting; it describes a mechanism the product no longer has, in the
+  governing document a reader consults before touching a scope.
+- §284 says `--card` is _"not one of the 17 rebound names"_ — the family is 18 base names, and with
+  the closure it is 29.
+- Plus the original list: the unused `text-3xl` page-title size, the 36-vs-40 control scale, a
+  `DataTable` described with five features it does not have, and §230's "three scopes" against
+  §267's "five".
+
+`CLAUDE.md` §16 and `docs/adr/README.md` gain ADR-0097 **in the same commit as the ADR file**,
+because `scripts/check-counts.mjs:55` re-derives the count from `docs/adr/`.
+
+> **F2 is the one part of this epic with a reason not to be last.** Everything else in F is a change
+> to the product; this is a correction to a document that is **wrong today** about a mechanism that
+> **changed today**. Every other landing has a reader in the meantime.
 
 ---
 
@@ -203,8 +288,12 @@ says five) and the family size (§246 says 17, the gate says 18). `CLAUDE.md` §
    `test:e2e:gantt` and `measure:gantt` with it.
 5. **Removing dark is an accommodation removed** (`design.md` §0.5.6). Not a WCAG failure, the product
    owner's call — and §0.5.4's one-sentence cost is what keeps "revisit later" honest.
-6. **`globals.css` still grows**, though far less than before: five families plus packs plus metric,
-   type, elevation and motion — but **once**, not three times.
+6. **`globals.css` still grows**, though far less than before: **six** families at **29** names each
+   (18 base + the eleven the closure pulls in), plus packs plus metric, type, elevation and motion —
+   but **once**, not three times. **Both of those numbers moved after this line was written**: `auth`
+   was measured and stays (§A), and the closure grew a family by 61 %. The net is still a reduction —
+   174 declarations against 270 — but it is a little under two thirds, not the third that the
+   pre-closure arithmetic implied, and `design.md` §0.5.1 carries the re-derivation.
 7. **Nine journeys touch the toolbar and every screen migration touches a suite.** All thirty-three
    are run at C, D and F. ADR-0091 records three broken by a label change, each found by CI rather
    than locally.

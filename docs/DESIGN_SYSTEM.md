@@ -265,23 +265,34 @@ Three rules keep this honest:
   `var(--token)` rather than a value resolved once at `:root`. Drop it and every scope
   silently stops working, with no error and a diff that looks like a tidy-up. Pinned by test.
 
-**There are five scopes, and the bar for a sixth is written down.** `chrome` (the app's top band),
+**There are five scopes, and the bar for a sixth is written down** (ADR-0097 plans `canvas` as that
+sixth, at Landing E — this sentence becomes wrong the day it lands). `chrome` (the app's top band),
 `panel` (the navigator rail), the page (`:root`), and — since ADR-0077 — `brand` (the public
 screens' navy panel) and `auth` (the card beside it).
 
-Those last two are the odd ones: both are **theme-invariant**, identical in Light, Dark and
-Corporate, because a signed-out visitor cannot choose a theme and `theme-boot.js` chooses one for
-them. **Do not "fix" either to follow the theme** — the whole login screen is deliberately one fixed
-look, and the theme picks up after sign-in, on the app the reader actually configured. `auth` exists
-because ADR-0077 originally pinned only the panel, which left a fixed navy panel joined to a
-theme-following card: one screen wearing two identities (ADR-0077 §8.3).
+Those last two were the odd ones, and **ADR-0097 changed why they exist without changing that they
+do**. They were justified as **theme-invariant** — identical in Light, Dark and Corporate, because a
+signed-out visitor cannot choose a theme and `theme-boot.js` chose one for them. There is now **one
+theme**, so that argument distinguishes nothing and is dead.
+
+They survive on a better reason they had all along: they are **designed differently from the page**,
+and measurably. `auth` was proposed for retirement on the strength of the dead argument; measuring it
+reversed the decision — 15 of its 18 tokens differ from their page counterparts and **12 differ
+perceptibly**, led by a focus ring at Δ0.39 OKLCH that ADR-0077 M7 derived up from a failing 2.02:1
+to clear WCAG 1.4.11. Retiring it would have discarded that derivation along with the field fill,
+four status inks and the white card that separates the login from an off-white page. Two gates now
+pin it (`token-architecture.test.ts`), so if a later change quietly aligns `auth` to the page it
+really has become dead weight and can be retired deliberately — rather than left as 18 aliases that
+look like a decision and are not one.
+
+**Do not "fix" either to follow the theme.** The login is deliberately one fixed look.
 
 A scope is a whole parallel vocabulary that every future value change must be applied to once more,
 so **add one only when all five of ADR-0077 §1's conditions hold**. The load-bearing one: the
 region's fill must be chosen for a reason the page's fill structurally cannot serve. If descendants
 would have to know where they are, it is not a scope — it is a component with props.
 
-**A scope cannot repaint a `Card`.** `--card` is deliberately not one of the 17 rebound names, so a
+**A scope cannot repaint a `Card`.** `--card` is deliberately not a rebound name, so a
 component that needs a scope-coloured container builds one from `bg-background` rather than wrapping
 `Card` — which is what `AuthShell` does. This is a feature: `Card` means the same thing everywhere.
 

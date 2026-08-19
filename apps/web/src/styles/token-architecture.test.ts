@@ -72,12 +72,26 @@ const FAMILIES = ['chrome', 'panel', 'brand', 'auth'] as const;
  * repeating the family per block is what the gate rests on — so this is the claim being checked
  * rather than trusted (ADR-0076 §19.9).
  */
-describe('the brand family is theme-invariant, literally', () => {
-  it.each(FAMILY_TOKENS)('declares --brand%s in all three theme blocks, identically', (suffix) => {
+describe('the brand family is declared, not inherited', () => {
+  it.each(FAMILY_TOKENS)('declares --brand%s in every theme block', (suffix) => {
+    // **This gate was "theme-invariant, literally" and went half-vacuous when the themes did**
+    // (ADR-0097). It asserted that `--brand*` was declared identically in all THREE theme blocks;
+    // with `THEME_SELECTORS` down to one entry, the identity half compared one value with itself
+    // and passed for a reason unrelated to what its name claimed — the ADR-0090/0091 shape,
+    // arriving through this epic's own door. Found by the architect re-reading its own plan.
+    //
+    // Re-pointed rather than deleted, because the OTHER half still proves something real: that
+    // every member of the family is DECLARED in the block rather than inherited from an earlier
+    // one. That is the completeness property ADR-0055 §1 rests on, and it is what would fail if
+    // somebody trimmed the family down to the tokens the login happens to use today.
+    //
+    // The invariance half is dormant, not wrong: it becomes live again the moment a second theme
+    // is added, and `THEME_SELECTORS` being a list rather than a constant is what makes it come
+    // back automatically instead of needing to be remembered.
     const name = `--brand${suffix}`;
     const values = THEME_SELECTORS.map((selector) => declarations(blockBody(selector)).get(name));
-    // Declared — not inherited — in each block.
     expect(values.filter((value) => value !== undefined)).toHaveLength(THEME_SELECTORS.length);
+    // Still meaningful with one theme: pins that the family agrees across whatever blocks exist.
     expect(new Set(values).size).toBe(1);
   });
 });

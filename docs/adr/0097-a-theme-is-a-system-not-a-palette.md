@@ -6,7 +6,11 @@
   ui-architect. Inputs from the `corporate-brand` feature-analyst pass and from the
   `--destructive-hover` fix that landed the same day.
 - **Spec:** [`../specs/design-system-rewrite/`](../specs/design-system-rewrite/README.md) — `diagnosis.md`, `design.md`,
-  `screens.md`, `command-surface.md`, `hard-surfaces.md`, `migration.md`.
+  `screens.md`, `command-surface.md`, `hard-surfaces.md`, `migration.md`, and — added during
+  Landing A — `typeface.md` (the face, and the 58 % digit measurement that made `tnum` a gate) and
+  `closure-measurement.md` (the closure computed, and the six WCAG 1.4.11 failures it found).
+- **Reviewed against what landed:** 2026-08-19. Four claims corrected in place, two of them
+  reversals of this ADR's own recommendation; see "What this ADR records about its own making" §4.
 
 > **On the scope of this ADR.** It was opened as a token-vocabulary decision and the mandate widened
 > three times while it was being written — to layout and typography, then to _"I remove all
@@ -140,12 +144,12 @@ at **2.92:1** inside a scope, latent). Each time the available answer was "add t
 
 ### D1 — The token layer gains three axes and keeps its mechanism
 
-| Axis                              | Today                              | After                                                                   |
-| --------------------------------- | ---------------------------------- | ----------------------------------------------------------------------- |
-| **Colour**, scoped by surface     | 5 scopes × 18 names × 3 themes     | 6 scopes + **role packs** for what a scope actually plays               |
-| **Metric**, scoped by **density** | Does not exist                     | `[data-density]`, reusing the `[data-surface]` mechanism                |
-| **Type**, two ramps               | One ramp, top unused, no data half | A prose ramp **with a top**, and a **data ramp** owning tabular figures |
-| **Meaning on the diagram**        | Borrowed from the page, ungated    | A validated family, a separation matrix, geometry tokens                |
+| Axis                              | Today                              | After                                                                          |
+| --------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------ |
+| **Colour**, scoped by surface     | 5 scopes × 18 names × 3 themes     | **6** scopes × **29** names (18 base + the closure) × 1 theme + **role packs** |
+| **Metric**, scoped by **density** | Does not exist                     | `[data-density]`, reusing the `[data-surface]` mechanism                       |
+| **Type**, two ramps               | One ramp, top unused, no data half | A prose ramp **with a top**, and a **data ramp** owning tabular figures        |
+| **Meaning on the diagram**        | Borrowed from the page, ungated    | A validated family, a separation matrix, geometry tokens                       |
 
 ADR-0055's mechanism is **kept unamended in substance**: one vocabulary rebound per surface; the
 families absent from `@theme inline` so `bg-chrome` does not compile; `@theme inline`'s `inline`
@@ -310,10 +314,29 @@ columns_, monospace is for _strings you compare character by character_.
 ### D10 — A page becomes a component
 
 `PageContainer`, `PageHeader`, `SectionCard`, `EmptyState`, `Skeleton`, `ListRow`. `CardTitle` gains
-`level?: 1 | 2 | 3` defaulting to **2**, which deletes `staff.tsx:117-118`'s written workaround —
-_"`CardTitle` is deliberately not used: it renders an `h1` and this page already has one"_ — and
-fixes the one-`<h1>`-per-page violation everywhere else at the same time. `DataTable` gains a
-`numeric` column flag, a sticky header and skeleton rows.
+`level?: 1 | 2 | 3` defaulting to ~~**2**~~ **1**, and **`SectionCard` owns the section's rank
+instead** — so `staff.tsx:117-118`'s written workaround (_"`CardTitle` is deliberately not used: it
+renders an `h1` and this page already has one"_) is deleted by using the archetype, and the
+one-`<h1>`-per-page violations are fixed **visibly, per screen, in Landing F**, gated by the
+page-frame structural test rather than by a default moving under forty call sites.
+
+> **Reversed 2026-08-19, and the reversal dissolves a collision nobody had noticed.**
+> `docs/specs/organisation-landing/feature-spec.md` §4.6 independently specified this same prop
+> **defaulting to `1`, "so every existing consumer is byte-identical"** — two live specs, one prop,
+> opposite defaults, and whichever landed first would have decided it silently. Theirs is right:
+> `CardTitle` renders `<h1>` today (`card.tsx:50`), so defaulting to `2` re-ranks every Card in the
+> product inside the landing whose claim is that almost nothing changes — a change to the assistive
+> heading tree, invisible on screen, in a commit nobody would inspect for it.
+
+`DataTable` gains a `numeric` column flag, a sticky header and skeleton rows.
+
+> **Two archetype APIs are wider than this decision states, found by reading Landing B's spec
+> against them** (`design.md` §6.1). `EmptyState` needs an **optional** action and a page-vs-section
+> size — B has five empty states of two sizes and one of them deliberately offers no action at all,
+> so "icon, one-line explanation, one action" describes exactly one of the five. And **`ListRow`
+> must own its own loading render**: `UX_STANDARDS` requires skeleton and final layout to be
+> identical, which a generic `Skeleton` rectangle above a list cannot deliver. Both are cheap now
+> and are a one-off on the LCP screen if they are found during B.
 
 **`EmptyState` and `Skeleton` close `docs/TECH_DEBT.md` #21(d) and `docs/UX_STANDARDS.md`'s
 year-old skeleton requirement**, and they land in L3 so the organisation-landing epic (ADR-0098)
@@ -362,9 +385,27 @@ rather than a rewrite (ADR-0078's barrel-preserving argument).
 
 ### D14 — Six scopes is the ceiling, and a seventh needs a sixth condition
 
-`page`, `chrome`, `panel`, `brand`, `auth`, `canvas` — 6 × 18 base declarations per theme × 3 themes,
-plus packs. `brand` and `auth` alone are 108 declarations that must stay identical, guarded by an
-assertion that exists _because the completeness sweep structurally cannot see them_.
+`page`, `chrome`, `panel`, `brand`, `auth`, `canvas`. **Written as 6 × 18 × 3 themes; both
+multipliers moved underneath it and the corrected figure is below**, because the ADR-0076 Class 1
+failure is a count nobody re-derived after the thing it counts changed.
+
+> **Re-derived from the shipped file, 2026-08-19.** Two things happened after this line was
+> written. D15 removed two themes (× 3 → × 1). D6's closure then **grew the family from 18 names
+> to 29** — the eleven status fills it pulls in — which is visible in `globals.css:496-532`, where
+> the `chrome` rebind block declares 18 base names and 11 closure members. So the honest arithmetic
+> is **6 families × 29 = 174 declarations, once**, plus the `PLOT` (6) and `GROUND` (2) packs, plus
+> the metric, type, elevation and motion sets. Two of the six are not yet declared: `--page-*` (D6a)
+> and `canvas` (D2). The claim that survives is the one that mattered — **the token surface is
+> smaller than it was**, because the × 3 that disappeared is worth more than the +61 % per family
+> that arrived. The claim that does **not** survive is D15's costing of a dark variant; see the
+> correction there.
+>
+> The `brand`/`auth` cross-theme identity assertion (`token-architecture.test.ts:75-83`) was
+> expected to disappear with the themes. **It did not — it survived and is now vacuous**, sweeping
+> a one-element `THEME_SELECTORS` while its own test name still reads _"declares --brand… in all
+> three theme blocks, identically"_. A gate that passes for a reason unrelated to what it asserts
+> is the ADR-0090/ADR-0091 shape, and it is Landing A's to resolve: delete it, or re-point it at
+> the thing that is still true.
 
 **A seventh scope must show, in an ADR, what the sixth could not do for it**, in addition to
 ADR-0077 §1's five conditions. Two that will be proposed and should be refused: a `dialog` scope
@@ -432,13 +473,24 @@ was never theme-able; under this design there is nowhere else to put it.
 > **The cost of adding a designed dark variant: a block of values and one entry in
 > `THEME_SELECTORS`.**
 
-Long form: ~110 declarations in one `[data-theme='dark']` block (against ~117 for today's `.dark` —
-**the axes being added do not make it materially more expensive**), one selector entry, one restored
-branch in a boot script that is still running, one picker entry, and a matrix that sweeps two and
-**names every failing pair**. The honest caveat: choosing good dark values is design work and that
-sentence does not price it — a dark variant of a diagram whose colours carry meaning needs its plot
-separations **re-derived, not re-tinted**. The mechanism is a block and a line; the design is a week's
-judgement.
+Long form: one `[data-theme='dark']` block, one selector entry, one restored branch in a boot script
+that is still running, one picker entry, and a matrix that sweeps two and **names every failing
+pair**.
+
+> **The size of that block is corrected, 2026-08-19, and it is a real cost increase.** This
+> paragraph said _"~110 declarations, against ~117 for today's `.dark` — the axes being added do
+> not make it materially more expensive"_. That was written before `auth` was measured back in
+> (D15's own note) and before the closure landed. Re-derived from `globals.css`: a theme block now
+> owes **six families × 29 names = 174** colour declarations plus the two packs, i.e. **~182 against
+> today's `.dark`'s ~117 — about 1.55×** — before any non-colour axis it chooses to vary. The
+> sentence _"a block of values and one entry"_ is still true in **shape**, which is what D15 is
+> about; the number under it is 65 % larger than stated and pretending otherwise is exactly the
+> claim this register exists to catch. The reason is not waste: the extra 11 per family are the
+> status fills that measured **1.34:1 and 2.47:1** on navy, so a dark theme that skipped them would
+> ship the defect this epic opened on. The honest caveat: choosing good dark values is design work and that
+> sentence does not price it — a dark variant of a diagram whose colours carry meaning needs its plot
+> separations **re-derived, not re-tinted**. The mechanism is a block and a line; the design is a week's
+> judgement.
 
 **And the cost to users, said plainly:** dark mode is an accommodation for some people — light
 sensitivity, migraine, low-light working — not only a preference. It is not a WCAG 2.2 AA failure and
@@ -501,20 +553,92 @@ vertical-rhythm and toolbar-width measurement in this repository was taken in wh
 there. It is D2's finding in a second place: the document names one thing and the product ships
 another, and nothing says so.
 
-**One self-hosted variable family, Latin subset: Inter.** Chosen on a design argument rather than by
-default — a scheduling tool's type must be unambiguous at 12–13 px in dense numeric columns, and the
-data ramp structurally depends on the font _having_ a `tnum` table. OFL, so it clears the permissive
-constraint. **No second display face**: the login already carries a photograph and a navy wash doing
-that work. **`--font-mono` is not self-hosted** — eight call sites for identifiers, and 30 kB is not
-that trade.
+**One self-hosted variable family, Latin subset. ~~Inter.~~ SPACE GROTESK — decided by the product
+owner, 2026-08-19, against this ADR's recommendation.** The brief was _"something with more
+character"_; four OFL families were rendered on real product chrome and a real schedule table
+(`typeface.md` §2), I recommended the Manrope / Instrument Serif **pairing**, and the product owner
+took the more distinctive **single** face. Recorded as a reversal rather than absorbed, with my
+reservation intact and reduced to a thing to watch: distinctive numerals appear in every date of a
+2,000-row table, and if the tables come to read as tiring that is the first place to look — the
+remedy is a numeral-only fallback, not re-opening the face.
+
+**Two clauses of my own argument survive the reversal and one dies.**
+
+- **Survives:** the data ramp structurally depends on the font _having_ a `tnum` table. Space
+  Grotesk ships one, and here it is **load-bearing rather than a nicety** — measured with
+  `fontTools` **before** the face was committed: its digits are proportional by default and
+  dramatically so, the `1` at 404 units against the `0`'s 638, a **58 % difference**. Left alone a
+  column of dates does not line up and a duration ticking `9 d → 10 d` shifts everything after it,
+  which reads as a rendering bug rather than a font setting. Gated
+  (`token-architecture.test.ts:358-375`, scoped to `th`/`td` and an opt-in class, with a second
+  assertion that it is **not** applied to running text, where even spacing reads as gappy).
+- **Survives, and the decision satisfies it:** **no second display face.** I argued that for Inter
+  and it is why I ranked the pairing fourth on cost; the product owner reached the same shape from
+  the other end by taking one face with enough character to do both jobs. There is no serif, and
+  nothing in `screens.md` depends on one.
+- **Dies:** _"distinctiveness belongs in the brand panel, not the data grid."_ That was the argument
+  the recommendation rested on and it was overruled on the merits, not by oversight. What replaces
+  it is a **constraint on the rest of the type work**: with no second family, hierarchy is carried
+  by **weight, size, tracking, colour and space alone**, and the weight axis is the one this design
+  had not tokenised at all — **183** hand-applied `font-medium|semibold|bold|light` classNames
+  across **85 non-test files** (counted, not estimated) with no token, no pairing to the ramp and no
+  gate. That is the `tabular-nums` finding (29 sites, 18 files) one axis along, and it becomes a
+  Landing A requirement rather than a discovery in Landing F. See `design.md` §4.1a.
+
+**`--font-mono` is not self-hosted** — eight call sites for identifiers, and 30 kB is not that
+trade.
 
 **The CSP needs no change**, which is the point worth recording: `apps/web/e2e-csp/` serves the real
 policy and it permits **no external origins** (`font-src 'self'`), so "add a font" cannot mean "add a
-CDN" here. Cost: **~35–45 kB on `/sign-in`**, the LCP path of the coldest screen in the product,
-preloaded, `font-display: swap` with metric-overridden fallbacks. `swap` rather than `optional`
+CDN" here — and a Google Fonts URL would have failed **closed and silently**, before first paint, in
+enforce mode, on the deployed origin only, with the fallback stack as its symptom. Cost as shipped:
+**41 kB for the whole family**, one variable file per subset (Latin and Latin-Extended split, so the
+common case never downloads the accented characters), on `/sign-in` — the LCP path of the coldest
+screen in the product — `font-display: swap` with metric-overridden fallbacks. Served from
+`src/assets/` rather than `public/` so Vite fingerprints it and it caches immutably. `swap` rather than `optional`
 deliberately — `optional` means a first-time visitor may never see the face, which reintroduces
 "the product looks different depending on your machine" through a new door. The layout shift is a
 **`performance-reviewer` question on the built artefact**, not a claim made here.
+
+### D19 — On existing screens the scope is **controls and interaction**, not paint
+
+**Product owner, 2026-08-19.** The back half of this epic was written as a restyle: tables, the
+Explorer's zones, the staff console, the public screens, the dialog set. It is now a **correction of
+interaction that has drifted from the documented standard** — the raw native `<select>`s on the
+library screens become the hand-rolled `Combobox` that already exists, and the bare text row-actions
+become the APG row menu `docs/UX_STANDARDS.md` "Row / node actions" already specifies.
+
+**This widens Landing F substantially, and F therefore splits** (`migration.md` F1/F2). Counted
+rather than estimated: **~20 `<SelectField>` call sites across 10 non-test files**, a further ~15
+raw `Select`/`<select>` usages, and **~10 tables carrying bare per-row text actions** —
+`CalendarsTable.tsx:233-281` renders five buttons in a single row. Each conversion changes the
+**accessibility tree**, and therefore the locators of every journey over it, which is a different
+risk class from changing a colour and does not belong in the same landing as the documentation
+sweep. It also moves affordances people know the position of; that is the accepted cost and is
+named here so it is not rediscovered as a complaint.
+
+**Two questions must be answered before the first conversion, and neither is answered by the
+decision itself.**
+
+1. **A written discriminator for `Select` vs `Combobox`.** `combobox.tsx:12-15` states its own
+   reason for existing narrowly — _"a native `<select>` cannot do what a library picker needs at
+   scale: type-ahead filtering against the server, a 'load more' page, and options that carry a
+   tier/state annotation"_. A dependency type (FS/SS/FF/SF) has none of those properties, and
+   converting it replaces a correct control with a heavier one. The decision named the **library
+   screens**; the principle behind it is general, so the general form needs a rule or it
+   over-applies. **Proposed:** `Combobox` when the option set is server-paged, searchable or
+   annotated; native `Select` otherwise.
+2. **What a hand-rolled combobox costs on a touch device.** A native `<select>` gets the platform's
+   own picker — the iOS wheel, the Android sheet — free, and it is the best mobile control in the
+   product. A `Combobox` gets an in-flow listbox competing with a virtual keyboard. D8 resolves
+   `comfortable` density under `@media (pointer: coarse)`, so this collides with a decision already
+   taken here, and `docs/TECH_DEBT.md` #133 records that **no measurement in this repository has
+   ever been taken with a coarse pointer**. An `accessibility-reviewer` and `ux-reviewer` question
+   **before** the conversions, not after.
+
+One thing it simplifies rather than complicates: ADR-0083 keeps native `<select>`'s `disabled` as a
+**named exception with its cost stated**, precisely because we do not control that element.
+Wherever a conversion lands, that exception retires with it.
 
 ---
 
@@ -608,10 +732,15 @@ deliberately — `optional` means a first-time visitor may never see the face, w
 - **A second theme becomes a block of values and one entry** (D15) — as ADR-0055 promised, but now
   including its non-colour decisions, and now with a computed contract that names every token a new
   theme forgets.
-- **The token surface shrinks by roughly two thirds while gaining a scope.** Five families declared
-  once, rather than five families declared three times — and the diagram, the surface that most needed
-  a validated family, is one of the five. **The count went down and the coverage went up**, which is
-  the clearest evidence available that the single-theme decision and the canvas scope are both right.
+- **The token surface shrinks while gaining a scope and widening every family.** Re-derived
+  2026-08-19 rather than left at "roughly two thirds": **six** families declared **once** at **29
+  names each** (18 base + the 11 the closure pulls in), against five families of 18 declared three
+  times — 174 + packs against 270 + packs. **The count went down and the coverage went up**, which
+  is the clearest evidence available that the single-theme decision, the canvas scope and the
+  closure are all right. Two caveats belong with it and are not softened: the saving is **half** of
+  what the pre-closure arithmetic implied, and it is spent entirely on a **second** thing this
+  epic gained — the eleven status fills that measured 1.34:1 and 2.47:1 on navy, i.e. six live WCAG
+  1.4.11 failures nobody had raised. That is the trade, stated in both directions.
 - **Every colour decision stops being a negotiation with two themes nobody was designing.** That is
   the mechanism behind "it looks like a badly designed skin" as much as the missing axes were, and it
   is the change that makes a bold palette safe to commit to: one target, one computed matrix.
@@ -672,15 +801,42 @@ deliberately — `optional` means a first-time visitor may never see the face, w
   can see coming.
 - **The scope count becomes the thing to defend.** Six is affordable; the seventh is where this
   becomes unmaintainable, and the only thing preventing it is a written bar and a reviewer applying
-  it.
+  it. **And the seventh is now dearer than the sixth was** — 29 declarations rather than 18, eleven
+  of them needing a derived value that clears 4:1 against that surface's fill. The bar did not move;
+  the price behind it did.
+- **Every width figure this epic inherits is now stale**, and D18 is why. The toolbar ladder, the
+  four band floors, `CHROME_RESIDUAL_PX` and `e2e-toolbar-fit`'s thresholds are arithmetic over
+  rendered text widths, and until Space Grotesk landed there was no stable face underneath any of
+  them (`typeface.md` §5). The gates pass — checked — but **"passes" is not "was re-derived"**, and
+  D16's measurement milestone is now the first honest measurement of this command surface in a face
+  the product actually ships. That materially raises C's cost and this ADR did not price it when it
+  was drafted against Inter.
+- **Hierarchy now rests on weight, and weight is the least-governed axis in the product.** A
+  sans/serif pairing would have given rank a categorical channel; one face does not, so weight,
+  size, tracking, colour and space carry all of it — and weight is **183 hand-applied classNames
+  across 85 non-test files** with no token, no pairing to a ramp step and no gate. It is the
+  `tabular-nums` finding one axis along, and worse, because a weight is a judgement about **rank**
+  rather than a formatting detail. Landing A gains the tokens, a default per ramp step, and a
+  ratchet at 183 (`design.md` §4.1a).
+- **D19 splits Landing F**, and the half that moves controls people already know how to find is a
+  different risk class from the half that re-derives documents.
 
 ### Neutral / follow-ups
 
-- `docs/DESIGN_SYSTEM.md` is **re-derived from the gates**, closing five drifts it carries today: the
+- `docs/DESIGN_SYSTEM.md` is **re-derived from the gates**, closing the drifts it carries: the
   unused `text-3xl` page-title size, the 36-vs-40 control scale, a `DataTable` described with five
   features it does not have, "three scopes" at §230 against "five scopes" at §267, and "17-token
   family" against the gate's 18. `docs/COMPONENT_LIBRARY.md` gains six primitives;
   `docs/FRONTEND_ARCHITECTURE.md` gains the density axis and the canvas scope.
+
+  > **Two of those entries stopped being pending and became WRONG when Landing A shipped, and the
+  > sweep should not wait for F2.** §268 states _"There are five scopes"_ — it is six. §272-277
+  > explains `brand` and `auth` as _"theme-invariant, identical in Light, Dark and Corporate,
+  > because a signed-out visitor cannot choose a theme"_ — **there is no Light and no Dark**, so the
+  > governing document a reader consults before touching a scope now describes a mechanism the
+  > product does not have. That is the drift class this epic's own §0.5.3 gate exists to prevent,
+  > arriving through the one door a CSS gate cannot watch.
+
 - `docs/TECH_DEBT.md` **#126** (four toolbar segments with no icons) is answered with a **rule** —
   a mode's glyph depicts the mode's effect on the diagram, not its name — and the constraint that all
   four land together. The glyph names must be **verified against the installed
@@ -708,7 +864,8 @@ to hold parity for.
 
 ## What this ADR records about its own making
 
-Three things, because this register is largely a record of claims that turned out false.
+Four things, because this register is largely a record of claims that turned out false — and the
+fourth is this document becoming one.
 
 1. **This session had no shell.** Every ratio in the spec is either quoted from a file that computed
    it or **hand-computed** from `globals.css` using this repository's own transform
@@ -724,3 +881,25 @@ Three things, because this register is largely a record of claims that turned ou
    found a pass; the defect was in the modifier. **The matrix measures tokens; the browser paints
    utilities.** D12's pair census covers alpha-modified fills because of that, not because a reviewer
    should remember to check them.
+4. **Reviewed against what actually landed, 2026-08-19 — and four of this document's own claims did
+   not survive it.** Two were reversed by the product owner on the merits (the typeface, D18; the
+   scope of the existing screens, D19). Two were **wrong**, and both are the ADR-0076 Class 1 shape
+   — a count nobody re-derived after the thing it counts changed. The scope count said five and is
+   six, because `auth`'s retirement was a **prediction** that the measurement `migration.md` A
+   correctly demanded then falsified. The family size said 18 and is 29, because D6's own closure —
+   the decision whose entire point is that _"the count becomes an output"_ — grew it, and three
+   sections went on quoting the input. **A design that replaces a count with a derivation has to
+   stop quoting the count**, and this one did not.
+
+   A fifth is worse than a wrong number. `screens.md` §6 specified a **metrics strip** for the
+   organisation landing page — a section that screen's own spec rejects **by name**, in its own
+   words _"the single most common dashboard mistake"_. That is `migration.md` B's condition — build
+   it from the archetypes, never a bespoke layout that happens to look right — violated by the
+   document that wrote the condition, on the flagship screen, before a line of it was built. Found
+   by opening `organisation-landing/feature-spec.md` §4.7 instead of trusting this document's own
+   list of what that screen is made of.
+
+   **What generalises from it**, since the same shape will recur every time this epic touches a
+   screen another spec owns: **that spec owns what a screen says; this one owns what it is made
+   of.** A sentence here naming a section, a metric or a piece of copy on somebody else's screen is
+   out of bounds by construction, however good the section would be.

@@ -55,6 +55,28 @@ the product _does_ render, so it governs pairs the product may never make. That 
 direction to be wrong in — a governed pair nobody renders costs three lines of CSS; an ungoverned
 pair somebody renders costs a WCAG failure nobody can see coming.
 
+## 3a. What it costs, now that the scope count is six
+
+The table above sweeps **five** scopes because those are the five that exist. `canvas` is the sixth
+and lands at **E**, so the closure's arithmetic has one more multiplication to come and it is worth
+stating before it arrives rather than discovering it in that landing.
+
+- **A family goes 18 → 29 names.** Eleven closure members join the eighteen base tokens; the shipped
+  `chrome` rebind block (`globals.css:496-532`) is the reference implementation.
+- **Six families × 29 = 174 declarations, once**, plus the `PLOT` (6) and `GROUND` (2) packs.
+  Against the pre-epic 5 × 18 × 3 themes = 270, that is still a reduction — **but a little under
+  two thirds, not the "roughly a third of the surface" `design.md` §0.5.1 originally claimed with
+  five families of eighteen.** Corrected there.
+- **`canvas` owes all eleven**, and the "declare it or it is a trap" rule is not weakened for it.
+  It is tempting to argue that a status **fill** never appears on a diagram — but the ADR-0092 dock,
+  the create popover and the bulk-selection bar are DOM inside the diagram container, and every one
+  of them can render a `Button` with a `destructive` or `secondary` variant. That is the pair the
+  closure exists to govern, so the argument for exempting the canvas is the argument the six
+  measured failures below already refuted for `chrome`.
+- **The seventh scope is therefore a bigger commitment than the sixth was.** ADR-0097 D14's bar was
+  written when a scope cost 18 declarations. It now costs 29, eleven of which need a derived value
+  clearing 4:1 against that surface's fill. The bar has not changed; the price behind it has.
+
 ## 4. Method
 
 `--color-*` declarations parsed out of the real `@theme inline` block in

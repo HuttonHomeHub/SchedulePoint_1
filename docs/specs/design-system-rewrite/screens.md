@@ -219,14 +219,29 @@ and forcing it into `<table>` misrepresents it to assistive technology and to th
 **Recommended as the first fully-realised screen in the new language** — see `migration.md` for the
 sequencing argument and the recommendation to the product owner.
 
-Composition: a page header that names the organisation and the reader's place in it; a metrics strip
-(counts that are facts, in `text-data`, not decorative KPI cards); **"Jump back in"** as `ListRow`s;
-**"Needs attention"** as `NoticeStrip info` — which its own spec correctly established already exists
-and must not reach for `destructive`, because holding an editing lock is a prompt, not a failure; and
-**"Recently changed"** as a feed of `ListRow`s.
+Composition: a page header that names the organisation and the reader's place in it; **"Jump back
+in"** as `ListRow`s; **"Needs attention"** as `NoticeStrip info` — which its own spec correctly
+established already exists and must not reach for `destructive`, because holding an editing lock is
+a prompt, not a failure; and **"Recently changed"** as a feed of `ListRow`s.
 
-Three empty states, all `EmptyState`, all on the first screen a new customer sees. That is the
-argument for building the primitive rather than a fourth bespoke one (`docs/TECH_DEBT.md` #21(d)).
+> **The metrics strip is WITHDRAWN, 2026-08-19.** This paragraph opened with _"a metrics strip
+> (counts that are facts, in `text-data`, not decorative KPI cards)"_, and the hedge in the
+> parenthesis is the tell — it is arguing with an objection instead of answering it.
+> `docs/specs/organisation-landing/feature-spec.md` §4.7 **rejects count tiles explicitly and
+> first**, in its own words _"the single most common dashboard mistake"_: they answer no question a
+> planner has, and the Project Explorer already shows the tree permanently, one rail away.
+>
+> That spec is the owner of this screen's content. This document had no business specifying a
+> section for it, and specifying one it had already refused is precisely the failure `migration.md`
+> B's condition names — **a bespoke thing that happens to look right, on the flagship screen, from
+> the design system that exists to stop that.** Found by reading §4.6 and §4.7 rather than by
+> trusting this list. The division of labour holds: **that spec owns what the screen says; this one
+> owns what it is made of.**
+
+Five empty states of two different sizes, all on the first screen a new customer sees — three
+organisation-level (one of them role-gated with **no** action) and two section-level. That is the
+argument for building the primitive rather than a fifth bespoke one (`docs/TECH_DEBT.md` #21(d)),
+and it is also why `EmptyState` needs a variant axis §5 did not give it (`design.md` §6.1).
 
 ---
 
@@ -239,14 +254,25 @@ nothing to be invariant against.
 - **`brand` survives** — on the ordinary ADR-0055 argument, not the invariance one. The panel is navy
   and the page is off-white; that is a region whose fill is chosen for a reason the page's cannot
   serve.
-- ~~**`auth` retires.**~~ **Measured 2026-08-18: it stays.** The premise below is correct as
-  history and wrong as a conclusion — losing its original reason is not the same as having none.
-  12 of its 18 tokens differ perceptibly from the page, including a WCAG-derived focus ring.
-  It exists only because §2's argument was applied to half the screen
-  (ADR-0077 §8.3). With one theme the card simply is a card on the page, and an entire 18-token
-  family goes with it. Verify before deleting: the four `--auth-*` values that differ from the page's
-  by design (the tinted field, the derived amber ring) either become page values or become the
-  reason `auth` stays. **That check is a task, not an assumption.**
+- ~~**`auth` retires.**~~ **Measured 2026-08-18: it STAYS, and the count of scopes goes up rather
+  than down.**
+
+  The reasoning that put it on the chopping block is correct **as history**: `auth` exists only
+  because ADR-0077 §2's pinning had been applied to half the screen (§8.3), and with one theme
+  there is nothing left to be invariant against. The conclusion drawn from it was wrong — **losing
+  its original reason is not the same as having none.**
+
+  This document said the check was "a task, not an assumption", and it earned that wording. The
+  task expected to find _"four `--auth-*` values that differ from the page's by design"_. Comparing
+  all eighteen in OKLCH found **fifteen differ and twelve are perceptible (Δ ≥ 0.02)**, led by
+  `--auth-ring` at **Δ 0.39** — the amber ring ADR-0077 M7 derived up from the old app's 2.02:1 to
+  3.01–3.36:1 specifically to clear WCAG 1.4.11 after the computed matrix caught it failing.
+  Retiring the scope would discard that derivation along with the tinted field fill, four status
+  inks and the white card that separates the login from an off-white page — a **visible** change to
+  the one screen every stranger meets, inside a landing whose claim is that almost nothing changes.
+
+  So `auth` survives on the ordinary ADR-0055 argument rather than the invariance one, and every
+  place these documents said "five scopes" has been corrected to six (`design.md` §1.4).
 
 The login's composition — the 900 px fixed-height card on a gradient ground, the photograph, the
 amber seam — is the best-designed screen in the product and is **not** reopened.

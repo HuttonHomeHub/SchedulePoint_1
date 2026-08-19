@@ -33,15 +33,17 @@ class means: WCAG 2.2 AA; the canvas's colours carry meaning; it stays gated.
 
 ## Read in this order
 
-| Document                                                          | What it is                                                                                  |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| [`diagnosis.md`](./diagnosis.md)                                  | What is actually undesigned, on named screens, with the file and line. Three categories.    |
-| [`design.md`](./design.md)                                        | The vocabulary: one theme, five scopes, three new axes, the typeface, the rules, the gates. |
-| [`screens.md`](./screens.md)                                      | **The product designed** — the six surfaces, at the level of composition and hierarchy.     |
-| [`command-surface.md`](./command-surface.md)                      | **The reshape** — why 32 commands in a row is the wrong instrument, and what replaces it.   |
-| [`hard-surfaces.md`](./hard-surfaces.md)                          | The vocabulary worked through against the canvas, the Gantt, the toolbar, tables, dialogs.  |
-| [`migration.md`](./migration.md)                                  | Six landings, the early look, the landing-page recommendation, and what gets worse.         |
-| [`ADR-0097`](../../adr/0097-a-theme-is-a-system-not-a-palette.md) | The decision record.                                                                        |
+| Document                                                          | What it is                                                                                     |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| [`diagnosis.md`](./diagnosis.md)                                  | What is actually undesigned, on named screens, with the file and line. Three categories.       |
+| [`design.md`](./design.md)                                        | The vocabulary: one theme, **six** scopes, three new axes, the typeface, the rules, the gates. |
+| [`screens.md`](./screens.md)                                      | **The product designed** — the six surfaces, at the level of composition and hierarchy.        |
+| [`command-surface.md`](./command-surface.md)                      | **The reshape** — why 32 commands in a row is the wrong instrument, and what replaces it.      |
+| [`hard-surfaces.md`](./hard-surfaces.md)                          | The vocabulary worked through against the canvas, the Gantt, the toolbar, tables, dialogs.     |
+| [`typeface.md`](./typeface.md)                                    | The face, the four candidates, and the 58 % digit measurement that made `tnum` a gate.         |
+| [`closure-measurement.md`](./closure-measurement.md)              | The closure, computed — and the six WCAG 1.4.11 failures it found on the navy scopes.          |
+| [`migration.md`](./migration.md)                                  | The landings, the early look, the landing-page recommendation, and what gets worse.            |
+| [`ADR-0097`](../../adr/0097-a-theme-is-a-system-not-a-palette.md) | The decision record.                                                                           |
 
 ---
 
@@ -66,6 +68,23 @@ class means: WCAG 2.2 AA; the canvas's colours carry meaning; it stays gated.
    it is editing (`screens.md`).
 
 ---
+
+## Where the plan has been corrected by what landed
+
+**Reviewed 2026-08-19, after Landing A began.** Four corrections, each recorded where it happened
+rather than collected here. Two of them contradict this design.
+
+| Correction                                                                                                                                                                                                                                                                                                    | Where                                             |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **Scopes are SIX, not five.** `auth` was to retire; measured, 15 of 18 tokens differ from the page and 12 perceptibly, led by a focus ring ADR-0077 M7 derived to clear WCAG 1.4.11. Every "five scopes" in these documents was wrong and is corrected.                                                       | `design.md` §1.4, `screens.md` §7, ADR D14        |
+| **A family is 29 names, not 18**, because the closure pulls in eleven status fills — so the token-surface saving is a little under two thirds rather than the third claimed, and a dark theme now costs ~182 declarations rather than the "~110, not materially more expensive" the ADR asserted.             | `design.md` §0.5.1, ADR D14/D15                   |
+| **`CHROME_RESIDUAL_PX` over-charging Row 2 by ~47 px was stale** — ADR-0091 M7 had already fixed it and the constant is `16`. The command-surface reshape rests on the menu argument alone.                                                                                                                   | `command-surface.md` §1, ADR head-note            |
+| **The typeface is Space Grotesk, not Inter**, and the argument that carried Inter — _"distinctiveness belongs in the brand panel, not the data grid"_ — was overruled on the merits. Its consequence is that **weight** becomes the hierarchy channel, and weight has no token: 183 sites, 85 non-test files. | `typeface.md`, `design.md` §4.0 and **new §4.1a** |
+
+**And one thing this design specified that it had no business specifying:** a metrics strip on the
+organisation landing page, which that screen's own spec rejects by name as _"the single most common
+dashboard mistake"_. Withdrawn (`screens.md` §6). It is the exact failure `migration.md` B's
+condition exists to prevent, committed by the document that wrote the condition.
 
 ## The question that was asked of this design, and its answer
 
