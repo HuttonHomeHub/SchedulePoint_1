@@ -282,6 +282,21 @@ the moment they run:
 | `TsldPanel.tsx:1081,1086` (`useMemo`) | during render, **above** the canvas      | **No** — the canvas is its child                                       |
 | `use-diagram-image.ts:103`            | on demand, off the render path           | Only if something hands it one                                         |
 
+**And the provider sits higher than the first draft assumed.** `resolvePrintPalette` is reached from
+`use-diagram-image.ts`, which is called by `useTsldToolbarContext`, which is called from
+`plan-workspace-toolbar.tsx:282` — i.e. from a component **above `TsldPanel`**, not below it. So a
+context published by the `<Surface tone="canvas">` element itself cannot reach it, and neither can
+one published inside `TsldPanel`. The provider goes in the plan workspace, above both the toolbar and
+the panel, and the surface **registers its node into it** from below — which is the `ChromeSlot`
+shape a second time (provider high, node registered from underneath), and the second reason to reuse
+that pattern rather than invent one.
+
+Worth being explicit about why the print path is not exempt: its own docblock promises that a
+printed diagram "cannot drift from the one on screen", and it reads the same `--color-primary` /
+`--color-destructive` / `--color-warning` names. The moment L4-1 re-values those inside the canvas
+scope, a print resolved from the page paints the **old** bar colours — the export silently stops
+matching the screen, which is the one thing that function exists to guarantee.
+
 So the element is published as **state, not a ref** — the `useChromeSlot` pattern, and for the
 identical reason recorded there: `createPortal`/`getComputedStyle` need a real element at the moment
 they run, and a ref mutation re-renders nobody, so a consumer would resolve once against nothing and
