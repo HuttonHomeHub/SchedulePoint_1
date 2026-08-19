@@ -2328,3 +2328,51 @@ does not import the router), four screen sites became one primitive site, and th
 ratcheted **165 → 162**. That is the trade the two-bucket split was designed to make visible, and it
 only works because the primitives bucket is also capped — otherwise "move it into a primitive" is an
 unlimited escape hatch rather than a decision.
+
+---
+
+## 2026-08-19 — Two of four symptoms had already been fixed
+
+**ADR-0097 Landing C, found before M0's measurement ran** — by checking the spec's own
+decision-bearing claims against the code, which is CLAUDE.md §19.10 applied to a document written
+for this epic rather than to one inherited from an earlier one.
+
+`docs/specs/design-system-rewrite/command-surface.md` §2 argues that the plan toolbar is a menu bar
+rendered as a row, and lists **four symptoms that follow directly from the shape**. Two of them
+describe behaviour that **ADR-0091 M7 had already changed**:
+
+- _"Labels are all-or-nothing per row"_ cited `Toolbar.tsx:286-310`, which is `applyLadder` and the
+  head of `measure` and has never held a label pass. The label pass is `computeLadder`'s Stage 1,
+  and it labels an **importance-sorted prefix** through `affordablePrefix` — labels fall one at a
+  time. That is precisely what M7 shipped, in answer to the product owner's "labels should fall one
+  at a time rather than all at once".
+- _"The `⋯` is an unnamed container for four named commands"_ — `tier: 3` has **one** occupant in
+  the plan toolbar (`float-paths`), M7 made tier 3 admitted-last rather than exiled, and ADR-0093
+  then returned `clear-visual-placement` inline and the `⋯` left Row 2 entirely.
+
+§3.2's deletion list also names `LABEL_CHROME_PX` and `LABEL_PROMOTION_MARGIN_PX`, both of which M7
+already removed — so the list overstates what the reshape buys by naming things already gone.
+
+**This is the third ADR-0091 M7 fix that this one document describes as a live defect.** ADR-0097's
+own register entry records the first: the reshape was costed partly on `CHROME_RESIDUAL_PX`
+over-charging Row 2 by ~47 px, and M7 had fixed that too, the constant reading `16` today with its
+docblock recording the recovery. One stale citation is ADR-0076 Class 2; three in one document, all
+from the same milestone, is a pattern — **a spec written from the epics that preceded it inherits
+their problem statements, and a milestone that fixed things does not go back and edit the specs that
+complained about them.**
+
+**What it costs, stated rather than absorbed.** The corrections are made in place with the withdrawn
+claims struck through, because a reader who meets a four-symptom diagnosis weighs it differently
+from a two-symptom one. Symptoms 3 (every width decision is a subtraction — `computeLadder`, four
+band floors, a 48 px hysteresis, `CHROME_RESIDUAL_PX`, the `⋯` costing) and 4 (two rows) are
+**verified accurate**, and the menu-structure argument — that `TOOLBAR_GROUPS` is a closed
+seven-member tuple of nouns, verified exactly as cited — was always the stronger half. But the
+proposal now has to carry itself on those, and §6 gains a second gate saying so: M0's report is read
+against the 120 px of slack **and** against whether what survives justifies replacing the renderer
+on the surface with the most test coverage in the product.
+
+**The generalisable half.** A spec's problem statement is a claim like any other, and it goes stale
+in the one direction nobody checks: the problem gets fixed and the document keeps complaining. The
+rule that follows is cheap — **before building from a spec, re-verify the symptoms, not just the
+design.** Everything in this repository's process already re-verifies the _solution's_ citations;
+nothing re-verified the _problem's_, and three of them had rotted.

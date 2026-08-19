@@ -55,17 +55,30 @@ has never been the problem — it is a good, compiler-enforced, gated, tested pi
 **renderer** is a flat horizontal bar, and a flat horizontal bar is the wrong instrument for
 thirty-two commands.
 
-Four symptoms follow directly from the shape, and only from the shape:
+Four symptoms follow directly from the shape, and only from the shape — **and two of the four were
+already fixed when this was written. They are corrected in place rather than deleted, because the
+pattern is the finding** (verified 2026-08-19, before M0 ran; ADR-0076 Class 2, and the third
+instance of an ADR-0091 M7 fix being described here as a live defect — the first was
+`CHROME_RESIDUAL_PX`, recorded in ADR-0097's own entry).
 
-1. **Labels are all-or-nothing per row.** `Toolbar.tsx:286-310` sums the whole `bar`, not the inline
-   half, so _"one 121 px label anywhere on the bar suppresses all of them"_
-   (`m2-item-widths.md`). A menu never faces this question: a menu item always has its name.
-2. **The `⋯` is an unnamed container for four named commands.** A planner looking for `Float paths`
-   has to know it is behind a glyph that means "more".
-3. **Every width decision is a subtraction.** `computeLadder`, the four band floors, the 48 px
+1. ~~**Labels are all-or-nothing per row.**~~ **WITHDRAWN — false since ADR-0091 M7.** The claim
+   cited `Toolbar.tsx:286-310`, which is `applyLadder` and the head of `measure` and has never
+   contained a label pass. The label pass is `computeLadder`'s Stage 1
+   (`toolbar-ladder.ts:216-231`), and it labels an **importance-sorted prefix** via
+   `affordablePrefix` — so labels fall **one at a time**, which is exactly what ADR-0091 M7 shipped
+   in answer to "labels should fall one at a time rather than all at once". The quoted
+   `m2-item-widths.md` line describes the pre-M7 world. A menu still never faces the question; that
+   is just no longer a difference from today.
+2. ~~**The `⋯` is an unnamed container for four named commands.**~~ **WITHDRAWN — one command, and
+   it is not exiled.** `tier: 3` has exactly **one** occupant in the plan toolbar today,
+   `float-paths` (`tsld-toolbar-items.tsx:2311`), and ADR-0091 M7 made tier 3 _admitted-last rather
+   than exiled_, so it is inline whenever there is room. ADR-0093 then returned
+   `clear-visual-placement` inline and the `⋯` left Row 2 entirely.
+3. **Every width decision is a subtraction.** _(Verified accurate 2026-08-19.)_ `computeLadder`, the four band floors, the 48 px
    hysteresis, `CHROME_RESIDUAL_PX`, the `⋯` costing — the entire apparatus exists to decide **what
    to drop**. A menu bar drops nothing.
-4. **The vertical cost buys the horizontal.** Two rows exist because one will not hold the commands.
+4. **The vertical cost buys the horizontal.** _(Verified accurate 2026-08-19 — two rows, both
+   present.)_ Two rows exist because one will not hold the commands.
    134 px of a 807 px workspace at 1646 is spent on the chrome above a diagram, and 31 % is the
    number the product owner reported as "taking up canvas space" (ADR-0092 Context).
 
@@ -127,9 +140,12 @@ must also be re-measured, because ADR-0092 M4 records a merge that _"gained exac
 
 ### 3.2 What this deletes
 
-- `computeLadder`'s label pass, the four band floors, `LABEL_CHROME_PX`, `LABEL_PROMOTION_MARGIN_PX`,
-  `CHROME_RESIDUAL_PX`, the 48 px hysteresis, the `⋯` costing, tier-3 admission, and the
-  "shrink-to-fit rows must never demote" rule — **because there is nothing to demote.**
+- `computeLadder`'s label pass, the four band floors (`TOOLBAR_LAYOUT_BANDS`),
+  `CHROME_RESIDUAL_PX`, the 48 px hysteresis (`TOOLBAR_LAYOUT_HYSTERESIS_PX`), the `⋯` costing,
+  tier-3 admission, and the "shrink-to-fit rows must never demote" rule — **because there is
+  nothing to demote.** _(`LABEL_CHROME_PX` and `LABEL_PROMOTION_MARGIN_PX` were also listed here
+  and are **already gone**: ADR-0091 M7 removed them, and `toolbar-ladder.ts:22` records why. A
+  deletion list naming things already deleted overstates what the reshape buys.)_
 - The four permanently-overflowed commands' exile. They become menu items with names.
 - `docs/TECH_DEBT.md` **#126** (four segments with no icons) — the mode switches keep their labels
   because the band has room; there is no condensed state that needs a glyph. **#131** (an icon-only
@@ -222,6 +238,20 @@ of number this repository has been wrong about four times running.
 3. **If the band does not fit at 1646 with ≥ 120 px of slack, this proposal is withdrawn and the
    fourth-fitting option returns.** That is the falsification condition, written down before the
    measurement, which is the one discipline these three epics converged on.
+
+**A second condition, added 2026-08-19 before M0 ran.** Checking §2's four symptoms against the code
+found **two of them false** — both describing behaviour ADR-0091 M7 had already fixed — and §3.2
+naming two constants that no longer exist. Those corrections are made in place above. What they cost
+the proposal is worth stating rather than absorbing: **the case now rests on symptoms 3 and 4 and on
+the menu-structure argument**, not on labels being all-or-nothing or on four commands hiding behind
+a glyph. Symptom 3 (every width decision is a subtraction) and symptom 4 (two rows) are both
+verified accurate, and the menu-structure argument was always the stronger half — but a reader who
+skipped this note would weigh a four-symptom diagnosis where there is a two-symptom one.
+
+So M0's report is read against **both** conditions: the 120 px of slack, and whether the two
+surviving symptoms plus the vertical return justify replacing the renderer on the surface with the
+most test coverage in the product. The first is arithmetic; the second is a judgement, and it is the
+product owner's.
 
 **The gate afterwards** is the existing `e2e-toolbar-fit`, re-pointed: its S3 (every command
 reachable), S5/S7 (target size), S9 (the `⋯` is rightmost) and S10 (a trailing group really trails)

@@ -2716,6 +2716,17 @@ When operating in this repo, Claude Code should:
     the request path" — say what was **run or read** to establish it: the command,
     the file and line, or the test. Not a pointer to another document.
 
+- **Re-verify a spec's PROBLEM statement, not only its design.** A problem goes
+  stale in the one direction nobody checks: somebody fixes it and the document
+  keeps complaining. ADR-0097 Landing C's spec listed four symptoms and **two
+  were false**, both describing behaviour ADR-0091 M7 had already changed — plus
+  a deletion list naming two constants M7 had already removed, and a
+  `CHROME_RESIDUAL_PX` cost M7 had already recovered. Three stale claims in one
+  document, all from the same milestone, because **a milestone that fixes things
+  does not go back and edit the specs that complained about them**. Everything in
+  this process re-verifies the solution's citations; nothing was re-verifying the
+  problem's. See [`docs/DECISIONS.md`](docs/DECISIONS.md), 2026-08-19.
+
 - **The brief is not evidence.** A claim inherited from the task that started
   the work gets checked like any other. Both recorded instances of this
   failure entered through a brief and were repeated into three or four
