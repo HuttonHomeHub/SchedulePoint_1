@@ -116,6 +116,15 @@
       "retiredOn": "2026-08-18",
       "batch": "batch-16",
       "note": "Retired by the organisation-landing epic (ADR-0098 M0), before it rewrote the flag's own host file \u2014 a screen should not be redesigned while a second, unreachable version of it sits in the same component. Two branches went: AppShell's alternative in `authed-layout.tsx`, and a card in `org-home.tsx` reading \"The schedule editor arrives in an upcoming update\", about a year after the editor shipped. Nobody had ever seen either \u2014 a `VITE_` constant is inlined at build time and no published image passes one (ADR-0088 D1) \u2014 which is the point: an unreachable screen does not go stale harmlessly, it goes stale INVISIBLY, and the next person to design the route reads a screen that does not exist. No flag-off parity suite and no pinned harness existed to convert (searched: no playwright*.config.ts pinned it, no unit test mocked the constant), so typecheck was the instrument, as the VITE_LIBRARY_SCOPING retirement note predicted. **AND THE CLASSIFICATION WAS WRONG.** It was filed class B \u2014 a one-line guard \u2014 while `authed-layout.tsx:15` was `if (NAV_TREE_ENABLED) return <AppShell />;`, an early return selecting between two whole layouts: the class A shape by ADR-0088's own definition. `check-flags.mjs`'s equality against classACap could not see it, because `detect-alternative-surfaces.mjs` matches ternaries returning JSX and is blind to early returns \u2014 which `$classA-note` in this file already says. So the measured class A count was 2 when the true count was 3, and the cap that is supposed to ratchet down was guarding a number it could not compute. Retiring in this commit keeps the detected count at 0 and leaves classACap untouched; raising it for a flag that is leaving would have been the wrong direction. The gate's blind spot is the finding, not this flag."
+    },
+    {
+      "flag": "VITE_DESIGNED_CHROME",
+      "constant": "DESIGNED_CHROME_ENABLED",
+      "enabled": "2026-07-26",
+      "enabledSource": "docblock",
+      "retiredOn": "2026-08-19",
+      "batch": "batch-8",
+      "note": "Retired by ADR-0099 M2, ahead of its batch and against its own `keep`. The keep reason was \"guard-only: the flag GATES a capability rather than SELECTING between two implementations\", and that stopped being true in the same commit that retired it: Graphite's grid shell has to place the band ROW and the body as siblings in one grid, so the shell can no longer render `ChromeBand`'s flag-off composition (`<AppHeader/>` then everything) without a second JSX root. That is ADR-0088's Class A discriminator exactly, and D3 says Class A retires on epic-touch \u2014 this epic is the touch. Leaving it would have been worse than either option: the shell rendered the band unconditionally while `ChromePortal` still branched, so flag-off was a state no reviewer had described and no suite covered. Its two harness pins were CONVERTED first, not stranded (the ADR-0084 batch-1 lesson): `playwright.designed-ui.config.ts` keeps its theme sweep and now runs it against the shipped shell, and `playwright.designed-chrome.config.ts` drops a pin that had become a no-op. `AppHeader` went with it as dead code."
     }
   ],
   "flags": {
@@ -331,14 +340,6 @@
       "enabled": "2026-07-18",
       "enabledSource": "docblock",
       "batch": "batch-6",
-      "class": "B",
-      "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
-    },
-    "VITE_DESIGNED_CHROME": {
-      "constant": "DESIGNED_CHROME_ENABLED",
-      "enabled": "2026-07-26",
-      "enabledSource": "docblock",
-      "batch": "batch-8",
       "class": "B",
       "keep": "Guard-only: the flag GATES a capability rather than SELECTING between two implementations of one, so its absence cannot drift and there is no second product to keep in step. ADR-0088 D4."
     },

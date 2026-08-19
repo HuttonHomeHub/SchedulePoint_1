@@ -5,7 +5,6 @@ import { AccountChip } from '@/components/layout/account-chip';
 import { BrandMark } from '@/components/layout/brand-mark';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { Button } from '@/components/ui/button';
-import { Surface } from '@/components/ui/surface';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { OrgSwitcher } from '@/features/organizations';
 
@@ -93,7 +92,7 @@ function HeaderContents({ identitySlot }: { identitySlot?: React.ReactNode }): R
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
   // Opens the rail as a drawer below `lg`, where the pinned rail is hidden. Null outside the
-  // shell — this header is also rendered by `chrome-band.tsx` on the DESIGNED_CHROME-off path.
+  // shell — this row is rendered by `chrome-band.tsx` as the band's first row.
   const shell = useShell();
 
   return (
@@ -124,20 +123,6 @@ function HeaderContents({ identitySlot }: { identitySlot?: React.ReactNode }): R
         <AccountChip />
       </div>
     </div>
-  );
-}
-
-/**
- * The header as its own chrome surface — today's shell, and the `VITE_DESIGNED_CHROME` flag-off
- * path. Centred at `max-w-6xl` to line up with the still-centred route bodies.
- */
-export function AppHeader(): React.ReactElement {
-  return (
-    <Surface tone="chrome" as="header" className="border-border sticky top-0 z-10 border-b">
-      <div className="mx-auto h-14 max-w-6xl px-4">
-        <HeaderContents />
-      </div>
-    </Surface>
   );
 }
 

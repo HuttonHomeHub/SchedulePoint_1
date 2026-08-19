@@ -39,16 +39,26 @@ const arg = (name) => {
 const stamp = Date.now();
 const password = 'correct-horse-battery';
 
-/** Sign up and create an organisation; returns the slug. Each run gets its own tenant. */
-async function onboard(page) {
-  const slug = `shoot-co-${stamp}`;
+/**
+ * Sign up and create an organisation; returns the slug. Each run gets its own tenant.
+ *
+ * **The tenant is per WIDTH, not per run**, and that is a repair rather than a nicety: the
+ * identity was `shoot-${stamp}` alone, so the first width onboarded and every later one tried to
+ * sign up an address that already existed, sat on the organisation heading and threw after 30 s.
+ * The harness could therefore only ever complete ONE of its three widths — and it reported that
+ * as an uncaught exception AFTER writing a full, correct-looking set of pictures for 1646, which
+ * is the shape of failure this file's own docblock is about (2026-08-19).
+ */
+async function onboard(page, width) {
+  const id = `${stamp}-${width}`;
+  const slug = `shoot-co-${id}`;
   await page.goto(`${BASE}/sign-up`);
   await page.getByLabel('Full name').fill('Ada Lovelace');
-  await page.getByLabel('Email').fill(`shoot-${stamp}@example.com`);
+  await page.getByLabel('Email').fill(`shoot-${id}@example.com`);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /create an account/i }).click();
   await page.getByRole('heading', { name: /create your organisation/i }).waitFor();
-  await page.getByLabel('Organisation name').fill(`Shoot Co ${stamp}`);
+  await page.getByLabel('Organisation name').fill(`Shoot Co ${id}`);
   await page.getByRole('button', { name: /create organisation/i }).click();
   await page.waitForURL(new RegExp(`/orgs/${slug}`));
   return slug;
@@ -226,7 +236,7 @@ for (const width of widths) {
   // One context per width, so the sign-up happens once and every authenticated shot reuses it.
   const context = await browser.newContext({ viewport: { width, height: 1000 } });
   const page = await context.newPage();
-  const slug = wanted.some((s) => !s.signedOut) ? await onboard(page) : null;
+  const slug = wanted.some((s) => !s.signedOut) ? await onboard(page, width) : null;
   let seeded = false;
   let planId = null;
 

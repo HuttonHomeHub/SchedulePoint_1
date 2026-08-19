@@ -2,7 +2,7 @@ import type * as ReactRouter from '@tanstack/react-router';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AppHeader } from '@/components/layout/app-header';
+import { AppHeaderRow } from '@/components/layout/app-header';
 import { ThemeProvider } from '@/hooks/use-theme';
 
 /**
@@ -85,7 +85,7 @@ beforeEach(() => {
 function openAccountMenu(): void {
   render(
     <ThemeProvider>
-      <AppHeader />
+      <AppHeaderRow />
     </ThemeProvider>,
   );
   fireEvent.click(screen.getByRole('button', { name: /Account:/ }));

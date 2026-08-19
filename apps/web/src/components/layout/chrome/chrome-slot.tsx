@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { DESIGNED_CHROME_ENABLED } from '@/config/env';
 import { cn } from '@/lib/utils';
 
 /**
@@ -85,13 +84,11 @@ export function ChromeSlot({
 }
 
 /**
- * Renders `children` into the chrome band's slot when the flag is on, and **in place** when it is
- * off — an identity wrapper, which is what makes the rollback byte-for-byte.
+ * Renders `children` into the chrome band's slot.
  *
- * With the flag on but no slot mounted yet (or a subtree with no band at all — a test harness),
- * it renders `null` for that commit rather than falling back to rendering in place. The fallback
- * would paint the toolbar twice for one frame on the way in, which is worse than a frame of
- * nothing.
+ * With no slot mounted yet (or a subtree with no band at all — a test harness) it renders `null`
+ * for that commit rather than falling back to rendering in place. The fallback would paint the
+ * toolbar twice for one frame on the way in, which is worse than a frame of nothing.
  */
 export function ChromePortal({
   children,
@@ -101,7 +98,6 @@ export function ChromePortal({
   name?: ChromeSlotName;
 }): React.ReactNode {
   const node = useContext(ChromeSlotContext)[name] ?? null;
-  if (!DESIGNED_CHROME_ENABLED) return children;
   if (!node) return null;
   return createPortal(children, node);
 }

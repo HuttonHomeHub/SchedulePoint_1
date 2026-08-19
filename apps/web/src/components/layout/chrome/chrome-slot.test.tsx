@@ -1,17 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import { createContext } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { ChromePortal, ChromeSlot, ChromeSlotProvider, useChromeSlot } from './chrome-slot';
 
 /**
- * Flag-ON behaviour of the chrome slot (ADR-0055 §3). The flag-off identity-wrapper case has its
- * own suite (`chrome-slot.flag-off.test.tsx`) because the two need opposite `vi.mock`s.
+ * The chrome slot (ADR-0055 §3). This used to be the flag-ON half of a pair, and its docblock
+ * named a `chrome-slot.flag-off.test.tsx` sibling that has never existed in this repository —
+ * a citation nothing checked. `VITE_DESIGNED_CHROME` retired in Graphite M2, so there is one
+ * behaviour and one suite.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  DESIGNED_CHROME_ENABLED: true,
-}));
 
 /** Stands in for the workspace's own contexts (the model, the toolbar context, the registry). */
 const WorkspaceContext = createContext('');
@@ -56,7 +54,7 @@ describe('ChromeSlot / ChromePortal (flag on)', () => {
   });
 
   it('renders nothing, and does not throw, when there is no band above it', () => {
-    // The flag-off `_authed` layout and every unit-test harness are in this state.
+    // Every unit-test harness that mounts a workspace without the shell is in this state.
     expect(() =>
       render(
         <ChromePortal>

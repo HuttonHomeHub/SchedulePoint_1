@@ -200,8 +200,8 @@ export function ToolbarPlanWorkspace({
   // not through the raw `close`: unmounting the focused Close button with nothing to catch focus
   // strands it on `<body>` (WCAG 2.4.3), which is what shipped until the a11y gate found it.
   //
-  // Searched from `document`, not `rootRef`: with `VITE_DESIGNED_CHROME` on the toolbar lives in
-  // the chrome band and is no longer a DOM descendant of the workspace root.
+  // Searched from `document`, not `rootRef`: the toolbar lives in the chrome band and is not a
+  // DOM descendant of the workspace root.
   const closeFloatPathsAndFocus = useCallback(() => {
     closeFloatPaths();
     // **Falls back to the `⋯` trigger, and that is not defensive coding.** ADR-0090 M2 moved this
@@ -433,10 +433,10 @@ export function ToolbarPlanWorkspace({
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
   // the Comments button itself doesn't go through here (it stays mounted + focused), so no double-move.
   //
-  // Searched from `document`, NOT from `rootRef`: with `VITE_DESIGNED_CHROME` on, the toolbar's
-  // DOM node lives in the chrome band (ADR-0055 §3) and is no longer a DOM descendant of the
-  // workspace root, so a root-scoped query silently found nothing and stranded focus. Only one
-  // plan workspace is mounted at a time, so the attribute is unambiguous document-wide.
+  // Searched from `document`, NOT from `rootRef`: the toolbar's DOM node lives in the chrome band
+  // (ADR-0055 §3) and is not a DOM descendant of the workspace root, so a root-scoped query
+  // silently found nothing and stranded focus. Only one plan workspace is mounted at a time, so
+  // the attribute is unambiguous document-wide.
   const closeNotes = useCallback(() => {
     setNotesOpen(false);
     document.querySelector<HTMLElement>('[data-toolbar-item="comments"]')?.focus();
@@ -1110,10 +1110,9 @@ export function ToolbarPlanWorkspace({
           Do carries the pen-gated authoring cluster (shaded as a set when the pen isn't held) beside
           the always-live plan & deliverable actions. Both rows share one `authoringEnabled` — only
           Row 2's `penGated` items react. Row 1 right-aligns its status read-outs (Finish/Summary/Legend). */}
-      {/* Flag-on (`VITE_DESIGNED_CHROME`) these two rows portal into the chrome band, so the top of
-          the app reads as one surface. Only the DOM node moves — in the React tree they stay right
-          here, which is why `ctx`, the registry predicates and the workspace key scope are all
-          untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
+      {/* These two rows portal into the chrome band, so the top of the app reads as one surface.
+          Only the DOM node moves — in the React tree they stay right here, which is why `ctx`, the
+          registry predicates and the workspace key scope are all untouched by the move. */}
       {/* **The plan identity line, merged into the app header row** (ADR-0097 D1b) — the merge
           ADR-0092 M5 withdrew at "134 px short at 1646", which Landing D1a paid for by moving the
           organisation nav into the rail (+250 px of slack at 1440; `m0-landing-d1-measurement.md`).

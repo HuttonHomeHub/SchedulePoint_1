@@ -2,7 +2,7 @@ import type * as ReactRouter from '@tanstack/react-router';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AppHeader } from '@/components/layout/app-header';
+import { AppHeaderRow } from '@/components/layout/app-header';
 import { OrgDestinations } from '@/components/layout/navigator/org-destinations';
 import { ThemeProvider } from '@/hooks/use-theme';
 
@@ -19,7 +19,7 @@ import { ThemeProvider } from '@/hooks/use-theme';
  * **The nav entry moved, and this suite followed it rather than being relaxed** (ADR-0097 Landing
  * D1a, 2026-08-19): the six organisation destinations left the app header for the Project
  * Explorer's bottom zone, so the three cases about the link now render `OrgDestinations` and the
- * two about the account menu still render `AppHeader`. Widening `getByRole` to search a whole
+ * two about the account menu still render the header row. Widening `getByRole` to search a whole
  * shell, or dropping the `Members` control assertion, would have been the cheaper edit and would
  * have left a parity suite that passes whether or not the entry exists at all.
  */
@@ -98,7 +98,7 @@ beforeEach(() => {
 function renderHeader(): void {
   render(
     <ThemeProvider>
-      <AppHeader />
+      <AppHeaderRow />
     </ThemeProvider>,
   );
 }

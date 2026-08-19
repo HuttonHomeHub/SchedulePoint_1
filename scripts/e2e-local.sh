@@ -81,6 +81,41 @@ for t in "${targets[@]}"; do [ "$t" = "--db-only" ] && exit 0; done
 # --- 3. Suites --------------------------------------------------------------
 # Playwright's own `webServer` block starts the API and the dev server, so the
 # only thing it needs from us is a migrated database and a browser it can find.
+#
+# **A dev server you already started is a silent, wrong pass or a silent, wrong FAIL.**
+# Every `playwright.*.config.ts` here sets `reuseExistingServer: !process.env.CI`, and the whole
+# point of these configs is the environment they hand their servers: the base journey pins
+# `VITE_PLAN_EDIT_LOCK=false`, thirteen flag-on configs set `PLAN_EDIT_LOCK_ENFORCED=true`, and
+# each suite pins its own `VITE_` flags. Reuse takes a server that carries somebody else's
+# environment and runs the suite against it anyway, reporting nothing.
+#
+# On 2026-08-19 that produced three consecutive false diagnoses in one session — 7 base-journey
+# failures blamed first on a palette change, then on a grid refactor, then filed as a product
+# defect — when the cause each time was a leftover server from a different harness. It is
+# especially deceptive because `nest start --watch` puts the environment on the CHILD process:
+# the watcher's `/proc/<pid>/environ` shows nothing, so even checking looks like it cleared it.
+#
+# So refuse rather than warn. A run that cannot be trusted is worse than no run.
+for port in 3000 5173; do
+  if curl -s -o /dev/null --max-time 2 "http://localhost:${port}/" 2>/dev/null \
+    || curl -s -o /dev/null --max-time 2 "http://localhost:${port}/api/v1/health" 2>/dev/null; then
+    cat >&2 <<EOF
+
+Something is already listening on localhost:${port}.
+
+Playwright reuses it (reuseExistingServer) instead of starting one with this suite's
+environment, so the flag pins in the config never apply and the result means nothing —
+whichever way it goes. Stop it and re-run:
+
+  pkill -f 'vite.js'; pkill -f 'dist/main'; pkill -f 'nest start'
+
+(Set E2E_ALLOW_EXISTING_SERVER=1 to proceed anyway — only when you started that server
+yourself with this suite's exact environment.)
+EOF
+    [ -n "${E2E_ALLOW_EXISTING_SERVER:-}" ] || exit 1
+  fi
+done
+
 if [ -z "${PLAYWRIGHT_CHROMIUM_PATH:-}" ]; then
   candidate="$(ls -d /opt/pw-browsers/chromium-*/chrome-linux/chrome 2>/dev/null | head -1 || true)"
   [ -n "$candidate" ] && export PLAYWRIGHT_CHROMIUM_PATH="$candidate"

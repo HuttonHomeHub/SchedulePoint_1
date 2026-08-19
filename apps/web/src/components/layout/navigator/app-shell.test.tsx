@@ -22,8 +22,8 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   useParams: () => ({}),
 }));
 
-// The real AppHeader pulls in session/org queries; the shell wiring is what we test,
-// so stub the header down to the drawer toggle it exposes via shell context.
+// The real header pulls in session/org queries; the shell wiring is what we test, so stub it
+// down to the drawer toggle it exposes via shell context.
 vi.mock('@/components/layout/app-header', async () => {
   const { useShell } = await import('./shell-context');
   const DrawerTrigger = (): React.ReactElement => {
@@ -34,10 +34,7 @@ vi.mock('@/components/layout/app-header', async () => {
       </button>
     );
   };
-  // BOTH exports: `AppHeader` is the flag-off header (own Surface, measure-capped),
-  // `AppHeaderRow` the bare row the chrome band composes. A mock supplying only one makes
-  // this suite pass or explode purely on the flag's default, which is not what it tests.
-  return { AppHeader: DrawerTrigger, AppHeaderRow: DrawerTrigger };
+  return { AppHeaderRow: DrawerTrigger };
 });
 
 beforeEach(() => localStorage.clear());

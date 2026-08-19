@@ -6,16 +6,11 @@ import { ChromeBand } from './chrome-band';
 import { ChromePortal } from './chrome-slot';
 
 /**
- * Flag-ON structure (ADR-0055 §3): one full-bleed chrome band carrying the header row and a slot,
+ * The band's structure (ADR-0055 §3): one full-bleed chrome band carrying the header row and a slot,
  * with everything else below it. The band is deliberately not plan-aware — it owns a slot, and a
  * plan workspace decides whether to portal anything into it, so the shell stays ignorant of plans
  * (ADR-0029) and does not remount when one opens.
  */
-vi.mock('@/config/env', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  DESIGNED_CHROME_ENABLED: true,
-}));
-
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   useParams: () => ({}),
@@ -38,7 +33,7 @@ vi.mock('@/components/layout/account-chip', () => ({
   AccountChip: () => <button type="button">Account</button>,
 }));
 
-describe('ChromeBand (flag on)', () => {
+describe('ChromeBand', () => {
   it('wraps the header and the slot in ONE chrome surface', () => {
     const { container } = render(
       <ChromeBand>

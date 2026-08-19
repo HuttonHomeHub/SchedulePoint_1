@@ -117,10 +117,10 @@
 /* ------------------------------------------------------------------------- */
 :root {
   /* Surfaces — the working canvas stays light and quiet. */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.321 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.321 0 0);
+  --card: oklch(0.242 0.019 258.4);
+  --card-foreground: oklch(0.913 0.012 252.1);
+  --popover: oklch(0.242 0.019 258.4);
+  --popover-foreground: oklch(0.913 0.012 252.1);
 
   /* Brand — NAVY fills on the page, amber on the chrome. Amber is the accent that
      makes this theme recognisable, but a solid amber button on the off-white page
@@ -391,8 +391,8 @@
      `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
      17-name vocabulary has no word for "the second stop". Values are the old
      app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
-  --ground: oklch(0.977 0.003 248);
-  --ground-end: oklch(0.845 0.028 249);
+  --ground: oklch(0.177 0.011 260.6);
+  --ground-end: oklch(0.154 0.009 264.3);
 
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
