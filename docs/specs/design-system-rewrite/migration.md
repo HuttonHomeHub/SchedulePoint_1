@@ -291,6 +291,13 @@ the panel, and the surface **registers its node into it** from below — which i
 shape a second time (provider high, node registered from underneath), and the second reason to reuse
 that pattern rather than invent one.
 
+**Its exact home is `plan-workspace.tsx`**, not `plan-workspace-toolbar.tsx`. The toolbar file's
+root `<div>` looks like the obvious place and is not: `useTsldToolbarContext` is called at
+`plan-workspace-toolbar.tsx:282`, in `ToolbarPlanWorkspace`'s **own body**, and a provider rendered
+in that component's JSX does not cover a hook called in the same component. `PlanWorkspace`
+(`plan-workspace.tsx:23`) renders `<ToolbarPlanWorkspace>` and nothing else, so wrapping it there
+covers the toolbar hook, the panel's two `useMemo`s and the canvas alike.
+
 Worth being explicit about why the print path is not exempt: its own docblock promises that a
 printed diagram "cannot drift from the one on screen", and it reads the same `--color-primary` /
 `--color-destructive` / `--color-warning` names. The moment L4-1 re-values those inside the canvas
