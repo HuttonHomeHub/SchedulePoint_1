@@ -433,6 +433,29 @@
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
+  /* Metrics (ADR-0097)                                                       */
+  /*                                                                          */
+  /* The first non-colour tokens this product has ever had. Before them a      */
+  /* theme could express nothing but colour, so every control height, row      */
+  /* rhythm and radius was a literal in a className — which is why "make the   */
+  /* Corporate theme the one the app is designed to" could only ever have      */
+  /* meant "recolour it".                                                      */
+  /*                                                                          */
+  /* **`--control-h` is 36 px, down from 40 (CQ-C).** The product owner chose  */
+  /* the move explicitly, departing from the recommended default. It governs   */
+  /* the FORM controls — `Button`, `Input`, `Select`, `Combobox` — and NOT the */
+  /* command surface, which was already on `min-h-9` (36 px). That distinction */
+  /* is worth stating because the task was briefed as a toolbar measurement:   */
+  /* the toolbar rows do not move, and the gain is in forms and dialogs.       */
+  /*                                                                          */
+  /* `--row-h` is 28 px (CQ-B): ONE rhythm for the Gantt (down from 32) and    */
+  /* the tables, rather than two that drift.                                   */
+  /* ----------------------------------------------------------------------- */
+  --control-h: 2.25rem;
+  --control-h-sm: 2rem;
+  --row-h: 1.75rem;
+
+  /* ----------------------------------------------------------------------- */
   /* Weight (ADR-0097)                                                        */
   /*                                                                          */
   /* **The product owner's typeface choice created this requirement, and it   */

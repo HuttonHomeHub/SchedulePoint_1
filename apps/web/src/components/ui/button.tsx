@@ -29,8 +29,8 @@ const buttonVariants = cva(
         destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive-hover',
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 px-3',
+        default: 'h-(--control-h) px-4 py-2',
+        sm: 'h-(--control-h-sm) px-3',
         lg: 'h-11 px-6',
         icon: 'size-10',
         // Row-height icon button for dense lists (e.g. the Project Explorer tree, whose

@@ -62,8 +62,19 @@ import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-tim
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { cn } from '@/lib/utils';
 
-/** Row height in pixels. Fixed, so the virtualizer needs no measurement pass. */
-export const GANTT_ROW_HEIGHT = 32;
+/**
+ * Row height in pixels. Fixed, so the virtualizer needs no measurement pass.
+ *
+ * **28, down from 32 (ADR-0097, CQ-B): ONE row rhythm rather than two that drift.** The Gantt and
+ * the tables were on different heights for no reason anybody recorded, which is the shape this
+ * epic exists to remove — a value that looks decided and was only ever defaulted.
+ *
+ * It duplicates `--row-h` rather than reading it, and that is deliberate: the virtualizer needs a
+ * NUMBER before layout, and reading a custom property means a `getComputedStyle` call on the
+ * critical path of a view whose whole design is "no measurement pass" (ADR-0059). The duplication
+ * is the cost; `row-rhythm.structural.test.ts` is what stops it becoming a drift.
+ */
+export const GANTT_ROW_HEIGHT = 28;
 
 /**
  * The scale used before the bar region has been measured, and whenever measurement is

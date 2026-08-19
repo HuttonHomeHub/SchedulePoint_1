@@ -465,7 +465,7 @@ export function Combobox({
           onKeyDown={readOnly ? undefined : onKeyDown}
           onBlur={() => setOpen(false)}
           className={cn(
-            'border-input bg-field text-field-foreground ring-offset-background flex h-10 w-full rounded-md border py-2 pr-9 pl-3 text-sm transition-colors',
+            'border-input bg-field text-field-foreground ring-offset-background flex h-(--control-h) w-full rounded-md border py-2 pr-9 pl-3 text-sm transition-colors',
             'placeholder:text-field-muted-foreground',
             'focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
             'disabled:cursor-not-allowed disabled:opacity-50',
