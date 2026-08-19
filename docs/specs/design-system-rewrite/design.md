@@ -223,13 +223,27 @@ be — a check that only ever reports faults reads as fault-finding rather than 
 - **Five resolvers, every one defaulting to `document.documentElement`**: `resolveTsldPalette:12`,
   `resolvePrintPalette:112`, `resolveResourceStripPalette:174`, `resolveLensPalette:197`,
   `resolveWbsBandPalette:301`. Condition 4's "five real consumers" is accurate.
-- **The signature already takes an `Element`** (`palette.ts:12`), and **no caller passes one** —
-  `TsldPanel.tsx:1081,1086` and `TsldCanvas.tsx:669,687,1555,1559` all call bare. So the change is
-  genuinely the argument at six call sites plus the `<Surface>` wrapper, exactly as condition 5
-  claims, with no signature churn.
+- **The signature already takes an `Element`** (`palette.ts:12`), and **no caller passes one**. So
+  the change is genuinely the argument at each call site plus the `<Surface>` wrapper, exactly as
+  condition 5 claims, with no signature churn.
+
+  **The count was wrong and is corrected here: nine production call sites, not six.** The first pass
+  listed `TsldPanel.tsx:1081,1086` and `TsldCanvas.tsx:669,687,1555,1559`, and missed
+  `TsldCanvas.tsx:675,1558` (`resolveResourceStripPalette`, both of them) and
+  `toolbar/commands/use-diagram-image.ts:103` (`resolvePrintPalette`). The last is the one that
+  matters: it is the **export** path, so a site missed there paints page colours into a delivered
+  PDF, where nobody is watching a screen to notice. A count taken by reading two files and a count
+  taken by grepping for all five resolver names are different numbers, and this is the second.
+
 - The scale is **larger than the section states and in the direction that helps**: `palette.ts`
   makes **86** token reads, all of them today against the page. Every one is a value validated
-  against `--background` being painted on a ground that is not `--background`.
+  against `--background` being painted on a ground that is not `--background`. (Re-counted after
+  Landing D1: still 86.)
+- **The `bg-canvas` retirement condition is checkable now, and it holds.** The section defers it to
+  L1 as "conditional on no remaining DOM consumer". There are two — `TsldCanvas.tsx:1640` (the
+  diagram container) and `:1647` (the ruler strip) — and **both are inside the element that becomes
+  `<Surface tone="canvas">`**, so inside the scope they become `bg-background` and nothing outside
+  needs the global token. There is no third consumer anywhere in `apps/web/src`.
 
 ### 1.3 Packs — how a family stays complete without every family carrying everything
 

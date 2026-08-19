@@ -105,3 +105,56 @@ turns out to be guarded.
 D1 therefore proceeds as scoped — one navigator instead of two, **and** the band merge ADR-0092 M5
 withdrew — with the prize stated correctly: not "the header is cramped", but "the nav is exactly
 what the merge costs, and there is 250 px to spare at the narrowest width we hold to".
+
+---
+
+## D1b, measured after the fact: **−45 px above the canvas, at every width**
+
+**Date:** 2026-08-19 · **Harness:** `measure-toolbar/vertical-stack.spec.ts`
+
+This is the check ADR-0092 M4 earned the hard way. That milestone folded the identity line into the
+command band, and the honest finding was that relocating a row inside one column **"gained exactly
+nothing"** — 257 px above the canvas before and 257 after, with the 8 px it did recover coming from
+matching the rows' `py-1` rhythm rather than from the fold. A merge is not a saving; only removing a
+row is. So D1b is not allowed to claim one without a number.
+
+Both figures below were **measured**, not derived: the harness was run on `HEAD` (D1b) and again
+with `apps/web/src` checked out at `HEAD~1` (D1a — the nav already in the rail, the identity still a
+row of its own), on the same machine, in the same browser, against the same fixture plan.
+
+| band                           | D1a     | D1b     |
+| ------------------------------ | ------- | ------- |
+| app header row                 | 56      | **56**  |
+| identity row / slot            | 45      | 36      |
+| command band (identity + rows) | 135     | **90**  |
+| shell chrome band (total)      | 192     | **147** |
+| **above the canvas**           | **240** | **195** |
+
+| viewport  | canvas D1a | canvas D1b | gain                |
+| --------- | ---------- | ---------- | ------------------- |
+| 1920×1080 | 559        | **604**    | **+45 px, +8.1 %**  |
+| 1646×1097 | 576        | **621**    | **+45 px, +7.8 %**  |
+| 1440×960  | 439        | **484**    | **+45 px, +10.3 %** |
+
+**The line that matters is the first one.** The app header row is **56 px in both states**: the
+identity slot is 36 px and sits inside it, so the band did not grow to hold what moved in. That is
+the difference between this and ADR-0092 M4 — there the row was relocated, here it is **absorbed**,
+and the 45 px it used to occupy is gone rather than moved. Absorbed because D1a freed 540 px of
+header width for it to be absorbed _into_, which is what that milestone was for.
+
+`aboveCanvas` is taken from the canvas's own `getBoundingClientRect().top` rather than by summing
+bands, so anything unaccounted for is included instead of quietly dropped — and it reconciles: the
+chrome band fell 192 → 147, i.e. by exactly 45, and `aboveCanvas` fell by exactly 45.
+
+**The gain is constant across the three widths, which is itself informative**: it says the saving is
+a whole row leaving a vertical stack, not a layout that happens to pack better on a wide screen. The
+_proportional_ gain is therefore largest where the canvas is smallest — 10.3 % at 1440×960, against
+7.8 % at the product owner's 1646. A vertical saving is worth most to the reader with the least
+vertical room, which is the opposite of how the horizontal work in ADR-0090/0091 behaved.
+
+**One measurement note, recorded because the first attempt produced a wrong kind of answer.** The
+harness located the identity row as "the command band's first child that contains a `nav`". After
+D1b that element does not exist, and the harness **threw** — which is correct and is the rule
+ADR-0091 M7 added after a `.filter()` silently dropped a missing band for the whole of ADR-0090 M5.
+It now locates the identity by its slot (`[data-chrome-slot="identity"]`), which is the seam the
+portal actually targets rather than a position that happens to be right today.
