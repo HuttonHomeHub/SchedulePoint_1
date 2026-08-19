@@ -777,6 +777,21 @@ recalculation (ADR-0022). An ordering on the plan row alone ranks a plan somebod
 in all morning below one whose name was corrected last week, and every row on the screen still
 looks correct.
 
+**`?recentPlanIds=<uuid>` (repeatable, at most 5) resolves ids to `recentPlans`** — the browser's
+"Jump back in" list. The client stores plan **ids only** and asks for their current names on every
+load, which is what makes a rename correct itself and a plan the reader has lost access to
+disappear rather than 404 on click. It rides on this request rather than taking one of its own:
+that is the constraint that made the section acceptable on the coldest path in the product.
+
+That parameter hands the server ids the caller may have no right to, so **the four ways an id can
+fail are indistinguishable by design**: deleted, another organisation's, unreadable, and never
+real all produce a byte-identical response. There is no `reason` field, no partial-failure list and
+no dropped count, because any of them would turn this into an existence oracle for every plan in
+the installation, reachable by any member. `recentPlans` preserves **the caller's order** — that
+order is the browser's own recency and the server has no basis to improve on it. A malformed id or
+more than five is a **422**: a client sending a non-UUID has a bug rather than a permission
+problem, and saying so discloses nothing about the organisation's contents.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

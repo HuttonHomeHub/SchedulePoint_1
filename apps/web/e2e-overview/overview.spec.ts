@@ -6,6 +6,7 @@ import {
   createClient,
   createPlan,
   createProject,
+  countOverviewRequests,
   ensurePen,
   onboard,
   openOverview,
@@ -101,4 +102,79 @@ test('the settled overview has no accessibility violations', async ({ page }) =>
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
   expect(results.violations).toEqual([]);
+});
+
+/**
+ * "Jump back in" (ADR-0098 M3), which only a real browser can prove.
+ *
+ * Three of its four claims are about `localStorage` and the network, both of which a unit suite
+ * replaces: that opening a plan is remembered at all, that the section costs **no extra request**,
+ * and that an entry whose plan has gone stops being offered rather than 404ing on click. The
+ * fourth — that the store holds no name — is a unit assertion, and it is the reason the third
+ * works.
+ */
+test('the landing offers the plans this browser was recently in', async ({ page }) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createClient(page, 'Bellway');
+  await createProject(page, 'Northgate');
+  await createPlan(page, 'Northgate — Phase 1');
+  const planUrl = page.url();
+
+  // -------------------------------------------------- 1. Opening a plan is remembered
+  const requests = await countOverviewRequests(page, async () => {
+    await openOverview(page, orgSlug);
+  });
+  const jumpBackIn = section(page, 'Jump back in');
+  await expect(jumpBackIn.getByRole('link', { name: 'Northgate — Phase 1' })).toBeVisible();
+
+  // -------------------------------------------------- 2. …and costs no request of its own
+  expect(requests).toBe(1);
+
+  // -------------------------------------------------- 3. A rename is corrected, not cached
+  await page.goto(planUrl);
+  const planId = /\/plans\/([0-9a-f-]{36})/.exec(planUrl)?.[1];
+  expect(planId).toBeDefined();
+  await ensurePen(page);
+  const renamed = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const current = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        credentials: 'include',
+      });
+      const version = (await current.json()).data.version as number;
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Renamed since', version }),
+      });
+      return { ok: response.ok, status: response.status, body: await response.text() };
+    },
+    { org: orgSlug, id: planId! },
+  );
+  if (!renamed.ok) throw new Error(`rename failed: ${renamed.status} ${renamed.body}`);
+
+  await openOverview(page, orgSlug);
+  await expect(
+    section(page, 'Jump back in').getByRole('link', { name: 'Renamed since' }),
+  ).toBeVisible();
+
+  // -------------------------------------------------- 4. A deleted plan disappears, never 404s
+  const deleted = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      return { ok: response.ok, status: response.status, body: await response.text() };
+    },
+    { org: orgSlug, id: planId! },
+  );
+  if (!deleted.ok) throw new Error(`delete failed: ${deleted.status} ${deleted.body}`);
+
+  await page.goto(`/orgs/${orgSlug}`);
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  // Absent, not present-and-broken, and not an "a plan you had is gone" message — that sentence
+  // would name a plan to somebody who may no longer be entitled to know it exists.
+  await expect(page.getByRole('region', { name: 'Jump back in' })).toHaveCount(0);
 });

@@ -170,6 +170,28 @@ and components. Deleting a feature should mean deleting one folder.
   typed client generated from the API's OpenAPI spec (e.g. `openapi-typescript`)
   remains the intended evolution; the client is still hand-written.
 
+### Browser-local state (`localStorage`)
+
+Rare and deliberately so — it is not a cache tier and never holds server data. Three rules, each
+learnt from a real failure:
+
+- **Every read and write is wrapped.** Private mode, a disabled store and a full quota all throw,
+  and none of them is a reason for a screen to show an error. The degraded behaviour is "the
+  convenience is absent" (`lib/active-org.ts:8-22`, `features/overview/model/recent-plans.ts`).
+- **A key that identifies a person carries the user id, and sign-out clears that account's
+  entries.** Otherwise a shared machine hands the next account the previous one's data — the query
+  cache dies with the tab, `localStorage` does not (ADR-0098 §4.9 D10a).
+- **Store identifiers, not content.** "Jump back in" holds plan **ids** and asks the server to name
+  them on every load, which is what makes a rename correct itself and a plan the reader has lost
+  access to disappear rather than 404 on click. A cached name is used exactly once — on the
+  occasion nobody has checked it.
+
+The model is **pure over an injected `Storage`**, so it is testable without a browser and cannot
+acquire a hidden dependency on `window`. That is not fastidiousness: `forgetAllForUser` was first
+written with `Object.keys(storage)`, which works only because the Web Storage API happens to expose
+stored keys as own properties, and a map-backed `Storage` in the unit test found the sweep silently
+matching nothing.
+
 ## Form handling (ADR-0007)
 
 React Hook Form + Zod. Every form uses the shared accessible `Form` primitive

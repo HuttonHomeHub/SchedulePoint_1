@@ -11,6 +11,7 @@ import type {
   HeldLockDto,
   OverviewActor,
   OverviewResponseDto,
+  RecentPlanDto,
   RecentlyChangedPlanDto,
 } from './dto/overview-response.dto';
 import { OverviewRepository } from './overview.repository';
@@ -59,7 +60,11 @@ export class OverviewService {
     @InjectPinoLogger(OverviewService.name) private readonly logger: PinoLogger,
   ) {}
 
-  async get(principal: Principal, orgSlug: string): Promise<OverviewResponseDto> {
+  async get(
+    principal: Principal,
+    orgSlug: string,
+    recentPlanIds: readonly string[] = [],
+  ): Promise<OverviewResponseDto> {
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
 
     // The representative hierarchy read, matching the recycle bin: any member who can
@@ -76,29 +81,44 @@ export class OverviewService {
       Date.now() - (this.appConfig.retentionHierarchyDays - EXPIRY_WARNING_DAYS) * MS_PER_DAY,
     );
 
-    const [recentlyChanged, heldLocks, hasClients, hasPlans, pendingInvitations, expiringDeleted] =
-      await Promise.all([
-        this.repo.findRecentlyChanged({
-          organizationId: organization.id,
-          take: RECENTLY_CHANGED_LIMIT,
-        }),
-        this.repo.findHeldLocks({
-          organizationId: organization.id,
-          userId: principal.userId,
-          take: HELD_LOCKS_LIMIT,
-        }),
-        this.repo.hasActiveClients(organization.id),
-        this.repo.hasActivePlans(organization.id),
-        mayReadInvitations
-          ? this.repo.countPendingInvitations(organization.id)
-          : Promise.resolve(null),
-        mayRestore && retentionArmed
-          ? this.repo.countExpiringDeleted({
-              organizationId: organization.id,
-              before: expiryCutoff,
-            })
-          : Promise.resolve(null),
-      ]);
+    const [
+      recentlyChanged,
+      heldLocks,
+      hasClients,
+      hasPlans,
+      pendingInvitations,
+      expiringDeleted,
+      recentPlanRows,
+    ] = await Promise.all([
+      this.repo.findRecentlyChanged({
+        organizationId: organization.id,
+        take: RECENTLY_CHANGED_LIMIT,
+      }),
+      this.repo.findHeldLocks({
+        organizationId: organization.id,
+        userId: principal.userId,
+        take: HELD_LOCKS_LIMIT,
+      }),
+      this.repo.hasActiveClients(organization.id),
+      this.repo.hasActivePlans(organization.id),
+      mayReadInvitations
+        ? this.repo.countPendingInvitations(organization.id)
+        : Promise.resolve(null),
+      mayRestore && retentionArmed
+        ? this.repo.countExpiringDeleted({
+            organizationId: organization.id,
+            before: expiryCutoff,
+          })
+        : Promise.resolve(null),
+      // Rides on the request the screen is already making — the constraint that made this
+      // section acceptable on the coldest path in the product (ADR-0098 §4.9). It is gated on
+      // the same `client:read` asserted above: the ids name plans, and a member who can browse
+      // the tree can see a plan's name.
+      this.repo.resolveRecentPlans({
+        organizationId: organization.id,
+        planIds: recentPlanIds,
+      }),
+    ]);
 
     // One batched resolution for every actor id on the page — the changed-by of each plan
     // and the requester of each held pen — so the number of round trips does not grow with
@@ -128,6 +148,14 @@ export class OverviewService {
       ...(expiringDeleted !== null ? { expiringDeletedCount: expiringDeleted } : {}),
     };
 
+    // **The caller's order, not the database's.** The order is the browser's own recency, which
+    // the server has no basis to improve on — and `findMany` makes no promise about the order of
+    // an `IN`, so leaving it would produce a list that reshuffles for no visible reason.
+    const byId = new Map(recentPlanRows.map((row) => [row.planId, row]));
+    const recentPlans: RecentPlanDto[] = recentPlanIds
+      .map((id) => byId.get(id))
+      .filter((row): row is RecentPlanDto => row !== undefined);
+
     return {
       organisationName: organization.name,
       isNewOrganisation: !hasClients,
@@ -142,6 +170,7 @@ export class OverviewService {
         changedAt: row.changedAt.toISOString(),
         changedBy: this.toActor(row.changedByUserId, names),
       })),
+      recentPlans,
       attention,
     };
   }

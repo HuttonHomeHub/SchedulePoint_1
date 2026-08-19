@@ -55,6 +55,7 @@ function overview(over: Partial<OrganisationOverview> = {}): OrganisationOvervie
     isNewOrganisation: false,
     hasPlans: true,
     recentlyChanged: [],
+    recentPlans: [],
     attention: { heldLocks: [] },
     ...over,
   };
@@ -91,6 +92,16 @@ function renderScreen({
   fail?: boolean;
 } = {}): void {
   vi.mocked(apiFetch).mockImplementation((path: string) => {
+    // The screen reads the session for the user id that keys the recent-plans store, so this mock
+    // has to answer `/me` too. Without it that query never settles and every assertion times out
+    // — which is exactly what happened when "Jump back in" landed, and is why this is a comment
+    // rather than one more line in a list.
+    if (path === '/me') {
+      return Promise.resolve({
+        user: { id: 'u1', name: 'Ada', email: 'ada@example.com' },
+        memberships: [],
+      });
+    }
     if (path === '/organizations') {
       return Promise.resolve([{ id: 'o1', name: 'Acme Construction', slug: ORG_SLUG, role }]);
     }

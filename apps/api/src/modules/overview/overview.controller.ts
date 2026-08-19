@@ -1,4 +1,4 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import {
   ApiCookieAuth,
   ApiForbiddenResponse,
@@ -7,11 +7,13 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 
 import type { Principal } from '../../common/auth/principal';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
+import { OverviewQueryDto } from './dto/overview-query.dto';
 import { OverviewResponseDto } from './dto/overview-response.dto';
 import { OverviewService } from './overview.service';
 
@@ -42,11 +44,18 @@ export class OverviewController {
       'about the reader and never a zero that leaks the existence of an answer.',
   })
   @ApiOkResponse({ type: OverviewResponseDto })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A malformed `recentPlanIds` value, or more than the documented maximum. Note what is ' +
+      'NOT a 422: an id the caller may not read. That is omitted silently, because reporting it ' +
+      'would confirm the plan exists.',
+  })
   async get(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
+    @Query() query: OverviewQueryDto,
   ): Promise<OverviewResponseDto> {
     // A bare DTO; the response interceptor wraps it as `{ data }` (docs/API.md).
-    return this.service.get(principal, orgSlug);
+    return this.service.get(principal, orgSlug, query.recentPlanIds ?? []);
   }
 }

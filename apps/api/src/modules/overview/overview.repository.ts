@@ -206,6 +206,54 @@ export class OverviewRepository {
     return clients + projects + plans;
   }
 
+  /**
+   * Resolve remembered plan ids to their **current** names, within the caller's organisation.
+   *
+   * **The filter IS the authorisation**, and that is why the organisation id comes from the
+   * already-resolved scope rather than from a request parameter: an id belonging to another
+   * organisation matches nothing here, which is the same outcome as an id that never existed. The
+   * caller cannot tell those apart, and cannot tell either from a plan that has been deleted — the
+   * anti-oracle property the whole feature rests on (ADR-0098 §4.9).
+   *
+   * **Archived plans ARE returned**, which is a deliberate departure from `findRecentlyChanged`.
+   * There, archiving is how a planner says "stop showing me this" about the organisation's work.
+   * This list is the reader's own history: a planner who archives the plan they have been in all
+   * morning and then cannot get back to it would be surprised by a rule that reads as tidiness.
+   *
+   * Order is **not** decided here. The caller's order is the browser's recency, which the server
+   * has no basis to improve on, so the service re-orders by the request — this method filters.
+   */
+  async resolveRecentPlans(params: {
+    organizationId: string;
+    planIds: readonly string[];
+  }): Promise<{ planId: string; planName: string; projectName: string; clientName: string }[]> {
+    const { organizationId, planIds } = params;
+    if (planIds.length === 0) return [];
+
+    const rows = await this.prisma.plan.findMany({
+      where: {
+        id: { in: [...planIds] },
+        organizationId,
+        deletedAt: null,
+        // A plan whose project or client has been deleted is unreachable, so it must not be
+        // offered — the cascade stamps the plan too, but this is stated rather than relied upon.
+        project: { deletedAt: null, client: { deletedAt: null } },
+      },
+      select: {
+        id: true,
+        name: true,
+        project: { select: { name: true, client: { select: { name: true } } } },
+      },
+    });
+
+    return rows.map((row) => ({
+      planId: row.id,
+      planName: row.name,
+      projectName: row.project.name,
+      clientName: row.project.client.name,
+    }));
+  }
+
   /** Whether the organisation holds any active client — the "brand new" test. */
   async hasActiveClients(organizationId: string): Promise<boolean> {
     const found = await this.prisma.client.findFirst({

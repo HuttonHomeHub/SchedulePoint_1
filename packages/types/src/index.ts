@@ -2368,6 +2368,20 @@ export interface OverviewAttention {
   expiringDeletedCount?: number;
 }
 
+/**
+ * One plan this browser remembers the reader opening, resolved to its **current** name.
+ *
+ * The browser stores ids only, so every name here comes from the server on the load that renders
+ * it — which is what makes a rename correct itself and a plan the reader has lost access to
+ * disappear rather than 404 on click.
+ */
+export interface RecentPlan {
+  planId: string;
+  planName: string;
+  projectName: string;
+  clientName: string;
+}
+
 export interface OrganisationOverview {
   organisationName: string;
   /** No active clients — the organisation has not been set up yet. */
@@ -2375,6 +2389,11 @@ export interface OrganisationOverview {
   /** Any active, non-archived plan exists. */
   hasPlans: boolean;
   recentlyChanged: RecentlyChangedPlan[];
+  /**
+   * The subset of the requested `recentPlanIds` the caller may read, in the order they were sent.
+   * Absent ids are absent for indistinguishable reasons — there is no `reason` field by design.
+   */
+  recentPlans: RecentPlan[];
   attention: OverviewAttention;
 }
 

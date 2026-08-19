@@ -3,11 +3,9 @@ import { AUDIT_ACTIONS, type AuditAction } from '@repo/types';
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, IsIn, IsOptional, Validate } from 'class-validator';
 
-import {
-  AUDIT_FILTER_MAX_ACTIONS,
-  ListAuditEventsQueryDto,
-  toArray,
-} from './list-audit-events-query.dto';
+import { toArray } from '../../../common/dto/to-array';
+
+import { AUDIT_FILTER_MAX_ACTIONS, ListAuditEventsQueryDto } from './list-audit-events-query.dto';
 import { NotAnOrganizationlessAction } from './not-an-organizationless-action.validator';
 
 /**

@@ -105,3 +105,33 @@ export async function openOverview(page: Page, orgSlug: string): Promise<void> {
 export function section(page: Page, name: string): ReturnType<Page['getByRole']> {
   return page.getByRole('region', { name });
 }
+
+/**
+ * Count the overview requests a navigation makes.
+ *
+ * "Jump back in" is only acceptable on the coldest path in the product because it costs **no extra
+ * request** — the remembered ids ride on the overview call the screen is already making (ADR-0098
+ * §4.9). That is an arithmetic claim about a real browser, so it is asserted here rather than
+ * reasoned about: a per-section query would be invisible to every unit test, because they mock
+ * `apiFetch` and count nothing.
+ *
+ * **The predicate matches the API path, not the substring `/overview`.** The first version used
+ * `includes('/overview')` and counted **19** — because the Vite dev server serves this feature's
+ * own modules from `/src/features/overview/…`, every one of which matches. A measurement harness
+ * that counts its own source files reports a defect that is not there, which is worse than not
+ * measuring: it is a number, and numbers get believed.
+ */
+export async function countOverviewRequests(page: Page, run: () => Promise<void>): Promise<number> {
+  let count = 0;
+  const isOverviewCall = /\/api\/v1\/organizations\/[^/]+\/overview(\?|$)/;
+  const listener = (request: { url(): string }): void => {
+    if (isOverviewCall.test(request.url())) count += 1;
+  };
+  page.on('request', listener);
+  try {
+    await run();
+  } finally {
+    page.off('request', listener);
+  }
+  return count;
+}

@@ -48,6 +48,12 @@ interface OverviewBody {
     changedAt: string;
     changedBy: { kind: string; name?: string };
   }>;
+  recentPlans: Array<{
+    planId: string;
+    planName: string;
+    projectName: string;
+    clientName: string;
+  }>;
   attention: {
     heldLocks: Array<{ planId: string; planName: string; requestedBy: { kind: string } | null }>;
     pendingInvitationCount?: number;
@@ -142,8 +148,9 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
     return plan.body.data.id as string;
   }
 
-  async function fetchOverview(actor: Actor): Promise<OverviewBody> {
-    const res = await actor.agent.get(OVERVIEW).expect(200);
+  async function fetchOverview(actor: Actor, recentPlanIds: string[] = []): Promise<OverviewBody> {
+    const query = recentPlanIds.map((id) => `recentPlanIds=${id}`).join('&');
+    const res = await actor.agent.get(query ? `${OVERVIEW}?${query}` : OVERVIEW).expect(200);
     return res.body.data as OverviewBody;
   }
 
@@ -385,6 +392,149 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
 
     it('401s without a session', async () => {
       await request(server()).get(OVERVIEW).expect(401);
+    });
+  });
+
+  /**
+   * "Jump back in" (ADR-0098 M3) — and the property worth the whole suite is that **the four ways
+   * an id can fail are indistinguishable**.
+   *
+   * The browser stores plan ids and asks the server to name them, so it hands over ids the caller
+   * may have no right to. If a deleted plan produced a different response from another
+   * organisation's plan, or either from an id nobody ever minted, the endpoint would be an
+   * existence oracle for every plan in the installation — reachable by any member, with no
+   * permission needed beyond their own. There is no `reason` field and no dropped-count for
+   * exactly that reason, and these cases assert the four responses are byte-identical rather than
+   * merely all-empty.
+   */
+  describe('recentPlanIds', () => {
+    it('resolves a readable id to its CURRENT name', async () => {
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Original name');
+
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({ name: 'Renamed since', version: 1 })
+        .expect(200);
+
+      const overview = await fetchOverview(actor, [planId]);
+      expect(overview.recentPlans).toHaveLength(1);
+      // The point of storing ids and not names: the browser remembered "Original name" and the
+      // reader is shown the truth.
+      expect(overview.recentPlans[0]).toMatchObject({
+        planId,
+        planName: 'Renamed since',
+        projectName: 'Original name project',
+        clientName: 'Northgate',
+      });
+    });
+
+    it('returns them in the order asked for, not the database’s', async () => {
+      const { actor } = await adminWithOrg();
+      const first = await createPlan(actor, 'One', 'Client A');
+      const second = await createPlan(actor, 'Two', 'Client B');
+
+      expect(
+        (await fetchOverview(actor, [second, first])).recentPlans.map((p) => p.planId),
+      ).toEqual([second, first]);
+      expect(
+        (await fetchOverview(actor, [first, second])).recentPlans.map((p) => p.planId),
+      ).toEqual([first, second]);
+    });
+
+    it('offers an ARCHIVED plan, unlike "recently changed"', async () => {
+      // A deliberate divergence: archiving says "stop showing me this" about the organisation's
+      // work, and this list is the reader's own history. Archiving the plan you have been in all
+      // morning should not strand you.
+      const { actor } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Archived');
+      await actor.agent
+        .patch(`/api/v1/organizations/acme/plans/${planId}`)
+        .send({ status: 'ARCHIVED', version: 1 })
+        .expect(200);
+
+      const overview = await fetchOverview(actor, [planId]);
+      expect(overview.recentlyChanged).toHaveLength(0);
+      expect(overview.recentPlans.map((p) => p.planId)).toEqual([planId]);
+    });
+
+    it('gives the same answer for deleted, foreign, unknown and never-real ids', async () => {
+      const { actor } = await adminWithOrg();
+
+      const deletedId = await createPlan(actor, 'Deleted', 'Client A');
+      await actor.agent.delete(`/api/v1/organizations/acme/plans/${deletedId}`).expect(204);
+
+      // Another organisation entirely, with its own admin.
+      const stranger = await signUp('stranger@example.com');
+      await stranger.agent.post('/api/v1/organizations').send({ name: 'Other Co' }).expect(201);
+      const otherClient = await stranger.agent
+        .post('/api/v1/organizations/other-co/clients')
+        .send({ name: 'Theirs' })
+        .expect(201);
+      const otherProject = await stranger.agent
+        .post(`/api/v1/organizations/other-co/clients/${otherClient.body.data.id}/projects`)
+        .send({ name: 'Theirs' })
+        .expect(201);
+      const foreign = await stranger.agent
+        .post(`/api/v1/organizations/other-co/projects/${otherProject.body.data.id}/plans`)
+        .send({ name: 'Theirs', plannedStart: '2026-01-01' })
+        .expect(201);
+      const foreignId = foreign.body.data.id as string;
+
+      const neverReal = '018f2c1e-0000-7000-8000-0000000000ff';
+
+      const responses = await Promise.all(
+        [deletedId, foreignId, neverReal].map((id) =>
+          actor.agent.get(`${OVERVIEW}?recentPlanIds=${id}`).expect(200),
+        ),
+      );
+
+      // Byte-identical, not merely all-empty: an oracle is a DIFFERENCE, so this compares the
+      // whole payload rather than asserting three empty arrays.
+      const [a, b, c] = responses.map((res) => JSON.stringify(res.body.data));
+      expect(b).toBe(a);
+      expect(c).toBe(a);
+      expect(responses[0]!.body.data.recentPlans).toEqual([]);
+    });
+
+    it('drops what it cannot resolve and keeps what it can, in one request', async () => {
+      const { actor } = await adminWithOrg();
+      const good = await createPlan(actor, 'Readable');
+      const gone = '018f2c1e-0000-7000-8000-0000000000fe';
+
+      const overview = await fetchOverview(actor, [gone, good]);
+      expect(overview.recentPlans.map((p) => p.planId)).toEqual([good]);
+    });
+
+    it('returns an empty list when the parameter is not sent', async () => {
+      const { actor } = await adminWithOrg();
+      await createPlan(actor, 'Something');
+      expect((await fetchOverview(actor)).recentPlans).toEqual([]);
+    });
+
+    it('refuses more ids than the documented maximum', async () => {
+      const { actor } = await adminWithOrg();
+      const six = Array.from(
+        { length: 6 },
+        (_, i) => `018f2c1e-0000-7000-8000-00000000000${i}`,
+      ).map((id) => `recentPlanIds=${id}`);
+      await actor.agent.get(`${OVERVIEW}?${six.join('&')}`).expect(422);
+    });
+
+    it('refuses a malformed id — a client bug, and saying so discloses nothing', async () => {
+      const { actor } = await adminWithOrg();
+      await actor.agent.get(`${OVERVIEW}?recentPlanIds=not-a-uuid`).expect(422);
+    });
+
+    it('serves a Viewer exactly as it serves a Planner — the one section every role gets', async () => {
+      const { actor, orgId } = await adminWithOrg();
+      const planId = await createPlan(actor, 'Shared');
+      const viewer = await memberWith(orgId, 'VIEWER', 'viewer@example.com');
+
+      const overview = await fetchOverview(viewer, [planId]);
+      expect(overview.recentPlans.map((p) => p.planId)).toEqual([planId]);
+      // …while the attention section stays absent for them.
+      expect(overview.attention.pendingInvitationCount).toBeUndefined();
     });
   });
 });

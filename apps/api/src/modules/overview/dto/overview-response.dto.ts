@@ -103,6 +103,28 @@ export class AttentionDto {
   expiringDeletedCount?: number;
 }
 
+/**
+ * One remembered plan, resolved to its **current** name.
+ *
+ * It carries no timestamp and no actor: this section answers "where was I?", not "what happened?",
+ * and the browser already knows the order it asked in. Adding a "you were here 20 minutes ago"
+ * would also be the one fact on this screen the server cannot actually attest to — the store is
+ * per-browser, so it would be a claim about a device rather than about the plan.
+ */
+export class RecentPlanDto {
+  @ApiProperty({ format: 'uuid' })
+  planId!: string;
+
+  @ApiProperty({ example: 'Northgate — Phase 1' })
+  planName!: string;
+
+  @ApiProperty({ example: 'Northgate Quarter' })
+  projectName!: string;
+
+  @ApiProperty({ example: 'Bellway Homes' })
+  clientName!: string;
+}
+
 export class OverviewResponseDto {
   @ApiProperty({ example: 'Acme Construction' })
   organisationName!: string;
@@ -115,6 +137,15 @@ export class OverviewResponseDto {
 
   @ApiProperty({ type: [RecentlyChangedPlanDto] })
   recentlyChanged!: RecentlyChangedPlanDto[];
+
+  @ApiProperty({
+    type: [RecentPlanDto],
+    description:
+      'The subset of `recentPlanIds` the caller may read, in the order they were sent. Absent ' +
+      'ids are absent for indistinguishable reasons — deleted, another organisation’s, ' +
+      'unreadable, or never real. Empty when the parameter was not sent.',
+  })
+  recentPlans!: RecentPlanDto[];
 
   @ApiProperty({ type: AttentionDto })
   attention!: AttentionDto;

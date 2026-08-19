@@ -9,6 +9,7 @@ import {
 
 import type { SignInValues, SignUpValues } from '../schemas/auth-schemas';
 
+import { forgetAllForUser } from '@/features/overview/model/recent-plans';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
 
@@ -410,6 +411,13 @@ export function useResetPassword() {
  * here and is not the question: the person pressed Sign out, so the local copy goes either way.
  * Clearing on a failure is safe in the other direction too, because the seeded `null` sends the
  * guard to `/sign-in`, which is where somebody whose sign-out did not complete should be.
+ *
+ * **It also clears this account's remembered plans from `localStorage`** (ADR-0098 §4.9 D10a). The
+ * query cache is in memory and dies with the tab; the recent-plans store does not, so without this
+ * a shared machine hands the next account the previous one's plan names — commercially sensitive
+ * strings, on the first screen after sign-in, caused by nothing they did. The id is read BEFORE the
+ * cache is cleared, because the only place it exists is the session query this function is about to
+ * remove.
  */
 export function useSignOut() {
   const queryClient = useQueryClient();
@@ -418,6 +426,8 @@ export function useSignOut() {
       await authClient.signOut();
     },
     onSettled: () => {
+      const userId = queryClient.getQueryData<MeResponse | null>(sessionKeys.session)?.user.id;
+      if (userId !== undefined) forgetAllForUser(window.localStorage, userId);
       queryClient.setQueryData(sessionKeys.session, null);
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
     },
