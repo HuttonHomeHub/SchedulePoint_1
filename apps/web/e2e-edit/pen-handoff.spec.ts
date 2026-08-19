@@ -46,7 +46,10 @@ test('a Planner requests control and the holder hands the pen over (peer hand-of
   await signUp(a, 'Holder A', `holder-${stamp}@example.com`);
   await a.getByLabel('Organisation name').fill(orgName);
   await a.getByRole('button', { name: /create organisation/i }).click();
-  await expect(a.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
+  // The landing is the organisation overview (ADR-0098), so its `<h1>` is the organisation's own
+  // name — it was 'Welcome to SchedulePoint' until that screen was replaced. Asserting the name is
+  // the stronger claim anyway: it proves this actor landed in the organisation they just created.
+  await expect(a.getByRole('heading', { level: 1, name: orgName })).toBeVisible();
 
   await a.getByRole('link', { name: 'Members' }).click();
   await a.getByRole('button', { name: 'Invite member' }).click();

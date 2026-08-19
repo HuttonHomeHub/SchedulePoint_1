@@ -178,3 +178,34 @@ test('the landing offers the plans this browser was recently in', async ({ page 
   // would name a plan to somebody who may no longer be entitled to know it exists.
   await expect(page.getByRole('region', { name: 'Jump back in' })).toHaveCount(0);
 });
+
+/**
+ * The wordmark is the route home, and "Overview" has left the nav (ADR-0098 M4 + M5).
+ *
+ * These land together because they are one change seen from two sides: the item went only after
+ * the conventional route home existed. A journey is the only place the pair can be checked at all —
+ * the wordmark has to work from a **plan workspace**, which is the screen furthest from the shell's
+ * own routes and the one a planner is actually on when they want to get back.
+ */
+test('the wordmark returns to the overview, and the nav no longer names it', async ({ page }) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createClient(page, 'Bellway');
+  await createProject(page, 'Northgate');
+  await createPlan(page, 'Northgate — Phase 1');
+  await expect(page).toHaveURL(/\/plans\/[0-9a-f-]{36}/);
+
+  // -------------------------------------------------- 1. The nav has dropped the item
+  const nav = page.getByRole('navigation', { name: 'Organisation' });
+  await expect(nav.getByRole('link', { name: 'Overview' })).toHaveCount(0);
+
+  // -------------------------------------------------- 2. …and the wordmark replaces it
+  await page.getByRole('link', { name: 'SchedulePoint — organisation overview' }).click();
+  await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}$`));
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Overview Co ${stamp}`);
+
+  // -------------------------------------------------- 3. …and says so once you are there
+  await expect(
+    page.getByRole('link', { name: 'SchedulePoint — organisation overview' }),
+  ).toHaveAttribute('aria-current', 'page');
+});

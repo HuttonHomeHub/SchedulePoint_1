@@ -27,6 +27,27 @@ describe('BrandPanel', () => {
     expect(screen.getByText(BRAND_TAGLINE)).toBeInTheDocument();
   });
 
+  it('renders the wordmark as plain text, never as a link (ADR-0098 M4)', () => {
+    // **The link belongs to the header call site, and this is the assertion that keeps it there.**
+    // `BrandMark` is rendered by both `app-header.tsx` and this panel; the tempting one-line
+    // version of "the wordmark is the route home" wraps the primitive itself, which passes every
+    // header test and puts a link on the sign-in door — where there is no session and the route it
+    // points at bounces the visitor straight back.
+    //
+    // It is asserted against the DOM rather than by role, because this panel is `aria-hidden`: a
+    // link inside it is invisible to `getByRole` and still focusable, which is a WCAG 4.1.2 defect
+    // in its own right and precisely the shape a role query cannot see. The first version of this
+    // gate lived in `public-screens.landmarks.test.tsx` and passed against a real injected link,
+    // because those tests mount the screen components and never this panel — the "SchedulePoint"
+    // it matched was sign-in's own description copy.
+    const { container } = render(<BrandPanel />);
+    const panel = container.querySelector('aside');
+
+    expect(panel?.querySelectorAll('a')).toHaveLength(0);
+    expect(panel?.querySelectorAll('button')).toHaveLength(0);
+    expect(screen.getByText('SchedulePoint').closest('a')).toBeNull();
+  });
+
   it('is hidden from assistive technology, and loses nothing by it', () => {
     const { container } = render(<BrandPanel />);
     const panel = container.querySelector('aside');

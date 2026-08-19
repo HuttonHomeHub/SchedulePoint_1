@@ -143,6 +143,24 @@ describe('OverviewScreen — frame', () => {
   });
 });
 
+describe('OverviewScreen — the heading description', () => {
+  it('promises what is waiting on you only to a reader who can have anything waiting', async () => {
+    // The fixed sentence was false for a Viewer and a Contributor, who never see "Needs your
+    // attention" at all. A description is announced with the heading, so it is the first thing a
+    // screen-reader user hears about the screen — and it was describing a different one.
+    renderScreen({ role: 'PLANNER', payload: overview({ recentlyChanged: [plan()] }) });
+    expect(
+      await screen.findByText('What has been happening, and what is waiting on you.'),
+    ).toBeVisible();
+  });
+
+  it('says only what a Viewer can actually see', async () => {
+    renderScreen({ role: 'VIEWER', payload: overview({ recentlyChanged: [plan()] }) });
+    expect(await screen.findByText('What your organisation has been working on.')).toBeVisible();
+    expect(screen.queryByText(/waiting on you/)).toBeNull();
+  });
+});
+
 describe('OverviewScreen — states', () => {
   it('shows skeletons while loading, and no rows', () => {
     renderScreen({ pending: true });

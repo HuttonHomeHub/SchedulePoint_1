@@ -16,6 +16,17 @@ const NAV_LINK_CLASS =
 const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
 
 /**
+ * The wordmark's link treatment.
+ *
+ * `chrome`-scope rebound names only — no colour literals, which the ADR-0055 lint rule enforces
+ * and which would be invisible to the contrast matrix. `rounded-md` plus the focus ring rather
+ * than an underline: the wordmark is a lockup with an icon, and underlining half of it reads as
+ * damage.
+ */
+const BRAND_LINK_CLASS =
+  'focus-visible:ring-ring hover:opacity-90 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none';
+
+/**
  * The header's contents — brand mark, org nav, and the account chip (theme, identity, sign-out).
  *
  * Split from the element that carries it because the two shell shapes place it differently:
@@ -33,6 +44,49 @@ const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
  * nav → account) is unchanged from the previous flex markup, so the pinned tab order holds by
  * construction — no `order-*`, no absolute positioning.
  */
+/**
+ * The wordmark, as the route home (ADR-0098 M4).
+ *
+ * **The link is added HERE and never inside `BrandMark`**, because `brand-panel.tsx` renders the
+ * same mark on the public screens — sign-in, sign-up, reset — where there is no session and no
+ * route home. A link inside the primitive would put one there, pointing at a route the visitor
+ * cannot reach. There is a test asserting the public panel still renders no anchor.
+ *
+ * Off an organisation route (`/account`, `/me/activity`, `/onboarding`, `/staff`) it goes to `/`,
+ * which the home resolver turns into the caller's last-active organisation or onboarding — the
+ * same answer, arrived at by the one route that knows it.
+ *
+ * The accessible name **contains the visible text** ("SchedulePoint — organisation overview"), so
+ * WCAG 2.5.3 Label in Name holds: a speech-input user saying "SchedulePoint" still matches.
+ */
+function BrandLink({ orgSlug }: { orgSlug: string | undefined }): React.ReactElement {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isLanding = orgSlug !== undefined && pathname === `/orgs/${orgSlug}`;
+
+  if (orgSlug === undefined) {
+    return (
+      <Link to="/" aria-label="SchedulePoint — home" className={BRAND_LINK_CLASS}>
+        <BrandMark />
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      to="/orgs/$orgSlug"
+      params={{ orgSlug }}
+      aria-label="SchedulePoint — organisation overview"
+      // `aria-current` is set from the pathname rather than left to the router's `.active` class:
+      // this is the affordance the "Overview" nav item provided with `activeOptions={{ exact:
+      // true }}`, and it has to survive that item's removal in M5.
+      aria-current={isLanding ? 'page' : undefined}
+      className={BRAND_LINK_CLASS}
+    >
+      <BrandMark />
+    </Link>
+  );
+}
+
 function HeaderContents(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
@@ -62,7 +116,7 @@ function HeaderContents(): React.ReactElement {
             <Menu aria-hidden="true" className="size-5" />
           </Button>
         ) : null}
-        <BrandMark />
+        <BrandLink orgSlug={orgSlug} />
       </div>
       <div className="flex min-w-0 items-center gap-2 justify-self-center">
         <OrgSwitcher className="max-w-[12rem] truncate" />
@@ -70,18 +124,18 @@ function HeaderContents(): React.ReactElement {
           // Nav shrinks and scrolls horizontally on narrow viewports so it never
           // pushes the header (or page) into overflow. A proper drawer-below-lg
           // shell is still owed — see TECH_DEBT.md.
+          //
+          // It carries no **Overview** item (ADR-0098 M5). The landing is reached by the
+          // wordmark, which is the conventional route home and is present on every screen
+          // including a plan workspace — where the nav item's `activeOptions={{ exact: true }}`
+          // affordance now lives as the wordmark's `aria-current`. The item went only AFTER the
+          // landing had content and the wordmark linked: removing the only labelled route home
+          // while the destination was still a blank card would have been a regression wearing a
+          // cleanup's clothes.
           <nav
             aria-label="Organisation"
             className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm"
           >
-            <Link
-              to="/orgs/$orgSlug"
-              params={{ orgSlug }}
-              activeOptions={{ exact: true }}
-              className={NAV_LINK_CLASS}
-            >
-              Overview
-            </Link>
             <Link
               to="/orgs/$orgSlug/clients"
               params={{ orgSlug }}

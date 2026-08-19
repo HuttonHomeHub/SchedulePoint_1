@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 import { cn } from '@/lib/utils';
 
 export interface PageHeaderProps {
@@ -25,6 +27,12 @@ export interface PageHeaderProps {
  * The description is wired with `aria-describedby` rather than left as a sibling paragraph: it is
  * about the heading, and a landmark-navigating reader who lands on the title should get it. That is
  * the ADR-0073 C2.5 finding — a caveat reachable only by reading serially is not reachable.
+ *
+ * The id comes from `useId()`, not from a constant. A fixed id was the first version and is a
+ * latent duplicate-id defect: this archetype is a page's single header today, but "today" is not
+ * something a primitive gets to assume about its call sites, and a duplicated `id` makes
+ * `aria-describedby` resolve to whichever element the browser saw first — wrong, and invisible.
+ * `SectionCard` already did it this way, which is what made the inconsistency worth looking at.
  */
 export function PageHeader({
   title,
@@ -32,7 +40,8 @@ export function PageHeader({
   actions,
   className,
 }: PageHeaderProps): React.ReactElement {
-  const describedBy = description ? 'page-header-description' : undefined;
+  const descriptionId = useId();
+  const describedBy = description ? descriptionId : undefined;
   return (
     <div className={cn('flex items-start justify-between gap-4', className)}>
       <div className="min-w-0">

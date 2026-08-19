@@ -1,6 +1,10 @@
 # ADR-0097: The design-system rewrite — one theme, a closure instead of a list, the diagram inside the system, and the command surface reshaped
 
-- **Status:** **Proposed** — drafted 2026-08-18, stops for approval.
+- **Status:** **Proposed** — drafted 2026-08-18. **Landings A and B landed 2026-08-19** with the
+  product owner's approval of the plan (and of its four extensions: the typeface, controls and
+  interaction in scope, the A→B→review cadence, and both relocations with D split into D1/D2).
+  C–F are not yet built; C is gated on its own measurement and is withdrawn if the reshaped row
+  does not clear 120px of slack at 1646.
 - **Date:** 2026-08-18
 - **Deciders:** Product owner (the mandate, widened three times; the single-theme decision; CQ-A–CQ-D);
   ui-architect. Inputs from the `corporate-brand` feature-analyst pass and from the

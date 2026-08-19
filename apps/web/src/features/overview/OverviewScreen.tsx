@@ -93,7 +93,17 @@ export function OverviewScreen({ orgSlug }: { orgSlug: string }): React.ReactEle
     <PageContainer width="narrow">
       <PageHeader
         title={title}
-        description="What has been happening, and what is waiting on you."
+        // **Role-aware, because the fixed version was false for two of the four roles.** The
+        // screen shows "what is waiting on you" only for a reader who can hold an editing lock,
+        // invite, or restore — "Needs your attention" is not rendered at all for a Viewer or a
+        // Contributor (spec §2 US-2), so promising it to them is exactly the copy defect the
+        // spec's own contract exists to prevent: a sentence that reads perfectly and describes a
+        // screen they are not looking at.
+        description={
+          isWriter
+            ? 'What has been happening, and what is waiting on you.'
+            : 'What your organisation has been working on.'
+        }
       />
 
       <div className="mt-6 flex flex-col gap-6">

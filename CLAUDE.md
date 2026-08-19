@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1018 web
 > source files with 34 flag-scoped Playwright suites beside the base journey, and
-> 97 ADRs.
+> 98 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2299,7 +2299,8 @@ progress` off the command surface because **an object action belongs on the obje
   **The CPM engine is not imported and the ADR-0034 recalculation parity gate is untouched** — in
   its honest form: there is nothing here to hold parity for. Builds on ADR-0046/0072/0073/0085/0086/0087.
 
-- **ADR-0097** _(Proposed; Landing A in progress)_ — A theme is a system, not a palette. The
+- **ADR-0097** _(Proposed; **Landings A and B landed 2026-08-19**, C–F to come)_ — A theme is a
+  system, not a palette. The
   product owner called the `.corporate` skin _"a badly designed skin"_ and asked for it to become
   the theme the app is designed to, then widened the mandate three times — to layout and
   typography, then to _"I remove all restraints"_, then to a single theme with the mechanism kept.
@@ -2364,6 +2365,45 @@ progress` off the command surface because **an object action belongs on the obje
   screen would falsify this epic's thesis on its first outing. No new `VITE_` flag: ADR-0088
   established that a `VITE_` constant is inlined at build time and is not an operator rollback, so
   the rollback is a commit boundary. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0098** _(Accepted; M0–M5 landed 2026-08-19)_ — The landing is the organisation overview.
+  `/orgs/:slug` is where **every sign-in lands**, and it showed a centred card saying "Select a plan
+  from the Project Explorer" — a description of the rail one column away, answering neither question
+  a planner actually arrives with. It also carried a **second screen nobody had ever seen**: a
+  `VITE_NAV_TREE`-off branch reading "The schedule editor arrives in an upcoming update", roughly a
+  year after the editor shipped and unreachable in every published image (ADR-0088), deleted with
+  the flag rather than corrected. **Recently changed** is ordered by
+  `GREATEST(plan, newest activity, newest dependency)` — **not** `plans.updated_at`, which does not
+  move when an activity is edited, so the naive ordering ranks a plan somebody worked in all morning
+  below one whose name was corrected last week **and every row still looks correct**. Names resolve
+  through `org_members` and never through `users`: that join is the control, not a convenience, and
+  `changedBy` is a discriminated union (`MEMBER`/`FORMER_MEMBER`/`UNKNOWN`) because a nullable name
+  collapses two different facts into an absence a reader cannot tell from a defect.
+  **Sections and counts the caller may not read are OMITTED, never zeroed** — ADR-0082's "when every
+  item would be shaded, show no trigger at all" applied at **section** granularity, because a zero is
+  a fact about the organisation and an absence is a fact about the reader. **"Jump back in" stores
+  ids and never names**, which is what makes a rename correct itself and a plan the reader has lost
+  access to disappear rather than 404 on click; the key carries the user id and sign-out sweeps it,
+  since the query cache dies with the tab and `localStorage` does not; and the ids ride on the
+  request the screen already makes, **measured** by the journey rather than asserted. Its **four
+  failure modes are indistinguishable by design** (deleted / another organisation's / unreadable /
+  never real), with the API e2e comparing whole payloads rather than three empty arrays — an oracle
+  is a difference. The wordmark becomes the route home **at the header call site only**, never
+  inside `BrandMark`, which the public screens also render; "Overview" leaves the nav **after** the
+  page has content, and that sequencing is the decision. **No feature flag** (ADR-0088 D2's Class A
+  shape, plus D1's finding that a `VITE_` flag is not an operator rollback at all). Six dashboard
+  sections are rejected **by name**, including count tiles and an activity feed the audit log
+  permanently cannot back.
+  **The screen is assembled from the ADR-0097 archetypes and that is a gate**, verified red against
+  a hand-rolled frame. Two archetypes changed because it needed them to — `PageContainer` gained a
+  `narrow` measure (at the default, a plan's name and its change time sat ~800px apart at 1646) and
+  `SectionCard` became a named `<section>`, which arrived from the journey rather than a reviewer.
+  **Three of my own gates were defective and are recorded rather than quietly fixed**: one was
+  vacuous (it matched sign-in's description copy, not the wordmark, and passed against a real
+  injected link), the ADR-0097 weight ratchet was counting `font-medium` inside its own docblocks so
+  that writing down reasoning pushed it towards failing, and `forgetAllForUser` used
+  `Object.keys(storage)`, which works only because the Web Storage API happens to expose stored keys
+  as own properties. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
