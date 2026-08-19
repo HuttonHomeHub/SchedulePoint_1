@@ -190,7 +190,8 @@ they chose the split.
 
 ### D1 — One navigator
 
-1. **The organisation nav leaves the header for the rail** (`screens.md` §0, §3). 637 px freed, one
+1. **The organisation nav leaves the header for the rail** (`screens.md` §0, §3). **540 px** freed
+   (re-measured 2026-08-19; see `m0-landing-d1-measurement.md`), one
    navigator, one `aria-current` treatment.
 2. **The band merge**, gated on the arithmetic in `screens.md` §1.2 — ~1677 px against 1646, **31 px
    short**, with two measured cuts available. **If it does not fit, the two-band fallback ships**, which

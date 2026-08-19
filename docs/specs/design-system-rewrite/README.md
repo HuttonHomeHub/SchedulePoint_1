@@ -129,7 +129,7 @@ than quietly absorbed.
 | -------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **CQ-E** | Does the landing page's UI wait one landing?    | **Yes** — Landing A, then B, then review. Its data half proceeded unblocked and is done.             |
 | **CQ-F** | Activity editor: modal or docked panel?         | **Docked panel.** A planner edits an activity to change the schedule and a modal hides the schedule. |
-| **CQ-G** | Does the org nav leave the header for the rail? | **Yes.** One navigator instead of two; frees 637 px of the scarcest width in the product.            |
+| **CQ-G** | Does the org nav leave the header for the rail? | **Yes.** One navigator instead of two. _(The width claim was wrong — see below.)_                    |
 | **CQ-H** | How much visible change per release?            | **One landing per release**, A then B then review.                                                   |
 | **CQ-I** | Reshape: one epic or two?                       | **One epic, separate landings** — C stays liftable if the risk needs isolating.                      |
 
@@ -149,6 +149,16 @@ than quietly absorbed.
 > requires a dark theme; but it is a materially larger removal than the sentence in `design.md`
 > §0.5.6 described. Put back to the product owner in that frame and re-affirmed. Recorded so the
 > decision on file is the one that was actually made.
+
+> **CQ-G's width claim is corrected, 2026-08-19, by measurement.** It said the nav "frees 637 px of
+> the scarcest width in the product". Both halves were wrong: the nav is **540 px** (three figures
+> were in circulation — 637, 620 and ~517 — and all three predate ADR-0098 M5 removing the Overview
+> item), and the header is **not** the scarcest width in the product, having 711 px of 1646 free at
+> the product owner's width. The scarcest is the plan command band, measured at 27 px the same day.
+> **The real argument is stronger and is the one ADR-0092 M5 implied without costing:** the nav is
+> exactly what the band merge needs. Without it the merge is 84 px short at 1646; with it there is
+> 456 px spare, and 250 px at 1440. See
+> [`m0-landing-d1-measurement.md`](m0-landing-d1-measurement.md).
 
 Two further decisions were taken at the same time and are larger than any of the above:
 

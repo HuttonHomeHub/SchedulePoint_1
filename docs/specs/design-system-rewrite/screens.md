@@ -14,21 +14,21 @@
 
 **The product has three navigation layers and needs two.**
 
-| Layer                            | Carries                                                  | Measured cost                       |
-| -------------------------------- | -------------------------------------------------------- | ----------------------------------- |
-| App header                       | brand mark, **organisation nav (7 links)**, account chip | 56 px tall, **637 px** of nav width |
-| Project Explorer rail            | Client → Project → Plan tree, lazy + virtualized         | 28 px rows                          |
-| Plan identity + two toolbar rows | plan name, path, pen, modes, view switch, 32 commands    | 45 + 45 + 44 = **134 px**           |
+| Layer                            | Carries                                                  | Measured cost                                                                                                                                                     |
+| -------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App header                       | brand mark, **organisation nav (6 links)**, account chip | 56 px tall, **540 px** of nav width (re-measured 2026-08-19; it was 7 links and 620 px until ADR-0098 M5 removed **Overview**, and 637 was never measured at all) |
+| Project Explorer rail            | Client → Project → Plan tree, lazy + virtualized         | 28 px rows                                                                                                                                                        |
+| Plan identity + two toolbar rows | plan name, path, pen, modes, view switch, 32 commands    | 45 + 45 + 44 = **134 px**                                                                                                                                         |
 
 _(widths and heights from `workspace-chrome/m0-band-measurement.md` §2–§3, measured at 1646)_
 
 The organisation nav and the Project Explorer are **the same layer wearing two shapes**: one is
 "where in this organisation", the other is "where in this hierarchy". Splitting them across a
-horizontal strip and a vertical rail costs 637 px of the scarcest width in the product and gives a
+horizontal strip and a vertical rail costs **540 px** (re-measured 2026-08-19) and gives a
 planner two places to look for "where am I".
 
 **So: the rail becomes the only navigator, and the header stops being one.** That single move frees
-637 px, and it is what makes everything else in this document affordable — including the ambition in
+540 px, and it is what makes everything else in this document affordable — including the ambition in
 §1.2 that three previous epics measured as out of reach.
 
 ---
@@ -70,7 +70,7 @@ Three bands become **one**, because:
 - the **plan identity sheds 456 px** of measured redundancy (the breadcrumb path the rail already
   shows, 199 px; the pen badge and live-region sentence that restate the button beside them, 257 px
   — `workspace-chrome/m0-band-measurement.md` §4);
-- the **organisation nav leaves the header** for the rail (§0), freeing 637 px.
+- the **organisation nav leaves the header** for the rail (§0), freeing **540 px**.
 
 **The arithmetic, and it is a prediction that M0 must falsify.** Header content after the nav leaves:
 brand 160 + account 52 = **212**. Command band, from `command-surface.md` §3.1: **~1465**. Together
@@ -166,7 +166,7 @@ A single rail with three zones and one job:
 | **middle** | the Client → Project → Plan tree — flexible height, the rail's purpose                                   |
 | **bottom** | the organisation's destinations: Calendars, Resources, Members, Audit log, Recently deleted, My activity |
 
-The bottom zone is the **637 px of header nav**, relocated. It belongs here because those are places
+The bottom zone is the **540 px of header nav**, relocated. It belongs here because those are places
 in the organisation, and the rail is where "where am I in this organisation" is answered.
 
 Three consequences:
