@@ -64,7 +64,15 @@ test('a planner links plans across projects and recalculates the programme', asy
   await add.getByLabel('Client', { exact: true }).selectOption({ label: 'Northgate' });
   await add.getByLabel('Project', { exact: true }).selectOption({ label: 'Riverside' });
   await add.getByLabel('Plan', { exact: true }).selectOption({ label: 'Procurement' });
-  await add.getByLabel('Activity', { exact: true }).selectOption({ label: 'Deliver steel' });
+  // **The Activity picker is a `Combobox`, not a `<select>`** (ADR-0097 Landing F1): a plan's
+  // activities are unbounded by the data model, so it is the one picker in this dialog that earns
+  // the searchable control. Client / Project / Plan above are still native and still
+  // `selectOption`, which is the discriminator visible in the test rather than only in a document.
+  const activity = add.getByLabel('Activity', { exact: true });
+  await activity.click();
+  await activity.fill('Deliver');
+  await add.getByRole('option', { name: 'Deliver steel' }).click();
+  await expect(activity).toHaveValue('Deliver steel');
   await add.getByRole('button', { name: 'Add cross-plan link' }).click();
 
   // The add succeeds and the link is created. The durable, deterministic signal is the **programme
