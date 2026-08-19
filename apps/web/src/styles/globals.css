@@ -117,8 +117,6 @@
 /* ------------------------------------------------------------------------- */
 :root {
   /* Surfaces — the working canvas stays light and quiet. */
-  --background: oklch(0.982 0.002 248);
-  --foreground: oklch(0.321 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.321 0 0);
   --popover: oklch(1 0 0);
@@ -131,23 +129,12 @@
      theme already uses for `--warning`. So amber goes where it is genuinely legible
      — `--chrome-primary` (7.9:1 on navy), `--chrome-ring`, the `--accent` row wash
      and `--chart-1` — and the page's primary is the brand navy at 12:1. */
-  --primary: oklch(0.252 0.056 264);
-  --primary-foreground: oklch(0.985 0 0);
   /* The lighter navy, as the quiet secondary surface. */
-  --secondary: oklch(0.338 0.081 262);
-  --secondary-foreground: oklch(0.985 0 0);
   /* A pale amber wash for hover/selected rows — a tint, so ordinary dark text
      keeps its contrast on top of it. */
-  --accent: oklch(0.955 0.04 78);
-  --accent-foreground: oklch(0.252 0.056 264);
-  --muted: oklch(0.965 0.002 248);
-  --muted-foreground: oklch(0.51 0 0);
 
   /* Status */
-  --destructive: oklch(0.505 0.19 27.5);
-  --destructive-foreground: oklch(0.985 0 0);
   /* Darker, as on the light page. 7.60:1 label, 7.53:1 against the page. */
-  --destructive-hover: oklch(0.455 0.19 27.5);
   /* **Hover as a TOKEN, never `hover:bg-X/NN`** — the rule `--destructive-hover` was added
      for, now applied to its neighbours. An alpha modifier composites the fill against whatever
      is behind it, so it moves TOWARD the surface and is invisible to a census that reads
@@ -156,24 +143,9 @@
      Each value below is the smallest luminance step, either direction, that clears 3:1 against
      its surface AND keeps the fill's own label at 4.5:1 — both bars, because a hover that
      separates from the surface by swallowing its text is not an improvement. */
-  --primary-hover: oklch(0.267 0.056 264); /* 14.51:1 on the surface, 14.63:1 for its label */
-  --secondary-hover: oklch(0.353 0.081 262); /* 10.69:1 on the surface, 10.78:1 for its label */
-  --destructive-text: oklch(0.505 0.19 27.5);
-  --success: oklch(0.52 0.15 143);
-  --success-foreground: oklch(0.985 0 0);
-  --success-text: oklch(0.45 0.11 150);
   /* Bronze, not amber — see note 2 above. */
-  --warning: oklch(0.56 0.115 55);
-  --warning-foreground: oklch(0.985 0 0);
-  --warning-text: oklch(0.47 0.11 55);
-  --info: oklch(0.338 0.081 262);
-  --info-foreground: oklch(0.985 0 0);
-  --info-text: oklch(0.3 0.075 262);
 
   /* Lines & focus — the ring is NAVY on light surfaces (note 1). */
-  --border: oklch(0.907 0 0);
-  --input: oklch(0.62 0.02 264);
-  --ring: oklch(0.35 0.09 262);
 
   /* Data visualisation — the brand pair first, then hues that stay apart from
      both it and the status colours. */
@@ -353,9 +325,6 @@
 
   /* White fields on navy — the reference's date and filter inputs. Deliberately
      per-theme: literal white would glare on Dark's near-black chrome. */
-  --field: oklch(1 0 0);
-  --field-foreground: oklch(0.321 0 0);
-  --field-muted-foreground: oklch(0.51 0 0);
   --canvas: oklch(0.988 0.006 90);
   --canvas-band: oklch(0.966 0.011 90);
 
@@ -432,6 +401,99 @@
   --canvas-nonworking-hatch: oklch(0.83 0.004 90);
 
   --radius: 0.625rem;
+  /* ----------------------------------------------------------------------- */
+  /* The page family (ADR-0097 §1.5a)                                         */
+  /*                                                                          */
+  /* Until now the page's values WERE the unqualified names, so those names    */
+  /* were simultaneously a source and a binding — and there was nothing to     */
+  /* restore FROM. Every other scope has a family it rebinds out of; the page  */
+  /* had none, which is why a `Card` inside a scope had no way back to the     */
+  /* page's own vocabulary and had to be handled as an exception.              */
+  /*                                                                          */
+  /* So the page gets a family like every other surface, and the unqualified   */
+  /* names alias it. Six symmetric scopes instead of five plus a special case. */
+  /*                                                                          */
+  /* **The "never write a token as a var() alias" rule does not forbid this,   */
+  /* and that was MEASURED rather than argued.** Probed in Chromium: a custom  */
+  /* property computes on the element it is declared on and then inherits, so  */
+  /* an alias fails only when the overriding block is on a DESCENDANT. The     */
+  /* product stamps its theme on `<html>` — the same element `:root` matches — */
+  /* so both declarations land together and the alias resolves correctly, and  */
+  /* so does an alias-of-an-alias. The rule's own wording pointed the other    */
+  /* way and my first probe reproduced its claim by putting the class on a     */
+  /* descendant, which the product never does.                                 */
+  /*                                                                          */
+  /* THE CATCH, and it is why the theme contract has to cover this from day    */
+  /* one rather than the day it bites: when a second theme returns, `--page-*` */
+  /* becomes exactly the multi-block topology the rule DOES describe. A dark   */
+  /* block must restate the page family literally, or the alias silently keeps */
+  /* the light values.                                                         */
+  /* ----------------------------------------------------------------------- */
+  --page-background: oklch(0.982 0.002 248);
+  --page-foreground: oklch(0.321 0 0);
+  --page-muted: oklch(0.965 0.002 248);
+  --page-muted-foreground: oklch(0.51 0 0);
+  --page-border: oklch(0.907 0 0);
+  --page-input: oklch(0.62 0.02 264);
+  --page-accent: oklch(0.955 0.04 78);
+  --page-accent-foreground: oklch(0.252 0.056 264);
+  --page-primary: oklch(0.252 0.056 264);
+  --page-primary-foreground: oklch(0.985 0 0);
+  --page-field: oklch(1 0 0);
+  --page-field-foreground: oklch(0.321 0 0);
+  --page-field-muted-foreground: oklch(0.51 0 0);
+  --page-destructive-text: oklch(0.505 0.19 27.5);
+  --page-success-text: oklch(0.45 0.11 150);
+  --page-warning-text: oklch(0.47 0.11 55);
+  --page-info-text: oklch(0.3 0.075 262);
+  --page-ring: oklch(0.35 0.09 262);
+  --page-destructive: oklch(0.505 0.19 27.5);
+  --page-destructive-foreground: oklch(0.985 0 0);
+  --page-destructive-hover: oklch(0.455 0.19 27.5);
+  --page-secondary: oklch(0.338 0.081 262);
+  --page-secondary-foreground: oklch(0.985 0 0);
+  --page-success: oklch(0.52 0.15 143);
+  --page-success-foreground: oklch(0.985 0 0);
+  --page-warning: oklch(0.56 0.115 55);
+  --page-warning-foreground: oklch(0.985 0 0);
+  --page-info: oklch(0.338 0.081 262);
+  --page-info-foreground: oklch(0.985 0 0);
+  --page-primary-hover: oklch(0.267 0.056 264);
+  --page-secondary-hover: oklch(0.353 0.081 262);
+
+  /* The unqualified names, aliasing the family above. */
+  --background: var(--page-background);
+  --foreground: var(--page-foreground);
+  --muted: var(--page-muted);
+  --muted-foreground: var(--page-muted-foreground);
+  --border: var(--page-border);
+  --input: var(--page-input);
+  --accent: var(--page-accent);
+  --accent-foreground: var(--page-accent-foreground);
+  --primary: var(--page-primary);
+  --primary-foreground: var(--page-primary-foreground);
+  --field: var(--page-field);
+  --field-foreground: var(--page-field-foreground);
+  --field-muted-foreground: var(--page-field-muted-foreground);
+  --destructive-text: var(--page-destructive-text);
+  --success-text: var(--page-success-text);
+  --warning-text: var(--page-warning-text);
+  --info-text: var(--page-info-text);
+  --ring: var(--page-ring);
+  --destructive: var(--page-destructive);
+  --destructive-foreground: var(--page-destructive-foreground);
+  --destructive-hover: var(--page-destructive-hover);
+  --secondary: var(--page-secondary);
+  --secondary-foreground: var(--page-secondary-foreground);
+  --success: var(--page-success);
+  --success-foreground: var(--page-success-foreground);
+  --warning: var(--page-warning);
+  --warning-foreground: var(--page-warning-foreground);
+  --info: var(--page-info);
+  --info-foreground: var(--page-info-foreground);
+  --primary-hover: var(--page-primary-hover);
+  --secondary-hover: var(--page-secondary-hover);
+
   /* ----------------------------------------------------------------------- */
   /* Metrics (ADR-0097)                                                       */
   /*                                                                          */

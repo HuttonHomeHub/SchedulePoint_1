@@ -163,6 +163,55 @@ function computeReboundNames(): string[] {
 
 const REBOUND_NAMES = computeReboundNames();
 
+describe('the theme contract', () => {
+  it('every theme block declares the whole page family, literally', () => {
+    // **The gate that keeps ADR-0097 §1.5a honest the day a second theme returns.**
+    //
+    // The page family works today because `:root` and any theme class both match `<html>`, so an
+    // alias like `--background: var(--page-background)` resolves against the same element that
+    // declares the source. Measured in Chromium, not assumed — the rule this replaces claimed the
+    // opposite, and it is right only for a theme applied to a DESCENDANT, which this product never
+    // does.
+    //
+    // A second theme block is still on `<html>`, so it must restate the page family LITERALLY. Set
+    // only `--page-background` and it works; set only `--background` and the alias is shadowed
+    // while everything beneath it silently keeps the first theme's values — a whole family wrong,
+    // with nothing failing. That is the failure this asserts against, from day one rather than
+    // from the day it bites.
+    //
+    // With one theme it checks `:root`'s own completeness, which is worth having on its own: the
+    // family is the thing every scope rebinds out of, so a missing member is a scope with nothing
+    // to restore from.
+    for (const selector of THEME_SELECTORS) {
+      const declared = declarations(blockBody(selector));
+      const missing = REBOUND_NAMES.filter((name) => {
+        const pageToken = `--page-${name.slice(2)}`;
+        const value = declared.get(pageToken);
+        return value === undefined || /^var\(/.test(value.trim());
+      });
+      expect(
+        missing,
+        `${selector} does not declare these page-family tokens literally: ${missing.join(', ')}`,
+      ).toEqual([]);
+    }
+  });
+
+  it('the unqualified names alias the family rather than restating it', () => {
+    // The other direction. If a name were declared literally in BOTH places they could drift, and
+    // the drift would be invisible — two identical colours today, two different ones after one
+    // edit. One source, one alias.
+    const declared = declarations(blockBody(':root'));
+    const restated = REBOUND_NAMES.filter((name) => {
+      const value = declared.get(name);
+      return value !== undefined && !/^var\(--page-/.test(value.trim());
+    });
+    expect(
+      restated,
+      `these should alias --page-*, not restate a value: ${restated.join(', ')}`,
+    ).toEqual([]);
+  });
+});
+
 describe('the rebound family is a closure, not a list', () => {
   it('every exposed colour token is either rebound or deliberately outside', () => {
     // The assertion that makes the derivation trustworthy: a token added to `@theme inline`

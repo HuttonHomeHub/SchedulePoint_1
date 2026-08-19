@@ -278,12 +278,18 @@ sequenceDiagram
   scope mechanism. Remove `inline` and every scope silently does nothing: no error, no
   failing build, and a diff that reads like a tidy-up. `styles/token-architecture.test.ts`
   pins it.
-- ⚠️ **Declare token values literally, never as `var()` aliases.** A `--field: var(--background)`
-  written in one theme block is substituted at computed-value time, so a second theme block
-  would inherit the first's value and never override it. Each theme block restates its own
-  values. With one theme this cannot currently bite — which is exactly why it is written
-  down: it becomes live again the moment a second block is added, and by then nobody will
-  remember why the values were literal.
+- ⚠️ **A token value written as a `var()` alias is safe HERE and unsafe one element down — and
+  that was measured, not reasoned.** The rule used to read "declare token values literally, never
+  as `var()` aliases", on the grounds that a second theme block would inherit the first's value.
+  Probed in Chromium: a custom property computes on the element it is declared on and then
+  **inherits that computed value**, so an alias fails only when the overriding block sits on a
+  **descendant**. This product stamps its theme on `<html>` — the same element `:root` matches — so
+  both declarations land together and the alias resolves correctly, including an alias of an alias.
+  ADR-0097 §1.5a relies on exactly this: `--background: var(--page-background)`.
+  **The catch, which is why the theme contract covers it from day one:** a second theme block is
+  still on `<html>`, so it must restate the page family **literally**. If a dark block sets only
+  `--page-background`, that works; if it sets only `--background`, the alias is shadowed and the
+  family beneath it silently keeps the light values. Each theme block declares the whole contract.
 
 ## Responsive strategy
 

@@ -70,14 +70,49 @@ export const THEME_SELECTORS = [':root'] as const;
 export type ThemeSelector = (typeof THEME_SELECTORS)[number];
 
 /**
+ * Follow `var()` aliases to a literal value, the way a browser resolves them.
+ *
+ * ADR-0097 §1.5a gave the page its own `--page-*` family and made the unqualified names alias it
+ * (`--background: var(--page-background)`), so six scopes are symmetric instead of five plus a
+ * special case. Every gate that reads a token then met `var(--page-background)` where it expected
+ * a colour, and a contrast matrix cannot composite a variable reference.
+ *
+ * Resolved here once rather than in each gate. The loop handles chains because `--field:
+ * var(--background)` on top of the page family is two hops, and it refuses to run forever on a
+ * cycle rather than hanging a run with no explanation. A name it cannot resolve is left alone:
+ * a scope family token (`--chrome-primary`) is resolved by the scope, not by the theme.
+ */
+function resolveAliases(tokens: Map<string, string>): Map<string, string> {
+  const out = new Map(tokens);
+  for (const [name, value] of out) {
+    let current = value.trim();
+    const seen = new Set<string>([name]);
+    let alias = /^var\((--[\w-]+)\)$/.exec(current);
+    while (alias) {
+      const target = alias[1]!;
+      if (seen.has(target)) {
+        throw new Error(`token alias cycle: ${[...seen, target].join(' -> ')}`);
+      }
+      seen.add(target);
+      const next = out.get(target);
+      if (next === undefined) break;
+      current = next.trim();
+      alias = /^var\((--[\w-]+)\)$/.exec(current);
+    }
+    out.set(name, current);
+  }
+  return out;
+}
+
+/**
  * Resolved declarations for a theme. With one theme this is `:root`'s own block; the merge
  * a second theme would need is written out rather than assumed, so the shape of "add dark
  * back" is visible here rather than rediscovered.
  */
 export function themeTokens(selector: ThemeSelector): Map<string, string> {
   const root = declarations(blockBody(':root'));
-  if (selector === ':root') return root;
+  if (selector === ':root') return resolveAliases(root);
   const merged = new Map(root);
   for (const [name, value] of declarations(blockBody(selector))) merged.set(name, value);
-  return merged;
+  return resolveAliases(merged);
 }
