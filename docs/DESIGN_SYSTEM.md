@@ -192,16 +192,30 @@ Authoring rule: a control's `showLabel` is **presentation** and its `tier` is **
 conflate them — they were one property once, which meant a static per-item flag decided a question
 that is really about the width available at render time (ADR-0031, TECH_DEBT #61).
 
-### Dark & light mode
+### One theme
 
-Both are first-class. Preference is light / dark / **system**; the `.dark` class
-on `<html>` flips every token (theme management in
-[`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md)). Components must look
-correct in both — reviewers check both.
+**There is one theme and no picker** (ADR-0097). It is declared at `:root`, no class is stamped on
+`<html>`, and every stored preference — `dark`, `light`, `system`, or anything else — resolves to
+"stamp nothing", which is what makes a flash of the wrong theme structurally impossible rather than
+merely avoided.
 
-### Corporate theme (navy + amber)
+> **This heading read "Dark & light mode — both are first-class. Preference is light / dark /
+> **system**; the `.dark` class on `<html>` flips every token … reviewers check both" until
+> 2026-08-19 — immediately above a section that opens "this is now the product's only theme".** Two
+> answers on one page, and the wrong one first. Corrected rather than deleted, because the
+> instruction it carried ("reviewers check both") was a real habit and a reader needs to know it has
+> lapsed rather than to find it silently gone.
 
-**This is now the product's only theme, and it is declared at `:root`** (ADR-0097) —
+The mechanism that would carry a future dark theme is **kept live rather than deleted**:
+`theme-boot.js` still runs and still has its test, `THEME_SELECTORS` is a one-element list, and
+`Theme` stays a union. The cost of bringing dark back is a block of values and one entry — about 110
+declarations, comparable to what `.dark` used to hold. What that does **not** buy is the judgement:
+choosing those values is a week of design work, and a dark diagram whose colours carry meaning needs
+its plot separations re-derived rather than re-tinted (`--plot-*`, ADR-0097 Landing E).
+
+### The palette (navy + amber)
+
+**This is the product's only theme, and it is declared at `:root`** (ADR-0097) —
 no class is stamped on `<html>`, and there is no picker. Navy chrome around a light
 working canvas. The product owner asked for it to become "the main theme that the app
 is designed to"; light, dark and system are withdrawn rather than deprecated, and the
@@ -228,22 +242,28 @@ Two rules make the palette work rather than merely look right on a swatch sheet:
    the brand **navy** (12:1), and amber is the primary on the navy chrome, where it carries
    navy ink at **7.9:1**. Same rule for focus: the ring is navy on light surfaces (`--ring`)
    and amber on chrome (`--chrome-ring`, 7.9:1).
-2. **Near-critical moved to bronze.** `--warning` is the TSLD's near-critical bar fill,
-   and in light/dark it is essentially this same amber. With amber promoted to `--primary`
-   (which is the ordinary bar fill), a normal bar and a near-critical bar would have been
-   the same colour. Corporate shifts `--warning` to a deeper bronze so the canvas keeps
-   three readable states — normal / near-critical / critical — on top of the dashed-outline
-   shape cue that carries [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color)
-   regardless of hue.
+2. **Near-critical is bronze rather than amber.** `--warning` is the TSLD's near-critical bar
+   fill. With amber promoted to `--primary` — which is also the ordinary bar fill — a normal bar and
+   a near-critical bar would have been the same colour, so `--warning` moved to a deeper bronze.
+
+   > **ADR-0097 Landing E removed the constraint that forced this**, and the entry is kept because
+   > the reasoning is still instructive. The diagram now has its own family (`--plot-*`), so the
+   > ordinary bar fill is no longer the same token as the page's primary button: a theme need never
+   > again recolour the canvas because it recoloured a control. The three bar states are separated
+   > **by measurement** there — near-critical against critical was 1.34:1 and is now 1.61:1, with
+   > 1.70:1 established as the ceiling under a white inside-label and a 3:1 floor on the ground —
+   > and `token-contrast.test.ts` asserts it rather than a reader checking a swatch. The shape cue
+   > (solid outline critical, dashed near-critical) still carries
+   > [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color) regardless of hue.
 
 Verified pairings (sRGB, WCAG 2.x): navy chrome / white text **16:1**; body `#333` on
 off-white **12:1**; amber fill / navy ink **7.9:1**; destructive `#b91c1c` on off-white
 **6.1:1**.
 
-**The type scale is unchanged.** The palette's source description named Roboto; swapping
-the typeface per theme would shift layout and pull a second font at runtime for no
-accessibility or brand gain that colour doesn't already deliver. Corporate is a colour
-theme.
+**The typeface is Space Grotesk** (ADR-0097), chosen from four candidates rendered on real product
+chrome. The palette's source description named Roboto; a per-theme typeface was rejected on the
+reasoning that it would shift layout and pull a second font at runtime for no accessibility or brand
+gain colour does not already deliver — and with one theme the question no longer arises.
 
 ### Surface scopes (ADR-0055)
 
