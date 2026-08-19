@@ -2624,3 +2624,25 @@ than a quick patch.
 **Blast radius if fixed:** every journey that reaches a client or project through `Clients` could
 then take the shorter route, so their locators would keep working; the risk is in the tree's own
 keyboard model, not in its consumers.
+
+## 144. `e2e-multi-select`'s focus assertion fails under sweep load and passes alone
+
+**Observed three times, 2026-08-19.** `multi-select.spec.ts:214` asserts that a bulk delete leaves
+focus on the activities listbox — a real assertion protecting a real defect (ADR-0080's gate pass
+found a bulk delete dropping focus to `<body>`, which is a WCAG 2.4.3 failure **and** silently
+disables Ctrl+Z, because the undo accelerator is a React `onKeyDown` on the workspace root).
+
+It fails whenever the suite runs inside `scripts/e2e-sweep.sh` and **passes every time the suite is
+run alone**. Verified by running it both ways on the same commit rather than inferred from a rerun.
+
+**The mechanism is a race the product wins with one frame of margin.** A native `<dialog>` restores
+focus to whatever held it when `showModal()` ran, from inside the effect that calls `close()` — i.e.
+_after_ the handler that asked for the listbox. `TsldPanel.tsx:674-679` therefore defers with a
+single `requestAnimationFrame`. Under sweep load — thirty-three suites in series, servers restarting
+between each — that one frame is not reliably after the dialog's restoration.
+
+**So the assertion is right and the wait is thin.** The fix is not to relax the assertion (it is the
+only thing standing between a planner and an unreachable undo) but to make the product's own wait
+robust: wait for the dialog's `close` event, or poll until `document.activeElement` is not `<body>`,
+rather than betting on frame ordering. Until then this costs triage time on every sweep, which is
+how a suite ends up being ignored.
