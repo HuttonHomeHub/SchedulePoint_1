@@ -39,7 +39,21 @@ import { cn } from '@/lib/utils';
  * bearing one is that the region's fill must be chosen for a reason the page's fill structurally
  * cannot serve — otherwise it is a component with props, not a scope.
  */
-export type SurfaceTone = 'chrome' | 'panel' | 'brand' | 'auth';
+export type SurfaceTone = 'chrome' | 'panel' | 'brand' | 'auth' | 'card' | 'popover';
+
+/**
+ * The two **resets** (ADR-0097 §1.5c). They are not scopes in the ADR-0077 §1 sense — nobody has
+ * to clear five conditions to add one, because they add no vocabulary. They RESTORE the page
+ * family for their subtree and then change one thing: their own fill.
+ *
+ * That is what keeps ADR-0055's promise that "a `Card` means the same thing everywhere" true
+ * inside a rebinding world. Without it, a `Card` landing inside `chrome` composites
+ * `text-muted-foreground` — which IS rebound, to a grey validated against navy — on `--card`,
+ * which is not. Two halves of one pair, governed by different scopes: the exact defect the closure
+ * defines, and latent rather than live only because no `<Card>` currently renders inside a
+ * `<Surface>`.
+ */
+export const RESET_TONES = ['card', 'popover'] as const satisfies readonly SurfaceTone[];
 
 /**
  * Carries the enclosing tone for the nesting invariant ONLY, and is deliberately not exported.
