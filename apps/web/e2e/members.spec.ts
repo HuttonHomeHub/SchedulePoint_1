@@ -25,7 +25,9 @@ test('an admin can invite a teammate who then accepts and joins', async ({ brows
   await admin.getByLabel('Organisation name').fill(orgName);
   await admin.getByRole('button', { name: /create organisation/i }).click();
 
-  await expect(admin.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
+  // The landing is the organisation overview (ADR-0098), so its `<h1>` is the organisation's own
+  // name — it was 'Welcome to SchedulePoint' until that screen was replaced.
+  await expect(admin.getByRole('heading', { level: 1, name: orgName })).toBeVisible();
   await admin.getByRole('link', { name: 'Members' }).click();
 
   await admin.getByRole('button', { name: 'Invite member' }).click();
@@ -53,8 +55,10 @@ test('an admin can invite a teammate who then accepts and joins', async ({ brows
   await expect(invitee.getByRole('heading', { name: new RegExp(`Join ${orgName}`) })).toBeVisible();
   await invitee.getByRole('button', { name: /accept and join/i }).click();
 
-  // Landed in the organisation the admin created.
+  // Landed in the organisation the admin created — and the overview names it, which is a stronger
+  // assertion than the old fixed welcome string: it proves the invitee landed in the RIGHT
+  // organisation rather than merely somewhere inside the app.
   await expect(invitee).toHaveURL(/\/orgs\//);
-  await expect(invitee.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
+  await expect(invitee.getByRole('heading', { level: 1, name: orgName })).toBeVisible();
   await inviteeContext.close();
 });

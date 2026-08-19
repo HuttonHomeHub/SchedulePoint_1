@@ -298,6 +298,15 @@ and `e2e/recently-deleted.spec.ts` reached CI still asserting a screen ADR-0096 
 sweep for the changed _label_ found nothing; the changed _screen_ had a journey of its own that
 nobody could run. Change a screen, run the base journey.
 
+It has now happened twice, and the second time the rule worked: ADR-0098 replaced the organisation
+landing, and `e2e/auth.spec.ts` and `e2e/members.spec.ts` were both still asserting
+`'Welcome to SchedulePoint'` — a heading that no longer exists anywhere. Both failed **locally**,
+which is the whole point of step 4a. Note what a sweep would have missed again: neither spec is
+named for the screen it lands on, so nothing about "the landing page" would have found them; they
+were asserting a fixed string as a proxy for "we arrived". The replacements assert the
+**organisation's own name**, which is a stronger claim — it proves the page resolved _this_
+organisation rather than merely rendering something.
+
 **Step 10 is the only gate that reads your branch's position.** `check:frontend-only` diffs
 `origin/main...HEAD`, so it needs a fetched base and answers differently depending on what has
 landed since. It is also the gate most likely to be **stale rather than wrong**: it reads an opt-in

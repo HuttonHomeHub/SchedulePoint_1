@@ -2552,3 +2552,32 @@ and the first is a ladder change with three consumers.
 this is the **fourth consecutive epic** whose width expectation its own measurement contradicted
 (ADR-0091 D4, ADR-0092 M4, ADR-0093's withdrawn width argument, ADR-0094 M0-T1 and this). Four is
 enough to stop calling it coincidence and start calling it a property of the surface.
+
+## 142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
+
+**Raised:** 2026-08-19 (ADR-0098 M2, seen in the base and overview journeys) · **Size:** S ·
+**Risk if left:** low
+
+Every navigation to the client list logs:
+
+```
+Generated path "/orgs/<slug>/clients/" for route "/_authed/orgs/$orgSlug/clients/$clientId"
+matched route "/_authed/orgs/$orgSlug/clients" instead.
+```
+
+Five call sites use the identical `to` (`app-header.tsx:86`, `client-detail.tsx:38`,
+`project-detail.tsx:61`, `plan-detail.tsx:58`, and now
+`features/overview/components/OrganisationEmptyState.tsx`), so it is **pre-existing and general**,
+not something this epic introduced — it surfaced here only because the overview journey is the first
+to watch the console while landing on a fresh organisation.
+
+**Navigation works**: the router lands on the list, which is why nobody has chased it. What it costs
+is the console — a permanent warning on the commonest link in the product trains everybody to ignore
+console output, which is exactly how the ADR-0074 CSP violation went unnoticed on the deployed origin
+for a release.
+
+**Not diagnosed yet, and the diagnosis is most of the work.** The message says TanStack resolved the
+`to` against the `$clientId` template and then matched the parent — so the two templates are
+generating the same URL, most likely because the child route's path segment allows an empty value.
+The fix is either a route-tree correction or an explicit `from`, and which one depends on that; do
+not guess.

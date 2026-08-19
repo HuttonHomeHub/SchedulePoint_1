@@ -2293,3 +2293,38 @@ documented capability, not a new requirement, and §7's contract for a bug fix i
 rather than a spec. What it _did_ owe was this entry and the note now in ADR-0026 — the reasoning
 originally lived only in a code docblock and a commit message, which is not the register. Recorded
 after the product owner asked whether the process had been followed.
+
+---
+
+## 2026-08-19 — A gate that counts its own documentation
+
+**ADR-0097 Landing B**, found while the overview screen was being built, and worth its own entry
+because it is the third instance of one shape and the first with a perverse incentive attached.
+
+`token-architecture.test.ts`'s weight ratchet reads every `.ts`/`.tsx` file under `src/` and counts
+`font-<weight>` utilities, split into two buckets: what the primitives place (a design system doing
+its job) and what screens place (the drift the archetypes exist to absorb). It scanned **raw file
+text**. So a docblock explaining _why_ a weight was chosen counted as placing one — which inflated
+both numbers, and, worse, meant that writing the reasoning down pushed the gate towards failing. A
+gate that penalises its own documentation is a gate somebody eventually works around.
+
+Stripping comments moved the measured buckets to **162 screens / 23 primitives** — one lower in
+each. Both ceilings were re-set to the corrected measurement rather than left at the inflated one,
+because a ceiling that is one higher than the truth is a free slot nobody decided to grant.
+
+**The shape.** A scan matching prose has now shipped three times here: the Gantt row-rhythm gate
+matched `font-size` inside a comment; the overview's own archetype gate reported `OverviewScreen.tsx`
+for an `<h1>` that appears only in its docblock; and this one. All three were caught the same way —
+by a green gate going red for a reason the code did not support, or a red one for code that was
+correct — and all three are fixed the same way. The rule that generalises: **a structural gate reads
+code, so it should be handed code.** Comments are the one part of a file guaranteed to talk _about_
+the thing being counted.
+
+**What the ratchet did right, on the same day.** The new screen pushed the screen bucket from 165 to
+167 — four row links each restating `font-medium` plus a hover colour, an underline and its offset.
+The ceiling was **not** raised. The treatment moved into `rowLinkClass` on the `ListRow` primitive
+(the `buttonVariants` precedent: a class constant rather than a component, because `components/ui/`
+does not import the router), four screen sites became one primitive site, and the screen ceiling
+ratcheted **165 → 162**. That is the trade the two-bucket split was designed to make visible, and it
+only works because the primitives bucket is also capped — otherwise "move it into a primitive" is an
+unlimited escape hatch rather than a decision.
