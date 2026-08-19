@@ -2675,3 +2675,41 @@ choice on touch. Different question, same blind spot.
 that ordering and the reason for it. If the answer is that the combobox is worse on touch, the rule
 gains a clause rather than an exception: a searchable picker on a surface a touch user reaches needs
 a touch-appropriate presentation, not a desktop listbox.
+
+**Measured 2026-08-19** (`apps/web/measure-toolbar/combobox-coarse.spec.ts`, Chromium with
+`hasTouch: true` — which is what makes it report `pointer: coarse`, `any-hover: none` — at 1646 CSS
+px, the Surface Pro width ADR-0091's retrospective established this product is judged at). The two
+control types on **one screen**, so a difference cannot be the screen: the resource library's
+native `Kind` filter, and the New-resource dialog's hand-rolled `Group` picker.
+
+|                                      | native `<select>`                       | our `Combobox`                   |
+| ------------------------------------ | --------------------------------------- | -------------------------------- |
+| closed height                        | **36 px**                               | **36 px**                        |
+| clears WCAG 2.5.8 (24 px)            | yes                                     | yes                              |
+| clears the 44 px platform preference | no                                      | no                               |
+| open list                            | platform-rendered, unmeasurable in-page | 138 px, 13 % of the viewport     |
+| option height                        | —                                       | 32 px, every option clears 24 px |
+| covers its own field                 | —                                       | no (588 px of space below it)    |
+
+**On this evidence there is no coarse-pointer penalty to the two held conversions**, and the two
+controls are indistinguishable closed. What the run **cannot** answer is unchanged and is why this
+row is narrowed rather than closed: Chromium renders its own picker rather than the platform's, so
+how the iOS wheel or the Android sheet _feels_ against an in-flow listbox is still a judgement, and
+nothing here has been driven with a real virtual keyboard taking half the viewport. The 44 px line
+is missed by **both**, so it is a product-wide control-height question (`--control-h`), not a reason
+to prefer one type over the other.
+
+**The run found a live defect, which is the more useful half.** Its first two versions each produced
+a plausible number about nothing — `getByRole('combobox')` matches a native `<select>` (that is the
+element's implicit role), so version one measured the org switcher twice; and the listbox is
+deliberately always in the DOM (`hidden` when closed, so `aria-controls` always resolves), so
+version two read a closed box as `listHeight: 0`. Fixing both left `optionCount: 1`, and the harness
+now **throws rather than reporting a verdict it cannot justify** — the rule ADR-0097's closure
+measurement earned by producing a PROCEED out of an `undefined`. The cause was in the product:
+`CreateResourceButton` never passed `resources` to `ResourceFormDialog`, while `ResourcesTable`
+passed its list to the same component on the edit path — so **the create dialog's Group picker could
+only ever offer "No group (top level)"**, and a resource could not be filed into a group at the
+moment it was created, only by editing it afterwards. It rendered, it looked right, and no unit test
+covered the host. One correct pattern applied to one neighbour and not the other — the ADR-0064 §7
+shape, and the fifth epic running. Fixed with a regression test verified red first
+(`CreateResourceButton.test.tsx`).

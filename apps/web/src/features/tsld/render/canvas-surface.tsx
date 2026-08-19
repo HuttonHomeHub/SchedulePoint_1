@@ -61,8 +61,14 @@ export function useRegisterCanvasSurface(): (node: HTMLElement | null) => void {
  * - **the compiler** — every resolver in `render/palette.ts` takes its root as a REQUIRED
  *   parameter, so a call site that forgets one does not compile (the ADR-0070 `hoursPerDay`
  *   precedent, adopted for exactly this class of silent-wrong-value bug);
- * - **a test** that mounts the real panel and asserts the resolved ground is the diagram's and not
- *   the page's when the two token values differ.
+ * - **a test** (`canvas-surface.test.tsx`) that pins the seam in both directions — a consumer
+ *   inside the scope receives the registered element, and a consumer ABOVE it (the `TsldPanel`
+ *   shape) receives it too, which is what the state-not-a-ref decision exists for.
+ *
+ * That test mounts a synthetic host rather than the real panel, and distinguishes the scope from
+ * the page by element identity rather than by two differing token values. Said plainly because an
+ * earlier draft of this docblock claimed the stronger thing: the guarantee is real and the artifact
+ * is narrower than the sentence was (ADR-0076).
  *
  * The fallback is what a caller gets when neither of those applies, i.e. when there is genuinely no
  * diagram on screen.

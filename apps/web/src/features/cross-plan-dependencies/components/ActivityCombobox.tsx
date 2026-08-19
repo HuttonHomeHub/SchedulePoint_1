@@ -60,6 +60,18 @@ export function ActivityCombobox({
   // codebase had to work around by hand before that primitive existed.
   const selected = activities.find((activity) => activity.id === value);
 
+  // **A load failure has to be VISIBLE, not only inside the listbox.** `combobox.tsx:531` renders
+  // "Could not load options." — but that row lives inside the popup, which is closed by default, so
+  // a reader who never opens it sees an ordinary empty field and no signal at all. The three native
+  // pickers beside this one in the same dialog each show a below-field sentence with
+  // `role="alert"`, so the failure was three-out-of-four correct in one form: the "one correct
+  // pattern applied to a control and not its neighbour" shape this register keeps recording, caught
+  // here by the ux gate rather than by a reader.
+  //
+  // The query error and a validation error share one slot deliberately. They cannot both be true —
+  // a field whose options failed to load has nothing to validate — and two stacked sentences under
+  // one control is how a reader learns to skip both.
+  const message = errored ? 'Couldn’t load activities. Please try again.' : error;
   const errorId = 'cross-plan-activity-error';
 
   return (
@@ -75,8 +87,8 @@ export function ActivityCombobox({
         disabled={disabled}
         loading={loading}
         errored={errored}
-        invalid={error !== undefined}
-        {...(error === undefined ? {} : { describedBy: errorId })}
+        invalid={message !== undefined}
+        {...(message === undefined ? {} : { describedBy: errorId })}
         {...(selected === undefined
           ? {}
           : {
@@ -86,9 +98,16 @@ export function ActivityCombobox({
         emptyMessage="No activity matches that."
         toggleLabel="Show activities"
       />
-      {error === undefined ? null : (
-        <p id={errorId} className="text-destructive-text text-sm">
-          {error}
+      {message === undefined ? null : (
+        // `role="alert"` only for the LOAD failure, matching `alertIfLoadFailed` on the three
+        // pickers above: a validation error is already announced by the field's invalid state when
+        // the reader submits, and announcing it twice is noise.
+        <p
+          id={errorId}
+          className="text-destructive-text text-sm"
+          {...(errored ? { role: 'alert' as const } : {})}
+        >
+          {message}
         </p>
       )}
     </div>

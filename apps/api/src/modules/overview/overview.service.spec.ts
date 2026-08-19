@@ -46,6 +46,7 @@ describe('OverviewService', () => {
     hasActiveClients: Mocked;
     hasActivePlans: Mocked;
     resolveMemberNames: Mocked;
+    resolveRecentPlans: Mocked;
   };
   let appConfig: { retentionHierarchyDays: number; retentionHierarchyEnabled: boolean };
   let service: OverviewService;
@@ -74,6 +75,7 @@ describe('OverviewService', () => {
       hasActiveClients: vi.fn().mockResolvedValue(true),
       hasActivePlans: vi.fn().mockResolvedValue(true),
       resolveMemberNames: vi.fn().mockResolvedValue(new Map()),
+      resolveRecentPlans: vi.fn().mockResolvedValue([]),
     };
     // A non-default period on purpose: a test written against 90 cannot tell a configured
     // value from a hardcoded one.
@@ -253,5 +255,36 @@ describe('OverviewService', () => {
   it('serves the resolved organisation name', async () => {
     const overview = await service.get(principalWith(['client:read']), 'acme');
     expect(overview.organisationName).toBe(ORG_NAME);
+  });
+
+  // **The jump-back-in section had NO service coverage at all**, which is why the M3 slice could
+  // add `resolveRecentPlans` to the repository and leave this spec's hand-built repo mock without
+  // it: the mock is cast at the boundary, so the compiler cannot see the gap and 14 cases failed
+  // at run time on a method that simply was not there. These two cover the section's two decisions.
+  describe('jump back in', () => {
+    const ROWS = [
+      { planId: 'p2', planName: 'Tower B', projectName: 'Riverside', clientName: 'Northgate' },
+      { planId: 'p1', planName: 'Tower A', projectName: 'Riverside', clientName: 'Northgate' },
+    ];
+
+    it("returns the caller's order, not the database's", async () => {
+      repo.resolveRecentPlans.mockResolvedValue(ROWS);
+      const overview = await service.get(principalWith(['client:read']), 'acme', ['p1', 'p2']);
+      // `findMany` makes no promise about the order of an `IN`, so the mock deliberately answers
+      // in the reverse of the request. The browser's recency is the order that means something.
+      expect(overview.recentPlans.map((row) => row.planId)).toEqual(['p1', 'p2']);
+    });
+
+    it('drops an id the organisation cannot resolve, without saying which or why', async () => {
+      repo.resolveRecentPlans.mockResolvedValue([ROWS[1]]);
+      const overview = await service.get(principalWith(['client:read']), 'acme', [
+        'p1',
+        'deleted-or-another-orgs',
+      ]);
+      // The four failure modes are indistinguishable by design (ADR-0098): deleted, another
+      // organisation's, unreadable, never real. A dropped row is silence, not an error.
+      expect(overview.recentPlans).toHaveLength(1);
+      expect(overview.recentPlans[0]?.planId).toBe('p1');
+    });
   });
 });

@@ -222,6 +222,66 @@ describe('the diagram tells its three criticality states apart', () => {
   });
 });
 
+/**
+ * **The PLOT pack against the two grounds it is drawn on** — the pairs this matrix claimed to cover
+ * and did not.
+ *
+ * ADR-0097 D12 says the plot separation matrix checks "plot fills vs the ground, vs the band, vs
+ * each other", and the Consequences section says a class of unreportable contrast defect becomes
+ * impossible. Measured after the epic shipped: this file contained **no PLOT-pack pair at all**, and
+ * `--canvas-grid-month` was at **2.08:1** against the ground and **1.95:1** against the band. A
+ * month boundary on a time-scaled diagram is the axis a planner reads a bar's position off, so that
+ * is a live WCAG 1.4.11 failure sitting behind a green suite and a paragraph saying it could not be.
+ *
+ * The pack is not part of any scope's family — it is drawn by the painter through
+ * `token('--color-canvas-grid-month')` rather than by a utility — which is exactly why the closure
+ * sweep above cannot see it and why it needs naming here.
+ *
+ * **Two members are reported rather than asserted, with the reason written down** so the next reader
+ * does not read a missing assertion as an oversight and "fix" it (the decorative-border precedent
+ * below):
+ *
+ * - **the DAY tier** is texture, not a landmark. ADR-0056 draws day → month → year so a coarser
+ *   boundary wins at a coincident x; the day tier is deliberately the weakest, one per column at the
+ *   Day preset, and a planner reads position off the month and year rules. Raising it to 3:1 would
+ *   turn a rhythm into a grid of hard lines.
+ * - **the non-working HATCH** is a second channel on a signal that already carries itself: the wash
+ *   beneath it is `--muted`, and the hatch distinguishes non-working by **kind** rather than being
+ *   the only cue (ADR-0056 F7a). Colour is not the sole channel, so 1.4.1 is satisfied and 1.4.11
+ *   applies to the wash rather than to the texture over it.
+ */
+const PLOT_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
+  ['the diagram ground', '--canvas'],
+  // The alternating month band (ADR-0055 §4). The TIGHTER of the two, and the one the first version
+  // of this gate would have missed by checking only the ground.
+  ['a month band', '--canvas-band'],
+];
+
+describe('the diagram grid is readable on both of its grounds', () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+
+  it.each(PLOT_GROUNDS)('the MONTH rule is perceivable on %s (≥ 3:1)', (_name, ground) => {
+    const value = ratio(tokens, ground, '--canvas-grid-month');
+    expect(value, `month gridline on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(PLOT_GROUNDS)('the YEAR rule is perceivable on %s (≥ 3:1)', (_name, ground) => {
+    const value = ratio(tokens, ground, '--canvas-grid-year');
+    expect(value, `year gridline on ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it('reports the day tier and the non-working hatch without asserting them', () => {
+    // Deliberately unasserted — see the block comment above for why each is exempt. Reported so a
+    // REGRESSION is still visible in the test output, which is the same contract the decorative
+    // border below has.
+    for (const ink of ['--canvas-grid-day', '--canvas-nonworking-hatch']) {
+      for (const [, ground] of PLOT_GROUNDS) {
+        expect(ratio(tokens, ground, ink)).toBeGreaterThan(1);
+      }
+    }
+  });
+});
+
 describe.each(THEME_SELECTORS)('%s', (theme) => {
   describe.each(SCOPES)('%s surface', (scope) => {
     const tokens = resolve(theme, scope);

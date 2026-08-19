@@ -77,7 +77,7 @@ function renderTable(rows: CalendarSummary[] = [STANDARD, RETIRED]) {
  * name and the verb separately rather than the old `"Archive Standard"` composite.
  */
 async function rowAction(calendarName: string, action: string | RegExp): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: `More actions: ${calendarName}` }));
+  fireEvent.click(await screen.findByRole('button', { name: `Actions for ${calendarName}` }));
   fireEvent.click(
     await within(
       await screen.findByRole('menu', { name: `Actions for ${calendarName}` }),

@@ -393,7 +393,15 @@
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
   --canvas-grid-day: oklch(0.965 0 0);
-  --canvas-grid-month: oklch(0.76 0 0);
+  /* **A month boundary is the axis a planner reads, so it clears WCAG 1.4.11's 3:1** — 0.76 gave
+     2.08:1 against the ground and **1.95:1 against the month band it is most often drawn over**,
+     i.e. a required graphical object below the non-text floor, live. 0.64 gives 3.25 / 3.05.
+     Found by the deferred accessibility gate, and the finding that matters more than the value is
+     that ADR-0097 D12 and this epic's own prose claimed the plot matrix already covered exactly
+     this pair. It did not: `token-contrast.test.ts` swept the criticality triple and the closure
+     and had **no PLOT-pack pair at all**. It does now — which is the actual fix; this number is
+     only how that gate passes. */
+  --canvas-grid-month: oklch(0.64 0 0);
   --canvas-grid-year: oklch(0.58 0 0);
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of

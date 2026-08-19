@@ -51,9 +51,13 @@ export function CalendarRowMenu({
         ref={triggerRef}
         variant="ghost"
         size="icon-sm"
-        // The name carries the row's subject, because a table of these renders one per row and
-        // "More actions" repeated forty times tells a screen-reader user nothing about which.
-        aria-label={`More actions: ${calendar.name}`}
+        // The name carries the row's subject, because a table of these renders one per row and a
+        // bare "Actions" repeated forty times tells a screen-reader user nothing about which. It is
+        // the SAME string as the menu's own label, so the phrase a reader hears opening the menu is
+        // the phrase they hear landing inside it — the convention `GanttRowMenu`, `HierarchyTree`
+        // and `ActivitiesTable` already share. This read `More actions: …` until the component gate
+        // pointed out it was a one-off on an otherwise identical control.
+        aria-label={`Actions for ${calendar.name}`}
         aria-haspopup="menu"
         aria-expanded={anchor !== null}
         onClick={(event) => {

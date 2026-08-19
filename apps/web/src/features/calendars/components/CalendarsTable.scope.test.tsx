@@ -96,7 +96,7 @@ function renderTable({
  * name and the verb separately rather than the old `"Archive Standard"` composite.
  */
 async function rowAction(calendarName: string, action: string | RegExp): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: `More actions: ${calendarName}` }));
+  fireEvent.click(await screen.findByRole('button', { name: `Actions for ${calendarName}` }));
   fireEvent.click(
     await within(
       await screen.findByRole('menu', { name: `Actions for ${calendarName}` }),
@@ -144,7 +144,7 @@ describe('CalendarsTable — calendar scope tier (flag on)', () => {
 
   /** Open one row's `⋯` without selecting anything, to inspect what it offers. */
   async function openRowMenu(calendarName: string): Promise<HTMLElement> {
-    fireEvent.click(await screen.findByRole('button', { name: `More actions: ${calendarName}` }));
+    fireEvent.click(await screen.findByRole('button', { name: `Actions for ${calendarName}` }));
     return screen.findByRole('menu', { name: `Actions for ${calendarName}` });
   }
 

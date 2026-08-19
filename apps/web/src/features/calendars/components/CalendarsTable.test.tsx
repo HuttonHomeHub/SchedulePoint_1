@@ -67,7 +67,7 @@ function renderTable(canWrite: boolean, data: CalendarSummary[] = CALENDARS) {
 
 /** Open a row's `⋯` and pick one of its secondary actions (ADR-0097 Landing F1). */
 async function rowAction(calendarName: string, action: string | RegExp): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: `More actions: ${calendarName}` }));
+  fireEvent.click(await screen.findByRole('button', { name: `Actions for ${calendarName}` }));
   fireEvent.click(
     await within(
       await screen.findByRole('menu', { name: `Actions for ${calendarName}` }),
@@ -87,7 +87,7 @@ describe('CalendarsTable', () => {
     expect(screen.getByText('Mon–Fri')).toBeInTheDocument();
     expect(screen.getByText('Every day')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Standard' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'More actions: Seven-day' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions for Seven-day' })).toBeInTheDocument();
   });
 
   it('hides write actions for non-writers but offers a read-only View', () => {
