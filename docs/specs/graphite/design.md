@@ -115,6 +115,46 @@ planning tool used all day, addressing at minimum:
   scope — a palette is a set of **values**, and proposing new token _names_ is a bigger
   change that needs its own argument.
 
+### 5a — WBS colouring and grouping (product-owner requirement, added late)
+
+**P6 planners colour and group by WBS on the Gantt, and expect to.** A planner groups rows
+by WBS (or activity code), the group band takes a fill, and bar colours are assigned per
+WBS/code value. This is not decoration: it is how a planner reads a large programme by
+phase or trade, and how they hand a client a chart that is legible without reading every
+row.
+
+It collides head-on with the criticality ladder in §5, because **both want the bar fill**.
+This must be designed, not discovered during implementation. Reviewers must answer:
+
+1. **Is bar fill a `colour by` MODE?** (Criticality / WBS / Activity code / Float /
+   Resource) — one dimension at a time, chosen by the planner. Precedent exists: the
+   product already ships an opt-in _Colour by float_ lens
+   (`apps/web/src/features/tsld/render/palette.ts`). If so, criticality becomes one mode
+   among several rather than the permanent meaning of a fill.
+2. **When fill is driven by WBS, what carries CRITICALITY?** It cannot simply vanish — the
+   critical path is the product's core output. A second channel is needed: outline, end
+   cap, weight, hatch, or drawing the critical path as an emphasis pass over any fill.
+   Whatever is chosen must satisfy WCAG 1.4.1 on its own, because colour is by then spoken
+   for.
+3. **A CATEGORICAL palette is now required** — roughly 10–12 WBS/code colours,
+   distinguishable from each other, each carrying a legible label ink, each ≥3:1 against
+   the diagram ground, each surviving common colour-vision deficiencies, and none
+   confusable with the reserved semantics (azure = interactive/selected, warm =
+   critical/conflict/today). Propose the set with values.
+4. **Assignment must be constrained, not free.** If a planner can pick any hex, every
+   contrast guarantee in this product becomes unenforceable and `token-contrast.test.ts`
+   stops meaning anything for the plot. Working proposal: a curated swatch set drawn from
+   (3). Confirm or argue against.
+5. **Group bands.** Grouped rows need a band fill derived from the WBS colour — low enough
+   in chroma that bars stay legible on top, and distinct from the ADR-0055 month bands and
+   the non-working wash already on the plot.
+6. **Where it applies.** Gantt certainly. Does the same colouring drive the diagram's lanes
+   and its pinned WBS band, or is this Gantt-only? State it.
+
+There is an **app surface** here too, not just a palette: somewhere to assign a colour to a
+WBS node, somewhere to choose the grouping, and persistence of both. Say what that surface
+is and whether it is per-plan or per-user.
+
 ## 6. Constraints
 
 - Frontend only. **The CPM engine is not imported and no migration runs.**
