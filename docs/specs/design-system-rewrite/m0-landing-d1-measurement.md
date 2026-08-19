@@ -66,6 +66,42 @@ credibility about widths: **if the tidied identity content does not fit the free
 1440 with ≥ 120 px of slack, the merge half of D1 is withdrawn and D1 ships as the navigation change
 alone.** Measured: **+250 px at 1440.** It clears.
 
+## The D1b blocking question, answered by reading rather than by inference
+
+The identity row that D1b moves into the header contains the **mode `Toolbar`**. Inside the band it
+takes its density from `ToolbarBandProvider`; moved into the header it would fall back to its own
+`clientWidth` while being `shrink-0` — which reads exactly like ADR-0091 M7's trap, _"a shrink-to-fit
+row must never demote"_, the one that once collapsed a row to 37 px holding nothing but a `⋯`.
+
+**The first answer offered was wrong, and it is recorded because it was nearly shipped on.** The
+inference was "its items are all `render` segmented controls, and `docs/TECH_DEBT.md` #134 says a
+`render` item is not demotable, so the trap cannot fire". Reading
+`tsld-toolbar-items.tsx:2142-2160`, `mode-early` is **not** a `render` item: it is an ordinary item
+with `tier: 1`, `showLabel: 'always'`, an `onActivate`, and a `demotionGroup`. `Toolbar.tsx:352`
+defines demotable as `typeof item.onActivate === 'function'`, so the mode items **are** demotable and
+the inference was false.
+
+**The real answer is a runtime guard, and it holds.** `Toolbar.measure` calls
+`isWidthConstrained(container)` (`Toolbar.tsx:81-84`), which is `flexGrow > 0` read off the live
+container. A `shrink-0` row is width-**un**constrained, and the comment at `:334-338` states the
+consequence directly: such a row "is charged no chrome" and "never demotes", because its
+`clientWidth` is an _output_ of the demotion decision. So the fit trap is closed by construction
+wherever the row sits, and moving it into the header does not open it.
+
+**What is genuinely left is density, not fit.** `toolbar-band.tsx:31-34` states the invariant: _the
+band width may never be an input to a fit decision_ — it says how roomy the surface is, and the fit
+question keeps reading the row's own box. Without a provider above it the mode row would resolve its
+**density** from its own ~412 px content width and land in a narrow band. Its labels survive that
+(`showLabel: 'always'`), but control padding does not.
+
+**So D1b's requirement is one line, and it is the principled one rather than the cautious one:** the
+header row is wrapped in a `ToolbarBandProvider` so the identity slot's toolbar resolves density
+against the header, which is the surface it is now on. That is ADR-0091 M7's own fix applied to the
+new host, and it is required for a real if minor reason rather than as insurance against a trap that
+turns out to be guarded.
+
+---
+
 D1 therefore proceeds as scoped — one navigator instead of two, **and** the band merge ADR-0092 M5
 withdrew — with the prize stated correctly: not "the header is cramped", but "the nav is exactly
 what the merge costs, and there is 250 px to spare at the narrowest width we hold to".
