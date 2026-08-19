@@ -2581,3 +2581,46 @@ for a release.
 generating the same URL, most likely because the child route's path segment allows an empty value.
 The fix is either a route-tree correction or an explicit `from`, and which one depends on that; do
 not guess.
+
+## 143. The Project Explorer cannot open a client or a project — two of ADR-0029's three levels
+
+**Found 2026-08-19**, by the ADR-0097 Landing D1b sweep, and it is older than the milestone that
+exposed it.
+
+`features/navigator/components/HierarchyTree.tsx:208-219`:
+
+```ts
+const activate = (row: VisibleRow): void => {
+  if (!row.node) return;
+  if (row.node.kind === 'plan') {
+    void navigate({ to: '/orgs/$orgSlug/plans/$planId', ... });
+    onNavigate?.();
+  } else {
+    tree.toggle(row.node.id);
+  }
+};
+```
+
+A **plan** row navigates. A **client** or **project** row toggles its own expansion — which the
+chevron beside it already does. So the rail ADR-0029 describes as the Client → Project → Plan
+navigator can open exactly one of those three, and the client-detail and project-detail screens are
+reachable only through the `Clients` destination and a scan down a list.
+
+**Why it went unnoticed for so long, and why it is filed now.** Every surface that needed the hop
+carried a breadcrumb, so the tree's hole was covered rather than absent. ADR-0097 D1b removed the
+plan workspace's breadcrumb path as measured redundancy — correct about orientation, wrong about
+navigation — and **three Playwright suites failed at once** (`programme`, `multi-select`,
+`authoring-flow`), each on the same `getByRole('link', { name: 'Riverside' })` that had been the
+breadcrumb. D1b restores a two-crumb trail, which closes the user-facing regression and leaves this
+untouched.
+
+**What it is not.** It is not "the tree should navigate on every row" — expanding a branch is the
+right default for a container, and a row that both expands and navigates is a control with two
+meanings. The likely answer is that the row's **label** becomes a link while the row keeps its
+toggle, which is a change to a `treeitem`'s inner markup and to the roving-focus contract, so it
+wants the APG's _Developing a Keyboard Interface_ read alongside it (the ADR-0082 precedent) rather
+than a quick patch.
+
+**Blast radius if fixed:** every journey that reaches a client or project through `Clients` could
+then take the shorter route, so their locators would keep working; the risk is in the tree's own
+keyboard model, not in its consumers.
