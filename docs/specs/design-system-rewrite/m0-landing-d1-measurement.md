@@ -187,3 +187,78 @@ commit message called the thing it removed redundant.
 and two of those three levels cannot be opened. D1b did not cause that; it removed the workaround
 that had been hiding it since the tree shipped. Both facts belong in the record, because fixing only
 the visible half leaves the same trap for the next surface that stops carrying a breadcrumb.
+
+---
+
+## The merge does not fit below 1646, and the tidy estimate was wrong by ~375 px
+
+**Date:** 2026-08-19 · **Harness:** `measure-toolbar/header-fit.spec.ts` (new)
+
+The D1b write-up above measured the **vertical** stack, proved the band did not grow, and never
+asked whether the row still fits **horizontally**. It does not, and the defect was live in what
+shipped.
+
+`header-fit` probes with `elementFromPoint` — the method `e2e-toolbar-fit` settled on after a
+proposed gate would have passed a control shrunk to zero width — and reports:
+
+| viewport  | header overflows | unreachable                                    |
+| --------- | ---------------- | ---------------------------------------------- |
+| 1920×1080 | no               | —                                              |
+| 1646×1097 | no               | —                                              |
+| 1440×960  | no               | **the SchedulePoint wordmark**                 |
+| 1280×800  | **yes**          | **the wordmark**; `Stop editing` 80 px outside |
+
+At 1280 `Stop editing` spanned 1218→1328 in a 1248 px header and **overlapped the account chip**
+(1212→1264). At 1440 the wordmark — the route home — was covered and unclickable.
+
+**That is ADR-0090 M1's defect, reproduced by the merge that was meant to be the cheap win**, and
+`vertical-stack` structurally could not see it because it measures heights.
+
+### The estimate
+
+The merge was approved on "tidied identity content **795 px** against 1045 px freed at 1440 —
+**+250 px slack**, gate ≥120". Measured, the identity content is **1126 px** before the crumbs and
+**1172 px** with them. The estimate was low by about **375 px**, which is the whole of the slack and
+then some. It is the **fifth** consecutive width expectation in this epic contradicted by its own
+measurement, and the fourth in the same direction.
+
+### Why it cannot simply be made to shrink
+
+Four variants were measured, not reasoned:
+
+| identity wrapper / `Toolbar` class    | header fits            | modes visible                |
+| ------------------------------------- | ---------------------- | ---------------------------- |
+| `shrink-0` / `shrink-0` (shipped)     | **no** — 1440 and 1280 | yes                          |
+| `min-w-0` / `flex-1`                  | yes, every width       | **no** — all four in the `⋯` |
+| `min-w-0 flex-1` crumbs / `min-w-0`   | **no** — 1440 and 1280 | yes                          |
+| `min-w-0 flex-1` crumbs / `flex-auto` | yes, every width       | **no** — all four in the `⋯` |
+
+The mechanism is understood: `Toolbar.measure` runs its ladder only on a width-**constrained** row
+(`Toolbar.tsx:81-84`, `flexGrow > 0`), so without grow the four switches never demote and simply
+overflow; with grow they demote, and `flex-1`'s zero basis makes the first measure see ~0 px so they
+collapse into the overflow and never recover — a row measuring its own output, ADR-0091 M7's trap.
+`flex-auto` starts at content width and still ends in the overflow, because the crumb block's
+zero-basis `flex-1` takes the free space first.
+
+**So there is no arrangement of shrink factors that fits the header AND keeps the modes visible at
+1280–1440.** The content is simply wider than the space: brand 143 + account 52 + org switcher 192
+leaves ~861 px at 1280, and the identity wants ~1170.
+
+### What ships, and the open decision
+
+The safe variant ships: the header **fits at every width measured and nothing is unreachable**, with
+the four mode switches in the `⋯`. That is a usability regression against ADR-0091 D1 — _a mode is
+not a command and belongs visible beside the pen_ — but it is reachable by pointer and keyboard,
+which the shipped state was not.
+
+**The decision is the product owner's and is stated rather than taken here**, because both answers
+cost something real:
+
+- **Withdraw the merge** (the ADR-0091 D4 / ADR-0092 M5 precedent — a requirement disqualified by its
+  own measurement). Costs the 45 px; restores the modes beside the pen at every width.
+- **Keep the merge and move the mode cluster back to the command band.** Without it the identity is
+  ~770 px against 861 px available at 1280, so it fits — but the cluster then needs a home, and its
+  own row is the 45 px back again.
+
+Arithmetic says the second is feasible only if the cluster joins an existing row, which is a
+`TOOLBAR_GROUPS` change and a milestone of its own rather than a fix.

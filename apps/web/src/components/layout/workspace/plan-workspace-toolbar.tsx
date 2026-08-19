@@ -25,6 +25,7 @@ import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
+import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
 import { useAnnounce } from '@/components/ui/announcer';
@@ -1130,15 +1131,42 @@ export function ToolbarPlanWorkspace({
           before the band existed. */}
       <ChromePortal name="identity">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            {/* The plan NAME, which is the identity — not the trail to it. It truncates rather
-                than wrapping: this sits in a fixed-height header row now, and a two-line name would
-                change the band's height as a function of its content. `title` carries the full
-                string for a name the column cannot hold, which is what the last breadcrumb crumb
-                did before it. */}
-            <p className="truncate font-medium" title={plan.name}>
-              {plan.name}
-            </p>
+          {/* **`flex-1` here, not on the toolbar** — this block is the one that should give way.
+              It is text with a `title`, so shrinking it truncates a name a reader can still get at;
+              shrinking the mode cluster puts `Early | Visual | Diagram | Gantt` behind a `⋯`, which
+              is ADR-0091 D1's whole objection (a mode is not a command and must be visible beside
+              the pen). Measured: with `flex-1` on the toolbar instead, all four demoted into the
+              overflow at 1646 — the product owner's own width. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {/* **Two crumbs: the project, then this plan.**
+                D1b first shipped the plan name alone, on the measurement that the four-crumb trail
+                cost 455 px and that the Project Explorer already answers "where am I". Right about
+                orientation, wrong about navigation, and **three Playwright suites failed on one
+                locator** saying so — `programme`, `multi-select` and `authoring-flow` all click a
+                project link from inside an open plan.
+
+                Checking rather than assuming made it worse than the failing assertion:
+                `HierarchyTree.tsx:208-219` navigates only for `kind === 'plan'` — a client or a
+                project row calls `tree.toggle`, which is what the chevron beside it already does —
+                and the rows are `treeitem` divs, not links. So this crumb was the ONLY route from
+                an open plan to its project, i.e. to the screen holding that project's calendars
+                (ADR-0053 M2). The tree's own hole is older and is `docs/TECH_DEBT.md` #143.
+
+                Two rather than four: the 455 px bought the whole trail, and Clients → client IS the
+                duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
+                is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
+                was measured to win. */}
+            <Breadcrumbs
+              variant="nowrap"
+              items={[
+                {
+                  label: model.project.data?.name ?? 'Project',
+                  to: '/orgs/$orgSlug/projects/$projectId',
+                  params: { orgSlug: model.orgSlug, projectId: plan.projectId },
+                },
+                { label: plan.name },
+              ]}
+            />
             <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
             {model.canWrite ? (
               <Button
@@ -1153,14 +1181,36 @@ export function ToolbarPlanWorkspace({
               </Button>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          {/* **Shrinkable, and that is the fix rather than a tidy-up.** D1b shipped this wrapper
+              `shrink-0`, which made the identity content unable to fall below its min-content —
+              about 1170 px. In a `minmax(0,auto)` grid track with `justify-self-center` the surplus
+              spills BOTH ways, so measured at 1440 the SchedulePoint wordmark was covered and
+              unclickable, and at 1280 `Stop editing` rendered 80 px outside the header, overlapping
+              the account chip. That is ADR-0090 M1's defect reproduced by the merge that was meant
+              to be the cheap win, and the vertical-stack measurement could not see it because it
+              measures heights.
+
+              Letting it shrink is what turns the mode `Toolbar` into a width-CONSTRAINED row, so
+              `Toolbar.measure`'s ladder runs and Early/Visual/Diagram/Gantt demote to icons and
+              then to a `⋯` instead of overflowing. ADR-0091 M7's "a shrink-to-fit row must never
+              demote" is not violated: that rule is about a row whose `clientWidth` is an OUTPUT of
+              its own demotion. Here the width is bounded by the header, so it is an input. */}
+          <div className="flex min-w-0 items-center gap-3">
             <Toolbar
               items={rows.mode}
               context={ctx}
               label="Plan mode"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               groupLabels={ROW_MODE_GROUP_LABELS}
-              className="shrink-0"
+              // **`flex-auto`, and the distinction from `flex-1` is the whole fix.** The ladder only
+              // runs on a width-CONSTRAINED row (`Toolbar.tsx:81-84` — `flexGrow > 0`), so with no
+              // grow the four switches never demote and simply overflow the header. But `flex-1` is
+              // `flex: 1 1 0%`: basis zero means the first measure sees ~0 px, the ladder collapses
+              // everything into a `⋯`, and it never recovers — a row measuring its own output,
+              // which is ADR-0091 M7's trap. Measured: all four modes were in the overflow at 1646.
+              // `flex-auto` is `flex: 1 1 auto` — it starts at content width and gives way only
+              // under real pressure.
+              className="min-w-0 flex-auto"
             />
             <CompactPenStatus
               pen={model.pen}
