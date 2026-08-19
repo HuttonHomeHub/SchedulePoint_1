@@ -508,6 +508,39 @@ Recorded rather than quietly amended, because the first version of the rule was 
 primitive's docblock and never applied to a call site before being called decided — which is the
 ADR-0076 Class 3 shape, and this file's own §19.10 rule catching its author two commits later.
 
+### The row-action half rests on a premise that does not hold as stated
+
+F1's other half says **"~10 tables carrying bare per-row text actions where
+`docs/UX_STANDARDS.md` 'Row / node actions' specifies the APG row menu"**. Read against the
+standard, that is not established, and the check is the same one §19.10 asks for.
+
+**The standard's subject is "dense list and tree rows"** (`UX_STANDARDS.md:86`) — the Project
+Explorer and its kind. A data table with a dedicated actions column is a different pattern, and
+`CalendarsTable.tsx:250-251` **already cites this standard and claims compliance in its own
+comment**: _"Always-visible row actions (never hover-only, docs/UX_STANDARDS.md 'Row / node
+actions')"_. The standard's own text supports that reading: its four routes include a
+**hover-revealed** `⋯`, which exists to stop a dense row hiding its actions — a problem a visible
+actions column does not have.
+
+So there is no standards violation to fix, and converting ten tables on the strength of one would
+have been a large interaction change justified by a misreading.
+
+**What IS real is narrower and worth doing.** Counted rather than asserted, two tables carry
+**seven** small buttons in their action column — `CalendarsTable` (View / Edit / Archive /
+Unarchive / Move to organisation / Delete, role-dependent) and `ResourcesTable` — while the other
+six carry two. Five text buttons on a row is not a standards defect; it is a row whose **primary**
+action competes with four secondary ones for the reader's eye and for horizontal space.
+
+**The treatment therefore is not "put the actions in a menu".** Burying `Edit` — the common case —
+behind a click to tidy the rare ones trades the frequent interaction for the infrequent. The
+defensible shape is the one the canvas selection bar already uses: **the primary action stays
+visible, the secondary ones move behind a `⋯`**, with ADR-0082 reason wiring so a shaded item keeps
+its explanation.
+
+**That is a design decision across ~2 screens, not a mechanical conversion across ~10**, and it
+should be built once as an exemplar and reviewed before it is rolled out — which is what the rest of
+this document says about every other conversion and is the reason the count mattered.
+
 ### 2. What a hand-rolled combobox costs on a coarse pointer — NOT decided, and it gates the rest
 
 A native `<select>` gets the platform's own picker: the iOS wheel, the Android sheet. That is the
