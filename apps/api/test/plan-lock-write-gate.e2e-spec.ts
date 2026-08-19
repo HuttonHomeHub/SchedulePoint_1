@@ -62,6 +62,11 @@ describe.skipIf(!hasDatabase)('Plan edit-lock write-gate (e2e, enforced)', () =>
     // steps until the ADR-0060 §5 gate case below, which is why the omission surfaced only now —
     // the same order `calendar-scope.e2e-spec.ts` already uses.
     await prisma.activityStep.deleteMany();
+    // Notes hold `activity_id`/`plan_id` FKs, so they must go before what they annotate. The
+    // e2e database is shared with the Playwright run and `apps/web/e2e-notes` leaves notes
+    // behind, so without this the failure lands in a spec that has never heard of notes — the
+    // same way `plan_shares` did, one table along.
+    await prisma.note.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();

@@ -88,6 +88,11 @@ describe.skipIf(!hasDatabase)('Organisation overview API (e2e)', () => {
     // before `plans`, whatever this spec itself creates.
     await prisma.crossPlanDependency.deleteMany();
     await prisma.activityDependency.deleteMany();
+    // Notes hold `activity_id`/`plan_id` FKs, so they must go before what they annotate. The
+    // e2e database is shared with the Playwright run and `apps/web/e2e-notes` leaves notes
+    // behind, so without this the failure lands in a spec that has never heard of notes — the
+    // same way `plan_shares` did, one table along.
+    await prisma.note.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.planLock.deleteMany();
     await prisma.plan.deleteMany();
