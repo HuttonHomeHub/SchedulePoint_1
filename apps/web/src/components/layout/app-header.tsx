@@ -6,6 +6,7 @@ import { BrandMark } from '@/components/layout/brand-mark';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
+import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { OrgSwitcher } from '@/features/organizations';
 
 /**
@@ -88,7 +89,7 @@ function BrandLink({ orgSlug }: { orgSlug: string | undefined }): React.ReactEle
   );
 }
 
-function HeaderContents(): React.ReactElement {
+function HeaderContents({ identitySlot }: { identitySlot?: React.ReactNode }): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
   // Opens the rail as a drawer below `lg`, where the pinned rail is hidden. Null outside the
@@ -111,8 +112,13 @@ function HeaderContents(): React.ReactElement {
         ) : null}
         <BrandLink orgSlug={orgSlug} />
       </div>
-      <div className="flex min-w-0 items-center gap-2 justify-self-center">
+      <div className="flex min-w-0 items-center gap-3 justify-self-center">
         <OrgSwitcher className="max-w-[12rem] truncate" />
+        {/* Where a plan's identity line lands (ADR-0097 D1b). Empty on every other screen — the
+            band's height is content-driven, so nothing is reserved. The header stays plan-UNAWARE:
+            it receives a slot NODE and the workspace portals into it, which is ADR-0029's contract
+            and the same mechanism the toolbar rows have used since ADR-0055 §3. */}
+        {identitySlot}
       </div>
       <div className="flex shrink-0 items-center gap-2 justify-self-end">
         <AccountChip />
@@ -141,10 +147,31 @@ export function AppHeader(): React.ReactElement {
  * band owns the surface scope, the sticky position and the bottom border, so this is a bare
  * landmark.
  */
-export function AppHeaderRow(): React.ReactElement {
+export function AppHeaderRow({
+  identitySlot,
+}: {
+  /** See {@link HeaderContents}. Passed by the band as a slot node, never as content. */
+  identitySlot?: React.ReactNode;
+} = {}): React.ReactElement {
   return (
-    <header className="h-14 px-4">
-      <HeaderContents />
-    </header>
+    // **`ToolbarBandProvider` wraps the row, and the reason is a reading rather than a caution**
+    // (`m0-landing-d1-measurement.md`). The identity slot carries the plan's mode `Toolbar`, and a
+    // toolbar with no provider above it resolves its DENSITY from its own `clientWidth` — which for
+    // a `shrink-0` row is its content width, landing it in a narrow band on a wide screen.
+    //
+    // It is NOT protection against the fit trap. That one is already closed by
+    // `isWidthConstrained` (`Toolbar.tsx:81-84`): a width-unconstrained row is charged no chrome and
+    // never demotes, because its `clientWidth` is an *output* of the demotion decision. The first
+    // answer here was "the mode items are `render`, so they cannot demote", and that is false —
+    // `mode-early` has an `onActivate` and a `demotionGroup`, which is exactly what
+    // `Toolbar.tsx:352` calls demotable. Recorded because it was nearly built on.
+    //
+    // `toolbar-band.tsx`'s invariant is honoured either way: the band width says how roomy the
+    // surface is and never answers whether a row's content fits.
+    <ToolbarBandProvider className="h-14 px-4">
+      <header className="flex h-full items-center">
+        <HeaderContents {...(identitySlot === undefined ? {} : { identitySlot })} />
+      </header>
+    </ToolbarBandProvider>
   );
 }

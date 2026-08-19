@@ -1,8 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-
 import type * as ReactRouter from '@tanstack/react-router';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import type * as NavigatorModule from '@/features/navigator';
 import { NavigatorCrudProvider } from '@/features/navigator/lib/navigator-crud-context';
@@ -96,5 +95,28 @@ describe('NavigatorRailCollapsed', () => {
     render(<NavigatorRailCollapsed onExpand={onExpand} />);
     fireEvent.click(screen.getByRole('button', { name: 'Show Project Explorer' }));
     expect(onExpand).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The state ADR-0097 Landing D1 owed (`migration.md`): before D1 the six organisation
+   * destinations lived in the app header and survived a rail collapse. Collapsing is exactly what a
+   * planner does to gain canvas width, so a collapsed rail with only a toggle would have put the
+   * whole secondary navigation behind one control it had never been behind.
+   */
+  it('keeps the organisation destinations reachable as an icon strip', () => {
+    renderRail(<NavigatorRailCollapsed onExpand={vi.fn()} orgSlug="acme" />);
+    const nav = screen.getByRole('navigation', { name: 'Organisation' });
+    // Named, not just present: an icon link with no accessible name is not a link anyone can use,
+    // and the name has to be the SAME word the expanded rail shows (WCAG 2.5.3 Label in Name) or a
+    // speech-input user says one thing when the rail is open and another when it is shut.
+    expect(within(nav).getByRole('link', { name: 'Clients' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Members' })).toBeInTheDocument();
+    // Icon-only: no destination renders its label as text, or the strip is not a strip.
+    expect(within(nav).getByRole('link', { name: 'Clients' })).toHaveTextContent('');
+  });
+
+  it('renders no destinations outside an organisation — there are none to show', () => {
+    renderRail(<NavigatorRailCollapsed onExpand={vi.fn()} />);
+    expect(screen.queryByRole('navigation', { name: 'Organisation' })).toBeNull();
   });
 });

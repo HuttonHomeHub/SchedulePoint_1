@@ -107,7 +107,11 @@ function ShellFrame(): React.ReactElement {
             <div className="flex min-h-0 flex-1">
               {rail.collapsed ? (
                 <div className="hidden shrink-0 lg:block">
-                  <NavigatorRailCollapsed onExpand={expand} focusToggleOnMount={interacted} />
+                  <NavigatorRailCollapsed
+                    onExpand={expand}
+                    focusToggleOnMount={interacted}
+                    orgSlug={orgSlug}
+                  />
                 </div>
               ) : (
                 <>

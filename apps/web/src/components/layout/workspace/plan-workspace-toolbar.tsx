@@ -25,7 +25,6 @@ import { usePlanWorkspaceKeyScope } from './use-plan-workspace-key-scope';
 import type { LoadedPlan, PlanWorkspaceModel } from './use-plan-workspace-model';
 import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle';
 
-import { Breadcrumbs, type Crumb } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
 import { useAnnounce } from '@/components/ui/announcer';
@@ -1089,24 +1088,6 @@ export function ToolbarPlanWorkspace({
     model.onRevealHandled();
   }, [model, canvasUi]);
 
-  // Breadcrumb ends at the plan name (the current page) so the whole trail — Clients → client →
-  // project → plan — reads on one header line (ADR-0031 two-row amendment). A visually-hidden <h1>
-  // keeps the document outline intact even though the visible title is the last (bold) crumb.
-  const crumbs: Crumb[] = [
-    { label: 'Clients', to: '/orgs/$orgSlug/clients', params: { orgSlug: model.orgSlug } },
-    {
-      label: model.client.data?.name ?? 'Client',
-      to: '/orgs/$orgSlug/clients/$clientId',
-      params: { orgSlug: model.orgSlug, clientId: model.project.data?.clientId ?? '' },
-    },
-    {
-      label: model.project.data?.name ?? 'Project',
-      to: '/orgs/$orgSlug/projects/$projectId',
-      params: { orgSlug: model.orgSlug, projectId: plan.projectId },
-    },
-    { label: plan.name },
-  ];
-
   return (
     // The workspace root is an event DELEGATION root, not a control masquerading as one: no role,
     // no tabIndex, no click handler, never focusable itself. It only observes keydowns bubbling
@@ -1132,6 +1113,63 @@ export function ToolbarPlanWorkspace({
           the app reads as one surface. Only the DOM node moves — in the React tree they stay right
           here, which is why `ctx`, the registry predicates and the workspace key scope are all
           untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
+      {/* **The plan identity line, merged into the app header row** (ADR-0097 D1b) — the merge
+          ADR-0092 M5 withdrew at "134 px short at 1646", which Landing D1a paid for by moving the
+          organisation nav into the rail (+250 px of slack at 1440; `m0-landing-d1-measurement.md`).
+          It is a second named slot rather than a second portal API, and the header receives a NODE
+          rather than content, so the shell stays plan-unaware (ADR-0029).
+
+          **Tidied, and each cut was measured rather than judged.** The breadcrumb PATH goes (455 px)
+          — the Project Explorer shows where you are and now holds the organisation's destinations
+          too, so a second answer to the same question is what this landing exists to remove. The
+          plan NAME stays, because that is the identity. The pen's badge and its live-region
+          sentence go (223–257 px, ADR-0092 M0) — they sat beside a button already reading
+          `Stop editing`, which is the redundancy that measurement named.
+
+          Flag-off `ChromePortal` is an identity wrapper, so this renders in place exactly as it did
+          before the band existed. */}
+      <ChromePortal name="identity">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {/* The plan NAME, which is the identity — not the trail to it. It truncates rather
+                than wrapping: this sits in a fixed-height header row now, and a two-line name would
+                change the band's height as a function of its content. `title` carries the full
+                string for a name the column cannot hold, which is what the last breadcrumb crumb
+                did before it. */}
+            <p className="truncate font-medium" title={plan.name}>
+              {plan.name}
+            </p>
+            <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+            {model.canWrite ? (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => model.setEditing(true)}
+                title="Edit plan…"
+                aria-label="Edit plan"
+                className="text-muted-foreground shrink-0"
+              >
+                <SquarePen aria-hidden="true" className="size-4" />
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <Toolbar
+              items={rows.mode}
+              context={ctx}
+              label="Plan mode"
+              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+              groupLabels={ROW_MODE_GROUP_LABELS}
+              className="shrink-0"
+            />
+            <CompactPenStatus
+              pen={model.pen}
+              {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
+            />
+          </div>
+        </div>
+      </ChromePortal>
+
       <ChromePortal>
         {/* Publishes the BAND's width to every `<Toolbar>` inside it (`toolbar-band.tsx`), so a
             row's density reflects the surface rather than whatever width is left after its
@@ -1166,62 +1204,6 @@ export function ToolbarPlanWorkspace({
               `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
               equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
               everything below it. */}
-          <div className="border-border flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-1">
-            <div className="flex min-w-0 items-center gap-2">
-              <Breadcrumbs items={crumbs} />
-              <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-              {/* Quick edit-plan affordance for writers, beside the status pill (ADR-0031 amendment) —
-                  the standalone toolbar Edit-plan button was folded into here + the Summary popover. */}
-              {model.canWrite ? (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => model.setEditing(true)}
-                  title="Edit plan…"
-                  aria-label="Edit plan"
-                  className="text-muted-foreground shrink-0"
-                >
-                  <SquarePen aria-hidden="true" className="size-4" />
-                </Button>
-              ) : null}
-            </div>
-            {/* The **mode row** (ADR-0091 D1), beside the pen because that is what it is: `Early |
-                Visual` and `Diagram | Gantt` do not *do* anything, they set how everything below
-                behaves — which is exactly `Start editing`'s relationship to the toolbar. It renders
-                as a third `<Toolbar>` rather than four hand-rolled segmented buttons, so it keeps
-                roving tabindex, group labelling, ADR-0082 reason wiring, `demotionGroup` pairing
-                and the fit gate's reach; this register has recorded each of those shipping wrong
-                once.
-
-                Wrapped WITH the pen so the identity line keeps exactly two children — it is
-                `justify-between`, and a third child would spread it into thirds.
-
-                NOT a nested `ChromePortal`: we are already inside one, and a second would read the
-                same context node and render this as a sibling of the band's children, i.e. below
-                Row 2. `shrink-0` (never `flex-1`) because `Toolbar`'s container carries `min-w-0`,
-                so a default-shrinking mode row squeezes below its content width on a narrow band
-                and starts demoting — putting an armed mode behind a `⋯`, which is the ADR-0064
-                dead-end. The breadcrumb cluster wraps instead; it already truncates. */}
-            <div className="flex shrink-0 items-center gap-3">
-              <Toolbar
-                items={rows.mode}
-                context={ctx}
-                label="Plan mode"
-                authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                // All four are `group: 'lens'`, whose default label is "Display" — which is also
-                // Row 1's `lens` group name, so unoverridden this announces a second, unrelated
-                // name for the cluster AND collides with a region one row below. Same class as
-                // ADR-0090 M5's `output` → "Deliver" rename.
-                groupLabels={ROW_MODE_GROUP_LABELS}
-                className="shrink-0"
-              />
-              <CompactPenStatus
-                pen={model.pen}
-                {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-              />
-            </div>
-          </div>
-
           {/* Visible row-purpose cues (ux review): the "Row 1 · Look" / "Row 2 · Do" split otherwise
               lived only in each row's `aria-label`, invisible to sighted users. Plain words rather than
               those internal ADR-0031 codenames — "Look"/"Do" read as jargon to a first-time user — and

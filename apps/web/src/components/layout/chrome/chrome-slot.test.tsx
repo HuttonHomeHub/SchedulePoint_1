@@ -19,7 +19,7 @@ const WorkspaceContext = createContext('');
 function Band({ children }: { children: React.ReactNode }): React.ReactElement {
   const { slotRef, node } = useChromeSlot();
   return (
-    <ChromeSlotProvider node={node}>
+    <ChromeSlotProvider nodes={{ rows: node }}>
       <div data-testid="band">
         <ChromeSlot slotRef={slotRef} />
       </div>

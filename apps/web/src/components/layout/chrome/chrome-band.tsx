@@ -17,7 +17,8 @@ import { DESIGNED_CHROME_ENABLED } from '@/config/env';
  * three. A fixed height would either waste a strip on every non-plan screen or clip the toolbar.
  */
 export function ChromeBand({ children }: { children: React.ReactNode }): React.ReactElement {
-  const { slotRef, node } = useChromeSlot();
+  const rows = useChromeSlot();
+  const identity = useChromeSlot();
 
   if (!DESIGNED_CHROME_ENABLED) {
     // Flag off: today's shell exactly — a header, then everything else. `ChromePortal` is an
@@ -32,13 +33,17 @@ export function ChromeBand({ children }: { children: React.ReactNode }): React.R
 
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider node={node}>
+      <ChromeSlotProvider nodes={{ rows: rows.node, identity: identity.node }}>
         {/* `z-20` clears the canvas ruler's `z-10` (TsldCanvas) and the resizer, so a scrolled
           workspace never rides over the band. The `Sheet` drawer is a native `<dialog>` in the
           top layer, which is above every z-index — the drawer still covers the band, correctly. */}
         <Surface tone="chrome" className="border-border sticky top-0 z-20 border-b">
-          <AppHeaderRow />
-          <ChromeSlot slotRef={slotRef} />
+          {/* A plan's identity line portals into the header ROW (ADR-0097 D1b), not into a row of
+              its own — the merge ADR-0092 M5 withdrew for want of the width D1a freed by moving the
+              organisation nav to the rail. The slot is empty on every screen that is not a plan and
+              the band's height is content-driven, so nothing is reserved for it. */}
+          <AppHeaderRow identitySlot={<ChromeSlot slotRef={identity.slotRef} name="identity" />} />
+          <ChromeSlot slotRef={rows.slotRef} />
         </Surface>
         {children}
       </ChromeSlotProvider>

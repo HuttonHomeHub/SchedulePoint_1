@@ -63,21 +63,19 @@ async function stackHeights(page: Page): Promise<unknown> {
     const rowDo = rowOf('Build and manage');
     const commandBand = rowLook?.parentElement ?? null;
 
-    // The **identity row** — breadcrumbs + pen status. ADR-0090 M4-T2 folded it INTO the command
-    // band as a `<div>` (a second `<header>` would have made a second `banner` landmark) and left
-    // the `sr-only <h1>` inside `<main>`. This lookup used to be `h1.closest('header')`, which
-    // returned `null` from that day on; `read()` returned `null`, `.filter()` dropped it, and the
-    // report silently listed five bands where six were asked for — with `aboveCanvas` still
-    // reading a plausible 249, so nothing looked wrong. Measured 2026-08-12 (M0-T1): five bands
-    // reported, and 135 − 45 − 44 = 46 px of command band unaccounted for. That 46 px IS this row.
+    // The **identity line** — plan name, status, edit pencil, mode toolbar, pen status.
     //
-    // It is now located structurally, as the command band's first child — the row above the two
-    // toolbars — and verified to be the element carrying the breadcrumb `nav`.
-    const identityRow = (() => {
-      const first = commandBand?.firstElementChild ?? null;
-      if (!first) return null;
-      return first.querySelector('nav') ? first : null;
-    })();
+    // **It has moved, and the move is what this harness now measures** (ADR-0097 Landing D1b). Until
+    // then it was a row of its OWN inside the command band, and this lookup was
+    // `commandBand.firstElementChild` verified to carry a breadcrumb `nav`. D1b portals the content
+    // into a named slot inside the **app header row** instead — the merge ADR-0092 M5 withdrew at
+    // "134 px short at 1646", which D1a paid for by moving the organisation nav to the rail.
+    //
+    // So it is located by its slot (`[data-chrome-slot="identity"]`), which is the seam the portal
+    // actually targets rather than a position that happens to be right today. The prior lookup
+    // would now throw — correctly: this harness's own rule is that a band it cannot find is a
+    // failure, not a `null` that filters away. That rule is why the move is visible here at all.
+    const identityRow = document.querySelector('[data-chrome-slot="identity"]');
 
     // **The shell's own chrome band** (ADR-0055 S2), which sits above everything the plan owns and
     // which `design.md` §2.1 does not account for at all. Located as the command band's nearest
@@ -103,7 +101,11 @@ async function stackHeights(page: Page): Promise<unknown> {
     const bands = [
       ['shell chrome band (total)', chromeBand],
       ['app header row', appHeaderRow],
-      ['identity row (breadcrumbs + pen)', identityRow],
+      // Inside the app header row since D1b, NOT a band of its own. Its height is reported so the
+      // merge can be checked rather than asserted: if it exceeds the header row's own height the
+      // band grew, and the merge bought nothing — which is exactly the outcome ADR-0092 M4 recorded
+      // for a relocation that "gained exactly nothing".
+      ['identity slot (in the header row)', identityRow],
       ['command band (identity + both rows)', commandBand],
       ['row 1 · View and navigate', rowLook],
       ['row 2 · Build and manage', rowDo],
