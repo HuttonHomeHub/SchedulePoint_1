@@ -450,3 +450,52 @@ because `scripts/check-counts.mjs:55` re-derives the count from `docs/adr/`.
   applied to itself.
 - **Let the single theme become a hard-coded theme.** `design.md` §0.5.3's gate is the whole of what
   keeps a future dark variant to "a block of values and one entry".
+
+---
+
+## F1's two blocking decisions, taken 2026-08-19
+
+`migration.md` said neither was decided and that nothing converts until both are. One is decided
+here; the other is deliberately **not**, and says what would decide it.
+
+### 1. The discriminator: `Combobox` when the option set is server-paged, searchable or annotated
+
+`combobox.tsx:12-15` already states its own reason for existing, narrowly: a native `<select>`
+cannot do **type-ahead filtering against the server**, a **"load more" page**, or **options that
+carry a tier/state annotation**. A four-option dependency type (FS/SS/FF/SF) has none of those
+properties, and replacing a correct native control with a heavier hand-rolled one is a cost with no
+purchase. So the rule is the narrow one, and it is the primitive's own.
+
+**Measured before it was written, and the plan's implied scale is wrong by about 5×.** The counts
+hold — **22 `<SelectField>` and 19 `<Select>` non-test call sites**, close to the "~20 plus ~15" the
+plan estimated. What does not hold is that they are all candidates. Grouped by whether their options
+come from a query at all:
+
+| site                                         | selects | queries | verdict                                                                                                                                                                 |
+| -------------------------------------------- | ------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AddCrossPlanLinkDialog`                     | 6       | 4       | **convert 4** — Client → Project → Plan → Activity, server-queried and cascading; the activity list is unbounded on a real plan                                         |
+| `ResourceFormDialog`, `PlanCalendarPicker`   | 1 each  | 1–2     | already `Combobox` where it matters (ADR-0053 M4); re-check, do not assume                                                                                              |
+| `ActivityBreakdownField`, `WbsBulkAssignBar` | 1 each  | 0       | **convert** — a plan's WBS summaries, and both already work around the native trap their own docblocks record                                                           |
+| the other ~30                                | —       | 0       | **stay native**: Status, Type, Constraint, Secondary constraint, Duration type, Cost accrual, Earn value from, Role, and the table filters. Fixed enums of 2–6 members. |
+
+So F1's select half is **about six conversions, not thirty-five**. That is a finding rather than a
+scoping win: the plan's number came from counting call sites, and the discriminator's whole purpose
+is that a call site is not a candidate.
+
+### 2. What a hand-rolled combobox costs on a coarse pointer — NOT decided, and it gates the rest
+
+A native `<select>` gets the platform's own picker: the iOS wheel, the Android sheet. That is the
+single best mobile control in the product and it is free. A `Combobox` gets an in-flow listbox
+competing with a virtual keyboard. `design.md` §3.3 already resolves `comfortable` density under
+`@media (pointer: coarse)`, so this collides with a decision this epic has taken — and
+`docs/TECH_DEBT.md` **#133** records that **no toolbar measurement in this repository has ever been
+taken with a coarse pointer**, which is the same blind spot one surface along.
+
+**This is not a judgement call to make from a desk.** It needs a coarse-pointer run and an
+`accessibility-reviewer` / `ux-reviewer` read **before** the conversions, not after. Until then the
+four cross-plan selects are the safe subset — they sit in a dialog a planner reaches from a desktop
+workspace — and `ActivityBreakdownField` / `WbsBulkAssignBar` wait, because the activity editor is
+reachable on a tablet.
+
+Recorded as a blocking question rather than an assumption, because the failure mode is silent: a
+converted picker looks correct on every desktop and is worse on the device nobody tested.
