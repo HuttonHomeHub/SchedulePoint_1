@@ -433,6 +433,37 @@
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
+  /* Weight (ADR-0097)                                                        */
+  /*                                                                          */
+  /* **The product owner's typeface choice created this requirement, and it   */
+  /* was not visible until they made it.** A sans/serif pairing gives rank a   */
+  /* CATEGORICAL channel — a serif title is a different kind of thing from a   */
+  /* sans row, at any weight. One face has no such channel, so rank is carried */
+  /* by weight, size, tracking, colour and space; four of those five had a     */
+  /* token and weight had none.                                               */
+  /*                                                                          */
+  /* Measured: 186 sites across 84 files — `font-medium` 131, `font-semibold`  */
+  /* 51, `font-normal` 3, `font-bold` 1. A size is a formatting detail; a      */
+  /* weight is a JUDGEMENT ABOUT RANK, so 186 ungoverned sites is 186 chances  */
+  /* for a section heading to outrank the page title. With a pairing that      */
+  /* would have been untidy. With one face it is the primary channel.          */
+  /*                                                                          */
+  /* Today's values, deliberately — the same discipline as the type ramp.      */
+  /* This commit takes OWNERSHIP; re-scaling is a separate, visible decision.  */
+  /*                                                                          */
+  /* NOTE the range. Space Grotesk's variable axis is 300–700, so `light`      */
+  /* through `bold` are real instances and anything outside them would be      */
+  /* SYNTHESISED by the browser — faux-bold, which looks like a rendering      */
+  /* fault rather than a choice. Nothing in the product uses those today and a */
+  /* gate keeps it that way.                                                   */
+  /* ----------------------------------------------------------------------- */
+  --weight-light: 300;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ----------------------------------------------------------------------- */
   /* The type ramp (ADR-0097)                                                 */
   /*                                                                          */
   /* **There was no type scale before this.** Not a poor one — none: the       */
@@ -685,6 +716,15 @@
      block and this only names them for Tailwind, so a size is a theme decision and
      not a build-config one. Without this mapping `text-sm` would silently fall back
      to Tailwind's own default and the ramp above would be inert. */
+  /* Weight, mapped as the sizes and colours are — the values live in the theme block and
+     this only names them for Tailwind. Declaring `--font-weight-*` directly here would put a
+     design decision in the build config rather than the theme, which is exactly what the
+     "no token outside a theme block" rule exists to prevent. */
+  --font-weight-light: var(--weight-light);
+  --font-weight-normal: var(--weight-normal);
+  --font-weight-medium: var(--weight-medium);
+  --font-weight-semibold: var(--weight-semibold);
+  --font-weight-bold: var(--weight-bold);
   --text-micro: var(--type-micro);
   --text-micro--line-height: var(--type-micro--line-height);
   --text-micro--letter-spacing: var(--type-micro--letter-spacing);

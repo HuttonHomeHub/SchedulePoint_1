@@ -274,6 +274,73 @@ describe.each(FAMILIES)('the [data-surface="%s"] rule', (family) => {
   });
 });
 
+describe('weight is a governed axis', () => {
+  /** Every `font-<weight>` utility in the source, excluding tests. */
+  function weightSites(): string[] {
+    const root = join(process.cwd(), 'src');
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) files.push(full);
+      }
+    };
+    walk(root);
+    const pattern = /\bfont-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b/g;
+    const sites: string[] = [];
+    for (const file of files) {
+      for (const match of readFileSync(file, 'utf8').matchAll(pattern)) {
+        sites.push(`${file.slice(root.length + 1)}: ${match[0]}`);
+      }
+    }
+    return sites;
+  }
+
+  it('declares the weights it uses, rather than inheriting the framework default', () => {
+    // Ownership, not a re-scale. The values are today's; what changes is that they are now a
+    // theme decision with a name rather than whatever Tailwind ships.
+    const tokens = themeTokens(':root');
+    for (const step of ['light', 'normal', 'medium', 'semibold', 'bold']) {
+      expect(tokens.get(`--weight-${step}`), `--weight-${step} is not declared`).toBeDefined();
+    }
+  });
+
+  it('uses no weight outside the variable font’s 300–700 axis', () => {
+    // **The one assertion here that prevents a visible defect rather than governing a count.**
+    // Space Grotesk's `wght` axis runs 300–700, so `font-thin` (100), `font-extralight` (200),
+    // `font-extrabold` (800) and `font-black` (900) have no real instance to interpolate to —
+    // the browser SYNTHESISES them, and faux-bold on a grotesque reads as a rendering fault
+    // rather than a choice. Nothing uses them today; this is what keeps it that way after
+    // somebody reaches for `font-black` on a heading.
+    const outside = weightSites().filter((site) =>
+      /font-(thin|extralight|extrabold|black)\b/.test(site),
+    );
+    expect(outside, `weights outside the 300–700 axis: ${outside.join(', ')}`).toEqual([]);
+  });
+
+  /**
+   * **A ratchet at the measured floor of 186** (84 files), set the day weight got a vocabulary.
+   *
+   * It is not debt in the way the sizing ratchet's remainder is: a weight utility is often the
+   * right thing to write. What the number guards is DRIFT — 186 independent judgements about
+   * rank, made one at a time, with nothing saying which rank a section heading should have. It
+   * comes down as the archetypes absorb those judgements into components that decide rank once.
+   *
+   * Lower it when it drops. Raising it means a component made a rank decision by hand that an
+   * archetype should have made for it.
+   */
+  const WEIGHT_SITE_CEILING = 186;
+
+  it(`uses no more than ${WEIGHT_SITE_CEILING} hand-placed weight utilities`, () => {
+    const sites = weightSites();
+    expect(
+      sites.length,
+      `hand-placed weight utilities rose to ${sites.length} (ceiling ${WEIGHT_SITE_CEILING})`,
+    ).toBeLessThanOrEqual(WEIGHT_SITE_CEILING);
+  });
+});
+
 describe('the sizing rhythm ratchets down', () => {
   /**
    * Arbitrary Tailwind sizing values in `className` — `w-[240px]`, `text-[10px]`, `p-[7px]`.
