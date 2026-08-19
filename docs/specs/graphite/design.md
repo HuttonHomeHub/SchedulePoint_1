@@ -71,11 +71,29 @@ spans the full width beneath the rail (or the full window width) and its geometr
 **independent of drawer state**. Controls must not move under the cursor because a panel
 opened.
 
-**4b — Rail/drawer side.** The product owner has asked for the tool cluster to sit on the
-opposite side from the mockup, so the Gantt's activity grid can start at the leading
-edge as it does in P6 and MSP. Exact placement is being confirmed; treat "rail and drawer
-on the trailing (right) edge, grid at the leading edge" as the working assumption and
-flag anything that turns on it.
+**4b — The icon rail moves to the trailing (right) edge; the drawer stays on the
+leading (left) edge.** Confirmed by the product owner. The layout is therefore:
+
+```
+┌──────────────┬─────────────────────────────────────────┬────┐
+│  TOOLBAR — full width, fixed, spans everything (§4a)     │    │
+├──────────────┼─────────────────────────────────────────┤RAIL│
+│  DRAWER      │  STAGE                                   │ 46 │
+│  224 px      │  Gantt: grid 620 │ splitter │ chart      │ px │
+│  (left)      │  Diagram: WBS band + full-width plot     │    │
+├──────────────┴─────────────────────────────────────────┴────┤
+│  STATUS BAR                                                  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**Tools on one edge, context on the other.** The five modal tools and the panel switches
+sit on the right where the drawing hand reaches them; the drawer stays beside the Gantt
+grid on the left, where the activity it describes is.
+
+Reviewers should say plainly if this is wrong. Two specific risks to address rather than
+skirt: (i) DOM order versus visual order — the rail is a primary control cluster and must
+not become the last thing in the reading order; (ii) a right-edge rail is unconventional
+for a left-to-right reading direction and needs an argument better than symmetry.
 
 ## 5. The palette is OPEN
 
