@@ -170,6 +170,28 @@ and components. Deleting a feature should mean deleting one folder.
   typed client generated from the API's OpenAPI spec (e.g. `openapi-typescript`)
   remains the intended evolution; the client is still hand-written.
 
+### Browser-local state (`localStorage`)
+
+Rare and deliberately so — it is not a cache tier and never holds server data. Three rules, each
+learnt from a real failure:
+
+- **Every read and write is wrapped.** Private mode, a disabled store and a full quota all throw,
+  and none of them is a reason for a screen to show an error. The degraded behaviour is "the
+  convenience is absent" (`lib/active-org.ts:8-22`, `features/overview/model/recent-plans.ts`).
+- **A key that identifies a person carries the user id, and sign-out clears that account's
+  entries.** Otherwise a shared machine hands the next account the previous one's data — the query
+  cache dies with the tab, `localStorage` does not (ADR-0098 §4.9 D10a).
+- **Store identifiers, not content.** "Jump back in" holds plan **ids** and asks the server to name
+  them on every load, which is what makes a rename correct itself and a plan the reader has lost
+  access to disappear rather than 404 on click. A cached name is used exactly once — on the
+  occasion nobody has checked it.
+
+The model is **pure over an injected `Storage`**, so it is testable without a browser and cannot
+acquire a hidden dependency on `window`. That is not fastidiousness: `forgetAllForUser` was first
+written with `Object.keys(storage)`, which works only because the Web Storage API happens to expose
+stored keys as own properties, and a map-backed `Storage` in the unit test found the sweep silently
+matching nothing.
+
 ## Form handling (ADR-0007)
 
 React Hook Form + Zod. Every form uses the shared accessible `Form` primitive
@@ -248,13 +270,22 @@ sequenceDiagram
 
 ## Theme management
 
-- Three modes: **light**, **dark**, **system**. A `ThemeProvider` (Context)
-  stores the preference in `localStorage` and applies/removes the `.dark` class
-  on `<html>`; `system` follows `prefers-color-scheme` live.
-- A fourth entry, **corporate**, is a brand skin rather than a colour scheme (a
-  `.corporate` class, sibling of `.dark`). Exactly one theme class is ever stamped.
-- To avoid a flash of the wrong theme, a tiny inline script in `index.html` sets
-  the class before first paint.
+- **One theme, and `:root` IS its block** (ADR-0097). There is no picker, no
+  `.dark`, no `.corporate`, and nothing is stamped on `<html>`.
+- That is what makes a flash of the wrong theme **structurally impossible** rather
+  than merely avoided: `public/theme-boot.js` and `ThemeProvider` cannot disagree
+  about what to paint, because neither of them paints. Every stored value — `dark`,
+  `light`, `system`, garbage, or a `localStorage` that throws — resolves the same way.
+- **The mechanism is kept live, not vestigial.** `theme-boot.js` still runs, reads
+  and validates on every load and keeps its test; `THEME_SELECTORS` is a one-element
+  **list**; `Theme` is a union with one member. Adding a dark theme back is a block of
+  values and one entry in each. What that does not buy is the design judgement: the
+  canvas's colours carry meaning, so its plot separations need **re-deriving**, not
+  re-tinting.
+- `ThemeProvider`'s one side effect is removing the stale `localStorage` key, once, on
+  first mount — never in `theme-boot.js`, which must stay side-effect-free before paint.
+  Removed rather than ignored, so a 2026 preference is not resurrected on the day a new
+  dark design ships.
 - Components never branch on theme in JS — tokens flip automatically (ADR-0006).
 - **Surface scopes** (ADR-0055) are the orthogonal axis: a theme says what the product
   looks like, a scope says what a token means _in this region_. `<Surface tone="chrome">`
@@ -269,9 +300,18 @@ sequenceDiagram
   scope mechanism. Remove `inline` and every scope silently does nothing: no error, no
   failing build, and a diff that reads like a tidy-up. `styles/token-architecture.test.ts`
   pins it.
-- ⚠️ **Declare token values literally, never as `var()` aliases.** A `--field: var(--background)`
-  written in `:root` is substituted at computed-value time, so `.dark` and `.corporate`
-  inherit **Light's** value and never override it. Each theme block restates its own values.
+- ⚠️ **A token value written as a `var()` alias is safe HERE and unsafe one element down — and
+  that was measured, not reasoned.** The rule used to read "declare token values literally, never
+  as `var()` aliases", on the grounds that a second theme block would inherit the first's value.
+  Probed in Chromium: a custom property computes on the element it is declared on and then
+  **inherits that computed value**, so an alias fails only when the overriding block sits on a
+  **descendant**. This product stamps its theme on `<html>` — the same element `:root` matches — so
+  both declarations land together and the alias resolves correctly, including an alias of an alias.
+  ADR-0097 §1.5a relies on exactly this: `--background: var(--page-background)`.
+  **The catch, which is why the theme contract covers it from day one:** a second theme block is
+  still on `<html>`, so it must restate the page family **literally**. If a dark block sets only
+  `--page-background`, that works; if it sets only `--background`, the alias is shadowed and the
+  family beneath it silently keeps the light values. Each theme block declares the whole contract.
 
 ## Responsive strategy
 

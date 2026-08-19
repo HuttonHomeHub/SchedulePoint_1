@@ -4,6 +4,7 @@ import { Transform } from 'class-transformer';
 import { ArrayMaxSize, IsIn, IsISO8601, IsOptional, Validate } from 'class-validator';
 
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+import { toArray } from '../../../common/dto/to-array';
 
 import { FromIsBeforeTo } from './from-is-before-to.validator';
 
@@ -23,20 +24,6 @@ import { FromIsBeforeTo } from './from-is-before-to.validator';
  * A cap derived from `AUDIT_ACTIONS` cannot fall behind the next action added to it.
  */
 export const AUDIT_FILTER_MAX_ACTIONS = AUDIT_ACTIONS.length;
-
-/**
- * Repeatable params arrive as a string when sent once and an array when sent more than once.
- *
- * Exported so the organisation subclass reuses it rather than reimplementing the same three lines —
- * the "two implementations drift, and the drift is invisible" rule (ADR-0065) applied to a helper
- * small enough that copying it looks harmless. This is the API's **first** repeatable array query
- * param; there is no prior idiom in the repo to match, which the first version of this file claimed
- * there was.
- */
-export function toArray(value: unknown): unknown {
-  if (value === undefined) return undefined;
-  return Array.isArray(value) ? value : [value];
-}
 
 /**
  * Query params for both audit reads (ADR-0073 Decision 4).

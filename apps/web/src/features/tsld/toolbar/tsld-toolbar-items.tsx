@@ -558,7 +558,7 @@ const LOE_TOO_FEW_REASON = 'Add activities to span between them';
 /** A small "coming soon" tag for menu rows that preview a not-yet-built activity kind. */
 function SoonTag(): React.ReactElement {
   return (
-    <span className="border-border text-muted-foreground ml-auto rounded-full border border-dashed px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase">
+    <span className="border-border text-muted-foreground text-micro ml-auto rounded-full border border-dashed px-2 py-0.5 font-medium tracking-wide uppercase">
       Soon
     </span>
   );

@@ -61,7 +61,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
 | 21 | **Systemic web-a11y & polish follow-ups (E1 reviews)** — _corrected 2026-08-08: **(b) is half done** — `hooks/use-document-title.ts` exists but only the six public routes call it, and no focus-to-heading manager exists anywhere; it pairs with **#102(6)**, and one manager in the router closes both. (a) required-indicator, (d) `EmptyState`, (e) `DateField` are all still absent — and (d)/(e) are **new primitives with no consumers to migrate**, so they are separate work from (a) despite sharing a file_ | Non-blocking items from the E1 component/UX/accessibility reviews that are pre-existing or systemic, so best fixed once at the primitive/shell level rather than per-feature: (a) no required-field indicator in the shared `Form`/`TextField` primitive (affects every form — sign-in/up/invite/create-org too); (b) no focus-to-heading / `document.title` update on client-side route navigation (router/`AuthedLayout` level); (c) `sm` ghost row-action buttons are 36px (below the 44px touch-target preference), shared with `MembersTable`; (d) no shared `EmptyState` primitive (icon + copy + action) — empty states are text-only; (e) from the E2 review: no shared `DateField` form primitive — a `TextField type="date"` is hand-composed where the CPM/GPM feature set needs it repeatedly (baseline/actual/constraint dates). **The `SelectField` half of this item is DONE** (2026-07-27, #42): the primitive exists and `InviteMemberDialog` + the plan status select are on it. | Minor friction for keyboard/AT and touch users; all current states still meet WCAG 2.2 AA. | Add a required-indicator to the `Form` primitive; add a route-change focus/title manager once in `AuthedLayout`; introduce `EmptyState`, `SelectField`, and `DateField` primitives (folding the calendar-date wire↔display contract into `DateField`) and bump the row-action target size when the design system is next revised. |
 
-| 23 | **Header org-nav was never folded into the rail** — _the responsive-collapse half is addressed (ADR-0029, `VITE_NAV_TREE` default-on); the fold-in is not: `app-header.tsx` still renders Overview / Clients / Members / Recently deleted as its own row_ | From the E3 UX review: the org nav (`apps/web/src/components/layout/app-header.tsx`) is a single flex row that grew to four items (Overview / Clients / Members / Recently deleted). `docs/FRONTEND_ARCHITECTURE.md` documents the intended shell as "nav collapses to a drawer/sheet below `lg`", which isn't built. E3 mitigated the immediate overflow by making the nav shrink and scroll horizontally (`min-w-0 flex-1 overflow-x-auto`, links `whitespace-nowrap`) so it never pushes the page into horizontal overflow, but a horizontally-scrolling nav strip is a stopgap, not the intended mobile pattern. **The persistent app-shell (ADR-0029) is landing this:** M1 added the shell — a Project Explorer rail pinned on `lg`+ and an off-canvas drawer (with a header menu button) below `lg` — behind `VITE_NAV_TREE` (default off). The primary navigation moves into the rail/drawer once the flag flips on at M2. | On narrow viewports the primary nav becomes a scroll strip rather than a proper menu; discoverability of later items is weaker. Every new nav item makes the row tighter. | Complete the navigator (M2), flip `VITE_NAV_TREE` on, and fold the header org-nav items into the rail; move low-frequency maintenance items (e.g. "Recently deleted") into an org-settings/admin area once one exists. |
+| 23 | **Header org-nav was never folded into the rail** — _the responsive-collapse half is addressed (ADR-0029, `VITE_NAV_TREE` default-on); the fold-in is not: `app-header.tsx` still renders Clients / Calendars / Resources / Members / Audit log / Recently deleted as its own row_ | From the E3 UX review: the org nav (`apps/web/src/components/layout/app-header.tsx`) is a single flex row that grew to four items (Overview / Clients / Members / Recently deleted). `docs/FRONTEND_ARCHITECTURE.md` documents the intended shell as "nav collapses to a drawer/sheet below `lg`", which isn't built. E3 mitigated the immediate overflow by making the nav shrink and scroll horizontally (`min-w-0 flex-1 overflow-x-auto`, links `whitespace-nowrap`) so it never pushes the page into horizontal overflow, but a horizontally-scrolling nav strip is a stopgap, not the intended mobile pattern. **The persistent app-shell (ADR-0029) is landing this:** M1 added the shell — a Project Explorer rail pinned on `lg`+ and an off-canvas drawer (with a header menu button) below `lg` — behind `VITE_NAV_TREE` (default off). The primary navigation moves into the rail/drawer once the flag flips on at M2. | On narrow viewports the primary nav becomes a scroll strip rather than a proper menu; discoverability of later items is weaker. Every new nav item makes the row tighter. | Complete the navigator (M2), flip `VITE_NAV_TREE` on, and fold the header org-nav items into the rail; move low-frequency maintenance items (e.g. "Recently deleted") into an org-settings/admin area once one exists. **Partially addressed 2026-08-19 (ADR-0098 M5): the Overview item is gone**, replaced by the wordmark as the conventional route home — one item lighter, and the row has since grown by three (Calendars, Resources, Audit log), so the row is a net two items worse than when this was raised. The fold-in itself is **ADR-0097 Landing D1**, which moves the whole organisation nav into the rail; this row does not need a second stopgap in the meantime. |
 
 | 28 | **TSLD canvas ring/stroke colour treatment** | From the D5 link-legality UX + a11y reviews. **(a)** The **legal** drop-target ring during a link-draw is visually identical to the ordinary **selection** ring (`paint.ts` — both `palette.selection`, solid, 2px), so two rings with different meanings can appear in the same style at once (predates D5). **(b)** The **illegal** ring reuses `palette.critical` (`--color-destructive`), the same token as the CPM critical-path **bar fill** (`paint.ts`), so an illegal drop hovered over a critical-path activity draws red-on-red — weaker contrast exactly where the signal matters, and overloads one colour for two meanings. **(c)** `--color-destructive` is documented (`globals.css`) as tuned for button surfaces; its use as a **state-border/stroke** on the canvas (the critical-bar outline too) wants a contrast check vs `--color-destructive-text` in both themes. | Cosmetic/robustness; the illegal ring is still distinguishable by its dash (colour + pattern, WCAG 1.4.1 holds), so not an AA failure. | Give the legal drop-target ring a distinct treatment from selection; pick a canvas "danger stroke" token distinct from the critical-bar fill; verify destructive-token stroke contrast in both themes when the canvas palette is next revised. |
 
@@ -2552,3 +2552,164 @@ and the first is a ladder change with three consumers.
 this is the **fourth consecutive epic** whose width expectation its own measurement contradicted
 (ADR-0091 D4, ADR-0092 M4, ADR-0093's withdrawn width argument, ADR-0094 M0-T1 and this). Four is
 enough to stop calling it coincidence and start calling it a property of the surface.
+
+## 142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
+
+**Raised:** 2026-08-19 (ADR-0098 M2, seen in the base and overview journeys) · **Size:** S ·
+**Risk if left:** low
+
+Every navigation to the client list logs:
+
+```
+Generated path "/orgs/<slug>/clients/" for route "/_authed/orgs/$orgSlug/clients/$clientId"
+matched route "/_authed/orgs/$orgSlug/clients" instead.
+```
+
+Five call sites use the identical `to` (`app-header.tsx:86`, `client-detail.tsx:38`,
+`project-detail.tsx:61`, `plan-detail.tsx:58`, and now
+`features/overview/components/OrganisationEmptyState.tsx`), so it is **pre-existing and general**,
+not something this epic introduced — it surfaced here only because the overview journey is the first
+to watch the console while landing on a fresh organisation.
+
+**Navigation works**: the router lands on the list, which is why nobody has chased it. What it costs
+is the console — a permanent warning on the commonest link in the product trains everybody to ignore
+console output, which is exactly how the ADR-0074 CSP violation went unnoticed on the deployed origin
+for a release.
+
+**Not diagnosed yet, and the diagnosis is most of the work.** The message says TanStack resolved the
+`to` against the `$clientId` template and then matched the parent — so the two templates are
+generating the same URL, most likely because the child route's path segment allows an empty value.
+The fix is either a route-tree correction or an explicit `from`, and which one depends on that; do
+not guess.
+
+## 143. The Project Explorer cannot open a client or a project — two of ADR-0029's three levels
+
+**Found 2026-08-19**, by the ADR-0097 Landing D1b sweep, and it is older than the milestone that
+exposed it.
+
+`features/navigator/components/HierarchyTree.tsx:208-219`:
+
+```ts
+const activate = (row: VisibleRow): void => {
+  if (!row.node) return;
+  if (row.node.kind === 'plan') {
+    void navigate({ to: '/orgs/$orgSlug/plans/$planId', ... });
+    onNavigate?.();
+  } else {
+    tree.toggle(row.node.id);
+  }
+};
+```
+
+A **plan** row navigates. A **client** or **project** row toggles its own expansion — which the
+chevron beside it already does. So the rail ADR-0029 describes as the Client → Project → Plan
+navigator can open exactly one of those three, and the client-detail and project-detail screens are
+reachable only through the `Clients` destination and a scan down a list.
+
+**Why it went unnoticed for so long, and why it is filed now.** Every surface that needed the hop
+carried a breadcrumb, so the tree's hole was covered rather than absent. ADR-0097 D1b removed the
+plan workspace's breadcrumb path as measured redundancy — correct about orientation, wrong about
+navigation — and **three Playwright suites failed at once** (`programme`, `multi-select`,
+`authoring-flow`), each on the same `getByRole('link', { name: 'Riverside' })` that had been the
+breadcrumb. D1b restores a two-crumb trail, which closes the user-facing regression and leaves this
+untouched.
+
+**What it is not.** It is not "the tree should navigate on every row" — expanding a branch is the
+right default for a container, and a row that both expands and navigates is a control with two
+meanings. The likely answer is that the row's **label** becomes a link while the row keeps its
+toggle, which is a change to a `treeitem`'s inner markup and to the roving-focus contract, so it
+wants the APG's _Developing a Keyboard Interface_ read alongside it (the ADR-0082 precedent) rather
+than a quick patch.
+
+**Blast radius if fixed:** every journey that reaches a client or project through `Clients` could
+then take the shorter route, so their locators would keep working; the risk is in the tree's own
+keyboard model, not in its consumers.
+
+## 144. `e2e-multi-select`'s focus assertion fails under sweep load and passes alone
+
+**Observed three times, 2026-08-19.** `multi-select.spec.ts:214` asserts that a bulk delete leaves
+focus on the activities listbox — a real assertion protecting a real defect (ADR-0080's gate pass
+found a bulk delete dropping focus to `<body>`, which is a WCAG 2.4.3 failure **and** silently
+disables Ctrl+Z, because the undo accelerator is a React `onKeyDown` on the workspace root).
+
+It fails whenever the suite runs inside `scripts/e2e-sweep.sh` and **passes every time the suite is
+run alone**. Verified by running it both ways on the same commit rather than inferred from a rerun.
+
+**The mechanism is a race the product wins with one frame of margin.** A native `<dialog>` restores
+focus to whatever held it when `showModal()` ran, from inside the effect that calls `close()` — i.e.
+_after_ the handler that asked for the listbox. `TsldPanel.tsx:674-679` therefore defers with a
+single `requestAnimationFrame`. Under sweep load — thirty-three suites in series, servers restarting
+between each — that one frame is not reliably after the dialog's restoration.
+
+**So the assertion is right and the wait is thin.** The fix is not to relax the assertion (it is the
+only thing standing between a planner and an unreachable undo) but to make the product's own wait
+robust: wait for the dialog's `close` event, or poll until `document.activeElement` is not `<body>`,
+rather than betting on frame ordering. Until then this costs triage time on every sweep, which is
+how a suite ends up being ignored.
+
+## 145. A hand-rolled `Combobox` takes the platform picker away on touch, and nobody has measured what that costs
+
+**Raised 2026-08-19**, blocking the last two conversions of ADR-0097 Landing F1.
+
+A native `<select>` gets the platform's own picker — the iOS wheel, the Android sheet. It is the
+single best mobile control in the product and it is free. `components/ui/combobox.tsx` gets an
+in-flow listbox competing with a virtual keyboard, and it is what F1's discriminator sends an
+unbounded option set to.
+
+**Two conversions are held on this and only on this.** `ActivityBreakdownField` (a plan's WBS
+summaries) and `WbsBulkAssignBar` (the same set, from the bulk bar) both clear the rule — a plan's
+summaries are bounded by nothing — and both live in the **activity editor**, which is reachable on a
+tablet. The cross-plan Activity picker was converted because that dialog is a desktop workspace
+flow; that is the whole of the distinction.
+
+**Why it is filed rather than judged.** The failure is silent: a converted picker looks correct on
+every desktop, and the only person who meets the worse control is on a device nobody tested. This is
+`#133` one surface along — that row records that **no toolbar measurement in this repository has
+ever been taken with a coarse pointer** because Playwright defaults to a fine one — but #133 is
+about control _sizing_ in the toolbar, and this is about whether a _whole control type_ is the right
+choice on touch. Different question, same blind spot.
+
+**What would settle it.** A coarse-pointer run of the activity editor with both controls
+(`hasTouch` + `pointer: coarse`, the shape `item-widths` used for #133), read by
+`accessibility-reviewer` and `ux-reviewer` **before** either conversion — `migration.md` F1 names
+that ordering and the reason for it. If the answer is that the combobox is worse on touch, the rule
+gains a clause rather than an exception: a searchable picker on a surface a touch user reaches needs
+a touch-appropriate presentation, not a desktop listbox.
+
+**Measured 2026-08-19** (`apps/web/measure-toolbar/combobox-coarse.spec.ts`, Chromium with
+`hasTouch: true` — which is what makes it report `pointer: coarse`, `any-hover: none` — at 1646 CSS
+px, the Surface Pro width ADR-0091's retrospective established this product is judged at). The two
+control types on **one screen**, so a difference cannot be the screen: the resource library's
+native `Kind` filter, and the New-resource dialog's hand-rolled `Group` picker.
+
+|                                      | native `<select>`                       | our `Combobox`                   |
+| ------------------------------------ | --------------------------------------- | -------------------------------- |
+| closed height                        | **36 px**                               | **36 px**                        |
+| clears WCAG 2.5.8 (24 px)            | yes                                     | yes                              |
+| clears the 44 px platform preference | no                                      | no                               |
+| open list                            | platform-rendered, unmeasurable in-page | 138 px, 13 % of the viewport     |
+| option height                        | —                                       | 32 px, every option clears 24 px |
+| covers its own field                 | —                                       | no (588 px of space below it)    |
+
+**On this evidence there is no coarse-pointer penalty to the two held conversions**, and the two
+controls are indistinguishable closed. What the run **cannot** answer is unchanged and is why this
+row is narrowed rather than closed: Chromium renders its own picker rather than the platform's, so
+how the iOS wheel or the Android sheet _feels_ against an in-flow listbox is still a judgement, and
+nothing here has been driven with a real virtual keyboard taking half the viewport. The 44 px line
+is missed by **both**, so it is a product-wide control-height question (`--control-h`), not a reason
+to prefer one type over the other.
+
+**The run found a live defect, which is the more useful half.** Its first two versions each produced
+a plausible number about nothing — `getByRole('combobox')` matches a native `<select>` (that is the
+element's implicit role), so version one measured the org switcher twice; and the listbox is
+deliberately always in the DOM (`hidden` when closed, so `aria-controls` always resolves), so
+version two read a closed box as `listHeight: 0`. Fixing both left `optionCount: 1`, and the harness
+now **throws rather than reporting a verdict it cannot justify** — the rule ADR-0097's closure
+measurement earned by producing a PROCEED out of an `undefined`. The cause was in the product:
+`CreateResourceButton` never passed `resources` to `ResourceFormDialog`, while `ResourcesTable`
+passed its list to the same component on the edit path — so **the create dialog's Group picker could
+only ever offer "No group (top level)"**, and a resource could not be filed into a group at the
+moment it was created, only by editing it afterwards. It rendered, it looked right, and no unit test
+covered the host. One correct pattern applied to one neighbour and not the other — the ADR-0064 §7
+shape, and the fifth epic running. Fixed with a regression test verified red first
+(`CreateResourceButton.test.tsx`).

@@ -1247,6 +1247,14 @@ model Activity {
   // schema/migration lock-step CI gate needs to be able to trust (TECH_DEBT #54). The
   // later partial-index siblings (resources.parent_id, calendars.project_id) got this
   // right from the start; this one has been brought into line with them.
+  // `idx_activities_plan_updated_at (plan_id, updated_at DESC) WHERE deleted_at IS NULL` lives in
+  // `20260818220000_overview_recently_changed_indexes` — raw SQL, because Prisma cannot express a
+  // partial predicate (TECH_DEBT #54, the `idx_activities_parent_id` precedent). The composite above
+  // CANNOT serve it: it is ordered by `created_at`, and the overview feed asks for the newest
+  // `updated_at` per plan. Measured before it shipped — 28.6 ms to 0.48 ms warm on a typical
+  // installation, 121.5 ms to 5.5 ms cold — and its write cost is real: HOT updates go to 0% on
+  // every path that stamps `updated_at`. The recalculation is exempt because `writeResults` does not
+  // touch that column, which is load-bearing: making it do so would make this index expensive.
   @@index([planId, createdAt, id])
   @@index([organizationId])
   @@map("activities")
@@ -1352,6 +1360,14 @@ model ActivityDependency {
   // and org-scoped IDOR loads. The partial delete_batch_id index (raw SQL, WHERE ...
   // IS NOT NULL) backs batch restore. A self-loop CHECK (predecessor_id <>
   // successor_id) and the lag-range CHECK are raw SQL in the migration.
+  // `idx_dependencies_plan_updated_at (plan_id, updated_at DESC) WHERE deleted_at IS NULL` lives in
+  // `20260818220000_overview_recently_changed_indexes` — raw SQL, because Prisma cannot express a
+  // partial predicate (TECH_DEBT #54, the `idx_activities_parent_id` precedent). The composite above
+  // CANNOT serve it: it is ordered by `created_at`, and the overview feed asks for the newest
+  // `updated_at` per plan. Measured before it shipped — 28.6 ms to 0.48 ms warm on a typical
+  // installation, 121.5 ms to 5.5 ms cold — and its write cost is real: HOT updates go to 0% on
+  // every path that stamps `updated_at`. The recalculation is exempt because `writeResults` does not
+  // touch that column, which is load-bearing: making it do so would make this index expensive.
   @@index([planId, createdAt, id])
   @@index([predecessorId])
   @@index([successorId])

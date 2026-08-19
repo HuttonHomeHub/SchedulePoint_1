@@ -19,10 +19,10 @@ floats, baselines, and resources — with a live critical path and collaborative
 browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
-> **Current stage: the application is substantially built.** 22 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 56 migrations, 989 web
-> source files with 33 flag-scoped Playwright suites beside the base journey, and
-> 96 ADRs.
+> **Current stage: the application is substantially built.** 23 API modules
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1025 web
+> source files with 34 flag-scoped Playwright suites beside the base journey, and
+> 98 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -105,10 +105,10 @@ SchedulePoint/
 │   │   ├── src/components/   #   Shared primitives (ui/) + app shell (layout/)
 │   │   └── e2e*/             #   Playwright suites — one per feature flag
 │   ├── api/                  # NestJS REST API (@repo/api)
-│   │   ├── src/modules/      #   22 feature modules
+│   │   ├── src/modules/      #   23 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (29 models) + 56 migrations
+│   │   ├── prisma/           #   Schema (29 models) + 57 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -262,8 +262,10 @@ documents (keep them authoritative):
 Essentials: feature-first structure; server state in TanStack Query; URL state
 in the router (TanStack Router); minimal client state; forms via RHF + Zod;
 styling via semantic tokens + Tailwind v4 + CVA, rebound per **surface scope**
-(ADR-0055). **Mobile-first,
-theme-aware (light/dark/system), and no one-off component styling — ever.** The
+(ADR-0055). **Mobile-first, and no one-off component styling — ever.** The product has
+**one theme**, declared at `:root` (ADR-0097) — light, dark and system were withdrawn,
+and the mechanism that would carry a future dark variant is kept live rather than
+deleted, so "never branch on theme in JS" still holds and still matters. The
 authenticated app is a **persistent app-shell** with a Client → Project → Plan
 **Project Explorer** navigator (ADR-0029); row actions use the hand-rolled APG
 `Menu` primitive (`components/ui/menu.tsx`) — never hover-only (see
@@ -2250,6 +2252,202 @@ progress` off the command surface because **an object action belongs on the obje
   §8's "edit supported" is still called **substantially** met rather than closed: the start-edge
   resize is deliberately absent (D4), and Gantt dependency arrows ship default-off.
 
+- **ADR-0096** _(Accepted; M0–M5 landed 2026-08-18, released `api-v0.50.0` / `web-v0.93.0`)_ —
+  Deleted work expires, and purge is refused structurally. Opened on three complaints about the
+  recycle bin — long and unstructured, an unhelpful "Restore its parent first", a duplicated
+  heading — and reading the code changed two of the three answers. A cascade stamps **one**
+  `delete_batch_id` across a subtree and `restoreBatch` is keyed on it, so most of those messages
+  described work the product **already does**: the list groups by deletion event and the message
+  disappears because the situation does, leaving only the case grouping cannot dissolve — a blocker
+  in a **different** batch — which now names it and offers a two-press restore. The requested
+  **purge is refused**, and structurally rather than by preference: its safeguard ("transfer purged
+  content to the Super Admin account") asks for exactly the reach ADR-0086 makes a **compile
+  error**, and the alternative of relaxing `audit_events`' `ENABLE ALWAYS` triggers was already
+  rejected by ADR-0085 D1. What the request was _for_ is served by **expiry** — nothing had ever
+  expired, which is why the list grows forever — making this the product's **first _aimable_ hard
+  delete of customer content** (interchange's rollback cannot be pointed at existing data). It
+  ships **off**, behind a retroactive 90-day clock and one release of notice, because an unawaited
+  sweep at boot means a single release cannot both preview and arm it.
+  **The load-bearing decision is that the expiry deletes by _ownership scope_, never by
+  `delete_batch_id`** (D5): the cascade leaves `resource_assignments` and
+  `cross_plan_dependencies` unstamped (`docs/TECH_DEBT.md` #139), so a batch-keyed delete passes on
+  a bare plan and violates a foreign key on exactly the plans that matter — resourced ones and
+  programme-linked ones. Proven against a real database with the negative control naming the
+  constraint. D7 records the spec's claim that `RESTRICT` forces level-order deletion as **false**,
+  refuted independently by two reviewers: the RI check is an `AFTER ROW` trigger evaluated at the
+  END of the statement, so a 40-deep WBS chain goes in one statement.
+  **The gate pass earned its place for the sixth epic running.** Six specialists; security passed
+  having re-derived the epic's own numbers from the code, the other five blocked on seven findings.
+  Three were measured rather than argued — Prisma does not chunk an `{ in: [...] }` list, so a
+  cascade over **16,384 activities** threw a bind-parameter error the catch block reported as "the
+  next tick will retry it", leaving the subtree permanently unexpirable, hourly, forever, under a
+  reassuring message. The arming switch itself was **inverted**: `z.coerce.boolean()` is
+  `Boolean(value)`, so `'false'` parsed to `true` and `.env.example` ships that exact line (D10).
+  A missing re-entrancy guard the sibling job carries deliberately; a budget bounding the big-batch
+  case and not the mirror one (100k ordinary deletions ≈ 17 minutes); focus dropped to `<body>` on
+  a dialog's Cancel/close/error paths, third instance of that class here; and all five delete
+  confirmations claiming a deadline that does not exist on an unarmed host — the epic's own honesty
+  rule failing one screen along from the screen that enforces it.
+  **Two more came from CI and both exposed the gate rather than the code.** `scripts/frontend-only.json`
+  still declared the finished gantt-editing epic active, so the first branch to legitimately change
+  `apps/api/` was refused on behalf of a parity argument that was not its own — a stale gate does not
+  go quiet, it goes **wrong about a different epic**. And the BASE Playwright journey still asserted
+  the pre-ADR-0096 screen, because `scripts/e2e-local.sh` mapped `web:<suite>` to
+  `test:e2e:<suite>` and the base is `test:e2e` with **no suffix** — the suite covering the shipped
+  default was the one thing the documented pre-push gate could not run. Both fixed, `web` added as a
+  target, and `docs/TESTING.md` gains the rule: change a screen, run the base journey.
+  **The CPM engine is not imported and the ADR-0034 recalculation parity gate is untouched** — in
+  its honest form: there is nothing here to hold parity for. Builds on ADR-0046/0072/0073/0085/0086/0087.
+
+- **ADR-0097** _(Accepted; A, B, D1, E, F landed 2026-08-19; C and D1's band merge WITHDRAWN on
+  measurement; D2 deferred out of the epic)_ — A theme is a
+  system, not a palette. The
+  product owner called the `.corporate` skin _"a badly designed skin"_ and asked for it to become
+  the theme the app is designed to, then widened the mandate three times — to layout and
+  typography, then to _"I remove all restraints"_, then to a single theme with the mechanism kept.
+  Reading the code turned the adjective into a work item: **a theme in this application can
+  structurally express nothing but colour.** All 117 of `.corporate`'s declarations are colours, and
+  `.dark`/`.corporate` declare **zero** non-colour tokens — so "designed" could only ever have meant
+  "recoloured", and every spacing, type, elevation and motion decision in the product is a literal
+  somewhere. **`--radius` is declared once, at `:root`**, which is the whole finding in one line.
+  **The single-theme answer does most of the work by making `:root` _be_ the theme block.** A
+  flash becomes structurally impossible rather than avoided: every stored value — `dark`, `light`,
+  `system`, garbage, or a throwing store — resolves to "stamp nothing", so `theme-boot.js` and
+  `use-theme.tsx` cannot disagree about what to paint because neither paints anything. The
+  mechanism stays **live rather than vestigial** (`THEME_SELECTORS` is a one-element list, `Theme`
+  stays a union, the boot script keeps running and keeps its test), and the cost of adding dark
+  back is stated rather than hand-waved: **a block of values and one entry** — ~110 declarations
+  against today's `.dark`'s ~117, so the new axes do not make it materially more expensive. The
+  caveat is not softened: choosing those values is a week of design judgement, and a dark diagram
+  whose colours carry meaning needs its plot separations **re-derived, not re-tinted**.
+  **Completeness stops being a count and becomes a property.** ADR-0055 §1's "complete (17 tokens)
+  or it is a trap" had been patched three times by three different people each finding a token
+  outside the family and adding it. The replacement rule: _the defect is never "a token is not
+  rebound" — it is a **pair whose two halves are governed by different scopes**_. The page becomes
+  an explicit `--page-*` family, `REBOUND_NAMES` is **computed by closure and asserted** rather
+  than authored, and `Card`/`Popover` become **resets** rather than exceptions — which closes a
+  **latent** split pair (`CardDescription`'s rebound `--muted-foreground` on an unbound `--card`).
+  Latent and verified so: it is compilable, one component move from real, and nothing would report
+  it.
+  **The diagram joins the design system**, which is ADR-0055's original defect surviving in the one
+  place ADR-0055 never reached: `resolveTsldPalette` resolves from `document.documentElement`, so a
+  bar's fill is the **page's** `--primary` painted on a ground that is not the page, and the
+  contrast matrix has **no canvas pair at all**. The canvas becomes a surface scope and the painter
+  does not change a line. **Scopes go 5 → 6**, and that line said 6 → 5 until 2026-08-19: the plan
+  was to retire `auth` on the ground that it existed only because ADR-0077 §2 had been applied to
+  half a screen. `migration.md` made that a **check rather than an assumption**, and the check
+  reversed it — measured, **15 of its 18 tokens differ from the page and 12 perceptibly**, led by a
+  focus ring ADR-0077 M7 derived specifically to clear WCAG 1.4.11. The theme collapse removes the
+  scope's original _reason_, not its _values_. Every "five scopes" in the epic's own documents was
+  corrected the day it was measured; this register was not, which is the ADR-0071 failure — noticing
+  and stepping over leaves the register exactly as wrong as not noticing. A gate is still
+  **deleted**: the cascade-trap assertion that exists only because a flag layer shadows a
+  theme-scoped one.
+  **The command surface is reshaped rather than fitted a fourth time.** `TOOLBAR_GROUPS` is already
+  `frame · lens · find · tools · object · output · help` — a **menu structure**; ADR-0031 designed
+  the menus and three epics rendered them as a row and made the row fit. Five menus, eight commands,
+  one band: the registry is untouched and the **renderer** replaced, deleting the label pass, the
+  band floors, the hysteresis, the `⋯` and `CHROME_RESIDUAL_PX`. It is **gated on its own
+  measurement with the falsification condition written first**: under 120 px of slack at 1646 and it
+  is withdrawn.
+  **One of the spec's own decision-bearing claims was stale and is corrected here rather than
+  carried**: it costed the reshape partly on `CHROME_RESIDUAL_PX` over-charging Row 2 by ~47 px, and
+  **ADR-0091 M7 had already fixed that** — the constant is `16` today, its docblock records
+  recovering the 44 px, and the over-charge it describes is the pre-M7 state. The reshape's case
+  therefore rests on the menu argument alone, which is the stronger half anyway. ADR-0076 Class 2
+  inside a document written for this epic — the same shape ADR-0080 recorded, found the same way,
+  by opening the file instead of trusting the sentence.
+  **Two findings arrived that nobody was looking for.** The product has **never decided a
+  typeface** — no `@font-face` anywhere, no font file in `public/`, and `globals.css:278` opens with
+  `'Inter'`, so the product's face is whatever the reader's machine happens to have and every width
+  measurement in this repository was taken in whichever one resolved there. That is the canvas
+  finding one layer along: a value that looks decided, is cited, and was never set. And the
+  single-theme promise dies quietly unless it is gated, so **no design token may be declared outside
+  a theme block or a scope-rebind block**, with a theme contract asserted for every selector — a
+  spacing scale hardcoded at `:root` being exactly how it would go.
+  Sequenced A–F around one question, _how soon can somebody look at a whole screen in the new
+  language_: **A** foundations (nearly all invisible), **B** the organisation landing page as the
+  first fully-realised screen, then **C** the command surface, **D** the workspace shape, **E** the
+  diagram, **F** the rest. **C is now WITHDRAWN on its own falsification condition** — the single
+  menu band measures 1619 px against a 1646 px container, **27 px of slack against the 120 px its
+  spec demanded** and 7 px at the worst point of the measured trigger spread, overflowing from 1440
+  down. The dominant term is the one §5 risk 2 named: a real plan name is **227 px**, and the
+  harness's first run used `Logic` at 37 px and reported 307 px of slack and a PROCEED. Two further
+  faults in that harness are recorded rather than tidied — triggers priced from "anything painting
+  text" (which sweeps in both halves of two segmented controls and a read-out), and a verdict
+  produced from an `undefined` because the edit adding the worst-case field silently failed to
+  apply, `undefined >= 120` being `false`: the right answer from a missing number. The gate now
+  throws when it has nothing to judge. **The diagnosis is not withdrawn, only the single-band answer
+  to it**, and it stands on the two of its four symptoms that survived verification — the other two
+  described behaviour ADR-0091 M7 had already fixed. Fourth consecutive epic whose width expectation
+  its own measurement contradicted, and the fourth in the same direction. **B's condition is not negotiable** — it is built from the archetypes,
+  never a bespoke layout that happens to look right, because a beautiful one-off on the flagship
+  screen would falsify this epic's thesis on its first outing. No new `VITE_` flag: ADR-0088
+  established that a `VITE_` constant is inlined at build time and is not an operator rollback, so
+  the rollback is a commit boundary. **The CPM engine is not imported and no migration runs.**
+  **The epic closed 2026-08-19 with two of its own proposals disproved by the instruments it
+  insisted on, which is what the method was for.** Beside C, **D1's band merge went the same way and
+  its evidence was a browser**: it shipped, and `e2e-gantt` then failed twice on the **view switch**
+  — the one control that moves a planner between the two views of their plan — reachable only
+  through an overflow menu at every width. Four shrink arrangements were measured and none fits the
+  header while keeping the four modes visible, because the identity wants ~1170 px against ~861 px
+  at 1280; the approving estimate had said 795 px and +250 px of slack. **Fifth** consecutive width
+  expectation contradicted by its own measurement. `aboveCanvas` returned to 240 px — the 45 px
+  given back exactly — and the product owner chose to leave it withdrawn. **D2 (the docked activity
+  editor) is deferred out of the epic** by the same decision: it is a workflow change, and ADR-0060's
+  per-scope save and unsaved-work guard are dialog-shaped, so it wants its own design pass.
+  **Landing F's lesson is that three quarters of it did not exist.** Its select conversion was
+  scoped at ~35 call sites and is **three**: the discriminator was written "server-paged", and
+  applying it to the first candidate showed all four of that dialog's pickers use `apiFetchAllPages`
+  — the opposite — so the rule would have left a 2,000-option `<select>` in place while reading as
+  decided; corrected to **unbounded by the data model**. Its row-action half was scoped at ~10 tables
+  "where `UX_STANDARDS.md` specifies the APG row menu", and that standard's subject is **dense list
+  and tree rows** while the named table already cited it as compliant; re-counted by subject-labelled
+  row actions rather than by `size="sm"` occurrences, **one** table was crowded. Each step needed a
+  count rather than a reading, and the estimate moved ten → two → one. F also found the drift class
+  **one layer in**: `account-chip.tsx`'s own docblock described a theme radio group "with four
+  themes" in a file with zero references to `useTheme` — not a document describing the code wrongly
+  but the code describing itself wrongly, where a reader is likeliest to trust it.
+
+- **ADR-0098** _(Accepted; M0–M5 landed 2026-08-19)_ — The landing is the organisation overview.
+  `/orgs/:slug` is where **every sign-in lands**, and it showed a centred card saying "Select a plan
+  from the Project Explorer" — a description of the rail one column away, answering neither question
+  a planner actually arrives with. It also carried a **second screen nobody had ever seen**: a
+  `VITE_NAV_TREE`-off branch reading "The schedule editor arrives in an upcoming update", roughly a
+  year after the editor shipped and unreachable in every published image (ADR-0088), deleted with
+  the flag rather than corrected. **Recently changed** is ordered by
+  `GREATEST(plan, newest activity, newest dependency)` — **not** `plans.updated_at`, which does not
+  move when an activity is edited, so the naive ordering ranks a plan somebody worked in all morning
+  below one whose name was corrected last week **and every row still looks correct**. Names resolve
+  through `org_members` and never through `users`: that join is the control, not a convenience, and
+  `changedBy` is a discriminated union (`MEMBER`/`FORMER_MEMBER`/`UNKNOWN`) because a nullable name
+  collapses two different facts into an absence a reader cannot tell from a defect.
+  **Sections and counts the caller may not read are OMITTED, never zeroed** — ADR-0082's "when every
+  item would be shaded, show no trigger at all" applied at **section** granularity, because a zero is
+  a fact about the organisation and an absence is a fact about the reader. **"Jump back in" stores
+  ids and never names**, which is what makes a rename correct itself and a plan the reader has lost
+  access to disappear rather than 404 on click; the key carries the user id and sign-out sweeps it,
+  since the query cache dies with the tab and `localStorage` does not; and the ids ride on the
+  request the screen already makes, **measured** by the journey rather than asserted. Its **four
+  failure modes are indistinguishable by design** (deleted / another organisation's / unreadable /
+  never real), with the API e2e comparing whole payloads rather than three empty arrays — an oracle
+  is a difference. The wordmark becomes the route home **at the header call site only**, never
+  inside `BrandMark`, which the public screens also render; "Overview" leaves the nav **after** the
+  page has content, and that sequencing is the decision. **No feature flag** (ADR-0088 D2's Class A
+  shape, plus D1's finding that a `VITE_` flag is not an operator rollback at all). Six dashboard
+  sections are rejected **by name**, including count tiles and an activity feed the audit log
+  permanently cannot back.
+  **The screen is assembled from the ADR-0097 archetypes and that is a gate**, verified red against
+  a hand-rolled frame. Two archetypes changed because it needed them to — `PageContainer` gained a
+  `narrow` measure (at the default, a plan's name and its change time sat ~800px apart at 1646) and
+  `SectionCard` became a named `<section>`, which arrived from the journey rather than a reviewer.
+  **Three of my own gates were defective and are recorded rather than quietly fixed**: one was
+  vacuous (it matched sign-in's description copy, not the wordmark, and passed against a real
+  injected link), the ADR-0097 weight ratchet was counting `font-medium` inside its own docblocks so
+  that writing down reasoning pushed it towards failing, and `forgetAllForUser` used
+  `Object.keys(storage)`, which works only because the Web Storage API happens to expose stored keys
+  as own properties. **The CPM engine is not imported and no migration runs.**
+
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
   alerts — turned out to need no principal at all (an alert is an outbound POST), but the question
@@ -2560,6 +2758,17 @@ When operating in this repo, Claude Code should:
     cost, a guarantee, a failure mode, "there is no oracle here", "this is not on
     the request path" — say what was **run or read** to establish it: the command,
     the file and line, or the test. Not a pointer to another document.
+
+- **Re-verify a spec's PROBLEM statement, not only its design.** A problem goes
+  stale in the one direction nobody checks: somebody fixes it and the document
+  keeps complaining. ADR-0097 Landing C's spec listed four symptoms and **two
+  were false**, both describing behaviour ADR-0091 M7 had already changed — plus
+  a deletion list naming two constants M7 had already removed, and a
+  `CHROME_RESIDUAL_PX` cost M7 had already recovered. Three stale claims in one
+  document, all from the same milestone, because **a milestone that fixes things
+  does not go back and edit the specs that complained about them**. Everything in
+  this process re-verifies the solution's citations; nothing was re-verifying the
+  problem's. See [`docs/DECISIONS.md`](docs/DECISIONS.md), 2026-08-19.
 
 - **The brief is not evidence.** A claim inherited from the task that started
   the work gets checked like any other. Both recorded instances of this

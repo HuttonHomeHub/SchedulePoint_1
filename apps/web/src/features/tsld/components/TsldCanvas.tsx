@@ -1,5 +1,5 @@
 import type { ActivityType, DependencyType } from '@repo/types';
-import { useEffect, useImperativeHandle, useMemo, useRef } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
 
 import {
   IDLE,
@@ -12,6 +12,7 @@ import {
   type LoeSpanStep,
   type Modifiers,
 } from '../interaction/gesture-machine';
+import { useCanvasSurface } from '../render/canvas-surface';
 import { cursorReadout } from '../render/cursor-readout';
 import type { GhostBar } from '../render/lenses';
 import { linkLegality } from '../render/link-legality';
@@ -665,14 +666,18 @@ export function TsldCanvas({
   // counter, one source of truth) bumps then; an effect below re-resolves `paletteRef` + repaints. The
   // rAF loop reads the ref, so no per-frame work and no stale closure.
   const themeVersion = useThemeVersion();
+  // The element whose scope the painter reads (ADR-0097 Landing E). Published as STATE by
+  // `CanvasSurfaceProvider`, so this re-renders exactly once when the diagram's `<Surface>` mounts
+  // and the palettes below re-resolve against the diagram's ground instead of the page's.
+  const canvasSurface = useCanvasSurface();
   const paletteRef = useRef<TsldPalette | null>(null);
-  paletteRef.current ??= resolveTsldPalette();
+  paletteRef.current ??= resolveTsldPalette(canvasSurface);
   // The resource-strip layer (Stage E, ADR-0049): its own re-resolved palette (Canvas 2D can't take a
   // `var()`), the sibling band `<canvas>`, the published data snapshot (a ref — no per-frame React),
   // and a **separate** dirty flag set by DATA changes (picker/bucket/refetch/theme) so a strip-only
   // change never repaints the main scene. All inert when the strip is inactive (the parity gate).
   const stripPaletteRef = useRef<ResourceStripPalette | null>(null);
-  stripPaletteRef.current ??= resolveResourceStripPalette();
+  stripPaletteRef.current ??= resolveResourceStripPalette(canvasSurface);
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const interactionCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -684,7 +689,7 @@ export function TsldCanvas({
   // never repaints the scene), plus the last frame's placed bars for the hit-test. All inert when
   // the band is off, which is the parity path.
   const wbsBandPaletteRef = useRef<WbsBandPalette | null>(null);
-  wbsBandPaletteRef.current ??= resolveWbsBandPalette();
+  wbsBandPaletteRef.current ??= resolveWbsBandPalette(canvasSurface);
   const wbsBandCanvasRef = useRef<HTMLCanvasElement>(null);
   const wbsBandDirtyRef = useRef(true);
   const wbsBandBarsRef = useRef<readonly WbsBandBar[]>([]);
@@ -1551,17 +1556,26 @@ export function TsldCanvas({
 
   // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
   // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).
-  useEffect(() => {
-    paletteRef.current = resolveTsldPalette();
-    // Re-resolve the strip palette on the SAME theme bump so the demand bars track light/dark like the
+  // **`useLayoutEffect`, not `useEffect`, and keyed on the surface as well as the theme**
+  // (ADR-0097 Landing E). The `??=` bootstrap above runs during the FIRST render, when the
+  // provider's state is still null and `useCanvasSurface` therefore falls back to the page — so
+  // something has to re-resolve once the diagram's `<Surface>` has mounted. A passive effect would
+  // let the rAF loop paint page colours first; a layout effect runs before the browser paints.
+  //
+  // Keying on `themeVersion` alone would not do it: ADR-0097 §1.5a collapsed the product to one
+  // theme, so that counter never bumps again and a missed first pass would have no second chance
+  // for the life of the mount.
+  useLayoutEffect(() => {
+    paletteRef.current = resolveTsldPalette(canvasSurface);
+    // Re-resolve the strip palette on the SAME bump so the demand bars track the scope like the
     // main painter (Canvas 2D `fillStyle` can't take a `var()`); mark the strip dirty so it repaints.
-    stripPaletteRef.current = resolveResourceStripPalette();
-    wbsBandPaletteRef.current = resolveWbsBandPalette();
+    stripPaletteRef.current = resolveResourceStripPalette(canvasSurface);
+    wbsBandPaletteRef.current = resolveWbsBandPalette(canvasSurface);
     dirtyRef.current = true;
     interactionDirtyRef.current = true;
     stripDirtyRef.current = true;
     wbsBandDirtyRef.current = true;
-  }, [themeVersion]);
+  }, [themeVersion, canvasSurface]);
 
   // The idle-hover affordance writes an INLINE cursor ('ew-resize'), which beats the class-based
   // busy cursor. Clear it the moment a write starts: the hover branch only re-runs on the next

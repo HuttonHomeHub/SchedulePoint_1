@@ -5,12 +5,17 @@ import { defineConfig, devices } from '@playwright/test';
  * It boots the shell once per theme — a thing the shared `e2e` project cannot express, since the
  * theme is chosen before first paint — and scans each for WCAG violations.
  *
- * `VITE_DESIGNED_CHROME` is pinned **false** below. It used to be absent, because off was the
- * default; since the S5-T4 flip it has to be explicit, and the suite's job changed with it. This
- * is now the **rollback-parity** suite: it proves that turning the epic off still leaves an
- * accessible app in all four themes. `playwright.designed-chrome.config.ts` is its flag-ON
- * sibling and covers the shipped default. Both run in CI; deleting either would leave one side
- * of the rollback contract unproven.
+ * `VITE_DESIGNED_CHROME` is pinned **false** below, and what that pin now proves is narrower
+ * than it was. It used to be a rollback-parity suite covering STRUCTURE and COLOUR across four
+ * themes: the flag carried token values in a `[data-designed-chrome]` layer (ADR-0055 §6), so
+ * flag-off painted a different palette as well as a different shell.
+ *
+ * **ADR-0097 removed both halves of that.** There is one theme, so there are no longer four to
+ * parametrise over, and the flagged value layers are folded into the theme block — so flag-off
+ * and flag-on paint the same colours by construction and the colour half of the contract has
+ * nothing left to assert. What survives is worth keeping and is stated rather than implied: the
+ * flag still selects a SHELL, and this suite proves that shell is accessible.
+ * `playwright.designed-chrome.config.ts` is its flag-ON sibling and covers the shipped default.
  *
  * Chromium only (TECH_DEBT #25a), serial (each test onboards its own org).
  */

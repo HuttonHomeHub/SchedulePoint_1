@@ -2,10 +2,23 @@ import { cn } from '@/lib/utils';
 
 type DivProps = React.HTMLAttributes<HTMLDivElement>;
 
+export interface CardProps extends DivProps {
+  /**
+   * The element to render. Defaults to `div`. `SectionCard` passes `section` so that, paired with
+   * an `aria-labelledby`, each titled section becomes a named `region` a screen-reader user can
+   * jump to — a card on its own is not a landmark and must not become one by default.
+   */
+  as?: React.ElementType;
+}
+
 /** Surface container. Composes with the header/title/content/footer parts. */
-export function Card({ className, ...props }: DivProps): React.ReactElement {
+export function Card({
+  className,
+  as: Component = 'div',
+  ...props
+}: CardProps): React.ReactElement {
   return (
-    <div
+    <Component
       className={cn(
         'border-border bg-card text-card-foreground rounded-lg border shadow-sm',
         className,
@@ -41,13 +54,30 @@ export function CardHeader({ className, ...props }: DivProps): React.ReactElemen
  * a card that was already fine — which is why it belongs on the primitive rather than on the two
  * screens that happened to be measured.
  */
-export function CardTitle({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLHeadingElement>): React.ReactElement {
+export interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
+  /**
+   * The heading rank this title takes. **Defaults to 1**, which is not the obvious choice and is
+   * the one that matters.
+   *
+   * ADR-0097's plan proposed defaulting to 2, so a section card would not claim the page heading.
+   * The component review measured what that costs: `CardTitle` rendered `<h1>` and **eleven** call
+   * sites depended on it — `auth-shell.tsx` (sign-in, sign-up, password reset: the front door) and
+   * every branch of `AcceptInvitationCard`. Defaulting to 2 turns all of them into an `<h2>` on a
+   * page with **no `<h1>` at all**: a WCAG 1.3.1 / 2.4.6 regression on the screens where a stranger
+   * meets the product, which nothing would fail to compile over.
+   *
+   * So the default stays 1 and `SectionCard` passes `level={2}` explicitly — a section heading is
+   * an `<h2>` because the archetype says so, not because every consumer remembered. Pinned by
+   * `card.test.tsx`.
+   */
+  level?: 1 | 2 | 3;
+}
+
+export function CardTitle({ className, level = 1, ...props }: CardTitleProps): React.ReactElement {
+  const Heading = `h${level}` as const;
   return (
     // eslint-disable-next-line jsx-a11y/heading-has-content -- content is supplied by consumers via children
-    <h1
+    <Heading
       className={cn('text-xl leading-tight font-semibold tracking-tight wrap-anywhere', className)}
       {...props}
     />

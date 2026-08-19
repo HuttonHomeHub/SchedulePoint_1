@@ -43,7 +43,7 @@ export function GanttRuler({ anchorIso, widthPx, pxPerDay }: GanttRulerProps): R
           style={{ left: tick.x }}
         >
           {tick.major ? (
-            <span className="text-muted-foreground pointer-events-none absolute top-1 left-1 text-[10px] whitespace-nowrap">
+            <span className="text-muted-foreground text-micro pointer-events-none absolute top-1 left-1 whitespace-nowrap">
               {tick.label}
             </span>
           ) : null}

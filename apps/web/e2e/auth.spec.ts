@@ -39,8 +39,13 @@ test.describe('Authentication journey', () => {
     await page.getByRole('button', { name: /create organisation/i }).click();
 
     // Lands in the new organisation, which is now the active org in the switcher.
+    //
+    // The landing is the organisation OVERVIEW (ADR-0098), so its `<h1>` is the organisation's own
+    // name — it was 'Welcome to SchedulePoint' until that screen was replaced. Asserting the name
+    // is strictly better than asserting a fixed string: it proves the page resolved THIS
+    // organisation rather than merely rendering something.
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
-    await expect(page.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: orgName })).toBeVisible();
     await expect(page.getByLabel('Active organisation')).toHaveValue(orgSlug);
 
     // Sign out lives in the account chip's menu (ADR-0055 S1) — the header no longer carries a
@@ -57,6 +62,6 @@ test.describe('Authentication journey', () => {
     await page.getByRole('button', { name: /sign in/i }).click();
 
     await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
-    await expect(page.getByRole('heading', { name: 'Welcome to SchedulePoint' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: orgName })).toBeVisible();
   });
 });

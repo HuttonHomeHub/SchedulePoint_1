@@ -7,7 +7,7 @@ import { resolvePrintPalette, resolveTsldPalette } from './palette';
  * `docs/specs/export-print/`): a printed/exported diagram's title `ink` and subtitle `mutedInk` must
  * clear 4.5:1 against the paper `ground`, so the self-describing title band stays legible on white
  * (a11y review S5; mirrors the `render/lenses.test.ts` contrast-assertion pattern). In jsdom the tokens
- * aren't loaded, so `resolvePrintPalette()` returns its documented light fallbacks — exactly the values
+ * aren't loaded, so `resolvePrintPalette(document.documentElement)` returns its documented light fallbacks — exactly the values
  * `PrintSurface.css` is pinned to — which is what this asserts on.
  */
 describe('resolvePrintPalette — title/subtitle ink contrast on paper (WCAG 1.4.3)', () => {
@@ -28,7 +28,7 @@ describe('resolvePrintPalette — title/subtitle ink contrast on paper (WCAG 1.4
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
   };
 
-  const palette = resolvePrintPalette();
+  const palette = resolvePrintPalette(document.documentElement);
 
   it('title ink clears 4.5:1 on the paper ground', () => {
     expect(contrast(palette.ink, palette.ground)).toBeGreaterThanOrEqual(4.5);
@@ -46,21 +46,21 @@ describe('resolvePrintPalette — title/subtitle ink contrast on paper (WCAG 1.4
 // ── Grab-handle two-tone entries (ADR-0052 M3 discoverability fix) ───────────────────────────
 describe('lag-handle palette entries (outline core / handleHalo ring)', () => {
   it('resolveTsldPalette resolves the halo (documented jsdom fallback)', () => {
-    const palette = resolveTsldPalette();
+    const palette = resolveTsldPalette(document.documentElement);
     expect(palette.handleHalo).toBe('#161a22'); // --color-card fallback
     // The core/halo pair must be two distinct colours — the ring is what makes the disc read.
     expect(palette.handleHalo).not.toBe(palette.outline);
   });
 
   it('resolvePrintPalette carries a LIGHT fallback for the same entry (total contract)', () => {
-    expect(resolvePrintPalette().handleHalo).toBe('#ffffff');
+    expect(resolvePrintPalette(document.documentElement).handleHalo).toBe('#ffffff');
   });
 });
 
 // ── Bar visual refresh palette entries (ADR-0052 M4) ─────────────────────────────────────
 describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   it('resolveTsldPalette resolves the refresh entries (documented jsdom fallbacks)', () => {
-    const palette = resolveTsldPalette();
+    const palette = resolveTsldPalette(document.documentElement);
     // jsdom serves no tokens, so the documented fallbacks come back — the entries are total.
     expect(palette.barStroke).toBe('#2a2f3a'); // --color-border fallback
     expect(palette.hoverRing).toBe('#7a8090'); // --color-muted-foreground fallback
@@ -69,7 +69,7 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   });
 
   it('resolvePrintPalette carries LIGHT fallbacks for the same entries (total contract)', () => {
-    const palette = resolvePrintPalette();
+    const palette = resolvePrintPalette(document.documentElement);
     expect(palette.barStroke).toBe('#e5e7eb');
     expect(palette.hoverRing).toBe('#6b7280');
   });
@@ -78,7 +78,7 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
 // ── Time-axis gridline tier palette entries (F5, `VITE_CANVAS_TIME_AXIS`) ────────────────
 describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineYear)', () => {
   it('resolveTsldPalette resolves all three tiers (documented jsdom fallbacks), distinct from each other', () => {
-    const palette = resolveTsldPalette();
+    const palette = resolveTsldPalette(document.documentElement);
     expect(palette.gridLineDay).toBe('#565c6a');
     expect(palette.gridLineMonth).toBe('#2a2f3a');
     expect(palette.gridLineYear).toBe('#9098ab');
@@ -91,7 +91,7 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
   });
 
   it('resolvePrintPalette carries LIGHT fallbacks for the same three tiers (total contract)', () => {
-    const palette = resolvePrintPalette();
+    const palette = resolvePrintPalette(document.documentElement);
     expect(palette.gridLineDay).toBe('#f5f6f8');
     expect(palette.gridLineMonth).toBe('#bcc2ca');
     expect(palette.gridLineYear).toBe('#8b93a1');
@@ -109,8 +109,8 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
         parseInt(clean.slice(4, 6), 16)
       );
     };
-    const dark = resolveTsldPalette();
-    const print = resolvePrintPalette();
+    const dark = resolveTsldPalette(document.documentElement);
+    const print = resolvePrintPalette(document.documentElement);
     // A gap that reads clearly on screen — comfortably above the old ~1.1:1 case (channel-sum
     // delta of roughly 16 there vs. the much larger gaps asserted below).
     expect(Math.abs(channelSum(dark.gridLineDay) - channelSum(dark.gridLineMonth))).toBeGreaterThan(
@@ -125,13 +125,13 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
 // ── Non-working hatch palette entry (F7a, `VITE_CANVAS_TIME_AXIS`) ──────────────────────
 describe('non-working hatch stripe ink (nonWorkingHatch)', () => {
   it('resolveTsldPalette resolves a distinct hatch colour from the wash it draws over (documented jsdom fallback)', () => {
-    const palette = resolveTsldPalette();
+    const palette = resolveTsldPalette(document.documentElement);
     expect(palette.nonWorkingHatch).toBe('#454b58');
     expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
   });
 
   it('resolvePrintPalette carries a LIGHT fallback for the same entry, also distinct from its wash', () => {
-    const palette = resolvePrintPalette();
+    const palette = resolvePrintPalette(document.documentElement);
     expect(palette.nonWorkingHatch).toBe('#c7c7c7');
     expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
   });
@@ -140,20 +140,20 @@ describe('non-working hatch stripe ink (nonWorkingHatch)', () => {
 // ── Today pill ink palette entry (F6b, `VITE_CANVAS_TIME_AXIS`) ─────────────────────────
 describe('today marker pill ink (todayInk)', () => {
   it('resolveTsldPalette pairs todayInk with today the same way labelInsideCritical pairs with critical', () => {
-    const palette = resolveTsldPalette();
+    const palette = resolveTsldPalette(document.documentElement);
     expect(palette.todayInk).toBe('#ffffff'); // --color-destructive-foreground fallback
     expect(palette.todayInk).toBe(palette.labelInsideCritical);
   });
 
   it('resolvePrintPalette carries the same LIGHT fallback (total contract)', () => {
-    expect(resolvePrintPalette().todayInk).toBe('#ffffff');
+    expect(resolvePrintPalette(document.documentElement).todayInk).toBe('#ffffff');
   });
 });
 
 // ── Data-date marker pair (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1) ─────────
 describe('data-date marker pair (dataDate / dataDateInk)', () => {
   it('resolveTsldPalette resolves the pair (documented jsdom fallbacks), distinct from today/bar/selection', () => {
-    const palette = resolveTsldPalette();
+    const palette = resolveTsldPalette(document.documentElement);
     expect(palette.dataDate).toBe('#e6e8ee'); // --color-foreground fallback
     expect(palette.dataDateInk).toBe('#161a22'); // --color-background fallback
     // CQ-1's whole point: the data-date hue must not collide with an existing MARK. `--color-info`
@@ -170,7 +170,7 @@ describe('data-date marker pair (dataDate / dataDateInk)', () => {
   });
 
   it('resolvePrintPalette carries LIGHT fallbacks for the pair, same distinctness (total contract)', () => {
-    const palette = resolvePrintPalette();
+    const palette = resolvePrintPalette(document.documentElement);
     expect(palette.dataDate).toBe('#1a1a1a');
     expect(palette.dataDateInk).toBe('#ffffff');
     expect(palette.dataDate).not.toBe(palette.today);
@@ -182,9 +182,9 @@ describe('data-date marker pair (dataDate / dataDateInk)', () => {
     // The pill's legibility rides the same guarantee todayInk gives the Today pill: the pair is
     // two halves of ONE token pairing (foreground on background), never two independent picks —
     // so the two invert together per theme and the label always reads on its own fill.
-    const dark = resolveTsldPalette();
+    const dark = resolveTsldPalette(document.documentElement);
     expect(dark.dataDateInk).not.toBe(dark.dataDate);
-    const print = resolvePrintPalette();
+    const print = resolvePrintPalette(document.documentElement);
     expect(print.dataDateInk).not.toBe(print.dataDate);
     // In the print resolver the pairing is literal: the pill ink IS the paper ground the export
     // lays behind the diagram, exactly as the fill IS the title ink.

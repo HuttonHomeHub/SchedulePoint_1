@@ -1,0 +1,1092 @@
+# The design — a vocabulary, its rules, and what each part is for
+
+> This is the design, not a mood board. Every part below exists to remove a decision from a call
+> site. Where a part would only make something prettier, it is not here.
+
+---
+
+## 0. The premise, in one paragraph
+
+The token layer answers exactly one question — _"what colour is this?"_ — and it answers it in
+exactly one dimension — _"which surface am I on?"_. That was the right size for a clients →
+projects → plans shell. The product it now has to dress is a Canvas-2D time-scaled logic diagram, a
+virtualized Gantt, a 32-stop command surface that must fit at 1646 CSS px, a four-tab activity
+editor with per-scope permissions, WBS bands, two libraries, an audit log, a staff console and six
+public screens. **The rewrite adds three axes and one surface**, and changes nothing that already
+works.
+
+| Axis                          | Today                                                     | After                                                                  |
+| ----------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Colour**, scoped by surface | 5 scopes × 18 tokens × 3 themes. Works. Gated.            | **6** scopes × **31** tokens × 1 theme + **role packs** (§1.4)         |
+| **Metric**, scoped by density | Does not exist. Five disagreeing constants in five files. | `[data-density]`, the `[data-surface]` mechanism reused                |
+| **Type**, two ramps           | One ramp, top unused, data half absent                    | A prose ramp with a top, and a **data ramp** that owns tabular figures |
+| **Meaning on the diagram**    | Borrowed from the page, ungated                           | A validated family, its own separation matrix, its own geometry tokens |
+
+---
+
+## 0.5 One theme — and the mechanism that survives it
+
+**Product owner, 2026-08-18:** _"if it's easier remove the light dark and system theme and just have
+the corporate. We can revisit light and dark at a later date once we have corporate pinned as this is
+what matters most."_ And, on the mechanism: _**"keep the mechanism, just remove the themes"**_.
+
+This is the largest simplification in the epic and it arrived after most of it was designed, so what
+follows is what it **dissolves**, checked rather than assumed, and what it **must not** dissolve.
+
+### 0.5.1 What it dissolves
+
+| Dissolved                                                                            | Was                                                                            |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `.dark`'s ~117 declarations, and their maintenance on every future value change      | `globals.css:278-482`                                                          |
+| Two of the three sweeps in the contrast matrix                                       | `token-contrast.test.ts:155` — 3 themes × 2 flag states × 5 scopes             |
+| ~~The `auth` scope, entirely — 18 tokens~~ **WITHDRAWN — measured, it stays** (§1.4) | The theme collapse removes its **original** reason, not its **values**         |
+| ADR-0077 §2's theme-invariance argument for `brand`                                  | `brand` survives on the ordinary ADR-0055 argument: navy panel, off-white page |
+| Every "which theme is this bad in?" negotiation on every colour                      | The reason the palette reads as compromised rather than chosen                 |
+| The theme picker in the account menu                                                 | `account-chip.tsx:197` — a picker with one entry is a lit-but-inert control    |
+
+Token maintenance drops from **5 families × 18 × 3 themes + packs** to **6 families × 31 × 1 +
+packs** — 270 declarations becoming 174, so a little under two thirds rather than "a third of the
+surface", and every value in it is now chosen for one target and can be chosen well.
+
+> **Both multipliers changed after this paragraph was written, and the corrected figure is above
+> (re-derived from `globals.css`, 2026-08-19).** `auth` was measured and stays, so it is six
+> families and not five; and §1.5's closure grew a family from 18 names to **31** — the thirteen
+> status fills — which is visible in the shipped `chrome` rebind block at `globals.css:496-532`.
+> **The saving is real and it is half what this paragraph originally claimed.** What it bought is
+> the reason it shrank less: six live WCAG 1.4.11 failures on the navy scopes that nobody had
+> raised (`closure-measurement.md` §2).
+
+**The two flagged value layers go with it.** `[data-designed-chrome]` and
+`[data-canvas-visual-language]` exist to hold Light's and Dark's chrome and Corporate's canvas
+separately (`globals.css:856-1016`), and `token-architecture.test.ts:202-221` gates a cascade trap
+that only exists because a global layer shadows a theme-scoped one. With one theme both layers fold
+into it and that gate becomes unnecessary — **the first gate this epic retires rather than adds.**
+
+### 0.5.2 The mechanism stays working, not vestigial
+
+The decision is _remove the themes, keep the ability to have themes_. Concretely:
+
+- **`:root` is the theme block**, and it holds Corporate. Not `.corporate` — the default theme needs
+  no stamping, which makes a flash **structurally impossible** rather than merely avoided: if
+  `localStorage` throws, if the boot script never runs, if JavaScript is disabled, the page still
+  paints a complete theme.
+- **`theme-boot.js` keeps running, keeps reading, keeps validating, keeps its test.** It resolves to
+  the default every time today and stamps nothing. It is exercised on every load, so it cannot rot —
+  which is the difference between a live mechanism and a vestigial one.
+- **`THEME_SELECTORS` becomes a one-element list**, not a hardcoded path. `themeTokens()`,
+  `blockBody()`, the matrix's `describe.each` and the completeness sweep are all already
+  parameterised by selector (`test/css-blocks.ts:58-68`) and stay that way.
+- **`Theme` stays a union type** with one member. `type Theme = 'corporate'` typechecks identically
+  and stays extensible; collapsing it to a literal or deleting it is the thing that would make the
+  next theme a re-architecture.
+
+### 0.5.3 The new axes are themeable by the same mechanism — and this is the part most easily lost
+
+The warning is exactly right: it is very easy to declare a spacing scale at `:root` "because there is
+only one theme" and discover a year later that it was never theme-able. Under this design that
+mistake is **impossible to make quietly**, because `:root` **is** the theme block. There is nowhere
+else to put a value.
+
+So the gate generalises from colour to every kind:
+
+> **The theme contract** — the full set of token names a theme block must declare: 5 surface families
+> × 18, plus the `PLOT` and `GROUND` packs, plus the metric set, the type ramp, the elevation set and
+> the motion set. `token-architecture.test.ts` asserts every selector in `THEME_SELECTORS` declares
+> the whole contract. Today one selector satisfies it; tomorrow two must, and the gate names every
+> token the second one forgets.
+
+Plus one structural assertion that keeps it honest: **no design token may be declared outside a theme
+block or a scope-rebind block.** That is what stops a `--gutter-page: 24px` appearing in a component
+file, or in an `@theme inline` default, where no future theme could reach it.
+
+### 0.5.4 What adding a designed dark variant would cost — the sentence
+
+> **A block of values and one entry in `THEME_SELECTORS`.**
+
+Long form, because the product owner is relying on this: one `[data-theme='dark'] { … }` block
+declaring the theme contract (~110 declarations under this design, against ~117 for today's `.dark` —
+so **the axes I am adding do not make it materially more expensive**); one entry in
+`THEME_SELECTORS`; one branch restored in `theme-boot.js` (which is still running and still tested,
+so the branch is an `if`, not an archaeology exercise); one entry back in the account menu; and the
+contrast matrix sweeps two selectors instead of one, **naming every pair that fails**.
+
+**The honest caveat, and it is not plumbing.** Choosing good dark values is design work and this
+sentence does not price it — a dark variant of a canvas whose colours carry meaning needs its plot
+separations re-derived, not re-tinted. The _mechanism_ is a block and a line; the _design_ is a
+week's judgement. Saying otherwise would be the kind of claim this register exists to catch.
+
+### 0.5.5 A user who has already stored `dark`, `light` or `system`
+
+The one failure mode this area has is that `theme-boot.js` and `use-theme.tsx` are two
+implementations of one rule with no compiler relationship, and they disagree **before first paint**,
+where nothing catches it. So this is specified rather than left to fall out.
+
+| Stored value                      | Boot script                                               | React provider         | Result              |
+| --------------------------------- | --------------------------------------------------------- | ---------------------- | ------------------- |
+| `null` (never chose)              | validates → not in `Theme` → default → **stamps nothing** | same rule, same answer | Corporate, no flash |
+| `'dark'` / `'light'` / `'system'` | validates → not in `Theme` → default → **stamps nothing** | same rule, same answer | Corporate, no flash |
+| `'corporate'`                     | validates → is the default → **stamps nothing**           | same rule, same answer | Corporate, no flash |
+| garbage                           | as above                                                  | as above               | Corporate, no flash |
+| `localStorage` throws             | catch → default → stamps nothing                          | catch → default        | Corporate, no flash |
+
+**Every row resolves to "stamp nothing", and `:root` is Corporate — so the two implementations cannot
+disagree about what to paint, because neither of them paints anything.** That is a stronger guarantee
+than making them agree; it removes the class of failure rather than testing for it. The cross-file
+seam gate still ships (it is what protects the _next_ theme), and it is **verified red first** by
+changing one of the two rules.
+
+**The stale key is removed once, on first mount, by the provider — not by the boot script**, which
+must stay side-effect-free before paint. Idempotent, unobservable.
+
+**Removed rather than ignored, and the reason is a decision:** a stored preference for a theme that
+does not exist is a fact about the past. Leaving it means that the day a designed dark variant ships,
+users who chose dark in 2026 are silently switched into a theme they have never seen, at a moment
+nobody expects. Dark will be a **new** design; opting into it should be a choice.
+
+### 0.5.6 What removing dark actually costs users, said plainly
+
+Dark mode is an accommodation for some people — light sensitivity, migraine, low-light working — not
+only a preference. It is not a WCAG 2.2 AA failure and it is the product owner's call, which they
+have made. What this design owes in return is that §0.5.4's sentence stays true, and §0.5.3's gate is
+what keeps it true. **If a future reader finds that adding dark back is expensive, the failure will
+be a token declared outside a theme block, and that gate is the thing that was supposed to prevent
+it.**
+
+---
+
+## 1. Surface scopes — keep the mechanism, add the diagram
+
+### 1.1 What is not changing, and why that matters
+
+ADR-0055's mechanism is correct and stays, unamended in substance:
+
+- one semantic vocabulary rebound per surface by `[data-surface]`;
+- the families are **absent from `@theme inline`**, so `bg-chrome` does not compile and `<Surface>`
+  is the only route in (`surface-seams.structural.test.ts`);
+- `@theme inline` is load-bearing and is pinned (`token-architecture.test.ts:104-110`);
+- a family is **complete or it is a trap**;
+- portals leave every scope, so overlays paint on `--popover`;
+- **`--card` is deliberately not a rebound name**, so a `Card` means the same thing everywhere
+  (`docs/DESIGN_SYSTEM.md:283-285`). **The promise is kept; the mechanism changes** — §1.5(c) makes a
+  Card a _reset_ rather than an exception, because as an exception it is currently a split pair.
+- **no descendant learns where it is.** This is the property everything else rests on.
+
+I am not proposing a replacement mechanism, and I want to be explicit about why, because the mandate
+says "blank canvas". A React `SurfaceContext` that components branch on, a per-surface CVA variant
+matrix, and per-theme component overrides were all considered and rejected **by ADR-0055's own
+Alternatives section, with reasons that have not changed** — and one of them (the variant matrix)
+gets strictly worse with a sixth surface. Reopening a decision that is right, gated and load-bearing
+would spend the epic's budget on a rewrite that produces the same file.
+
+### 1.2 The sixth scope: `canvas`
+
+**`SurfaceTone` gains `'canvas'`, and `resolveTsldPalette` reads its element rather than
+`document.documentElement`.**
+
+The argument, against ADR-0077 §1's five conditions — which is the bar this repository set for a new
+scope and which a proposal must be measured by:
+
+| condition                                                                    | verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. The region keeps the semantic names and changes what they resolve to      | **Yes, and this is the whole trick.** `palette.ts` keeps reading `--color-primary`, `--color-destructive`, `--color-warning`, `--color-foreground`, `--color-muted-foreground`, `--color-ring`. Not one line of the painter changes. Only the element passed to `getComputedStyle` does.                                                                                                                                                                   |
+| 2. The fill is chosen for a reason the page's fill structurally cannot serve | **Yes.** The diagram's ground is a working surface, not a document surface — Corporate already gives it a warm value behind a flag (`globals.css:1014`) and **CQ-A is answered: a quiet ground**, now one set of values rather than three, landing in Landing E. More importantly, its inks must be validated **against that ground and against each other**, which the page family structurally cannot do because it is validated against `--background`. |
+| 3. The family can be complete and every pair clears its bar by computation   | **Yes — and it is the reason to do it.** `diagnosis.md` §3.3 shows five pairs nothing computes today, two of which land below any floor anyone would set.                                                                                                                                                                                                                                                                                                  |
+| 4. At least one real consumer on the day it lands                            | **Five.** `resolveTsldPalette`, `resolveWbsBandPalette`, `resolveLensPalette`, `resolveResourceStripPalette`, and the Gantt's chart region (DOM).                                                                                                                                                                                                                                                                                                          |
+| 5. It goes through `<Surface>`                                               | **Yes**, and it is the condition that made this design work: the diagram container already exists as a `div` painted `bg-canvas`. It becomes `<Surface tone="canvas">`, and `resolveTsldPalette(root)` — whose signature **already takes an `Element`** (`palette.ts:12`) — is handed that node.                                                                                                                                                           |
+
+**Three consequences fall out for free, which is the test of a mechanism.**
+
+- The Gantt's chart area takes `tone="canvas"` too. One drawing ground, one grid vocabulary, one bar
+  palette, in both views of the same plan. That is ADR-0059's "the time axis is shared, not
+  reimplemented" applied one level up: **the drawing surface is shared, not reimplemented.**
+
+  > **Corrected at L4-2: there is no "chart area" to wrap.** The Gantt's chart is a per-row
+  > `<div role="gridcell">` at the end of each row (`GanttPanel.tsx`, the last cell before the row
+  > closes), not a container beside the grid — so the only things this sentence could name are N of
+  > them, one per rendered row. Wrapping those would put a bar inside the scope and the row
+  > background it sits on outside it: **a pair split across two scopes**, which is exactly what
+  > §1.5's closure defines as the defect and exists to prevent. So the scope wraps the whole
+  > scrolling panel, and that is the correct answer rather than the convenient one — the split is
+  > the trap. Nothing visible moves beyond the critical bar, because 30 of the 31 `--plot-*` members
+  > alias the page and the ground is 1.02:1 from it; what it buys is that every pair the panel can
+  > composite is now swept by the matrix under the `canvas` scope, and none of them were before.
+
+- `--canvas` and `--canvas-band` as _global_ tokens can be **retired**: inside the scope,
+  `--background` **is** the diagram ground, so `bg-background` on the container and
+  `token('--color-background')` in the painter both do the right thing. (Conditional on no remaining
+  DOM consumer of `bg-canvas` — checked at L1, not assumed here.)
+- `handleHalo`'s theme-inverse pairing argument (`palette.ts:69-77`) stops being a claim about
+  `--card` and becomes a claim about the scope's own fill and its own foreground — i.e. it becomes
+  true by construction instead of by coincidence.
+
+**The one real risk**, stated so it is designed for rather than discovered: if the element handed to
+`resolveTsldPalette` is not mounted, or is outside the scope, `getComputedStyle` silently returns
+the page values and the diagram paints in page colours **with nothing failing anywhere** — which is
+today's behaviour, so no test would notice the regression. L1 lands a guard and a test that asserts
+the resolved fill differs from the page fill when the two token values differ.
+
+**And it is not hypothetical — the code is already shaped so that the obvious change hits it.**
+`TsldCanvas.tsx:669,675,687` initialise the three painter palettes with `paletteRef.current ??=
+resolveTsldPalette()`, which runs during the **first render**, and `containerRef` is declared on the
+line after (`:676`). So `containerRef.current` is `null` at that point and passing it resolves the
+**page** family — the exact silent failure above, arriving through the most natural edit anyone
+would make.
+
+The three are re-resolved in a `useEffect` keyed on `themeVersion` (`:1554-1564`), which does run on
+mount with the container available. That would repair it, but only after a frame — and it is a
+**passive** effect, so the rAF loop can paint page colours first. Worse, **that self-repair is
+exactly what ADR-0097 §1.5a removed**: with one theme `themeVersion` never bumps again, so if the
+mount pass ever fails to resolve there is no second chance for the life of the mount.
+
+So L1's shape is decided here rather than in the editor: **the resolution moves to a
+`useLayoutEffect`** — which runs before the browser paints and before the rAF loop's own passive
+effect — and the `??=` initialisers stop resolving from `document.documentElement`. Whatever they
+become, they must not be a plausible-looking page-resolved value, because a plausible fallback is
+indistinguishable from success. The guard belongs on the same line as the resolution, not in a test
+that runs somewhere else.
+
+---
+
+**Problem statement re-verified 2026-08-19**, before any of E was built, under the rule CLAUDE.md
+§19.10 gained the same day after two of Landing C's four symptoms turned out to have been fixed
+already. **This section's claims all hold**, which is worth recording as plainly as a failure would
+be — a check that only ever reports faults reads as fault-finding rather than as verification:
+
+- **Five resolvers, every one defaulting to `document.documentElement`**: `resolveTsldPalette:12`,
+  `resolvePrintPalette:112`, `resolveResourceStripPalette:174`, `resolveLensPalette:197`,
+  `resolveWbsBandPalette:301`. Condition 4's "five real consumers" is accurate.
+- **The signature already takes an `Element`** (`palette.ts:12`), and **no caller passes one**. So
+  the change is genuinely the argument at each call site plus the `<Surface>` wrapper, exactly as
+  condition 5 claims, with no signature churn.
+
+  **And the resolver count was wrong too — SIX, not five — which is worse, because it was
+  re-verified twice.** §1.2's condition 4 says five and names them; the re-verification block below
+  re-derived five and called the claim accurate. `resolvePrintWbsBandPalette` (`palette.ts:330`) is
+  a sixth, and it is **also on the export path**. It was found by the compiler, not by either read:
+  removing the defaults turned every unpassed call site into a type error, and it appeared in the
+  list. Both reads had grepped for the five names they already believed in — which finds exactly
+  what it is looking for and nothing else. That is the ADR-0076 Class 3 shape inside the check
+  written to prevent it, and the instrument that caught it is the one this landing adopts as its
+  guard.
+
+  **The count was wrong and is corrected here: nine production call sites, not six** (eleven with
+  the sixth resolver's two). The first pass
+  listed `TsldPanel.tsx:1081,1086` and `TsldCanvas.tsx:669,687,1555,1559`, and missed
+  `TsldCanvas.tsx:675,1558` (`resolveResourceStripPalette`, both of them) and
+  `toolbar/commands/use-diagram-image.ts:103` (`resolvePrintPalette`). The last is the one that
+  matters: it is the **export** path, so a site missed there paints page colours into a delivered
+  PDF, where nobody is watching a screen to notice. A count taken by reading two files and a count
+  taken by grepping for all five resolver names are different numbers, and this is the second.
+
+- The scale is **larger than the section states and in the direction that helps**: `palette.ts`
+  makes **86** token reads, all of them today against the page. Every one is a value validated
+  against `--background` being painted on a ground that is not `--background`. (Re-counted after
+  Landing D1: still 86.)
+- **The `bg-canvas` retirement condition is checkable now, and it holds.** The section defers it to
+  L1 as "conditional on no remaining DOM consumer". There are two — `TsldCanvas.tsx:1640` (the
+  diagram container) and `:1647` (the ruler strip) — and **both are inside the element that becomes
+  `<Surface tone="canvas">`**, so inside the scope they become `bg-background` and nothing outside
+  needs the global token. There is no third consumer anywhere in `apps/web/src`.
+
+### 1.3 Packs — how a family stays complete without every family carrying everything
+
+The 18-token base stays **mandatory for every scope**. That rule is what makes a family trap-proof
+and it is not weakened.
+
+On top of it, a scope declares the **packs** it plays a role in. A pack is a small, named set of
+tokens with no semantic sibling in the base vocabulary, and it comes with its **own** completeness
+assertion and its **own** contrast pairs.
+
+| Pack     | Members                                                                                         | Declared by | Why it is a pack and not base                                                                                                                                                 |
+| -------- | ----------------------------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PLOT`   | `-plot-band`, `-plot-grid-day`, `-plot-grid-month`, `-plot-grid-year`, `-plot-nonworking-hatch` | `canvas`    | A month band and three gridline tiers have no meaning on a header. Forcing `chrome` to declare them is five tokens nobody can use and five more chances to get a value wrong. |
+| `GROUND` | `-ground`, `-ground-end`                                                                        | `auth`      | A gradient needs two stops and the base vocabulary has no word for the second one — the reasoning already written at `globals.css:246-249`, formalised.                       |
+
+Everything else the diagram needs is a **rebind**, not a pack, and the discriminator is stated so the
+next addition is not a judgement call:
+
+> **If the thing has a semantic sibling in the base vocabulary, rebind it. If it does not, pack it.**
+
+So: ordinary bar → `--primary`. Critical → `--destructive`. Near-critical → `--warning`. Link line →
+`--muted-foreground`. Selection → `--ring`. Emphasis outline, beside-bar label and the data-date rule
+→ `--foreground`. Non-working wash → `--muted`. Ground → `--background`. Month band → `PLOT`,
+because "the alternating stripe under the diagram" is not any of the eighteen names.
+
+### 1.4 Six scopes, and the ceiling
+
+`page`, `chrome`, `panel`, `brand`, `auth`, `canvas`. **The diagram joins; `auth` stays.**
+
+> **Corrected 2026-08-19. This section said five, and said the count "goes _down_ while gaining the
+> surface that most needed one", which it called "the clearest available evidence that the
+> single-theme decision and the canvas scope are the two right moves".** The premise was that
+> `auth` retires. `migration.md` A rightly made that a **check rather than an assumption**, and the
+> check came back the other way: comparing every `--auth-*` token against its page counterpart in
+> OKLCH, **15 of 18 differ and 12 are perceptible (Δ ≥ 0.02)**, led by `--auth-ring` at **Δ 0.39** —
+> the amber ring ADR-0077 M7 derived up from the old app's 2.02:1 to 3.01–3.36:1 so it would clear
+> WCAG 1.4.11. Retiring the scope discards that derivation along with the tinted field fill, four
+> status inks and the white card that separates the login from an off-white page.
+>
+> **Losing its original reason is not the same as having none.** The theme collapse dissolves
+> ADR-0077 §2's theme-invariance argument, because nothing is invariant against anything now. What
+> is left is the ordinary ADR-0055 argument, which `auth` passes on measured values: it is the
+> front door, and it is designed. So the count goes **up**, five to six, and the rhetorical claim
+> above is withdrawn — the single-theme decision and the canvas scope stand on their own arguments,
+> which never needed a scoreboard.
+
+That is 6 × 31 = **186 base declarations, once**, plus packs — against today's 5 × 18 × 3 = 270.
+(31, not 18: §1.5's closure adds thirteen status fills to every family. The count is now an **output**
+of the closure, which is the whole point of §1.5, so a section that quotes it has to re-derive it.)
+The `brand`/`auth` per-theme repetition that `diagnosis.md` §4.4 records as a real ongoing cost does
+disappear, because with one theme there is nothing to keep identical across blocks.
+
+> **But the assertion that guarded it did not disappear — it went vacuous, and that is worse.**
+> `token-architecture.test.ts:75-83` sweeps `THEME_SELECTORS`, which is now a one-element list, so
+> _"declares --brand… in all three theme blocks, identically"_ asserts that one value equals
+> itself. It passes for a reason unrelated to what its name claims. Landing A owes it a decision:
+> delete it, or re-point it at something still true.
+
+**A seventh scope must show, in an ADR, what the sixth could not do for it**, in addition to
+ADR-0077 §1's five conditions — noting that condition 2 has just lost its most-used justification,
+because "theme-invariance" is not a property any region can now claim. Two candidates that will be
+proposed and should be refused unless they clear that bar: a `dialog` scope (portals already leave
+every scope — a dialog is the page, and that is correct), and a `print` scope (the print path is a
+_palette_, not a surface; it forces light values, and giving it a scope means every future value
+change is applied twice).
+
+**And the bar is now materially higher than when it was written**, which is worth saying out loud:
+a scope costs **31 declarations** rather than 18, each of the thirteen new ones requiring a derived
+value that clears 4:1 against that surface's fill. The seventh scope is a bigger commitment than
+the sixth was, and the closure is what made it so.
+
+### 1.5 What belongs in the rebound family — a closure, not a longer list
+
+This is the question `diagnosis.md` §2.3a poses and it is the most important structural decision in
+the epic after the canvas scope. Three people have found a token outside `REBOUND_NAMES` one at a
+time (the chrome stub, `--secondary`, `--destructive`), and each time the available answer was "add
+that one". **A rule that fails once per discovery is not a rule.**
+
+**The defect is never "a token is not rebound". The defect is a _pair whose two halves are governed
+by different scopes._** `--background` is rebound and becomes navy; `--destructive` is not and keeps
+the page's red; their ratio is then **2.92:1**, and it is nobody's decision — it is an accident of
+which theme is on and where the component landed. Whereas `--secondary`/`--secondary-foreground` is
+_self_-consistent as a fill-and-label pair and only becomes a defect against a rebound
+`--background`. So the property to enforce is not membership; it is **governance agreement**.
+
+Three parts, and they replace the count.
+
+**(a) The page becomes an explicit family, `--page-*`.** Today the page's values _are_ the unqualified
+names, so the unqualified names are simultaneously a source and a binding, and there is nothing to
+restore _from_. Making `:root` bind `--background: var(--page)` &c. costs 18 lines, makes all six
+scopes symmetric, and is the prerequisite for (c).
+
+**(b) `REBOUND_NAMES` is computed as a closure, and asserted rather than authored.**
+
+> Seed the set with the scope's fill and its foreground. Add any token that can be **composited with
+> a member in a utility the build can compile** — a fill painted on it, ink painted on it, a boundary
+> drawn against it. Iterate to a fixed point. That set is the rebound family.
+
+Run over today's `@theme inline`, the closure pulls in what three people found separately —
+`--destructive`, `--destructive-foreground`, `--destructive-hover`, `--secondary`,
+`--secondary-foreground`, and the solid `--success`/`--warning`/`--info` triples — because each is a
+fill a component can paint **on** a scoped `--background`. Nobody has to notice them.
+
+**(c) A second fill inside a scope is a _reset_, not a member.** `--card` and `--popover` are not
+family tokens and not exceptions: they are **surfaces in miniature**, and the honest way to keep
+ADR-0055's promise that _"a `Card` means the same thing everywhere"_ inside a rebinding world is for
+a `Card` to **restore the page family for its subtree** — `[data-surface='card'] { --background:
+var(--card); --foreground: var(--card-foreground); --muted-foreground: var(--page-muted-foreground);
+… }`. A reset is not a new vocabulary; it is the page's, re-entered.
+
+**This closes a split pair nobody has raised.** `CardDescription` is `text-muted-foreground`
+(`card.tsx:61`) on `bg-card` (`:10`). `--muted-foreground` **is** rebound; `--card` is not — so the
+two halves of that pair are governed by different scopes, which is exactly the property §1.5 defines
+the defect as.
+
+> **Corrected on verification (2026-08-18).** This paragraph said "a live split pair" and gave the
+> Project Explorer rail as the instance. It is **latent, not live**, and the rail is not an instance
+> at all: the rail's `<Surface tone="panel">` regions contain the tree and the resizer, and a
+> repository-wide search finds **no `<Card>` or `bg-card` inside any of the six `<Surface>` sites**.
+> The only Card-family usage inside a scope is `auth-shell.tsx:66-70`, which renders `CardHeader` /
+> `CardTitle` / `CardDescription` **without** a `<Card>` wrapper — so there is no `bg-card` — and its
+> fill is `bg-background`, which IS rebound, so both halves sit in the `auth` scope and the pair does
+> not split. Every other Card in the product renders inside `<main>`, which is outside every scope.
+>
+> The structural finding stands and is the reason the closure is right: the pair is compilable, so it
+> is one component move away from being live, and nothing would report it. What does not stand is the
+> word "live", and the distinction decides whether this ships on its own or inside the rewrite.
+> Checked with a shell, which the session that wrote this paragraph did not have.
+
+**So "complete" stops being a count and becomes a property:**
+
+> **A scope is complete when no pair a compiled utility can composite is split across two scopes.**
+
+17, then 18, then 19 was always the wrong instrument — it counts names, and the question is whether
+any pair spans two families. The count becomes an output of the closure, and
+`token-architecture.test.ts` asserts the _closure_, not a hand-written array.
+
+**Its blind spot, stated:** the closure is computed from what a utility **can** compile, not from
+what the product **does** render, so it will be a superset — it will govern pairs the product never
+makes. That is the correct direction to be wrong in (a governed pair nobody renders costs three
+lines of CSS; an ungoverned pair somebody renders costs a WCAG failure nobody can see coming), and it
+is exactly the trade the `--destructive` fix took by _recording_ the 2.92:1 rather than asserting a
+pairing the product does not currently make. Under the closure that judgement is no longer needed.
+
+---
+
+## 2. Colour — two changes, and the accent finally gets a job
+
+### 2.1 `--primary` stops meaning two things
+
+Today `--primary` means _"the thing you should press"_ on the chrome and _"an ordinary, non-critical
+activity"_ on the diagram (`palette.ts:26`). Those are unrelated concepts sharing one token, and
+`diagnosis.md` §3.2 shows what it cost: Corporate promoted amber to `--primary`, which made an
+ordinary bar and a near-critical bar the same colour, so `--warning` was moved to bronze — **the
+diagram was re-coloured because the button was.**
+
+The canvas scope removes the coupling with no new name. Inside `[data-surface='canvas']`,
+`--primary` is the ordinary-activity fill: a calm, structural colour chosen for legibility against
+the plot ground and separation from the other two states. Outside it, `--primary` is the action
+colour. The painter is unchanged. Corporate's bronze `--warning` survives on its own merits or is
+withdrawn on them — **which is a decision someone gets to make, instead of a constraint they
+inherit.**
+
+### 2.2 The accent gets a placement rule
+
+The rule, and it is the shortest useful sentence in this document:
+
+> **The brand accent marks _where you are_ and _what will happen if you act_.
+> It never marks _what something is_.**
+
+| The accent may mark                                          | The accent may never mark                                   |
+| ------------------------------------------------------------ | ----------------------------------------------------------- |
+| the current nav item; the selected tree row; the active mode | a status (`--success`/`--warning`/`--info`/`--destructive`) |
+| a pressed toggle; a checked control                          | a criticality, a float band, a drift, a conflict            |
+| the primary action's fill                                    | a categorical series (`--chart-*`, a WBS group)             |
+| the focus ring on its own surface                            | **anything on the diagram, ever**                           |
+
+Three things this buys that a hue choice does not:
+
+1. **It answers `diagnosis.md` §1.4 without inventing anything.** The corporate spec's D4 — the
+   active nav item indicated by grey and weight, in a band where amber is already proven at 7.9:1 —
+   is now a rule violation, not a taste question.
+2. **It makes the amber/near-critical collision structurally impossible**, not managed. The accent
+   is forbidden on the diagram by definition, because the diagram paints what things _are_.
+3. **It is censusable.** `ACCENT_ROLES` is a `Record` of the roles the accent is bound to; adding one
+   is a deliberate edit, removing one fails. That is the corporate spec's requested **C3**, with a
+   rule behind it rather than a snapshot — a snapshot proves a binding did not change, a rule says
+   whether the binding should exist.
+
+**Its blind spot, stated:** a census proves _binding_, not _prominence_. It cannot tell you the
+accent is a 28×28 px tile. The remedy for that is a person looking at a screen, and this document
+does not pretend otherwise.
+
+### 2.3 Four pairs join the matrix, and the list stops being hand-written
+
+See §8.1. `--destructive`/`--destructive-foreground`, `--secondary`/`--secondary-foreground`,
+`--card`/`--muted-foreground`, `--popover`/`--muted-foreground` — three of which pass, hand-computed
+(`diagnosis.md` §2.3), and none of which anyone knew passed.
+
+`--secondary` and `--destructive` are not "the nineteenth and twentieth names": they arrive because
+the **closure** (§1.5b) pulls them in, along with everything else that can be painted on a scoped
+`--background`. Closing the corporate spec's **G3** stops being a fix and becomes a consequence.
+
+### 2.4 Interaction states are a token, and the rule is directional
+
+`hover:bg-destructive/90` is not `--destructive`. It is `--destructive` composited at 90 % against
+whatever sits behind it, which in Light lightens it toward white and took a Delete button's label to
+**4.32:1** — a live WCAG 1.4.3 failure, found while asserting the rest state and fixed with a
+`--destructive-hover` token in all three themes. **An opacity modifier is a different colour, and the
+matrix measures tokens while the browser paints utilities.**
+
+So: **an interaction state is a token, never a modifier**, and the rule for its value is the one that
+fix established, adopted here unchanged because it generalises:
+
+> **Hover moves the fill _away from the surface it sits on_.**
+
+It reads as an inconsistency — Dark lightens, Light and Corporate darken — and it is not. Darkening
+in Dark takes the fill to **2.96:1** against its own page, so the control would stop being
+distinguishable from what it sits on **in the act of being hovered**. The direction is a per-theme
+fact about which way there is room, not a global preference, and writing it down is what stops the
+next person "fixing" the inconsistency.
+
+Two consequences:
+
+- `--{token}-hover` (and, where a design calls for one, `-active`) joins the **closure**, because it
+  is a fill that carries ink and sits on a scoped surface.
+- **"The surface it sits on" is the governing scope's fill**, not `--background` at `:root`. This is
+  where §1.5 and this rule compose: a hover value derived against the page and rendered on navy is
+  the same split-pair defect one state along.
+
+`bg-primary/90` (`button.tsx:11`) and `bg-secondary/80` (`:12`) are the two remaining modifiers and
+take the same treatment. Neither is measured anywhere today.
+
+---
+
+## 3. Metric — the axis that does not exist
+
+### 3.1 The mechanism: density is a scope
+
+`[data-density='compact' | 'default' | 'comfortable']`, rebinding a set of metric custom properties,
+stamped by a `<Density>` component exactly as `<Surface>` stamps a tone. Same mechanism, same
+guarantees, same reason: `docs/FRONTEND_ARCHITECTURE.md` states that components never branch on the
+theme in JS, and a density that components branch on in JS would be a re-render per surface change
+and a prop threaded through 989 files.
+
+**One deliberate asymmetry with the colour families, because someone will otherwise "fix" it:**
+metric tokens **do** get Tailwind utilities (`h-control-md`, `min-h-row`, `gap-section`). Colour
+families must be unreachable because a component must never _choose_ a surface. Metric tokens must
+be reachable because a component must be able to _say what kind of thing it is_ — `h-control-md` is
+the statement "I am a medium control", and the density scope decides what that means. The class name
+is the semantic; the value is the scope's.
+
+### 3.2 The tokens
+
+| Token                                   | Means                                                               | Value at L2, and where it goes                                                                          |
+| --------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `--control-h-sm` / `-md` / `-lg`        | Control heights                                                     | **36 / 40 / 44 frozen at L2** (`button.tsx:22-24`), then **32 / 36 / 40 at L2b** — CQ-C, measured       |
+| `--control-h-toolbar`                   | The command row's minor axis                                        | 36 px, frozen (`docs/TECH_DEBT.md` #127) — **already 36, which is why L2b's vertical gain is measured** |
+| `--row-h`                               | A row of records                                                    | **28** (CQ-B, answered). Tree keeps 28; **Gantt moves 32 → 28** at L2; tables follow                    |
+| `--ruler-h`                             | A time-axis band                                                    | **Unanswered** — stays per-surface (40 TSLD / 34 Gantt) until it is                                     |
+| `--lane-h` / `--lane-bar-h`             | The diagram's row and bar                                           | 28 / 18 (`geometry.ts:35,37`)                                                                           |
+| `--rule-w`                              | Divider / boundary weight                                           | 1 px everywhere today                                                                                   |
+| `--gutter-page` / `-section` / `-field` | The three rhythms `DESIGN_SYSTEM.md:97` names and nothing expresses | 24 / 24 / 16 px                                                                                         |
+| `--radius-plot`                         | The diagram's corner language                                       | 3 px (`render-model.ts:31`) — beside the DOM's 8 px                                                     |
+| `--tap-min`                             | Minimum pointer target                                              | 24 px (WCAG 2.2 §2.5.8) / 44 px house rule                                                              |
+
+### 3.3 Where a density comes from — the surface decides, not the user
+
+| Region                                                  | Density       | Because                                                         |
+| ------------------------------------------------------- | ------------- | --------------------------------------------------------------- |
+| The plan workspace, its panels, the command band        | `compact`     | A planner is in it for 1–3 hours a day and every 4 px is canvas |
+| Content pages, dialogs, forms, the organisation landing | `default`     | Read once, filled once. A form is not a cockpit                 |
+| Anything under `@media (pointer: coarse)`               | `comfortable` | **This is the answer to `docs/TECH_DEBT.md` #127**              |
+
+**No user-facing density setting.** A density toggle is a second product maintained forever
+(ADR-0088's Class A argument), for a preference nobody has asked for.
+
+**#127 is worth spelling out, because it is a concrete thing the current system structurally cannot
+do.** The house rule is 44 × 44; the toolbar ships 40 × 36; the entry explains that raising the minor
+axis adds 16 px to the vertical stack _"for every user, including the desktop users who reported the
+problem, and it can be done under `pointer-coarse` alone only if the band's height is allowed to
+differ by input device"_. With density as a scope, that is exactly what happens, once, in
+`globals.css`, for every control in the product — instead of a per-control media query that some
+controls get and their neighbours do not. And `docs/TECH_DEBT.md` **#133** ("every toolbar
+measurement ever taken assumed a mouse") becomes a measurement the harness can take by stamping one
+attribute.
+
+### 3.4 The rule that keeps this from breaking the toolbar
+
+ADR-0090 and ADR-0091 derive the command surface's band floors from **measured** control widths, and
+`e2e-toolbar-fit` asserts them. Four epics in a row found that their width expectation was
+contradicted by their own measurement (ADR-0091 D4, ADR-0092 M4, ADR-0093, ADR-0094 M0-T1).
+
+> **Metric tokens land frozen at today's shipped values. Every later change to one is its own
+> commit, with `pnpm --filter @repo/web measure:toolbar` and `test:e2e:toolbar-fit` at 1646 run
+> before and after.**
+
+This is ADR-0055 §8.1's ordering argument — structure before values, because flipping both together
+makes every parity suite meaningless on the day it is needed — applied to metrics.
+
+**CQ-C is answered: the control scale moves to 36 px in this epic** (departing from this design's own
+default, which was to tokenise 40 and move later). The rule above is what makes that safe, and it is
+not softened by the answer — **it is what the answer has to obey.** So the move is a landing of its
+own (`migration.md` **L2b**), immediately after the frozen tokens land, and it is built as a
+measurement rather than a value edit:
+
+1. change the value;
+2. re-run `measure:toolbar` **at 1646** — the product owner's actual screen, and the width ADR-0091's
+   retrospective records nobody having measured for two whole epics;
+3. **re-derive the band floors from what it reports** — never adjust them to make the existing gate
+   pass, which would be tuning the instrument to the reading;
+4. update `e2e-toolbar-fit`'s expectations to the measured values;
+5. run **every** journey (ADR-0091 records three broken by a label change and found by CI rather than
+   locally; `scripts/e2e-local.sh web` now covers the base one);
+6. **measure and report the vertical gain rather than asserting one.** Reclaiming height is the point
+   — chrome is 31 % of the workspace at 1646 — and four consecutive epics here have had exactly this
+   kind of headline number contradicted by their own measurement. **If the gain turns out to be
+   small, that is the finding**, and it is reported as one.
+
+Note what step 6 implies and step 1 does not: a 4 px control height does not necessarily buy 4 px of
+band. The command row's minor axis is `--control-h-toolbar` at 36 **already** (`docs/TECH_DEBT.md`
+#127), so the band may not move at all, and the gain may land entirely in the tables, the forms and
+the Explorer. That is a legitimate outcome and it is not the outcome the change is being made for, so
+it is the one most worth measuring.
+
+> **Confirmed with a shell (2026-08-18), so L2b starts from a fact rather than a prediction.**
+> `ToolbarSplitButton.tsx:165` sets `min-h-9` — 36 px — directly on the control, and
+> `plan-workspace-toolbar.tsx:1164` describes the two rows as `py-1` around a `min-h-9` control.
+> Neither takes `Button`'s `h-10` default. So changing that default from 40 to 36 is very unlikely to
+> move the command surface at all.
+>
+> That cuts both ways and both halves matter. **The risk is smaller than CQ-C's answer implied** — the
+> band floors and `e2e-toolbar-fit` are derived from control _widths_ on a row whose height is already
+> 36, so the change should not disturb them. **And the reward is somewhere else than expected**: the
+> 4 px comes back in tables, forms, dialogs and the Project Explorer, not in the chrome above the
+> canvas that the 31 % figure is about. Anyone approving L2b in the hope of reclaiming canvas height
+> should know that before it is built, not after.
+
+---
+
+## 4. Type, elevation, radius, motion, icons
+
+### 4.0 The typeface — and the finding that it has never been decided
+
+**There is no `@font-face` rule anywhere in `apps/web`, and no font file in `apps/web/public/`**
+(which holds exactly three things: `brand/auth-panel.avif`, `favicon.svg`, `theme-boot.js`). Yet
+`globals.css:278` opens the stack with `'Inter'`, and `docs/DESIGN_SYSTEM.md:75` describes the family
+as _"Inter + system fallback"_ as though it were served.
+
+**So the product's typeface is whatever the reader's machine happens to have.** A designer with Inter
+installed sees Inter; the product owner's Surface Pro sees Segoe UI; a Mac sees SF Pro; a Linux CI
+runner sees something else again. Two people comparing screenshots of the same screen are comparing
+two typefaces, and every vertical-rhythm and toolbar-width measurement in this repository was taken
+in whichever face that machine resolved. **This is the type equivalent of the `--canvas` finding: the
+document names one thing and the product ships another, and nothing says so.**
+
+**Decision: self-host one variable family, subset to Latin. The family is SPACE GROTESK** — decided
+by the product owner on 2026-08-19 from four candidates rendered on real product chrome, **against
+this document's recommendation**, which was the Manrope / Instrument Serif pairing. The full
+specimen, the reasoning and the reservation are in [`typeface.md`](./typeface.md); what follows is
+what the choice changes here.
+
+- ~~**The family is Inter**~~ — **superseded.** The clause that argued it (_"it is already the
+  declared intent, so this decision makes the document true rather than changing the product's face
+  for everyone who currently sees it"_) was the weakest reason in this document, and the mandate was
+  _"something with more character"_. It is struck rather than deleted because the **requirement**
+  under it survives and is now load-bearing: a scheduling tool's type must be unambiguous at
+  12–13 px in dense numeric columns, and the data ramp below structurally depends on the font
+  _having_ a `tnum` table.
+- **Tabular figures went from a nicety to a gate, and that was measured before the face was
+  committed.** Space Grotesk's digits are proportional **by default and dramatically so** — the `1`
+  is 404 units against the `0`'s 638, a **58 % difference** (`fontTools`, `typeface.md` §3). Left
+  alone, a column of dates does not line up and a duration ticking `9 d → 10 d` shifts everything
+  after it. It ships a real `tnum`, so the fix is one rule — but for **this** face the rule is
+  load-bearing in a way it would not have been for the safe candidates, so it is gated
+  (`token-architecture.test.ts:358-375`), scoped to `th`/`td` plus an opt-in class, with a **second**
+  assertion that it is not applied to running text.
+- ~~**Distinctiveness belongs in the brand panel, not the data grid.**~~ **Overruled on the merits,
+  not by oversight.** This was the argument the recommendation rested on. The reservation behind it
+  is not withdrawn and becomes a thing to watch rather than to re-argue: distinctive numerals appear
+  in every date of a 2,000-row table, and character in a glyph is character you scan past a thousand
+  times. If a planner reports the tables feeling tiring, that is the first place to look, and the
+  remedy is a **numeral-only fallback**, not reopening the face.
+- **"No second display face" survives, and the decision satisfies it** from the other end: one face
+  with enough character to carry the login and the grid, rather than a pairing that costs a second
+  download on the coldest screen in the product. There is no serif and nothing in `screens.md`
+  depends on one — see §4.1a for what carries hierarchy instead.
+- **`--font-mono` is not self-hosted.** Eight call sites use it for identifiers and codes; the system
+  stack compares characters perfectly well. 30 kB for eight sites is not a trade worth making, and
+  saying so is cheaper than discovering it in a bundle review.
+
+**What it costs, and the constraint that shapes it.** `apps/web/e2e-csp/` serves the **real**
+Content-Security-Policy, parsed out of `docker-compose.yml` rather than restated, and it permits **no
+external origins** — `font-src 'self'` (ADR-0074 §4). So a webfont must be self-hosted, which is what
+this decision does; **the CSP needs no change at all**, which is worth stating because "add a font"
+usually means "add a CDN" and here it cannot.
+
+| term                         | figure                                                                                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Variable `woff2`, as shipped | **41 kB for the whole family** (weight axis 300–700), split Latin / Latin-Extended so the common case never downloads the accented characters  |
+| Where it lands               | **`/sign-in`** — the LCP path of the coldest screen in the product (ADR-0077's front door)                                                     |
+| Loading                      | `<link rel="preload" as="font" crossorigin>` + `font-display: swap`                                                                            |
+| Layout shift                 | Mitigated by `size-adjust` / `ascent-override` on a local fallback face, **measured, not assumed**                                             |
+| Weight ceiling               | **700.** Nothing in `apps/web/src` uses `font-extrabold` or `font-black` (checked), so the axis covers every call site and nothing synthesises |
+
+`swap` rather than `optional` deliberately: `optional` means a first-time visitor may never see the
+face at all, which reintroduces "the product looks different depending on your machine" through a new
+door. The shift `swap` risks is real and is bounded by metric-overridden fallbacks — and it is a
+**`performance-reviewer` question on the built artefact**, not a claim to make here. This repository
+has an LCP budget (`CLAUDE.md` §15: LCP < 2.5 s on mid-tier mobile over 4G) and 40 kB of font on the
+sign-in path is the single largest addition this epic makes to it.
+
+### 4.1 Two ramps, because prose and data are not the same reading task
+
+**The prose ramp gets a top.** `--text-page` (the size `text-3xl` was documented for and never used),
+then `--text-section`, `--text-subsection`, `--text-body`, `--text-meta`. `PageHeader` owns
+`--text-page`; a structural test asserts no route sets its own `<h1>` size, so `diagnosis.md` §1.2
+cannot recur one route at a time.
+
+**The data ramp owns tabular figures, and that is the point.** `text-data` and `text-data-sm` are
+Tailwind v4 `@utility` definitions that set size, line-height **and**
+`font-variant-numeric: tabular-nums` together. A number cannot be typeset in this product without
+getting tabular figures, because there is one way to typeset one.
+
+That single change retires `diagnosis.md` §1.3 — 29 hand-applied `tabular-nums` across 18 files — and
+the lint rule that goes with it (`tabular-nums` may not appear in a `className`) is what stops the
+30th. It also gives the canvas painter a named font size to read instead of a literal, and the Gantt
+cell, the table cell and the bar label finally agree.
+
+**One nuance worth keeping:** `--font-mono` is used at 8 sites for identifiers and codes. That stays
+separate. Tabular figures are for _quantities in columns_; monospace is for _strings you compare
+character by character_. Two jobs, two tools.
+
+### 4.1a Weight is now a hierarchy channel, and it is the one axis with no token
+
+**Added 2026-08-19, as a direct consequence of the typeface decision** (§4.0). This is the part of
+the design the reversal actually changes, and it was not visible until the reversal happened.
+
+A sans/serif pairing gives hierarchy a **categorical** channel: a page title is a different _kind_
+of type from a table cell, and the reader sees the rank before reading the word. With one face
+that channel does not exist, and hierarchy is carried entirely by **weight, size, tracking, colour
+and space**. Four of those five now have a token — the ramp owns size, line-height and tracking
+(and the negative tracking at the large end is precisely the display-tier compensation a grotesque
+needs); colour has had one since ADR-0055; space is `--gutter-*` in §3.2.
+
+**Weight has none, and it is the least-tokenised axis in the product:** `font-medium |
+font-semibold | font-bold | font-light` appears **183 times across 85 non-test files** (185/87
+including tests — counted, not estimated), with no token, no pairing to a ramp step, and no gate.
+That is the `tabular-nums` finding (29 sites, 18 files) one
+axis along — and it is worse, because a weight is a **judgement about rank** rather than a
+formatting detail, so 185 independent judgements is 185 chances for a section heading to outrank
+a page title.
+
+So Landing A owes three things it was not previously asked for:
+
+1. **`--weight-*` tokens declared inside the theme block** (§0.5.3's rule: no design token outside
+   a theme or scope-rebind block, and a weight is a design token). The scale is bounded by the
+   file: **300–700**, nothing above.
+2. **A default weight per ramp step**, so `--text-page` carries its weight rather than every call
+   site choosing one. This is §9 mechanism 4 — remove the decision from the call site — applied to
+   the axis that now does the most work.
+3. **The rhythm ratchet extended to weight**, at its measured floor of **183**, never up (the
+   ADR-0058 pattern §8.3 already uses for arbitrary sizing values). Not zero: a gate that fails on
+   day one gets deleted rather than fixed.
+
+**What this is not.** It is not a re-scaling. §4.1's sizes deliberately land at today's values, and
+so should the weights: this task takes **ownership** of the axis so a later, measured decision can
+change it. Shipping a token and a new weight in one commit is the mistake ADR-0055 §8.1 exists to
+prevent.
+
+### 4.2 Elevation — kept, and given a token so a theme can say which mechanism it uses
+
+`diagnosis.md` §4.1 defends borders-first and it is not reopened. The refinement is that the model
+already runs on **two** mechanisms and names one:
+
+> **Elevation is carried by a shadow on light surfaces and by a fill step plus a brighter border on
+> dark ones. A dark theme may set its shadow to `none`; that is the model working, not a missing
+> value.**
+
+`--elevation-1` (Card) / `-2` (menus, popovers) / `-3` (dialogs, sheets) become theme-scoped tokens.
+Ten call sites change from `shadow-sm|md|lg` to `elevation-1|2|3`. The gain is small and honest: a
+theme can finally express a depth decision, and the rule is written where the next person will read
+it rather than being inferable only from noticing that Dark's shadows do nothing.
+
+### 4.3 Radius and motion — not re-derived
+
+`--radius: 0.625rem` gives `radius-md` = **8 px**, which is the previous Flask app's
+`--border-radius` exactly (`corporate-brand/measurements.md`); the documented 150/200/300 ms band
+contains that app's `0.2s`. Both are already right. `--radius-plot` is added because the diagram's
+3 px corner is a module constant a theme cannot reach; `--motion-fast/base/slow` are added because
+§0.5.3 requires every axis to be theme-declarable, and a future dark variant may genuinely want
+slower transitions on a dark ground. **That is the only reason they exist**, and with one theme they
+are three declarations nobody currently varies. If a dark variant arrives and does not vary them,
+they are a token nobody needed and should be deleted — and this sentence is the note that says so.
+
+### 4.4 Iconography — the rule, and the four glyphs this document owes
+
+The existing rule stands (Lucide only, 16 inline / 20 standalone, 1.5–2 px, accessible name
+required). Two additions:
+
+**The rule for choosing a mode glyph**, which is what `docs/TECH_DEBT.md` #126 is actually blocked
+on: _a mode's glyph depicts the mode's **effect on the diagram**, not its name._ `Early` and `Visual`
+are not nouns with pictures; they are two answers to "what decides where a bar sits". So the pair
+should read as _computed_ versus _placed_, and it must be a **pair that only makes sense together** —
+which is why #126's own conclusion, that doing the easy pair alone is the wrong move, is right.
+
+**All four land together or none does**, and they land with `e2e-toolbar-fit` re-run, because the
+reverted implementation measured four blank 16 px buttons and the gate caught it within the hour.
+Candidate glyphs are named in the implementation plan and must be **verified against the installed
+`lucide-react@^1.29.0`** before being written down as decided — naming an icon that does not exist in
+the installed version is the ADR-0076 Class 2 shape.
+
+**And the second prominence channel** (`diagnosis.md` §2.5, `docs/TECH_DEBT.md` #131): a dense
+command row has exactly one way to signal importance — whether the label renders — so a demoted
+control loses its name entirely and recovers it from a `title` a touch device never shows. The design
+system supplies a second: **an icon-only control must carry a persistent name that is not
+hover-dependent.** In practice that is a visible label at some band, or the label rendered beneath
+the glyph at `comfortable` density, or the control not demoting. Which of the three is a per-item
+decision; that it is one of the three is a rule.
+
+---
+
+## 5. What a page is
+
+The vocabulary `diagnosis.md` §1.2 says does not exist:
+
+- **`PageContainer`** — the frame currently copy-pasted 15 times. Owns the measure cap, the page
+  gutter and the scroll relationship. One implementation, all themes.
+- **`PageHeader`** — an optional eyebrow (breadcrumb or parent), the `<h1>` at `--text-page`, an
+  optional description, and a **primary-action slot**. Owns the page-title size (so §4.1's structural
+  test has something to point at) and, critically, owns _where the primary action sits_, which is
+  currently "wherever the route put it" — `clients.tsx:14-17` puts it in a `justify-between` flex,
+  `project-detail.tsx` does something else.
+- **`SectionCard`** — a named section of a content screen: `Card`'s composition contract plus a real
+  heading rank. `CardTitle` gains `level?: 1 | 2 | 3`.
+
+  > **The default is `1`, not `2` — reversed 2026-08-19, and the reversal dissolves a collision.**
+  > This said "defaulting to **2**, which deletes `staff.tsx:117-118`'s written workaround and fixes
+  > the `<h1>`-per-page violation everywhere else at the same time". `docs/specs/organisation-landing/`
+  > §4.6 independently specified the same prop **defaulting to `1`, so every existing consumer is
+  > byte-identical** — two specs, one prop, opposite defaults, and whichever landed first would have
+  > silently decided it.
+  >
+  > Theirs is right and mine was wrong for a reason worth keeping: `CardTitle` renders `<h1>` today
+  > (`card.tsx:50`), so defaulting to `2` **re-ranks every Card in the product** in the landing whose
+  > whole claim is that almost nothing changes — a change to the AT heading tree, invisible on screen,
+  > in a commit nobody would look at for it. And it was never necessary: **`SectionCard` owns its own
+  > rank**, so a section heading is an `<h2>` because the archetype says so, not because a shared
+  > primitive's default moved underneath forty call sites. `staff.tsx`'s workaround is deleted either
+  > way — by passing `level`, or by using `SectionCard`. The `<h1>`-per-page violations are then fixed
+  > **visibly, per screen, in Landing F**, with the structural test from §8.4 as the gate rather than
+  > a default change as the mechanism.
+
+- **`EmptyState`** — icon, one-line explanation, one action. `docs/TECH_DEBT.md` #21(d), overdue, and
+  the organisation landing needs three of them on the first screen a new customer sees.
+- **`Skeleton`** — mirrors the final layout, first loads only. `docs/UX_STANDARDS.md` has required
+  this for a year with no implementation anywhere.
+- **`ListRow`** — a scannable linked row with primary / secondary / metadata ranks. Not a table:
+  "recently changed" is a list of links, and forcing it into `<table>` misrepresents it to assistive
+  technology and to the eye. This is what the landing page's feed and "jump back in" are made of.
+
+`DataTable` gains what `docs/DESIGN_SYSTEM.md:419-423` already promised and it does not have: a
+`numeric` flag on `Column<T>` (so alignment and tabular figures are a **property of the data**, not a
+per-cell `cellClassName` that drifts one column at a time), a sticky header, and `Skeleton` rows in
+place of the spinner.
+
+**Tier placement:** `PageContainer`, `PageHeader` and `SectionCard` are `components/layout/` — they
+carry page structure, following `brand-mark.tsx`'s precedent. `EmptyState`, `Skeleton` and `ListRow`
+are `components/ui/` — they are reusable widgets with no page knowledge.
+
+---
+
+## 6. What this says to the organisation landing page (ADR-0098)
+
+Its §0.3 lists five things the current vocabulary cannot express and asks that each be a requirement
+on this rewrite rather than a one-off. Answering all five by name, so that epic can consume rather
+than bridge:
+
+| It needs                                          | This design supplies                                                                                                                                                        |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An empty state                                    | `EmptyState` (§5). Lands in **Landing A** — see §6.1 for the variant axis it needs and did not have.                                                                        |
+| A skeleton                                        | `Skeleton` (§5). Lands in **Landing A** — see §6.1: a block is not enough.                                                                                                  |
+| A page-section archetype with a real heading rank | `SectionCard` + `CardTitle level` (§5). The bridge that spec proposed **is** the answer; it does not need to be temporary. **The prop's default is theirs, not mine** (§5). |
+| A list / feed row                                 | `ListRow` (§5).                                                                                                                                                             |
+| Density as a system concept                       | `[data-density]` (§3). Its observation was right: **the landing page is `default` density** — reading, not cockpit — and it now has a word for that.                        |
+
+### 6.1 What Landing B needs that Landing A does not deliver
+
+**Added 2026-08-19 by reading `docs/specs/organisation-landing/feature-spec.md` §2 and §4.6 against
+the archetype list, rather than trusting the five-row table above.** `migration.md` B's condition is
+that the screen is built from the archetypes and that _"if the screen needs something the vocabulary
+does not have, that is a requirement on A"_. A gap discovered **during** B is the failure that
+condition exists to prevent, so it is worth finding them now. Four, and the first two are real.
+
+1. **A skeleton block is not a skeleton.** `docs/UX_STANDARDS.md` requires _"skeleton and final
+   layout identical"_, and B's §4.6 asks for skeletons on three sections of `ListRow`s. A generic
+   `Skeleton` rectangle satisfies neither: it produces a grey box that reflows into a row of a
+   different shape. **`ListRow` (and `DataTable`) must own their own loading render** — `ListRow`
+   gains a `loading` state, `Skeleton` stays the shape primitive underneath. Without this the first
+   consumer hand-rolls a row-shaped skeleton, which is a one-off on the LCP screen.
+2. **`EmptyState` needs two axes §5 does not give it.** B has **five** empty states of two
+   different sizes and three different shapes: three page-level organisation states (one of which
+   is **role-gated and offers no action at all** — a Viewer is told to ask a Planner), two
+   section-level ones, and a settled one-line _"Nothing needs you right now."_ which is **not** an
+   empty state and must not render as one. So: `action` is **optional, not decorative**, and there
+   is a **size/prominence** axis (page vs section). §5's "icon, one-line explanation, one action"
+   describes exactly one of those five.
+3. **`PageContainer` must not render a landmark.** B _"sits inside the shell's existing `<main>` and
+   adds no landmark"_ (§4.6). §5 says `PageContainer` owns the measure cap, the gutter and the
+   scroll relationship and is silent on the element — and the obvious implementation of "the page
+   frame" is a `<main>`. If it renders one, B ships two `main` landmarks on the first screen after
+   sign-in. One sentence in the primitive's docblock, decided now rather than found by an
+   accessibility review.
+4. **Relative time is on its fifth implementation** (lower confidence, and not blocking A). B adds
+   `model/relative-time.ts`; `NoteItem`, `staff.tsx`'s retention copy and `lock-copy` each already
+   format one. It is a formatting concern rather than a layout archetype, so it does not obviously
+   belong in `components/ui/` — but "the fifth place doing this" is how §9's inventory problem
+   starts, and somebody should decide rather than let B be the fifth by default.
+
+**And one thing B needs that A must NOT deliver:** `screens.md` §6 proposed a metrics strip for this
+screen. That is withdrawn — see the note there.
+
+And one thing it did not ask for but will need on its first draft: **the accent rule** (§2.2). A
+landing page is where somebody reaches for a brand colour to make a section feel important. Under the
+rule, the accent marks the current thing and the actionable thing — so "jump back in" may carry it on
+its links' focus and hover, and a "what changed" row may not carry it at all, because a change is a
+fact about the world, not a place you are.
+
+---
+
+## 7. What the diagram gets, specifically
+
+Because "the design system reaches the canvas" is the claim, and a claim needs a list.
+
+1. **A validated family.** 18 base tokens + the `PLOT` pack, per theme, with every ink measured
+   against the diagram's own ground rather than the page's.
+2. **A separation matrix** (§8.2) that no other surface needs: fills against the ground, fills against
+   the **band** (a bar sits on two different grounds and nobody has ever checked the second), inks on
+   their own fills, and **fill against fill** — the two states a planner most needs to tell apart
+   across a wall of bars.
+3. **Geometry tokens** — `--lane-h`, `--lane-bar-h`, `--radius-plot`, `--ruler-h`, `--rule-w` — so the
+   diagram's rhythm is a theme decision rather than five constants in two files.
+4. **A named text size**, from the data ramp, so a bar label, a Gantt cell and a table cell agree.
+5. **The accent forbidden**, permanently and by rule, so a future brand change cannot walk into the
+   float tails.
+
+**And a hard performance rule that comes with it**, because this is the surface where a design system
+can do real damage:
+
+> **A metric or colour token may be resolved once per theme change or per resize, into the
+> `PaintFrame` (ADR-0078). `getComputedStyle` may never appear inside a paint layer.**
+
+The painter already resolves palettes once per `useThemeVersion` bump and never per frame. ADR-0065
+measured the **pre-existing** painter at 16.7–23.1 ms p95 at 2,000 activities — 4–6× ADR-0026 §16's
+≤ 4 ms, which `docs/TECH_DEBT.md` #75 has open. **This rewrite must not be the thing that makes #75
+unmeasurable**, so L1 and L2 each re-run `apps/web/scripts/measure-link-routing.mjs` before and
+after, and the numbers go in the milestone record. The harness exists; it has been run; there is no
+excuse for reasoning about this one.
+
+---
+
+## 8. The gates — how each part is checked
+
+Every gate below is either an extension of one that exists, or is modelled on a named precedent.
+Each is **verified red first** where it should be red (ADR-0084 D5's rule, which ADR-0089 M6 records
+catching a false "already covered" claim).
+
+### 8.1 The **pair census** — the pair list stops being an inventory
+
+`token-contrast.test.ts`'s `TEXT_PAIRS`/`NON_TEXT_PAIRS` are hand-written (`:86-153`), which is why
+four pairs are missing and nobody noticed. An inventory goes stale every time the vocabulary grows —
+ADR-0073 C4 recorded exactly that shape, where a hard-coded cap of `20` was overtaken by nineteen new
+actions.
+
+So the universe is **derived**: enumerate every `--color-*` fill and every `--color-*-foreground` /
+`--color-*-text` ink from `@theme inline`, form the pairs a component can actually compile, and
+assert that **every pair is either measured or explicitly classified with a reason**. Adding a token
+without classifying its pairs fails the build.
+
+**Three extensions, each one a defect somebody actually found:**
+
+- **Alpha-modified fills are separate colours.** `bg-X/90` composites `--color-X` against its
+  backdrop and is not `--color-X`. The census enumerates every `/\d+` colour modifier in
+  `apps/web/src/**` (today: `button.tsx:11,12,19`) and measures the composite. This is the gate that
+  would have caught the Delete button at **4.32:1** hovered while its rest state passed at 4.56:1 —
+  the failure was in the modifier and nothing looked at modifiers.
+- **A split pair is a failure by construction, not by ratio** (§1.5). If one half of a compiled pair
+  is governed by a scope and the other is not, the census fails **regardless of the number**. That is
+  what turns the `--background`/`--destructive` **2.92:1** finding from a judgement call — assert it,
+  or record that the product does not currently make that pairing? — into a rule.
+- **Both directions of an interaction state.** A `-hover` token is measured against its own label
+  **and** against the governing scope's fill, because §2.4's rule is directional and a value derived
+  against the wrong surface is a defect one state along.
+
+Its blind spot, stated in its own docblock, because a census presented as proof is worse than none:
+**it forces a classification, not a correct one.** A pair wrongly classified "never rendered" passes.
+The census makes the omission impossible; it cannot make the judgement.
+
+This is the gate that would have caught `--destructive`/`--destructive-foreground` at **4.56:1** on
+the day it was declared, its hover at **4.32:1** on the day the modifier was written, `--secondary`
+the day it was not rebound, and the `--background`/`--destructive` split the day a scope existed.
+**Four findings, three finders, one gate.**
+
+### 8.2 The **plot separation matrix** — new, and canvas-only
+
+For each theme × each canvas flag state:
+
+- every plot fill ≥ **3:1** against `--background` in the canvas scope (the ground) **and** against
+  `-plot-band` (the striped ground);
+- every plot fill's paired ink ≥ **4.5:1** on its own fill;
+- every plot fill against every other plot fill — **reported in L0, asserted at ≥ 1.5:1 in L4**
+  (CQ-D). Reported first because it is red today in two themes and a gate that fails on day one gets
+  deleted rather than fixed (ADR-0058); the adjacent-surfaces block at `token-contrast.test.ts:189-213`
+  is the precedent for a computed number that is printed rather than asserted.
+- the same set for the **print** palette, because `resolvePrintPalette` resolves the same tokens onto
+  paper (`palette.ts:109`) and a printed programme is a deliverable a scheduler hands to a client —
+  and because a palette contract that is total on screen and partial on paper is how the two drift.
+
+**Why fill-against-fill is the right number, and what it is _not_ — corrected on verification.** An
+earlier draft justified it as "the monochrome-print test", on the reasoning that a WCAG ratio is a
+luminance ratio and `resolvePrintPalette` puts these tokens on paper. **That justification does not
+hold**: the print palette carries `outline` (`palette.ts:135`) and `paint.ts` strokes critical and
+near-critical bars with it on the print path as on screen, so the solid-versus-dashed shape cue
+survives a black-and-white printout and 1.4.1 is satisfied there too.
+
+The honest justification is narrower and still sufficient. A luminance ratio is **the best available
+proxy for "do these two read as different at a glance"**, which is the question a diagram made of
+hundreds of bars actually poses — a planner scanning for the critical path is not inspecting stroke
+patterns. **1.5:1 is a house number, not a standard**, and it is proposed rather than derived; that
+is why CQ-D makes it a reported figure first and an assertion only once the values satisfy it. Anyone
+raising the floor later owes a reason, and "WCAG says so" will not be it.
+
+### 8.3 The **rhythm gate** — a metric may not be a literal
+
+- ESLint rejects arbitrary sizing values (`h-[36px]`, `min-h-[2.25rem]`) in
+  `components/**`/`features/**`, extending the existing colour-literal rule in
+  `packages/config/eslint/react.js`. **Baseline: 27 arbitrary-value sites today** (searched across
+  `apps/web/src/**/*.tsx`). It ships as a **ratchet at 27, never up** — the ADR-0058 coverage-ratchet
+  pattern, set at the measured floor rather than an aspirational zero, because a gate that fails on
+  day one gets deleted.
+- `tabular-nums` may not appear in a `className` — use `text-data` (§4.1).
+- A virtualized list's row height must come from `--row-h`, not a module constant. Structural test,
+  naming `HierarchyTree.tsx`, `GanttPanel.tsx` and `geometry.ts` as the three call sites it covers.
+
+### 8.4 The **page-frame** structural test
+
+No file under `src/routes/` hand-rolls the page frame. `surface-seams.structural.test.ts`'s shape,
+including its own hard-won note: **the protection is in the regex; the allowlist is what must not
+grow** (ADR-0077 §1).
+
+### 8.5 **Total records**, so a new member is a typecheck failure
+
+`Record<SurfaceTone, SurfaceFamily>`, `Record<Density, MetricSet>`, `Record<PlotRole, FillAndInk>`,
+`Record<AccentRole, TokenName>`. ADR-0094's `Record<ConflictKey, ConflictRemedy>` is the precedent
+and its stated benefit is exactly the one wanted here: adding a flag becomes a typecheck failure
+rather than a conflict reaching a planner with nothing behind it.
+
+### 8.6 Existing gates, extended not replaced
+
+`token-architecture.test.ts` gains: per-scope completeness = **the closure** (§1.5b) + declared
+packs, replacing the hand-written `REBOUND_NAMES` array at `:83-102` with an assertion that the
+declared rebind list **equals** the computed closure — so `--secondary`, `--destructive` and its
+hover arrive without anyone noticing them; the `canvas` family joins `FAMILIES`; the
+`[data-density]` layers get the same "a scoped layer restates its global layer in full" assertion
+that the flag layers have (`:202-221`), because it is the same cascade trap.
+
+`surface-seams.structural.test.ts` gains `canvas` **in its regexes**, not only in its allowlist —
+ADR-0077 §1's implementation note, which is the one thing about that gate that is easy to get wrong.
+
+---
+
+## 9. How this makes "a correct pattern applied to one control and not its neighbour" impossible
+
+This repository has recorded that defect shape in ADR-0059 M6, ADR-0062 M6, ADR-0064 §7 (four of
+five findings), ADR-0067 M4, ADR-0073 C4, ADR-0080, ADR-0086 M6, ADR-0090 M5, ADR-0092 and ADR-0093.
+It is the house defect. A design system that does not attack it directly is decoration.
+
+Four mechanisms, in decreasing order of strength:
+
+**1. Make the wrong thing not compile.** A colour family has no utility, so a component cannot choose
+a surface (exists, kept). A metric literal fails lint, so a control cannot be sized one way here and
+another there (§8.3). `tabular-nums` fails lint, so a number cannot be typeset two ways (§4.1). This
+is the only mechanism that works while nobody is looking.
+
+**2. Make the set total.** Where the system has an enumerable set, the mapping is a `Record`, so
+adding a member without handling it is a typecheck failure (§8.5). This is what turns "somebody must
+remember to update the other place" into "the compiler will tell you".
+
+**3. Derive the inventory, never write it.** The pair census (§8.1) is the general form: any gate
+whose contents are a hand-written list will eventually be shorter than the thing it guards. Four
+missing contrast pairs and ADR-0073 C4's cap of `20` are the same failure.
+
+**4. Remove the decision from the call site.** `PageHeader` decides where the primary action goes, so
+twelve routes cannot each decide. `DataTable`'s `numeric` flag decides alignment, so a column cannot.
+`EmptyState` decides what an empty list looks like. This is the weakest mechanism — a call site can
+always not use the primitive — which is why each ships **with** a structural test (§8.4) rather than
+with an instruction.
+
+**What none of them covers, said plainly.** No gate can tell you a screen is beautiful, that a
+hierarchy reads, or that an accent is prominent enough to be an accent. Mechanisms 1–4 make it
+impossible for a _decision that was made_ to be applied inconsistently; they cannot make the decision.
+That judgement stays with a person looking at a screen, and this design's honest contribution is that
+it reduces the number of screens that person has to look at from every screen to every archetype.

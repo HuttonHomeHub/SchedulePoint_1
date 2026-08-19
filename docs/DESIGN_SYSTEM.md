@@ -84,7 +84,14 @@ Status is never conveyed by colour alone — always pair with an icon and/or tex
   | `text-lg`   | 1.125rem / 1.75rem | Lead text                   |
   | `text-xl`   | 1.25rem / 1.75rem  | Card titles                 |
   | `text-2xl`  | 1.5rem / 2rem      | Section headings            |
-  | `text-3xl`  | 1.875rem / 2.25rem | Page titles                 |
+  | `text-3xl`  | 1.875rem / 2.25rem | _(unused — see below)_      |
+
+> **`text-3xl` is declared and used by nothing** — zero call sites in `apps/web/src`, verified by
+> search rather than by memory. Its row said "Page titles", which was wrong twice over: page titles
+> come from the `PageHeader` archetype, which renders `text-2xl`. It is **kept rather than deleted**,
+> because a type ramp is a designed sequence and a scale with a hole in it invites the next person to
+> reach past the gap; an unused top step costs three custom properties. If a display context ever
+> wants it, it is there and it is the right size.
 
 - **Weights:** 400 body, 500 medium (labels/buttons), 600 semibold (headings).
   Avoid heavier weights except for display.
@@ -99,9 +106,19 @@ groups, `8`–`12` between page sections.
 
 ### Sizing scale
 
-Controls share a height scale for alignment: **sm 32px (`h-8`)**, **md 36px
-(`h-9`, default)**, **lg 40px (`h-10`)**. Content width is capped with container
-utilities (e.g. `max-w-screen-xl`) rather than fixed pixel widths.
+Controls share a height scale for alignment: **sm 32px**, **md 36px (default)**, **lg 44px**.
+Content width is capped with container utilities (e.g. `max-w-screen-xl`) rather than fixed pixel
+widths.
+
+The two common sizes are **tokens, not utilities** — `--control-h` (2.25rem) and `--control-h-sm`
+(2rem), consumed as `h-(--control-h)` — so the scale is a theme decision that moves in one place
+rather than a class each control remembers. `lg` is still the literal `h-11`, and `icon` is
+`size-10`.
+
+> **This said `h-8` / `h-9` / `h-10` and named 40px for `lg`.** All three were wrong after ADR-0097
+> tokenised the scale and the product owner took the default from 40px to 36px: the utilities are
+> gone from the two sizes that matter, and `lg` is 44px rather than 40. Corrected by reading
+> `button.tsx` and `globals.css`, which is the only way a number like this is ever right.
 
 ### Border radius
 
@@ -175,20 +192,35 @@ Authoring rule: a control's `showLabel` is **presentation** and its `tier` is **
 conflate them — they were one property once, which meant a static per-item flag decided a question
 that is really about the width available at render time (ADR-0031, TECH_DEBT #61).
 
-### Dark & light mode
+### One theme
 
-Both are first-class. Preference is light / dark / **system**; the `.dark` class
-on `<html>` flips every token (theme management in
-[`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md)). Components must look
-correct in both — reviewers check both.
+**There is one theme and no picker** (ADR-0097). It is declared at `:root`, no class is stamped on
+`<html>`, and every stored preference — `dark`, `light`, `system`, or anything else — resolves to
+"stamp nothing", which is what makes a flash of the wrong theme structurally impossible rather than
+merely avoided.
 
-### Corporate theme (navy + amber)
+> **This heading read "Dark & light mode — both are first-class. Preference is light / dark /
+> **system**; the `.dark` class on `<html>` flips every token … reviewers check both" until
+> 2026-08-19 — immediately above a section that opens "this is now the product's only theme".** Two
+> answers on one page, and the wrong one first. Corrected rather than deleted, because the
+> instruction it carried ("reviewers check both") was a real habit and a reader needs to know it has
+> lapsed rather than to find it silently gone.
 
-A fourth picker entry, and a different _kind_ of thing from the three above: light,
-dark and system are colour **schemes**; Corporate is a **brand skin** — navy chrome
-around a light working canvas — that resolves as a light scheme. It is applied by a
-`.corporate` class on `<html>`, a sibling of `.dark`; exactly one theme class is ever
-stamped, and light stamps none (it is the `:root` baseline).
+The mechanism that would carry a future dark theme is **kept live rather than deleted**:
+`theme-boot.js` still runs and still has its test, `THEME_SELECTORS` is a one-element list, and
+`Theme` stays a union. The cost of bringing dark back is a block of values and one entry — about 110
+declarations, comparable to what `.dark` used to hold. What that does **not** buy is the judgement:
+choosing those values is a week of design work, and a dark diagram whose colours carry meaning needs
+its plot separations re-derived rather than re-tinted (`--plot-*`, ADR-0097 Landing E).
+
+### The palette (navy + amber)
+
+**This is the product's only theme, and it is declared at `:root`** (ADR-0097) —
+no class is stamped on `<html>`, and there is no picker. Navy chrome around a light
+working canvas. The product owner asked for it to become "the main theme that the app
+is designed to"; light, dark and system are withdrawn rather than deprecated, and the
+mechanism that would carry a future dark theme is kept live rather than deleted (see
+`docs/FRONTEND_ARCHITECTURE.md` → Theme management).
 
 | Role                    | Colour                 | Token                                            |
 | ----------------------- | ---------------------- | ------------------------------------------------ |
@@ -210,47 +242,67 @@ Two rules make the palette work rather than merely look right on a swatch sheet:
    the brand **navy** (12:1), and amber is the primary on the navy chrome, where it carries
    navy ink at **7.9:1**. Same rule for focus: the ring is navy on light surfaces (`--ring`)
    and amber on chrome (`--chrome-ring`, 7.9:1).
-2. **Near-critical moved to bronze.** `--warning` is the TSLD's near-critical bar fill,
-   and in light/dark it is essentially this same amber. With amber promoted to `--primary`
-   (which is the ordinary bar fill), a normal bar and a near-critical bar would have been
-   the same colour. Corporate shifts `--warning` to a deeper bronze so the canvas keeps
-   three readable states — normal / near-critical / critical — on top of the dashed-outline
-   shape cue that carries [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color)
-   regardless of hue.
+2. **Near-critical is bronze rather than amber.** `--warning` is the TSLD's near-critical bar
+   fill. With amber promoted to `--primary` — which is also the ordinary bar fill — a normal bar and
+   a near-critical bar would have been the same colour, so `--warning` moved to a deeper bronze.
+
+   > **ADR-0097 Landing E removed the constraint that forced this**, and the entry is kept because
+   > the reasoning is still instructive. The diagram now has its own family (`--plot-*`), so the
+   > ordinary bar fill is no longer the same token as the page's primary button: a theme need never
+   > again recolour the canvas because it recoloured a control. The three bar states are separated
+   > **by measurement** there — near-critical against critical was 1.34:1 and is now 1.61:1, with
+   > 1.70:1 established as the ceiling under a white inside-label and a 3:1 floor on the ground —
+   > and `token-contrast.test.ts` asserts it rather than a reader checking a swatch. The shape cue
+   > (solid outline critical, dashed near-critical) still carries
+   > [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color) regardless of hue.
 
 Verified pairings (sRGB, WCAG 2.x): navy chrome / white text **16:1**; body `#333` on
 off-white **12:1**; amber fill / navy ink **7.9:1**; destructive `#b91c1c` on off-white
 **6.1:1**.
 
-**The type scale is unchanged.** The palette's source description named Roboto; swapping
-the typeface per theme would shift layout and pull a second font at runtime for no
-accessibility or brand gain that colour doesn't already deliver. Corporate is a colour
-theme.
+**The typeface is Space Grotesk** (ADR-0097), chosen from four candidates rendered on real product
+chrome. The palette's source description named Roboto; a per-theme typeface was rejected on the
+reasoning that it would shift layout and pull a second font at runtime for no accessibility or brand
+gain colour does not already deliver — and with one theme the question no longer arises.
 
 ### Surface scopes (ADR-0055)
 
-A **theme** answers "what does this product look like". A **surface scope** answers "what
-does this token mean _here_". Corporate is why the second question exists: its chrome is
-navy while its page is off-white, so `--muted-foreground` cannot be one colour. The first
-attempt gave the header three bespoke tokens and no muted grey, and every piece of secondary
-text in the chrome fell back to the page's grey — invisible on navy, in six separate places.
+A **surface scope** answers "what does this token mean _here_". It exists because one product
+carries regions whose grounds are genuinely different — a navy chrome band above an off-white page —
+so `--muted-foreground` cannot be one colour. The first attempt gave the header three bespoke tokens
+and no muted grey, and every piece of secondary text in the chrome fell through to the page's grey:
+invisible on navy, in six separate places.
 
-There are three scopes:
+> **This section used to explain scopes via the Corporate theme, which no longer exists.** ADR-0097
+> collapsed the product to one theme, so a scope is now the only mechanism by which a token means
+> two things — which makes it more load-bearing than when it was one of two. The old text also said
+> "three scopes" and "a complete 17-token family" while a passage further down said five: two
+> answers on one page, which is worse than either being wrong alone.
 
-| Scope    | Where                     | Applied by                 |
-| -------- | ------------------------- | -------------------------- |
-| _(page)_ | everything by default     | `:root` — nothing to apply |
-| `chrome` | the top band              | `<Surface tone="chrome">`  |
-| `panel`  | the Project Explorer rail | `<Surface tone="panel">`   |
+There are **six** scopes — the page plus five:
 
-Each theme block declares a **complete 17-token family** per scope — fill, foreground,
-muted-foreground, border, accent (+ foreground), primary (+ foreground), field (+ foreground
+| Scope    | Where                            | Applied by                 |
+| -------- | -------------------------------- | -------------------------- |
+| _(page)_ | everything by default            | `:root` — nothing to apply |
+| `chrome` | the top band                     | `<Surface tone="chrome">`  |
+| `panel`  | the Project Explorer rail        | `<Surface tone="panel">`   |
+| `brand`  | the public screens' navy panel   | `<Surface tone="brand">`   |
+| `auth`   | the card that panel is joined to | `<Surface tone="auth">`    |
+| `canvas` | the diagram, and the Gantt panel | `<Surface tone="canvas">`  |
 
-- muted-foreground), muted, input, destructive/warning/info text, and ring. A `[data-surface]`
-  rule then
-  rebinds the ordinary semantic names to that family. Inside a scope, `bg-background` **is**
-  the header's navy and `text-muted-foreground` **is** a grey validated against it — so no
-  descendant component changes at all, and none of them learn where they are.
+`:root` declares a **complete family of 31 names** per scope: the 18-name base — fill, foreground,
+muted (+ foreground), border, input, accent (+ foreground), primary (+ foreground), field
+(+ foreground, + muted-foreground), destructive/success/warning/info **text**, and ring — plus the
+**13 closure members** the status fills pull in (`destructive`, `secondary`, `success`, `warning`,
+`info` and their foregrounds, and the three hover fills). A `[data-surface]` rule then rebinds the
+ordinary semantic names to that family. Inside a scope, `bg-background` **is** the header's navy or
+the diagram's ground, and `text-muted-foreground` **is** a grey validated against it — so no
+descendant component changes at all, and none of them learn where they are.
+
+**The count is an output, not a target.** `styles/token-architecture.test.ts` derives the family by
+closure from what a compiled utility can composite, so "31" is what that computation currently
+returns rather than a number anybody chose. Quoting it here is a convenience for the reader; the
+gate is the authority, and it was 18 before the closure and will move again.
 
 Three rules keep this honest:
 
@@ -264,23 +316,40 @@ Three rules keep this honest:
   `var(--token)` rather than a value resolved once at `:root`. Drop it and every scope
   silently stops working, with no error and a diff that looks like a tidy-up. Pinned by test.
 
-**There are five scopes, and the bar for a sixth is written down.** `chrome` (the app's top band),
-`panel` (the navigator rail), the page (`:root`), and — since ADR-0077 — `brand` (the public
-screens' navy panel) and `auth` (the card beside it).
+**There are six scopes, and the bar for a seventh is written down.** `chrome` (the app's top band),
+`panel` (the navigator rail), the page (`:root`), `brand` (the public screens' navy panel) and
+`auth` (the card beside it) since ADR-0077, and `canvas` (the diagram and the Gantt panel) since
+ADR-0097 Landing E.
 
-Those last two are the odd ones: both are **theme-invariant**, identical in Light, Dark and
-Corporate, because a signed-out visitor cannot choose a theme and `theme-boot.js` chooses one for
-them. **Do not "fix" either to follow the theme** — the whole login screen is deliberately one fixed
-look, and the theme picks up after sign-in, on the app the reader actually configured. `auth` exists
-because ADR-0077 originally pinned only the panel, which left a fixed navy panel joined to a
-theme-following card: one screen wearing two identities (ADR-0077 §8.3).
+> This sentence said "five, and the bar for a sixth" and dated itself — _"this sentence becomes
+> wrong the day it lands"_. It landed; the sentence is corrected rather than left for a reader to
+> notice the caveat. **A seventh is a bigger commitment than the sixth was**: the bar (ADR-0077 §1,
+> five conditions) has not changed, but a scope now costs 31 declarations rather than 18, thirteen
+> of which need a derived value clearing its own pairs against that surface's fill.
+
+Those last two were the odd ones, and **ADR-0097 changed why they exist without changing that they
+do**. They were justified as **theme-invariant** — identical in Light, Dark and Corporate, because a
+signed-out visitor cannot choose a theme and `theme-boot.js` chose one for them. There is now **one
+theme**, so that argument distinguishes nothing and is dead.
+
+They survive on a better reason they had all along: they are **designed differently from the page**,
+and measurably. `auth` was proposed for retirement on the strength of the dead argument; measuring it
+reversed the decision — 15 of its 18 tokens differ from their page counterparts and **12 differ
+perceptibly**, led by a focus ring at Δ0.39 OKLCH that ADR-0077 M7 derived up from a failing 2.02:1
+to clear WCAG 1.4.11. Retiring it would have discarded that derivation along with the field fill,
+four status inks and the white card that separates the login from an off-white page. Two gates now
+pin it (`token-architecture.test.ts`), so if a later change quietly aligns `auth` to the page it
+really has become dead weight and can be retired deliberately — rather than left as 18 aliases that
+look like a decision and are not one.
+
+**Do not "fix" either to follow the theme.** The login is deliberately one fixed look.
 
 A scope is a whole parallel vocabulary that every future value change must be applied to once more,
 so **add one only when all five of ADR-0077 §1's conditions hold**. The load-bearing one: the
 region's fill must be chosen for a reason the page's fill structurally cannot serve. If descendants
 would have to know where they are, it is not a scope — it is a component with props.
 
-**A scope cannot repaint a `Card`.** `--card` is deliberately not one of the 17 rebound names, so a
+**A scope cannot repaint a `Card`.** `--card` is deliberately not a rebound name, so a
 component that needs a scope-coloured container builds one from `bg-background` rather than wrapping
 `Card` — which is what `AuthShell` does. This is a feature: `Card` means the same thing everywhere.
 
@@ -332,6 +401,35 @@ journeys, and manual keyboard + screen-reader checks for significant UI. The
 **Accessibility Reviewer** agent audits non-trivial UI.
 
 ---
+
+## Page archetypes (ADR-0097 Landing A)
+
+Six components in `apps/web/src/components/ui/page/` decide, **once**, what every
+screen's frame, heading, section, empty state, loading shape and row look like.
+Before them the frame was hand-written **fourteen** times and the page heading
+**sixteen** — fourteen and sixteen chances for one screen to be padded or ranked
+differently from its neighbour, and no way to change the measure once.
+
+| Archetype                     | Owns                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `PageContainer`               | the measure, centring and padding. Renders a `<div>`, **never a landmark** — the app shell already provides the single `<main>` |
+| `PageHeader`                  | the page's one `<h1>`, its `aria-describedby` description, and the primary action                                               |
+| `SectionCard`                 | a section's heading **rank** (`<h2>`), and a named `<section>` so each section is a `region` a screen-reader user can jump to   |
+| `EmptyState`                  | what a screen or a section says when it holds nothing — two sizes, and the action is **optional**                               |
+| `Skeleton`                    | the loading **material** only; each archetype owns its own loading **shape**                                                    |
+| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly                                                          |
+
+**The authoring rule: reach for the archetype, or raise the requirement — never
+invent a one-off.** A hand-rolled frame that happens to match today's archetype
+looks identical on screen and drifts the first time either changes, which is a
+defect nobody can see. A screen that needs something these do not offer wants a
+seventh archetype, not a bespoke layout in a feature folder.
+
+Two things `EmptyState` is deliberately **not** for. An action it cannot offer is
+not a degenerate case: a Viewer who cannot act is told who can, and a required
+`action` prop would force that into a lie. And a settled one-liner like "Nothing
+needs you right now" is a **fact**, not an absence to be resolved — giving it an
+icon and a frame dresses a good outcome as a problem.
 
 ## Component standards
 
@@ -416,11 +514,20 @@ link`; sizes `sm | md | lg | icon`; icon buttons require `aria-label`. One
   independently — and the API alone is what ADR-0082 and ADR-0064 both record
   failing: a correct pattern applied to one control and not its neighbour.
 
-- **Tables (DataTable)** — one table component: sortable headers, pagination,
-  row selection, sticky header, per-column alignment (numbers right-aligned,
-  tabular numerals), loading (skeleton rows), empty, and error states. Semantic
-  `<table>` markup with scoped headers. Responsive: horizontal scroll in a
-  bordered container; never break the page layout.
+- **Tables (DataTable)** — one table component owning the four **states** every resource list
+  needs: loading (a labelled spinner), error with retry, empty (the caller supplies the icon, copy
+  and optional action), and populated. Semantic `<table>` markup with scoped headers, an optional
+  per-row detail `<tr>` (`renderDetail`), and a focusable scroll region that can be
+  `aria-describedby`-linked to prose qualifying what the rows mean. Responsive: horizontal scroll in
+  a bordered container; never break the page layout.
+
+  > **This entry claimed five features the component does not have** — sortable headers, pagination,
+  > row selection, a sticky header and per-column alignment — and was corrected by reading
+  > `components/ui/data-table.tsx` rather than by trusting it. Consumers that sort or select do it
+  > themselves today. That is not a to-do list: a shared primitive earns each of those when a second
+  > consumer needs it, and writing them down as though they exist is how a reader plans around a
+  > capability that isn't there. Loading is a **spinner**, not skeleton rows.
+
 - **Cards** — `card` surface, `radius-lg`, `shadow-sm`, standard padding;
   slots for header/title, content, footer/actions.
 - **Navigation** — top-level via the Project Explorer rail (a hand-rolled ARIA

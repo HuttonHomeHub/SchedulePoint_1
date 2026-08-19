@@ -1,0 +1,135 @@
+-- Serve the organisation-overview "recently changed" feed (ADR-0098 M1).
+--
+-- The landing page lists the 8 most recently-changed plans, where "changed" means the newest of the
+-- plan row, any of its activities, or any of its dependencies — by `updated_at`, because ADR-0073 §3
+-- permanently excludes ordinary content edits from the audit log, so row attribution is the only
+-- source there is. Two `LEFT JOIN LATERAL … ORDER BY updated_at DESC LIMIT 1` subqueries, one per
+-- child table. The nearest existing indexes are `(plan_id, created_at, id)` on both tables, which
+-- cannot serve `ORDER BY updated_at DESC`.
+--
+-- Designed and measured by the database-architect agent (CLAUDE.md §19.3), on 630,028 activities /
+-- 860,230 dependencies / 106,789 plans across 323 organisations, ~7.5% soft-deleted, with
+-- `updated_by` at its real 32-character width. PostgreSQL 16.13 on defaults; production is 17 (see
+-- LIMITS below). Medians of 9-11 reps after a warm-up.
+--
+-- ---------------------------------------------------------------------------------------------
+-- WHAT IT BUYS, warm                          | no index (jit on) | both indexes | buffers
+--   typical installation (16 plans × 180)     |          28.6 ms  |     0.48 ms  |  944 → 135
+--   scale tier (10 plans × 2,000, ADR-0066)   |          46.2 ms  |     0.32 ms  | 5,351 → 86
+--   breadth (459 plans × 40)                  |          61.1 ms  |     5.6 ms   | 10,673 → 3,692
+--   extra-large (3,000 plans × 40)            |         319.2 ms  |    29.1 ms   | 43,693 → 24,086
+--
+-- COLD (postgres restarted, OS page cache dropped — a REAL state, because ADR-0047 recreates the
+-- container on every release, so the first person to sign in after a deploy gets exactly this):
+--   typical  121.5 ms → 5.5 ms     scale  205.5 ms → 3.9 ms     breadth  642.2 ms → 103.1 ms
+--
+-- Without these, the query ALONE breaches the 200 ms p95 endpoint budget (docs/PERFORMANCE.md) on
+-- the cold path at the scale tier, before the service, the other reads, serialisation or the network.
+--
+-- ---------------------------------------------------------------------------------------------
+-- THE FINDING NO REASONING WOULD HAVE PRODUCED: the dominant baseline cost is JIT COMPILATION.
+--
+-- Unindexed, the lateral's estimated cost on a breadth-shaped organisation is 554,836 — which crosses
+-- `jit_above_cost` (100,000) AND both `jit_inline_above_cost` / `jit_optimize_above_cost` (500,000).
+-- Measured: 241.6 ms with `jit=on`, 25.1 ms with `jit=off`. **195 ms of it is LLVM**, paid on every
+-- single load of the first screen after sign-in, because JIT is per-execution and never cached.
+--
+-- And it is unstable rather than merely slow: after growing `plans` from 3k to 103k rows, JIT began
+-- firing on EVERY organisation shape — taking the small "typical" organisation from 3.2 ms to 28.6 ms
+-- with no change whatsoever to that organisation's data. A tenant's landing page would get slower
+-- because a different tenant grew.
+--
+-- Both indexes together drop the estimate to 3,334 and JIT never fires. **Neither index alone does
+-- this.** That is why they ship together and why splitting them later would be a regression, not a
+-- saving.
+--
+-- ---------------------------------------------------------------------------------------------
+-- WHAT IT COSTS, stated in full rather than as "one more index".
+--
+-- Disk: ~41 bytes per LIVE row. 23 MB at 582k activities, 32 MB at 815k dependencies (+17% and +13%
+-- on those tables' existing index footprints; ~81 kB per 2,000-activity plan). On the deployed
+-- database today — 28 activities — both are one page each. Build takes a SHARE lock; Prisma runs
+-- migrations in a transaction so CONCURRENTLY is unavailable, but at ~0.6 ms per 1,000 rows even a
+-- million-row table is a sub-second write pause at container start.
+--
+-- Writes: this index takes HOT updates to **exactly 0%** for every write that stamps `updated_at`,
+-- structurally and permanently — `updated_at` changes on every such write, so no fillfactor headroom
+-- restores it. Measured on a fillfactor-90 clone in steady state:
+--
+--   one activity edit (drag/resize/progress)  HOT 80% → 0%    WAL   75 B →   504 B (6.7×)
+--   50-row bulk edit                          HOT 100% → 0%   WAL  4.9 kB →  25.3 kB (5.2×)
+--   2,000-row lane pack (auto-arrange/import) HOT 99.9% → 0%  WAL  188 kB → 1,028 kB (5.5×)
+--   CPM recalculation (21 cols × 2,000)       HOT 82% → 89%   WAL  396 kB →   314 kB (1.0×)
+--
+-- ≈ +429 bytes per activity edit (10,000 edits/day ≈ +4 MB WAL), +840 kB and +16 ms per auto-arrange
+-- of a 2,000-activity plan — an action already followed by a recalculation.
+--
+-- THE RECALCULATION IS EXEMPT, and that is the single biggest thing standing between this index and
+-- an expensive decision. `ScheduleRepository.writeResults` (schedule.repository.ts:643-760) writes
+-- only the 21 engine-owned columns and deliberately never touches `updated_at`/`version` (ADR-0022),
+-- so the highest-volume write in the product does not pay this. That is a property of existing code,
+-- not luck — and it is load-bearing, so a future change that made the recalculation stamp
+-- `updated_at` would silently make this index expensive.
+--
+-- ---------------------------------------------------------------------------------------------
+-- THREE DECLINES, each with the number, so a future reader does not re-open them on instinct.
+--
+--  * ANYTHING ON `plans` — declined, but NOT for the reason the spec gave. §4.4 said the outer set is
+--    small; at the extra-large shape it is 3,000 plans, which is not small, and the decline still
+--    holds. The real reason is that `plans_organization_id_idx` ADAPTS: at 3,033 plans the planner
+--    picks a seq scan (71 blocks, 0.65 ms); at 106,789 it switches by itself to a bitmap scan on that
+--    index (17 blocks, 0.19 ms), end-to-end median unchanged. Three candidates were built and
+--    measured; the planner chose NONE of them, with byte-identical buffer counts proving they went
+--    unused. Pure dead weight.
+--  * `INCLUDE (updated_by)` COVERING VARIANT — declined at **+60 MB for 0.05 ms**. Buffers drop
+--    (3,692 → 2,776) and time does not, because those buffers are already cache hits. This is
+--    ADR-0053 M4's shape exactly (1,296 kB declined for 0.14 ms), and it was only visible because
+--    `updated_by` was measured at its true 32-character width rather than a short seed value.
+--  * `(organization_id, plan_id, updated_at DESC)` 3-COLUMN VARIANT — declined; see the instruction
+--    below, which is the reason anyone would want it.
+--
+-- ASC vs DESC makes no measurable difference (identical size, identical buffers, indistinguishable
+-- medians). DESC is kept because it names the intent.
+--
+-- ---------------------------------------------------------------------------------------------
+-- TWO INSTRUCTIONS FOR THE REPOSITORY THAT READS THESE.
+--
+--  1. The lateral MUST carry `deleted_at IS NULL` verbatim. Dropping it does not error — it silently
+--     falls back to `activities_plan_id_created_at_id_idx` and scans the plan's whole activity set.
+--     The partial predicate was checked rather than assumed (ADR-0086 M6's hazard): exact match uses
+--     the index; a strictly narrower predicate also uses it, with the extra term as a Filter; an
+--     equivalent-but-differently-written `NOT (deleted_at IS NOT NULL)` also uses it; OMITTING it does
+--     not. ADR-0086's finding stands for predicates Postgres cannot PROVE implication for — its case
+--     was a LIKE prefix — and `IS NULL` is in the trivially-provable class.
+--  2. Do NOT add `a.organization_id = $1` to the lateral. It is a natural defence-in-depth reflex and
+--     it costs **62%**: 1.73-1.90 ms (Index Only Scan, Heap Fetches: 0) becomes 3.07 ms, because
+--     `organization_id` is not in this index and the predicate forces a heap fetch per plan. Putting
+--     it in the index recovers the time at +45% size, to re-check something already guaranteed twice
+--     over — the outer query has scoped `plans` to the caller's organisation, and
+--     `activities.plan_id → plans.id` is an enforced foreign key.
+--
+-- ---------------------------------------------------------------------------------------------
+-- LIMITS OF WHAT WAS MEASURED, stated so nobody reads more into it than was established.
+--   * PostgreSQL 16.13, not the deployed 17. Nothing here is known to depend on a 16→17 planner
+--     change, but the JIT finding is a COST-ESTIMATE THRESHOLD effect and cost estimates move between
+--     majors — worth one spot-check on 17.
+--   * UUIDs seeded v4, not the product's v7. Affects PK-index locality only; these indexes are keyed
+--     on `plan_id` and the heap is clustered by plan either way.
+--   * Dependency ratio 1.49/activity against the 1.6 ADR-0073 C3.0 measured — 7% low, making the
+--     `dependencies` index look marginally cheaper and its win marginally smaller.
+--   * Read timings taken on a freshly ANALYZEd table. `plan_id` row estimates are badly off in this
+--     schema (150 estimated vs 1,847 actual); that does not change the chosen plan, but a very stale
+--     ANALYZE on a real installation could.
+--   * The endpoint was not measured, only this query.
+--
+-- Note the SECOND table's real name: the Prisma model is `ActivityDependency` and the table is
+-- `dependencies` (`@@map`, schema.prisma:1359). The spec and the brief both named a table called
+-- `activity_dependencies`, which does not exist.
+
+CREATE INDEX "idx_activities_plan_updated_at"
+  ON "activities" ("plan_id", "updated_at" DESC)
+  WHERE "deleted_at" IS NULL;
+
+CREATE INDEX "idx_dependencies_plan_updated_at"
+  ON "dependencies" ("plan_id", "updated_at" DESC)
+  WHERE "deleted_at" IS NULL;

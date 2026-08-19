@@ -163,8 +163,8 @@ describe('buildExportViewport — view extent', () => {
 
 describe('resolvePrintPalette', () => {
   it('is a LIGHT-forced palette (dark ink on white paper), distinct from the theme palette', () => {
-    const print = resolvePrintPalette();
-    const themed = resolveTsldPalette();
+    const print = resolvePrintPalette(document.documentElement);
+    const themed = resolveTsldPalette(document.documentElement);
     // Light fallbacks: white paper, near-black ink/labels (not the dark palette's near-white ink).
     expect(print.ground).toBe('#ffffff');
     expect(print.ink).toBe('#1a1a1a');

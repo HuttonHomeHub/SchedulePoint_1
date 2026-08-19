@@ -21,6 +21,19 @@ Product direction lives in [ROADMAP.md](ROADMAP.md) and
 the ADR-0034 capability matrix. Listed here only when a candidate is neither —
 a product idea that has not yet earned a roadmap line:
 
+- `M` **The activity editor as a docked panel** — ADR-0097 Landing **D2**, deferred out of that
+  epic by the product owner on 2026-08-19 rather than dropped. The editor is a modal dialog today;
+  the proposal is a panel docked into the workspace, so a planner can see the diagram while editing
+  the activity they picked from it.
+
+  **It is a workflow change, not a styling one, which is why it wants its own pass.** ADR-0060's
+  per-scope save exists because the editor spans scopes that do not share a permission, and its
+  unsaved-work guard (ADR-0060 M6) is **dialog-shaped** — it hangs off backdrop-click and the close
+  button. A docked panel removes the thing that guard is attached to, across three independently
+  dirty scopes, so "what happens to unsaved changes when the planner clicks the canvas" is a real
+  design question rather than an implementation detail. Named here rather than discovered by a
+  failing suite.
+
 - `S` **The Gantt's remaining editing gaps.** The epic landed (ADR-0095, M1–M5,
   `web-v0.92.0` 2026-08-18) and this entry is rewritten to be about what is
   **left**, per this file's own convention — it previously described the whole

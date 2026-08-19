@@ -52,6 +52,11 @@ export async function clearAuditEvents(prisma: PrismaClient): Promise<void> {
 export async function clearDomainData(prisma: PrismaClient): Promise<void> {
   await prisma.crossPlanDependency.deleteMany();
   await prisma.activityDependency.deleteMany();
+  // Notes hold `activity_id`/`plan_id` FKs, so they must go before what they annotate. The
+  // e2e database is shared with the Playwright run and `apps/web/e2e-notes` leaves notes
+  // behind, so without this the failure lands in a spec that has never heard of notes — the
+  // same way `plan_shares` did, one table along.
+  await prisma.note.deleteMany();
   await prisma.activity.deleteMany();
   // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go before
   // `plan`, deepest first.

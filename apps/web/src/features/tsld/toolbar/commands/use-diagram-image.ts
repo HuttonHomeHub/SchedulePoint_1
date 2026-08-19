@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 
 import { buildExportViewport, EXPORT_TOP_BAND, type ExportExtent } from '../../export/export-image';
 import { renderExportImage } from '../../export/render-export-image';
+import { useCanvasSurface } from '../../render/canvas-surface';
 import type { TsldViewToggles } from '../../render/paint';
 import { resolvePrintPalette, resolvePrintWbsBandPalette } from '../../render/palette';
 import { daysBetween } from '../../render/render-model';
@@ -58,6 +59,13 @@ export function useDiagramImage(args: {
   // viewport). Returns `null` when there's nothing to frame yet (no data date / no live viewport);
   // `hasDiagram` gates the menu, so that's a defensive guard. `imageWidth`/`imageHeight` are the raster
   // pixel dims (aspect ratio) the PDF page-fit needs.
+  //
+  // **The export path reads the diagram's scope too** (ADR-0097 Landing E), and it is the site the
+  // migration named as the one that gets forgotten: it is off the render path, so no screen shows
+  // it wrong. A miss here paints page colours into a delivered PDF, where nobody is watching a
+  // screen to notice — and `resolvePrintPalette`'s own docblock promises a printed diagram "cannot
+  // drift from the one on screen".
+  const canvasSurface = useCanvasSurface();
   return useCallback(
     (extent: ExportExtent) => {
       const dataDate = plan.plannedStart;
@@ -100,7 +108,7 @@ export function useDiagramImage(args: {
         size,
         dpr,
         topBand: EXPORT_TOP_BAND,
-        palette: resolvePrintPalette(),
+        palette: resolvePrintPalette(canvasSurface),
         scaledToFit,
         meta: { planName: plan.name, dataDate, generatedAtIso: todayIso },
         // Placed against the EXPORT viewport, by the same `wbsBandBars` the live canvas calls with
@@ -114,7 +122,7 @@ export function useDiagramImage(args: {
                   width: size.width,
                   height: band.height,
                 }),
-                palette: resolvePrintWbsBandPalette(),
+                palette: resolvePrintWbsBandPalette(canvasSurface),
               },
             }
           : {}),
@@ -135,6 +143,13 @@ export function useDiagramImage(args: {
       todayIso,
       lateOverlayActive,
       canvasControlRef,
+      // **Not optional, and the lint warning that asked for it was right** (ADR-0097 Landing E).
+      // Omitted, this callback closes over the element from the render that created it — which is
+      // the FIRST render, before the diagram's `<Surface>` has mounted and therefore
+      // `document.documentElement`. The export would then paint page colours forever while every
+      // screen looked correct, which is precisely the failure this landing exists to remove,
+      // reintroduced by a dependency array.
+      canvasSurface,
     ],
   );
 }

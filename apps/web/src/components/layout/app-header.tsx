@@ -6,17 +6,33 @@ import { BrandMark } from '@/components/layout/brand-mark';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
-import { AUDIT_LOG_ENABLED, RESOURCES_ENABLED } from '@/config/env';
+import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { OrgSwitcher } from '@/features/organizations';
-import { canManageHierarchy, canReadAuditLog, useOrgRole } from '@/hooks/use-org-role';
-import { cn } from '@/lib/utils';
-
-const NAV_LINK_CLASS =
-  'text-muted-foreground hover:text-foreground [&.active]:text-foreground shrink-0 rounded-md px-2 py-1 whitespace-nowrap [&.active]:font-medium';
-const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
 
 /**
- * The header's contents — brand mark, org nav, and the account chip (theme, identity, sign-out).
+ * The wordmark's link treatment.
+ *
+ * `chrome`-scope rebound names only — no colour literals, which the ADR-0055 lint rule enforces
+ * and which would be invisible to the contrast matrix. `rounded-md` plus the focus ring rather
+ * than an underline: the wordmark is a lockup with an icon, and underlining half of it reads as
+ * damage.
+ */
+const BRAND_LINK_CLASS =
+  'focus-visible:ring-ring hover:opacity-90 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none';
+
+/**
+ * The header's contents — brand mark, organisation switcher, account chip. **No navigation.**
+ *
+ * The six organisation destinations (Clients, Calendars, Resources, Members, Audit log, Recently
+ * deleted) moved to the Project Explorer rail's bottom zone in ADR-0097 Landing D1: they are
+ * *places in the organisation*, and one navigator beats two. What is left is identity and account,
+ * which is what a header is for.
+ *
+ * That freed **540 px** at 1646 — measured, not estimated
+ * (`docs/specs/design-system-rewrite/m0-landing-d1-measurement.md`), and the figure the spec
+ * carried until then was 637 px, which appears never to have been measured at all. It is what pays
+ * for folding the plan identity line into this band, which ADR-0092 M5 withdrew for want of
+ * exactly this width.
  *
  * Split from the element that carries it because the two shell shapes place it differently:
  * flag-off the header IS the chrome surface and centres its row at `max-w-6xl` (today's shell);
@@ -25,27 +41,59 @@ const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
  * inside its own markup.
  *
  * A `1fr auto 1fr` grid (feature-spec.md §4.9, ADR-0056) — not a flex row with `flex-1`/`ml-auto`
- * — so the centre cell (org switcher + nav) sits at the true midpoint between the brand and the
- * account chip rather than merely absorbing whatever space the edges don't claim. **Centred while
- * it fits, filling when it does not**: `min-w-0` on every cell plus the nav's own
- * `overflow-x-auto` means a long org name or a crowded nav scrolls internally rather than pushing
- * the account chip off-screen or breaking the grid. DOM order (drawer → brand → org switcher →
- * nav → account) is unchanged from the previous flex markup, so the pinned tab order holds by
- * construction — no `order-*`, no absolute positioning.
+ * — so the centre cell sits at the true midpoint between the brand and the account chip rather
+ * than merely absorbing whatever space the edges don't claim. `min-w-0` on every cell means a long
+ * organisation name truncates rather than pushing the account chip off-screen. DOM order (drawer →
+ * brand → org switcher → account) is unchanged, so the pinned tab order holds by construction.
  */
-function HeaderContents(): React.ReactElement {
+/**
+ * The wordmark, as the route home (ADR-0098 M4).
+ *
+ * **The link is added HERE and never inside `BrandMark`**, because `brand-panel.tsx` renders the
+ * same mark on the public screens — sign-in, sign-up, reset — where there is no session and no
+ * route home. A link inside the primitive would put one there, pointing at a route the visitor
+ * cannot reach. There is a test asserting the public panel still renders no anchor.
+ *
+ * Off an organisation route (`/account`, `/me/activity`, `/onboarding`, `/staff`) it goes to `/`,
+ * which the home resolver turns into the caller's last-active organisation or onboarding — the
+ * same answer, arrived at by the one route that knows it.
+ *
+ * The accessible name **contains the visible text** ("SchedulePoint — organisation overview"), so
+ * WCAG 2.5.3 Label in Name holds: a speech-input user saying "SchedulePoint" still matches.
+ */
+function BrandLink({ orgSlug }: { orgSlug: string | undefined }): React.ReactElement {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isLanding = orgSlug !== undefined && pathname === `/orgs/${orgSlug}`;
+
+  if (orgSlug === undefined) {
+    return (
+      <Link to="/" aria-label="SchedulePoint — home" className={BRAND_LINK_CLASS}>
+        <BrandMark />
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      to="/orgs/$orgSlug"
+      params={{ orgSlug }}
+      aria-label="SchedulePoint — organisation overview"
+      // `aria-current` is set from the pathname rather than left to the router's `.active` class:
+      // this is the affordance the "Overview" nav item provided with `activeOptions={{ exact:
+      // true }}`, and it has to survive that item's removal in M5.
+      aria-current={isLanding ? 'page' : undefined}
+      className={BRAND_LINK_CLASS}
+    >
+      <BrandMark />
+    </Link>
+  );
+}
+
+function HeaderContents({ identitySlot }: { identitySlot?: React.ReactNode }): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  // A project's plans live at /orgs/:slug/projects/:id (a sibling of /clients),
-  // so keep the Clients nav item current across the whole hierarchy tree.
-  const onHierarchy = /\/orgs\/[^/]+\/(clients|projects)(\/|$)/.test(pathname);
-  // The recycle bin is a writer surface (only writers can restore); non-writers
-  // never see the entry point, though the API read itself is member-level.
-  const role = useOrgRole(orgSlug ?? '');
-  const canWrite = canManageHierarchy(role);
-  // Present only inside the persistent shell (VITE_NAV_TREE on); opens the rail as a
-  // drawer below `lg`, where the pinned rail is hidden.
+  // Opens the rail as a drawer below `lg`, where the pinned rail is hidden. Null outside the
+  // shell — this header is also rendered by `chrome-band.tsx` on the DESIGNED_CHROME-off path.
   const shell = useShell();
 
   return (
@@ -62,63 +110,15 @@ function HeaderContents(): React.ReactElement {
             <Menu aria-hidden="true" className="size-5" />
           </Button>
         ) : null}
-        <BrandMark />
+        <BrandLink orgSlug={orgSlug} />
       </div>
-      <div className="flex min-w-0 items-center gap-2 justify-self-center">
+      <div className="flex min-w-0 items-center gap-3 justify-self-center">
         <OrgSwitcher className="max-w-[12rem] truncate" />
-        {orgSlug ? (
-          // Nav shrinks and scrolls horizontally on narrow viewports so it never
-          // pushes the header (or page) into overflow. A proper drawer-below-lg
-          // shell is still owed — see TECH_DEBT.md.
-          <nav
-            aria-label="Organisation"
-            className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm"
-          >
-            <Link
-              to="/orgs/$orgSlug"
-              params={{ orgSlug }}
-              activeOptions={{ exact: true }}
-              className={NAV_LINK_CLASS}
-            >
-              Overview
-            </Link>
-            <Link
-              to="/orgs/$orgSlug/clients"
-              params={{ orgSlug }}
-              aria-current={onHierarchy ? 'page' : undefined}
-              className={cn(NAV_LINK_CLASS, onHierarchy && NAV_LINK_ACTIVE_CLASS)}
-            >
-              Clients
-            </Link>
-            <Link to="/orgs/$orgSlug/calendars" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-              Calendars
-            </Link>
-            {RESOURCES_ENABLED ? (
-              <Link to="/orgs/$orgSlug/resources" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-                Resources
-              </Link>
-            ) : null}
-            <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-              Members
-            </Link>
-            {/* Org Admin only (ADR-0072). Hiding it for other roles is a courtesy, not the
-                control: the API answers 403 whether or not this link is rendered. */}
-            {AUDIT_LOG_ENABLED && canReadAuditLog(role) ? (
-              <Link to="/orgs/$orgSlug/audit-log" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-                Audit log
-              </Link>
-            ) : null}
-            {canWrite ? (
-              <Link
-                to="/orgs/$orgSlug/recently-deleted"
-                params={{ orgSlug }}
-                className={NAV_LINK_CLASS}
-              >
-                Recently deleted
-              </Link>
-            ) : null}
-          </nav>
-        ) : null}
+        {/* Where a plan's identity line lands (ADR-0097 D1b). Empty on every other screen — the
+            band's height is content-driven, so nothing is reserved. The header stays plan-UNAWARE:
+            it receives a slot NODE and the workspace portals into it, which is ADR-0029's contract
+            and the same mechanism the toolbar rows have used since ADR-0055 §3. */}
+        {identitySlot}
       </div>
       <div className="flex shrink-0 items-center gap-2 justify-self-end">
         <AccountChip />
@@ -147,10 +147,31 @@ export function AppHeader(): React.ReactElement {
  * band owns the surface scope, the sticky position and the bottom border, so this is a bare
  * landmark.
  */
-export function AppHeaderRow(): React.ReactElement {
+export function AppHeaderRow({
+  identitySlot,
+}: {
+  /** See {@link HeaderContents}. Passed by the band as a slot node, never as content. */
+  identitySlot?: React.ReactNode;
+} = {}): React.ReactElement {
   return (
-    <header className="h-14 px-4">
-      <HeaderContents />
-    </header>
+    // **`ToolbarBandProvider` wraps the row, and the reason is a reading rather than a caution**
+    // (`m0-landing-d1-measurement.md`). The identity slot carries the plan's mode `Toolbar`, and a
+    // toolbar with no provider above it resolves its DENSITY from its own `clientWidth` — which for
+    // a `shrink-0` row is its content width, landing it in a narrow band on a wide screen.
+    //
+    // It is NOT protection against the fit trap. That one is already closed by
+    // `isWidthConstrained` (`Toolbar.tsx:81-84`): a width-unconstrained row is charged no chrome and
+    // never demotes, because its `clientWidth` is an *output* of the demotion decision. The first
+    // answer here was "the mode items are `render`, so they cannot demote", and that is false —
+    // `mode-early` has an `onActivate` and a `demotionGroup`, which is exactly what
+    // `Toolbar.tsx:352` calls demotable. Recorded because it was nearly built on.
+    //
+    // `toolbar-band.tsx`'s invariant is honoured either way: the band width says how roomy the
+    // surface is and never answers whether a row's content fits.
+    <ToolbarBandProvider className="h-14 px-4">
+      <header className="flex h-full items-center">
+        <HeaderContents {...(identitySlot === undefined ? {} : { identitySlot })} />
+      </header>
+    </ToolbarBandProvider>
   );
 }

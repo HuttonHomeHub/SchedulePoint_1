@@ -214,6 +214,7 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'GET /api/v1/organizations/:orgSlug/dependencies/:dependencyId': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/invitations': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/members': REASONS.READ,
+  'GET /api/v1/organizations/:orgSlug/overview': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/activities': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/baselines': REASONS.READ,

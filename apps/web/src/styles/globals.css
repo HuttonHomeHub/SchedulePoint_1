@@ -24,491 +24,99 @@
    route happens to pull in. */
 @import './print-document.css';
 
-/* Enable class-based dark mode: `<html class="dark">` (see theme management). */
-@custom-variant dark (&:is(.dark *));
-
 /* ------------------------------------------------------------------------- */
-/* Semantic tokens — LIGHT theme                                             */
+/* The typeface (ADR-0097)                                                    */
+/*                                                                            */
+/* SchedulePoint is set in SPACE GROTESK. Chosen by the product owner from    */
+/* four candidates rendered on real product chrome — the specimen is in       */
+/* `docs/specs/design-system-rewrite/typeface.md`.                            */
+/*                                                                            */
+/* **Until this landed the product had never actually chosen a typeface.**    */
+/* There was no `@font-face` anywhere and no font file in the repository;     */
+/* `--font-sans` merely NAMED 'Inter' first in a fallback stack, so the       */
+/* product's face was whatever each reader's machine happened to have — and   */
+/* every width measurement in this repository (the toolbar ladder, the band   */
+/* floors, `e2e-toolbar-fit`) was taken in whichever face resolved on the CI  */
+/* runner. A value that looked decided, was cited, and had never been set.    */
+/*                                                                            */
+/* SELF-HOSTED, and that is a requirement rather than a preference: the CSP   */
+/* is `font-src 'self'` (ADR-0074), so a Google Fonts URL would be blocked in */
+/* enforce mode — silently, before first paint, on the deployed origin only.  */
+/* Imported from `src/assets/` rather than `public/` so Vite fingerprints the */
+/* files and they can be cached immutably.                                    */
+/*                                                                            */
+/* ONE variable file per subset covers every weight from 300 to 700 — 41 kB   */
+/* for the whole family, against roughly that per static weight.              */
+/*                                                                            */
+/* `font-display: swap` deliberately: the fallback stack below is metrically  */
+/* close enough that a swap is a reflow of a few pixels, and the alternative  */
+/* (`block`) is invisible text on the coldest page in the product.            */
 /* ------------------------------------------------------------------------- */
-:root {
-  /* Radius scale is derived from a single base for consistency. */
-  --radius: 0.625rem;
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('../assets/fonts/space-grotesk-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 
-  /* Surfaces */
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-
-  /* Brand / interactive. L is 0.50 (not lighter) so white foreground clears the
-     WCAG 2.2 AA 4.5:1 contrast bar even after the blue is clipped into the sRGB
-     gamut — verified by axe on a solid primary button (DESIGN_SYSTEM.md). */
-  --primary: oklch(0.5 0.18 255);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.545 0 0);
-
-  /* Status */
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  /* Readable destructive for text & state borders on page surfaces. The solid
-     `--destructive` above is tuned as a button surface (light foreground), which
-     is too light to also serve as text on light/dark surfaces — this token keeps
-     text/borders at ≥ 4.5:1 (text) / ≥ 3:1 (border). See docs/DESIGN_SYSTEM.md. */
-  --destructive-text: oklch(0.505 0.21 27.5);
-  --success: oklch(0.52 0.14 155);
-  --success-foreground: oklch(0.985 0 0);
-  --success-text: oklch(0.48 0.13 150);
-  --warning: oklch(0.769 0.15 80);
-  --warning-foreground: oklch(0.205 0 0);
-  /* Readable warning for TEXT on page surfaces. Like `--destructive-text`, the
-     solid `--warning` above is a surface tone (near-black foreground) and is not
-     legible as coloured text on `background`/`card`; this keeps text ≥ 4.5:1. */
-  --warning-text: oklch(0.48 0.13 80);
-  --info: oklch(0.5 0.14 240);
-  --info-foreground: oklch(0.985 0 0);
-  /* Readable info for TEXT on page surfaces (mirrors `--warning-text`): the solid `--info` above is a
-     surface tone and isn't legible as coloured text on `background`/`card`; this keeps text ≥ 4.5:1. */
-  --info-text: oklch(0.45 0.14 250);
-
-  /* Lines & focus */
-  --border: oklch(0.922 0 0);
-  /* A CONTROL BOUNDARY, not a divider — and the reason it no longer shares `--border`'s value.
-     `--field` is valued identically to the surface it sits on in every theme, so this line is the
-     only thing that says "a text field is here". WCAG 1.4.11 asks for 3:1 where a visual is what
-     identifies a component, and the inherited `0.922` grey was 1.26:1 against white: an input
-     outline nobody could see, in every theme, on every surface. A divider may stay a hairline
-     (1.4.11 exempts decoration); this may not. See `token-contrast.test.ts`, which now gates it. */
-  --input: oklch(0.64 0 0);
-  --ring: oklch(0.55 0.18 255);
-
-  /* Data visualisation (see dataviz standards in DESIGN_SYSTEM.md) */
-  --chart-1: oklch(0.55 0.18 255);
-  --chart-2: oklch(0.6 0.13 185);
-  --chart-3: oklch(0.6 0.13 155);
-  --chart-4: oklch(0.769 0.15 80);
-  --chart-5: oklch(0.627 0.2 320);
-
-  /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
-     ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
-     `panel` the navigator rail; the page is the `:root` case.
-
-     These families are deliberately NOT mapped into `@theme inline` below, so
-     `bg-chrome` / `text-panel-foreground` DO NOT COMPILE. The only route to them
-     is the `[data-surface]` rule, which is what makes the boundary structural
-     rather than a convention someone has to remember.
-
-     Each family is COMPLETE. The bug this replaces was a three-token header stub
-     and a `--sidebar-*` set with no muted-foreground: every piece of secondary
-     text in the chrome reached for the canvas grey, which was invisible the day
-     a theme made chrome and canvas diverge. A surface family is complete or it
-     is a trap. */
-
-  /* Light: chrome and panel carry TODAY's values, so this theme is byte-identical. */
-
-  /* chrome — the top band */
-  --chrome: oklch(1 0 0);
-  --chrome-foreground: oklch(0.145 0 0);
-  --chrome-muted-foreground: oklch(0.545 0 0);
-  --chrome-muted: oklch(0.97 0 0);
-  --chrome-border: oklch(0.922 0 0);
-  --chrome-input: oklch(0.64 0 0);
-  --chrome-accent: oklch(0.97 0 0);
-  --chrome-accent-foreground: oklch(0.205 0 0);
-  --chrome-primary: oklch(0.5 0.18 255);
-  --chrome-primary-foreground: oklch(0.985 0 0);
-  --chrome-field: oklch(1 0 0);
-  --chrome-field-foreground: oklch(0.145 0 0);
-  --chrome-field-muted-foreground: oklch(0.545 0 0);
-  --chrome-destructive-text: oklch(0.505 0.21 27.5);
-  --chrome-success-text: oklch(0.48 0.13 150);
-  --chrome-warning-text: oklch(0.48 0.13 80);
-  --chrome-info-text: oklch(0.45 0.14 250);
-  --chrome-ring: oklch(0.55 0.18 255);
-
-  /* panel — the navigator rail */
-  --panel: oklch(0.985 0 0);
-  --panel-foreground: oklch(0.145 0 0);
-  --panel-muted-foreground: oklch(0.545 0 0);
-  --panel-muted: oklch(0.97 0 0);
-  --panel-border: oklch(0.922 0 0);
-  --panel-input: oklch(0.64 0 0);
-  --panel-accent: oklch(0.97 0 0);
-  --panel-accent-foreground: oklch(0.205 0 0);
-  --panel-primary: oklch(0.5 0.18 255);
-  --panel-primary-foreground: oklch(0.985 0 0);
-  --panel-field: oklch(1 0 0);
-  --panel-field-foreground: oklch(0.145 0 0);
-  --panel-field-muted-foreground: oklch(0.545 0 0);
-  --panel-destructive-text: oklch(0.505 0.21 27.5);
-  --panel-success-text: oklch(0.48 0.13 150);
-  --panel-warning-text: oklch(0.48 0.13 80);
-  --panel-info-text: oklch(0.45 0.14 250);
-  --panel-ring: oklch(0.55 0.18 255);
-
-  /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
-     THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
-
-     This family does not follow the theme. A signed-out visitor cannot choose one
-     — `theme-boot.js` picks Dark because their OS is dark, or Corporate because a
-     colleague signed in on this machine last month — so the one screen where the
-     product has to be recognisable would otherwise render in one of three
-     identities, selected by something the visitor did not do and cannot undo.
-
-     It is repeated per theme rather than declared once on `:root` because the
-     repetition is what makes the *values* visible where a reader looks for them,
-     and because `token-contrast.test.ts` resolves each theme independently. Note
-     what the repetition does NOT buy: `themeTokens()` resolves `.dark` and
-     `.corporate` over `:root` by inheritance, so a member deleted from one theme
-     block is NOT caught by the completeness gate — see the `brand` case in
-     `token-architecture.test.ts`, which pins the literal declarations per block
-     precisely because the inherited read cannot.
-
-     The values are Corporate's navy chrome — already measured against this fill —
-     and re-verified here by `token-contrast.test.ts`, which now sweeps `brand`
-     across all three themes rather than trusting the provenance.
-
-     Do not "fix" this to follow the theme. That would be undoing the decision. */
-  --brand: oklch(0.252 0.056 264);
-  --brand-foreground: oklch(0.985 0 0);
-  --brand-muted-foreground: oklch(0.78 0.02 264);
-  --brand-muted: oklch(0.32 0.05 264);
-  --brand-border: oklch(1 0 0 / 14%);
-  --brand-input: oklch(0.62 0.02 264);
-  --brand-accent: oklch(0.338 0.081 262);
-  --brand-accent-foreground: oklch(0.985 0 0);
-  --brand-primary: oklch(0.786 0.167 70);
-  --brand-primary-foreground: oklch(0.252 0.056 264);
-  --brand-field: oklch(1 0 0);
-  --brand-field-foreground: oklch(0.321 0 0);
-  --brand-field-muted-foreground: oklch(0.51 0 0);
-  --brand-destructive-text: oklch(0.74 0.15 25);
-  --brand-success-text: oklch(0.8 0.12 150);
-  --brand-warning-text: oklch(0.8 0.14 70);
-  --brand-info-text: oklch(0.8 0.09 245);
-  --brand-ring: oklch(0.786 0.167 70);
-
-  /* A form field's surface has never been the same concept as the page's;
-     pretending it was is what made an outline button invisible on navy. */
-  --field: oklch(1 0 0);
-  --field-foreground: oklch(0.145 0 0);
-  --field-muted-foreground: oklch(0.545 0 0);
-
-  /* The TSLD drawing ground and its alternating month band (ADR-0055 §4).
-     `--canvas` is valued identically to `--card` here so the S4 re-point of the
-     canvas painter is a no-op until the band lands. */
-  --canvas: oklch(1 0 0);
-  --canvas-band: oklch(0.975 0 0);
-
-  /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
-     Theme-INVARIANT, like `brand` and for the same reason one step further out.
-     ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
-     theme — the boot script picked Dark from their operating system, or
-     Corporate because a colleague signed in on this machine last month. That
-     argument was only ever applied to half the screen: the panel was pinned and
-     the card beside it still followed the theme, so a Dark-mode visitor met a
-     fixed navy panel joined to a dark card. One identity, chosen by nobody.
-     These values are the old app's, sampled from `static/css/main.css`
-     (#14213D navy, #fca311 amber) so the match is exact rather than close —
-     with TWO exceptions, and the exceptions are the point of having a gate.
-     The old app's amber focus ring is 2.02:1 on white and its field outline
-     2.22:1 on the field fill; both are WCAG 1.4.11 failures at 3:1, and both
-     are invisible to a person looking at the screen because a focus ring you
-     cannot see looks exactly like a focus ring you have not triggered. So
-     `--auth-ring` and `--auth-input` are DERIVED rather than sampled: the same
-     hue and chroma walked down in lightness to the first value that clears
-     3:1. Ring 3.36:1 on the card and 3.01:1 on a field; outline 3.36:1 and
-     3.01:1. `styles/token-contrast.test.ts` recomputes all four. */
-  --auth: oklch(1 0 0);
-  --auth-foreground: oklch(0.252 0.056 264);
-  --auth-muted: oklch(0.965 0.004 250);
-  --auth-muted-foreground: oklch(0.53 0.017 258);
-  --auth-border: oklch(0.914 0.008 255);
-  --auth-input: oklch(0.64 0.014 256);
-  --auth-accent: oklch(0.958 0.006 250);
-  --auth-accent-foreground: oklch(0.252 0.056 264);
-  --auth-primary: oklch(0.252 0.056 264);
-  --auth-primary-foreground: oklch(0.985 0 0);
-  --auth-field: oklch(0.962 0.005 252);
-  --auth-field-foreground: oklch(0.252 0.056 264);
-  --auth-field-muted-foreground: oklch(0.53 0.017 258);
-  --auth-destructive-text: oklch(0.505 0.213 27);
-  --auth-success-text: oklch(0.403 0.105 147);
-  --auth-warning-text: oklch(0.52 0.13 70);
-  --auth-info-text: oklch(0.5 0.13 245);
-  --auth-ring: oklch(0.648 0.167 70);
-  /* The page the card floats on. A PAIR rather than a family member, the way
-     `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
-     17-name vocabulary has no word for "the second stop". Values are the old
-     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
-  --ground: oklch(0.977 0.003 248);
-  --ground-end: oklch(0.845 0.028 249);
-
-  /* Time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5):
-     day fainter (so it recedes), month mid-strength, year strongest (darker on this light
-     ground, so it reads as the dominant boundary). Flag-off strokes still use --border alone
-     (`gridLine`). The three steps are spaced widely enough (not merely a hair off --border)
-     that day vs month is reliably distinguishable by lightness alone — accessibility-review
-     finding: the original day/month pair sat ~1.1:1 apart, which read as one shade under
-     colour-vision deficiency or on a low-quality display (WCAG 1.4.1). */
-  --canvas-grid-day: oklch(0.97 0 0);
-  --canvas-grid-month: oklch(0.78 0 0);
-  --canvas-grid-year: oklch(0.58 0 0);
-
-  /* Non-working hatch stripe (F7a, `VITE_CANVAS_TIME_AXIS`) — a step stronger than --muted (the
-     wash it draws over), so a weekend/holiday differs by kind, not just a darker shade of grey. */
-  --canvas-nonworking-hatch: oklch(0.85 0 0);
-
-  /* Typography */
-  --font-sans:
-    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  --font-mono: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('../assets/fonts/space-grotesk-latin-ext.woff2') format('woff2');
+  /* Latin Extended-A onwards — the accented characters in European client and
+     contractor names. A separate file so the common case never downloads it. */
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
 }
 
 /* ------------------------------------------------------------------------- */
-/* Semantic tokens — DARK theme                                              */
-/* ------------------------------------------------------------------------- */
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-
-  --primary: oklch(0.65 0.17 255);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-
-  --destructive: oklch(0.52 0.2 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  /* Lighter than the button surface so red text/borders stay legible on the
-     dark background/card (≥ 4.5:1 text, ≥ 3:1 border). */
-  --destructive-text: oklch(0.7 0.19 22);
-  --success: oklch(0.696 0.14 160);
-  --success-foreground: oklch(0.205 0 0);
-  --success-text: oklch(0.82 0.13 150);
-  --warning: oklch(0.82 0.16 82);
-  --warning-foreground: oklch(0.205 0 0);
-  /* Lighter amber so warning text stays legible on the dark background/card. */
-  --warning-text: oklch(0.85 0.14 82);
-  --info: oklch(0.7 0.13 240);
-  --info-foreground: oklch(0.205 0 0);
-  /* Lighter blue so info text stays legible on the dark background/card. */
-  --info-text: oklch(0.82 0.11 245);
-
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 38%);
-  --ring: oklch(0.65 0.17 255);
-
-  --chart-1: oklch(0.65 0.17 255);
-  --chart-2: oklch(0.696 0.14 185);
-  --chart-3: oklch(0.696 0.14 160);
-  --chart-4: oklch(0.82 0.16 82);
-  --chart-5: oklch(0.7 0.19 320);
-
-  /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
-     ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
-     `panel` the navigator rail; the page is the `:root` case.
-
-     These families are deliberately NOT mapped into `@theme inline` below, so
-     `bg-chrome` / `text-panel-foreground` DO NOT COMPILE. The only route to them
-     is the `[data-surface]` rule, which is what makes the boundary structural
-     rather than a convention someone has to remember.
-
-     Each family is COMPLETE. The bug this replaces was a three-token header stub
-     and a `--sidebar-*` set with no muted-foreground: every piece of secondary
-     text in the chrome reached for the canvas grey, which was invisible the day
-     a theme made chrome and canvas diverge. A surface family is complete or it
-     is a trap. */
-
-  /* Dark: chrome and panel carry TODAY's values, so this theme is byte-identical. */
-
-  /* chrome — the top band */
-  --chrome: oklch(0.145 0 0);
-  --chrome-foreground: oklch(0.985 0 0);
-  --chrome-muted-foreground: oklch(0.708 0 0);
-  --chrome-muted: oklch(0.269 0 0);
-  --chrome-border: oklch(1 0 0 / 10%);
-  --chrome-input: oklch(1 0 0 / 38%);
-  --chrome-accent: oklch(0.269 0 0);
-  --chrome-accent-foreground: oklch(0.985 0 0);
-  --chrome-primary: oklch(0.65 0.17 255);
-  --chrome-primary-foreground: oklch(0.205 0 0);
-  --chrome-field: oklch(0.145 0 0);
-  --chrome-field-foreground: oklch(0.985 0 0);
-  --chrome-field-muted-foreground: oklch(0.708 0 0);
-  --chrome-destructive-text: oklch(0.7 0.19 22);
-  --chrome-success-text: oklch(0.82 0.13 150);
-  --chrome-warning-text: oklch(0.85 0.14 82);
-  --chrome-info-text: oklch(0.82 0.11 245);
-  --chrome-ring: oklch(0.65 0.17 255);
-
-  /* panel — the navigator rail */
-  --panel: oklch(0.205 0 0);
-  --panel-foreground: oklch(0.985 0 0);
-  --panel-muted-foreground: oklch(0.708 0 0);
-  --panel-muted: oklch(0.269 0 0);
-  --panel-border: oklch(1 0 0 / 10%);
-  --panel-input: oklch(1 0 0 / 38%);
-  --panel-accent: oklch(0.269 0 0);
-  --panel-accent-foreground: oklch(0.985 0 0);
-  --panel-primary: oklch(0.65 0.17 255);
-  --panel-primary-foreground: oklch(0.205 0 0);
-  --panel-field: oklch(0.205 0 0);
-  --panel-field-foreground: oklch(0.985 0 0);
-  --panel-field-muted-foreground: oklch(0.708 0 0);
-  --panel-destructive-text: oklch(0.7 0.19 22);
-  --panel-success-text: oklch(0.82 0.13 150);
-  --panel-warning-text: oklch(0.85 0.14 82);
-  --panel-info-text: oklch(0.82 0.11 245);
-  --panel-ring: oklch(0.65 0.17 255);
-
-  /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
-     THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
-
-     This family does not follow the theme. A signed-out visitor cannot choose one
-     — `theme-boot.js` picks Dark because their OS is dark, or Corporate because a
-     colleague signed in on this machine last month — so the one screen where the
-     product has to be recognisable would otherwise render in one of three
-     identities, selected by something the visitor did not do and cannot undo.
-
-     It is repeated per theme rather than declared once on `:root` because the
-     repetition is what makes the *values* visible where a reader looks for them,
-     and because `token-contrast.test.ts` resolves each theme independently. Note
-     what the repetition does NOT buy: `themeTokens()` resolves `.dark` and
-     `.corporate` over `:root` by inheritance, so a member deleted from one theme
-     block is NOT caught by the completeness gate — see the `brand` case in
-     `token-architecture.test.ts`, which pins the literal declarations per block
-     precisely because the inherited read cannot.
-
-     The values are Corporate's navy chrome — already measured against this fill —
-     and re-verified here by `token-contrast.test.ts`, which now sweeps `brand`
-     across all three themes rather than trusting the provenance.
-
-     Do not "fix" this to follow the theme. That would be undoing the decision. */
-  --brand: oklch(0.252 0.056 264);
-  --brand-foreground: oklch(0.985 0 0);
-  --brand-muted-foreground: oklch(0.78 0.02 264);
-  --brand-muted: oklch(0.32 0.05 264);
-  --brand-border: oklch(1 0 0 / 14%);
-  --brand-input: oklch(0.62 0.02 264);
-  --brand-accent: oklch(0.338 0.081 262);
-  --brand-accent-foreground: oklch(0.985 0 0);
-  --brand-primary: oklch(0.786 0.167 70);
-  --brand-primary-foreground: oklch(0.252 0.056 264);
-  --brand-field: oklch(1 0 0);
-  --brand-field-foreground: oklch(0.321 0 0);
-  --brand-field-muted-foreground: oklch(0.51 0 0);
-  --brand-destructive-text: oklch(0.74 0.15 25);
-  --brand-success-text: oklch(0.8 0.12 150);
-  --brand-warning-text: oklch(0.8 0.14 70);
-  --brand-info-text: oklch(0.8 0.09 245);
-  --brand-ring: oklch(0.786 0.167 70);
-
-  --field: oklch(0.145 0 0);
-  --field-foreground: oklch(0.985 0 0);
-  --field-muted-foreground: oklch(0.708 0 0);
-  --canvas: oklch(0.205 0 0);
-  --canvas-band: oklch(0.24 0 0);
-
-  /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
-     Theme-INVARIANT, like `brand` and for the same reason one step further out.
-     ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
-     theme — the boot script picked Dark from their operating system, or
-     Corporate because a colleague signed in on this machine last month. That
-     argument was only ever applied to half the screen: the panel was pinned and
-     the card beside it still followed the theme, so a Dark-mode visitor met a
-     fixed navy panel joined to a dark card. One identity, chosen by nobody.
-     These values are the old app's, sampled from `static/css/main.css`
-     (#14213D navy, #fca311 amber) so the match is exact rather than close —
-     with TWO exceptions, and the exceptions are the point of having a gate.
-     The old app's amber focus ring is 2.02:1 on white and its field outline
-     2.22:1 on the field fill; both are WCAG 1.4.11 failures at 3:1, and both
-     are invisible to a person looking at the screen because a focus ring you
-     cannot see looks exactly like a focus ring you have not triggered. So
-     `--auth-ring` and `--auth-input` are DERIVED rather than sampled: the same
-     hue and chroma walked down in lightness to the first value that clears
-     3:1. Ring 3.36:1 on the card and 3.01:1 on a field; outline 3.36:1 and
-     3.01:1. `styles/token-contrast.test.ts` recomputes all four. */
-  --auth: oklch(1 0 0);
-  --auth-foreground: oklch(0.252 0.056 264);
-  --auth-muted: oklch(0.965 0.004 250);
-  --auth-muted-foreground: oklch(0.53 0.017 258);
-  --auth-border: oklch(0.914 0.008 255);
-  --auth-input: oklch(0.64 0.014 256);
-  --auth-accent: oklch(0.958 0.006 250);
-  --auth-accent-foreground: oklch(0.252 0.056 264);
-  --auth-primary: oklch(0.252 0.056 264);
-  --auth-primary-foreground: oklch(0.985 0 0);
-  --auth-field: oklch(0.962 0.005 252);
-  --auth-field-foreground: oklch(0.252 0.056 264);
-  --auth-field-muted-foreground: oklch(0.53 0.017 258);
-  --auth-destructive-text: oklch(0.505 0.213 27);
-  --auth-success-text: oklch(0.403 0.105 147);
-  --auth-warning-text: oklch(0.52 0.13 70);
-  --auth-info-text: oklch(0.5 0.13 245);
-  --auth-ring: oklch(0.648 0.167 70);
-  /* The page the card floats on. A PAIR rather than a family member, the way
-     `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
-     17-name vocabulary has no word for "the second stop". Values are the old
-     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
-  --ground: oklch(0.977 0.003 248);
-  --ground-end: oklch(0.845 0.028 249);
-
-  /* Time-axis gridline tiers — day the faintest alpha step, month mid-strength, year the
-     strongest. Same white-at-alpha family as --border so all three stay legible against the
-     near-black canvas, spaced widely enough that day vs month is reliably distinguishable
-     (WCAG 1.4.1 — the original 6%/10% pair read as one shade). */
-  --canvas-grid-day: oklch(1 0 0 / 4%);
-  --canvas-grid-month: oklch(1 0 0 / 17%);
-  --canvas-grid-year: oklch(1 0 0 / 30%);
-
-  /* Non-working hatch stripe (F7a) — a lighter alpha-white step over the muted wash, the same
-     family as the grid tiers above, so it reads against the near-black canvas without a new hue. */
-  --canvas-nonworking-hatch: oklch(1 0 0 / 12%);
-}
-
-/* ------------------------------------------------------------------------- */
-/* Semantic tokens — CORPORATE theme (navy + amber)                          */
+/* The theme (ADR-0097)                                                       */
 /*                                                                            */
-/* A brand skin, not a third light/dark mode: navy chrome around a light      */
-/* working canvas, with amber as the primary action colour. It is a sibling   */
-/* of light/dark in the picker and resolves as a LIGHT scheme (native form    */
-/* controls and scrollbars stay light).                                        */
+/* SchedulePoint has ONE theme, and `:root` IS the theme block. That is not   */
+/* a tidy-up of the old three-theme arrangement — it is what makes a flash of  */
+/* the wrong theme STRUCTURALLY IMPOSSIBLE rather than merely avoided. Every  */
+/* stored preference — `dark`, `light`, `system`, garbage, or a localStorage  */
+/* that throws — resolves to "stamp nothing", so `public/theme-boot.js` and   */
+/* `hooks/use-theme.tsx` cannot disagree about what to paint, because neither */
+/* of them paints anything.                                                    */
 /*                                                                            */
-/* Source palette: navy #14213D, amber #fca311, lighter navy #1f3661,         */
-/* off-white #f8f9fa, body #333. Two constraints shaped how they're mapped:   */
+/* The values are the former `.corporate` skin with its two flag-keyed value  */
+/* layers folded in. The product owner asked for Corporate to become "the     */
+/* main theme that the app is designed to", and those layers were unreachable */
+/* in any published image in any case (ADR-0088: a `VITE_` constant is        */
+/* inlined at build time, so no operator could ever have turned one off).     */
+/*                                                                            */
+/* Navy chrome around a light working canvas, amber as the primary action     */
+/* colour. Two constraints shaped that mapping and both still hold:           */
 /*                                                                            */
 /*  1. Amber is a FILL, never ink or a line on a light surface. #fca311 on    */
 /*     #f8f9fa is 1.9:1 — it fails as text (4.5:1) and as a focus indicator   */
 /*     (3:1). It carries navy ink at 7.9:1, which is where it shines. So      */
-/*     amber is `--primary` (buttons, active states, activity bars) and the   */
+/*     amber is `--primary` (buttons, active states, activity bars), and the  */
 /*     focus ring on light surfaces is navy; amber rings appear only on the   */
-/*     navy chrome, where they reach 7.9:1.                                    */
-/*  2. `--warning` had to move. It is the canvas's NEAR-CRITICAL fill, and in */
-/*     light/dark it is essentially this same amber — so with amber promoted  */
-/*     to primary, an ordinary bar and a near-critical bar would have been    */
-/*     the same colour. Near-critical becomes a deeper bronze here, keeping   */
-/*     three readable states (normal / near-critical / critical) on top of    */
-/*     the dashed-outline shape cue that carries WCAG 1.4.1 regardless.       */
+/*     navy chrome, where they reach 7.9:1.                                   */
+/*  2. `--warning` is the canvas's NEAR-CRITICAL fill. With amber promoted to */
+/*     primary, an ordinary bar and a near-critical bar would otherwise be    */
+/*     the same colour, so near-critical is a deeper bronze — three readable  */
+/*     states (normal / near-critical / critical) on top of the dashed-       */
+/*     outline shape cue that carries WCAG 1.4.1 regardless.                  */
+/*                                                                            */
+/* ADDING A DARK THEME BACK is a block of values and one entry in             */
+/* `THEME_SELECTORS`; the mechanism is kept alive for exactly that. What it   */
+/* is NOT is cheap: a dark diagram whose colours carry meaning needs its plot */
+/* separations RE-DERIVED, not re-tinted, which is design judgement rather    */
+/* than a find-and-replace.                                                    */
 /* ------------------------------------------------------------------------- */
-.corporate {
+:root {
   /* Surfaces — the working canvas stays light and quiet. */
-  --background: oklch(0.982 0.002 248);
-  --foreground: oklch(0.321 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.321 0 0);
   --popover: oklch(1 0 0);
@@ -521,37 +129,23 @@
      theme already uses for `--warning`. So amber goes where it is genuinely legible
      — `--chrome-primary` (7.9:1 on navy), `--chrome-ring`, the `--accent` row wash
      and `--chart-1` — and the page's primary is the brand navy at 12:1. */
-  --primary: oklch(0.252 0.056 264);
-  --primary-foreground: oklch(0.985 0 0);
   /* The lighter navy, as the quiet secondary surface. */
-  --secondary: oklch(0.338 0.081 262);
-  --secondary-foreground: oklch(0.985 0 0);
   /* A pale amber wash for hover/selected rows — a tint, so ordinary dark text
      keeps its contrast on top of it. */
-  --accent: oklch(0.955 0.04 78);
-  --accent-foreground: oklch(0.252 0.056 264);
-  --muted: oklch(0.965 0.002 248);
-  --muted-foreground: oklch(0.51 0 0);
 
   /* Status */
-  --destructive: oklch(0.505 0.19 27.5);
-  --destructive-foreground: oklch(0.985 0 0);
-  --destructive-text: oklch(0.505 0.19 27.5);
-  --success: oklch(0.52 0.15 143);
-  --success-foreground: oklch(0.985 0 0);
-  --success-text: oklch(0.45 0.11 150);
+  /* Darker, as on the light page. 7.60:1 label, 7.53:1 against the page. */
+  /* **Hover as a TOKEN, never `hover:bg-X/NN`** — the rule `--destructive-hover` was added
+     for, now applied to its neighbours. An alpha modifier composites the fill against whatever
+     is behind it, so it moves TOWARD the surface and is invisible to a census that reads
+     tokens. `hover:bg-secondary/80` measured **3.8:1** for its own label on the two navy
+     scopes: below 1.4.3, on a shipped primitive, found by the alpha census on its first run.
+     Each value below is the smallest luminance step, either direction, that clears 3:1 against
+     its surface AND keeps the fill's own label at 4.5:1 — both bars, because a hover that
+     separates from the surface by swallowing its text is not an improvement. */
   /* Bronze, not amber — see note 2 above. */
-  --warning: oklch(0.56 0.115 55);
-  --warning-foreground: oklch(0.985 0 0);
-  --warning-text: oklch(0.47 0.11 55);
-  --info: oklch(0.338 0.081 262);
-  --info-foreground: oklch(0.985 0 0);
-  --info-text: oklch(0.3 0.075 262);
 
   /* Lines & focus — the ring is NAVY on light surfaces (note 1). */
-  --border: oklch(0.907 0 0);
-  --input: oklch(0.62 0.02 264);
-  --ring: oklch(0.35 0.09 262);
 
   /* Data visualisation — the brand pair first, then hues that stay apart from
      both it and the status colours. */
@@ -604,25 +198,71 @@
   --chrome-info-text: oklch(0.8 0.09 245);
   --chrome-ring: oklch(0.786 0.167 70);
 
+  /* The closure members (ADR-0097 §1.5). A status FILL a component can paint on this
+     surface, not an ink — `--chrome-destructive-text` above is the ink. Derived, not
+     chosen: each fill is the least-light value clearing 4:1 against the navy at the
+     highest chroma its hue allows, and each label is the near-black that clears 4.5:1
+     on it. The page's own values measured 2.47:1 (destructive) and 1.34:1 (secondary,
+     info) here — very nearly invisible, and `Button` ships variants painting exactly
+     those two fills. `--info` also gains a hue of its own: the page uses ONE value for
+     both secondary and info, which is why the two failed identically. */
+  --chrome-destructive: oklch(0.61 0.114 27.5); /* 4.00:1 on the surface */
+  --chrome-destructive-foreground: oklch(0.15 0 0); /* 4.92:1 on the fill */
+  --chrome-destructive-hover: oklch(0.68 0.114 27.5); /* 5.28:1, further from the surface */
+  --chrome-primary-hover: oklch(0.771 0.167 70); /* 7.50:1 on the surface, 7.50:1 for its label */
+  --chrome-secondary-hover: oklch(
+    0.615 0.081 262
+  ); /* 4.29:1 on the surface, 5.28:1 for its label */
+  --chrome-secondary: oklch(0.6 0.081 262); /* 4.03:1 on the surface */
+  --chrome-secondary-foreground: oklch(0.15 0 0); /* 4.96:1 on the fill */
+  --chrome-success: oklch(0.585 0.15 143); /* 4.04:1 on the surface */
+  --chrome-success-foreground: oklch(0.15 0 0); /* 4.98:1 on the fill */
+  --chrome-warning: oklch(0.605 0.103 55); /* 4.00:1 on the surface */
+  --chrome-warning-foreground: oklch(0.15 0 0); /* 4.93:1 on the fill */
+  --chrome-info: oklch(0.595 0.123 235); /* 4.06:1 on the surface */
+  --chrome-info-foreground: oklch(0.15 0 0); /* 4.99:1 on the fill */
+
   /* panel — the navigator rail */
-  --panel: oklch(0.252 0.056 264);
-  --panel-foreground: oklch(0.985 0 0);
-  --panel-muted-foreground: oklch(0.78 0.02 264);
-  --panel-muted: oklch(0.32 0.05 264);
-  --panel-border: oklch(1 0 0 / 14%);
+  --panel: oklch(0.955 0.004 248);
+  --panel-foreground: oklch(0.321 0 0);
+  --panel-muted-foreground: oklch(0.51 0 0);
+  --panel-muted: oklch(0.92 0.004 248);
+  --panel-border: oklch(0.895 0.005 248);
   --panel-input: oklch(0.62 0.02 264);
-  --panel-accent: oklch(0.338 0.081 262);
-  --panel-accent-foreground: oklch(0.985 0 0);
-  --panel-primary: oklch(0.786 0.167 70);
-  --panel-primary-foreground: oklch(0.252 0.056 264);
+  --panel-accent: oklch(0.955 0.04 78);
+  --panel-accent-foreground: oklch(0.252 0.056 264);
+  --panel-primary: oklch(0.252 0.056 264);
+  --panel-primary-foreground: oklch(0.985 0 0);
   --panel-field: oklch(1 0 0);
   --panel-field-foreground: oklch(0.321 0 0);
   --panel-field-muted-foreground: oklch(0.51 0 0);
-  --panel-destructive-text: oklch(0.74 0.15 25);
-  --panel-success-text: oklch(0.8 0.12 150);
-  --panel-warning-text: oklch(0.8 0.14 70);
-  --panel-info-text: oklch(0.8 0.09 245);
-  --panel-ring: oklch(0.786 0.167 70);
+  --panel-destructive-text: oklch(0.505 0.19 27.5);
+  --panel-success-text: oklch(0.45 0.11 150);
+  --panel-warning-text: oklch(0.47 0.11 55);
+  --panel-info-text: oklch(0.3 0.075 262);
+  --panel-ring: oklch(0.35 0.09 262);
+
+  /* The closure members (ADR-0097 §1.5). The panel is light, so every one of these
+     clears its bar at the page's own value and takes it — declared LITERALLY rather
+     than aliased, because a `var()` here resolves once at this block and a second theme
+     would silently inherit it. Declared at all, rather than left to inherit, because a
+     family that covers some of the closure is the "complete or it is a trap" failure
+     one level down. */
+  --panel-destructive: oklch(0.505 0.19 27.5); /* 5.69:1 */
+  --panel-destructive-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-destructive-hover: oklch(0.455 0.19 27.5); /* 6.96:1, further from the surface */
+  --panel-primary-hover: oklch(0.267 0.056 264); /* 13.41:1 on the surface, 14.63:1 for its label */
+  --panel-secondary-hover: oklch(
+    0.353 0.081 262
+  ); /* 9.88:1 on the surface, 10.78:1 for its label */
+  --panel-secondary: oklch(0.338 0.081 262); /* 10.48:1 */
+  --panel-secondary-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-success: oklch(0.52 0.15 143); /* 4.54:1 */
+  --panel-success-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-warning: oklch(0.56 0.115 55); /* 4.24:1 */
+  --panel-warning-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-info: oklch(0.338 0.081 262); /* 10.48:1 */
+  --panel-info-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
 
   /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
      THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
@@ -666,13 +306,27 @@
   --brand-info-text: oklch(0.8 0.09 245);
   --brand-ring: oklch(0.786 0.167 70);
 
+  /* The closure members (ADR-0097 §1.5) — the same derivation as `chrome`, on the same
+     navy. Identical values by arithmetic rather than by copying: both surfaces resolve
+     the same fill, so the same search returns the same answer. */
+  --brand-destructive: oklch(0.61 0.114 27.5); /* 4.00:1 on the surface */
+  --brand-destructive-foreground: oklch(0.15 0 0); /* 4.92:1 on the fill */
+  --brand-destructive-hover: oklch(0.68 0.114 27.5); /* 5.28:1, further from the surface */
+  --brand-primary-hover: oklch(0.771 0.167 70); /* 7.50:1 on the surface, 7.50:1 for its label */
+  --brand-secondary-hover: oklch(0.615 0.081 262); /* 4.29:1 on the surface, 5.28:1 for its label */
+  --brand-secondary: oklch(0.6 0.081 262); /* 4.03:1 on the surface */
+  --brand-secondary-foreground: oklch(0.15 0 0); /* 4.96:1 on the fill */
+  --brand-success: oklch(0.585 0.15 143); /* 4.04:1 on the surface */
+  --brand-success-foreground: oklch(0.15 0 0); /* 4.98:1 on the fill */
+  --brand-warning: oklch(0.605 0.103 55); /* 4.00:1 on the surface */
+  --brand-warning-foreground: oklch(0.15 0 0); /* 4.93:1 on the fill */
+  --brand-info: oklch(0.595 0.123 235); /* 4.06:1 on the surface */
+  --brand-info-foreground: oklch(0.15 0 0); /* 4.99:1 on the fill */
+
   /* White fields on navy — the reference's date and filter inputs. Deliberately
      per-theme: literal white would glare on Dark's near-black chrome. */
-  --field: oklch(1 0 0);
-  --field-foreground: oklch(0.321 0 0);
-  --field-muted-foreground: oklch(0.51 0 0);
-  --canvas: oklch(1 0 0);
-  --canvas-band: oklch(0.972 0.004 90);
+  --canvas: oklch(0.988 0.006 90);
+  --canvas-band: oklch(0.966 0.011 90);
 
   /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
      Theme-INVARIANT, like `brand` and for the same reason one step further out.
@@ -711,6 +365,24 @@
   --auth-warning-text: oklch(0.52 0.13 70);
   --auth-info-text: oklch(0.5 0.13 245);
   --auth-ring: oklch(0.648 0.167 70);
+
+  /* The closure members (ADR-0097 §1.5). The login card is white, so these clear their
+     bars at the page's values — declared literally, for the reason above. */
+  --auth-destructive: oklch(0.505 0.19 27.5); /* 6.48:1 */
+  --auth-destructive-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --auth-destructive-hover: oklch(0.455 0.19 27.5); /* 7.93:1, further from the surface */
+  --auth-primary-hover: oklch(0.267 0.056 264); /* 15.28:1 on the surface, 14.63:1 for its label */
+  --auth-secondary-hover: oklch(
+    0.353 0.081 262
+  ); /* 11.26:1 on the surface, 10.78:1 for its label */
+  --auth-secondary: oklch(0.338 0.081 262); /* 11.95:1 */
+  --auth-secondary-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --auth-success: oklch(0.52 0.15 143); /* 5.18:1 */
+  --auth-success-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --auth-warning: oklch(0.56 0.115 55); /* 4.83:1 */
+  --auth-warning-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --auth-info: oklch(0.338 0.081 262); /* 11.95:1 */
+  --auth-info-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
   /* The page the card floats on. A PAIR rather than a family member, the way
      `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
      17-name vocabulary has no word for "the second stop". Values are the old
@@ -721,12 +393,323 @@
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
   --canvas-grid-day: oklch(0.965 0 0);
-  --canvas-grid-month: oklch(0.76 0 0);
+  /* **A month boundary is the axis a planner reads, so it clears WCAG 1.4.11's 3:1** — 0.76 gave
+     2.08:1 against the ground and **1.95:1 against the month band it is most often drawn over**,
+     i.e. a required graphical object below the non-text floor, live. 0.64 gives 3.25 / 3.05.
+     Found by the deferred accessibility gate, and the finding that matters more than the value is
+     that ADR-0097 D12 and this epic's own prose claimed the plot matrix already covered exactly
+     this pair. It did not: `token-contrast.test.ts` swept the criticality triple and the closure
+     and had **no PLOT-pack pair at all**. It does now — which is the actual fix; this number is
+     only how that gate passes. */
+  --canvas-grid-month: oklch(0.64 0 0);
   --canvas-grid-year: oklch(0.58 0 0);
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */
   --canvas-nonworking-hatch: oklch(0.83 0.004 90);
+
+  --radius: 0.625rem;
+  /* ----------------------------------------------------------------------- */
+  /* The page family (ADR-0097 §1.5a)                                         */
+  /*                                                                          */
+  /* Until now the page's values WERE the unqualified names, so those names    */
+  /* were simultaneously a source and a binding — and there was nothing to     */
+  /* restore FROM. Every other scope has a family it rebinds out of; the page  */
+  /* had none, which is why a `Card` inside a scope had no way back to the     */
+  /* page's own vocabulary and had to be handled as an exception.              */
+  /*                                                                          */
+  /* So the page gets a family like every other surface, and the unqualified   */
+  /* names alias it. Six symmetric scopes instead of five plus a special case. */
+  /*                                                                          */
+  /* **The "never write a token as a var() alias" rule does not forbid this,   */
+  /* and that was MEASURED rather than argued.** Probed in Chromium: a custom  */
+  /* property computes on the element it is declared on and then inherits, so  */
+  /* an alias fails only when the overriding block is on a DESCENDANT. The     */
+  /* product stamps its theme on `<html>` — the same element `:root` matches — */
+  /* so both declarations land together and the alias resolves correctly, and  */
+  /* so does an alias-of-an-alias. The rule's own wording pointed the other    */
+  /* way and my first probe reproduced its claim by putting the class on a     */
+  /* descendant, which the product never does.                                 */
+  /*                                                                          */
+  /* THE CATCH, and it is why the theme contract has to cover this from day    */
+  /* one rather than the day it bites: when a second theme returns, `--page-*` */
+  /* becomes exactly the multi-block topology the rule DOES describe. A dark   */
+  /* block must restate the page family literally, or the alias silently keeps */
+  /* the light values.                                                         */
+  /* ----------------------------------------------------------------------- */
+  --page-background: oklch(0.982 0.002 248);
+  --page-foreground: oklch(0.321 0 0);
+  --page-muted: oklch(0.965 0.002 248);
+  --page-muted-foreground: oklch(0.51 0 0);
+  --page-border: oklch(0.907 0 0);
+  --page-input: oklch(0.62 0.02 264);
+  --page-accent: oklch(0.955 0.04 78);
+  --page-accent-foreground: oklch(0.252 0.056 264);
+  --page-primary: oklch(0.252 0.056 264);
+  --page-primary-foreground: oklch(0.985 0 0);
+  --page-field: oklch(1 0 0);
+  --page-field-foreground: oklch(0.321 0 0);
+  --page-field-muted-foreground: oklch(0.51 0 0);
+  --page-destructive-text: oklch(0.505 0.19 27.5);
+  --page-success-text: oklch(0.45 0.11 150);
+  --page-warning-text: oklch(0.47 0.11 55);
+  --page-info-text: oklch(0.3 0.075 262);
+  --page-ring: oklch(0.35 0.09 262);
+  --page-destructive: oklch(0.505 0.19 27.5);
+  --page-destructive-foreground: oklch(0.985 0 0);
+  --page-destructive-hover: oklch(0.455 0.19 27.5);
+  --page-secondary: oklch(0.338 0.081 262);
+  --page-secondary-foreground: oklch(0.985 0 0);
+  --page-success: oklch(0.52 0.15 143);
+  --page-success-foreground: oklch(0.985 0 0);
+  --page-warning: oklch(0.56 0.115 55);
+  --page-warning-foreground: oklch(0.985 0 0);
+  --page-info: oklch(0.338 0.081 262);
+  --page-info-foreground: oklch(0.985 0 0);
+  --page-primary-hover: oklch(0.267 0.056 264);
+  --page-secondary-hover: oklch(0.353 0.081 262);
+
+  /* ----------------------------------------------------------------------- */
+  /* The DIAGRAM's own family (ADR-0097 Landing E, L4-1).                     */
+  /*                                                                          */
+  /* **Named `--plot-*` and not `--canvas-*`, and the reason is a collision   */
+  /* rather than taste**: `--canvas`, `--canvas-band` and the four            */
+  /* `--canvas-grid-*`/hatch tokens are the PLOT PACK, deliberately exposed   */
+  /* in `@theme inline` so `bg-canvas` compiles and the painter can read      */
+  /* `--color-canvas-band`. A family on the same prefix would make            */
+  /* `token-architecture.test.ts` assert both that `--color-canvas-` is       */
+  /* absent from that block and that it is present. The scope attribute stays */
+  /* `canvas`, because that is what the surface IS.                           */
+  /*                                                                          */
+  /* **Thirty of the thirty-one alias the page, and that is the point.** A    */
+  /* partial family is the trap ADR-0055 §1 names, so the whole closure is    */
+  /* declared here whether or not it differs today — which makes the next     */
+  /* diagram-only value a one-line edit in the right place rather than a      */
+  /* decision about whether to start a family.                                */
+  /* ----------------------------------------------------------------------- */
+
+  /* The ground: the diagram's working surface, not the page's document       */
+  /* surface. 1.02:1 apart today — two greys nobody can tell apart, which is  */
+  /* exactly why the pre-scope trap never showed.                             */
+  --plot-background: var(--canvas);
+  --plot-foreground: var(--page-foreground);
+  --plot-muted: var(--page-muted);
+  --plot-muted-foreground: var(--page-muted-foreground);
+  --plot-border: var(--page-border);
+  --plot-input: var(--page-input);
+  --plot-accent: var(--page-accent);
+  --plot-accent-foreground: var(--page-accent-foreground);
+  /* **`--primary` means two different things and this is where they part.**
+     On the chrome it is "the thing you should press"; on the diagram it is
+     "an ordinary, non-critical activity" (`palette.ts:26`). `diagnosis.md`
+     §3.2 records what their being one value cost: a theme promoted amber to
+     `--primary`, which made an ordinary bar and a near-critical bar the same
+     colour, so `--warning` was moved to bronze to get out of the way — the
+     diagram recoloured because the button was. Unchanged today, but it now
+     HAS somewhere to change. */
+  --plot-primary: var(--page-primary);
+  --plot-primary-foreground: var(--page-primary-foreground);
+  --plot-field: var(--page-field);
+  --plot-field-foreground: var(--page-field-foreground);
+  --plot-field-muted-foreground: var(--page-field-muted-foreground);
+  --plot-destructive-text: var(--page-destructive-text);
+  --plot-success-text: var(--page-success-text);
+  --plot-warning-text: var(--page-warning-text);
+  --plot-info-text: var(--page-info-text);
+  --plot-ring: var(--page-ring);
+  /* **The one value that differs, and the whole reason L4-1 exists.**
+     `--warning` (near-critical) against `--destructive` (critical) measured
+     **1.34:1** — the two states a planner scans a wall of bars to tell apart,
+     differing by less than the amount at which a difference reads as
+     intentional. Not a WCAG failure: `paint.ts` gives criticality a SHAPE cue
+     (solid outline critical, dashed near-critical), so colour was never the
+     only channel. A design-quality failure on the primary surface of a
+     scheduling product, which is reason enough.
+
+     Critical darkens 0.505 -> 0.46 and its chroma eases 0.19 -> 0.175, giving
+     **1.61:1**. Near-critical does NOT move: lightening it to 0.58 was the
+     first candidate and it takes white-on-warning to 4.26:1, below the 4.5 its
+     own label pair needs — one defect traded for another.
+
+     The chroma easing is not cosmetic. `oklch(0.46 0.19 27.5)` is OUT of the
+     sRGB gamut (green channel -0.0014), so a browser would clamp it and the
+     ratio asserted in `token-contrast.test.ts` would be one the screen never
+     produces. Measured, not assumed: the search that proposed it had a slack
+     gamut tolerance and its answer looked fine.
+
+     **1.70:1 is the ceiling**, established by maximising the worst pair over
+     all three inks subject to a white inside-label at 4.5:1 and every bar at
+     3:1 on a near-white ground. So a 1.5 floor is reachable and 3:1 is not,
+     without changing the label ink or the hues. Recorded so nobody spends a
+     day chasing it. */
+  --plot-destructive: oklch(0.46 0.175 27.5);
+  --plot-destructive-foreground: var(--page-destructive-foreground);
+  --plot-destructive-hover: var(--page-destructive-hover);
+  --plot-secondary: var(--page-secondary);
+  --plot-secondary-foreground: var(--page-secondary-foreground);
+  --plot-success: var(--page-success);
+  --plot-success-foreground: var(--page-success-foreground);
+  --plot-warning: var(--page-warning);
+  --plot-warning-foreground: var(--page-warning-foreground);
+  --plot-info: var(--page-info);
+  --plot-info-foreground: var(--page-info-foreground);
+  --plot-primary-hover: var(--page-primary-hover);
+  --plot-secondary-hover: var(--page-secondary-hover);
+
+  /* The unqualified names, aliasing the family above. */
+  --background: var(--page-background);
+  --foreground: var(--page-foreground);
+  --muted: var(--page-muted);
+  --muted-foreground: var(--page-muted-foreground);
+  --border: var(--page-border);
+  --input: var(--page-input);
+  --accent: var(--page-accent);
+  --accent-foreground: var(--page-accent-foreground);
+  --primary: var(--page-primary);
+  --primary-foreground: var(--page-primary-foreground);
+  --field: var(--page-field);
+  --field-foreground: var(--page-field-foreground);
+  --field-muted-foreground: var(--page-field-muted-foreground);
+  --destructive-text: var(--page-destructive-text);
+  --success-text: var(--page-success-text);
+  --warning-text: var(--page-warning-text);
+  --info-text: var(--page-info-text);
+  --ring: var(--page-ring);
+  --destructive: var(--page-destructive);
+  --destructive-foreground: var(--page-destructive-foreground);
+  --destructive-hover: var(--page-destructive-hover);
+  --secondary: var(--page-secondary);
+  --secondary-foreground: var(--page-secondary-foreground);
+  --success: var(--page-success);
+  --success-foreground: var(--page-success-foreground);
+  --warning: var(--page-warning);
+  --warning-foreground: var(--page-warning-foreground);
+  --info: var(--page-info);
+  --info-foreground: var(--page-info-foreground);
+  --primary-hover: var(--page-primary-hover);
+  --secondary-hover: var(--page-secondary-hover);
+
+  /* ----------------------------------------------------------------------- */
+  /* Metrics (ADR-0097)                                                       */
+  /*                                                                          */
+  /* The first non-colour tokens this product has ever had. Before them a      */
+  /* theme could express nothing but colour, so every control height, row      */
+  /* rhythm and radius was a literal in a className — which is why "make the   */
+  /* Corporate theme the one the app is designed to" could only ever have      */
+  /* meant "recolour it".                                                      */
+  /*                                                                          */
+  /* **`--control-h` is 36 px, down from 40 (CQ-C).** The product owner chose  */
+  /* the move explicitly, departing from the recommended default. It governs   */
+  /* the FORM controls — `Button`, `Input`, `Select`, `Combobox` — and NOT the */
+  /* command surface, which was already on `min-h-9` (36 px). That distinction */
+  /* is worth stating because the task was briefed as a toolbar measurement:   */
+  /* the toolbar rows do not move, and the gain is in forms and dialogs.       */
+  /*                                                                          */
+  /* `--row-h` is 28 px (CQ-B): ONE rhythm for the Gantt (down from 32) and    */
+  /* the tables, rather than two that drift.                                   */
+  /* ----------------------------------------------------------------------- */
+  --control-h: 2.25rem;
+  --control-h-sm: 2rem;
+  --row-h: 1.75rem;
+
+  /* ----------------------------------------------------------------------- */
+  /* Weight (ADR-0097)                                                        */
+  /*                                                                          */
+  /* **The product owner's typeface choice created this requirement, and it   */
+  /* was not visible until they made it.** A sans/serif pairing gives rank a   */
+  /* CATEGORICAL channel — a serif title is a different kind of thing from a   */
+  /* sans row, at any weight. One face has no such channel, so rank is carried */
+  /* by weight, size, tracking, colour and space; four of those five had a     */
+  /* token and weight had none.                                               */
+  /*                                                                          */
+  /* Measured: 186 sites across 84 files — `font-medium` 131, `font-semibold`  */
+  /* 51, `font-normal` 3, `font-bold` 1. A size is a formatting detail; a      */
+  /* weight is a JUDGEMENT ABOUT RANK, so 186 ungoverned sites is 186 chances  */
+  /* for a section heading to outrank the page title. With a pairing that      */
+  /* would have been untidy. With one face it is the primary channel.          */
+  /*                                                                          */
+  /* Today's values, deliberately — the same discipline as the type ramp.      */
+  /* This commit takes OWNERSHIP; re-scaling is a separate, visible decision.  */
+  /*                                                                          */
+  /* NOTE the range. Space Grotesk's variable axis is 300–700, so `light`      */
+  /* through `bold` are real instances and anything outside them would be      */
+  /* SYNTHESISED by the browser — faux-bold, which looks like a rendering      */
+  /* fault rather than a choice. Nothing in the product uses those today and a */
+  /* gate keeps it that way.                                                   */
+  /* ----------------------------------------------------------------------- */
+  --weight-light: 300;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ----------------------------------------------------------------------- */
+  /* The type ramp (ADR-0097)                                                 */
+  /*                                                                          */
+  /* **There was no type scale before this.** Not a poor one — none: the       */
+  /* product used Tailwind's default sizes implicitly, with seven arbitrary    */
+  /* `text-[10px]` / `text-[0.625rem]` escapes where the default set had no    */
+  /* answer. That is the epic's diagnosis in one place: a theme here could     */
+  /* structurally express nothing but colour, so every type decision lived as  */
+  /* a literal in a className.                                                */
+  /*                                                                          */
+  /* **The sizes are today's values, deliberately.** Landing A's claim is that */
+  /* almost nothing changes, and re-scaling 342 `text-sm` call sites in the    */
+  /* same commit that first declares a scale would make that claim false and   */
+  /* the flag-off comparison meaningless. This commit takes OWNERSHIP of the   */
+  /* values; changing them is a separate, measured decision (the ADR-0055      */
+  /* structure-then-values split, which that decision's own retrospective      */
+  /* credits with making its rollback contract mean something).                */
+  /*                                                                          */
+  /* Two things ARE new, and both are decisions rather than transcription:     */
+  /*                                                                          */
+  /*  1. `--type-micro` — the size the seven escapes were reaching for. An     */
+  /*     uppercase eyebrow label, a Gantt ruler tick, a menu section heading.  */
+  /*     It exists so the rhythm ratchet has somewhere to send them.           */
+  /*  2. Negative tracking at the large end. Space Grotesk is a grotesque      */
+  /*     with generous default spacing, which is right at 13px and loose at    */
+  /*     27px — display sizes in this class of face need pulling in or the     */
+  /*     words stop reading as one shape. Confined to the sizes used for       */
+  /*     headings, so the blast radius is a few dozen call sites.              */
+  /* ----------------------------------------------------------------------- */
+  --type-micro: 0.625rem;
+  --type-micro--line-height: 0.875rem;
+  --type-micro--letter-spacing: 0.06em;
+
+  --type-xs: 0.75rem;
+  --type-xs--line-height: 1rem;
+
+  --type-sm: 0.875rem;
+  --type-sm--line-height: 1.25rem;
+
+  --type-base: 1rem;
+  --type-base--line-height: 1.5rem;
+
+  --type-lg: 1.125rem;
+  --type-lg--line-height: 1.75rem;
+  --type-lg--letter-spacing: -0.006em;
+
+  --type-xl: 1.25rem;
+  --type-xl--line-height: 1.75rem;
+  --type-xl--letter-spacing: -0.01em;
+
+  --type-2xl: 1.5rem;
+  --type-2xl--line-height: 2rem;
+  --type-2xl--letter-spacing: -0.014em;
+
+  --type-3xl: 1.875rem;
+  --type-3xl--line-height: 2.25rem;
+  --type-3xl--letter-spacing: -0.018em;
+
+  --type-4xl: 2.25rem;
+  --type-4xl--line-height: 2.5rem;
+  --type-4xl--letter-spacing: -0.022em;
+
+  /* Typography */
+  --font-sans:
+    'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -764,6 +747,25 @@
   --warning-text: var(--chrome-warning-text);
   --info-text: var(--chrome-info-text);
   --ring: var(--chrome-ring);
+  /* The closure members (ADR-0097 §1.5). These are here because the defect a scope
+     prevents is never "a token is not rebound" — it is a PAIR whose two halves are
+     governed by different scopes. `--background` was rebound and became navy while
+     `--destructive` kept the page's red, and their ratio then belonged to nobody: an
+     accident of which surface a component happened to land on. Measured, that accident
+     was 2.47:1, and 1.34:1 for `--secondary` and `--info`. */
+  --destructive: var(--chrome-destructive);
+  --destructive-foreground: var(--chrome-destructive-foreground);
+  --destructive-hover: var(--chrome-destructive-hover);
+  --secondary: var(--chrome-secondary);
+  --secondary-foreground: var(--chrome-secondary-foreground);
+  --success: var(--chrome-success);
+  --success-foreground: var(--chrome-success-foreground);
+  --warning: var(--chrome-warning);
+  --warning-foreground: var(--chrome-warning-foreground);
+  --info: var(--chrome-info);
+  --info-foreground: var(--chrome-info-foreground);
+  --primary-hover: var(--chrome-primary-hover);
+  --secondary-hover: var(--chrome-secondary-hover);
 }
 
 [data-surface='panel'] {
@@ -785,6 +787,25 @@
   --warning-text: var(--panel-warning-text);
   --info-text: var(--panel-info-text);
   --ring: var(--panel-ring);
+  /* The closure members (ADR-0097 §1.5). These are here because the defect a scope
+     prevents is never "a token is not rebound" — it is a PAIR whose two halves are
+     governed by different scopes. `--background` was rebound and became navy while
+     `--destructive` kept the page's red, and their ratio then belonged to nobody: an
+     accident of which surface a component happened to land on. Measured, that accident
+     was 2.47:1, and 1.34:1 for `--secondary` and `--info`. */
+  --destructive: var(--panel-destructive);
+  --destructive-foreground: var(--panel-destructive-foreground);
+  --destructive-hover: var(--panel-destructive-hover);
+  --secondary: var(--panel-secondary);
+  --secondary-foreground: var(--panel-secondary-foreground);
+  --success: var(--panel-success);
+  --success-foreground: var(--panel-success-foreground);
+  --warning: var(--panel-warning);
+  --warning-foreground: var(--panel-warning-foreground);
+  --info: var(--panel-info);
+  --info-foreground: var(--panel-info-foreground);
+  --primary-hover: var(--panel-primary-hover);
+  --secondary-hover: var(--panel-secondary-hover);
 }
 
 [data-surface='brand'] {
@@ -806,6 +827,25 @@
   --warning-text: var(--brand-warning-text);
   --info-text: var(--brand-info-text);
   --ring: var(--brand-ring);
+  /* The closure members (ADR-0097 §1.5). These are here because the defect a scope
+     prevents is never "a token is not rebound" — it is a PAIR whose two halves are
+     governed by different scopes. `--background` was rebound and became navy while
+     `--destructive` kept the page's red, and their ratio then belonged to nobody: an
+     accident of which surface a component happened to land on. Measured, that accident
+     was 2.47:1, and 1.34:1 for `--secondary` and `--info`. */
+  --destructive: var(--brand-destructive);
+  --destructive-foreground: var(--brand-destructive-foreground);
+  --destructive-hover: var(--brand-destructive-hover);
+  --secondary: var(--brand-secondary);
+  --secondary-foreground: var(--brand-secondary-foreground);
+  --success: var(--brand-success);
+  --success-foreground: var(--brand-success-foreground);
+  --warning: var(--brand-warning);
+  --warning-foreground: var(--brand-warning-foreground);
+  --info: var(--brand-info);
+  --info-foreground: var(--brand-info-foreground);
+  --primary-hover: var(--brand-primary-hover);
+  --secondary-hover: var(--brand-secondary-hover);
 }
 
 [data-surface='auth'] {
@@ -827,198 +867,138 @@
   --warning-text: var(--auth-warning-text);
   --info-text: var(--auth-info-text);
   --ring: var(--auth-ring);
+  /* The closure members (ADR-0097 §1.5). These are here because the defect a scope
+     prevents is never "a token is not rebound" — it is a PAIR whose two halves are
+     governed by different scopes. `--background` was rebound and became navy while
+     `--destructive` kept the page's red, and their ratio then belonged to nobody: an
+     accident of which surface a component happened to land on. Measured, that accident
+     was 2.47:1, and 1.34:1 for `--secondary` and `--info`. */
+  --destructive: var(--auth-destructive);
+  --destructive-foreground: var(--auth-destructive-foreground);
+  --destructive-hover: var(--auth-destructive-hover);
+  --secondary: var(--auth-secondary);
+  --secondary-foreground: var(--auth-secondary-foreground);
+  --success: var(--auth-success);
+  --success-foreground: var(--auth-success-foreground);
+  --warning: var(--auth-warning);
+  --warning-foreground: var(--auth-warning-foreground);
+  --info: var(--auth-info);
+  --info-foreground: var(--auth-info-foreground);
+  --primary-hover: var(--auth-primary-hover);
+  --secondary-hover: var(--auth-secondary-hover);
 }
 
 /* ------------------------------------------------------------------------- */
-/* Flag-keyed value overrides (ADR-0055 §6)                                   */
+/* The DIAGRAM's scope (ADR-0097 Landing E).                                  */
 /*                                                                            */
-/* Later milestones change token VALUES, not just structure — the light        */
-/* Corporate rail (S3) and the cream canvas ground (S4). Those values live      */
-/* here, keyed on an attribute the flag stamps on <html>, so "flag-off is       */
-/* byte-for-byte" stays true for colour as well as markup and a rollback is a   */
-/* single attribute rather than a revert.                                       */
+/* ADR-0055's original defect, surviving in the one place ADR-0055 never      */
+/* reached. `render/palette.ts` makes 86 token reads, every one of them       */
+/* against `:root` — so a bar's fill is the PAGE's `--primary`, painted on a  */
+/* ground that is not the page, and the contrast matrix had no canvas pair at */
+/* all. The painter does not change a line: only the element handed to        */
+/* `getComputedStyle` does.                                                    */
 /*                                                                            */
-/* Both blocks are deliberately empty until their milestone fills them, and     */
-/* BOTH ARE DELETED when their flag is retired — the values fold back into the  */
-/* theme blocks above. If you find these still here with no flag, that is the   */
-/* cleanup that was missed.                                                     */
+/* **It arrives byte-identical, deliberately.** Every name below binds to the */
+/* same source `:root` gives it, and `--background` binds to `--canvas`, which */
+/* is what the diagram container already painted as `bg-canvas`. So this      */
+/* commit is a seam and not a repaint; the VALUES are L4-1, with their own    */
+/* diff, so a reader can see which change moved a colour. The live defect     */
+/* those values fix is `--warning` against `--destructive` at **1.34:1** —    */
+/* near-critical against critical, the two states a planner scans a wall of   */
+/* bars to tell apart. (`diagnosis.md` §3.3 leads on 1.27:1; that was a       */
+/* Light-theme figure and went with its theme.)                               */
+/*                                                                            */
+/* All 31 closure names, not 18: a scope is complete when no pair a compiled  */
+/* utility can composite is split across two scopes, and the ADR-0092 dock,   */
+/* the create popover and the bulk-selection bar are all DOM inside this      */
+/* container, every one of them able to render a `destructive` or `secondary` */
+/* button. `token-architecture.test.ts` asserts the set, so a missing member  */
+/* fails rather than lurking.                                                  */
 /* ------------------------------------------------------------------------- */
-/* S5: Light's and Dark's own designed chrome — the last theme values to land, and
-   deliberately the last, because flipping structure and values in one change makes every
-   flag-off parity suite meaningless on the day it is most needed (ADR-0055 §8.1).
-
-   CASCADE ORDER MATTERS HERE. `[data-designed-chrome]` and `.dark` have the SAME specificity
-   and both match <html>, so this block — being later in the file — wins over the `.dark` theme
-   block. That is why it holds LIGHT's values and why the two theme-scoped blocks below must
-   RESTATE every token it declares, including ones they do not change. A token declared here and
-   forgotten there silently paints Light's grey on a dark theme.
-   `token-architecture.test.ts` pins exactly that, so the trap cannot be re-set by hand. */
-[data-designed-chrome] {
-  /* A band that is a shade off the page, not the page with a line under it. White-on-white
-     asks the 1px border to do all the work of saying "this is chrome, not content". */
-  --chrome: oklch(0.975 0 0);
-  --chrome-foreground: oklch(0.145 0 0);
-  --chrome-muted: oklch(0.955 0 0);
-  --chrome-muted-foreground: oklch(0.535 0 0);
-  --chrome-border: oklch(0.9 0 0);
-  --chrome-input: oklch(0.62 0 0);
-  --chrome-accent: oklch(0.925 0 0);
-  --chrome-accent-foreground: oklch(0.205 0 0);
-  --chrome-primary: oklch(0.5 0.18 255);
-  --chrome-primary-foreground: oklch(0.985 0 0);
-  /* White stays the field even though the band no longer is: a field reads as a place to type
-     because it is LIGHTER than what surrounds it, which only works once the band is not white. */
-  --chrome-field: oklch(1 0 0);
-  --chrome-field-foreground: oklch(0.145 0 0);
-  --chrome-field-muted-foreground: oklch(0.535 0 0);
-  --chrome-destructive-text: oklch(0.505 0.21 27.5);
-  --chrome-success-text: oklch(0.48 0.13 150);
-  --chrome-warning-text: oklch(0.48 0.13 80);
-  --chrome-info-text: oklch(0.45 0.14 250);
-  --chrome-ring: oklch(0.55 0.18 255);
-
-  /* The rail sits between the band and the page — lighter than the chrome, darker than the
-     content — so the three surfaces read as a hierarchy rather than as two arbitrary greys. */
-  --panel: oklch(0.98 0 0);
-  --panel-foreground: oklch(0.145 0 0);
-  --panel-muted: oklch(0.96 0 0);
-  --panel-muted-foreground: oklch(0.535 0 0);
-  --panel-border: oklch(0.9 0 0);
-  --panel-input: oklch(0.62 0 0);
-  --panel-accent: oklch(0.93 0 0);
-  --panel-accent-foreground: oklch(0.205 0 0);
-  --panel-primary: oklch(0.5 0.18 255);
-  --panel-primary-foreground: oklch(0.985 0 0);
-  --panel-field: oklch(1 0 0);
-  --panel-field-foreground: oklch(0.145 0 0);
-  --panel-field-muted-foreground: oklch(0.535 0 0);
-  --panel-destructive-text: oklch(0.505 0.21 27.5);
-  --panel-success-text: oklch(0.48 0.13 150);
-  --panel-warning-text: oklch(0.48 0.13 80);
-  --panel-info-text: oklch(0.45 0.14 250);
-  --panel-ring: oklch(0.55 0.18 255);
-}
-
-/* S5: Dark's chrome goes BELOW the page rather than above it — a near-black band with the
-   content lifted off it. Dark themes have no "lighter than white" to reach for, so depth has
-   to run the other way.
-
-   `--chrome-field` is a RAISED DARK, not white (ADR-0055 §8.2). A white field on a near-black
-   band is a glare source at night, which is the condition the theme exists for; if a literal
-   white field is ever wanted here it is a deliberate Dark-theme regression and has to be
-   recorded as one. */
-[data-designed-chrome].dark {
-  --chrome: oklch(0.115 0 0);
-  --chrome-foreground: oklch(0.985 0 0);
-  --chrome-muted: oklch(0.235 0 0);
-  --chrome-muted-foreground: oklch(0.708 0 0);
-  --chrome-border: oklch(1 0 0 / 12%);
-  --chrome-input: oklch(1 0 0 / 38%);
-  --chrome-accent: oklch(0.25 0 0);
-  --chrome-accent-foreground: oklch(0.985 0 0);
-  --chrome-primary: oklch(0.65 0.17 255);
-  --chrome-primary-foreground: oklch(0.205 0 0);
-  --chrome-field: oklch(0.19 0 0);
-  --chrome-field-foreground: oklch(0.985 0 0);
-  --chrome-field-muted-foreground: oklch(0.708 0 0);
-  --chrome-destructive-text: oklch(0.7 0.19 22);
-  --chrome-success-text: oklch(0.82 0.13 150);
-  --chrome-warning-text: oklch(0.85 0.14 82);
-  --chrome-info-text: oklch(0.82 0.11 245);
-  --chrome-ring: oklch(0.65 0.17 255);
-
-  --panel: oklch(0.175 0 0);
-  --panel-foreground: oklch(0.985 0 0);
-  --panel-muted: oklch(0.26 0 0);
-  --panel-muted-foreground: oklch(0.708 0 0);
-  --panel-border: oklch(1 0 0 / 12%);
-  --panel-input: oklch(1 0 0 / 38%);
-  --panel-accent: oklch(0.27 0 0);
-  --panel-accent-foreground: oklch(0.985 0 0);
-  --panel-primary: oklch(0.65 0.17 255);
-  --panel-primary-foreground: oklch(0.205 0 0);
-  --panel-field: oklch(0.215 0 0);
-  --panel-field-foreground: oklch(0.985 0 0);
-  --panel-field-muted-foreground: oklch(0.708 0 0);
-  --panel-destructive-text: oklch(0.7 0.19 22);
-  --panel-success-text: oklch(0.82 0.13 150);
-  --panel-warning-text: oklch(0.85 0.14 82);
-  --panel-info-text: oklch(0.82 0.11 245);
-  --panel-ring: oklch(0.65 0.17 255);
-}
-
-/* S3: Corporate's Project Explorer becomes a LIGHT working surface. One dark band across
-   the top and two light surfaces below it reads as a designed application; three competing
-   dark/light regions does not. Scoped to `.corporate` because Light and Dark already have a
-   light rail — their chrome values land at S5.
-
-   The rail sits at ~1.09:1 against the page. That is deliberately a *preference*, not a WCAG
-   rule (1.4.11 exempts a decorative surface boundary), which is why the "adjacent surfaces"
-   block of `token-contrast.test.ts` RECOMPUTES and prints this number every run rather than
-   asserting a threshold on it — and why the rail keeps a real `border-r` rather than relying
-   on the fill difference alone. (It was quoted here as a hand-computed figure with nothing
-   recomputing it, which is the same trap one level up: a later edit to `--panel` or
-   `--background` would have drifted it silently and this comment would still say 1.09.) */
-[data-designed-chrome].corporate {
-  /* RESTATED, not changed. The global `[data-designed-chrome]` layer above holds Light's grey
-     chrome at equal specificity and earlier in the file, so without these lines Corporate's
-     navy band would silently become that grey. Values are byte-identical to the `.corporate`
-     theme block; `token-architecture.test.ts` fails if one is dropped. */
-  --chrome: oklch(0.252 0.056 264);
-  --chrome-foreground: oklch(0.985 0 0);
-  --chrome-muted: oklch(0.32 0.05 264);
-  --chrome-muted-foreground: oklch(0.78 0.02 264);
-  --chrome-border: oklch(1 0 0 / 14%);
-  --chrome-input: oklch(0.62 0.02 264);
-  --chrome-accent: oklch(0.338 0.081 262);
-  --chrome-accent-foreground: oklch(0.985 0 0);
-  --chrome-primary: oklch(0.786 0.167 70);
-  --chrome-primary-foreground: oklch(0.252 0.056 264);
-  --chrome-field: oklch(1 0 0);
-  --chrome-field-foreground: oklch(0.321 0 0);
-  --chrome-field-muted-foreground: oklch(0.51 0 0);
-  --chrome-destructive-text: oklch(0.74 0.15 25);
-  --chrome-success-text: oklch(0.8 0.12 150);
-  --chrome-warning-text: oklch(0.8 0.14 70);
-  --chrome-info-text: oklch(0.8 0.09 245);
-  --chrome-ring: oklch(0.786 0.167 70);
-
-  --panel: oklch(0.955 0.004 248);
-  --panel-foreground: oklch(0.321 0 0);
-  --panel-muted-foreground: oklch(0.51 0 0);
-  --panel-muted: oklch(0.92 0.004 248);
-  --panel-border: oklch(0.895 0.005 248);
-  --panel-input: oklch(0.62 0.02 264);
-  /* The pale amber wash the page already uses for a selected row — the brand accent where
-     ordinary dark text still sits on top of it at full contrast. */
-  --panel-accent: oklch(0.955 0.04 78);
-  --panel-accent-foreground: oklch(0.252 0.056 264);
-  /* Navy, matching the page: amber is 1.9:1 on a light fill and cannot identify a control. */
-  --panel-primary: oklch(0.252 0.056 264);
-  --panel-primary-foreground: oklch(0.985 0 0);
-  --panel-field: oklch(1 0 0);
-  --panel-field-foreground: oklch(0.321 0 0);
-  --panel-field-muted-foreground: oklch(0.51 0 0);
-  --panel-destructive-text: oklch(0.505 0.19 27.5);
-  --panel-success-text: oklch(0.45 0.11 150);
-  --panel-warning-text: oklch(0.47 0.11 55);
-  --panel-info-text: oklch(0.3 0.075 262);
-  --panel-ring: oklch(0.35 0.09 262);
-}
-
-/* S4: Corporate's diagram gets a warm ground and a band a shade deeper than it. Warm rather
-   than the page's cool off-white so the drawing surface reads as a distinct place to work,
-   and OPAQUE rather than an alpha wash — an alpha band would tint whatever it overlaps and
-   would have to be re-checked against every layer above it. */
-[data-canvas-visual-language].corporate {
-  --canvas: oklch(0.988 0.006 90);
-  --canvas-band: oklch(0.966 0.011 90);
+[data-surface='canvas'] {
+  /* The ground. `--canvas` rather than `--page-background` — this is the one
+     binding that is not a straight pass-through, and it is what makes the
+     container's `bg-background` inside the scope identical to the `bg-canvas`
+     it replaces. Measured 1.02:1 against the page today, i.e. two greys nobody
+     can tell apart, which is exactly why the trap has never shown. */
+  --background: var(--plot-background);
+  --foreground: var(--plot-foreground);
+  --muted: var(--plot-muted);
+  --muted-foreground: var(--plot-muted-foreground);
+  --border: var(--plot-border);
+  --input: var(--plot-input);
+  --accent: var(--plot-accent);
+  --accent-foreground: var(--plot-accent-foreground);
+  --primary: var(--plot-primary);
+  --primary-foreground: var(--plot-primary-foreground);
+  --field: var(--plot-field);
+  --field-foreground: var(--plot-field-foreground);
+  --field-muted-foreground: var(--plot-field-muted-foreground);
+  --destructive-text: var(--plot-destructive-text);
+  --success-text: var(--plot-success-text);
+  --warning-text: var(--plot-warning-text);
+  --info-text: var(--plot-info-text);
+  --ring: var(--plot-ring);
+  /* The closure members. Not optional for this scope and the argument is not
+     "a status fill never appears on a diagram" — the dock, the create popover
+     and the selection bar are DOM inside this container. */
+  --destructive: var(--plot-destructive);
+  --destructive-foreground: var(--plot-destructive-foreground);
+  --destructive-hover: var(--plot-destructive-hover);
+  --secondary: var(--plot-secondary);
+  --secondary-foreground: var(--plot-secondary-foreground);
+  --success: var(--plot-success);
+  --success-foreground: var(--plot-success-foreground);
+  --warning: var(--plot-warning);
+  --warning-foreground: var(--plot-warning-foreground);
+  --info: var(--plot-info);
+  --info-foreground: var(--plot-info-foreground);
+  --primary-hover: var(--plot-primary-hover);
+  --secondary-hover: var(--plot-secondary-hover);
 }
 
 /* ------------------------------------------------------------------------- */
 /* Map tokens into Tailwind's theme so utilities (bg-*, text-*, etc.) resolve */
 /* ------------------------------------------------------------------------- */
 @theme inline {
+  /* The type ramp. Mapped exactly as the colours are — the VALUES live in the theme
+     block and this only names them for Tailwind, so a size is a theme decision and
+     not a build-config one. Without this mapping `text-sm` would silently fall back
+     to Tailwind's own default and the ramp above would be inert. */
+  /* Weight, mapped as the sizes and colours are — the values live in the theme block and
+     this only names them for Tailwind. Declaring `--font-weight-*` directly here would put a
+     design decision in the build config rather than the theme, which is exactly what the
+     "no token outside a theme block" rule exists to prevent. */
+  --font-weight-light: var(--weight-light);
+  --font-weight-normal: var(--weight-normal);
+  --font-weight-medium: var(--weight-medium);
+  --font-weight-semibold: var(--weight-semibold);
+  --font-weight-bold: var(--weight-bold);
+  --text-micro: var(--type-micro);
+  --text-micro--line-height: var(--type-micro--line-height);
+  --text-micro--letter-spacing: var(--type-micro--letter-spacing);
+  --text-xs: var(--type-xs);
+  --text-xs--line-height: var(--type-xs--line-height);
+  --text-sm: var(--type-sm);
+  --text-sm--line-height: var(--type-sm--line-height);
+  --text-base: var(--type-base);
+  --text-base--line-height: var(--type-base--line-height);
+  --text-lg: var(--type-lg);
+  --text-lg--line-height: var(--type-lg--line-height);
+  --text-lg--letter-spacing: var(--type-lg--letter-spacing);
+  --text-xl: var(--type-xl);
+  --text-xl--line-height: var(--type-xl--line-height);
+  --text-xl--letter-spacing: var(--type-xl--letter-spacing);
+  --text-2xl: var(--type-2xl);
+  --text-2xl--line-height: var(--type-2xl--line-height);
+  --text-2xl--letter-spacing: var(--type-2xl--letter-spacing);
+  --text-3xl: var(--type-3xl);
+  --text-3xl--line-height: var(--type-3xl--line-height);
+  --text-3xl--letter-spacing: var(--type-3xl--letter-spacing);
+  --text-4xl: var(--type-4xl);
+  --text-4xl--line-height: var(--type-4xl--line-height);
+  --text-4xl--letter-spacing: var(--type-4xl--letter-spacing);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -1034,6 +1014,9 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-hover: var(--destructive-hover);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary-hover: var(--secondary-hover);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-text: var(--destructive-text);
   --color-success-text: var(--success-text);
@@ -1097,6 +1080,23 @@
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+  }
+
+  /* **Tabular figures, and for this typeface they are load-bearing rather than a
+     refinement** (ADR-0097). Space Grotesk's digits are PROPORTIONAL by default and
+     dramatically so — its `1` is 404 units against the `0`'s 638, a 58% difference —
+     so a column of dates set in it does not line up, and a duration that ticks from
+     `9 d` to `10 d` shifts everything after it. Measured with fontTools before the
+     face was committed, which is also how we know the family ships a real `tnum`.
+
+     Applied to the elements where a number is DATA rather than prose: table cells,
+     and anything opting in with `.tabular-nums`. Deliberately NOT applied to `body`,
+     because tabular figures in running text are the wrong choice — the even spacing
+     that aligns a column reads as gappy in a sentence. */
+  th,
+  td,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 
   /* Honour reduced-motion preferences globally. */

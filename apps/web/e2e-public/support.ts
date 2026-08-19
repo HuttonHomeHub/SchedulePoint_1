@@ -35,7 +35,28 @@ export const VIEWPORTS = [
  * (`hooks/use-theme.tsx`), so it adds no fourth rendering and testing it would only be testing
  * `matchMedia`.
  */
-export const THEMES = ['light', 'dark', 'corporate'] as const;
+/**
+ * The stored theme preferences a visitor can arrive with.
+ *
+ * **It was `['light', 'dark', 'corporate']` and is now one entry, because ADR-0097 collapsed the
+ * product to a single theme** — `:root` IS the theme block, and every stored value resolves to
+ * "stamp nothing". This suite kept sweeping three and failed on `dark` and `corporate` the first
+ * time anything ran it after the collapse, which is the full-suite sweep (`docs/TESTING.md` step
+ * 4b) doing exactly what it exists for: it is named for the public screens, not for themes, so
+ * nothing about "the theme change" would have found it.
+ *
+ * **Collapsed rather than repointed, and the reason matters.** Three passes would now measure the
+ * same pixels three times — a sweep that reads as though it covered three worlds while covering
+ * one, which is the defect class `URL_STATES`' own docblock names two lines down. The property
+ * those passes used to protect — that every stored preference paints identically — is held by
+ * `e2e-designed-ui`'s "every stored preference resolves to the same painted theme", which was
+ * deliberately **kept** at the collapse for precisely this purpose. One suite proves the values are
+ * one; this one measures that one.
+ *
+ * `Theme` stays a union of one rather than becoming `string`, so re-introducing dark is an edit
+ * here and a compiler sweep everywhere else.
+ */
+export const THEMES = ['light'] as const;
 export type Theme = (typeof THEMES)[number];
 
 /** The Tailwind `md` breakpoint, in pixels — the width at which the panel becomes a column. */
@@ -92,14 +113,22 @@ export async function pinTheme(page: Page, theme: Theme): Promise<void> {
   }, theme);
 }
 
-/** The class the boot script stamps on `<html>` for each theme (Light is the unclassed default). */
+/**
+ * The class the boot script stamps on `<html>` for each preference — **nothing, for all of them**
+ * (ADR-0097). Kept as a map rather than inlined as `null`, so re-introducing dark is one entry
+ * here rather than a rewrite of the assertion below.
+ */
 const ROOT_CLASS: Record<Theme, string | null> = {
   light: null,
-  dark: 'dark',
-  corporate: 'corporate',
 };
 
-/** Assert the theme actually rendered, so a sweep cannot silently measure Light three times. */
+/**
+ * Assert what actually rendered, so a sweep cannot silently measure one theme while claiming three.
+ *
+ * That was its original job and it did it: when ADR-0097 collapsed the product to a single theme,
+ * this is the assertion that failed rather than letting `dark` and `corporate` quietly become two
+ * more passes over the same pixels.
+ */
 export async function expectTheme(page: Page, theme: Theme): Promise<void> {
   const classes = await page.evaluate(() => document.documentElement.className);
   const expected = ROOT_CLASS[theme];

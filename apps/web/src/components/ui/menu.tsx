@@ -272,7 +272,7 @@ export function MenuSection({
     >
       <span
         aria-hidden="true"
-        className="text-muted-foreground block px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase"
+        className="text-muted-foreground text-micro block px-2 pt-2 pb-1 font-semibold tracking-wider uppercase"
       >
         {label}
       </span>

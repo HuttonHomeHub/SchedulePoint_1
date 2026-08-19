@@ -4,6 +4,7 @@ import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { PlanWorkspace } from '@/components/layout/workspace/plan-workspace';
 import { usePlanWorkspaceModel } from '@/components/layout/workspace/use-plan-workspace-model';
 import { Spinner } from '@/components/ui/spinner';
+import { useRememberPlan } from '@/features/overview/hooks/use-remember-plan';
 
 /**
  * A single plan (`/orgs/$orgSlug/plans/$planId`). Route-composed orchestration (queries, gating,
@@ -15,6 +16,9 @@ import { Spinner } from '@/components/ui/spinner';
  * with the flag. The model lives where it does because two layouts once shared it; it stays there
  * because the split between "what this plan needs" and "how it is laid out" is worth keeping
  * whether or not there is a second layout to prove it.
+ *
+ * Its one other job is to tell the overview's "Jump back in" that this plan was opened
+ * ({@link useRememberPlan}) — one call, ids only, written once per plan rather than per render.
  */
 export function PlanDetailScreen(): React.ReactElement {
   const params = useParams({ strict: false });
@@ -22,6 +26,8 @@ export function PlanDetailScreen(): React.ReactElement {
   const planId = 'planId' in params ? params.planId : '';
   const model = usePlanWorkspaceModel(orgSlug, planId);
   const planQuery = model.plan;
+
+  useRememberPlan({ orgSlug, planId, resolved: planQuery.isSuccess });
 
   if (planQuery.isPending) {
     // A workspace-shaped skeleton (header + canvas + panel) on the canvas-first path so the load

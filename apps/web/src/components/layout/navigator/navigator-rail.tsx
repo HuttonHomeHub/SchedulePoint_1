@@ -1,6 +1,8 @@
 import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import { OrgDestinations, OrgDestinationsCollapsed } from './org-destinations';
+
 import { Button } from '@/components/ui/button';
 import { SheetHeader } from '@/components/ui/sheet';
 import { Surface } from '@/components/ui/surface';
@@ -108,6 +110,11 @@ export function NavigatorRail({
           <p className="text-muted-foreground p-4 text-sm">Select an organisation to browse.</p>
         )}
       </div>
+      {/* The organisation's destinations, relocated from the app header (ADR-0097 Landing D1).
+          `shrink-0` and outside the scrolling region: these are six fixed places, and a tree that
+          scrolled them out of reach would put the product's whole secondary navigation behind an
+          interaction. The tree above takes the flexible height, which is the rail's purpose. */}
+      {orgSlug ? <OrgDestinations orgSlug={orgSlug} /> : null}
       {/* A quiet footer with both service versions — subtle build metadata, not a nav item. */}
       <div className="border-border shrink-0 border-t px-4 py-2">
         <AppVersionLine />
@@ -117,15 +124,28 @@ export function NavigatorRail({
 }
 
 /**
- * The collapsed pinned rail: a slim bar with a single control to reopen it. Keeps a
- * persistent affordance on screen so the explorer is never more than one click away.
+ * The collapsed pinned rail: a slim bar with a control to reopen it, and the organisation's
+ * destinations as an icon strip.
+ *
+ * **The strip is owed by ADR-0097 Landing D1, not an embellishment.** Until D1 the six destinations
+ * lived in the app header, where they survived a rail collapse. Collapsing the rail is exactly what
+ * a planner does to gain canvas width — the thing this epic chases — so relocating them here and
+ * leaving this component as one button would have put the product's whole secondary navigation
+ * behind a toggle it had never been behind. `migration.md` names this as a state D1 does not ship
+ * without.
+ *
+ * The tree itself stays collapsed: a tree has no icon form, and the toggle above is the affordance
+ * for it. Only the fixed destinations survive the collapse, which is what they were doing before.
  */
 export function NavigatorRailCollapsed({
   onExpand,
   focusToggleOnMount,
+  orgSlug,
 }: {
   onExpand: () => void;
   focusToggleOnMount?: boolean;
+  /** Absent outside an organisation route, where there are no destinations to show. */
+  orgSlug?: string | undefined;
 }): React.ReactElement {
   const toggleRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -143,6 +163,10 @@ export function NavigatorRailCollapsed({
       >
         <PanelLeftOpen aria-hidden="true" className="size-4" />
       </Button>
+      {/* Pinned to the bottom, matching the expanded rail's zone order, so the same six things are
+          in the same place either way and collapsing does not shuffle them. */}
+      <div className="min-h-0 flex-1" />
+      {orgSlug ? <OrgDestinationsCollapsed orgSlug={orgSlug} /> : null}
     </Surface>
   );
 }

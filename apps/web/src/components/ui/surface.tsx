@@ -39,7 +39,32 @@ import { cn } from '@/lib/utils';
  * bearing one is that the region's fill must be chosen for a reason the page's fill structurally
  * cannot serve — otherwise it is a component with props, not a scope.
  */
-export type SurfaceTone = 'chrome' | 'panel' | 'brand' | 'auth';
+/**
+ * `canvas` is the diagram's own ground (ADR-0097 Landing E), and it is the scope with the most
+ * consumers of any: `render/palette.ts` makes **86** token reads and every one of them resolved
+ * against `:root` until this landed — so a bar's fill was the PAGE's `--primary` painted on a
+ * ground that is not the page, and the contrast matrix had no canvas pair at all.
+ *
+ * It clears ADR-0077 §1's five conditions, and the load-bearing one is the second: the diagram's
+ * inks must be validated **against that ground and against each other**, which the page family
+ * structurally cannot do because it is validated against `--background`. The painter does not
+ * change a line — only the element handed to `getComputedStyle` does.
+ */
+export type SurfaceTone = 'chrome' | 'panel' | 'brand' | 'auth' | 'canvas' | 'card' | 'popover';
+
+/**
+ * The two **resets** (ADR-0097 §1.5c). They are not scopes in the ADR-0077 §1 sense — nobody has
+ * to clear five conditions to add one, because they add no vocabulary. They RESTORE the page
+ * family for their subtree and then change one thing: their own fill.
+ *
+ * That is what keeps ADR-0055's promise that "a `Card` means the same thing everywhere" true
+ * inside a rebinding world. Without it, a `Card` landing inside `chrome` composites
+ * `text-muted-foreground` — which IS rebound, to a grey validated against navy — on `--card`,
+ * which is not. Two halves of one pair, governed by different scopes: the exact defect the closure
+ * defines, and latent rather than live only because no `<Card>` currently renders inside a
+ * `<Surface>`.
+ */
+export const RESET_TONES = ['card', 'popover'] as const satisfies readonly SurfaceTone[];
 
 /**
  * Carries the enclosing tone for the nesting invariant ONLY, and is deliberately not exported.
@@ -52,6 +77,15 @@ export interface SurfaceProps extends React.HTMLAttributes<HTMLElement> {
   tone: SurfaceTone;
   /** The element to render — `header`, `aside`, `div` … Defaults to `div`. */
   as?: React.ElementType;
+  /**
+   * The scope's own DOM node, for a consumer that has to READ it rather than paint inside it.
+   *
+   * Added for `canvas` (ADR-0097 Landing E), whose whole purpose is that
+   * `getComputedStyle(thisNode)` is what the painter resolves its 86 tokens from — so unlike every
+   * other scope, something outside needs the element itself. React 19 passes `ref` as an ordinary
+   * prop, so this is a declaration rather than a `forwardRef`.
+   */
+  ref?: React.Ref<HTMLElement>;
 }
 
 /**
@@ -67,6 +101,7 @@ export function Surface({
   as: Component = 'div',
   className,
   children,
+  ref,
   ...rest
 }: SurfaceProps): React.ReactElement {
   const enclosing = useContext(SurfaceToneContext);
@@ -80,6 +115,7 @@ export function Surface({
   return (
     <SurfaceToneContext value={tone}>
       <Component
+        ref={ref}
         data-surface={tone}
         className={cn('bg-background text-foreground', className)}
         {...rest}

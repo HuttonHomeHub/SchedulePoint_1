@@ -8,19 +8,29 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        // `hover:bg-primary-hover` / `hover:bg-secondary-hover`, never the `/90` and `/80`
+        // alpha forms these used to carry — the rule the `destructive` comment below states, now
+        // applied to its neighbours rather than to one of the three. The alpha census caught
+        // `hover:bg-secondary-hover` at **3.8:1** for its own label on both navy scopes.
+        default: 'bg-primary text-primary-foreground hover:bg-primary-hover',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary-hover',
         // `text-foreground` is not decoration: a variant that states its own fill and then
         // inherits its ink is a bug wherever it lands (ADR-0055 §2, defect D3) — on a dark
         // surface it inherited light ink onto a light fill and vanished.
         outline:
           'border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
-        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        // `hover:bg-destructive-hover`, never `hover:bg-destructive/90`. The alpha form
+        // composites the fill against the PAGE, so on a light surface it lightened toward white
+        // and took the label to 4.32:1 — below 1.4.3, on every Delete button in the product. It
+        // was invisible to both gates: the contrast matrix resolves tokens and a utility is not
+        // one, and the axe suite measures no hover state at all. A token is checkable; an alpha
+        // utility is not, and that is the reason for the shape rather than the colour.
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive-hover',
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-9 px-3',
+        default: 'h-(--control-h) px-4 py-2',
+        sm: 'h-(--control-h-sm) px-3',
         lg: 'h-11 px-6',
         icon: 'size-10',
         // Row-height icon button for dense lists (e.g. the Project Explorer tree, whose

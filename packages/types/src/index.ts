@@ -2320,4 +2320,81 @@ export interface AuditChanges {
   truncated?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// The organisation overview (ADR-0098) — the screen every sign-in lands on.
+// ---------------------------------------------------------------------------
+
+/**
+ * Who made a change.
+ *
+ * **A discriminated union, not a nullable name.** "Sarah", "somebody who has left this
+ * organisation" and "we do not know" are three different facts, and a nullable string collapses the
+ * last two into an absence a reader cannot tell from a defect.
+ */
+export type OverviewActor =
+  { kind: 'MEMBER'; name: string } | { kind: 'FORMER_MEMBER' } | { kind: 'UNKNOWN' };
+
+export interface RecentlyChangedPlan {
+  planId: string;
+  planName: string;
+  projectId: string;
+  projectName: string;
+  clientName: string;
+  status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  /**
+   * The latest of the plan row, its newest activity and its newest dependency — NOT
+   * `plans.updated_at`, which does not move when an activity is edited.
+   */
+  changedAt: string;
+  changedBy: OverviewActor;
+}
+
+export interface OverviewHeldLock {
+  planId: string;
+  planName: string;
+  /** The peer waiting for this pen, or null when nobody has asked. */
+  requestedBy: OverviewActor | null;
+}
+
+/**
+ * The things waiting on this reader.
+ *
+ * **The two counts are OMITTED for readers who may not see them, never sent as `0`.** A zero is a
+ * fact about the organisation; an absence is a fact about the reader.
+ */
+export interface OverviewAttention {
+  heldLocks: OverviewHeldLock[];
+  pendingInvitationCount?: number;
+  expiringDeletedCount?: number;
+}
+
+/**
+ * One plan this browser remembers the reader opening, resolved to its **current** name.
+ *
+ * The browser stores ids only, so every name here comes from the server on the load that renders
+ * it — which is what makes a rename correct itself and a plan the reader has lost access to
+ * disappear rather than 404 on click.
+ */
+export interface RecentPlan {
+  planId: string;
+  planName: string;
+  projectName: string;
+  clientName: string;
+}
+
+export interface OrganisationOverview {
+  organisationName: string;
+  /** No active clients — the organisation has not been set up yet. */
+  isNewOrganisation: boolean;
+  /** Any active, non-archived plan exists. */
+  hasPlans: boolean;
+  recentlyChanged: RecentlyChangedPlan[];
+  /**
+   * The subset of the requested `recentPlanIds` the caller may read, in the order they were sent.
+   * Absent ids are absent for indistinguishable reasons — there is no `reason` field by design.
+   */
+  recentPlans: RecentPlan[];
+  attention: OverviewAttention;
+}
+
 export {};

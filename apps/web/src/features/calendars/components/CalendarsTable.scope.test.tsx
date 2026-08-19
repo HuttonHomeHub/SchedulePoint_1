@@ -87,6 +87,23 @@ function renderTable({
   );
 }
 
+/**
+ * Open a row's `⋯` and click one of its secondary actions (ADR-0097 Landing F1).
+ *
+ * These were five text buttons per row until that landing; now the row's primary action (`Edit`)
+ * stays visible and the rest sit behind a trigger. The **menu** carries the subject
+ * (`Actions for <name>`), so the items are plain verbs — which is why this helper takes the row
+ * name and the verb separately rather than the old `"Archive Standard"` composite.
+ */
+async function rowAction(calendarName: string, action: string | RegExp): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: `Actions for ${calendarName}` }));
+  fireEvent.click(
+    await within(
+      await screen.findByRole('menu', { name: `Actions for ${calendarName}` }),
+    ).findByRole('menuitem', { name: action }),
+  );
+}
+
 describe('CalendarsTable — calendar scope tier (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
@@ -125,22 +142,45 @@ describe('CalendarsTable — calendar scope tier (flag on)', () => {
     expect(screen.getByText('Site shutdown')).toBeInTheDocument();
   });
 
-  it('offers Move to organisation only for project-scoped rows, and only with calendar:manage_org', () => {
+  /** Open one row's `⋯` without selecting anything, to inspect what it offers. */
+  async function openRowMenu(calendarName: string): Promise<HTMLElement> {
+    fireEvent.click(await screen.findByRole('button', { name: `Actions for ${calendarName}` }));
+    return screen.findByRole('menu', { name: `Actions for ${calendarName}` });
+  }
+
+  it('offers Move to organisation only for project-scoped rows', async () => {
     renderTable();
     expect(
-      screen.getByRole('button', { name: 'Move to organisation: Site shutdown' }),
+      within(await openRowMenu('Site shutdown')).getByRole('menuitem', {
+        name: 'Move to organisation',
+      }),
     ).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    // **Omitted, not shaded** — and that is the other half of ADR-0082. An ORG calendar is already
+    // in the shared library, so the action does not apply to the object at all; shading it would
+    // offer a reader something that could never become available.
     expect(
-      screen.queryByRole('button', { name: 'Move to organisation: Standard' }),
+      within(await openRowMenu('Standard')).queryByRole('menuitem', {
+        name: 'Move to organisation',
+      }),
     ).not.toBeInTheDocument();
   });
 
-  it('hides the tier move from a writer without calendar:manage_org', () => {
+  it('shades the tier move — with its reason — for a writer without calendar:manage_org', async () => {
     renderTable({ canManageOrg: false });
 
-    expect(
-      screen.queryByRole('button', { name: 'Move to organisation: Site shutdown' }),
-    ).not.toBeInTheDocument();
+    // **This asserted the item was HIDDEN until ADR-0097 Landing F1**, and the change is the point
+    // rather than a locator update: hiding it means a planner never learns the row can do the thing
+    // and never learns what would let them (ADR-0082). It is shaded, still an arrow-key stop, and
+    // carries the reason.
+    const item = within(await openRowMenu('Site shutdown')).getByRole('menuitem', {
+      name: 'Move to organisation',
+    });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(item).toHaveAccessibleDescription(/Org Admin or Planner/);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
     // The ordinary write actions are untouched — only the shared-library act is gated.
     expect(screen.getByRole('button', { name: 'Edit Site shutdown' })).toBeInTheDocument();
   });
@@ -149,7 +189,7 @@ describe('CalendarsTable — calendar scope tier (flag on)', () => {
     vi.mocked(apiFetch).mockResolvedValue({ ...PROJECT_CALENDAR, scope: 'ORG' });
     renderTable();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move to organisation: Site shutdown' }));
+    await rowAction('Site shutdown', 'Move to organisation');
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
@@ -175,7 +215,7 @@ describe('CalendarsTable — calendar scope tier (flag on)', () => {
     );
     renderTable();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Move to organisation: Site shutdown' }));
+    await rowAction('Site shutdown', 'Move to organisation');
     fireEvent.click(screen.getByRole('button', { name: 'Move' }));
 
     expect(await screen.findByText('This calendar changed. Reload.')).toBeInTheDocument();

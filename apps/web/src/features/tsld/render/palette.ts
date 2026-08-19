@@ -8,8 +8,16 @@ import type { ResourceStripPalette, TsldPalette, WbsBandPalette } from './paint'
  * `--color-*` custom properties off the document root; call again on a theme change to
  * repaint with the new values. Falls back to sensible values when the DOM/tokens are
  * unavailable (e.g. jsdom in unit tests).
+ *
+ * **`root` is REQUIRED, and that is the guard** (ADR-0097 Landing E). It defaulted to
+ * `document.documentElement` and every one of the nine production call sites took the default — so
+ * all 86 token reads below resolved against the PAGE, on a ground that is not the page. A default
+ * makes that failure silent: the diagram paints plausible colours and nothing anywhere reports it.
+ * Removing the default turns a missed call site into a compile error, which is the ADR-0070
+ * `hoursPerDay` precedent adopted for the same class of bug — a value that is wrong rather than
+ * absent, and therefore invisible.
  */
-export function resolveTsldPalette(root: Element = document.documentElement): TsldPalette {
+export function resolveTsldPalette(root: Element): TsldPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -98,70 +106,67 @@ export interface PrintPalette extends TsldPalette {
 }
 
 /**
- * Resolve a **LIGHT-forced** print palette from the SAME design tokens (ADR-0006) `resolveTsldPalette`
- * reads — so an exported / printed diagram is legible on white paper regardless of the user's current
- * light/dark/system theme (reports and paper want light). No hard-coded colours: the app applies dark
- * via a `.dark` class on the documentElement, so the light token values (the `:root` defaults) are read
- * by momentarily clearing that class — **synchronously**, so no paint happens between clear and restore
- * (no flash) — then restoring it. Falls back to sensible LIGHT values when the DOM/tokens are
- * unavailable (jsdom in unit tests), which is what makes the palette light there too.
+ * Resolve the print palette from the SAME design tokens (ADR-0006) `resolveTsldPalette` reads, so a
+ * printed or exported diagram cannot drift from the one on screen. Falls back to sensible LIGHT
+ * values when the DOM or the tokens are unavailable (jsdom in unit tests), which is what makes the
+ * palette light there too.
+ *
+ * **It used to force light by momentarily clearing a `.dark` class**, synchronously so no paint
+ * happened in between. ADR-0097 collapsed the product to one theme whose working surfaces are
+ * already light, so there is nothing to force and nothing to restore. **If a dark theme returns,
+ * this is one of the places that needs it back** — paper wants light whatever the screen is doing,
+ * and the trick is recorded here rather than left to be rediscovered.
  */
-export function resolvePrintPalette(root: Element = document.documentElement): PrintPalette {
-  const hadDark = root.classList.contains('dark');
-  if (hadDark) root.classList.remove('dark');
-  try {
-    const styles = getComputedStyle(root);
-    const token = (name: string, fallback: string): string => {
-      const value = styles.getPropertyValue(name).trim();
-      return value || fallback;
-    };
-    return {
-      // Surface colours the export composites around the diagram (light fallbacks: white paper, near-
-      // black ink, mid-grey muted) — token-derived so a themed token override still flows through.
-      ground: token('--color-background', '#ffffff'),
-      ink: token('--color-foreground', '#1a1a1a'),
-      mutedInk: token('--color-muted-foreground', '#6b7280'),
-      // The painter fields, mirroring `resolveTsldPalette` but with LIGHT fallbacks (grid a light grey,
-      // ink near-black) so the diagram reads on white even when the tokens can't be read.
-      gridLine: token('--color-border', '#e5e7eb'),
-      // Time-axis gridline tiers, LIGHT-forced fallbacks (mirrors resolveTsldPalette's fields).
-      gridLineDay: token('--color-canvas-grid-day', '#f5f6f8'),
-      gridLineMonth: token('--color-canvas-grid-month', '#bcc2ca'),
-      gridLineYear: token('--color-canvas-grid-year', '#8b93a1'),
-      edge: token('--color-muted-foreground', '#6b7280'),
-      bar: token('--color-primary', '#2f62c4'),
-      critical: token('--color-destructive', '#c2331f'),
-      nearCritical: token('--color-warning', '#b58900'),
-      outline: token('--color-foreground', '#1a1a1a'),
-      selection: token('--color-ring', '#3b6fbf'),
-      nonWorking: token('--color-muted', '#f0f0f0'),
-      // LIGHT fallback for the same F7a stripe (mirrors `resolveTsldPalette`).
-      nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#c7c7c7'),
-      today: token('--color-destructive', '#c2331f'),
-      todayInk: token('--color-destructive-foreground', '#ffffff'),
-      // The data-date pair with LIGHT fallbacks (mirrors `resolveTsldPalette`): near-black rule +
-      // pill on paper, white ink on the pill — the export path draws the same line the screen does.
-      dataDate: token('--color-foreground', '#1a1a1a'),
-      dataDateInk: token('--color-background', '#ffffff'),
-      conflict: token('--color-warning', '#b58900'),
-      laneOverlap: token('--color-warning', '#b58900'),
-      labelInside: token('--color-primary-foreground', '#ffffff'),
-      labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
-      labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
-      labelBeside: token('--color-foreground', '#1a1a1a'),
-      // M4 refresh entries with LIGHT fallbacks (the export path builds a `visualRefresh`-less
-      // scene today, but the palette contract stays total — every painter field resolves).
-      barStroke: token('--color-border', '#e5e7eb'),
-      hoverRing: token('--color-muted-foreground', '#6b7280'),
-      // The export builds a handle-less scene (the handles are an editing affordance) and prints
-      // on unbanded paper, but the palette contract stays TOTAL — every painter field resolves, so
-      // a future export that does paint them cannot pick up an undefined colour.
-      handleHalo: token('--color-canvas', '#ffffff'),
-      monthBand: token('--color-canvas-band', '#f7f7f7'),
-    };
-  } finally {
-    if (hadDark) root.classList.add('dark');
-  }
+export function resolvePrintPalette(root: Element): PrintPalette {
+  const styles = getComputedStyle(root);
+  const token = (name: string, fallback: string): string => {
+    const value = styles.getPropertyValue(name).trim();
+    return value || fallback;
+  };
+  return {
+    // Surface colours the export composites around the diagram (light fallbacks: white paper, near-
+    // black ink, mid-grey muted) — token-derived so a themed token override still flows through.
+    ground: token('--color-background', '#ffffff'),
+    ink: token('--color-foreground', '#1a1a1a'),
+    mutedInk: token('--color-muted-foreground', '#6b7280'),
+    // The painter fields, mirroring `resolveTsldPalette` but with LIGHT fallbacks (grid a light grey,
+    // ink near-black) so the diagram reads on white even when the tokens can't be read.
+    gridLine: token('--color-border', '#e5e7eb'),
+    // Time-axis gridline tiers, LIGHT-forced fallbacks (mirrors resolveTsldPalette's fields).
+    gridLineDay: token('--color-canvas-grid-day', '#f5f6f8'),
+    gridLineMonth: token('--color-canvas-grid-month', '#bcc2ca'),
+    gridLineYear: token('--color-canvas-grid-year', '#8b93a1'),
+    edge: token('--color-muted-foreground', '#6b7280'),
+    bar: token('--color-primary', '#2f62c4'),
+    critical: token('--color-destructive', '#c2331f'),
+    nearCritical: token('--color-warning', '#b58900'),
+    outline: token('--color-foreground', '#1a1a1a'),
+    selection: token('--color-ring', '#3b6fbf'),
+    nonWorking: token('--color-muted', '#f0f0f0'),
+    // LIGHT fallback for the same F7a stripe (mirrors `resolveTsldPalette`).
+    nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#c7c7c7'),
+    today: token('--color-destructive', '#c2331f'),
+    todayInk: token('--color-destructive-foreground', '#ffffff'),
+    // The data-date pair with LIGHT fallbacks (mirrors `resolveTsldPalette`): near-black rule +
+    // pill on paper, white ink on the pill — the export path draws the same line the screen does.
+    dataDate: token('--color-foreground', '#1a1a1a'),
+    dataDateInk: token('--color-background', '#ffffff'),
+    conflict: token('--color-warning', '#b58900'),
+    laneOverlap: token('--color-warning', '#b58900'),
+    labelInside: token('--color-primary-foreground', '#ffffff'),
+    labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
+    labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
+    labelBeside: token('--color-foreground', '#1a1a1a'),
+    // M4 refresh entries with LIGHT fallbacks (the export path builds a `visualRefresh`-less
+    // scene today, but the palette contract stays total — every painter field resolves).
+    barStroke: token('--color-border', '#e5e7eb'),
+    hoverRing: token('--color-muted-foreground', '#6b7280'),
+    // The export builds a handle-less scene (the handles are an editing affordance) and prints
+    // on unbanded paper, but the palette contract stays TOTAL — every painter field resolves, so
+    // a future export that does paint them cannot pick up an undefined colour.
+    handleHalo: token('--color-canvas', '#ffffff'),
+    monthBand: token('--color-canvas-band', '#f7f7f7'),
+  };
 }
 
 /**
@@ -173,9 +178,7 @@ export function resolvePrintPalette(root: Element = document.documentElement): P
  * (Canvas 2D `fillStyle` can't take a `var()`). Falls back to sensible values when the DOM/tokens are
  * unavailable (jsdom in unit tests).
  */
-export function resolveResourceStripPalette(
-  root: Element = document.documentElement,
-): ResourceStripPalette {
+export function resolveResourceStripPalette(root: Element): ResourceStripPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -197,7 +200,7 @@ export function resolveResourceStripPalette(
  * chart tokens deterministically; `neutral` is the muted "uncomputed / ungrouped" colour. Call again on
  * a theme change to repaint. Falls back to sensible values when the DOM/tokens are unavailable (jsdom).
  */
-export function resolveLensPalette(root: Element = document.documentElement): LensPalette {
+export function resolveLensPalette(root: Element): LensPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -301,7 +304,7 @@ export function lensLegendVarPalette(): LensPalette {
  * not read as the same kind of object. It is the muted token rather than a tint of the primary,
  * so the difference survives a theme switch instead of depending on one theme's contrast.
  */
-export function resolveWbsBandPalette(root: Element = document.documentElement): WbsBandPalette {
+export function resolveWbsBandPalette(root: Element): WbsBandPalette {
   const styles = getComputedStyle(root);
   const token = (name: string, fallback: string): string => {
     const value = styles.getPropertyValue(name).trim();
@@ -319,19 +322,11 @@ export function resolveWbsBandPalette(root: Element = document.documentElement):
 /**
  * The **light-forced** WBS band palette for the image export and print (ADR-0063 §M5).
  *
- * It delegates to {@link resolveWbsBandPalette} with the `.dark` class momentarily cleared — the
- * same synchronous clear/restore {@link resolvePrintPalette} uses, so no paint happens in between.
- * Delegating rather than restating the five tokens is the point: a band whose colours were listed
- * twice would eventually print in a colour the screen had stopped using.
+ * It delegates to {@link resolveWbsBandPalette} rather than restating the five tokens, and that is
+ * the point: a band whose colours were listed twice would eventually print in a colour the screen
+ * had stopped using. It used to clear a `.dark` class first — see {@link resolvePrintPalette} for
+ * why that is gone and when it would need to come back.
  */
-export function resolvePrintWbsBandPalette(
-  root: Element = document.documentElement,
-): WbsBandPalette {
-  const hadDark = root.classList.contains('dark');
-  if (hadDark) root.classList.remove('dark');
-  try {
-    return resolveWbsBandPalette(root);
-  } finally {
-    if (hadDark) root.classList.add('dark');
-  }
+export function resolvePrintWbsBandPalette(root: Element): WbsBandPalette {
+  return resolveWbsBandPalette(root);
 }

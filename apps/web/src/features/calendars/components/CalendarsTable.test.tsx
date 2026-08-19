@@ -1,7 +1,7 @@
 import { WorkingWeekdays } from '@repo/types';
 import type { CalendarSummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { calendarKeys } from '../api/use-calendars';
@@ -65,6 +65,16 @@ function renderTable(canWrite: boolean, data: CalendarSummary[] = CALENDARS) {
   );
 }
 
+/** Open a row's `⋯` and pick one of its secondary actions (ADR-0097 Landing F1). */
+async function rowAction(calendarName: string, action: string | RegExp): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: `Actions for ${calendarName}` }));
+  fireEvent.click(
+    await within(
+      await screen.findByRole('menu', { name: `Actions for ${calendarName}` }),
+    ).findByRole('menuitem', { name: action }),
+  );
+}
+
 describe('CalendarsTable', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
@@ -77,7 +87,7 @@ describe('CalendarsTable', () => {
     expect(screen.getByText('Mon–Fri')).toBeInTheDocument();
     expect(screen.getByText('Every day')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Standard' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete Seven-day' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions for Seven-day' })).toBeInTheDocument();
   });
 
   it('hides write actions for non-writers but offers a read-only View', () => {
@@ -95,9 +105,9 @@ describe('CalendarsTable', () => {
     expect(screen.getByText(/No calendars yet/)).toBeInTheDocument();
   });
 
-  it('confirms before deleting', () => {
+  it('confirms before deleting', async () => {
     renderTable(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Standard' }));
+    await rowAction('Standard', 'Delete');
     expect(screen.getByRole('heading', { name: 'Delete calendar' })).toBeInTheDocument();
   });
 
@@ -111,7 +121,7 @@ describe('CalendarsTable', () => {
     );
     renderTable(true);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Standard' }));
+    await rowAction('Standard', 'Delete');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     expect(await screen.findByText(/In use by 2 plans/)).toBeInTheDocument();

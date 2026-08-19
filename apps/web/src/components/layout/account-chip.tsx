@@ -1,33 +1,12 @@
 import { useNavigate } from '@tanstack/react-router';
-import {
-  Building2,
-  Check,
-  ChevronDown,
-  Keyboard,
-  Monitor,
-  Moon,
-  ScrollText,
-  Sun,
-  UserCog,
-  Wrench,
-} from 'lucide-react';
-import { useId } from 'react';
+import { ChevronDown, Keyboard, ScrollText, UserCog, Wrench } from 'lucide-react';
 
 import { useShortcutsAction } from '@/components/layout/chrome/help-action';
 import { Menu, MenuItem, useMenuTrigger } from '@/components/ui/menu';
 import { ACCOUNT_SETTINGS_ENABLED, AUDIT_LOG_ENABLED } from '@/config/env';
 import { useSession, useSignOut } from '@/features/auth';
 import { useStaffIdentity } from '@/features/staff/api/staff-identity';
-import { useTheme, type Theme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
-
-const THEME_META: Record<Theme, { icon: typeof Sun; label: string }> = {
-  light: { icon: Sun, label: 'Light' },
-  dark: { icon: Moon, label: 'Dark' },
-  system: { icon: Monitor, label: 'System' },
-  corporate: { icon: Building2, label: 'Corporate' },
-};
-const THEMES: Theme[] = ['light', 'dark', 'system', 'corporate'];
 
 /** Initials from a name or, failing that, an email — never more than two characters. */
 function initialsOf(name: string | undefined, email: string | undefined): string {
@@ -39,29 +18,30 @@ function initialsOf(name: string | undefined, email: string | undefined): string
 }
 
 /**
- * The **account chip**: an initials avatar that opens a menu holding the theme choice, the
- * signed-in identity and Sign out.
+ * The **account chip**: an initials avatar that opens a menu holding the signed-in identity, the
+ * account screen, keyboard shortcuts and Sign out.
  *
  * It replaces three separate header controls — a theme-cycling icon button, an always-visible
- * email `<span>`, and an `outline` Sign-out button. Two of the six Corporate contrast defects are
- * fixed here by **deletion**: the email that was 2.8:1 on navy and the outline button that was
- * 1.01:1 no longer exist as header elements. What replaces them lives in a portalled
- * {@link Menu}, which renders outside every surface scope and therefore paints on `--popover` —
- * the page's own, already-validated pairing.
+ * email `<span>`, and an `outline` Sign-out button. Two of the six contrast defects that theme
+ * shipped with are fixed here by **deletion**: the email that was 2.8:1 on navy and the outline
+ * button that was 1.01:1 no longer exist as header elements. What replaces them lives in a
+ * portalled {@link Menu}, which renders outside every surface scope and therefore paints on
+ * `--popover` — the page's own, already-validated pairing.
  *
- * The theme control becomes a radio group inside the menu instead of a cycling button. A cycle
- * gives no indication of what the other options are and forces a blind press to discover them;
- * with four themes that is a genuinely poor control.
+ * **There is no theme control, and this docblock said there was until 2026-08-19.** It described a
+ * radio group of four themes, with a paragraph arguing why a radio group beats a cycling button —
+ * for a control ADR-0097 removed when the product collapsed to one theme. The file had zero
+ * references to `useTheme`, `setTheme` or `THEMES` at the time; only the comment still believed in
+ * it. The argument it made was right and is kept in `ADR-0097` rather than here, because it is the
+ * reason a future theme picker should not be a cycle either.
  */
 export function AccountChip({ className }: { className?: string }): React.ReactElement {
   const { data: session } = useSession();
   const signOut = useSignOut();
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
   const { triggerRef, open, anchor, close, toggle } = useMenuTrigger();
   // Asked only while the menu is open — see the hook for why the deferral is not an optimisation.
   const staff = useStaffIdentity({ enabled: open });
-  const themeLabelId = useId();
   const openShortcuts = useShortcutsAction();
 
   const email = session?.user?.email;
@@ -108,9 +88,10 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
             {email}
           </p>
         ) : null}
-        {/* Directly above My activity, and above the theme group: both are the reader's own,
-            and this menu is already the account's — there is nowhere else the account screen
-            could live without inventing a settings IA the product does not have. ADR-0074 M3. */}
+        {/* Directly above My activity: both are the reader's own, and this menu is already the
+            account's — there is nowhere else the account screen could live without inventing a
+            settings IA the product does not have. ADR-0074 M3. ("and above the theme group" until
+            2026-08-19, naming a group ADR-0097 had removed.) */}
         {ACCOUNT_SETTINGS_ENABLED ? (
           <MenuItem
             onSelect={() => {
@@ -182,29 +163,6 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
             Diagram keyboard shortcuts
           </MenuItem>
         ) : null}
-        <p className="text-muted-foreground px-2 pt-2 pb-1 text-xs font-medium" id={themeLabelId}>
-          Theme
-        </p>
-        {/* The heading above relates to these four options visually and ONLY visually without
-            this group — a screen-reader user arrowing through the menu would meet four radios
-            with no idea what they choose between (WCAG 1.3.1). `role="group"` is transparent to
-            the APG menu's roving focus, which queries `[role="menuitemradio"]` across all
-            DESCENDANTS of the menu container, not its direct children. */}
-        <div role="group" aria-labelledby={themeLabelId}>
-          {THEMES.map((option) => {
-            const { icon: Icon, label } = THEME_META[option];
-            return (
-              <MenuItem key={option} selected={theme === option} onSelect={() => setTheme(option)}>
-                <Check
-                  aria-hidden="true"
-                  className={cn('size-4', theme === option ? 'opacity-100' : 'opacity-0')}
-                />
-                <Icon aria-hidden="true" className="size-4" />
-                {label}
-              </MenuItem>
-            );
-          })}
-        </div>
         <div className="border-border my-1 border-t" />
         <MenuItem
           // The sign-out mutation's pending state has to survive the move into a menu: a second

@@ -322,19 +322,27 @@ markers appear and disappear, which reflows the panel under the user's cursor mi
 ## Layout: `BrandMark` and `AccountChip`
 
 `BrandMark` (`components/layout/brand-mark.tsx`) is the tile + wordmark. The tile is
-`bg-primary text-primary-foreground`, i.e. a token: inside chrome that is Corporate's amber on
-navy and the brand blue on a white header. A literal amber would be unreadable on Light chrome.
+`bg-primary text-primary-foreground`, i.e. a token, so it resolves per surface scope: amber on the
+navy chrome, navy on the page. Writing either as a literal would pin it to one surface and make it
+unreadable on the other — which is the whole reason it is a token and not a colour.
 The tile is `aria-hidden` — it repeats the wordmark's first letter, so exposing it would have a
 screen reader announce "S SchedulePoint".
 
 `AccountChip` (`components/layout/account-chip.tsx`) is an initials avatar opening a portalled
-`Menu` with the theme choice, the signed-in email and Sign out. It replaced a theme-cycling
-button, an always-visible email and an `outline` Sign-out button — two of which were the
-Corporate theme's worst contrast defects. Three things it must keep doing: the trigger's
+`Menu` with the signed-in email, the account screen, keyboard shortcuts and Sign out. It replaced
+a theme-cycling button, an always-visible email and an `outline` Sign-out button — two of which
+were that theme's worst contrast defects. **The theme choice itself is gone** (ADR-0097: one
+theme), and this paragraph described it until 2026-08-19. Three things it must keep doing: the
+trigger's
 accessible name carries the email (initials identify nobody), focus returns to the trigger on
 close, and the sign-out mutation's pending state disables the item so a second press cannot
-fire a duplicate request. The theme is a **radio group** rather than a cycling button, because
-a cycle never tells the user what the other three options are.
+fire a duplicate request.
+
+> The sentence that followed — _"the theme is a **radio group** rather than a cycling button,
+> because a cycle never tells the user what the other three options are"_ — described a control
+> ADR-0097 removed. The **reasoning** is kept, in that ADR, because it is the argument against a
+> cycling picker rather than an argument about this menu, and a future theme choice should not be a
+> cycle either.
 
 ## Layout: `AuthShell` (`components/layout/auth-shell.tsx`)
 
@@ -408,7 +416,7 @@ reason.
 `data:` URI are fetches this origin pays for or refuses. Inline markup is neither, and it stays
 inside the design system's reach — the colour-literal lint rule and the contrast matrix can both see
 it. It draws from the **enclosing scope's** semantic names and never from `--chart-*`, which is not
-rebound per surface and would land near 1.4:1 on a fixed navy panel for Corporate users.
+rebound per surface and measured near 1.4:1 on the fixed navy panel.
 
 ## Primitive: `Surface` (`components/ui/surface.tsx`)
 

@@ -68,6 +68,23 @@ function renderTable(rows: CalendarSummary[] = [STANDARD, RETIRED]) {
   );
 }
 
+/**
+ * Open a row's `⋯` and click one of its secondary actions (ADR-0097 Landing F1).
+ *
+ * These were five text buttons per row until that landing; now the row's primary action (`Edit`)
+ * stays visible and the rest sit behind a trigger. The **menu** carries the subject
+ * (`Actions for <name>`), so the items are plain verbs — which is why this helper takes the row
+ * name and the verb separately rather than the old `"Archive Standard"` composite.
+ */
+async function rowAction(calendarName: string, action: string | RegExp): Promise<void> {
+  fireEvent.click(await screen.findByRole('button', { name: `Actions for ${calendarName}` }));
+  fireEvent.click(
+    await within(
+      await screen.findByRole('menu', { name: `Actions for ${calendarName}` }),
+    ).findByRole('menuitem', { name: action }),
+  );
+}
+
 describe('CalendarsTable — search & archive (flag on)', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset().mockResolvedValue(undefined);
@@ -115,7 +132,7 @@ describe('CalendarsTable — search & archive (flag on)', () => {
 
   it('archives a row with its version, and unarchives an archived one', async () => {
     renderTable();
-    fireEvent.click(await screen.findByRole('button', { name: 'Archive Standard' }));
+    await rowAction('Standard', 'Archive');
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     expect(apiFetch).toHaveBeenCalledWith('/organizations/acme/calendars/cal-1/archive', {
@@ -124,7 +141,7 @@ describe('CalendarsTable — search & archive (flag on)', () => {
     });
 
     vi.mocked(apiFetch).mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Unarchive Winter shutdown' }));
+    await rowAction('Winter shutdown', 'Unarchive');
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     expect(apiFetch).toHaveBeenCalledWith('/organizations/acme/calendars/cal-2/unarchive', {
       method: 'POST',
@@ -137,7 +154,7 @@ describe('CalendarsTable — search & archive (flag on)', () => {
     vi.mocked(apiFetch).mockRejectedValue(
       new ApiFetchError(409, { code: 'CONFLICT', message: 'This was changed elsewhere.' }),
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Archive Standard' }));
+    await rowAction('Standard', 'Archive');
 
     expect(await screen.findByText('This was changed elsewhere.')).toBeInTheDocument();
   });

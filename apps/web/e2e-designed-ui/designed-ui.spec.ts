@@ -11,30 +11,101 @@ import {
 } from './support';
 
 /**
- * **Theme-parametrised accessibility** (ADR-0055 §5, spec §4.7 D1).
+ * **Accessibility across every stored theme preference** (ADR-0055 §5, rescoped by ADR-0097).
  *
  * The Corporate theme shipped with six verified contrast defects past a human review, a
  * component review and a green axe suite. The axe suite was not wrong — it had simply never
- * been asked to look at anything but the default theme, in its default surface. This suite
- * closes that: every picker option, plus `system` under dark emulation, over the shell that
- * carries the header chrome and the Project Explorer panel.
+ * been asked to look at anything but the default theme, in its default surface.
+ *
+ * **The product now has one theme, and this sweep is kept rather than collapsed to a single
+ * scan**, because what it proves has changed into something no unit test can reach: a reader
+ * still carrying `dark` or `system` from before the collapse must get the SAME shell as
+ * everyone else. The boot script stamps nothing and the provider stamps nothing, so a flash is
+ * unrepresentable — but that claim spans a parser-blocking `<script src>`, the real bundle and
+ * an actual first paint, and jsdom has none of the three. `system` keeps its dark emulation for
+ * the same reason: `prefers-color-scheme` no longer selects anything, and the way to know that
+ * is to ask a browser that really prefers dark.
  *
  * The six defect sites are also asserted BY NAME. "axe is clean" would have passed on the
  * invisible outline button — an unreadable control is not an axe rule — and axe measures no
  * hover or `aria-current` state at all, so those are read back through `getComputedStyle`.
  */
 
-/** The four options a user can actually pick, plus how the browser should be emulated. */
+/** Every value a reader's storage may hold, plus how the browser should be emulated. */
 const THEMES: ReadonlyArray<{ choice: ThemeChoice; colorScheme: 'light' | 'dark' }> = [
   { choice: 'light', colorScheme: 'light' },
   { choice: 'dark', colorScheme: 'dark' },
   { choice: 'corporate', colorScheme: 'light' },
-  // `system` is a distinct code path (it resolves at runtime), and it is the DEFAULT — so the
-  // one theme most users see is the one no suite had ever scanned under dark emulation.
+  // `system` under DARK emulation is the sharpest case: it was the old default, so it is what
+  // most readers still have stored, and it is the one combination that would resurrect a dark
+  // paint if any branch survived anywhere in the chain.
   { choice: 'system', colorScheme: 'dark' },
 ];
 
 const TEXT_MIN = 4.5;
+
+/**
+ * **The one assertion no unit test can make: every stored preference paints the same.**
+ *
+ * The scans below prove each shell is accessible; they would each pass equally if the four
+ * stored values still selected four different palettes, because "accessible" is not "identical".
+ * This case is the other half — it reads the resolved ground and the resolved ink off a real
+ * first paint and requires them to agree across all four, which is exactly what "the boot script
+ * and the provider cannot disagree" means when written as something checkable.
+ *
+ * It has to be a browser: the claim spans a parser-blocking `<script src>`, the real bundle and
+ * an actual paint, and jsdom has none of the three. It reads `<html>` rather than a component,
+ * because a surviving branch would stamp a class there and every scope below would follow.
+ */
+test('every stored preference resolves to the same painted theme', async ({ browser }) => {
+  const seen: Array<{ choice: string; ground: string; ink: string; classes: string }> = [];
+
+  for (const entry of THEMES) {
+    // A FRESH CONTEXT per value, not one page reused four times. `setTheme` works through
+    // `page.addInitScript`, which ACCUMULATES: reusing a page would leave four seed scripts
+    // running in registration order, so each iteration would be correct only because the
+    // last-registered one happens to win. A test whose correctness rests on that is one that
+    // will mislead somebody the day the order changes.
+    const context = await browser.newContext({ colorScheme: entry.colorScheme });
+    try {
+      const page = await context.newPage();
+      await setTheme(page, entry.choice);
+      await page.goto('/sign-in');
+      await expect(page.getByRole('button', { name: /sign in/i })).toBeVisible();
+
+      const paint = await page.evaluate(() => {
+        const style = getComputedStyle(document.documentElement);
+        return {
+          ground: style.getPropertyValue('--background').trim(),
+          ink: style.getPropertyValue('--foreground').trim(),
+          classes: document.documentElement.className,
+        };
+      });
+      seen.push({ choice: entry.choice, ...paint });
+    } finally {
+      await context.close();
+    }
+  }
+
+  const first = seen[0]!;
+  for (const entry of seen) {
+    expect(entry.ground, `${entry.choice} resolved a different --background`).toBe(first.ground);
+    expect(entry.ink, `${entry.choice} resolved a different --foreground`).toBe(first.ink);
+    // No class at all — not "the same class". A stamped class is the mechanism a flash needs,
+    // so its absence is the guarantee rather than a detail of how it is achieved.
+    // Two assertions, and the first one is the general one. `<html>` carries `h-full` from
+    // `index.html` — a layout class, nothing to do with themes — so "no class at all" was the
+    // wrong bar and this case found that by failing before it found anything else. Equality
+    // across the four catches ANY stamped class whatever it is called; the named check below
+    // catches the specific pair a returning branch would use, which equality alone would miss
+    // if every value stamped the same wrong class.
+    expect(entry.classes, `${entry.choice} carries different classes on <html>`).toBe(
+      first.classes,
+    );
+    const themeClass = entry.classes.split(/\s+/).find((c) => c === 'dark' || c === 'corporate');
+    expect(themeClass, `${entry.choice} stamped a theme class on <html>`).toBeUndefined();
+  }
+});
 
 for (const { choice, colorScheme } of THEMES) {
   test.describe(`theme: ${choice} (prefers-color-scheme: ${colorScheme})`, () => {
@@ -58,17 +129,35 @@ for (const { choice, colorScheme } of THEMES) {
 
       // D1 — a nav link at rest. The header's `text-muted-foreground` used to resolve to the
       // page grey; on navy it was 1.26:1.
-      const navLink = `header nav a[href="/orgs/${orgSlug}/calendars"]`;
+      //
+      // **The site MOVED, it was not deleted** (ADR-0097 Landing D1a): the organisation nav left
+      // the header for the Project Explorer rail, so this link now paints in the `panel` scope
+      // rather than `chrome`. That is a different pair of tokens, so the measurement follows the
+      // link rather than being dropped — the defect class is "a nav link's ink against whatever
+      // ground its scope resolves", and the ground changed. Caught by the sweep on the first run
+      // after the move, which is what step 4c is for.
+      const navLink = `nav[aria-label="Organisation"] a[href="/orgs/${orgSlug}/calendars"]`;
       expect(contrast(await computedPair(page, navLink))).toBeGreaterThanOrEqual(TEXT_MIN);
 
       // D2 — the same link hovered. axe never measures a hover state.
       await page.locator(navLink).hover();
       expect(contrast(await computedPair(page, navLink))).toBeGreaterThanOrEqual(TEXT_MIN);
 
-      // D3 — the current-page link (`aria-current="page"`), likewise unmeasured by axe.
-      const current = 'header nav a[aria-current="page"]';
-      await expect(page.locator(current)).toBeVisible();
-      expect(contrast(await computedPair(page, current))).toBeGreaterThanOrEqual(TEXT_MIN);
+      // D3 — the current-page state (`aria-current="page"`), likewise unmeasured by axe.
+      //
+      // **Two sites now, in two scopes, which is more coverage than before rather than less.**
+      // The wordmark became the route home in ADR-0098 M4 and carries `aria-current` on the
+      // landing — that is the `chrome` scope's only current-state left, and it is new. The rail's
+      // current destination is the `panel` scope's. Measuring one and calling it D3 would leave
+      // whichever scope was dropped unmeasured for exactly the state axe never looks at.
+      const currentBrand = 'header a[aria-current="page"]';
+      await expect(page.locator(currentBrand)).toBeVisible();
+      expect(contrast(await computedPair(page, currentBrand))).toBeGreaterThanOrEqual(TEXT_MIN);
+
+      await page.goto(`/orgs/${orgSlug}/calendars`);
+      const currentRail = 'nav[aria-label="Organisation"] a[aria-current="page"]';
+      await expect(page.locator(currentRail)).toBeVisible();
+      expect(contrast(await computedPair(page, currentRail))).toBeGreaterThanOrEqual(TEXT_MIN);
 
       // D4 — the account area. The always-visible email (2.8:1 on navy) and the `outline`
       // Sign-out button (1.01:1 — an invisible control) are GONE: both moved into the account

@@ -48,7 +48,15 @@ describe('ChromeBand (flag on)', () => {
     const band = container.querySelector('[data-surface="chrome"]');
     expect(band).not.toBeNull();
     expect(band).toContainElement(screen.getByRole('banner'));
-    expect(band!.querySelector('[data-chrome-slot]')).not.toBeNull();
+    // BOTH slots (ADR-0097 D1b) — asserted by name, because they sit in different places and a
+    // bare `[data-chrome-slot]` query would be satisfied by either one.
+    expect(band!.querySelector('[data-chrome-slot="rows"]')).not.toBeNull();
+    expect(band!.querySelector('[data-chrome-slot="identity"]')).not.toBeNull();
+    // The identity slot is INSIDE the header row, which is the whole point of the merge: a plan's
+    // identity line costs the band no height of its own.
+    expect(screen.getByRole('banner')).toContainElement(
+      band!.querySelector('[data-chrome-slot="identity"]'),
+    );
     // Everything else is BELOW the band, not inside it.
     expect(band).not.toContainElement(screen.getByTestId('below'));
   });
@@ -70,16 +78,25 @@ describe('ChromeBand (flag on)', () => {
         <div />
       </ChromeBand>,
     );
-    const slot = () => container.querySelector('[data-chrome-slot]')!;
-    expect(slot().childElementCount).toBe(0);
+    const slot = (name: string) => container.querySelector(`[data-chrome-slot="${name}"]`)!;
+    expect(slot('rows').childElementCount).toBe(0);
+    expect(slot('identity').childElementCount).toBe(0);
 
     rerender(
       <ChromeBand>
         <ChromePortal>
           <div data-testid="toolbar-rows" />
         </ChromePortal>
+        <ChromePortal name="identity">
+          <div data-testid="plan-identity" />
+        </ChromePortal>
       </ChromeBand>,
     );
-    expect(slot()).toContainElement(screen.getByTestId('toolbar-rows'));
+    expect(slot('rows')).toContainElement(screen.getByTestId('toolbar-rows'));
+    // Each portal lands in ITS OWN slot. Asserting both ways round matters: a `name` that fell
+    // through to the default would put the identity line in the rows slot, which paints in a
+    // plausible-looking place and silently undoes the merge.
+    expect(slot('identity')).toContainElement(screen.getByTestId('plan-identity'));
+    expect(slot('rows')).not.toContainElement(screen.getByTestId('plan-identity'));
   });
 });

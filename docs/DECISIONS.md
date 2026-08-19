@@ -10,6 +10,32 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-18 — A flag's class was wrong, and the gate that checks it cannot see the shape
+
+**Decision.** `VITE_NAV_TREE` retires (ADR-0098 M0), and its register entry records that it had been
+filed **class B** — a one-line guard — while `authed-layout.tsx:15` was
+`if (NAV_TREE_ENABLED) return <AppShell />;`: an early return selecting between two whole layouts,
+which is the **class A** shape by ADR-0088's own definition.
+
+**Why it matters more than one flag.** ADR-0088 replaced a retirement _calendar_ with a
+_classification_, and class A — "the flag selects which of two different JSX roots a component
+returns" — is the class that ratchets: `classACap` is set at the measured count and lowered after
+each retirement, so an alternative surface beyond the cap fails CI while the conversation is still
+cheap. That mechanism was reading a number it could not compute. `detect-alternative-surfaces.mjs`
+matches ternaries returning JSX and is blind to early returns — this file's own `$classA-note` says
+so — so the measured count was 2 where the true count was 3.
+
+**What was NOT done, deliberately.** `classACap` was not raised. Retiring in the same commit keeps
+the detected count at 0 and leaves the cap untouched; raising a ratchet for a flag that is leaving
+would be the wrong direction, and the register says a raise needs an ADR.
+
+**The residue.** The detector's blind spot is unfixed and is now written down where the next curator
+will meet it. Two flags were found by a person reading code, not by the gate — which is the same
+observation ADR-0088 made about `check-flags.mjs` matching `'true'` and `'false'` identically, one
+mechanism along.
+
+---
+
 ### 2026-08-18 — Reconciliation pass at the ADR-0095 epic boundary
 
 **What was decided.** Run the pass ([`RECONCILE.md`](RECONCILE.md), ADR-0058) at the boundary of the
@@ -2267,3 +2293,131 @@ documented capability, not a new requirement, and §7's contract for a bug fix i
 rather than a spec. What it _did_ owe was this entry and the note now in ADR-0026 — the reasoning
 originally lived only in a code docblock and a commit message, which is not the register. Recorded
 after the product owner asked whether the process had been followed.
+
+---
+
+## 2026-08-19 — A gate that counts its own documentation
+
+**ADR-0097 Landing B**, found while the overview screen was being built, and worth its own entry
+because it is the third instance of one shape and the first with a perverse incentive attached.
+
+`token-architecture.test.ts`'s weight ratchet reads every `.ts`/`.tsx` file under `src/` and counts
+`font-<weight>` utilities, split into two buckets: what the primitives place (a design system doing
+its job) and what screens place (the drift the archetypes exist to absorb). It scanned **raw file
+text**. So a docblock explaining _why_ a weight was chosen counted as placing one — which inflated
+both numbers, and, worse, meant that writing the reasoning down pushed the gate towards failing. A
+gate that penalises its own documentation is a gate somebody eventually works around.
+
+Stripping comments moved the measured buckets to **162 screens / 23 primitives** — one lower in
+each. Both ceilings were re-set to the corrected measurement rather than left at the inflated one,
+because a ceiling that is one higher than the truth is a free slot nobody decided to grant.
+
+**The shape.** A scan matching prose has now shipped three times here: the Gantt row-rhythm gate
+matched `font-size` inside a comment; the overview's own archetype gate reported `OverviewScreen.tsx`
+for an `<h1>` that appears only in its docblock; and this one. All three were caught the same way —
+by a green gate going red for a reason the code did not support, or a red one for code that was
+correct — and all three are fixed the same way. The rule that generalises: **a structural gate reads
+code, so it should be handed code.** Comments are the one part of a file guaranteed to talk _about_
+the thing being counted.
+
+**What the ratchet did right, on the same day.** The new screen pushed the screen bucket from 165 to
+167 — four row links each restating `font-medium` plus a hover colour, an underline and its offset.
+The ceiling was **not** raised. The treatment moved into `rowLinkClass` on the `ListRow` primitive
+(the `buttonVariants` precedent: a class constant rather than a component, because `components/ui/`
+does not import the router), four screen sites became one primitive site, and the screen ceiling
+ratcheted **165 → 162**. That is the trade the two-bucket split was designed to make visible, and it
+only works because the primitives bucket is also capped — otherwise "move it into a primitive" is an
+unlimited escape hatch rather than a decision.
+
+---
+
+## 2026-08-19 — Two of four symptoms had already been fixed
+
+**ADR-0097 Landing C, found before M0's measurement ran** — by checking the spec's own
+decision-bearing claims against the code, which is CLAUDE.md §19.10 applied to a document written
+for this epic rather than to one inherited from an earlier one.
+
+`docs/specs/design-system-rewrite/command-surface.md` §2 argues that the plan toolbar is a menu bar
+rendered as a row, and lists **four symptoms that follow directly from the shape**. Two of them
+describe behaviour that **ADR-0091 M7 had already changed**:
+
+- _"Labels are all-or-nothing per row"_ cited `Toolbar.tsx:286-310`, which is `applyLadder` and the
+  head of `measure` and has never held a label pass. The label pass is `computeLadder`'s Stage 1,
+  and it labels an **importance-sorted prefix** through `affordablePrefix` — labels fall one at a
+  time. That is precisely what M7 shipped, in answer to the product owner's "labels should fall one
+  at a time rather than all at once".
+- _"The `⋯` is an unnamed container for four named commands"_ — `tier: 3` has **one** occupant in
+  the plan toolbar (`float-paths`), M7 made tier 3 admitted-last rather than exiled, and ADR-0093
+  then returned `clear-visual-placement` inline and the `⋯` left Row 2 entirely.
+
+§3.2's deletion list also names `LABEL_CHROME_PX` and `LABEL_PROMOTION_MARGIN_PX`, both of which M7
+already removed — so the list overstates what the reshape buys by naming things already gone.
+
+**This is the third ADR-0091 M7 fix that this one document describes as a live defect.** ADR-0097's
+own register entry records the first: the reshape was costed partly on `CHROME_RESIDUAL_PX`
+over-charging Row 2 by ~47 px, and M7 had fixed that too, the constant reading `16` today with its
+docblock recording the recovery. One stale citation is ADR-0076 Class 2; three in one document, all
+from the same milestone, is a pattern — **a spec written from the epics that preceded it inherits
+their problem statements, and a milestone that fixed things does not go back and edit the specs that
+complained about them.**
+
+**What it costs, stated rather than absorbed.** The corrections are made in place with the withdrawn
+claims struck through, because a reader who meets a four-symptom diagnosis weighs it differently
+from a two-symptom one. Symptoms 3 (every width decision is a subtraction — `computeLadder`, four
+band floors, a 48 px hysteresis, `CHROME_RESIDUAL_PX`, the `⋯` costing) and 4 (two rows) are
+**verified accurate**, and the menu-structure argument — that `TOOLBAR_GROUPS` is a closed
+seven-member tuple of nouns, verified exactly as cited — was always the stronger half. But the
+proposal now has to carry itself on those, and §6 gains a second gate saying so: M0's report is read
+against the 120 px of slack **and** against whether what survives justifies replacing the renderer
+on the surface with the most test coverage in the product.
+
+**The generalisable half.** A spec's problem statement is a claim like any other, and it goes stale
+in the one direction nobody checks: the problem gets fixed and the document keeps complaining. The
+rule that follows is cheap — **before building from a spec, re-verify the symptoms, not just the
+design.** Everything in this repository's process already re-verifies the _solution's_ citations;
+nothing re-verified the _problem's_, and three of them had rotted.
+
+---
+
+## 2026-08-19 — A gate that answered from an `undefined`
+
+**ADR-0097 Landing C M0.** The measurement that withdrew the menu band took **three passes**, and
+the two failed passes are worth more than the result.
+
+**Pass 1 said PROCEED with 307 px of slack.** Three faults, all mine:
+
+- The fixture plan was called `Logic` — five characters, **37 px**. `command-surface.md` §5 risk 2
+  is, verbatim, _"165 px of slack is thin, and a long plan name eats it."_ I measured the exact term
+  a stated risk is about, at that term's most favourable possible value. An ordinary construction
+  plan name (`Riverside — Phase 2 Substructure`) measures **227 px**, and that 190 px is most of the
+  reversal.
+- Menu triggers were identified as **"anything that paints text"**, which swept in both halves of two
+  segmented controls and the `finish-chip` read-out — 24 samples, a 25 px chrome spread. Pricing a
+  menu from a segment prices the wrong control. The discriminator is `aria-haspopup`, which is what a
+  trigger structurally **is**; on that set the spread is **6 px** across five samples, and `view`
+  reads 89 px against `m2-item-widths.md`'s 91 px measured two days earlier.
+- The verdict was taken from the **median** of that spread. A gate answered from the middle of a
+  spread passes on average.
+
+**Pass 2 reported WITHDRAWN — from an `undefined`.** The edit adding `slackAtWidestChrome` to the
+report had silently failed to apply, because Prettier had rewrapped the line the find-and-replace was
+matching and `str.replace` does not complain when it matches nothing. So the gate evaluated
+`undefined >= 120`, which is `false`, which reads as "withdrawn". **The right answer, produced by a
+missing number.** Whichever way that lands it is a vacuous gate, and it would have been the third
+this session had it not been checked.
+
+The gate now **throws** when it has no number to judge, rather than answering. That is the rule
+worth keeping: _a gate that cannot see its own input must refuse, not default_ — because a default
+is indistinguishable from a measurement in the report, and "withdrawn" looked exactly as authoritative
+as it would have if measured.
+
+**The silent no-op replace is the session's second.** A `docs/TESTING.md` write earlier the same day
+also matched nothing, and was reported as done before the loss was noticed. Both were writes not read
+back. The habit that follows is cheap and now applied throughout this file's edits: **assert the
+match, then read the file back** — a write you did not verify is a claim, not a change.
+
+**What the measurement finally said.** 1619 px against a 1646 px container: 27 px of slack at the
+median chrome, **7 px at the worst**, negative from 1440 down. §3.1's strip estimate was right to
+within a pixel; its trigger estimate was 47 px light; its identity estimate was 100 px light. Fourth
+consecutive epic whose width expectation its own measurement contradicted, and the fourth in the same
+direction — an estimate of what a row can hold, made without a browser, comes out optimistic.

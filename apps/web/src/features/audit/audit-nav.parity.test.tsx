@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppHeader } from '@/components/layout/app-header';
+import { OrgDestinations } from '@/components/layout/navigator/org-destinations';
 import { ThemeProvider } from '@/hooks/use-theme';
 
 /**
@@ -14,6 +15,13 @@ import { ThemeProvider } from '@/hooks/use-theme';
  *
  * The nav entry is a courtesy, never the control — the API answers 403 whether or not it renders,
  * which is why this file pins visibility and the API e2e pins authorisation.
+ *
+ * **The nav entry moved, and this suite followed it rather than being relaxed** (ADR-0097 Landing
+ * D1a, 2026-08-19): the six organisation destinations left the app header for the Project
+ * Explorer's bottom zone, so the three cases about the link now render `OrgDestinations` and the
+ * two about the account menu still render `AppHeader`. Widening `getByRole` to search a whole
+ * shell, or dropping the `Members` control assertion, would have been the cheaper edit and would
+ * have left a parity suite that passes whether or not the entry exists at all.
  */
 // The account chip now asks whether the reader is staff (ADR-0086). Stubbed to "no" — the answer
 // for almost everybody — so these tests stay about what they are about, and so no real fetch
@@ -95,15 +103,21 @@ function renderHeader(): void {
   );
 }
 
+/** Where the entry lives since Landing D1a. No theme provider needed — it renders no chip. */
+function renderDestinations(): void {
+  render(<OrgDestinations orgSlug="acme" />);
+}
+
 describe('flag OFF — the prior product, byte for byte', () => {
   beforeEach(() => {
     flag.enabled = false;
   });
 
   it('renders no Audit log entry, even for an Org Admin', () => {
-    renderHeader();
+    renderDestinations();
     expect(screen.queryByRole('link', { name: 'Audit log' })).toBeNull();
-    // Flag-off is not "audit hidden", it is the prior header: the rest of the nav is untouched.
+    // Flag-off is not "audit hidden", it is the prior nav: the rest of it is untouched. Asserting
+    // a sibling is what stops this passing against a component that renders nothing.
     expect(screen.getByRole('link', { name: 'Members' })).toBeInTheDocument();
   });
 
@@ -121,7 +135,7 @@ describe('flag ON — the entry appears for the role that can use it', () => {
   });
 
   it('shows Audit log to an Org Admin', () => {
-    renderHeader();
+    renderDestinations();
     expect(screen.getByRole('link', { name: 'Audit log' })).toHaveAttribute(
       'href',
       '/orgs/$orgSlug/audit-log',
@@ -130,7 +144,7 @@ describe('flag ON — the entry appears for the role that can use it', () => {
 
   it('hides it from a Planner — audit:read is Org Admin only', () => {
     role.current = 'PLANNER';
-    renderHeader();
+    renderDestinations();
     expect(screen.queryByRole('link', { name: 'Audit log' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Members' })).toBeInTheDocument();
   });

@@ -17,8 +17,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * and is deliberately not imported by the bundle.
  *
  * What it cannot prove is that the script still runs **before first paint** — that is a browser
- * fact about a parser-blocking `<script src>` in `<head>`, and jsdom has no paint. The plan calls
- * for a visual check in a real browser, and the M1 report-only window is when it happens.
+ * fact about a parser-blocking `<script src>` in `<head>`, and jsdom has no paint.
+ *
+ * **Since ADR-0097 every case below asserts an absence, and that is the guarantee rather than a
+ * weakening of it.** There is one theme and `:root` is its block, so the script stamps nothing
+ * whatever it reads — which means this file and `hooks/use-theme.tsx` cannot disagree about what
+ * to paint, and a flash of the wrong theme is unrepresentable rather than avoided. The cases are
+ * kept parametrised over every value the old arrangement could store because "no class, ever"
+ * is the whole contract: a suite asserting the happy path alone would pass equally against a
+ * script that stamped a class for one stored value out of six.
  */
 // Resolved from the vitest root (`apps/web`) rather than `import.meta.url`, which jsdom serves
 // as an `http://localhost/` URL that `fileURLToPath` refuses.
@@ -47,29 +54,34 @@ describe('theme-boot.js', () => {
     vi.unstubAllGlobals();
   });
 
-  it('applies the dark class for a stored dark preference', () => {
-    localStorage.setItem('schedulepoint-theme', 'dark');
+  it.each([
+    ['dark', 'the preference a reader actually chose before the collapse'],
+    ['light', 'the same, one value along'],
+    ['system', 'the old default, which most readers never wrote explicitly'],
+    ['corporate', 'the value that survives — and still stamps nothing'],
+    ['nonsense', 'a value no version of this product ever wrote'],
+    ['', 'an empty string, which is neither absent nor valid'],
+  ])('stamps no class for a stored %s (%s)', (stored) => {
+    localStorage.setItem('schedulepoint-theme', stored);
     runBoot();
 
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect(document.documentElement.classList.contains('corporate')).toBe(false);
+    expect(document.documentElement.className).toBe('');
   });
 
-  it('applies corporate, and corporate wins over the system preference', () => {
-    // The precedence that is easy to lose in a move: `corporate` is not a shade, so a dark system
-    // setting must not also add `dark` on top of it.
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({ matches: true })),
-    );
-    localStorage.setItem('schedulepoint-theme', 'corporate');
+  it('stamps no class when nothing is stored at all', () => {
+    // First visit, and the case a careless rewrite is most likely to get wrong — under the old
+    // arrangement this was the `!stored` branch whose absence looked like nothing until a
+    // dark-mode user opened the app for the first time. It is now the same answer as every
+    // other input, which is the point.
     runBoot();
 
-    expect(document.documentElement.classList.contains('corporate')).toBe(true);
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.className).toBe('');
   });
 
-  it('follows the system preference when the stored value is `system`', () => {
+  it('stamps no class whatever the system preference says', () => {
+    // `prefers-color-scheme` no longer selects anything. Kept as a case rather than dropped
+    // because a dark theme returning is where a media-query branch would come back, and this
+    // is the assertion that would have to change with it.
     vi.stubGlobal(
       'matchMedia',
       vi.fn(() => ({ matches: true })),
@@ -77,22 +89,10 @@ describe('theme-boot.js', () => {
     localStorage.setItem('schedulepoint-theme', 'system');
     runBoot();
 
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(document.documentElement.className).toBe('');
   });
 
-  it('follows the system preference when nothing is stored at all', () => {
-    // First visit. The `!stored` branch is the one a careless rewrite drops, and its absence looks
-    // like nothing until a dark-mode user opens the app for the first time.
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({ matches: true })),
-    );
-    runBoot();
-
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
-  });
-
-  it('falls back to light rather than throwing when localStorage is unavailable', () => {
+  it('does not throw when localStorage is unavailable', () => {
     // Private-browsing modes and some embedded webviews throw on access. An exception here would
     // run before React mounts, so it would take the whole app down rather than the theme.
     vi.stubGlobal('localStorage', {
@@ -104,6 +104,6 @@ describe('theme-boot.js', () => {
     expect(() => {
       runBoot();
     }).not.toThrow();
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(document.documentElement.className).toBe('');
   });
 });

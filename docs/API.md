@@ -748,6 +748,50 @@ together: `retentionActive: false` is the shipped default, and it means deleted 
 indefinitely — a countdown rendered from `retentionDays` alone would state a consequence the
 installation does not deliver.
 
+### The organisation overview (ADR-0098)
+
+`GET /api/v1/organizations/:orgSlug/overview` — the screen every sign-in already lands on.
+Not paginated, and it carries **no `meta`**: there is nothing to add.
+
+**One endpoint, not one per section.** All three sections resolve the same organisation, check
+the same permission and read the same database in the same request, so partial failure is not a
+real mode — per-section isolation buys nothing and costs a second round trip on the coldest path
+in the product.
+
+Two shape rules are load-bearing and worth stating here rather than only in the DTO:
+
+- **`changedBy` is a discriminated union, never a nullable name.** `{ kind: 'MEMBER', name }`,
+  `{ kind: 'FORMER_MEMBER' }` and `{ kind: 'UNKNOWN' }` are three different facts. A nullable
+  string collapses the last two into an absence a reader cannot tell from a defect. Names are
+  resolved **through the organisation's membership**, never through `users` directly — which is
+  what stops this endpoint turning an arbitrary user id into a display name.
+- **Sections the caller may not read are OMITTED, not zeroed.** `pendingInvitationCount` is
+  absent without `invitation:read`; `expiringDeletedCount` is absent unless the caller may
+  restore **and** hierarchy retention is armed on this host. A zero is a fact about the
+  organisation; an absence is a fact about the reader, and sending `0` would tell a Contributor
+  there is an answer they may not have.
+
+**"Recently changed" is ordered by `GREATEST(plan, newest activity, newest dependency)`**, not by
+`plans.updated_at` — editing an activity does not stamp its plan, and neither does the CPM
+recalculation (ADR-0022). An ordering on the plan row alone ranks a plan somebody has been working
+in all morning below one whose name was corrected last week, and every row on the screen still
+looks correct.
+
+**`?recentPlanIds=<uuid>` (repeatable, at most 5) resolves ids to `recentPlans`** — the browser's
+"Jump back in" list. The client stores plan **ids only** and asks for their current names on every
+load, which is what makes a rename correct itself and a plan the reader has lost access to
+disappear rather than 404 on click. It rides on this request rather than taking one of its own:
+that is the constraint that made the section acceptable on the coldest path in the product.
+
+That parameter hands the server ids the caller may have no right to, so **the four ways an id can
+fail are indistinguishable by design**: deleted, another organisation's, unreadable, and never
+real all produce a byte-identical response. There is no `reason` field, no partial-failure list and
+no dropped count, because any of them would turn this into an existence oracle for every plan in
+the installation, reachable by any member. `recentPlans` preserves **the caller's order** — that
+order is the browser's own recency and the server has no basis to improve on it. A malformed id or
+more than five is a **422**: a client sending a non-UUID has a bug rather than a permission
+problem, and saying so discloses nothing about the organisation's contents.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

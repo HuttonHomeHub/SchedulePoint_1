@@ -83,10 +83,24 @@ async function pickUpstreamActivity(): Promise<void> {
     expect(screen.getByRole('option', { name: 'Upstream Plan' })).toBeInTheDocument(),
   );
   fireEvent.change(screen.getByLabelText('Plan'), { target: { value: 'pl2' } });
+
+  // **The Activity picker is a `Combobox`, not a `<select>`** (ADR-0097 Landing F1) — a plan's
+  // activities are unbounded by the data model, so this is the one picker in the dialog that earns
+  // the heavier control. Its listbox does not exist until the input is opened, which is why this
+  // helper types rather than `fireEvent.change`s: driving it any other way would assert against a
+  // control the reader does not have.
+  const activity = screen.getByLabelText('Activity');
+  fireEvent.focus(activity);
+  fireEvent.change(activity, { target: { value: 'Deliver' } });
   await waitFor(() =>
     expect(screen.getByRole('option', { name: 'A-1 — Deliver steel' })).toBeInTheDocument(),
   );
-  fireEvent.change(screen.getByLabelText('Activity'), { target: { value: 'up1' } });
+  // Committed by KEYBOARD, which is how `combobox.test.tsx` drives the primitive and is also the
+  // representative path: the option commits on `pointerDown` (so the input's blur cannot beat it),
+  // and `fireEvent.click` alone therefore does nothing — a difference a reader would otherwise
+  // rediscover by watching an assertion fail with the option plainly on screen.
+  fireEvent.keyDown(activity, { key: 'ArrowDown' });
+  fireEvent.keyDown(activity, { key: 'Enter' });
 }
 
 describe('AddCrossPlanLinkDialog', () => {

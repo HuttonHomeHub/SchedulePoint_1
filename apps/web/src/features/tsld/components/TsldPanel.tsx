@@ -45,6 +45,7 @@ import {
   summarizeLogic,
   wbsGroupClause,
 } from '../render/a11y';
+import { useCanvasSurface, useRegisterCanvasSurface } from '../render/canvas-surface';
 import {
   buildBaselineGhosts,
   buildColourInkMap,
@@ -93,6 +94,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { NoticeStrip } from '@/components/ui/notice-strip';
+import { Surface } from '@/components/ui/surface';
 import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
@@ -652,6 +654,11 @@ export function TsldPanel({
   // Focus returns here when the create popover closes, so keyboard users aren't dropped to
   // <body> (they're placed back on the tool to draw again).
   const addActivityRef = useRef<HTMLButtonElement>(null);
+  // The element whose scope the lens palettes read (ADR-0097 Landing E). `TsldPanel` is one of the
+  // two consumers ABOVE the canvas, which is why the element is published as state: these are
+  // `useMemo`s, so a ref would leave them holding page colours forever and looking correct.
+  const canvasSurface = useCanvasSurface();
+  const registerCanvasSurface = useRegisterCanvasSurface();
   const listboxRef = useRef<HTMLUListElement>(null);
   // Where the docked selection bar hands focus back when it hides/unmounts while focused (so a
   // keyboard user is never dropped to <body> on pan-away or a last-activity delete). Stable.
@@ -1078,14 +1085,14 @@ export function TsldPanel({
   // `barFill` so an inside-bar label clears 4.5:1 on the recoloured hue (WCAG 1.4.3; U2/A1).
   const barFill = useMemo<Map<string, string> | undefined>(() => {
     if (!CANVAS_LENSES_ENABLED || colourMode === 'criticality') return undefined;
-    return buildColourMap(activities, colourMode, resolveLensPalette());
+    return buildColourMap(activities, colourMode, resolveLensPalette(canvasSurface));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
-  }, [colourMode, activities, themeVersion]);
+  }, [colourMode, activities, themeVersion, canvasSurface]);
   const barInk = useMemo<Map<string, string> | undefined>(() => {
     if (!CANVAS_LENSES_ENABLED || colourMode === 'criticality') return undefined;
-    return buildColourInkMap(activities, colourMode, resolveLensPalette());
+    return buildColourInkMap(activities, colourMode, resolveLensPalette(canvasSurface));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
-  }, [colourMode, activities, themeVersion]);
+  }, [colourMode, activities, themeVersion, canvasSurface]);
   // The baseline ghost bars — the captured baseline spans joined to the live lanes. Absent unless the
   // overlay is on AND there are variance rows to draw (and at least one joins a live activity).
   const baselineGhosts = useMemo(() => {
@@ -2611,7 +2618,18 @@ export function TsldPanel({
         ) : null}
       </CanvasDock>
 
-      <div
+      {/* **The diagram's surface scope** (ADR-0097 Landing E). Inside it every semantic token name
+          keeps its meaning and starts resolving against the diagram's own ground — which is what
+          lets `render/palette.ts` make its 86 token reads without changing a line, and what finally
+          brings the plot into the contrast matrix.
+
+          The element registers itself with `CanvasSurfaceProvider` (mounted in
+          `plan-workspace.tsx`, above the toolbar hook that reaches the export path), so every
+          resolver reads THIS node. `registerCanvasSurface` is a stable callback, so React never
+          detaches and reattaches it. */}
+      <Surface
+        tone="canvas"
+        ref={registerCanvasSurface}
         className={
           // `fill` is the canvas-first workspace, where the diagram IS the screen: no border and no
           // radius, so it meets the chrome band and the dock rather than floating inside them
@@ -2788,7 +2806,7 @@ export function TsldPanel({
             The diagram appears once the schedule has been calculated.
           </div>
         )}
-      </div>
+      </Surface>
 
       {/*
         Bulk delete's confirmation. The copy names BOTH what goes: the activities and the links

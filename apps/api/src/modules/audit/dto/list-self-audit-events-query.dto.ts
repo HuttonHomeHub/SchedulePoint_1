@@ -2,7 +2,9 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, IsIn, IsOptional } from 'class-validator';
 
-import { ListAuditEventsQueryDto, toArray } from './list-audit-events-query.dto';
+import { toArray } from '../../../common/dto/to-array';
+
+import { ListAuditEventsQueryDto } from './list-audit-events-query.dto';
 
 /**
  * The one thing `include` can ask for today (ADR-0073 C2.3).
