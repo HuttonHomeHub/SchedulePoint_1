@@ -3,8 +3,10 @@
 - **Status:** **Proposed** — drafted 2026-08-18. **Landings A and B landed 2026-08-19** with the
   product owner's approval of the plan (and of its four extensions: the typeface, controls and
   interaction in scope, the A→B→review cadence, and both relocations with D split into D1/D2).
-  C–F are not yet built; C is gated on its own measurement and is withdrawn if the reshaped row
-  does not clear 120px of slack at 1646.
+  **Landing C is WITHDRAWN on its own measurement (2026-08-19)** — 27 px of slack against the 120 px
+  its spec required, 7 px at the worst point of the measured spread, and negative from 1440 down
+  ([`m0-menu-band-measurement.md`](../specs/design-system-rewrite/m0-menu-band-measurement.md)).
+  D–F remain.
 - **Date:** 2026-08-18
 - **Deciders:** Product owner (the mandate, widened three times; the single-theme decision; CQ-A–CQ-D);
   ui-architect. Inputs from the `corporate-brand` feature-analyst pass and from the

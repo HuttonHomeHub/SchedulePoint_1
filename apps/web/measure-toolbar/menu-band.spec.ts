@@ -20,17 +20,28 @@ import { writeMeasurement } from './output';
  * in a real browser at the real width in the real typeface:
  *
  * - A **proposed menu trigger** is priced from the REAL labelled triggers the toolbar already
- *   renders (`View ▾`, `Zoom ▾`, `Analysis ▾`, `Share & export ▾`). Each gives a box width and a
+ *   renders (`View ▾`, `Analysis ▾`, `Share & export ▾`, …). Each gives a box width and a
  *   visible-text width measured with its own computed font; the difference is that trigger's
  *   chrome. The assumption is that chrome is **constant across triggers**, and it is not assumed —
- *   the spread across every real trigger is reported, and if it is wide the derivation is void and
- *   this file says so rather than quoting a mean.
+ *   the spread is reported, and the verdict is computed at the **min and max** as well as the
+ *   median, so a wide spread shows up as a range of slacks rather than being averaged away.
+ *
+ *   **A trigger is identified by `aria-haspopup`, not by "it paints text".** The first run took
+ *   every labelled item and got a 40–65 px spread, because that set includes the two segmented
+ *   controls' halves (`mode-early`, `view-gantt` …) and the `finish-chip` read-out — none of which
+ *   is a menu trigger and none of which carries a caret. Pricing a menu from a segment is pricing
+ *   the wrong control.
  * - The **strip** is priced from the real icon-only controls the toolbar already renders, at their
  *   real widths and their real inter-item gap, read from adjacent bounding boxes rather than from
  *   a class name.
  * - **Identity, reduced** is re-measured here rather than taken from ADR-0092 M0: the plan name and
  *   its badge, with the breadcrumb path and the pen badge/sentence excluded by measuring the parts
  *   that stay rather than subtracting the parts that go.
+ *
+ *   **The plan is created with a realistically long name**, because the first run used `Logic` —
+ *   five characters, 37 px — and `command-surface.md` §5 risk 2 is *"165 px of slack is thin, and a
+ *   long plan name eats it"*. Measuring the one term that risk is about at its most favourable
+ *   value would answer a question nobody asked.
  * - The **mode switches** and the **pen button** are read whole, because they survive unchanged.
  *
  * Asserts nothing about the outcome; it is a harness (ADR-0081 §3). The gate is a number in the
@@ -82,6 +93,11 @@ async function measureBand(page: Page): Promise<unknown> {
         .map((el) => {
           const text = visibleText(el);
           if (!text) return null;
+          // A menu trigger, not merely something that paints text — see the docblock.
+          const control = el.matches('[aria-haspopup]')
+            ? el
+            : (el.querySelector('[aria-haspopup]') ?? el.closest('[aria-haspopup]'));
+          if (!control) return null;
           const font = getComputedStyle(el).font || '14px sans-serif';
           const width = round(box(el).width);
           const label = textWidth(text, font);
@@ -224,13 +240,14 @@ test('Landing C M0 — the menu band, measured before it is built', async ({ pag
   await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('button', { name: 'New plan' }).click();
-  await page.getByRole('dialog').getByLabel('Name').fill('Logic');
+  // A realistic plan name, not `Logic`. §5 risk 2 is about exactly this term.
+  await page.getByRole('dialog').getByLabel('Name').fill('Riverside — Phase 2 Substructure');
   await page
     .getByRole('dialog')
     .getByLabel(/Planned start/)
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
-  await page.getByRole('link', { name: 'Logic' }).click();
+  await page.getByRole('link', { name: 'Riverside — Phase 2 Substructure' }).click();
   await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
 
   // The pen is taken because half the command surface is shaded without it, and a shaded control
@@ -245,36 +262,80 @@ test('Landing C M0 — the menu band, measured before it is built', async ({ pag
     await page.waitForTimeout(600);
     const band = (await measureBand(page)) as {
       containerWidth: number | null;
-      chromeSpread: { median: number; range: number; samples: number } | null;
-      proposedTriggers: { name: string; width: number }[];
+      chromeSpread: {
+        min: number;
+        max: number;
+        median: number;
+        range: number;
+        samples: number;
+      } | null;
+      proposedTriggers: { name: string; labelWidth: number; width: number }[];
       strip: { medianIconWidth: number; medianGap: number };
       identity: { planNameWidth: number | null; badgeWidth: number | null } | null;
       modeRowWidth: number | null;
       penWidth: number | null;
     };
 
-    const triggers = band.proposedTriggers.reduce((s, t) => s + t.width, 0);
+    const labelSum = band.proposedTriggers.reduce((sum, t) => sum + t.labelWidth, 0);
+    const spread = band.chromeSpread;
+    // Priced at the median AND at the ends of the measured spread, so a wide spread reads as a
+    // range of answers rather than disappearing into an average.
+    const triggersAt = (chrome: number): number => labelSum + PROPOSED_MENUS.length * chrome;
+    const triggers = triggersAt(spread?.median ?? 0);
+
+    // **Eight is the PROPOSAL's count, not a measurement.** Only four icon-only controls exist to
+    // measure today, so the unit price is measured and the multiplier is §3's.
     const strip = 8 * band.strip.medianIconWidth + 7 * band.strip.medianGap;
     const identity = (band.identity?.planNameWidth ?? 0) + (band.identity?.badgeWidth ?? 0);
     // Group rules and gaps between the five clusters — identity | menus | strip | modes | pen.
     const separators = 4 * (13 + 4);
-    const total =
-      triggers + strip + identity + (band.modeRowWidth ?? 0) + (band.penWidth ?? 0) + separators;
-    const slack = (band.containerWidth ?? 0) - total;
+    const fixed = strip + identity + (band.modeRowWidth ?? 0) + (band.penWidth ?? 0) + separators;
+    const total = triggers + fixed;
+    const container = band.containerWidth ?? 0;
 
     report[String(width)] = {
       ...band,
-      derived: { triggers, strip, identity, separators, total, slack },
+      derived: {
+        triggers,
+        strip,
+        stripCountIsProposed: true,
+        identity,
+        separators,
+        total,
+        slack: container - total,
+        // The honest bound: the same arithmetic at the widest and narrowest trigger chrome the
+        // toolbar actually exhibits.
+        slackAtWidestChrome: container - (triggersAt(spread?.max ?? 0) + fixed),
+        slackAtNarrowestChrome: container - (triggersAt(spread?.min ?? 0) + fixed),
+      },
     };
   }
 
-  const atGate = report[String(GATE.width)] as { derived: { slack: number; total: number } };
+  const atGate = report[String(GATE.width)] as {
+    derived: { slack: number; total: number; slackAtWidestChrome: number };
+  };
+  // **Judged on the WORST case the measurement supports**, not the median. A gate answered from the
+  // middle of a spread is a gate that passes on average, and this proposal's own §6 exists because
+  // three epics were wrong about numbers exactly this size.
+  const worst = atGate.derived.slackAtWidestChrome;
+  // **A gate that cannot see its own input must throw, not answer.** The first corrected run
+  // reported WITHDRAWN from `undefined >= 120` — right by accident, because an edit adding this
+  // field had silently failed to apply. A verdict produced by a missing number is a vacuous gate
+  // whichever way it lands.
+  if (typeof worst !== 'number' || Number.isNaN(worst)) {
+    throw new Error(
+      `the gate has no slackAtWidestChrome to judge at ${GATE.width}px — the measurement did not ` +
+        `produce the field, so there is no verdict to report`,
+    );
+  }
   report.gate = {
     condition: `command-surface.md §6: fits at ${GATE.width} with >= ${GATE.minSlackPx}px of slack`,
     width: GATE.width,
     slack: atGate.derived.slack,
+    slackAtWidestChrome: worst,
     total: atGate.derived.total,
-    verdict: atGate.derived.slack >= GATE.minSlackPx ? 'PROCEED' : 'WITHDRAWN',
+    judgedOn: 'slackAtWidestChrome',
+    verdict: worst >= GATE.minSlackPx ? 'PROCEED' : 'WITHDRAWN',
   };
 
   writeMeasurement('landing-c-m0-menu-band', report);

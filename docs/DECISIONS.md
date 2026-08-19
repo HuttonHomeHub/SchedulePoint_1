@@ -2376,3 +2376,48 @@ in the one direction nobody checks: the problem gets fixed and the document keep
 rule that follows is cheap — **before building from a spec, re-verify the symptoms, not just the
 design.** Everything in this repository's process already re-verifies the _solution's_ citations;
 nothing re-verified the _problem's_, and three of them had rotted.
+
+---
+
+## 2026-08-19 — A gate that answered from an `undefined`
+
+**ADR-0097 Landing C M0.** The measurement that withdrew the menu band took **three passes**, and
+the two failed passes are worth more than the result.
+
+**Pass 1 said PROCEED with 307 px of slack.** Three faults, all mine:
+
+- The fixture plan was called `Logic` — five characters, **37 px**. `command-surface.md` §5 risk 2
+  is, verbatim, _"165 px of slack is thin, and a long plan name eats it."_ I measured the exact term
+  a stated risk is about, at that term's most favourable possible value. An ordinary construction
+  plan name (`Riverside — Phase 2 Substructure`) measures **227 px**, and that 190 px is most of the
+  reversal.
+- Menu triggers were identified as **"anything that paints text"**, which swept in both halves of two
+  segmented controls and the `finish-chip` read-out — 24 samples, a 25 px chrome spread. Pricing a
+  menu from a segment prices the wrong control. The discriminator is `aria-haspopup`, which is what a
+  trigger structurally **is**; on that set the spread is **6 px** across five samples, and `view`
+  reads 89 px against `m2-item-widths.md`'s 91 px measured two days earlier.
+- The verdict was taken from the **median** of that spread. A gate answered from the middle of a
+  spread passes on average.
+
+**Pass 2 reported WITHDRAWN — from an `undefined`.** The edit adding `slackAtWidestChrome` to the
+report had silently failed to apply, because Prettier had rewrapped the line the find-and-replace was
+matching and `str.replace` does not complain when it matches nothing. So the gate evaluated
+`undefined >= 120`, which is `false`, which reads as "withdrawn". **The right answer, produced by a
+missing number.** Whichever way that lands it is a vacuous gate, and it would have been the third
+this session had it not been checked.
+
+The gate now **throws** when it has no number to judge, rather than answering. That is the rule
+worth keeping: _a gate that cannot see its own input must refuse, not default_ — because a default
+is indistinguishable from a measurement in the report, and "withdrawn" looked exactly as authoritative
+as it would have if measured.
+
+**The silent no-op replace is the session's second.** A `docs/TESTING.md` write earlier the same day
+also matched nothing, and was reported as done before the loss was noticed. Both were writes not read
+back. The habit that follows is cheap and now applied throughout this file's edits: **assert the
+match, then read the file back** — a write you did not verify is a claim, not a change.
+
+**What the measurement finally said.** 1619 px against a 1646 px container: 27 px of slack at the
+median chrome, **7 px at the worst**, negative from 1440 down. §3.1's strip estimate was right to
+within a pixel; its trigger estimate was 47 px light; its identity estimate was 100 px light. Fourth
+consecutive epic whose width expectation its own measurement contradicted, and the fourth in the same
+direction — an estimate of what a row can hold, made without a browser, comes out optimistic.

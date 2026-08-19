@@ -1,5 +1,14 @@
 # The command surface — a reshape, not a fourth fitting
 
+> **WITHDRAWN 2026-08-19, on its own falsification condition (§6).** The band measures **1619 px**
+> against a **1646 px** container at the product owner's width — **27 px of slack against the 120 px
+> this document required**, and only 7 px at the worst point of the measured trigger spread. It
+> overflows at 1440 and below. The full reading, what §3.1 got wrong and what survives, is
+> [`m0-menu-band-measurement.md`](m0-menu-band-measurement.md).
+>
+> **The diagnosis is not withdrawn** — only the single-band answer to it. Read §2 with its two
+> corrected symptoms, then the measurement.
+
 > **Read this against `docs/specs/workspace-layout/`, `workspace-modes/` and `workspace-chrome/`
 > before disagreeing with it.** Everything below is built on those epics' own measurements, not on a
 > fresh opinion about their outcome. Where a number is mine it says so, and it is a **prediction that
@@ -252,6 +261,34 @@ So M0's report is read against **both** conditions: the 120 px of slack, and whe
 surviving symptoms plus the vertical return justify replacing the renderer on the surface with the
 most test coverage in the product. The first is arithmetic; the second is a judgement, and it is the
 product owner's.
+
+### The answer, 2026-08-19
+
+**The first condition fails, so the second was never reached.** 27 px of slack against 120, 7 px at
+the worst point of the measured spread, and negative from 1440 down —
+[`m0-menu-band-measurement.md`](m0-menu-band-measurement.md).
+
+The dominant term is the one §5 risk 2 named: a real plan name. Measured directly rather than by
+subtraction, identity-reduced plus the modes and the pen is **795 px** against §3.1's ~695, of which
+**227 px is the plan name alone**. The trigger estimate was 47 px light; the strip estimate was right
+to within a pixel.
+
+**Two things are worth carrying forward rather than discarding with the proposal.** The trigger
+pricing is now measured and corroborated — five real `aria-haspopup` triggers, a 6 px chrome spread,
+and `view` at 89 px against `m2-item-widths.md`'s 91 px two days earlier. And the harness itself
+survives: a different proposal (menus on a second row; menus replacing the ladder while the identity
+and mode clusters stay where they are) can be costed by editing `PROPOSED_MENUS` and the strip count,
+without rebuilding anything.
+
+**How the harness nearly reported the opposite, recorded because it is the more useful half.** Its
+first run said **307 px of slack and PROCEED**. Three faults, all mine: the plan was called `Logic`
+(37 px, against 227 for an ordinary name), triggers were identified as "anything painting text" —
+which swept in both halves of two segmented controls and a read-out — and the verdict was taken from
+the median of a 25 px spread. Corrected, it reversed. Then the corrected run reported WITHDRAWN from
+an `undefined`, because the edit adding the worst-case field had silently failed to apply and
+`undefined >= 120` is `false`: the right answer, produced by a missing number. The gate now throws
+when it has nothing to judge. **A falsification condition is only worth what the measurement behind
+it is worth**, and this one needed three passes before it was worth anything.
 
 **The gate afterwards** is the existing `e2e-toolbar-fit`, re-pointed: its S3 (every command
 reachable), S5/S7 (target size), S9 (the `⋯` is rightmost) and S10 (a trailing group really trails)

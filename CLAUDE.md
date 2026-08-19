@@ -2360,7 +2360,19 @@ progress` off the command surface because **an object action belongs on the obje
   Sequenced A–F around one question, _how soon can somebody look at a whole screen in the new
   language_: **A** foundations (nearly all invisible), **B** the organisation landing page as the
   first fully-realised screen, then **C** the command surface, **D** the workspace shape, **E** the
-  diagram, **F** the rest. **B's condition is not negotiable** — it is built from the archetypes,
+  diagram, **F** the rest. **C is now WITHDRAWN on its own falsification condition** — the single
+  menu band measures 1619 px against a 1646 px container, **27 px of slack against the 120 px its
+  spec demanded** and 7 px at the worst point of the measured trigger spread, overflowing from 1440
+  down. The dominant term is the one §5 risk 2 named: a real plan name is **227 px**, and the
+  harness's first run used `Logic` at 37 px and reported 307 px of slack and a PROCEED. Two further
+  faults in that harness are recorded rather than tidied — triggers priced from "anything painting
+  text" (which sweeps in both halves of two segmented controls and a read-out), and a verdict
+  produced from an `undefined` because the edit adding the worst-case field silently failed to
+  apply, `undefined >= 120` being `false`: the right answer from a missing number. The gate now
+  throws when it has nothing to judge. **The diagnosis is not withdrawn, only the single-band answer
+  to it**, and it stands on the two of its four symptoms that survived verification — the other two
+  described behaviour ADR-0091 M7 had already fixed. Fourth consecutive epic whose width expectation
+  its own measurement contradicted, and the fourth in the same direction. **B's condition is not negotiable** — it is built from the archetypes,
   never a bespoke layout that happens to look right, because a beautiful one-off on the flagship
   screen would falsify this epic's thesis on its first outing. No new `VITE_` flag: ADR-0088
   established that a `VITE_` constant is inlined at build time and is not an operator rollback, so
