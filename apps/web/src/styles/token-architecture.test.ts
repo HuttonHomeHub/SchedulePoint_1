@@ -339,7 +339,16 @@ describe('weight is a governed axis', () => {
     const pattern = /\bfont-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)\b/g;
     const sites: string[] = [];
     for (const file of files) {
-      for (const match of readFileSync(file, 'utf8').matchAll(pattern)) {
+      // **Comments are stripped, and both ceilings were re-measured after adding this.** The first
+      // version scanned raw text, so a docblock EXPLAINING a weight decision counted as placing
+      // one — which inflated the numbers and, worse, made writing down the reasoning push the gate
+      // towards failing. A gate that penalises its own documentation gets worked around. (Third
+      // occurrence of a scan matching prose in this repository: the Gantt row-rhythm gate and the
+      // overview's archetype gate each shipped it once.)
+      const text = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      for (const match of text.matchAll(pattern)) {
         sites.push(`${file.slice(root.length + 1)}: ${match[0]}`);
       }
     }
@@ -383,8 +392,14 @@ describe('weight is a governed axis', () => {
    * Narrowed rather than raised. Raising it to accommodate the fix would have made the number mean
    * "how much weight is in the tree", which nobody needs to know; this way it means "how many
    * screens are still deciding for themselves", which is the thing the epic is changing.
+   *
+   * **Ratcheted 165 → 162 by Landing B**, which is what the ratchet is for. The overview screen
+   * pushed it UP by two on its first run — four row links each restating the same four
+   * declarations — and the fix was to move that treatment into `rowLinkClass` on the `ListRow`
+   * primitive rather than to raise the number. Re-measured after the scan stopped counting
+   * occurrences inside comments (see `weightSites`), which moved both buckets down by one.
    */
-  const SCREEN_WEIGHT_CEILING = 165;
+  const SCREEN_WEIGHT_CEILING = 162;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));
@@ -397,14 +412,20 @@ describe('weight is a governed axis', () => {
   /**
    * The other half. The primitives may decide weight — that is the point — but not without limit:
    * a design system in which every component picks its own is the same disorder one directory in.
-   * Set at the measured 24, which includes the six archetypes. It was 23 on the first count —
-   * that one globbed only `.tsx` and missed `toolbar/toolbar-styles.ts`, which is exactly the kind
-   * of quiet undercount a ratchet is supposed to make visible rather than inherit.
+   * Set at the measured 23, which includes the six archetypes and `rowLinkClass`. It read 24 until
+   * the scan stopped counting occurrences inside comments; the earlier 23 → 24 move was a real one,
+   * caught when the first count globbed only `.tsx` and missed `toolbar/toolbar-styles.ts`, which
+   * is exactly the kind of quiet undercount a ratchet is supposed to make visible rather than
+   * inherit.
+   *
+   * A rise here is not automatically wrong — it is what the screen ceiling coming down looks like
+   * from this side, and Landing B is exactly that trade: four screen sites became one primitive.
+   * It is a ceiling so that the trade is a decision somebody makes rather than a drift.
    */
-  it('no more than 24 weights placed inside the primitives', () => {
+  it('no more than 23 weights placed inside the primitives', () => {
     const sites = weightSites().filter((site) => site.startsWith('components/ui/'));
     expect(sites.length, `primitives placing weight rose to ${sites.length}`).toBeLessThanOrEqual(
-      24,
+      23,
     );
   });
 });

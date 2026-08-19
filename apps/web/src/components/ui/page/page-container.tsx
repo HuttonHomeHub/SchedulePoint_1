@@ -5,11 +5,18 @@ export interface PageContainerProps extends React.HTMLAttributes<HTMLDivElement>
    * How wide the content may grow. `default` is the reading measure every list and detail screen
    * uses; `wide` is for a screen whose content is genuinely tabular and suffers from being
    * narrowed; `full` opts out entirely, for a screen that manages its own width.
+   *
+   * `narrow` is for a screen that is **read rather than scanned** — a short list of sentences with
+   * a fact at each end of the row. It was added after looking at the organisation overview at
+   * 1646px: at the default measure a plan's name and the time it changed sat ~800px apart, so
+   * associating the two facts the row exists to pair cost a saccade across an empty half-screen.
+   * Widening a container is free; the row inside it is what pays.
    */
-  width?: 'default' | 'wide' | 'full';
+  width?: 'narrow' | 'default' | 'wide' | 'full';
 }
 
 const WIDTHS = {
+  narrow: 'max-w-4xl',
   default: 'max-w-6xl',
   wide: 'max-w-screen-2xl',
   full: 'max-w-none',

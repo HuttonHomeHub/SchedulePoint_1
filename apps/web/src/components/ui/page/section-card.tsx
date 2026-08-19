@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +27,17 @@ export interface SectionCardProps {
  *
  * It composes `Card` rather than reimplementing it, so a section and a card cannot drift apart —
  * the ADR-0062 extraction argument, applied before the divergence rather than after it.
+ *
+ * **It renders a NAMED `<section>`, which makes each section a landmark.** A `<section>` with an
+ * accessible name is a `region`, so a screen-reader user can jump between "Recently changed" and
+ * "Needs your attention" instead of walking the whole page. Unlike `PageContainer`'s refusal to be
+ * a `<main>`, this adds no ambiguity: each region is distinctly named by its own heading, which is
+ * exactly the condition the APG puts on using `region` at all.
+ *
+ * It was added when the overview journey hit a strict-mode violation — the same plan legitimately
+ * appears in both sections, saying two different things — and the page had no way to say which
+ * section a row belonged to. That is a test's problem only until you notice a screen-reader user
+ * has the same one.
  */
 export function SectionCard({
   title,
@@ -34,11 +47,12 @@ export function SectionCard({
   className,
   flush,
 }: SectionCardProps): React.ReactElement {
+  const titleId = useId();
   return (
-    <Card className={className}>
+    <Card as="section" aria-labelledby={titleId} className={className}>
       <CardHeader className={cn('flex items-start justify-between gap-4', flush && 'pb-4')}>
         <div className="min-w-0">
-          <CardTitle level={2} className="text-base">
+          <CardTitle id={titleId} level={2} className="text-base">
             {title}
           </CardTitle>
           {description ? <CardDescription className="mt-1">{description}</CardDescription> : null}

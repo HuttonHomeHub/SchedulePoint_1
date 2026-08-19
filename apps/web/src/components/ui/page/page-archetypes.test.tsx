@@ -83,6 +83,22 @@ describe('SectionCard', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
+
+  it('is a region named by its own heading, so sections are navigable', () => {
+    // A `<section>` with an accessible name IS a landmark, which is how a screen-reader user jumps
+    // between "Recently changed" and "Needs your attention" instead of walking the page. It is safe
+    // here for the reason the APG puts on `region` at all: each one is distinctly named. The
+    // overview journey found the same gap from the other side — the page had no way to say which
+    // section a row belonged to, so a plan appearing in both matched twice.
+    render(
+      <>
+        <SectionCard title="Recently changed">rows</SectionCard>
+        <SectionCard title="Needs your attention">items</SectionCard>
+      </>,
+    );
+    expect(screen.getByRole('region', { name: 'Recently changed' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Needs your attention' })).toBeInTheDocument();
+  });
 });
 
 describe('EmptyState', () => {

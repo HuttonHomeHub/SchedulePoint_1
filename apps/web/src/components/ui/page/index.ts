@@ -12,4 +12,4 @@ export { PageHeader, type PageHeaderProps } from './page-header';
 export { SectionCard, type SectionCardProps } from './section-card';
 export { EmptyState, type EmptyStateProps } from './empty-state';
 export { Skeleton } from './skeleton';
-export { ListRow, ListRowSkeleton, type ListRowProps } from './list-row';
+export { ListRow, ListRowSkeleton, rowLinkClass, type ListRowProps } from './list-row';

@@ -47,6 +47,7 @@
     "e2e-account",
     "e2e-staff",
     "e2e-public",
+    "e2e-overview",
     "e2e-csp",
     "e2e-multi-select",
     "e2e-copy-paste",

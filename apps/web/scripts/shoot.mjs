@@ -54,10 +54,57 @@ async function onboard(page) {
   return slug;
 }
 
+/**
+ * Give the organisation something to be an overview OF.
+ *
+ * Added when the landing page stopped being a welcome card (ADR-0098): a freshly-onboarded
+ * organisation renders the new-organisation empty state, so shooting `org-home` straight after
+ * `onboard` photographed the least interesting of the screen's states and called it the screen.
+ * Both are worth seeing, so both are shot — `org-home-empty` before this runs, `org-home` after.
+ *
+ * It goes through the API rather than the UI because this is a screenshot harness, not a journey:
+ * the assertions about whether those forms work belong to `e2e-overview/`, and driving them here
+ * would make a photograph fail for a reason that has nothing to do with how the screen looks.
+ */
+async function seed(page, slug) {
+  const created = await page.evaluate(async (org) => {
+    const post = async (path, body) => {
+      const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`${path}: ${response.status} ${await response.text()}`);
+      return (await response.json()).data;
+    };
+    const client = await post('/clients', { name: 'Bellway Homes' });
+    const project = await post(`/clients/${client.id}/projects`, { name: 'Northgate Quarter' });
+    const plans = [];
+    for (const name of ['Enabling works', 'Substructure', 'Frame & envelope']) {
+      plans.push(await post(`/projects/${project.id}/plans`, { name, plannedStart: '2026-01-05' }));
+    }
+    for (const plan of plans) {
+      await post(`/plans/${plan.id}/edit-lock`, {});
+      await post(`/plans/${plan.id}/activities`, {
+        name: 'Pour slab',
+        code: 'A0001',
+        durationDays: 5,
+      });
+    }
+    return plans.length;
+  }, slug);
+  console.log(`      seeded ${created} plans`);
+}
+
 const SHOTS = [
   { name: 'sign-in', signedOut: true, go: (p) => p.goto(`${BASE}/sign-in`) },
   { name: 'sign-up', signedOut: true, go: (p) => p.goto(`${BASE}/sign-up`) },
-  { name: 'org-home', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}`) },
+  // Both states of the landing, because a freshly-onboarded organisation renders the
+  // new-organisation empty state — so shooting `org-home` straight after `onboard` photographed
+  // the least interesting of the screen's states and called it the screen.
+  { name: 'org-home-empty', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}`) },
+  { name: 'org-home', seedFirst: true, go: (p, slug) => p.goto(`${BASE}/orgs/${slug}`) },
   { name: 'clients', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/clients`) },
   { name: 'calendars', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/calendars`) },
   { name: 'resources', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/resources`) },
@@ -65,11 +112,22 @@ const SHOTS = [
   { name: 'recently-deleted', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/recently-deleted`) },
 ];
 
-const only = arg('only');
+// `--only` takes a comma-separated list. It was a single name until two consecutive runs of
+// `--only <name>` produced one file: the wipe below is unconditional, so the second run deleted
+// the first run's output. Clearing only what is about to be re-taken fixes the general case; taking
+// several shots in one run is what you usually wanted anyway.
+const only = arg('only')
+  ?.split(',')
+  .map((name) => name.trim());
 const widths = arg('width') ? [Number(arg('width'))] : WIDTHS;
-const wanted = SHOTS.filter((s) => !only || s.name === only);
+const wanted = SHOTS.filter((s) => !only || only.includes(s.name));
+if (wanted.length === 0) {
+  throw new Error(
+    `--only ${arg('only')} matches no shot. Known: ${SHOTS.map((s) => s.name).join(', ')}`,
+  );
+}
 
-await rm(OUT, { recursive: true, force: true });
+if (!only) await rm(OUT, { recursive: true, force: true });
 
 /**
  * The same browser discovery `scripts/e2e-local.sh:84-86` does, for the same reason: this
@@ -98,6 +156,7 @@ for (const width of widths) {
   const context = await browser.newContext({ viewport: { width, height: 1000 } });
   const page = await context.newPage();
   const slug = wanted.some((s) => !s.signedOut) ? await onboard(page) : null;
+  let seeded = false;
 
   for (const shot of wanted) {
     if (shot.signedOut) {
@@ -109,6 +168,10 @@ for (const width of widths) {
       await anonPage.screenshot({ path: join(dir, `${shot.name}.png`) });
       await anon.close();
     } else {
+      if (shot.seedFirst && !seeded) {
+        await seed(page, slug);
+        seeded = true;
+      }
       await shot.go(page, slug);
       await page.waitForLoadState('networkidle');
       await page.screenshot({ path: join(dir, `${shot.name}.png`) });

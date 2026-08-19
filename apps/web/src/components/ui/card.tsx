@@ -2,10 +2,23 @@ import { cn } from '@/lib/utils';
 
 type DivProps = React.HTMLAttributes<HTMLDivElement>;
 
+export interface CardProps extends DivProps {
+  /**
+   * The element to render. Defaults to `div`. `SectionCard` passes `section` so that, paired with
+   * an `aria-labelledby`, each titled section becomes a named `region` a screen-reader user can
+   * jump to — a card on its own is not a landmark and must not become one by default.
+   */
+  as?: React.ElementType;
+}
+
 /** Surface container. Composes with the header/title/content/footer parts. */
-export function Card({ className, ...props }: DivProps): React.ReactElement {
+export function Card({
+  className,
+  as: Component = 'div',
+  ...props
+}: CardProps): React.ReactElement {
   return (
-    <div
+    <Component
       className={cn(
         'border-border bg-card text-card-foreground rounded-lg border shadow-sm',
         className,

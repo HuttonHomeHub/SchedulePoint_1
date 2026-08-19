@@ -1,6 +1,20 @@
 import { Skeleton } from '@/components/ui/page/skeleton';
 import { cn } from '@/lib/utils';
 
+/**
+ * The class a row's **primary link** wears — the plan name, the item's own name, the thing the row
+ * is about.
+ *
+ * A class constant rather than a component, following `buttonVariants`: the link itself is a
+ * router `<Link>`, and `components/ui/` deliberately does not import the router. It exists because
+ * the same four declarations (`font-medium`, the hover colour, the underline and its offset) were
+ * repeated at every row call site — `docs/COMPONENT_LIBRARY.md`'s stated extraction threshold — and
+ * because the weight ratchet in `token-architecture.test.ts` counts a screen placing its own weight
+ * as drift, correctly: what a row's name weighs is one decision, not one per list.
+ */
+export const rowLinkClass =
+  'hover:text-primary font-medium wrap-anywhere underline-offset-4 hover:underline';
+
 export interface ListRowProps extends React.HTMLAttributes<HTMLDivElement> {
   /** The row's leading content — a name, usually with a secondary line beneath. */
   primary: React.ReactNode;

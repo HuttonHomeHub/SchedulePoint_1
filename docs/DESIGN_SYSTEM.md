@@ -345,6 +345,35 @@ journeys, and manual keyboard + screen-reader checks for significant UI. The
 
 ---
 
+## Page archetypes (ADR-0097 Landing A)
+
+Six components in `apps/web/src/components/ui/page/` decide, **once**, what every
+screen's frame, heading, section, empty state, loading shape and row look like.
+Before them the frame was hand-written **fourteen** times and the page heading
+**sixteen** — fourteen and sixteen chances for one screen to be padded or ranked
+differently from its neighbour, and no way to change the measure once.
+
+| Archetype                     | Owns                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `PageContainer`               | the measure, centring and padding. Renders a `<div>`, **never a landmark** — the app shell already provides the single `<main>` |
+| `PageHeader`                  | the page's one `<h1>`, its `aria-describedby` description, and the primary action                                               |
+| `SectionCard`                 | a section's heading **rank** (`<h2>`), and a named `<section>` so each section is a `region` a screen-reader user can jump to   |
+| `EmptyState`                  | what a screen or a section says when it holds nothing — two sizes, and the action is **optional**                               |
+| `Skeleton`                    | the loading **material** only; each archetype owns its own loading **shape**                                                    |
+| `ListRow` / `ListRowSkeleton` | one row's rhythm (`--row-h`), and the skeleton that matches it exactly                                                          |
+
+**The authoring rule: reach for the archetype, or raise the requirement — never
+invent a one-off.** A hand-rolled frame that happens to match today's archetype
+looks identical on screen and drifts the first time either changes, which is a
+defect nobody can see. A screen that needs something these do not offer wants a
+seventh archetype, not a bespoke layout in a feature folder.
+
+Two things `EmptyState` is deliberately **not** for. An action it cannot offer is
+not a degenerate case: a Viewer who cannot act is told who can, and a required
+`action` prop would force that into a lie. And a settled one-liner like "Nothing
+needs you right now" is a **fact**, not an absence to be resolved — giving it an
+icon and a frame dresses a good outcome as a problem.
+
 ## Component standards
 
 Every component below is built **once** as a design-system primitive/composite

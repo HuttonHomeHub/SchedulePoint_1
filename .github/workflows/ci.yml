@@ -577,6 +577,20 @@ jobs:
       - name: Web end-to-end tests (staff console)
         run: pnpm --filter @repo/web test:e2e:staff
 
+      # The organisation overview — the landing every sign-in reaches (ADR-0098 M2). It lands with
+      # the milestone rather than at some later enablement (ADR-0081 §2), and it carries **no flag**
+      # for the feature under test (spec §4.8 D7), because the screen replaces its predecessor
+      # rather than sitting beside it.
+      #
+      # Three of the four claims the screen makes are structurally invisible to the unit suite,
+      # which hands the component its own payload: that the endpoint exists and the client asks for
+      # it correctly (the staff console shipped a doubled `/api/v1` prefix its own tests agreed
+      # with), that an ACTIVITY edit moves its plan up the list (the read model's ordering key is a
+      # `GREATEST` over three tables precisely because `plans.updated_at` does not move), and that
+      # the actor named is the person who made the change, resolved through `org_members`.
+      - name: Web end-to-end tests (organisation overview)
+        run: pnpm --filter @repo/web test:e2e:overview
+
       # The public screens, **measured** rather than reasoned about (ADR-0077 M6-T1): ten
       # URL-reachable states × six viewports × three themes, plus a real invitation carrying a
       # 100-character organisation name and a fulfilled 429. It earned its place before it was ever
