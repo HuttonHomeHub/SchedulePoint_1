@@ -1,5 +1,5 @@
 import type * as ReactRouter from '@tanstack/react-router';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppHeader, AppHeaderRow } from '@/components/layout/app-header';
@@ -80,22 +80,20 @@ function renderWithTheme(ui: React.ReactElement): void {
 }
 
 describe('header grid (feature-spec.md §4.9)', () => {
-  it('keeps the brand → org switcher → nav → account DOM order for AppHeader', () => {
+  it('keeps the brand → org switcher → account DOM order for AppHeader', () => {
+    // The nav used to sit between the switcher and the account chip. It moved to the Project
+    // Explorer rail in ADR-0097 Landing D1; what remains is identity and account.
     renderWithTheme(<AppHeader />);
     const header = screen.getByRole('banner');
     const brand = screen.getByText('SchedulePoint');
     const orgSwitcher = screen.getByLabelText('Active organisation');
-    const nav = screen.getByRole('navigation', { name: 'Organisation' });
     const account = screen.getByRole('button', { name: /Account:/ });
 
     // DOCUMENT_POSITION_FOLLOWING (4) means the argument comes AFTER the node it's called on.
     expect(brand.compareDocumentPosition(orgSwitcher) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    expect(orgSwitcher.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
-    expect(nav.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+    expect(orgSwitcher.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(header).toContainElement(brand);
@@ -106,16 +104,20 @@ describe('header grid (feature-spec.md §4.9)', () => {
     renderWithTheme(<AppHeaderRow />);
     expect(screen.getByText('SchedulePoint')).toBeInTheDocument();
     expect(screen.getByLabelText('Active organisation')).toBeInTheDocument();
-    const nav = screen.getByRole('navigation', { name: 'Organisation' });
-    expect(nav).toHaveClass('min-w-0', 'overflow-x-auto');
     expect(screen.getByRole('button', { name: /Account:/ })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Organisation' })).toBeNull();
   });
 
-  it('the nav keeps its shrink-and-scroll classes so it never pushes the account chip off', () => {
+  it('carries NO navigation at all — one navigator, and it is the rail', () => {
+    // The D1 gate. The header's job is identity and account; every organisation destination is a
+    // place in the organisation and lives in the Project Explorer, where "where am I in this
+    // organisation" is answered. Asserted as an ABSENCE because that is what the change is — a
+    // test for the rail's copy would pass equally with both copies present.
     renderWithTheme(<AppHeader />);
-    const nav = screen.getByRole('navigation', { name: 'Organisation' });
-    expect(nav).toHaveClass('min-w-0', 'overflow-x-auto');
-    expect(nav).not.toHaveClass('flex-1');
+    expect(screen.queryByRole('navigation', { name: 'Organisation' })).toBeNull();
+    for (const name of ['Clients', 'Calendars', 'Members', 'Recently deleted']) {
+      expect(screen.queryByRole('link', { name })).toBeNull();
+    }
   });
 
   it('caps the org switcher width so a long org name shifts the centre by a bounded amount', () => {
@@ -133,19 +135,16 @@ describe('header grid (feature-spec.md §4.9)', () => {
  * `public-screens.landmarks.test.tsx`; these cover the header's own four.
  */
 describe('the organisation nav', () => {
-  it('carries no Overview item — the wordmark is the route home', () => {
+  it('has no Overview item anywhere — the wordmark is the route home', () => {
     // ADR-0098 M5, and the ORDER is the decision: the item went only after the landing had
     // content (M2) and the wordmark linked to it (M4). Removing the only labelled route home
     // while the destination was still a blank welcome card would have been a regression wearing a
     // cleanup's clothes.
+    //
+    // The nav itself then left the header entirely (ADR-0097 Landing D1), so this can no longer
+    // scope itself to it. The roster assertion moved with the nav, to `org-destinations.test.tsx`.
     renderWithTheme(<AppHeader />);
-    const nav = screen.getByRole('navigation', { name: 'Organisation' });
-    expect(within(nav).queryByRole('link', { name: 'Overview' })).toBeNull();
-    expect(
-      within(nav)
-        .getAllByRole('link')
-        .map((link) => link.textContent),
-    ).toEqual(['Clients', 'Calendars', 'Resources', 'Members', 'Audit log', 'Recently deleted']);
+    expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull();
   });
 });
 

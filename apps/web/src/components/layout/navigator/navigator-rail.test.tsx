@@ -2,8 +2,32 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type * as ReactRouter from '@tanstack/react-router';
+
 import type * as NavigatorModule from '@/features/navigator';
 import { NavigatorCrudProvider } from '@/features/navigator/lib/navigator-crud-context';
+
+// The rail's bottom zone renders router `Link`s (ADR-0097 Landing D1). This suite mounts the rail
+// without a router — its subject is the rail's own chrome — so `Link` becomes an anchor, the same
+// stand-in `app-header.test.tsx` and `breadcrumbs.test.tsx` use. `org-destinations.test.tsx` owns
+// the destinations' own assertions.
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactRouter>()),
+  Link: ({
+    children,
+    to,
+    params: _params,
+    ...props
+  }: {
+    children: React.ReactNode;
+    to?: string;
+    params?: unknown;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={typeof to === 'string' ? to : '/'} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 // The tree reads route params, so it needs a router this suite has no reason to mount — the
 // subject here is the rail's own header chrome. Everything else from the barrel is real.

@@ -6,14 +6,7 @@ import { BrandMark } from '@/components/layout/brand-mark';
 import { useShell } from '@/components/layout/navigator/shell-context';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
-import { AUDIT_LOG_ENABLED, RESOURCES_ENABLED } from '@/config/env';
 import { OrgSwitcher } from '@/features/organizations';
-import { canManageHierarchy, canReadAuditLog, useOrgRole } from '@/hooks/use-org-role';
-import { cn } from '@/lib/utils';
-
-const NAV_LINK_CLASS =
-  'text-muted-foreground hover:text-foreground [&.active]:text-foreground shrink-0 rounded-md px-2 py-1 whitespace-nowrap [&.active]:font-medium';
-const NAV_LINK_ACTIVE_CLASS = 'text-foreground font-medium';
 
 /**
  * The wordmark's link treatment.
@@ -27,7 +20,18 @@ const BRAND_LINK_CLASS =
   'focus-visible:ring-ring hover:opacity-90 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none';
 
 /**
- * The header's contents — brand mark, org nav, and the account chip (theme, identity, sign-out).
+ * The header's contents — brand mark, organisation switcher, account chip. **No navigation.**
+ *
+ * The six organisation destinations (Clients, Calendars, Resources, Members, Audit log, Recently
+ * deleted) moved to the Project Explorer rail's bottom zone in ADR-0097 Landing D1: they are
+ * *places in the organisation*, and one navigator beats two. What is left is identity and account,
+ * which is what a header is for.
+ *
+ * That freed **540 px** at 1646 — measured, not estimated
+ * (`docs/specs/design-system-rewrite/m0-landing-d1-measurement.md`), and the figure the spec
+ * carried until then was 637 px, which appears never to have been measured at all. It is what pays
+ * for folding the plan identity line into this band, which ADR-0092 M5 withdrew for want of
+ * exactly this width.
  *
  * Split from the element that carries it because the two shell shapes place it differently:
  * flag-off the header IS the chrome surface and centres its row at `max-w-6xl` (today's shell);
@@ -36,13 +40,10 @@ const BRAND_LINK_CLASS =
  * inside its own markup.
  *
  * A `1fr auto 1fr` grid (feature-spec.md §4.9, ADR-0056) — not a flex row with `flex-1`/`ml-auto`
- * — so the centre cell (org switcher + nav) sits at the true midpoint between the brand and the
- * account chip rather than merely absorbing whatever space the edges don't claim. **Centred while
- * it fits, filling when it does not**: `min-w-0` on every cell plus the nav's own
- * `overflow-x-auto` means a long org name or a crowded nav scrolls internally rather than pushing
- * the account chip off-screen or breaking the grid. DOM order (drawer → brand → org switcher →
- * nav → account) is unchanged from the previous flex markup, so the pinned tab order holds by
- * construction — no `order-*`, no absolute positioning.
+ * — so the centre cell sits at the true midpoint between the brand and the account chip rather
+ * than merely absorbing whatever space the edges don't claim. `min-w-0` on every cell means a long
+ * organisation name truncates rather than pushing the account chip off-screen. DOM order (drawer →
+ * brand → org switcher → account) is unchanged, so the pinned tab order holds by construction.
  */
 /**
  * The wordmark, as the route home (ADR-0098 M4).
@@ -90,14 +91,6 @@ function BrandLink({ orgSlug }: { orgSlug: string | undefined }): React.ReactEle
 function HeaderContents(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  // A project's plans live at /orgs/:slug/projects/:id (a sibling of /clients),
-  // so keep the Clients nav item current across the whole hierarchy tree.
-  const onHierarchy = /\/orgs\/[^/]+\/(clients|projects)(\/|$)/.test(pathname);
-  // The recycle bin is a writer surface (only writers can restore); non-writers
-  // never see the entry point, though the API read itself is member-level.
-  const role = useOrgRole(orgSlug ?? '');
-  const canWrite = canManageHierarchy(role);
   // Opens the rail as a drawer below `lg`, where the pinned rail is hidden. Null outside the
   // shell — this header is also rendered by `chrome-band.tsx` on the DESIGNED_CHROME-off path.
   const shell = useShell();
@@ -120,59 +113,6 @@ function HeaderContents(): React.ReactElement {
       </div>
       <div className="flex min-w-0 items-center gap-2 justify-self-center">
         <OrgSwitcher className="max-w-[12rem] truncate" />
-        {orgSlug ? (
-          // Nav shrinks and scrolls horizontally on narrow viewports so it never
-          // pushes the header (or page) into overflow. A proper drawer-below-lg
-          // shell is still owed — see TECH_DEBT.md.
-          //
-          // It carries no **Overview** item (ADR-0098 M5). The landing is reached by the
-          // wordmark, which is the conventional route home and is present on every screen
-          // including a plan workspace — where the nav item's `activeOptions={{ exact: true }}`
-          // affordance now lives as the wordmark's `aria-current`. The item went only AFTER the
-          // landing had content and the wordmark linked: removing the only labelled route home
-          // while the destination was still a blank card would have been a regression wearing a
-          // cleanup's clothes.
-          <nav
-            aria-label="Organisation"
-            className="flex min-w-0 items-center gap-1 overflow-x-auto text-sm"
-          >
-            <Link
-              to="/orgs/$orgSlug/clients"
-              params={{ orgSlug }}
-              aria-current={onHierarchy ? 'page' : undefined}
-              className={cn(NAV_LINK_CLASS, onHierarchy && NAV_LINK_ACTIVE_CLASS)}
-            >
-              Clients
-            </Link>
-            <Link to="/orgs/$orgSlug/calendars" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-              Calendars
-            </Link>
-            {RESOURCES_ENABLED ? (
-              <Link to="/orgs/$orgSlug/resources" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-                Resources
-              </Link>
-            ) : null}
-            <Link to="/orgs/$orgSlug/members" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-              Members
-            </Link>
-            {/* Org Admin only (ADR-0072). Hiding it for other roles is a courtesy, not the
-                control: the API answers 403 whether or not this link is rendered. */}
-            {AUDIT_LOG_ENABLED && canReadAuditLog(role) ? (
-              <Link to="/orgs/$orgSlug/audit-log" params={{ orgSlug }} className={NAV_LINK_CLASS}>
-                Audit log
-              </Link>
-            ) : null}
-            {canWrite ? (
-              <Link
-                to="/orgs/$orgSlug/recently-deleted"
-                params={{ orgSlug }}
-                className={NAV_LINK_CLASS}
-              >
-                Recently deleted
-              </Link>
-            ) : null}
-          </nav>
-        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2 justify-self-end">
         <AccountChip />

@@ -1,6 +1,8 @@
 import { PanelLeftClose, PanelLeftOpen, Plus } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import { OrgDestinations } from './org-destinations';
+
 import { Button } from '@/components/ui/button';
 import { SheetHeader } from '@/components/ui/sheet';
 import { Surface } from '@/components/ui/surface';
@@ -108,6 +110,11 @@ export function NavigatorRail({
           <p className="text-muted-foreground p-4 text-sm">Select an organisation to browse.</p>
         )}
       </div>
+      {/* The organisation's destinations, relocated from the app header (ADR-0097 Landing D1).
+          `shrink-0` and outside the scrolling region: these are six fixed places, and a tree that
+          scrolled them out of reach would put the product's whole secondary navigation behind an
+          interaction. The tree above takes the flexible height, which is the rail's purpose. */}
+      {orgSlug ? <OrgDestinations orgSlug={orgSlug} /> : null}
       {/* A quiet footer with both service versions — subtle build metadata, not a nav item. */}
       <div className="border-border shrink-0 border-t px-4 py-2">
         <AppVersionLine />
