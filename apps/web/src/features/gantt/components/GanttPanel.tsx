@@ -53,6 +53,7 @@ import type { GanttRowStructureActions } from './GanttRowMenu';
 import { GanttRowMenu } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
+import { Surface } from '@/components/ui/surface';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
@@ -829,9 +830,28 @@ export function GanttPanel({
   const contentWidth = gridWidth + chartPx;
 
   return (
-    <div
+    // **The Gantt joins the diagram's surface scope** (ADR-0097 Landing E, L4-2): one drawing
+    // ground, one grid vocabulary, one bar palette, in both views of the same plan. That is
+    // ADR-0059's "the time axis is shared, not reimplemented" applied one level up — a `bg-primary`
+    // bar here and a `--color-primary` bar on the canvas now resolve to the same value because they
+    // are the same concept, rather than by both happening to read `:root`.
+    //
+    // **It wraps the WHOLE panel, and the design's own words are corrected here.** `design.md` §1.2
+    // says "the Gantt's chart AREA takes `tone="canvas"` too" — there is no such element. The chart
+    // is a per-row `<div role="gridcell">` at the end of each row (below), so the only things that
+    // could be wrapped are ~N of them. Doing that would put a bar inside the scope and the row
+    // background it sits on outside it: a pair split across two scopes, which is precisely the
+    // defect ADR-0097 §1.5's closure defines and exists to prevent. Wrapping the panel is therefore
+    // the correct answer rather than the convenient one, and the split is the trap.
+    //
+    // Nothing visible moves today beyond the critical bar: 30 of the 31 `--plot-*` members alias
+    // the page, and the ground is 1.02:1 from it. What it buys is that every pair the panel can
+    // composite is now swept by `token-contrast.test.ts` under the `canvas` scope, which none of
+    // them were before.
+    <Surface
+      tone="canvas"
       ref={scrollRef}
-      className="bg-background relative min-h-0 flex-1 overflow-auto"
+      className="relative min-h-0 flex-1 overflow-auto"
       data-testid="gantt-scroll"
     >
       {/* The explanation stays even though the grid now renders (M2-T4). Dropping it was the first
@@ -1060,7 +1080,7 @@ export function GanttPanel({
           })}
         </div>
       </div>
-    </div>
+    </Surface>
   );
 }
 

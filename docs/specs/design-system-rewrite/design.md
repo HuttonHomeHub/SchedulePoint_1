@@ -199,6 +199,18 @@ scope and which a proposal must be measured by:
 - The Gantt's chart area takes `tone="canvas"` too. One drawing ground, one grid vocabulary, one bar
   palette, in both views of the same plan. That is ADR-0059's "the time axis is shared, not
   reimplemented" applied one level up: **the drawing surface is shared, not reimplemented.**
+
+  > **Corrected at L4-2: there is no "chart area" to wrap.** The Gantt's chart is a per-row
+  > `<div role="gridcell">` at the end of each row (`GanttPanel.tsx`, the last cell before the row
+  > closes), not a container beside the grid — so the only things this sentence could name are N of
+  > them, one per rendered row. Wrapping those would put a bar inside the scope and the row
+  > background it sits on outside it: **a pair split across two scopes**, which is exactly what
+  > §1.5's closure defines as the defect and exists to prevent. So the scope wraps the whole
+  > scrolling panel, and that is the correct answer rather than the convenient one — the split is
+  > the trap. Nothing visible moves beyond the critical bar, because 30 of the 31 `--plot-*` members
+  > alias the page and the ground is 1.02:1 from it; what it buys is that every pair the panel can
+  > composite is now swept by the matrix under the `canvas` scope, and none of them were before.
+
 - `--canvas` and `--canvas-band` as _global_ tokens can be **retired**: inside the scope,
   `--background` **is** the diagram ground, so `bg-background` on the container and
   `token('--color-background')` in the painter both do the right thing. (Conditional on no remaining
