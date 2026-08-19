@@ -129,17 +129,35 @@ for (const { choice, colorScheme } of THEMES) {
 
       // D1 — a nav link at rest. The header's `text-muted-foreground` used to resolve to the
       // page grey; on navy it was 1.26:1.
-      const navLink = `header nav a[href="/orgs/${orgSlug}/calendars"]`;
+      //
+      // **The site MOVED, it was not deleted** (ADR-0097 Landing D1a): the organisation nav left
+      // the header for the Project Explorer rail, so this link now paints in the `panel` scope
+      // rather than `chrome`. That is a different pair of tokens, so the measurement follows the
+      // link rather than being dropped — the defect class is "a nav link's ink against whatever
+      // ground its scope resolves", and the ground changed. Caught by the sweep on the first run
+      // after the move, which is what step 4c is for.
+      const navLink = `nav[aria-label="Organisation"] a[href="/orgs/${orgSlug}/calendars"]`;
       expect(contrast(await computedPair(page, navLink))).toBeGreaterThanOrEqual(TEXT_MIN);
 
       // D2 — the same link hovered. axe never measures a hover state.
       await page.locator(navLink).hover();
       expect(contrast(await computedPair(page, navLink))).toBeGreaterThanOrEqual(TEXT_MIN);
 
-      // D3 — the current-page link (`aria-current="page"`), likewise unmeasured by axe.
-      const current = 'header nav a[aria-current="page"]';
-      await expect(page.locator(current)).toBeVisible();
-      expect(contrast(await computedPair(page, current))).toBeGreaterThanOrEqual(TEXT_MIN);
+      // D3 — the current-page state (`aria-current="page"`), likewise unmeasured by axe.
+      //
+      // **Two sites now, in two scopes, which is more coverage than before rather than less.**
+      // The wordmark became the route home in ADR-0098 M4 and carries `aria-current` on the
+      // landing — that is the `chrome` scope's only current-state left, and it is new. The rail's
+      // current destination is the `panel` scope's. Measuring one and calling it D3 would leave
+      // whichever scope was dropped unmeasured for exactly the state axe never looks at.
+      const currentBrand = 'header a[aria-current="page"]';
+      await expect(page.locator(currentBrand)).toBeVisible();
+      expect(contrast(await computedPair(page, currentBrand))).toBeGreaterThanOrEqual(TEXT_MIN);
+
+      await page.goto(`/orgs/${orgSlug}/calendars`);
+      const currentRail = 'nav[aria-label="Organisation"] a[aria-current="page"]';
+      await expect(page.locator(currentRail)).toBeVisible();
+      expect(contrast(await computedPair(page, currentRail))).toBeGreaterThanOrEqual(TEXT_MIN);
 
       // D4 — the account area. The always-visible email (2.8:1 on navy) and the `outline`
       // Sign-out button (1.01:1 — an invisible control) are GONE: both moved into the account
