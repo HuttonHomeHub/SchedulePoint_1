@@ -265,7 +265,7 @@ export function ContextStrip({
     >
       {facts.map((fact) => (
         <div key={fact.label} className="flex flex-col gap-0.5">
-          <dt className="text-muted-foreground text-[0.625rem] font-semibold tracking-wider uppercase">
+          <dt className="text-muted-foreground text-micro font-semibold tracking-wider uppercase">
             {fact.label}
           </dt>
           <dd className="text-sm font-semibold tabular-nums">{fact.value}</dd>

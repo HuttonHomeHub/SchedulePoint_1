@@ -408,6 +408,68 @@
   --canvas-nonworking-hatch: oklch(0.83 0.004 90);
 
   --radius: 0.625rem;
+  /* ----------------------------------------------------------------------- */
+  /* The type ramp (ADR-0097)                                                 */
+  /*                                                                          */
+  /* **There was no type scale before this.** Not a poor one — none: the       */
+  /* product used Tailwind's default sizes implicitly, with seven arbitrary    */
+  /* `text-[10px]` / `text-[0.625rem]` escapes where the default set had no    */
+  /* answer. That is the epic's diagnosis in one place: a theme here could     */
+  /* structurally express nothing but colour, so every type decision lived as  */
+  /* a literal in a className.                                                */
+  /*                                                                          */
+  /* **The sizes are today's values, deliberately.** Landing A's claim is that */
+  /* almost nothing changes, and re-scaling 342 `text-sm` call sites in the    */
+  /* same commit that first declares a scale would make that claim false and   */
+  /* the flag-off comparison meaningless. This commit takes OWNERSHIP of the   */
+  /* values; changing them is a separate, measured decision (the ADR-0055      */
+  /* structure-then-values split, which that decision's own retrospective      */
+  /* credits with making its rollback contract mean something).                */
+  /*                                                                          */
+  /* Two things ARE new, and both are decisions rather than transcription:     */
+  /*                                                                          */
+  /*  1. `--type-micro` — the size the seven escapes were reaching for. An     */
+  /*     uppercase eyebrow label, a Gantt ruler tick, a menu section heading.  */
+  /*     It exists so the rhythm ratchet has somewhere to send them.           */
+  /*  2. Negative tracking at the large end. Space Grotesk is a grotesque      */
+  /*     with generous default spacing, which is right at 13px and loose at    */
+  /*     27px — display sizes in this class of face need pulling in or the     */
+  /*     words stop reading as one shape. Confined to the sizes used for       */
+  /*     headings, so the blast radius is a few dozen call sites.              */
+  /* ----------------------------------------------------------------------- */
+  --type-micro: 0.625rem;
+  --type-micro--line-height: 0.875rem;
+  --type-micro--letter-spacing: 0.06em;
+
+  --type-xs: 0.75rem;
+  --type-xs--line-height: 1rem;
+
+  --type-sm: 0.875rem;
+  --type-sm--line-height: 1.25rem;
+
+  --type-base: 1rem;
+  --type-base--line-height: 1.5rem;
+
+  --type-lg: 1.125rem;
+  --type-lg--line-height: 1.75rem;
+  --type-lg--letter-spacing: -0.006em;
+
+  --type-xl: 1.25rem;
+  --type-xl--line-height: 1.75rem;
+  --type-xl--letter-spacing: -0.01em;
+
+  --type-2xl: 1.5rem;
+  --type-2xl--line-height: 2rem;
+  --type-2xl--letter-spacing: -0.014em;
+
+  --type-3xl: 1.875rem;
+  --type-3xl--line-height: 2.25rem;
+  --type-3xl--letter-spacing: -0.018em;
+
+  --type-4xl: 2.25rem;
+  --type-4xl--line-height: 2.5rem;
+  --type-4xl--letter-spacing: -0.022em;
+
   /* Typography */
   --font-sans:
     'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
@@ -587,6 +649,35 @@
 /* Map tokens into Tailwind's theme so utilities (bg-*, text-*, etc.) resolve */
 /* ------------------------------------------------------------------------- */
 @theme inline {
+  /* The type ramp. Mapped exactly as the colours are — the VALUES live in the theme
+     block and this only names them for Tailwind, so a size is a theme decision and
+     not a build-config one. Without this mapping `text-sm` would silently fall back
+     to Tailwind's own default and the ramp above would be inert. */
+  --text-micro: var(--type-micro);
+  --text-micro--line-height: var(--type-micro--line-height);
+  --text-micro--letter-spacing: var(--type-micro--letter-spacing);
+  --text-xs: var(--type-xs);
+  --text-xs--line-height: var(--type-xs--line-height);
+  --text-sm: var(--type-sm);
+  --text-sm--line-height: var(--type-sm--line-height);
+  --text-base: var(--type-base);
+  --text-base--line-height: var(--type-base--line-height);
+  --text-lg: var(--type-lg);
+  --text-lg--line-height: var(--type-lg--line-height);
+  --text-lg--letter-spacing: var(--type-lg--letter-spacing);
+  --text-xl: var(--type-xl);
+  --text-xl--line-height: var(--type-xl--line-height);
+  --text-xl--letter-spacing: var(--type-xl--letter-spacing);
+  --text-2xl: var(--type-2xl);
+  --text-2xl--line-height: var(--type-2xl--line-height);
+  --text-2xl--letter-spacing: var(--type-2xl--letter-spacing);
+  --text-3xl: var(--type-3xl);
+  --text-3xl--line-height: var(--type-3xl--line-height);
+  --text-3xl--letter-spacing: var(--type-3xl--letter-spacing);
+  --text-4xl: var(--type-4xl);
+  --text-4xl--line-height: var(--type-4xl--line-height);
+  --text-4xl--letter-spacing: var(--type-4xl--letter-spacing);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

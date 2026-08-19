@@ -28,7 +28,7 @@ const badgeVariants = cva('inline-flex items-center rounded-full font-medium whi
       warning: 'bg-warning/15 text-warning-text',
     },
     size: {
-      sm: 'px-1.5 py-0.5 text-[0.6875rem]',
+      sm: 'px-1.5 py-0.5 text-micro',
       md: 'px-2 py-0.5 text-xs',
     },
   },

@@ -1648,7 +1648,7 @@ function GanttRowView({
             {labelMode === 'name' ? (
               <span
                 aria-hidden="true"
-                className="text-muted-foreground pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px] whitespace-nowrap"
+                className="text-muted-foreground text-micro pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap"
                 style={{ left: geometry.x + geometry.width + 6 }}
               >
                 {badge === null ? null : (
@@ -1663,7 +1663,7 @@ function GanttRowView({
               // just because the chart is dense, which is precisely when a planner is hunting for it.
               <span
                 aria-hidden="true"
-                className="text-warning-text pointer-events-none absolute top-1/2 -translate-y-1/2 text-[10px]"
+                className="text-warning-text text-micro pointer-events-none absolute top-1/2 -translate-y-1/2"
                 style={{ left: geometry.x + geometry.width + 4 }}
                 title={badge.label}
               >

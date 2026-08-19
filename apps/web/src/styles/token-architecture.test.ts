@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -254,6 +257,74 @@ describe.each(FAMILIES)('the [data-surface="%s"] rule', (family) => {
         new RegExp(`^var\\(--${family}\\b`),
       );
     }
+  });
+});
+
+describe('the sizing rhythm ratchets down', () => {
+  /**
+   * Arbitrary Tailwind sizing values in `className` — `w-[240px]`, `text-[10px]`, `p-[7px]`.
+   * Counted across the whole source tree, excluding tests and excluding values that reference a
+   * token (`w-[var(--rail)]`, `h-[--row-h]`), which are the opposite of the problem.
+   */
+  function countArbitrarySizing(): { total: number; sites: string[] } {
+    const root = join(process.cwd(), 'src');
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) files.push(full);
+      }
+    };
+    walk(root);
+
+    const pattern =
+      /\b(?:w|h|min-w|min-h|max-w|max-h|p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|top|left|right|bottom|inset|text|leading|tracking|rounded|basis|size)-\[[^\]]+\]/g;
+    const sites: string[] = [];
+    for (const file of files) {
+      for (const match of readFileSync(file, 'utf8').matchAll(pattern)) {
+        if (/\[(?:--|var\()/.test(match[0])) continue; // token-referencing: not the defect
+        sites.push(`${file.slice(root.length + 1)}: ${match[0]}`);
+      }
+    }
+    return { total: sites.length, sites };
+  }
+
+  /**
+   * **A ratchet set at the measured floor, not an aspiration** (ADR-0058's rule: a gate that
+   * fails on day one gets deleted rather than fixed).
+   *
+   * It was 27 before the type ramp landed and is 20 after — the seven that went were
+   * `text-[10px]` / `text-[0.6875rem]` / `text-[0.625rem]`, all reaching for a size the scale
+   * had no name for. They now use `text-micro`, which is the whole reason that step exists.
+   *
+   * **The remaining 20 are mostly legitimate and this number should not be read as debt.**
+   * `w-[min(15rem,32vw)]`, `max-h-[60vh]`, `w-[calc(100vw-2rem)]` are responsive clamps that no
+   * design token can express — a token is one value and these are a relationship. What the
+   * ratchet is for is the OTHER kind: a one-off pixel nudge that should have been a scale step,
+   * which is how the seven above accumulated one at a time, each of them locally reasonable.
+   *
+   * Lower this number when it drops. Never raise it without saying which relationship the new
+   * value expresses that a token could not.
+   */
+  const ARBITRARY_SIZING_CEILING = 20;
+
+  it(`uses no more than ${ARBITRARY_SIZING_CEILING} arbitrary sizing values`, () => {
+    const { total, sites } = countArbitrarySizing();
+    expect(
+      total,
+      `arbitrary sizing values rose to ${total} (ceiling ${ARBITRARY_SIZING_CEILING}):\n` +
+        sites.join('\n'),
+    ).toBeLessThanOrEqual(ARBITRARY_SIZING_CEILING);
+  });
+
+  it('has no arbitrary TYPE sizes at all, because the ramp now covers them', () => {
+    // Stricter than the general ratchet, and it can be: a font size is never a relationship
+    // between the viewport and a container — it is a step on a scale, and the scale now has a
+    // step for every size the product was reaching for.
+    const { sites } = countArbitrarySizing();
+    const type = sites.filter((site) => /\b(?:text|leading|tracking)-\[/.test(site));
+    expect(type, `arbitrary type sizes: ${type.join(', ')}`).toEqual([]);
   });
 });
 

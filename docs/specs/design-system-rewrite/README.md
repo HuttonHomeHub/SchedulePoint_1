@@ -100,46 +100,35 @@ being real and nothing would report it.
 | **CQ-D** separation floor | **Report first, assert ≥ 1.5:1 with the values.** | A **house** number, not a WCAG one — the shape cue carries 1.4.1, on paper too.    |
 | **Themes**                | **Corporate only; keep the mechanism.**           | `design.md` §0.5. Adding dark back: _a block of values and one entry._             |
 
-### Open — and these are about ambition and sequencing, not permission
+### Answered (product owner, 2026-08-19) — do not re-ask
 
-> **CQ-E — Does the organisation landing page's UI wait one landing for the archetypes?**
-> **Recommended: yes**, and it becomes the **first fully-realised screen in the new language**
-> (`migration.md` B). Its data work proceeds unblocked. The reasoning: it is new, so there is no
-> legacy to preserve; it needs exactly the six archetypes; it depends on none of the slow work; and it
-> is the screen they opened this thread about. **The fallback if even one landing is too long**: ship
-> the six archetypes alone — they have no dependency on the token work and could land in days.
-> The option I recommend against is "proceed and get restyled": it would build a sixteenth copy of the
-> page frame and a fourth bespoke empty state, both of which Landing A then has to unpick.
+All five were put to the product owner with the architect's recommendation and its reasoning.
+**Two of the five went against that recommendation**, and both are recorded as decisions rather
+than quietly absorbed.
 
-> **CQ-F — The activity editor: modal dialog, or docked panel?**
-> A planner edits an activity to change the schedule, and a modal hides the schedule. Every
-> `ContextStrip` in ADR-0061 exists to carry facts into a dialog covering the surface those facts came
-> from. **Recommended: a docked, resizable right panel**, keeping every ADR-0060/0061/0062/0089
-> decision verbatim and changing only the container. It is the largest _behavioural_ change proposed
-> and needs `ux-reviewer` before it is taken. Retiring it from the dialog also retires `Dialog`'s `xl`
-> preset, whose only consumer it is.
+|          | Question                                        | Answer                                                                                               |
+| -------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **CQ-E** | Does the landing page's UI wait one landing?    | **Yes** — Landing A, then B, then review. Its data half proceeded unblocked and is done.             |
+| **CQ-F** | Activity editor: modal or docked panel?         | **Docked panel.** A planner edits an activity to change the schedule and a modal hides the schedule. |
+| **CQ-G** | Does the org nav leave the header for the rail? | **Yes.** One navigator instead of two; frees 637 px of the scarcest width in the product.            |
+| **CQ-H** | How much visible change per release?            | **One landing per release**, A then B then review.                                                   |
+| **CQ-I** | Reshape: one epic or two?                       | **One epic, separate landings** — C stays liftable if the risk needs isolating.                      |
 
-> **CQ-G — Does the organisation nav (7 links, 637 px) leave the app header for the rail?**
-> It is what funds the one-band workspace: 190 px of chrome becomes 56, and the canvas grows ~24 % at 1646. **Recommended: yes** — the header nav and the Project Explorer are the same layer wearing two
-> shapes, and a planner should have one place to look for "where am I". The cost is that six
-> destinations move to a zone in the rail, which is a real relocation for existing users.
+Two further decisions were taken at the same time and are larger than any of the above:
 
-> **CQ-H — How much visible change lands in one release?**
-> The product owner's host pulls every release automatically (ADR-0047), so "merged" means "in use by
-> tomorrow". **Recommended: one landing per release**, with A (invisible) and B (a new screen) first,
-> and the surfaces they use daily — C, D, E — only after they have seen and approved the language.
-> The alternative is to batch C+D so the workspace changes once rather than twice; that is a real
-> option and it trades review size for churn.
+> **The typeface is Space Grotesk** (`typeface.md`), chosen from four candidates rendered on real
+> product chrome. The brief was _"something with more character"_, and the choice went **against my
+> recommendation** — I proposed the Manrope / Instrument Serif pairing. Recorded, with the
+> reservation intact: distinctive numerals appear in every date of a 2,000-row table. If the tables
+> come to feel tiring, that is the first place to look, and the remedy is a numeral-only fallback
+> rather than reopening the face.
 
-> **CQ-I — Is the command-surface reshape one epic with the token layer, or two?**
-> **Recommended: one epic, separate landings.** They share no code — the menubar consumes the token
-> layer and nothing else — but they share a _thesis_, and splitting them means the reshape gets
-> re-justified from scratch against three epics of prior measurement. The counter-argument is real and
-> should be put: the reshape is the single highest-risk item here, it may be **withdrawn by its own
-> measurement**, and a separate epic would let the rest land regardless. **If the product owner wants
-> the risk isolated, split it — the plan is written so C is liftable.**
-
----
+> **The scope on existing screens is "controls and interaction", not paint.** So the raw native
+> `<select>`s on the library screens become the hand-rolled `Combobox` that already exists, and the
+> bare text row-actions become the APG row menu `docs/UX_STANDARDS.md` already specifies. This
+> **widens Landing F substantially** — it is no longer a restyle but a correction of interaction
+> that has drifted from the documented standard. It also moves affordances people know the position
+> of, which is the accepted cost and is named here so it is not rediscovered as a complaint.
 
 ## Stated defaults for everything else
 
