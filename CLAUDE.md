@@ -2332,9 +2332,16 @@ progress` off the command surface because **an object action belongs on the obje
   place ADR-0055 never reached: `resolveTsldPalette` resolves from `document.documentElement`, so a
   bar's fill is the **page's** `--primary` painted on a ground that is not the page, and the
   contrast matrix has **no canvas pair at all**. The canvas becomes a surface scope and the painter
-  does not change a line. Scopes go 6 → 5 while gaining it, because `auth` **retires** — it existed
-  only because ADR-0077 §2 was applied to half a screen — and a gate is **deleted**, the
-  cascade-trap assertion that exists only because a flag layer shadows a theme-scoped one.
+  does not change a line. **Scopes go 5 → 6**, and that line said 6 → 5 until 2026-08-19: the plan
+  was to retire `auth` on the ground that it existed only because ADR-0077 §2 had been applied to
+  half a screen. `migration.md` made that a **check rather than an assumption**, and the check
+  reversed it — measured, **15 of its 18 tokens differ from the page and 12 perceptibly**, led by a
+  focus ring ADR-0077 M7 derived specifically to clear WCAG 1.4.11. The theme collapse removes the
+  scope's original _reason_, not its _values_. Every "five scopes" in the epic's own documents was
+  corrected the day it was measured; this register was not, which is the ADR-0071 failure — noticing
+  and stepping over leaves the register exactly as wrong as not noticing. A gate is still
+  **deleted**: the cascade-trap assertion that exists only because a flag layer shadows a
+  theme-scoped one.
   **The command surface is reshaped rather than fitted a fourth time.** `TOOLBAR_GROUPS` is already
   `frame · lens · find · tools · object · output · help` — a **menu structure**; ADR-0031 designed
   the menus and three epics rendered them as a row and made the row fit. Five menus, eight commands,

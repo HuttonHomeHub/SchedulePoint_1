@@ -313,16 +313,26 @@ at the end.
 written and two entries are now **live rather than pending**, because Landing A shipped underneath
 them:
 
-- §268 says _"There are five scopes"_ — it is six.
-- §272-277 explains `brand` and `auth` as _"theme-invariant, identical in Light, Dark and
-  Corporate, because a signed-out visitor cannot choose a theme"_. **There is no Light and no Dark.**
-  That paragraph is not stale-in-waiting; it describes a mechanism the product no longer has, in the
-  governing document a reader consults before touching a scope.
-- §284 says `--card` is _"not one of the 17 rebound names"_ — the family is 18 base names, and with
-  the closure it is 29.
-- Plus the original list: the unused `text-3xl` page-title size, the 36-vs-40 control scale, a
-  `DataTable` described with five features it does not have, and §230's "three scopes" against
-  §267's "five".
+**Re-verified against the file 2026-08-19, before F2 is scoped** — because Landing C's problem
+statement had four symptoms of which two were already fixed, and chasing a fixed symptom changes a
+correct file (CLAUDE.md §19.10). Half of this list is now closed, and the half that is open is worse
+than it reads:
+
+- ~~§268 _"There are five scopes"_~~ — **closed.** The paragraph was rewritten in Landing A, states
+  five correctly for today, names `canvas` as the planned sixth and **dates itself**: _"this
+  sentence becomes wrong the day it lands"_. Landing E updates it; F2 does not need to.
+- ~~§272-277 `brand`/`auth` as theme-invariant across Light, Dark and Corporate~~ — **closed**, and
+  replaced with the better reason measurement found: they survive because they are _designed_
+  differently from the page, with the `auth` reversal and its two pinning gates written in.
+- **§239 is the live one, and it contradicts §268 in the same file**: _"There are three scopes"_
+  with a table of three, followed by _"a complete **17**-token family"_. Landing A corrected the
+  §268 passage and left this one, so a reader now finds three scopes and 17 tokens on one screen and
+  five scopes and 18 names a page later. That is worse than either being wrong alone — the original
+  entry ("§230's three against §267's five") described a smaller version of it.
+- **`text-3xl` is genuinely unused** — **zero** call sites in `apps/web/src`. Still open.
+- **`DataTable` exists** (`components/ui/data-table.tsx`), so the entry is about the five features
+  §460 claims for it, not about the component. Check the claims, not the existence.
+- The 36-vs-40 control scale (§103) is still open.
 
 `CLAUDE.md` §16 and `docs/adr/README.md` gain ADR-0097 **in the same commit as the ADR file**,
 because `scripts/check-counts.mjs:55` re-derives the count from `docs/adr/`.
