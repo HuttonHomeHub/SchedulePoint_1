@@ -482,6 +482,32 @@ So F1's select half is **about six conversions, not thirty-five**. That is a fin
 scoping win: the plan's number came from counting call sites, and the discriminator's whole purpose
 is that a call site is not a candidate.
 
+### The rule was wrong on its first application, and the correction is the useful part
+
+Applied to `AddCrossPlanLinkDialog` — the four sites the table above calls the strongest candidates
+— **"server-paged" says none of them qualifies.** All four use `apiFetchAllPages`
+(`lib/query/hierarchy-queries.ts:26`, `cross-plan-dependencies/api:37`), which walks every page
+into one array before rendering. That is not server paging; it is the opposite, and a rule keyed on
+it would have left a 2,000-option `<select>` in place while calling the decision made.
+
+**The right test is whether the option set is unbounded by the DATA MODEL, not by the fetch.** An
+eagerly-paged list of 2,000 activities needs search precisely because nothing bounds it; that it is
+currently fetched in one go is a symptom to fix, not a justification for a native picker. So:
+
+> **A `Combobox` when the option set is unbounded by the data model, searchable, or annotated. A
+> native `Select` otherwise.** "Unbounded" means the domain sets no ceiling — a plan's activities, a
+> library's resources. Bounded-in-practice is not unbounded: an organisation's clients, a client's
+> projects and a project's plans are tens, and a native picker is the better control for tens.
+
+Re-applied, the cross-plan dialog converts **one** of its four — **Activity** — and Client, Project
+and Plan stay native. The set for the whole of F1 is therefore **three**: that one, plus
+`ActivityBreakdownField` and `WbsBulkAssignBar` (a plan's WBS summaries), and those two wait on the
+coarse-pointer question below because the activity editor is reachable on a tablet.
+
+Recorded rather than quietly amended, because the first version of the rule was written from the
+primitive's docblock and never applied to a call site before being called decided — which is the
+ADR-0076 Class 3 shape, and this file's own §19.10 rule catching its author two commits later.
+
 ### 2. What a hand-rolled combobox costs on a coarse pointer — NOT decided, and it gates the rest
 
 A native `<select>` gets the platform's own picker: the iOS wheel, the Android sheet. That is the
