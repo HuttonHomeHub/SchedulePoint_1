@@ -8,8 +8,12 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        // `hover:bg-primary-hover` / `hover:bg-secondary-hover`, never the `/90` and `/80`
+        // alpha forms these used to carry — the rule the `destructive` comment below states, now
+        // applied to its neighbours rather than to one of the three. The alpha census caught
+        // `hover:bg-secondary-hover` at **3.8:1** for its own label on both navy scopes.
+        default: 'bg-primary text-primary-foreground hover:bg-primary-hover',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary-hover',
         // `text-foreground` is not decoration: a variant that states its own fill and then
         // inherits its ink is a bug wherever it lands (ADR-0055 §2, defect D3) — on a dark
         // surface it inherited light ink onto a light fill and vanished.

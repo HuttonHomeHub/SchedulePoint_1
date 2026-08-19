@@ -148,6 +148,16 @@
   --destructive-foreground: oklch(0.985 0 0);
   /* Darker, as on the light page. 7.60:1 label, 7.53:1 against the page. */
   --destructive-hover: oklch(0.455 0.19 27.5);
+  /* **Hover as a TOKEN, never `hover:bg-X/NN`** — the rule `--destructive-hover` was added
+     for, now applied to its neighbours. An alpha modifier composites the fill against whatever
+     is behind it, so it moves TOWARD the surface and is invisible to a census that reads
+     tokens. `hover:bg-secondary/80` measured **3.8:1** for its own label on the two navy
+     scopes: below 1.4.3, on a shipped primitive, found by the alpha census on its first run.
+     Each value below is the smallest luminance step, either direction, that clears 3:1 against
+     its surface AND keeps the fill's own label at 4.5:1 — both bars, because a hover that
+     separates from the surface by swallowing its text is not an improvement. */
+  --primary-hover: oklch(0.267 0.056 264); /* 14.51:1 on the surface, 14.63:1 for its label */
+  --secondary-hover: oklch(0.353 0.081 262); /* 10.69:1 on the surface, 10.78:1 for its label */
   --destructive-text: oklch(0.505 0.19 27.5);
   --success: oklch(0.52 0.15 143);
   --success-foreground: oklch(0.985 0 0);
@@ -227,6 +237,10 @@
   --chrome-destructive: oklch(0.61 0.114 27.5); /* 4.00:1 on the surface */
   --chrome-destructive-foreground: oklch(0.15 0 0); /* 4.92:1 on the fill */
   --chrome-destructive-hover: oklch(0.68 0.114 27.5); /* 5.28:1, further from the surface */
+  --chrome-primary-hover: oklch(0.771 0.167 70); /* 7.50:1 on the surface, 7.50:1 for its label */
+  --chrome-secondary-hover: oklch(
+    0.615 0.081 262
+  ); /* 4.29:1 on the surface, 5.28:1 for its label */
   --chrome-secondary: oklch(0.6 0.081 262); /* 4.03:1 on the surface */
   --chrome-secondary-foreground: oklch(0.15 0 0); /* 4.96:1 on the fill */
   --chrome-success: oklch(0.585 0.15 143); /* 4.04:1 on the surface */
@@ -265,6 +279,10 @@
   --panel-destructive: oklch(0.505 0.19 27.5); /* 5.69:1 */
   --panel-destructive-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
   --panel-destructive-hover: oklch(0.455 0.19 27.5); /* 6.96:1, further from the surface */
+  --panel-primary-hover: oklch(0.267 0.056 264); /* 13.41:1 on the surface, 14.63:1 for its label */
+  --panel-secondary-hover: oklch(
+    0.353 0.081 262
+  ); /* 9.88:1 on the surface, 10.78:1 for its label */
   --panel-secondary: oklch(0.338 0.081 262); /* 10.48:1 */
   --panel-secondary-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
   --panel-success: oklch(0.52 0.15 143); /* 4.54:1 */
@@ -322,6 +340,8 @@
   --brand-destructive: oklch(0.61 0.114 27.5); /* 4.00:1 on the surface */
   --brand-destructive-foreground: oklch(0.15 0 0); /* 4.92:1 on the fill */
   --brand-destructive-hover: oklch(0.68 0.114 27.5); /* 5.28:1, further from the surface */
+  --brand-primary-hover: oklch(0.771 0.167 70); /* 7.50:1 on the surface, 7.50:1 for its label */
+  --brand-secondary-hover: oklch(0.615 0.081 262); /* 4.29:1 on the surface, 5.28:1 for its label */
   --brand-secondary: oklch(0.6 0.081 262); /* 4.03:1 on the surface */
   --brand-secondary-foreground: oklch(0.15 0 0); /* 4.96:1 on the fill */
   --brand-success: oklch(0.585 0.15 143); /* 4.04:1 on the surface */
@@ -382,6 +402,10 @@
   --auth-destructive: oklch(0.505 0.19 27.5); /* 6.48:1 */
   --auth-destructive-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
   --auth-destructive-hover: oklch(0.455 0.19 27.5); /* 7.93:1, further from the surface */
+  --auth-primary-hover: oklch(0.267 0.056 264); /* 15.28:1 on the surface, 14.63:1 for its label */
+  --auth-secondary-hover: oklch(
+    0.353 0.081 262
+  ); /* 11.26:1 on the surface, 10.78:1 for its label */
   --auth-secondary: oklch(0.338 0.081 262); /* 11.95:1 */
   --auth-secondary-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
   --auth-success: oklch(0.52 0.15 143); /* 5.18:1 */
@@ -529,6 +553,8 @@
   --warning-foreground: var(--chrome-warning-foreground);
   --info: var(--chrome-info);
   --info-foreground: var(--chrome-info-foreground);
+  --primary-hover: var(--chrome-primary-hover);
+  --secondary-hover: var(--chrome-secondary-hover);
 }
 
 [data-surface='panel'] {
@@ -567,6 +593,8 @@
   --warning-foreground: var(--panel-warning-foreground);
   --info: var(--panel-info);
   --info-foreground: var(--panel-info-foreground);
+  --primary-hover: var(--panel-primary-hover);
+  --secondary-hover: var(--panel-secondary-hover);
 }
 
 [data-surface='brand'] {
@@ -605,6 +633,8 @@
   --warning-foreground: var(--brand-warning-foreground);
   --info: var(--brand-info);
   --info-foreground: var(--brand-info-foreground);
+  --primary-hover: var(--brand-primary-hover);
+  --secondary-hover: var(--brand-secondary-hover);
 }
 
 [data-surface='auth'] {
@@ -643,6 +673,8 @@
   --warning-foreground: var(--auth-warning-foreground);
   --info: var(--auth-info);
   --info-foreground: var(--auth-info-foreground);
+  --primary-hover: var(--auth-primary-hover);
+  --secondary-hover: var(--auth-secondary-hover);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -694,6 +726,8 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-hover: var(--destructive-hover);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary-hover: var(--secondary-hover);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-text: var(--destructive-text);
   --color-success-text: var(--success-text);
