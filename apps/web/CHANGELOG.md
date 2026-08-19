@@ -1,5 +1,94 @@
 # @repo/web
 
+## 0.94.0
+
+### Minor Changes
+
+- [#333](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/333) [`44f1c59`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/44f1c5951e010515e8e202c1efbb566d7701c37a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The diagram can tell its three criticality states apart, and the plan header gives you back a route
+  to your project.
+
+  **A near-critical bar and a critical bar differed by 1.34:1** — less than the amount at which a
+  difference reads as intentional. Scanning a wall of bars, you recovered the distinction by
+  inspecting a stroke rather than by looking. Critical is now a deeper red at **1.61:1**, and the
+  separation is asserted by a gate rather than checked by eye.
+
+  That was possible because **the diagram now has its own colour vocabulary**. Until now every bar
+  fill was resolved from the page's tokens — so an ordinary activity was painted in the same value as
+  a primary button, and re-colouring one meant re-colouring the other. The two are separate now, on
+  the canvas and in the Gantt alike, which means one drawing ground and one bar palette across both
+  views of the same plan.
+
+  **The plan header:** the trail back to a plan's project is restored, having briefly been removed —
+  the Project Explorer shows where you are but cannot open a client or a project, so that link was the
+  only way there. The four mode switches (Early / Visual / Diagram / Gantt) stay visible beside the pen
+  at every width.
+
+  **Two controls changed shape.** The upstream-activity picker on a cross-plan link is now searchable
+  — type to find, rather than scrolling a list that on a real programme runs to thousands. And a
+  calendar row now shows `Edit` with its other actions one press away, instead of up to five buttons
+  competing across the row; `Move to organisation` is shown-and-explained rather than hidden when your
+  role cannot use it.
+
+- [#333](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/333) [`44f1c59`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/44f1c5951e010515e8e202c1efbb566d7701c37a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - "Jump back in" — the organisation landing now offers the plans you were recently working in.
+
+  Up to five, most recent first, for **every** role: it is the one personalised section a Viewer or
+  Contributor gets, because it is your own history rather than a list of things to act on. Opening a
+  plan puts it at the top; opening one already listed moves it rather than adding it twice.
+
+  It costs **no extra request** — the remembered ids ride on the overview call the landing already
+  makes (`?recentPlanIds=`), which is what made it acceptable on the first screen after every sign-in.
+
+  The browser remembers **ids only, never a name**. That is what makes a renamed plan show its
+  current name, a deleted one simply disappear, and a plan you have lost access to vanish silently
+  rather than 404 when you click it. The list is per-account and cleared when you sign out, so a
+  shared machine never hands the next person your plan names.
+
+- [#333](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/333) [`44f1c59`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/44f1c5951e010515e8e202c1efbb566d7701c37a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The organisation landing page is now an overview rather than a welcome card.
+
+  `/orgs/:slug` — where every sign-in lands — used to show a card explaining that you could select a
+  plan from the Project Explorer one column away. It now answers the question a planner actually
+  arrives with: **Recently changed** lists up to eight plans in order of last change with who changed
+  them and when, and **Needs your attention** (for Planners and Org Admins) lists the editing locks
+  you are holding, anyone waiting on one, pending invitations and deleted work about to expire.
+
+  A brand-new organisation gets a role-aware first step instead: an Org Admin or Planner is offered
+  "Add your first client"; a Viewer or Contributor is told who can.
+
+- [#333](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/333) [`44f1c59`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/44f1c5951e010515e8e202c1efbb566d7701c37a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The SchedulePoint wordmark is now the way back to your organisation overview, from anywhere in the
+  app — including a plan, which is the screen you are usually on when you want to get back. It marks
+  itself as the current page once you are there.
+
+  The **Overview** item has left the organisation nav, which now reads Clients · Calendars ·
+  Resources · Members · Audit log · Recently deleted. It went only after the landing had something
+  worth returning to and the wordmark linked to it.
+
+  On the sign-in and sign-up screens the wordmark is deliberately not a link: there is no
+  organisation to go to yet.
+
+  The overview's heading description is now role-aware: it promised "what is waiting on you" to
+  readers who never see that section at all.
+
+### Patch Changes
+
+- [#333](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/333) [`44f1c59`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/44f1c5951e010515e8e202c1efbb566d7701c37a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix the new-resource dialog's Group picker, which could only ever offer "No group (top level)". The
+  create host never passed the organisation's groups to the dialog while the edit host did, so a
+  resource could not be filed into a group at the moment it was created — only by editing it
+  afterwards. It now reads the groups directly, and the closed-state target sizes of a native
+  `<select>` and the hand-rolled combobox are recorded as measured on a coarse pointer.
+
+- [#333](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/333) [`44f1c59`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/44f1c5951e010515e8e202c1efbb566d7701c37a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix a contrast failure on every Delete button.
+
+  Hovering a destructive button lightened its fill toward the page, taking the label to 4.32:1 in the
+  light theme — below the 4.5:1 WCAG 2.2 AA floor, on the shipped default. The hovered fill is now a
+  token per theme rather than an alpha utility, which is also what makes it checkable: the contrast
+  matrix resolves tokens, and `hover:bg-destructive/90` was not one.
+
+- [#333](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/333) [`44f1c59`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/44f1c5951e010515e8e202c1efbb566d7701c37a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Retire the `VITE_NAV_TREE` flag and delete the two screens behind it.
+
+  Neither was reachable — a `VITE_` constant is inlined at build time and no published image passes
+  one — and one of them had been telling nobody that "the schedule editor arrives in an upcoming
+  update" for about a year. No user-visible change.
+
 ## 0.93.0
 
 ### Minor Changes
