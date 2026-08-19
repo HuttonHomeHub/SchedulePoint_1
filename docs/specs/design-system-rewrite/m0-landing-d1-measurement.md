@@ -158,3 +158,32 @@ D1b that element does not exist, and the harness **threw** — which is correct 
 ADR-0091 M7 added after a `.filter()` silently dropped a missing band for the whole of ADR-0090 M5.
 It now locates the identity by its slot (`[data-chrome-slot="identity"]`), which is the seam the
 portal actually targets rather than a position that happens to be right today.
+
+---
+
+## What D1b broke, found by the sweep and not by a reviewer
+
+**`e2e-programme` failed on `getByRole('link', { name: 'Riverside' })`** — a project link, clicked
+from inside an open plan to get back to the project. That link was the **breadcrumb**, and D1b
+dropped the breadcrumb path as 455 px of measured redundancy on the grounds that _"the Project
+Explorer answers where am I"_.
+
+That justification is right about **orientation** and wrong about **navigation**, and checking rather
+than assuming showed the gap is larger than the failing assertion implies:
+
+- `HierarchyTree.tsx:208-219` — `activate(row)` navigates **only for `kind === 'plan'`**. A client or
+  a project row calls `tree.toggle(...)`. So a project is not reachable from the tree **at all**; it
+  expands.
+- The rows are `role="treeitem"` `<div>`s, not links, so even where the tree does navigate there is
+  no href, no middle-click and no open-in-new-tab.
+
+So the breadcrumb was not a duplicate of the rail. It was the **only** route from an open plan to its
+project — the screen that hosts the project's Calendars section (ADR-0053 M2) — and after D1b the
+route is Clients → the right client → the project, which requires knowing which client the plan
+belongs to. That is a capability with no entry point (ADR-0081), shipped inside a milestone whose own
+commit message called the thing it removed redundant.
+
+**The deeper hole is the tree's, not D1b's.** ADR-0029 promises a Client → Project → Plan navigator
+and two of those three levels cannot be opened. D1b did not cause that; it removed the workaround
+that had been hiding it since the tree shipped. Both facts belong in the record, because fixing only
+the visible half leaves the same trap for the next surface that stops carrying a breadcrumb.
