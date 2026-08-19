@@ -16,6 +16,8 @@ import {
   type CrossPlanLinkFormValues,
 } from '../schemas/cross-plan-schemas';
 
+import { ActivityCombobox } from './ActivityCombobox';
+
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -114,6 +116,7 @@ export function AddCrossPlanLinkDialog({
   const clientId = useWatch({ control, name: 'clientId' });
   const projectId = useWatch({ control, name: 'projectId' });
   const predecessorPlanId = useWatch({ control, name: 'predecessorPlanId' });
+  const predecessorActivityId = useWatch({ control, name: 'predecessorActivityId' });
   const lagCalendar = useWatch({ control, name: 'lagCalendar' });
 
   useEffect(() => {
@@ -285,30 +288,38 @@ export function AddCrossPlanLinkDialog({
                 ))}
               </SelectField>
 
-              <SelectField
-                label="Activity"
-                id="cross-plan-activity"
+              {/* **The one picker in this dialog that is a `Combobox`, and the rule that decides it
+                  is written down** (ADR-0097 Landing F1, `migration.md`): a `Combobox` when the
+                  option set is **unbounded by the data model**, searchable or annotated; a native
+                  `Select` otherwise.
+
+                  Client, Project and Plan above stay native and that is deliberate — an
+                  organisation's clients, a client's projects and a project's plans are tens, and a
+                  native picker is the better control for tens (it gets the platform's own list, and
+                  on touch the iOS wheel or Android sheet, free). A plan's **activities** are bounded
+                  by nothing: 2,000 is an ordinary programme, and 2,000 `<option>`s is a scroll, not
+                  a choice.
+
+                  The first version of the rule said "server-paged", and applying it here is what
+                  showed it was wrong: all four of these use `apiFetchAllPages`, which walks every
+                  page into one array — the opposite of server paging. That would have left this
+                  `<select>` in place while the decision read as made. The eager fetch is a symptom
+                  to fix, not a justification.
+
+                  Filtering is local because the data already is. `matchesLibraryQuery` is the same
+                  helper the calendar and resource pickers use, so "type to find" means the same
+                  thing in all three. */}
+              <ActivityCombobox
+                value={predecessorActivityId}
+                onChange={(id) => setValue('predecessorActivityId', id, { shouldValidate: true })}
+                activities={activities.data ?? []}
                 disabled={predecessorPlanId === ''}
-                error={
-                  errors.predecessorActivityId?.message ??
-                  (activities.isError
-                    ? 'Couldn\u2019t load activities. Please try again.'
-                    : undefined)
-                }
-                {...alertIfLoadFailed(!errors.predecessorActivityId && activities.isError)}
-                {...register('predecessorActivityId')}
-              >
-                <option value="" disabled>
-                  {activities.isPending && predecessorPlanId !== ''
-                    ? 'Loading activities\u2026'
-                    : 'Choose an activity\u2026'}
-                </option>
-                {(activities.data ?? []).map((activity) => (
-                  <option key={activity.id} value={activity.id}>
-                    {activity.code ? `${activity.code} \u2014 ${activity.name}` : activity.name}
-                  </option>
-                ))}
-              </SelectField>
+                loading={activities.isPending && predecessorPlanId !== ''}
+                errored={activities.isError}
+                {...(errors.predecessorActivityId?.message === undefined
+                  ? {}
+                  : { error: errors.predecessorActivityId.message })}
+              />
             </FormSection>
 
             <FormSection
