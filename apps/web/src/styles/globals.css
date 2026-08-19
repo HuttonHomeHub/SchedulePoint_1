@@ -179,24 +179,24 @@
      a value change landing at S3. */
 
   /* chrome — the top band */
-  --chrome: oklch(0.252 0.056 264);
-  --chrome-foreground: oklch(0.985 0 0);
-  --chrome-muted-foreground: oklch(0.78 0.02 264);
-  --chrome-muted: oklch(0.32 0.05 264);
-  --chrome-border: oklch(1 0 0 / 14%);
-  --chrome-input: oklch(0.62 0.02 264);
-  --chrome-accent: oklch(0.338 0.081 262);
-  --chrome-accent-foreground: oklch(0.985 0 0);
-  --chrome-primary: oklch(0.786 0.167 70);
-  --chrome-primary-foreground: oklch(0.252 0.056 264);
-  --chrome-field: oklch(1 0 0);
-  --chrome-field-foreground: oklch(0.321 0 0);
-  --chrome-field-muted-foreground: oklch(0.51 0 0);
-  --chrome-destructive-text: oklch(0.74 0.15 25);
-  --chrome-success-text: oklch(0.8 0.12 150);
-  --chrome-warning-text: oklch(0.8 0.14 70);
-  --chrome-info-text: oklch(0.8 0.09 245);
-  --chrome-ring: oklch(0.786 0.167 70);
+  --chrome: oklch(0.154 0.009 264.3);
+  --chrome-foreground: oklch(0.913 0.012 252.1);
+  --chrome-muted-foreground: oklch(0.74 0.022 252.6);
+  --chrome-muted: oklch(0.212 0.016 256.8);
+  --chrome-border: oklch(0.29 0.023 256.4);
+  --chrome-input: oklch(0.558 0.071 238.2);
+  --chrome-accent: oklch(0.242 0.019 258.4);
+  --chrome-accent-foreground: oklch(0.913 0.012 252.1);
+  --chrome-primary: oklch(0.66 0.128 249.5);
+  --chrome-primary-foreground: oklch(0.181 0.031 247.1);
+  --chrome-field: oklch(0.189 0.015 253.2);
+  --chrome-field-foreground: oklch(0.913 0.012 252.1);
+  --chrome-field-muted-foreground: oklch(0.61 0.024 254.5);
+  --chrome-destructive-text: oklch(0.74 0.145 33);
+  --chrome-success-text: oklch(0.72 0.115 156.4);
+  --chrome-warning-text: oklch(0.79 0.135 75.1);
+  --chrome-info-text: oklch(0.76 0.105 247.6);
+  --chrome-ring: oklch(0.66 0.128 249.5);
 
   /* The closure members (ADR-0097 §1.5). A status FILL a component can paint on this
      surface, not an ink — `--chrome-destructive-text` above is the ink. Derived, not
@@ -206,41 +206,43 @@
      info) here — very nearly invisible, and `Button` ships variants painting exactly
      those two fills. `--info` also gains a hue of its own: the page uses ONE value for
      both secondary and info, which is why the two failed identically. */
-  --chrome-destructive: oklch(0.61 0.114 27.5); /* 4.00:1 on the surface */
-  --chrome-destructive-foreground: oklch(0.15 0 0); /* 4.92:1 on the fill */
-  --chrome-destructive-hover: oklch(0.68 0.114 27.5); /* 5.28:1, further from the surface */
-  --chrome-primary-hover: oklch(0.771 0.167 70); /* 7.50:1 on the surface, 7.50:1 for its label */
+  --chrome-destructive: oklch(0.649 0.167 31.6); /* 4.00:1 on the surface */
+  --chrome-destructive-foreground: oklch(0.176 0.025 42.3); /* 4.92:1 on the fill */
+  --chrome-destructive-hover: oklch(0.7 0.16 31.6); /* 5.28:1, further from the surface */
+  --chrome-primary-hover: oklch(
+    0.722 0.109 247.6
+  ); /* 7.50:1 on the surface, 7.50:1 for its label */
   --chrome-secondary-hover: oklch(
     0.615 0.081 262
   ); /* 4.29:1 on the surface, 5.28:1 for its label */
-  --chrome-secondary: oklch(0.6 0.081 262); /* 4.03:1 on the surface */
-  --chrome-secondary-foreground: oklch(0.15 0 0); /* 4.96:1 on the fill */
-  --chrome-success: oklch(0.585 0.15 143); /* 4.04:1 on the surface */
-  --chrome-success-foreground: oklch(0.15 0 0); /* 4.98:1 on the fill */
-  --chrome-warning: oklch(0.605 0.103 55); /* 4.00:1 on the surface */
-  --chrome-warning-foreground: oklch(0.15 0 0); /* 4.93:1 on the fill */
-  --chrome-info: oklch(0.595 0.123 235); /* 4.06:1 on the surface */
-  --chrome-info-foreground: oklch(0.15 0 0); /* 4.99:1 on the fill */
+  --chrome-secondary: oklch(0.51 0.026 256); /* 4.03:1 on the surface */
+  --chrome-secondary-foreground: oklch(0.985 0 0); /* 4.96:1 on the fill */
+  --chrome-success: oklch(0.72 0.115 156.4); /* 4.04:1 on the surface */
+  --chrome-success-foreground: oklch(0.15 0.02 156); /* 4.98:1 on the fill */
+  --chrome-warning: oklch(0.79 0.135 75.1); /* 4.00:1 on the surface */
+  --chrome-warning-foreground: oklch(0.15 0.02 77.5); /* 4.93:1 on the fill */
+  --chrome-info: oklch(0.66 0.128 249.5); /* 4.06:1 on the surface */
+  --chrome-info-foreground: oklch(0.181 0.031 247.1); /* 4.99:1 on the fill */
 
   /* panel — the navigator rail */
-  --panel: oklch(0.955 0.004 248);
-  --panel-foreground: oklch(0.321 0 0);
-  --panel-muted-foreground: oklch(0.51 0 0);
-  --panel-muted: oklch(0.92 0.004 248);
-  --panel-border: oklch(0.895 0.005 248);
-  --panel-input: oklch(0.62 0.02 264);
-  --panel-accent: oklch(0.955 0.04 78);
-  --panel-accent-foreground: oklch(0.252 0.056 264);
-  --panel-primary: oklch(0.252 0.056 264);
-  --panel-primary-foreground: oklch(0.985 0 0);
-  --panel-field: oklch(1 0 0);
-  --panel-field-foreground: oklch(0.321 0 0);
-  --panel-field-muted-foreground: oklch(0.51 0 0);
-  --panel-destructive-text: oklch(0.505 0.19 27.5);
-  --panel-success-text: oklch(0.45 0.11 150);
-  --panel-warning-text: oklch(0.47 0.11 55);
-  --panel-info-text: oklch(0.3 0.075 262);
-  --panel-ring: oklch(0.35 0.09 262);
+  --panel: oklch(0.212 0.016 256.8);
+  --panel-foreground: oklch(0.913 0.012 252.1);
+  --panel-muted-foreground: oklch(0.74 0.022 252.6);
+  --panel-muted: oklch(0.242 0.019 258.4);
+  --panel-border: oklch(0.29 0.023 256.4);
+  --panel-input: oklch(0.558 0.071 238.2);
+  --panel-accent: oklch(0.242 0.019 258.4);
+  --panel-accent-foreground: oklch(0.913 0.012 252.1);
+  --panel-primary: oklch(0.66 0.128 249.5);
+  --panel-primary-foreground: oklch(0.181 0.031 247.1);
+  --panel-field: oklch(0.189 0.015 253.2);
+  --panel-field-foreground: oklch(0.913 0.012 252.1);
+  --panel-field-muted-foreground: oklch(0.61 0.024 254.5);
+  --panel-destructive-text: oklch(0.74 0.145 33);
+  --panel-success-text: oklch(0.72 0.115 156.4);
+  --panel-warning-text: oklch(0.79 0.135 75.1);
+  --panel-info-text: oklch(0.76 0.105 247.6);
+  --panel-ring: oklch(0.66 0.128 249.5);
 
   /* The closure members (ADR-0097 §1.5). The panel is light, so every one of these
      clears its bar at the page's own value and takes it — declared LITERALLY rather
@@ -248,21 +250,23 @@
      would silently inherit it. Declared at all, rather than left to inherit, because a
      family that covers some of the closure is the "complete or it is a trap" failure
      one level down. */
-  --panel-destructive: oklch(0.505 0.19 27.5); /* 5.69:1 */
-  --panel-destructive-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
-  --panel-destructive-hover: oklch(0.455 0.19 27.5); /* 6.96:1, further from the surface */
-  --panel-primary-hover: oklch(0.267 0.056 264); /* 13.41:1 on the surface, 14.63:1 for its label */
+  --panel-destructive: oklch(0.649 0.167 31.6); /* 5.69:1 */
+  --panel-destructive-foreground: oklch(0.176 0.025 42.3); /* the page pairing, unchanged */
+  --panel-destructive-hover: oklch(0.7 0.16 31.6); /* 6.96:1, further from the surface */
+  --panel-primary-hover: oklch(
+    0.722 0.109 247.6
+  ); /* 13.41:1 on the surface, 14.63:1 for its label */
   --panel-secondary-hover: oklch(
     0.353 0.081 262
   ); /* 9.88:1 on the surface, 10.78:1 for its label */
-  --panel-secondary: oklch(0.338 0.081 262); /* 10.48:1 */
+  --panel-secondary: oklch(0.51 0.026 256); /* 10.48:1 */
   --panel-secondary-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
-  --panel-success: oklch(0.52 0.15 143); /* 4.54:1 */
-  --panel-success-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
-  --panel-warning: oklch(0.56 0.115 55); /* 4.24:1 */
-  --panel-warning-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
-  --panel-info: oklch(0.338 0.081 262); /* 10.48:1 */
-  --panel-info-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
+  --panel-success: oklch(0.72 0.115 156.4); /* 4.54:1 */
+  --panel-success-foreground: oklch(0.15 0.02 156); /* the page pairing, unchanged */
+  --panel-warning: oklch(0.79 0.135 75.1); /* 4.24:1 */
+  --panel-warning-foreground: oklch(0.15 0.02 77.5); /* the page pairing, unchanged */
+  --panel-info: oklch(0.66 0.128 249.5); /* 10.48:1 */
+  --panel-info-foreground: oklch(0.181 0.031 247.1); /* the page pairing, unchanged */
 
   /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
      THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
@@ -325,8 +329,8 @@
 
   /* White fields on navy — the reference's date and filter inputs. Deliberately
      per-theme: literal white would glare on Dark's near-black chrome. */
-  --canvas: oklch(0.988 0.006 90);
-  --canvas-band: oklch(0.966 0.011 90);
+  --canvas: oklch(0.177 0.011 260.6);
+  --canvas-band: oklch(0.196 0.013 258);
 
   /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
      Theme-INVARIANT, like `brand` and for the same reason one step further out.
@@ -392,7 +396,7 @@
 
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
-  --canvas-grid-day: oklch(0.965 0 0);
+  --canvas-grid-day: oklch(0.245 0.018 256);
   /* **A month boundary is the axis a planner reads, so it clears WCAG 1.4.11's 3:1** — 0.76 gave
      2.08:1 against the ground and **1.95:1 against the month band it is most often drawn over**,
      i.e. a required graphical object below the non-text floor, live. 0.64 gives 3.25 / 3.05.
@@ -401,12 +405,12 @@
      this pair. It did not: `token-contrast.test.ts` swept the criticality triple and the closure
      and had **no PLOT-pack pair at all**. It does now — which is the actual fix; this number is
      only how that gate passes. */
-  --canvas-grid-month: oklch(0.64 0 0);
-  --canvas-grid-year: oklch(0.58 0 0);
+  --canvas-grid-month: oklch(0.53 0.022 256);
+  --canvas-grid-year: oklch(0.64 0.024 256);
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */
-  --canvas-nonworking-hatch: oklch(0.83 0.004 90);
+  --canvas-nonworking-hatch: oklch(0.3 0.018 256);
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
@@ -437,37 +441,37 @@
   /* block must restate the page family literally, or the alias silently keeps */
   /* the light values.                                                         */
   /* ----------------------------------------------------------------------- */
-  --page-background: oklch(0.982 0.002 248);
-  --page-foreground: oklch(0.321 0 0);
-  --page-muted: oklch(0.965 0.002 248);
-  --page-muted-foreground: oklch(0.51 0 0);
-  --page-border: oklch(0.907 0 0);
-  --page-input: oklch(0.62 0.02 264);
-  --page-accent: oklch(0.955 0.04 78);
-  --page-accent-foreground: oklch(0.252 0.056 264);
-  --page-primary: oklch(0.252 0.056 264);
-  --page-primary-foreground: oklch(0.985 0 0);
-  --page-field: oklch(1 0 0);
-  --page-field-foreground: oklch(0.321 0 0);
-  --page-field-muted-foreground: oklch(0.51 0 0);
-  --page-destructive-text: oklch(0.505 0.19 27.5);
-  --page-success-text: oklch(0.45 0.11 150);
-  --page-warning-text: oklch(0.47 0.11 55);
-  --page-info-text: oklch(0.3 0.075 262);
-  --page-ring: oklch(0.35 0.09 262);
-  --page-destructive: oklch(0.505 0.19 27.5);
-  --page-destructive-foreground: oklch(0.985 0 0);
-  --page-destructive-hover: oklch(0.455 0.19 27.5);
-  --page-secondary: oklch(0.338 0.081 262);
+  --page-background: oklch(0.177 0.011 260.6);
+  --page-foreground: oklch(0.913 0.012 252.1);
+  --page-muted: oklch(0.212 0.016 256.8);
+  --page-muted-foreground: oklch(0.74 0.022 252.6);
+  --page-border: oklch(0.29 0.023 256.4);
+  --page-input: oklch(0.558 0.071 238.2);
+  --page-accent: oklch(0.242 0.019 258.4);
+  --page-accent-foreground: oklch(0.913 0.012 252.1);
+  --page-primary: oklch(0.66 0.128 249.5);
+  --page-primary-foreground: oklch(0.181 0.031 247.1);
+  --page-field: oklch(0.189 0.015 253.2);
+  --page-field-foreground: oklch(0.913 0.012 252.1);
+  --page-field-muted-foreground: oklch(0.61 0.024 254.5);
+  --page-destructive-text: oklch(0.74 0.145 33);
+  --page-success-text: oklch(0.72 0.115 156.4);
+  --page-warning-text: oklch(0.79 0.135 75.1);
+  --page-info-text: oklch(0.76 0.105 247.6);
+  --page-ring: oklch(0.66 0.128 249.5);
+  --page-destructive: oklch(0.649 0.167 31.6);
+  --page-destructive-foreground: oklch(0.176 0.025 42.3);
+  --page-destructive-hover: oklch(0.7 0.16 31.6);
+  --page-secondary: oklch(0.51 0.026 256);
   --page-secondary-foreground: oklch(0.985 0 0);
-  --page-success: oklch(0.52 0.15 143);
-  --page-success-foreground: oklch(0.985 0 0);
-  --page-warning: oklch(0.56 0.115 55);
-  --page-warning-foreground: oklch(0.985 0 0);
-  --page-info: oklch(0.338 0.081 262);
-  --page-info-foreground: oklch(0.985 0 0);
-  --page-primary-hover: oklch(0.267 0.056 264);
-  --page-secondary-hover: oklch(0.353 0.081 262);
+  --page-success: oklch(0.72 0.115 156.4);
+  --page-success-foreground: oklch(0.15 0.02 156);
+  --page-warning: oklch(0.79 0.135 75.1);
+  --page-warning-foreground: oklch(0.15 0.02 77.5);
+  --page-info: oklch(0.66 0.128 249.5);
+  --page-info-foreground: oklch(0.181 0.031 247.1);
+  --page-primary-hover: oklch(0.722 0.109 247.6);
+  --page-secondary-hover: oklch(0.56 0.026 256);
 
   /* ----------------------------------------------------------------------- */
   /* The DIAGRAM's own family (ADR-0097 Landing E, L4-1).                     */
@@ -507,8 +511,8 @@
      colour, so `--warning` was moved to bronze to get out of the way — the
      diagram recoloured because the button was. Unchanged today, but it now
      HAS somewhere to change. */
-  --plot-primary: var(--page-primary);
-  --plot-primary-foreground: var(--page-primary-foreground);
+  --plot-primary: oklch(0.49 0.075 238);
+  --plot-primary-foreground: oklch(1 0 0);
   --plot-field: var(--page-field);
   --plot-field-foreground: var(--page-field-foreground);
   --plot-field-muted-foreground: var(--page-field-muted-foreground);
@@ -516,7 +520,7 @@
   --plot-success-text: var(--page-success-text);
   --plot-warning-text: var(--page-warning-text);
   --plot-info-text: var(--page-info-text);
-  --plot-ring: var(--page-ring);
+  --plot-ring: oklch(0.66 0.128 249.5);
   /* **The one value that differs, and the whole reason L4-1 exists.**
      `--warning` (near-critical) against `--destructive` (critical) measured
      **1.34:1** — the two states a planner scans a wall of bars to tell apart,
@@ -542,15 +546,15 @@
      3:1 on a near-white ground. So a 1.5 floor is reachable and 3:1 is not,
      without changing the label ink or the hues. Recorded so nobody spends a
      day chasing it. */
-  --plot-destructive: oklch(0.46 0.175 27.5);
-  --plot-destructive-foreground: var(--page-destructive-foreground);
+  --plot-destructive: oklch(0.721 0.148 37);
+  --plot-destructive-foreground: oklch(0.176 0.025 42.3);
   --plot-destructive-hover: var(--page-destructive-hover);
   --plot-secondary: var(--page-secondary);
   --plot-secondary-foreground: var(--page-secondary-foreground);
-  --plot-success: var(--page-success);
+  --plot-success: oklch(0.59 0.084 178);
   --plot-success-foreground: var(--page-success-foreground);
-  --plot-warning: var(--page-warning);
-  --plot-warning-foreground: var(--page-warning-foreground);
+  --plot-warning: oklch(0.6 0.125 58);
+  --plot-warning-foreground: oklch(0.176 0.025 42.3);
   --plot-info: var(--page-info);
   --plot-info-foreground: var(--page-info-foreground);
   --plot-primary-hover: var(--page-primary-hover);
