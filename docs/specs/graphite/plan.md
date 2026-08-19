@@ -1,36 +1,184 @@
-# Graphite — implementation plan
+# Graphite — consolidated implementation plan
 
-Design accepted 2026-08-19 (ADR-0099). Sliced so **every milestone ends with a
-screenshot you can look at**, because that is the feedback loop whose absence
-produced the four epics this replaces.
+Six specialist reviews over `design.md` + ADR-0099. This replaces the first-draft plan.
+**Five of six returned BLOCKING findings.** What follows is the resolution, not a digest.
 
-`scripts/shoot.mjs --only plan-workspace --width 1646` after each one.
+---
 
-| #      | Milestone                                                                                                           | Lands                                            | Risk                                         |
-| ------ | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------- |
-| **M1** | **Palette** — Graphite values for `page`, `chrome`, `panel`, `plot`; contrast matrix extended to the new pairs      | The whole app changes colour; no layout moves    | Low. Values only, no structure (ADR-0099 D7) |
-| **M2** | **Rail** — 38 px icon rail; brand, 5 modal tools, 5 panel switches, account                                         | Top bar deleted; rail is the only nav            | Medium. Touches the shell                    |
-| **M3** | **Drawer** — 186 px context panel; activity schedule/logic/resources/cost                                           | Replaces the modal activity dialog               | Medium. Reuses ADR-0060 scopes               |
-| **M4** | **Toolbar** — one strip, six groups, modes + finish read-out right-aligned                                          | Deletes the ladder, band floors, hysteresis, `⋯` | Medium. Rewrites `e2e-toolbar-fit`           |
-| **M5** | **Status bar** — counts, data date, finish, zoom, save state                                                        | `Recalculate` becomes a state                    | Low                                          |
-| **M6** | **Gantt split** — grid beside chart, draggable, two-tier scale                                                      | Grid/chart layout change                         | Medium                                       |
-| **M7** | **Diagram** — WBS band, named lanes, routed logic, float tails                                                      | Canvas paint only                                | Low. Painter already does most of it         |
-| **M8** | **Gate pass** — the five specialist reviews over the combined diff, flag-on journeys, screenshots at 1646/1440/1920 |                                                  | —                                            |
+## A. What the reviews changed about the design
 
-## Sequencing rules
+### A1. My own numbers disagreed with themselves (architecture, component, performance — all three found it independently)
 
-1. **M1 first and alone.** It is reversible in one commit and proves the token
-   layer carries the design before anything structural moves.
-2. **No new `VITE_` flag.** ADR-0088 D1 established a `VITE_` constant is inlined
-   at build time and is not an operator rollback; the rollback is a commit
-   boundary, and each milestone is one.
-3. **`brand` / `auth` are out of scope** — the signed-out screens keep today's
-   values and are revisited after M8.
-4. **The CPM engine is not imported and no migration runs.**
+|         | ADR-0099   | `design.md` |
+| ------- | ---------- | ----------- |
+| Rail    | 38 px      | 46 px       |
+| Drawer  | **186 px** | **224 px**  |
+| Toolbar | 29 px      | 36 px       |
 
-## Open, and deliberately not blocking
+Not cosmetic: 186 vs 224 decides whether `FieldGrid`'s container query can ever fire; 29
+vs 36 decides whether a control clears WCAG 2.5.8 with padding. **Resolved to the brief's
+numbers (46 / 36) and a resizable drawer (below). ADR-0099 is amended, not left to
+diverge.**
 
-- A **light** Graphite. Deferred, not rejected (ADR-0099). The plot separations
-  must be re-derived rather than re-tinted, which is design work, not a swap.
-- Whether the activities **table** survives as a bottom panel in the diagram view
-  or becomes a rail panel. M3 will answer it from use, not from argument.
+### A2. §4a is solved by geometry, not by measurement (architecture)
+
+The toolbar must not resize with the drawer. The answer is one CSS grid in the shell:
+
+```
+columns:  minmax(0,1fr)   auto      46px
+          /* stage      | drawer | rail */
+rows:     auto   minmax(0,1fr)   auto
+          /* command | body | status */
+
+command strip → col 1/3, row 1     drawer → col 2, row 2
+main          → col 1,   row 2     rail   → col 3, rows 1/4
+status bar    → col 1/3, row 3
+```
+
+The strip spans columns 1–2, so **the drawer's width is inside its span**. Opening the
+drawer redistributes width between `<main>` and the drawer and changes the strip by zero.
+No `ResizeObserver`, no measurement, and no way to break it without changing
+`grid-column`. Rows 1 and 3 are `auto`, so an unfilled slot is a zero-height row and the
+twelve non-plan screens keep the frame they have.
+
+### A3. The drawer cannot be a fixed 224 px (component, UX, architecture)
+
+`Tabs orientation="vertical"`'s rail is `w-52` = **208 px** — 93 % of a 224 px drawer
+before any content. `DESIGN_SYSTEM.md` records that the editor takes the 896 px `xl`
+dialog _because_ a narrow single column was tried and rejected.
+
+**Resolved:** the drawer is **resizable 224–420, default 300**, on the existing
+`PanelResizer` + `useResizablePanelPrefs` (which already supports an end-anchored panel via
+`reverseKeys`). Tabs become a **horizontal strip**, never the vertical rail. `FieldGrid`
+pairs will stack at the narrow end — accepted and stated, not discovered.
+
+### A4. The trailing rail needs a skip link, and there isn't one anywhere (architecture)
+
+Today a keyboard user tabs header → rail → main. Trailing, they tab command strip → stage
+→ status → drawer → rail: navigation stops being first, on all thirteen routes. That is
+**WCAG 2.4.1 Bypass Blocks**, and `apps/web/src` contains no skip link at all. One lands in
+the same commit as the move. DOM order is the visual order — **never** `order:`,
+`row-reverse` or `direction: rtl`, each of which decouples focus from reading order.
+
+### A5. My milestone order would have broken thirteen routes (architecture)
+
+The first plan put the rail at M2. Deleting the top bar removes the brand link, org
+switcher, account chip and the below-`lg` Explorer trigger from **all thirteen** authed
+routes — one commit _before_ the Explorer has anywhere to live. Reordered to
+**frame → occupants → contents**, where the first slice is pure structure whose acceptance
+condition is a **pixel-identical screenshot**.
+
+### A6. Moving the activities table would silently undo ADR-0092 (architecture)
+
+`ActivityPanelCollapsedBar` **is** the `CanvasDockOutlet`'s host. If the table becomes a
+drawer panel, the dock falls back to rendering in place and every transient strip goes back
+above the scene — reversing an epic that shipped six days ago at a measured 0 px cost. The
+status bar becomes the dock's new host.
+
+### A7. Three right-edge claimants (UX, architecture)
+
+Notes and Float paths are both right-docked today under an explicit "the right edge holds
+one dock at a time" rule. Adding the rail makes three. **Notes folds into the drawer's
+Comments subject** — one claimant removed. **Float paths is undecided** (D3 below).
+
+### A8. Palette defects in code already shipped (UX)
+
+`today` and `conflict` both resolve to **the same token as `critical`** — three distinct
+facts painting identically, which breaks the rule the palette is built on. Also: D6 says
+azure is the only interactive colour while `DESIGN_SYSTEM.md` documents **amber** as
+chrome's primary and focus ring. One of those is now wrong and must be settled in writing.
+
+### A9. The drawer has no "close", and nothing guards that (component, test)
+
+ADR-0060 M6 shipped a confirmation before discarding unsaved work across independently
+dirty scopes — triggered by dialog close. A drawer never closes; **selecting a different
+bar is the implicit dismiss**, and nothing covers that path. Silently discarding an edit
+mid-keystroke is what we would ship by default.
+
+### A10. The drawer must not re-seed on every recalculation (performance)
+
+`activities.data` gets a **fresh array reference on every recalc**, so `.find()` returns a
+new object even when the activity is unchanged. A permanently-mounted drawer keyed on
+object identity re-seeds its forms on every recalculation anywhere in the plan. Key the
+re-seed on `(activityId, version)`. Resources/Cost tabs must lazy-mount, not fetch on every
+canvas click.
+
+---
+
+## B. The gate that comes before everything
+
+**M0 — measure, decide nothing else.** Five consecutive epics in this register had their
+width expectation contradicted by their own measurement (ADR-0090, 0091 D4, 0092 M4, 0093,
+0097 Landing C). Graphite deletes the `⋯` — the escape hatch that made those failures
+embarrassing rather than broken. Deleting the ladder on the strength of a mockup would be
+the sixth.
+
+M0 delivers, with falsification conditions written **before** the runs:
+
+1. Natural width of the six toolbar groups + two mode segments + finish read-out at
+   1280 / 1440 / 1646 / 1920, with a **real plan name** and a **resolved** finish chip
+   (the widest state of every dynamic item, not the typical one).
+2. The ADR-0061 primitives at 224 px — does a horizontal `Tabs` fit four labels, where does
+   `FieldGrid` land, does `ContextStrip` read.
+3. A **command census**: `buildTsldToolbarItems()`'s real set diffed against design.md §3's 38. A registered command in none of the homes is silently dropped today and nothing
+   would report it.
+4. Canvas draw budget re-measured at Graphite's chrome height — less chrome means more
+   visible rows, and `TECH_DEBT.md` #75 already records the painter 4–6× over its stated
+   budget.
+
+**M0 gates M5. If the strip does not fit at 1280, the strip narrows — it does not get
+shaved for a sixth epic.**
+
+---
+
+## C. Milestones
+
+| #       | Slice                                                                    | Ends with                                                                                                                |
+| ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| **M0**  | Measure (no product code)                                                | A measurement document; falsification conditions stated first                                                            |
+| **M1**  | Palette — _landed_                                                       | Confirm the new pairs are gated; fix A8                                                                                  |
+| **M2**  | The shell grid with **today's** occupants; retire `VITE_DESIGNED_CHROME` | **Pixel-identical screenshots.** If not, the grid is wrong and it is cheap to learn here                                 |
+| **M3**  | Rail trailing; top bar deleted; **skip link**                            | Re-shoot all nine non-plan screens; axe on five routes                                                                   |
+| **M4**  | Drawer, Explorer as first subject; Notes folds in                        | A Playwright assertion that the strip's `getBoundingClientRect().width` is **unchanged** across drawer open/close/resize |
+| **M5**  | The single command strip — deletes ladder, tiers, rows, band, `⋯`        | `e2e-toolbar-fit` **rewritten, not retired**; Escape target guard re-asserted                                            |
+| **M6**  | Drawer as the activity context — replaces the modal                      | Every existing `ActivityEditorDialog.*.test.tsx` passes **unchanged** (the ADR-0062 bar)                                 |
+| **M7**  | Status bar; dock re-hosted; `Recalculate` becomes a state                | Three states — not calculated / calculating / calculated-zero-critical — must not collapse into one sentence             |
+| **M8**  | Gantt grid beside chart                                                  | **One** virtualizer, not two synced scrollers; row heights identical by construction                                     |
+| **M9**  | Diagram stage; WBS colouring                                             | `sceneTopOffset` re-derived, not re-assumed                                                                              |
+| **M10** | Gate pass                                                                | Five specialists; screenshots at four widths **plus a coarse-pointer run**                                               |
+
+Standing gates every slice: `pnpm lint && typecheck && test`, plus `scripts/e2e-local.sh web`
+(the base journey), plus **all 31 Playwright suites on any slice that moves a label or a
+layout** — locating controls by `[data-toolbar-item]`, never by copy.
+
+---
+
+## D. Decisions the product owner must make
+
+**D1 — Drawer width and content split.** Resizable 224–420 (default 300) is the resolution
+above. Confirm, or say the drawer should be wider still and Logic/Resources/Cost move into
+it wholesale rather than staying dialogs at first.
+
+**D2 — What carries CRITICAL when bars are coloured by WBS.** Colour is spoken for. The
+candidates are an outline, a heavier end cap, a hatch, or the critical path drawn as an
+emphasis pass over any fill. This is planner judgement.
+
+**D3 — Float paths: a sixth drawer subject, or a stage overlay.** It cannot stay a third
+right-hand dock.
+
+**D4 — Chrome's accent: amber or azure.** `DESIGN_SYSTEM.md` documents amber as chrome's
+primary and ring; ADR-0099 D6 says azure is the only interactive colour. Whichever wins,
+the other document changes in the same commit.
+
+---
+
+## E. Divergence risks, named
+
+- Deleting the ladder before M0 measures — the exact mistake ADR-0099 was written about.
+- Hand-rolling the rail's tool buttons instead of registering them: the five modal tools
+  need arm/disarm, Escape precedence, announcement and pen gating, and the registry already
+  gives all five. Hand-rolling is how one control gets it and its neighbour does not.
+- A new `rail` surface scope — costs a complete 31-name family for no vocabulary `chrome`
+  lacks.
+- Overlaying the drawer over the stage to keep the toolbar fixed. It works, and it
+  reintroduces the obstruction ADR-0092 removed. The grid does the same job for free.
