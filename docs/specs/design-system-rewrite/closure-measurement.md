@@ -61,20 +61,25 @@ The table above sweeps **five** scopes because those are the five that exist. `c
 and lands at **E**, so the closure's arithmetic has one more multiplication to come and it is worth
 stating before it arrives rather than discovering it in that landing.
 
-- **A family goes 18 → 29 names.** Eleven closure members join the eighteen base tokens; the shipped
-  `chrome` rebind block (`globals.css:496-532`) is the reference implementation.
-- **Six families × 29 = 174 declarations, once**, plus the `PLOT` (6) and `GROUND` (2) packs.
+- **A family goes 18 → 31 names.** Thirteen closure members join the eighteen base tokens; the
+  shipped `chrome` rebind block is the reference implementation. **This said eleven and 29 until
+  2026-08-19**, when the block was counted rather than derived from the closure's description —
+  `computeReboundNames()` returns **31**, and the two the prose missed are the hover pair
+  (`--primary-hover`, `--secondary-hover`), which are exactly the kind of member a hand-written
+  arithmetic drops. The gate was right throughout: `token-architecture.test.ts` asserts set equality
+  against every scope's block, so no scope was ever short. Only the sentence was.
+- **Six families × 31 = 186 declarations, once**, plus the `PLOT` (6) and `GROUND` (2) packs.
   Against the pre-epic 5 × 18 × 3 themes = 270, that is still a reduction — **but a little under
   two thirds, not the "roughly a third of the surface" `design.md` §0.5.1 originally claimed with
   five families of eighteen.** Corrected there.
-- **`canvas` owes all eleven**, and the "declare it or it is a trap" rule is not weakened for it.
+- **`canvas` owes all thirteen**, and the "declare it or it is a trap" rule is not weakened for it.
   It is tempting to argue that a status **fill** never appears on a diagram — but the ADR-0092 dock,
   the create popover and the bulk-selection bar are DOM inside the diagram container, and every one
   of them can render a `Button` with a `destructive` or `secondary` variant. That is the pair the
   closure exists to govern, so the argument for exempting the canvas is the argument the six
   measured failures below already refuted for `chrome`.
 - **The seventh scope is therefore a bigger commitment than the sixth was.** ADR-0097 D14's bar was
-  written when a scope cost 18 declarations. It now costs 29, eleven of which need a derived value
+  written when a scope cost 18 declarations. It now costs 31, thirteen of which need a derived value
   clearing 4:1 against that surface's fill. The bar has not changed; the price behind it has.
 
 ## 4. Method

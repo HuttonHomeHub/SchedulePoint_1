@@ -406,11 +406,12 @@ because `scripts/check-counts.mjs:55` re-derives the count from `docs/adr/`.
    `test:e2e:gantt` and `measure:gantt` with it.
 5. **Removing dark is an accommodation removed** (`design.md` §0.5.6). Not a WCAG failure, the product
    owner's call — and §0.5.4's one-sentence cost is what keeps "revisit later" honest.
-6. **`globals.css` still grows**, though far less than before: **six** families at **29** names each
-   (18 base + the eleven the closure pulls in), plus packs plus metric, type, elevation and motion —
+6. **`globals.css` still grows**, though far less than before: **six** families at **31** names each
+   (18 base + the thirteen the closure pulls in — counted from the shipped block, not derived from
+   prose; see `closure-measurement.md` §3a), plus packs plus metric, type, elevation and motion —
    but **once**, not three times. **Both of those numbers moved after this line was written**: `auth`
    was measured and stays (§A), and the closure grew a family by 61 %. The net is still a reduction —
-   174 declarations against 270 — but it is a little under two thirds, not the third that the
+   186 declarations against 270 — but it is a little under two thirds, not the third that the
    pre-closure arithmetic implied, and `design.md` §0.5.1 carries the re-derivation.
 7. **Nine journeys touch the toolbar and every screen migration touches a suite.** All thirty-three
    are run at C, D and F. ADR-0091 records three broken by a label change, each found by CI rather

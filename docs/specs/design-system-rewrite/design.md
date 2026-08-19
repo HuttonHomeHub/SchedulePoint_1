@@ -17,7 +17,7 @@ works.
 
 | Axis                          | Today                                                     | After                                                                  |
 | ----------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Colour**, scoped by surface | 5 scopes × 18 tokens × 3 themes. Works. Gated.            | **6** scopes × **29** tokens × 1 theme + **role packs** (§1.4)         |
+| **Colour**, scoped by surface | 5 scopes × 18 tokens × 3 themes. Works. Gated.            | **6** scopes × **31** tokens × 1 theme + **role packs** (§1.4)         |
 | **Metric**, scoped by density | Does not exist. Five disagreeing constants in five files. | `[data-density]`, the `[data-surface]` mechanism reused                |
 | **Type**, two ramps           | One ramp, top unused, data half absent                    | A prose ramp with a top, and a **data ramp** that owns tabular figures |
 | **Meaning on the diagram**    | Borrowed from the page, ungated                           | A validated family, its own separation matrix, its own geometry tokens |
@@ -44,13 +44,13 @@ follows is what it **dissolves**, checked rather than assumed, and what it **mus
 | Every "which theme is this bad in?" negotiation on every colour                      | The reason the palette reads as compromised rather than chosen                 |
 | The theme picker in the account menu                                                 | `account-chip.tsx:197` — a picker with one entry is a lit-but-inert control    |
 
-Token maintenance drops from **5 families × 18 × 3 themes + packs** to **6 families × 29 × 1 +
+Token maintenance drops from **5 families × 18 × 3 themes + packs** to **6 families × 31 × 1 +
 packs** — 270 declarations becoming 174, so a little under two thirds rather than "a third of the
 surface", and every value in it is now chosen for one target and can be chosen well.
 
 > **Both multipliers changed after this paragraph was written, and the corrected figure is above
 > (re-derived from `globals.css`, 2026-08-19).** `auth` was measured and stays, so it is six
-> families and not five; and §1.5's closure grew a family from 18 names to **29** — the eleven
+> families and not five; and §1.5's closure grew a family from 18 names to **31** — the thirteen
 > status fills — which is visible in the shipped `chrome` rebind block at `globals.css:496-532`.
 > **The saving is real and it is half what this paragraph originally claimed.** What it bought is
 > the reason it shrank less: six live WCAG 1.4.11 failures on the navy scopes that nobody had
@@ -310,8 +310,8 @@ because "the alternating stripe under the diagram" is not any of the eighteen na
 > above is withdrawn — the single-theme decision and the canvas scope stand on their own arguments,
 > which never needed a scoreboard.
 
-That is 6 × 29 = **174 base declarations, once**, plus packs — against today's 5 × 18 × 3 = 270.
-(29, not 18: §1.5's closure adds eleven status fills to every family. The count is now an **output**
+That is 6 × 31 = **186 base declarations, once**, plus packs — against today's 5 × 18 × 3 = 270.
+(31, not 18: §1.5's closure adds thirteen status fills to every family. The count is now an **output**
 of the closure, which is the whole point of §1.5, so a section that quotes it has to re-derive it.)
 The `brand`/`auth` per-theme repetition that `diagnosis.md` §4.4 records as a real ongoing cost does
 disappear, because with one theme there is nothing to keep identical across blocks.
@@ -331,7 +331,7 @@ _palette_, not a surface; it forces light values, and giving it a scope means ev
 change is applied twice).
 
 **And the bar is now materially higher than when it was written**, which is worth saying out loud:
-a scope costs **29 declarations** rather than 18, each of the eleven new ones requiring a derived
+a scope costs **31 declarations** rather than 18, each of the thirteen new ones requiring a derived
 value that clears 4:1 against that surface's fill. The seventh scope is a bigger commitment than
 the sixth was, and the closure is what made it so.
 
