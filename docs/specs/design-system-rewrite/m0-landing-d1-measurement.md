@@ -262,3 +262,39 @@ cost something real:
 
 Arithmetic says the second is feasible only if the cluster joins an existing row, which is a
 `TOOLBAR_GROUPS` change and a milestone of its own rather than a fix.
+
+---
+
+## The merge is withdrawn for now, and a browser is what settled it
+
+**Date:** 2026-08-19 · **Evidence:** `e2e-gantt`, two failures.
+
+The safe variant shipped with the four mode switches in the `⋯` and that written up as an open
+question. `e2e-gantt` then failed twice on `getByRole('button', { name: 'Gantt' })` and
+`{ name: 'Diagram' }` — **the view switch**, the one control that gets a planner from the diagram to
+the Gantt, reachable only through an overflow menu at every width.
+
+That is not a locator nit and it is not a matter of taste. It is a real regression, found by
+something that drove the real product, in exactly the way this epic's record keeps saying is the
+only way these are found.
+
+**So the mode cluster goes back to the band**, where ADR-0091 D1 put it, and the header keeps the
+breadcrumb, the status pill and the edit pencil — ~770 px, which fits at every width measured
+(`header-fit`: no overflow, nothing unreachable, 1280 → 1920). Re-measured: `aboveCanvas` returns to
+**240 px** at all three widths, i.e. the 45 px D1b won is given back exactly.
+
+**This is not the product owner's decision being taken.** It is declining to leave a shipped
+regression in place while that decision is open. The two options are unchanged and both still cost
+something real:
+
+- **Leave it withdrawn.** The canvas keeps today's 240 px of chrome; the modes are visible beside
+  the pen at every width. Nothing further is owed.
+- **Re-attempt the merge with a home for the modes.** The identity fits the header without them, so
+  the merge itself is sound — what it needs is somewhere for `Early | Visual | Diagram | Gantt` to
+  live that is neither a band row of their own (which is the 45 px straight back) nor an overflow
+  menu. Folding them into Row 1 is the only candidate that costs no height, and it reverses
+  ADR-0091 D1's finding that a mode is not a command. That is a milestone, not a fix.
+
+**What the epic keeps demonstrating, now five times running:** a width expectation was contradicted
+by its own measurement. The approving estimate said 795 px of identity content and +250 px of slack;
+the measured content was 1172 px. The number that mattered was never in the plan.

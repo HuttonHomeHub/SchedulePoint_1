@@ -1181,42 +1181,6 @@ export function ToolbarPlanWorkspace({
               </Button>
             ) : null}
           </div>
-          {/* **Shrinkable, and that is the fix rather than a tidy-up.** D1b shipped this wrapper
-              `shrink-0`, which made the identity content unable to fall below its min-content —
-              about 1170 px. In a `minmax(0,auto)` grid track with `justify-self-center` the surplus
-              spills BOTH ways, so measured at 1440 the SchedulePoint wordmark was covered and
-              unclickable, and at 1280 `Stop editing` rendered 80 px outside the header, overlapping
-              the account chip. That is ADR-0090 M1's defect reproduced by the merge that was meant
-              to be the cheap win, and the vertical-stack measurement could not see it because it
-              measures heights.
-
-              Letting it shrink is what turns the mode `Toolbar` into a width-CONSTRAINED row, so
-              `Toolbar.measure`'s ladder runs and Early/Visual/Diagram/Gantt demote to icons and
-              then to a `⋯` instead of overflowing. ADR-0091 M7's "a shrink-to-fit row must never
-              demote" is not violated: that rule is about a row whose `clientWidth` is an OUTPUT of
-              its own demotion. Here the width is bounded by the header, so it is an input. */}
-          <div className="flex min-w-0 items-center gap-3">
-            <Toolbar
-              items={rows.mode}
-              context={ctx}
-              label="Plan mode"
-              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-              groupLabels={ROW_MODE_GROUP_LABELS}
-              // **`flex-auto`, and the distinction from `flex-1` is the whole fix.** The ladder only
-              // runs on a width-CONSTRAINED row (`Toolbar.tsx:81-84` — `flexGrow > 0`), so with no
-              // grow the four switches never demote and simply overflow the header. But `flex-1` is
-              // `flex: 1 1 0%`: basis zero means the first measure sees ~0 px, the ladder collapses
-              // everything into a `⋯`, and it never recovers — a row measuring its own output,
-              // which is ADR-0091 M7's trap. Measured: all four modes were in the overflow at 1646.
-              // `flex-auto` is `flex: 1 1 auto` — it starts at content width and gives way only
-              // under real pressure.
-              className="min-w-0 flex-auto"
-            />
-            <CompactPenStatus
-              pen={model.pen}
-              {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-            />
-          </div>
         </div>
       </ChromePortal>
 
@@ -1226,6 +1190,42 @@ export function ToolbarPlanWorkspace({
             siblings. Without it, the project-finish chip beside Row 1 silently costs the four
             viewport commands their labels — measured on a 1646 px screen, shipped in web-v0.86.0. */}
         <ToolbarBandProvider className="border-border flex flex-col border-b">
+          {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
+              design.** D1b moved it into the header with the rest of the identity line, and the
+              header cannot hold it: measured, the identity wants ~1170 px against ~861 px available
+              at 1280, so something has to give. Every arrangement that made the header FIT put
+              `Early | Visual | Diagram | Gantt` behind a `⋯` — and `e2e-gantt` then failed on the
+              view switch, twice, because the one control that gets a planner from the diagram to
+              the Gantt was in an overflow menu at every width. Not a locator nit: a real regression
+              a browser found.
+
+              So the modes come back here, where ADR-0091 D1 put them, and the header keeps the
+              breadcrumb, the status and the edit pencil — which is ~770 px and fits. The canvas
+              gives back the 45 px D1b won. **Whether to re-attempt the merge is the product owner's
+              call and is written up with its numbers at the end of
+              `m0-landing-d1-measurement.md`**; this is not that decision, it is declining to leave
+              a shipped regression in place while the decision is open. */}
+          <div className="border-border flex items-center justify-end gap-3 border-b px-4 py-1">
+            <Toolbar
+              items={rows.mode}
+              context={ctx}
+              label="Plan mode"
+              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+              // All four are `group: 'lens'`, whose default label is "Display" — also Row 1's
+              // `lens` group name, so unoverridden this announces a second, unrelated name for the
+              // cluster AND collides with a region one row below (the ADR-0090 M5 `output` rename).
+              groupLabels={ROW_MODE_GROUP_LABELS}
+              // `shrink-0`, never `flex-1`: `Toolbar`'s container carries `min-w-0`, so a
+              // default-shrinking mode row squeezes below its content width and starts demoting —
+              // putting an armed mode behind a `⋯`, which is the ADR-0064 dead end and exactly what
+              // the header could not avoid.
+              className="shrink-0"
+            />
+            <CompactPenStatus
+              pen={model.pen}
+              {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
+            />
+          </div>
           {/*
             **The plan identity line** — breadcrumb, status, project finish, Edit plan, pen status —
             folded into the band **above** the commands it governs (ADR-0090 M4-T2). Measured gain:

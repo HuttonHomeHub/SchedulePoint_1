@@ -84,7 +84,14 @@ Status is never conveyed by colour alone — always pair with an icon and/or tex
   | `text-lg`   | 1.125rem / 1.75rem | Lead text                   |
   | `text-xl`   | 1.25rem / 1.75rem  | Card titles                 |
   | `text-2xl`  | 1.5rem / 2rem      | Section headings            |
-  | `text-3xl`  | 1.875rem / 2.25rem | Page titles                 |
+  | `text-3xl`  | 1.875rem / 2.25rem | _(unused — see below)_      |
+
+> **`text-3xl` is declared and used by nothing** — zero call sites in `apps/web/src`, verified by
+> search rather than by memory. Its row said "Page titles", which was wrong twice over: page titles
+> come from the `PageHeader` archetype, which renders `text-2xl`. It is **kept rather than deleted**,
+> because a type ramp is a designed sequence and a scale with a hole in it invites the next person to
+> reach past the gap; an unused top step costs three custom properties. If a display context ever
+> wants it, it is there and it is the right size.
 
 - **Weights:** 400 body, 500 medium (labels/buttons), 600 semibold (headings).
   Avoid heavier weights except for display.
@@ -99,9 +106,19 @@ groups, `8`–`12` between page sections.
 
 ### Sizing scale
 
-Controls share a height scale for alignment: **sm 32px (`h-8`)**, **md 36px
-(`h-9`, default)**, **lg 40px (`h-10`)**. Content width is capped with container
-utilities (e.g. `max-w-screen-xl`) rather than fixed pixel widths.
+Controls share a height scale for alignment: **sm 32px**, **md 36px (default)**, **lg 44px**.
+Content width is capped with container utilities (e.g. `max-w-screen-xl`) rather than fixed pixel
+widths.
+
+The two common sizes are **tokens, not utilities** — `--control-h` (2.25rem) and `--control-h-sm`
+(2rem), consumed as `h-(--control-h)` — so the scale is a theme decision that moves in one place
+rather than a class each control remembers. `lg` is still the literal `h-11`, and `icon` is
+`size-10`.
+
+> **This said `h-8` / `h-9` / `h-10` and named 40px for `lg`.** All three were wrong after ADR-0097
+> tokenised the scale and the product owner took the default from 40px to 36px: the utilities are
+> gone from the two sizes that matter, and `lg` is 44px rather than 40. Corrected by reading
+> `button.tsx` and `globals.css`, which is the only way a number like this is ever right.
 
 ### Border radius
 
@@ -230,28 +247,42 @@ theme.
 
 ### Surface scopes (ADR-0055)
 
-A **theme** answers "what does this product look like". A **surface scope** answers "what
-does this token mean _here_". Corporate is why the second question exists: its chrome is
-navy while its page is off-white, so `--muted-foreground` cannot be one colour. The first
-attempt gave the header three bespoke tokens and no muted grey, and every piece of secondary
-text in the chrome fell back to the page's grey — invisible on navy, in six separate places.
+A **surface scope** answers "what does this token mean _here_". It exists because one product
+carries regions whose grounds are genuinely different — a navy chrome band above an off-white page —
+so `--muted-foreground` cannot be one colour. The first attempt gave the header three bespoke tokens
+and no muted grey, and every piece of secondary text in the chrome fell through to the page's grey:
+invisible on navy, in six separate places.
 
-There are three scopes:
+> **This section used to explain scopes via the Corporate theme, which no longer exists.** ADR-0097
+> collapsed the product to one theme, so a scope is now the only mechanism by which a token means
+> two things — which makes it more load-bearing than when it was one of two. The old text also said
+> "three scopes" and "a complete 17-token family" while a passage further down said five: two
+> answers on one page, which is worse than either being wrong alone.
 
-| Scope    | Where                     | Applied by                 |
-| -------- | ------------------------- | -------------------------- |
-| _(page)_ | everything by default     | `:root` — nothing to apply |
-| `chrome` | the top band              | `<Surface tone="chrome">`  |
-| `panel`  | the Project Explorer rail | `<Surface tone="panel">`   |
+There are **six** scopes — the page plus five:
 
-Each theme block declares a **complete 17-token family** per scope — fill, foreground,
-muted-foreground, border, accent (+ foreground), primary (+ foreground), field (+ foreground
+| Scope    | Where                            | Applied by                 |
+| -------- | -------------------------------- | -------------------------- |
+| _(page)_ | everything by default            | `:root` — nothing to apply |
+| `chrome` | the top band                     | `<Surface tone="chrome">`  |
+| `panel`  | the Project Explorer rail        | `<Surface tone="panel">`   |
+| `brand`  | the public screens' navy panel   | `<Surface tone="brand">`   |
+| `auth`   | the card that panel is joined to | `<Surface tone="auth">`    |
+| `canvas` | the diagram, and the Gantt panel | `<Surface tone="canvas">`  |
 
-- muted-foreground), muted, input, destructive/warning/info text, and ring. A `[data-surface]`
-  rule then
-  rebinds the ordinary semantic names to that family. Inside a scope, `bg-background` **is**
-  the header's navy and `text-muted-foreground` **is** a grey validated against it — so no
-  descendant component changes at all, and none of them learn where they are.
+`:root` declares a **complete family of 31 names** per scope: the 18-name base — fill, foreground,
+muted (+ foreground), border, input, accent (+ foreground), primary (+ foreground), field
+(+ foreground, + muted-foreground), destructive/success/warning/info **text**, and ring — plus the
+**13 closure members** the status fills pull in (`destructive`, `secondary`, `success`, `warning`,
+`info` and their foregrounds, and the three hover fills). A `[data-surface]` rule then rebinds the
+ordinary semantic names to that family. Inside a scope, `bg-background` **is** the header's navy or
+the diagram's ground, and `text-muted-foreground` **is** a grey validated against it — so no
+descendant component changes at all, and none of them learn where they are.
+
+**The count is an output, not a target.** `styles/token-architecture.test.ts` derives the family by
+closure from what a compiled utility can composite, so "31" is what that computation currently
+returns rather than a number anybody chose. Quoting it here is a convenience for the reader; the
+gate is the authority, and it was 18 before the closure and will move again.
 
 Three rules keep this honest:
 
@@ -265,10 +296,16 @@ Three rules keep this honest:
   `var(--token)` rather than a value resolved once at `:root`. Drop it and every scope
   silently stops working, with no error and a diff that looks like a tidy-up. Pinned by test.
 
-**There are five scopes, and the bar for a sixth is written down** (ADR-0097 plans `canvas` as that
-sixth, at Landing E — this sentence becomes wrong the day it lands). `chrome` (the app's top band),
-`panel` (the navigator rail), the page (`:root`), and — since ADR-0077 — `brand` (the public
-screens' navy panel) and `auth` (the card beside it).
+**There are six scopes, and the bar for a seventh is written down.** `chrome` (the app's top band),
+`panel` (the navigator rail), the page (`:root`), `brand` (the public screens' navy panel) and
+`auth` (the card beside it) since ADR-0077, and `canvas` (the diagram and the Gantt panel) since
+ADR-0097 Landing E.
+
+> This sentence said "five, and the bar for a sixth" and dated itself — _"this sentence becomes
+> wrong the day it lands"_. It landed; the sentence is corrected rather than left for a reader to
+> notice the caveat. **A seventh is a bigger commitment than the sixth was**: the bar (ADR-0077 §1,
+> five conditions) has not changed, but a scope now costs 31 declarations rather than 18, thirteen
+> of which need a derived value clearing its own pairs against that surface's fill.
 
 Those last two were the odd ones, and **ADR-0097 changed why they exist without changing that they
 do**. They were justified as **theme-invariant** — identical in Light, Dark and Corporate, because a
@@ -457,11 +494,20 @@ link`; sizes `sm | md | lg | icon`; icon buttons require `aria-label`. One
   independently — and the API alone is what ADR-0082 and ADR-0064 both record
   failing: a correct pattern applied to one control and not its neighbour.
 
-- **Tables (DataTable)** — one table component: sortable headers, pagination,
-  row selection, sticky header, per-column alignment (numbers right-aligned,
-  tabular numerals), loading (skeleton rows), empty, and error states. Semantic
-  `<table>` markup with scoped headers. Responsive: horizontal scroll in a
-  bordered container; never break the page layout.
+- **Tables (DataTable)** — one table component owning the four **states** every resource list
+  needs: loading (a labelled spinner), error with retry, empty (the caller supplies the icon, copy
+  and optional action), and populated. Semantic `<table>` markup with scoped headers, an optional
+  per-row detail `<tr>` (`renderDetail`), and a focusable scroll region that can be
+  `aria-describedby`-linked to prose qualifying what the rows mean. Responsive: horizontal scroll in
+  a bordered container; never break the page layout.
+
+  > **This entry claimed five features the component does not have** — sortable headers, pagination,
+  > row selection, a sticky header and per-column alignment — and was corrected by reading
+  > `components/ui/data-table.tsx` rather than by trusting it. Consumers that sort or select do it
+  > themselves today. That is not a to-do list: a shared primitive earns each of those when a second
+  > consumer needs it, and writing them down as though they exist is how a reader plans around a
+  > capability that isn't there. Loading is a **spinner**, not skeleton rows.
+
 - **Cards** — `card` surface, `radius-lg`, `shadow-sm`, standard padding;
   slots for header/title, content, footer/actions.
 - **Navigation** — top-level via the Project Explorer rail (a hand-rolled ARIA
