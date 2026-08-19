@@ -336,18 +336,24 @@ describe("the [data-surface='canvas'] rule", () => {
     expect([...rebinds.keys()].sort()).toEqual([...REBOUND_NAMES].sort());
   });
 
-  it('reads from the page, except the ground, which reads the plot pack', () => {
+  it('reads from its own family, never straight from the page', () => {
+    // L1 pointed these at `--page-*` because nothing differed yet. L4-1 gives the scope a family,
+    // and the assertion moves with it: a rebind that reads the page directly is a value the
+    // diagram cannot change without changing the buttons, which is the coupling `diagnosis.md`
+    // §3.2 records a theme having to work around.
     for (const [name, value] of rebinds) {
-      if (name === '--background') {
-        // The one binding that is not a pass-through, and the whole point of the scope: inside it
-        // `bg-background` IS the diagram's ground, which is what makes the container's `bg-canvas`
-        // redundant rather than merely duplicated.
-        expect(value, 'the ground must be the plot pack, not the page').toBe('var(--canvas)');
-        continue;
-      }
-      expect(value, `${name} should pass the page value through at L1`).toMatch(
-        /^var\(--page-[a-z-]+\)$/,
-      );
+      expect(value, `${name} should read --plot-*`).toMatch(/^var\(--plot-[a-z-]+\)$/);
+    }
+  });
+
+  it('declares the whole family, including the members that only alias the page', () => {
+    // Thirty of the thirty-one alias `--page-*` today. Declaring them anyway is the ADR-0055 §1
+    // rule — a partial family is a trap — and it is what makes the NEXT diagram-only value a
+    // one-line edit rather than a decision about whether to start a family.
+    const tokens = themeTokens(':root');
+    for (const name of REBOUND_NAMES) {
+      const member = `--plot-${name.replace(/^--/, '')}`;
+      expect(tokens.has(member), `${member} is not declared at :root`).toBe(true);
     }
   });
 

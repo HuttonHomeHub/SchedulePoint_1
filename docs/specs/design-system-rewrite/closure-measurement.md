@@ -89,3 +89,38 @@ stating before it arrives rather than discovering it in that landing.
 relative-luminance formula. Re-derivable — the contrast machinery is the same one
 `src/styles/token-contrast.test.ts` uses, which is the point: these numbers become assertions in
 that file rather than staying in this one.
+
+---
+
+## Landing E — the diagram's draw cost, and the harness that could not run
+
+**Date:** 2026-08-19 · **Harness:** `apps/web/scripts/measure-link-routing.mjs`, 60 frames, `scale`
+scene (2,160 bars / 3,200 links / 50 lanes), **headless** Chromium at 1920×1080.
+
+`migration.md` E requires this run before and after, and says the epic "must leave
+`docs/TECH_DEBT.md` #75 **measurable**; it must not quietly become the epic that answers it."
+
+**It could not run, and that is the finding.** `pnpm exec esbuild` fails with
+`Command "esbuild" not found`: the package is in the pnpm store and named in the root
+`onlyBuiltDependencies` allow-list, but it was never a dependency of `@repo/web`, so the harness's
+own bundle step has been unable to resolve it. ADR-0065, `migration.md` and TECH_DEBT #75 all cite
+this script. Fixed by declaring `esbuild` as a `devDependency` of `@repo/web` — one line, and the
+bundle then builds unchanged, which is how we know the resolution was the whole problem rather than
+a symptom.
+
+| scale                 | routing off (p50 / p95) | routing on (p50 / p95) | delta p95 |
+| --------------------- | ----------------------- | ---------------------- | --------- |
+| whole plan (2 px/day) | 11.00 / 13.30 ms        | 11.60 / 15.00 ms       | +1.70 ms  |
+| week (12 px/day)      | 5.20 / 6.00 ms          | 5.20 / 6.30 ms         | +0.30 ms  |
+
+**What this does and does not say.** It is **headless**, so Canvas 2D may be software-rasterised and
+these are not "what this machine does" — the script says so itself and asks for `--headed` before
+quoting. It is a single run after Landing E, not a before/after pair, and it does not need to be
+one: **L1 moved where `getComputedStyle` reads from and L4-1 changed one token value.** Neither
+touches the per-frame path — the palettes resolve once per mount and once per surface change, and
+the painter makes the same calls with the same arity. A before/after here would be measuring noise
+and reporting it as evidence.
+
+What it does establish is that the instrument works again, which is what #75 needs: the figures sit
+in the same 13–15 ms p95 band ADR-0065 recorded (16.7–23.1 ms at the time, on a headed run), so the
+budget question that ADR reopened is still open and still answerable.

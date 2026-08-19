@@ -461,6 +461,93 @@
   --page-primary-hover: oklch(0.267 0.056 264);
   --page-secondary-hover: oklch(0.353 0.081 262);
 
+  /* ----------------------------------------------------------------------- */
+  /* The DIAGRAM's own family (ADR-0097 Landing E, L4-1).                     */
+  /*                                                                          */
+  /* **Named `--plot-*` and not `--canvas-*`, and the reason is a collision   */
+  /* rather than taste**: `--canvas`, `--canvas-band` and the four            */
+  /* `--canvas-grid-*`/hatch tokens are the PLOT PACK, deliberately exposed   */
+  /* in `@theme inline` so `bg-canvas` compiles and the painter can read      */
+  /* `--color-canvas-band`. A family on the same prefix would make            */
+  /* `token-architecture.test.ts` assert both that `--color-canvas-` is       */
+  /* absent from that block and that it is present. The scope attribute stays */
+  /* `canvas`, because that is what the surface IS.                           */
+  /*                                                                          */
+  /* **Thirty of the thirty-one alias the page, and that is the point.** A    */
+  /* partial family is the trap ADR-0055 §1 names, so the whole closure is    */
+  /* declared here whether or not it differs today — which makes the next     */
+  /* diagram-only value a one-line edit in the right place rather than a      */
+  /* decision about whether to start a family.                                */
+  /* ----------------------------------------------------------------------- */
+
+  /* The ground: the diagram's working surface, not the page's document       */
+  /* surface. 1.02:1 apart today — two greys nobody can tell apart, which is  */
+  /* exactly why the pre-scope trap never showed.                             */
+  --plot-background: var(--canvas);
+  --plot-foreground: var(--page-foreground);
+  --plot-muted: var(--page-muted);
+  --plot-muted-foreground: var(--page-muted-foreground);
+  --plot-border: var(--page-border);
+  --plot-input: var(--page-input);
+  --plot-accent: var(--page-accent);
+  --plot-accent-foreground: var(--page-accent-foreground);
+  /* **`--primary` means two different things and this is where they part.**
+     On the chrome it is "the thing you should press"; on the diagram it is
+     "an ordinary, non-critical activity" (`palette.ts:26`). `diagnosis.md`
+     §3.2 records what their being one value cost: a theme promoted amber to
+     `--primary`, which made an ordinary bar and a near-critical bar the same
+     colour, so `--warning` was moved to bronze to get out of the way — the
+     diagram recoloured because the button was. Unchanged today, but it now
+     HAS somewhere to change. */
+  --plot-primary: var(--page-primary);
+  --plot-primary-foreground: var(--page-primary-foreground);
+  --plot-field: var(--page-field);
+  --plot-field-foreground: var(--page-field-foreground);
+  --plot-field-muted-foreground: var(--page-field-muted-foreground);
+  --plot-destructive-text: var(--page-destructive-text);
+  --plot-success-text: var(--page-success-text);
+  --plot-warning-text: var(--page-warning-text);
+  --plot-info-text: var(--page-info-text);
+  --plot-ring: var(--page-ring);
+  /* **The one value that differs, and the whole reason L4-1 exists.**
+     `--warning` (near-critical) against `--destructive` (critical) measured
+     **1.34:1** — the two states a planner scans a wall of bars to tell apart,
+     differing by less than the amount at which a difference reads as
+     intentional. Not a WCAG failure: `paint.ts` gives criticality a SHAPE cue
+     (solid outline critical, dashed near-critical), so colour was never the
+     only channel. A design-quality failure on the primary surface of a
+     scheduling product, which is reason enough.
+
+     Critical darkens 0.505 -> 0.46 and its chroma eases 0.19 -> 0.175, giving
+     **1.61:1**. Near-critical does NOT move: lightening it to 0.58 was the
+     first candidate and it takes white-on-warning to 4.26:1, below the 4.5 its
+     own label pair needs — one defect traded for another.
+
+     The chroma easing is not cosmetic. `oklch(0.46 0.19 27.5)` is OUT of the
+     sRGB gamut (green channel -0.0014), so a browser would clamp it and the
+     ratio asserted in `token-contrast.test.ts` would be one the screen never
+     produces. Measured, not assumed: the search that proposed it had a slack
+     gamut tolerance and its answer looked fine.
+
+     **1.70:1 is the ceiling**, established by maximising the worst pair over
+     all three inks subject to a white inside-label at 4.5:1 and every bar at
+     3:1 on a near-white ground. So a 1.5 floor is reachable and 3:1 is not,
+     without changing the label ink or the hues. Recorded so nobody spends a
+     day chasing it. */
+  --plot-destructive: oklch(0.46 0.175 27.5);
+  --plot-destructive-foreground: var(--page-destructive-foreground);
+  --plot-destructive-hover: var(--page-destructive-hover);
+  --plot-secondary: var(--page-secondary);
+  --plot-secondary-foreground: var(--page-secondary-foreground);
+  --plot-success: var(--page-success);
+  --plot-success-foreground: var(--page-success-foreground);
+  --plot-warning: var(--page-warning);
+  --plot-warning-foreground: var(--page-warning-foreground);
+  --plot-info: var(--page-info);
+  --plot-info-foreground: var(--page-info-foreground);
+  --plot-primary-hover: var(--page-primary-hover);
+  --plot-secondary-hover: var(--page-secondary-hover);
+
   /* The unqualified names, aliasing the family above. */
   --background: var(--page-background);
   --foreground: var(--page-foreground);
@@ -826,40 +913,40 @@
      container's `bg-background` inside the scope identical to the `bg-canvas`
      it replaces. Measured 1.02:1 against the page today, i.e. two greys nobody
      can tell apart, which is exactly why the trap has never shown. */
-  --background: var(--canvas);
-  --foreground: var(--page-foreground);
-  --muted: var(--page-muted);
-  --muted-foreground: var(--page-muted-foreground);
-  --border: var(--page-border);
-  --input: var(--page-input);
-  --accent: var(--page-accent);
-  --accent-foreground: var(--page-accent-foreground);
-  --primary: var(--page-primary);
-  --primary-foreground: var(--page-primary-foreground);
-  --field: var(--page-field);
-  --field-foreground: var(--page-field-foreground);
-  --field-muted-foreground: var(--page-field-muted-foreground);
-  --destructive-text: var(--page-destructive-text);
-  --success-text: var(--page-success-text);
-  --warning-text: var(--page-warning-text);
-  --info-text: var(--page-info-text);
-  --ring: var(--page-ring);
+  --background: var(--plot-background);
+  --foreground: var(--plot-foreground);
+  --muted: var(--plot-muted);
+  --muted-foreground: var(--plot-muted-foreground);
+  --border: var(--plot-border);
+  --input: var(--plot-input);
+  --accent: var(--plot-accent);
+  --accent-foreground: var(--plot-accent-foreground);
+  --primary: var(--plot-primary);
+  --primary-foreground: var(--plot-primary-foreground);
+  --field: var(--plot-field);
+  --field-foreground: var(--plot-field-foreground);
+  --field-muted-foreground: var(--plot-field-muted-foreground);
+  --destructive-text: var(--plot-destructive-text);
+  --success-text: var(--plot-success-text);
+  --warning-text: var(--plot-warning-text);
+  --info-text: var(--plot-info-text);
+  --ring: var(--plot-ring);
   /* The closure members. Not optional for this scope and the argument is not
      "a status fill never appears on a diagram" — the dock, the create popover
      and the selection bar are DOM inside this container. */
-  --destructive: var(--page-destructive);
-  --destructive-foreground: var(--page-destructive-foreground);
-  --destructive-hover: var(--page-destructive-hover);
-  --secondary: var(--page-secondary);
-  --secondary-foreground: var(--page-secondary-foreground);
-  --success: var(--page-success);
-  --success-foreground: var(--page-success-foreground);
-  --warning: var(--page-warning);
-  --warning-foreground: var(--page-warning-foreground);
-  --info: var(--page-info);
-  --info-foreground: var(--page-info-foreground);
-  --primary-hover: var(--page-primary-hover);
-  --secondary-hover: var(--page-secondary-hover);
+  --destructive: var(--plot-destructive);
+  --destructive-foreground: var(--plot-destructive-foreground);
+  --destructive-hover: var(--plot-destructive-hover);
+  --secondary: var(--plot-secondary);
+  --secondary-foreground: var(--plot-secondary-foreground);
+  --success: var(--plot-success);
+  --success-foreground: var(--plot-success-foreground);
+  --warning: var(--plot-warning);
+  --warning-foreground: var(--plot-warning-foreground);
+  --info: var(--plot-info);
+  --info-foreground: var(--plot-info-foreground);
+  --primary-hover: var(--plot-primary-hover);
+  --secondary-hover: var(--plot-secondary-hover);
 }
 
 /* ------------------------------------------------------------------------- */

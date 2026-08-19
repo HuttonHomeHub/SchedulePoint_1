@@ -170,6 +170,58 @@ const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: st
   ['--accent', '--warning-text', 'a constraint badge on the selected row'],
 ];
 
+/**
+ * **The criticality separation, ASSERTED rather than reported** (ADR-0097 Landing E, L4-1).
+ *
+ * These three fills are the diagram's whole vocabulary for how urgent a bar is, and they were
+ * separated by **hue alone**: near-critical against critical measured **1.34:1**, which is below
+ * the amount at which a difference reads as intentional. A planner scanning a wall of bars
+ * recovered the distinction by inspecting a stroke rather than by looking.
+ *
+ * **It is not a WCAG failure and this file does not pretend otherwise.** `paint.ts:450-451` gives
+ * criticality a SHAPE cue — a solid outline for critical, dashed for near-critical, none otherwise
+ * — so colour was never the only channel (1.4.1 is satisfied), and the print path carries the same
+ * outline. It is a design-quality failure on the primary surface of a scheduling product, which is
+ * reason enough on its own. `diagnosis.md` §3.3 records an earlier draft of this argument being
+ * overstated and corrected; the weaker claim is the true one.
+ *
+ * **The floor is 1.5 and the ceiling is 1.70**, the latter established by maximising the worst pair
+ * over all three inks subject to a white inside-label at 4.5:1 and every bar at 3:1 on a near-white
+ * ground. So 3:1 between fills is not reachable without changing the label ink or the hues, and the
+ * floor is set where it can actually be held rather than where it would look best in a document —
+ * the ADR-0058 rule that a gate failing on day one gets deleted rather than fixed.
+ *
+ * Only the `canvas` scope is swept: these names mean "ordinary / near-critical / critical activity"
+ * there and "primary button / warning / destructive" everywhere else, which is exactly the
+ * distinction the scope exists to make (`diagnosis.md` §3.2).
+ */
+const CRITICALITY_PAIRS: ReadonlyArray<readonly [a: string, b: string, why: string]> = [
+  ['--primary', '--destructive', 'an ordinary bar against a critical one'],
+  ['--warning', '--destructive', 'a near-critical bar against a critical one'],
+  ['--primary', '--warning', 'an ordinary bar against a near-critical one'],
+];
+
+describe('the diagram tells its three criticality states apart', () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+
+  it.each(CRITICALITY_PAIRS)('%s vs %s — %s — differs by ≥ 1.5:1', (a, b, _why) => {
+    const value = ratio(tokens, a, b);
+    expect(
+      value,
+      `${a} vs ${b} is ${fmtRatio(value)}, needs 1.5:1 (ceiling is 1.70:1)`,
+    ).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it('keeps each of the three perceivable against the ground it is painted on', () => {
+    // The pair that had NO entry in this matrix at all before Landing E: every diagram ink was
+    // validated against `--background` at `:root` while being painted on `--canvas`.
+    for (const ink of ['--primary', '--warning', '--destructive']) {
+      const value = ratio(tokens, '--background', ink);
+      expect(value, `${ink} on the diagram ground is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
 describe.each(THEME_SELECTORS)('%s', (theme) => {
   describe.each(SCOPES)('%s surface', (scope) => {
     const tokens = resolve(theme, scope);

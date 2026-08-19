@@ -81,6 +81,7 @@
     "@repo/seed": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.0",
+    "esbuild": "^0.28.1",
     "@testing-library/react": "^16.2.0",
     "@types/node": "^22.10.7",
     "@types/react": "^19.2.18",
