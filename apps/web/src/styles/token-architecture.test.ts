@@ -320,24 +320,43 @@ describe('weight is a governed axis', () => {
   });
 
   /**
-   * **A ratchet at the measured floor of 186** (84 files), set the day weight got a vocabulary.
+   * **A ratchet on the weights placed BY SCREENS, at the measured floor of 165.**
    *
-   * It is not debt in the way the sizing ratchet's remainder is: a weight utility is often the
-   * right thing to write. What the number guards is DRIFT — 186 independent judgements about
-   * rank, made one at a time, with nothing saying which rank a section heading should have. It
-   * comes down as the archetypes absorb those judgements into components that decide rank once.
+   * It counted every site and was set at 186 — and then failed on the six page archetypes, which
+   * is the gate working and the number measuring the wrong thing. A primitive placing a weight is
+   * the design system doing its job: `PageHeader` decides what a page title weighs, once, for
+   * every screen. A route placing one is the judgement that archetype exists to absorb.
    *
-   * Lower it when it drops. Raising it means a component made a rank decision by hand that an
-   * archetype should have made for it.
+   * So the ceiling covers `src/` **outside `components/ui/`**, which is where drift lives: 165
+   * independent decisions about rank, made one at a time, with nothing saying which rank a section
+   * heading should have. It comes down as screens adopt the archetypes (Landings B and F).
+   *
+   * Narrowed rather than raised. Raising it to accommodate the fix would have made the number mean
+   * "how much weight is in the tree", which nobody needs to know; this way it means "how many
+   * screens are still deciding for themselves", which is the thing the epic is changing.
    */
-  const WEIGHT_SITE_CEILING = 186;
+  const SCREEN_WEIGHT_CEILING = 165;
 
-  it(`uses no more than ${WEIGHT_SITE_CEILING} hand-placed weight utilities`, () => {
-    const sites = weightSites();
+  it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
+    const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));
     expect(
       sites.length,
-      `hand-placed weight utilities rose to ${sites.length} (ceiling ${WEIGHT_SITE_CEILING})`,
-    ).toBeLessThanOrEqual(WEIGHT_SITE_CEILING);
+      `screens placing their own weight rose to ${sites.length} (ceiling ${SCREEN_WEIGHT_CEILING})`,
+    ).toBeLessThanOrEqual(SCREEN_WEIGHT_CEILING);
+  });
+
+  /**
+   * The other half. The primitives may decide weight — that is the point — but not without limit:
+   * a design system in which every component picks its own is the same disorder one directory in.
+   * Set at the measured 24, which includes the six archetypes. It was 23 on the first count —
+   * that one globbed only `.tsx` and missed `toolbar/toolbar-styles.ts`, which is exactly the kind
+   * of quiet undercount a ratchet is supposed to make visible rather than inherit.
+   */
+  it('no more than 24 weights placed inside the primitives', () => {
+    const sites = weightSites().filter((site) => site.startsWith('components/ui/'));
+    expect(sites.length, `primitives placing weight rose to ${sites.length}`).toBeLessThanOrEqual(
+      24,
+    );
   });
 });
 
