@@ -22,6 +22,7 @@ import {
 } from '../schemas/calendar-schemas';
 
 import { CalendarFormDialog } from './CalendarFormDialog';
+import { CalendarRowMenu } from './CalendarRowMenu';
 import { CalendarScopeBadge } from './CalendarScopeBadge';
 
 import { useAnnounce } from '@/components/ui/announcer';
@@ -228,17 +229,20 @@ export function CalendarsTable({
     cellClassName: 'py-2 text-right whitespace-nowrap',
     cell: (calendar) =>
       canWrite ? (
-        <div className="flex justify-end gap-2">
-          {calendar.scope === 'PROJECT' && canManageOrg ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => scopeMove.startMove(calendar, 'ORG')}
-              aria-label={`Move to organisation: ${calendar.name}`}
-            >
-              Move to organisation
-            </Button>
-          ) : null}
+        /* **The primary action stays visible; the rest move behind a `⋯`** (ADR-0097 Landing F1).
+           This row carried up to five text buttons — Move to organisation / Edit / Archive /
+           Unarchive / Delete — and the count is the defect rather than the markup: `Edit` is what a
+           planner does here almost every time, and it competed with four rarer neighbours for the
+           eye and for the column's width.
+
+           **It is NOT "put the row's actions in a menu".** `docs/UX_STANDARDS.md` "Row / node
+           actions" is about **dense list and tree rows**, whose problem is that they have nowhere
+           to show actions at all; this table has a visible actions column and its own comment
+           already cited that standard as satisfied. Burying `Edit` behind a click to tidy the rare
+           ones would trade the frequent interaction for the infrequent — so the shape is the canvas
+           selection bar's instead: the primary in the open, the secondary one press away, and every
+           shaded item keeping its reason (ADR-0082). */
+        <div className="flex items-center justify-end gap-1">
           <Button
             variant="ghost"
             size="sm"
@@ -247,27 +251,17 @@ export function CalendarsTable({
           >
             Edit
           </Button>
-          {/* Always-visible row actions (never hover-only, docs/UX_STANDARDS.md "Row / node
-              actions"), matching the Edit/Delete idiom this table already uses. */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => toggleArchived(calendar)}
-            aria-label={`${isArchivedRow(calendar) ? 'Unarchive' : 'Archive'} ${calendar.name}`}
-          >
-            {isArchivedRow(calendar) ? 'Unarchive' : 'Archive'}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
+          <CalendarRowMenu
+            calendar={calendar}
+            canManageOrg={canManageOrg}
+            archived={isArchivedRow(calendar)}
+            onMoveToOrg={() => scopeMove.startMove(calendar, 'ORG')}
+            onToggleArchived={() => toggleArchived(calendar)}
+            onDelete={() => {
               setDeleteError(null);
               setDeleting(calendar);
             }}
-            aria-label={`Delete ${calendar.name}`}
-          >
-            Delete
-          </Button>
+          />
         </div>
       ) : (
         <div className="flex justify-end">
