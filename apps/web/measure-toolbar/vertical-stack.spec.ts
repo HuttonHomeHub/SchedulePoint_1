@@ -284,13 +284,17 @@ test('M4-T1 — the vertical stack on a populated plan, pen held', async ({ page
   await page.getByRole('dialog').getByRole('button', { name: 'Create project' }).click();
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('button', { name: 'New plan' }).click();
-  await page.getByRole('dialog').getByLabel('Name').fill('Logic');
+  // A realistic plan name. It was `Logic` — five characters, a 37 px breadcrumb crumb against
+  // 227 px for an ordinary construction plan name. That 190 px reversed the Landing C verdict from
+  // PROCEED to WITHDRAWN (`m0-menu-band-measurement.md`): a harness that measures the one term a
+  // documented risk is about, at that term's most favourable value, answers a question nobody asked.
+  await page.getByRole('dialog').getByLabel('Name').fill('Riverside — Phase 2 Substructure');
   await page
     .getByRole('dialog')
     .getByLabel(/Planned start/)
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
-  await page.getByRole('link', { name: 'Logic' }).click();
+  await page.getByRole('link', { name: 'Riverside — Phase 2 Substructure' }).click();
   await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Start editing' }).click();
