@@ -375,8 +375,13 @@ describe('the typeface is chosen, shipped, and legible in a table', () => {
     // that aligns a column reads as gappy in a sentence. A `body { font-variant-numeric }`
     // would pass the assertion above and be the wrong answer.
     const base = blockBody('@layer base');
-    const body = /body\s*\{([^}]*)\}/.exec(base)?.[1] ?? '';
-    expect(body).not.toMatch(/font-variant-numeric/);
+    const match = /body\s*\{([^}]*)\}/.exec(base);
+    // **Throw rather than default to `''`.** This read used `?? ''`, and an empty string passes
+    // `not.toMatch` vacuously — so a reformat of `@layer base` (a `body, .foo {` selector, a
+    // restructured block) would have turned this gate green while proving nothing. That is the
+    // ADR-0093 shape: a gate that passes equally when the thing it checks has vanished.
+    if (!match) throw new Error('no `body { … }` block in @layer base — this gate cannot run');
+    expect(match[1]).not.toMatch(/font-variant-numeric/);
   });
 });
 

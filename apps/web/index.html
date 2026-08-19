@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
+    <!-- ONE theme (ADR-0097), so this declares one scheme. It said `light dark` until the
+         single-theme collapse, and that was a real defect rather than a stale word: the value
+         tells the browser which schemes the page supports, so an OS-dark visitor got dark
+         NATIVE chrome — scrollbars, `<select>` popups, checkbox and radio skins, the mobile
+         status-bar tint — composited over a page that is now light-only. Nothing in the app's
+         own tokens could have corrected it, and no contrast gate can see a scrollbar. -->
+    <meta name="color-scheme" content="light" />
     <title>SchedulePoint</title>
     <!--
       A served SVG, not a `data:` URI: ADR-0074's CSP is `img-src 'self' blob:` with no `data:`, so
