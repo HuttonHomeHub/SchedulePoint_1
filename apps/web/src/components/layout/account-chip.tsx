@@ -18,19 +18,22 @@ function initialsOf(name: string | undefined, email: string | undefined): string
 }
 
 /**
- * The **account chip**: an initials avatar that opens a menu holding the theme choice, the
- * signed-in identity and Sign out.
+ * The **account chip**: an initials avatar that opens a menu holding the signed-in identity, the
+ * account screen, keyboard shortcuts and Sign out.
  *
  * It replaces three separate header controls — a theme-cycling icon button, an always-visible
- * email `<span>`, and an `outline` Sign-out button. Two of the six Corporate contrast defects are
- * fixed here by **deletion**: the email that was 2.8:1 on navy and the outline button that was
- * 1.01:1 no longer exist as header elements. What replaces them lives in a portalled
- * {@link Menu}, which renders outside every surface scope and therefore paints on `--popover` —
- * the page's own, already-validated pairing.
+ * email `<span>`, and an `outline` Sign-out button. Two of the six contrast defects that theme
+ * shipped with are fixed here by **deletion**: the email that was 2.8:1 on navy and the outline
+ * button that was 1.01:1 no longer exist as header elements. What replaces them lives in a
+ * portalled {@link Menu}, which renders outside every surface scope and therefore paints on
+ * `--popover` — the page's own, already-validated pairing.
  *
- * The theme control becomes a radio group inside the menu instead of a cycling button. A cycle
- * gives no indication of what the other options are and forces a blind press to discover them;
- * with four themes that is a genuinely poor control.
+ * **There is no theme control, and this docblock said there was until 2026-08-19.** It described a
+ * radio group of four themes, with a paragraph arguing why a radio group beats a cycling button —
+ * for a control ADR-0097 removed when the product collapsed to one theme. The file had zero
+ * references to `useTheme`, `setTheme` or `THEMES` at the time; only the comment still believed in
+ * it. The argument it made was right and is kept in `ADR-0097` rather than here, because it is the
+ * reason a future theme picker should not be a cycle either.
  */
 export function AccountChip({ className }: { className?: string }): React.ReactElement {
   const { data: session } = useSession();
@@ -85,9 +88,10 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
             {email}
           </p>
         ) : null}
-        {/* Directly above My activity, and above the theme group: both are the reader's own,
-            and this menu is already the account's — there is nowhere else the account screen
-            could live without inventing a settings IA the product does not have. ADR-0074 M3. */}
+        {/* Directly above My activity: both are the reader's own, and this menu is already the
+            account's — there is nowhere else the account screen could live without inventing a
+            settings IA the product does not have. ADR-0074 M3. ("and above the theme group" until
+            2026-08-19, naming a group ADR-0097 had removed.) */}
         {ACCOUNT_SETTINGS_ENABLED ? (
           <MenuItem
             onSelect={() => {
