@@ -525,11 +525,27 @@ actions column does not have.
 So there is no standards violation to fix, and converting ten tables on the strength of one would
 have been a large interaction change justified by a misreading.
 
-**What IS real is narrower and worth doing.** Counted rather than asserted, two tables carry
-**seven** small buttons in their action column — `CalendarsTable` (View / Edit / Archive /
-Unarchive / Move to organisation / Delete, role-dependent) and `ResourcesTable` — while the other
-six carry two. Five text buttons on a row is not a standards defect; it is a row whose **primary**
-action competes with four secondary ones for the reader's eye and for horizontal space.
+**What IS real is narrower still, and the count was wrong the first time.** This paragraph said
+"two tables carry **seven** small buttons — `CalendarsTable` and `ResourcesTable`". That figure came
+from counting `size="sm"` occurrences per file, which sweeps in the filter row and the empty state's
+"Clear filters" button. It is a proxy for the thing, not the thing, and it is the same mistake the
+select half made one section earlier — counting call sites instead of counting candidates.
+
+Re-counted by **subject-labelled row actions** (`aria-label={\`Edit ${name}\`}` and its siblings),
+which is what a row actually offers:
+
+| table                     | actions a WRITER sees at once                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| `CalendarsTable` (before) | **4–5** — Edit, Archive/Unarchive, Delete, and Move to organisation on a project row |
+| `ResourcesTable`          | **3** — Edit, Archive/Unarchive, Delete                                              |
+| the other six             | **1–2**                                                                              |
+
+So **`CalendarsTable` was the only crowded row**, and the exemplar is the whole job rather than the
+first of two. `ResourcesTable` keeps its three: three is not a crowd, all three are ordinary, and
+putting them behind a trigger would be exactly the "bury the frequent to tidy the rare" trade this
+section rejects two paragraphs down. Five text buttons on a row is not a standards defect; it is a
+row whose **primary** action competes with four secondary ones for the reader's eye and for
+horizontal space — and only one row had four.
 
 **The treatment therefore is not "put the actions in a menu".** Burying `Edit` — the common case —
 behind a click to tidy the rare ones trades the frequent interaction for the infrequent. The
@@ -537,9 +553,10 @@ defensible shape is the one the canvas selection bar already uses: **the primary
 visible, the secondary ones move behind a `⋯`**, with ADR-0082 reason wiring so a shaded item keeps
 its explanation.
 
-**That is a design decision across ~2 screens, not a mechanical conversion across ~10**, and it
-should be built once as an exemplar and reviewed before it is rolled out — which is what the rest of
-this document says about every other conversion and is the reason the count mattered.
+**That is a design decision on ONE screen, not a mechanical conversion across ~10** — and the
+journey from "ten" to "two" to "one" is the reason the count mattered at each step. It is built as
+`CalendarsTable`'s exemplar and stands as the pattern for the next row that grows a fourth action,
+rather than as the first of a rollout that has nothing left to roll out to.
 
 ### 2. What a hand-rolled combobox costs on a coarse pointer — NOT decided, and it gates the rest
 
