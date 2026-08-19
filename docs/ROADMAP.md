@@ -210,6 +210,30 @@ keep `main` releasable.
   conflict-flavoured twin would be ADR-0093's defect reproduced inside one surface. The flag-on
   journey caught the epic's purpose inverting on its first run — the count's own read-out cannot
   demote, so it pushed the command it labels off the row in the only state the epic exists for.
+- **The design system is a system rather than a palette** (ADR-0097). The product owner called the
+  Corporate skin "a badly designed skin" and asked for it to become the theme the app is designed to,
+  then widened the mandate until it was a ground-up rewrite. Reading the code turned the adjective
+  into a work item: **a theme here could structurally express nothing but colour** — all 117 of that
+  skin's declarations were colours, `.dark` and `.corporate` declared **zero** non-colour tokens, and
+  `--radius` was declared once at `:root`. So "designed" could only ever have meant "recoloured".
+  Shipped as one theme (a flash of the wrong one is now structurally impossible — every stored
+  preference resolves to "stamp nothing"), a **computed** token closure instead of a hand-written
+  list that had failed once per discovery, a typeface the product had never actually chosen, six
+  page archetypes, and **the diagram brought inside the design system** — until then
+  `render/palette.ts` made 86 token reads against the page while painting on a ground that is not the
+  page, and the contrast matrix had no canvas pair at all. Its three criticality states were
+  separated by hue alone at **1.34:1**; they are now 1.61:1 and asserted rather than eyeballed.
+  **Two of the epic's own proposals were disproved by the instruments it insisted on** — the
+  command-surface reshape on the falsification condition its spec set in advance, and the header band
+  merge on a browser, when the flag-on journey found the diagram/Gantt view switch buried in an
+  overflow menu. The docked activity editor is deferred to its own epic.
+- **The landing is the organisation overview** (ADR-0098). `/orgs/:slug` is where every sign-in
+  lands, and it showed a centred card telling the reader to select a plan from the rail one column
+  away. It now answers what a planner arrives with: what changed recently, what needs attention, and
+  where they were. Recently-changed is ordered by the newest of the plan, its activities and its
+  dependencies — not `plans.updated_at`, which does not move when an activity is edited, so the
+  naive ordering ranks a plan somebody worked in all morning below one whose name was corrected last
+  week **and every row still looks correct**.
 - **Deleted work expires, and purge is refused structurally** (ADR-0096). The recycle
   bin was reported as hard to browse, with an unhelpful "Restore its parent first" and a duplicated
   heading — and reading the code changed two of the three answers. Deleting stamps a whole subtree
