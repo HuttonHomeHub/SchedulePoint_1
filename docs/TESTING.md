@@ -276,20 +276,21 @@ pnpm --filter @repo/web test:watch   # web unit tests in watch mode
 cheaper than the one after it and than the CI round-trip it replaces, so a
 failure should surface at the earliest step that can see it.
 
-| #   | Run                                                         | When                                                                                    |
-| --- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| 1   | `pnpm lint && pnpm typecheck`                               | always                                                                                  |
-| 2   | `pnpm test`                                                 | always                                                                                  |
-| 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                  |
-| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives    |
-| 4a  | `scripts/e2e-local.sh web`                                  | you changed a **screen** — its markup, its copy, or an accessible name                  |
-| 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite))    |
-| 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                          |
-| 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile              |
-| 7   | `pnpm check:counts`                                         | you added an ADR, module, model, migration, Playwright suite or web source file         |
-| 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call` |
-| 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                |
-| 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**          |
+| #   | Run                                                         | When                                                                                              |
+| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1   | `pnpm lint && pnpm typecheck`                               | always                                                                                            |
+| 2   | `pnpm test`                                                 | always                                                                                            |
+| 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                            |
+| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives              |
+| 4a  | `scripts/e2e-local.sh web`                                  | you changed a **screen** — its markup, its copy, or an accessible name                            |
+| 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite))              |
+| 4c  | `scripts/e2e-sweep.sh`                                      | you replaced a **screen every journey signs in through**, or moved a control every journey clicks |
+| 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                                    |
+| 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile                        |
+| 7   | `pnpm check:counts`                                         | you added an ADR, module, model, migration, Playwright suite or web source file                   |
+| 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call`           |
+| 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                          |
+| 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**                    |
 
 **Step 4a is not covered by step 4**, and the difference cost a CI round on 2026-08-18. Every `web:`
 target maps to `test:e2e:<suite>`; the base journey is `test:e2e` with no suffix, so until that day
@@ -297,6 +298,26 @@ target maps to `test:e2e:<suite>`; the base journey is `test:e2e` with no suffix
 and `e2e/recently-deleted.spec.ts` reached CI still asserting a screen ADR-0096 had replaced. A
 sweep for the changed _label_ found nothing; the changed _screen_ had a journey of its own that
 nobody could run. Change a screen, run the base journey.
+
+**Step 4c — when the change is under every journey, sweep every journey.** `scripts/e2e-sweep.sh`
+runs all thirty-three flag-on suites in series, each against its own freshly-started servers.
+Restarting between suites is load-bearing rather than tidy: the `VITE_` flags bake at `webServer`
+start and `reuseExistingServer` is true outside CI, so a suite that inherits the previous one's
+servers silently runs against the previous one's configuration.
+
+**It is not a per-change step** — thirty-three suites is about forty minutes. Its trigger is a change
+every journey passes through, and its first two runs say why:
+
+- ADR-0098 replaced the landing every journey signs in through. A `grep` for the deleted heading
+  across `src/` and `e2e/` found and fixed two specs; the sweep found a **third**, in `e2e-edit/`,
+  which the grep had missed because it was scoped to the directories I happened to think of. **A
+  search is scoped by what you remember; a sweep is scoped by nothing.**
+- ADR-0097 collapsed the product to a single theme, and `e2e-public` was still sweeping three —
+  twelve failures, every `dark` and `corporate` case, every `light` case green. That one is the
+  sharper lesson: three passes over one theme would have read as three worlds covered while covering
+  one, and the only thing that stopped it was `expectTheme`, written for exactly that reason. **A
+  sweep finds the suites that are wrong about a change they were never about**, and neither of these
+  two is named for what changed.
 
 It has now happened twice, and the second time the rule worked: ADR-0098 replaced the organisation
 landing, and `e2e/auth.spec.ts` and `e2e/members.spec.ts` were both still asserting
