@@ -258,3 +258,93 @@ building means rebuilding.
 **D6 — Two-tone warm.** Split the warm family so critical/today/conflict and
 near-critical/over-allocation/lane-overlap read differently, or keep one warm hue carrying
 six meanings separated by shape alone at badge size.
+
+---
+
+## F. Decisions — RESOLVED 2026-08-19
+
+Product owner: _"Go with your recommendations. Also alter anything layout wise if it doesn't
+work, such as where the float path and the right toolbar are. If it's not working, alter it
+rather than work around stuff. You have approval to change layout if agents agree."_
+
+### F0 — LAYOUT CHANGED: rail moves to the LEADING edge, drawer to the TRAILING edge
+
+**The arrangement we picked does not deliver the thing it was picked for.** The rail went
+right so the Gantt's activity grid could start at the leading edge like P6 — but the drawer
+stayed left, so the grid does not reach the leading edge. It reaches 224–420 px in, behind a
+properties panel. The stated goal was unmet by construction and nobody spotted it, including
+me, until the reviews forced the layout to be reasoned about as a whole.
+
+Three independent blocking findings all resolve by swapping the two:
+
+| Finding                   | Cause                                                                                             | Resolved by rail-left                                                 |
+| ------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Accessibility A12         | Rail is Tab-order-last, after the toolbar, ~15 drawer fields and a `treegrid` of hundreds of rows | Rail is the first stop after the skip link                            |
+| Accessibility A13         | At 200–400 % a magnifier user viewing the grid (left) cannot see the armed tool (right)           | Tools and grid share the leading edge                                 |
+| UX B6 / architecture §3.6 | Rail + Notes + Float paths = three claimants on one edge                                          | Notes and Float paths fold into the drawer; **one** trailing occupant |
+
+**Final layout:**
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  TOOLBAR — spans stage + drawer, fixed (col 1/3, row 1)       │
+├────┬────────────────────────────────────┬────────────────────┤
+│RAIL│  STAGE                              │  DRAWER            │
+│ 46 │  Gantt: grid │ splitter │ chart     │  224–420, resizable│
+│ px │  Diagram: WBS band + plot           │  (trailing)        │
+├────┴────────────────────────────────────┴────────────────────┤
+│  STATUS BAR                                                   │
+└──────────────────────────────────────────────────────────────┘
+```
+
+The Gantt grid now starts **46 px** from the leading edge instead of 224–420 px behind a
+panel — which is as close to the original request as any arrangement gets while the product
+has a tool rail at all. This is also the Figma / Illustrator / Sketch arrangement: tools
+lead, inspector trails.
+
+**Cost, stated:** 46 px of leading edge. Accepted.
+
+### F1 — Drawer: resizable 224–420, default 300
+
+Horizontal tab strip, never ADR-0061's vertical rail (which is 208 px on its own). Logic,
+Resources and Cost move in with Details and Progress — **all five subjects in the drawer** —
+because the resizable upper bound makes it viable and leaving three in dialogs would keep the
+modal this epic exists to retire. `FieldGrid` pairs stack below ~384 px: accepted and stated.
+
+### F2 — Criticality survives WBS colouring as an OUTLINE
+
+When bar fill is driven by WBS, the critical path is drawn as a **2 px outline in the
+critical hue plus the existing solid/dashed outline cue**, over any fill. Chosen over end
+caps (too small at Week zoom), hatch (already the non-working channel) and weight (already
+the driving-link channel). It satisfies SC 1.4.1 on its own, since it is a shape, and it is
+the one channel `paint.ts` has spare. Colour-by is a **mode** — Criticality (default) / WBS /
+Activity code / Float / Resource — extending the existing opt-in float lens rather than
+inventing a mechanism.
+
+### F3 — Float paths becomes a drawer subject
+
+Sixth panel switch beside Explorer, Properties, Resources, Comments, Baselines. It stops
+being a dock, which is what makes the trailing edge single-occupant.
+
+### F4 — Chrome's accent is AZURE; the amber rule is superseded
+
+ADR-0099 D6 wins over `DESIGN_SYSTEM.md`'s amber-on-chrome rule, because the amber rule
+exists to solve a problem Graphite deletes: amber was chrome's primary _because_ the old
+navy chrome could not carry a legible blue. Graphite's chrome is graphite, azure clears
+6.33:1 on it, and one interactive colour across chrome, page and plot is worth more than
+continuity with a rule written for a surface that no longer exists. `DESIGN_SYSTEM.md`
+changes in the same commit. Amber survives as the brand mark and as `warning`.
+
+### F5 — Gantt split: ONE row spanning both panes
+
+CSS Grid, `grid-column` placement, DOM order matching visual order. Not two containers
+joined by `aria-owns` — that is a correspondence that can go stale, and a stale one is
+invisible until an AT user hits it. One virtualizer, one `role="row"`, one coordinate frame
+for the link overlay.
+
+### F6 — Warm splits two-tone
+
+Red-orange for _the schedule is in trouble_ (critical, today, conflict); amber for
+_resource/placement caution_ (near-critical, over-allocation, lane-overlap). Redundant on
+top of the shape cues, which stay load-bearing. Fixes the `today`/`conflict`/`critical`
+aliasing defect (A8) as a side effect rather than a separate patch.
