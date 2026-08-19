@@ -2646,3 +2646,32 @@ only thing standing between a planner and an unreachable undo) but to make the p
 robust: wait for the dialog's `close` event, or poll until `document.activeElement` is not `<body>`,
 rather than betting on frame ordering. Until then this costs triage time on every sweep, which is
 how a suite ends up being ignored.
+
+## 145. A hand-rolled `Combobox` takes the platform picker away on touch, and nobody has measured what that costs
+
+**Raised 2026-08-19**, blocking the last two conversions of ADR-0097 Landing F1.
+
+A native `<select>` gets the platform's own picker — the iOS wheel, the Android sheet. It is the
+single best mobile control in the product and it is free. `components/ui/combobox.tsx` gets an
+in-flow listbox competing with a virtual keyboard, and it is what F1's discriminator sends an
+unbounded option set to.
+
+**Two conversions are held on this and only on this.** `ActivityBreakdownField` (a plan's WBS
+summaries) and `WbsBulkAssignBar` (the same set, from the bulk bar) both clear the rule — a plan's
+summaries are bounded by nothing — and both live in the **activity editor**, which is reachable on a
+tablet. The cross-plan Activity picker was converted because that dialog is a desktop workspace
+flow; that is the whole of the distinction.
+
+**Why it is filed rather than judged.** The failure is silent: a converted picker looks correct on
+every desktop, and the only person who meets the worse control is on a device nobody tested. This is
+`#133` one surface along — that row records that **no toolbar measurement in this repository has
+ever been taken with a coarse pointer** because Playwright defaults to a fine one — but #133 is
+about control _sizing_ in the toolbar, and this is about whether a _whole control type_ is the right
+choice on touch. Different question, same blind spot.
+
+**What would settle it.** A coarse-pointer run of the activity editor with both controls
+(`hasTouch` + `pointer: coarse`, the shape `item-widths` used for #133), read by
+`accessibility-reviewer` and `ux-reviewer` **before** either conversion — `migration.md` F1 names
+that ordering and the reason for it. If the answer is that the combobox is worse on touch, the rule
+gains a clause rather than an exception: a searchable picker on a surface a touch user reaches needs
+a touch-appropriate presentation, not a desktop listbox.
