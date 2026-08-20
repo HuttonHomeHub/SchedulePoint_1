@@ -1022,26 +1022,33 @@ dangling.
 
 One line each. The story lives where the link points, not here.
 
-| #   | What it was                                                     | Closed     | Where the record is                                                                              |
-| --- | --------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
-| 29  | Released images not pulled — "shipped but not live"             | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                |
-| 59  | The device-authoritative draw measurement was never made        | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                         |
-| 77  | The demo Unit 300 file was a lossy rendering of the fixture     | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                               |
-| 78  | Public activity/dependency API was day-denominated              | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                     |
-| 79  | A window-only calendar was rejected by the API                  | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                       |
-| 80  | Intraday shift patterns had no write path                       | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                           |
-| 82  | Shift-editor epic — the non-blocking half of five gates         | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                         |
-| 87  | Import rejected a file with two activities of the same name     | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                         |
-| 90  | `idx_audit_events_actor_occurred` was never measured            | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                   |
-| 91  | A failed sign-in was recorded and readable by nobody            | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                   |
-| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)            | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites. |
-| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                   |
-| 94  | A verification email that never sends is invisible to everyone  | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                     |
-| 111 | The row menu hid pen-gated actions instead of shading them      | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                    |
-| 83¹ | A typed duration overwritten by the calendar factor landing     | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                      |
-| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                     |
-| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                       | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                     |
-| 137 | The shortcuts sheet was inert while the Gantt was on screen     | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                         |
+| #   | What it was                                                             | Closed     | Where the record is                                                                              |
+| --- | ----------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
+| 29  | Released images not pulled — "shipped but not live"                     | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                |
+| 59  | The device-authoritative draw measurement was never made                | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                         |
+| 77  | The demo Unit 300 file was a lossy rendering of the fixture             | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                               |
+| 78  | Public activity/dependency API was day-denominated                      | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                     |
+| 79  | A window-only calendar was rejected by the API                          | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                       |
+| 80  | Intraday shift patterns had no write path                               | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                           |
+| 82  | Shift-editor epic — the non-blocking half of five gates                 | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                         |
+| 87  | Import rejected a file with two activities of the same name             | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                         |
+| 90  | `idx_audit_events_actor_occurred` was never measured                    | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                   |
+| 91  | A failed sign-in was recorded and readable by nobody                    | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                   |
+| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                    | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites. |
+| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo         | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                   |
+| 94  | A verification email that never sends is invisible to everyone          | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                     |
+| 111 | The row menu hid pen-gated actions instead of shading them              | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                    |
+| 103 | ADR-0064's recalculation hold was not wired on the shipped host         | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                 |
+| 107 | ADR-0080 shipped without the specialist-agent review pass               | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                     |
+| 113 | Redo unavailable after undoing a band copy                              | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                        |
+| 119 | The API e2e suite "fails intermittently"                                | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                       |
+| 125 | `View ▾` held one toggle that ejects you from it                        | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                 |
+| 83¹ | A typed duration overwritten by the calendar factor landing             | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                      |
+| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns         | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                     |
+| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                               | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                     |
+| 137 | The shortcuts sheet was inert while the Gantt was on screen             | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                         |
+| 126 | The two segmented pairs had no icons, so they could not go icon-only    | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.              |
+| 129 | The 56 px app header row was the last recoverable band above the canvas | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.      |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
@@ -1367,45 +1374,6 @@ swapped, which is why it is written down rather than remembered.
 
 **Next free number: 103.**
 
-## 103. ADR-0064's recalculation hold is not wired on the surface it ships on **(CLOSED 2026-08-08)**
-
-**Status:** closed · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M5)
-
-**Closed by the debt-paydown programme M1-T1**, and it was worse than this row recorded. The task
-diffs both hosts' whole `TsldPanel` prop lists rather than fixing the two named here — and found a
-**third**: `onUndoLastEdit`. `CanvasModeBand.tsx:98` renders the link confirmation's Undo only
-`{confirmation && onUndo ? …}`, so on the shipped host that button had **never** appeared, including
-through the ADR-0064 §7 gate pass that found and fixed a defect in it. All three now match the
-legacy layout, pinned by an assertion in `plan-workspace-toolbar.test.tsx` verified red first.
-
-The lesson is the diff, not the props: when a host divergence turns up, compare the whole surface.
-A register row lists what somebody noticed.
-
-ADR-0064 T7 added **token-based recalculation holds** so the bars cannot move between a planner's two
-clicks during a link pick — the epic's own founding defect. The hold is real and its unit suite
-passes. It is passed into `TsldPanel` from **one** host:
-
-- `components/layout/workspace/plan-workspace.tsx:150-151` — `recalcHold={model.autoRecalcHold}` and
-  `dropLinkPickSignal={model.dropLinkPickSignal}`. This is the **ADR-0030 host**, reached only with
-  `VITE_CANVAS_TOOLBAR` **off**.
-- `components/layout/workspace/plan-workspace-toolbar.tsx` — passes **neither**. This is the default
-  surface (`VITE_CANVAS_TOOLBAR` has been default-on since ADR-0031's enablement).
-
-> _Both citations above are historical as of 2026-08-10._ ADR-0088 D3 retired `VITE_CANVAS_TOOLBAR`
-> and **deleted** the ADR-0030 host, so `plan-workspace.tsx` is now a 24-line re-export and the
-> toolbar host is the only one. The row is kept as written because it records how the defect was
-> found; what it describes as "the surface every planner actually uses" is now the only surface.
-
-So on the surface every planner actually uses, `recalcHold` is `undefined`, `TsldPanel`'s
-`recalcHoldRef.current?.hold(...)` is a no-op, and a two-click link pick takes no hold at all. The
-feature is not broken in the sense of throwing — it is inert, which is the shape ADR-0064 §7 itself
-names (lit-but-inert) and the reason that epic exists.
-
-Found while wiring M5's settle announcer through the same host, by reading which props each workspace
-supplies; **not** introduced by this epic, and deliberately not fixed inside it — the fix is one line
-per prop plus a test that the hold is actually taken on the default surface, and it belongs with
-somebody re-reading ADR-0064 T7's contract rather than bolted onto a feedback milestone.
-
 ## 104. Two live-region owners can collapse one recalculation into one sentence
 
 **Status:** open · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M5)
@@ -1477,40 +1445,6 @@ re-exported around it_ — is the thing the next step needs to follow.
 
 **Not urgent.** Nothing is broken: `render-model.ts` is 1,500 lines rather than 1,660 and every
 consumer is unchanged. This is the shape of the remaining work, written down while it is fresh.
-
-## #107 — ADR-0080 shipped without the specialist-agent review pass **(CLOSED same day)**
-
-**Closed 2026-08-08**: the pass ran once subagents were approved, and found five blocking defects
-plus one status-code mismatch — all folded with regression tests before the merge (ADR-0080 §9).
-The entry is kept rather than deleted, because the interesting part is not that the gap existed but
-what it would have cost: the pass caught a sentence asserting a gesture nobody wired, a button that
-disabled itself for the case its own dialog explains, and an `aria-activedescendant` naming a
-different row from the one `Enter` acted on. The original text follows.
-
----
-
-**Found:** 2026-08-08, closing the canvas multi-select epic (ADR-0080 M5).
-
-Every enablement milestone since ADR-0060 has run four to six specialist reviewers
-(`accessibility`, `ux`, `component`, `api`, `security`, `performance`) over the combined epic diff
-before the flag flip, and each one found blocking defects that had already passed a human read —
-ADR-0064 §7 records five, ADR-0067 M4 ten, ADR-0073 C4 six. **This epic did not run them**, because
-the session it was built in was instructed not to invoke subagents. That is a real gap, and it is
-recorded rather than glossed: the flip went ahead on the strength of the flag-on journey
-(`apps/web/e2e-multi-select/`), the flag-off parity suites, the counting-stub draw-budget gate and
-the full pre-push gate, all green.
-
-**What that does and does not cover.** The journey drives the whole gesture against a real API with
-the pen enforced, which is where the four defects §9 of the ADR records were found — so the
-"lit but inert / one host and not its neighbour" class was exercised. What no gate here covers is
-the reviewers' own lens: the accessibility pass over the bulk bar's shading and reason wiring beyond
-the `aria-describedby` link asserted in `BulkSelectionBar.test.tsx`, the UX pass over the two
-dialogs' copy and state coverage, and the component pass over `BulkSelectionBar` / `LinkChainDialog`
-as reusable surfaces.
-
-**The fix** is one review pass over the ADR-0080 diff (`10ceb5d..618563b` plus its predecessors) with
-those four reviewers, folding blocking findings as its own slice. Rollback is available meanwhile:
-`VITE_CANVAS_MULTI_SELECT=false` restores the singular selection byte-for-byte.
 
 ## #108 — The plural drag: model, command and endpoint landed; the gesture did not
 
@@ -1672,51 +1606,6 @@ Non-blocking findings from the six specialist reviews over the W5 diff, recorded
 
 **Risk:** low. None changes what the product does today; (1) is the only one a planner could meet,
 and only by activating twice inside one round trip.
-
----
-
-## 113. Redo is unavailable after undoing a band copy **(CLOSED 2026-08-08)**
-
-**Status:** open · **Owner:** api + web · **Raised:** 2026-08-08 (W5 M5, found by the flag-on journey)
-
-Undoing a **band** copy deletes the cloned summary and lets the ADR-0038 cascade take its subtree,
-because `bulkDelete` refuses any batch containing a `WBS_SUMMARY` by design (422
-`SUMMARY_NOT_BULK_ELIGIBLE`) — a bulk delete is always leaf-only, "which is what makes its undo
-honest". That is correct, and it works.
-
-**Redo does not.** A cascade delete does assign a `delete_batch_id` server-side, so the rows are
-restorable in principle — but `DELETE …/activities/:id` answers **204 with no body**, so the client
-never learns the id and has nothing to hand `restoreDeleteBatch`. The command therefore leaves its
-batch id null and `redo` is a no-op: the Redo affordance has nothing to offer, which is the honest
-shape and better than a call that would fail. A flat copy is unaffected — it still undoes and redoes
-through the batch as before.
-
-**The fix is small and it is on the API side:** return the `deleteBatchId` in the delete response
-(or a `204` → `200 { data: { deleteBatchId } }` change), and the existing client restore path works
-unchanged. It is out of scope for a frontend-only epic.
-
-**How it was found is the point.** The journey drove a real band copy against a real API with the
-pen enforced, pressed Ctrl+Z, and read the product's own words back: "Couldn't undo just now. Please
-try again." Every unit test passed throughout — a mocked delete accepts any batch, so nothing below
-the network could see the refusal. It is the ADR-0060 M6 rule in a new costume: the guard that
-matters is only testable against the thing that enforces it.
-
-**Risk:** low. The undo works; only the reversal of the undo is missing, and the planner can copy
-the band again.
-
-### Closed 2026-08-08 — the route returns the id
-
-`DELETE …/activities/:activityId` now answers **200 `{ deleteBatchId }`** instead of `204`. Nothing
-about the delete itself changed: the cascade already assigned that id, and the only defect was that
-the response threw it away. `pasteActivitiesCommand` keeps it and hands it to `restoreDeleteBatch`,
-so a band copy's undo is reversible like every other command's.
-
-Additive rather than breaking — existing callers ignore the body — but it **is** a public contract
-change, so `docs/API.md` records it and says why this `DELETE` is not `204`: the caller genuinely
-cannot derive the value, which is the test that section already applies.
-
-The API e2e asserts the id is a real uuid **and then uses it** to restore what it deleted. A field
-that is only asserted present is a field that can quietly stop being right.
 
 ---
 
@@ -2156,35 +2045,6 @@ self-heals; set a per-table `autovacuum_vacuum_scale_factor` on the two swept ta
 first — the last one trades a bounded connection hold for a faster vacuum, which is the opposite of
 what `RUN_CAP` exists for.
 
-## 119. The API e2e suite fails intermittently **(DIAGNOSED AND CLOSED 2026-08-10)**
-
-> **It was never intermittent. It was order-dependent, and the order changed whenever a new e2e file
-> was added.**
->
-> Nine specs — `calendars`, `clients`, `invitations`, `me`, `members`, `organizations`, `plans`,
-> `projects`, `recycle-bin` — began their `beforeEach` with `prisma.plan.deleteMany()` **without
-> first deleting the activities and link rows that reference a plan**. Each therefore passed only
-> when whichever spec ran before it happened to have left the tables empty. `vitest.e2e.config.ts`
-> sets `fileParallelism: false` and every spec shares one database, so "whichever ran before" is
-> decided by the file list — and adding `retention-sweep.e2e-spec.ts` was enough to reshuffle it.
->
-> The failure then names a table the failing spec never touches
-> (`Foreign key constraint violated on the constraint: activities_plan_id_fkey`), which is why it
-> read as noise: the spec that breaks is not the spec that is wrong. Whole files fail at once —
-> the shape this entry recorded as "a `beforeAll` failure" — because a broken `beforeEach` takes
-> every test in the file with it.
->
-> **What closed it was capturing the log instead of retrying**, which is the one instruction this
-> entry asked for. The three earlier occurrences were each met with a re-run that passed and
-> destroyed the evidence; the fourth was written to a file first and diagnosed in one read.
->
-> The correct sweep order was already documented — in `activities.e2e-spec.ts`, whose comment
-> claimed "the sibling specs already sweep in this order". Nine of them did not. That sentence is
-> corrected in the same commit, because a comment asserting an invariant nine files violate is worse
-> than no comment: it is the reason nobody checked.
-
-### Original entry (2026-08-10, before the diagnosis)
-
 ## 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
 **Observed 2026-08-10, three times in one session, against `scripts/e2e-local.sh api`.** Each time
@@ -2247,73 +2107,6 @@ click, so exercising it needs a canvas gesture the fit gate has no other reason 
 subject anyway, and assert the thing that can actually go wrong — that the bar stays fully inside the
 viewport at 960 and 768 with its widest plausible item set. Raised by `component-reviewer` during the
 ADR-0090 pre-approval pass as a suggestion, and recorded rather than silently left out of scope.
-
-## 125. `View ▾` holds one toggle that ejects you from it — **CLOSED 2026-08-12 (ADR-0090 M5)**
-
-**Resolved by making the row legible, not by changing where focus goes.** The two candidate fixes
-were "keep the popover open and lose the panel's focus move" and "keep the focus move and accept the
-eject". Both were rejected in favour of a third: the behaviour is **right** — ADR-0049 says a
-revealed panel should receive focus, the panel is `tabIndex={-1}` precisely so it can, and an
-`e2e-resource-view` assertion depends on it, so a revealed panel a keyboard user cannot reach would
-be the worse defect. What was missing was any warning before it happened.
-
-The row now carries a standing note — _"Opens the resource panel and moves focus to it"_ —
-`aria-describedby`-linked alongside its shut reason rather than folded into its name, and visible
-beside the control because this surface has no tooltip to fall back on. It is the only row in
-`View ▾` with one, and a test asserts that a neighbour acquiring one would be a regression: the note
-exists to mark this row as different, so it is worthless if everything has it.
-
-**One thing it broke immediately, which is the useful part.** `aria-describedby` takes an id _list_,
-and the row now carries two. `tsld-toolbar-resource-view.test.tsx`'s helper read a single id and
-returned `null` the moment the second appeared — reading as "no reason at all" rather than as a
-helper that had stopped keeping up. Caught by the existing suite on the first run.
-
-_Original entry follows._
-
-**Raised:** 2026-08-11 (ADR-0090 M2-T2) · **Size:** S · **Owner:** the M5 gate pass
-
-`resource-view` moved from Row 1 into the `View ▾` popover. Revealing the resource strip moves
-focus into the strip (ADR-0049, deliberate — a revealed panel should receive focus), which from a
-Row-1 button was unremarkable and from inside an open popover means the planner is ejected from the
-surface they were still using. Every other member of `View ▾` leaves the popover open, so this one
-behaves unlike its neighbours in a list that invites toggling several things at once.
-
-Recorded rather than fixed mid-relocation, because the fix is a judgement between two defensible
-behaviours (keep the popover open and lose the panel's focus move, or keep the focus move and
-accept the eject) and it belongs with the specialist reviews at M5. Observed, not inferred:
-`e2e-resource-view/resource-view.spec.ts` asserts the focus move immediately after the toggle, and
-its comment records why the assertion sits exactly there.
-
-## 126. The two segmented pairs cannot go icon-only, because they have no icons
-
-**Raised:** 2026-08-12 (ADR-0090 M3-T2) · **Size:** S · **Owner:** a design pass, then M5
-
-M3-T2's own title asks that _"segments become icon pairs"_ in the condensed band, and it is the one
-task in that milestone that could not be done. `mode-early`, `mode-visual`, `view-tsld` and
-`view-gantt` **carry no `icon` field at all** — the registry warns about it twelve lines above them
-(_"Tier 1 so the labels render (a tier-2 label-less segment paints blank — ux review)"_) — so
-withholding their labels renders four blank **16 px** buttons.
-
-That is not a hypothesis. It was built, and `e2e-toolbar-fit` S5 failed on it within the hour as a
-WCAG 2.2 §2.5.8 target-size violation: `mode-early:16px, mode-visual:16px, view-tsld:16px,
-view-gantt:16px`. Reverted, along with the primitive widening written to support it (`showLabel` as
-a function of the row's band), because an unused branch is a second product (ADR-0088) and this one
-would have shipped with no consumer and no test.
-
-**Why it is debt rather than a decision taken:** choosing a glyph for **Early** versus **Visual**
-scheduling mode is a statement about what those modes _are_, and this milestone is about width.
-`Diagram | Gantt` has obvious candidates and `Early | Visual` does not, and doing the easy pair alone
-is the "one correct pattern applied to a control and not its neighbour" shape this repository keeps
-recording (ADR-0064 §7, ADR-0067 M4, ADR-0073 C4, ADR-0086 M6).
-
-**What it costs today:** Row 1's inline count is not monotone in width — 8 items at 1280 against 10
-at 1024 — because the collapsed band trades labels for commands and the condensed band cannot.
-Nothing is unreachable; the two extra sit in the `⋯` at 1280. Measured in
-`docs/specs/workspace-layout/m3-narrow-widths.md` §4 O1.
-
-**What to do:** get four icons decided, then restore the band-aware `showLabel` (the reverted
-implementation is one type widening plus a three-line `labelPolicy`), and re-run the fit gate — which
-will now catch a blank segment on the first run rather than in review.
 
 ## 127. The toolbar's touch targets are 40 × 36, and the house rule is 44 × 44
 
@@ -2390,31 +2183,6 @@ intermittent gets quietly re-attributed to whoever last touched the file.
 `playwright.multi-select.config.ts:32` sets `retries: process.env.CI ? 2 : 0`. A ~25 % per-run
 failure rate becomes ~1.5 % with two retries, so CI absorbs it and only a local sweep sees it. That
 is the right configuration and it is also why the rate can drift a long way before anything notices.
-
-## 129. The 56 px app header row is the last recoverable band above the canvas
-
-**Raised:** 2026-08-12 (ADR-0090 M4-T2) · **Size:** L · **Owner:** a shell/ADR-0055 pass, not a toolbar one
-
-The reported defect that opened ADR-0090 was a command surface eating canvas on a 24" monitor.
-Measured (`docs/specs/workspace-layout/m4-vertical-stack.md`), **257 px sat above the canvas** and the
-epic has taken it to 249. Of what remains, the largest single band is the **app header row at 56 px** —
-bigger than either command row.
-
-**M4-T2 could not take it, and the reason is structural rather than a matter of effort.** Recovering
-it means merging the plan's identity line into that row, and that row is a three-column grid whose
-organisation nav **already `overflow-x-auto`s at 1440 px** with a drawer owed against it. It is also
-shared by every screen in the product, and both ADR-0029 and ADR-0055 S2 say directly that the shell
-must stay plan-unaware — a plan breadcrumb rendered by the shell is exactly what they forbid.
-
-So M4-T2 delivered the reading order (identity above the commands it governs, one surface) and **8 px**
-of height from matching the rows' vertical rhythm, and this row records where the rest is.
-
-**What to do, if vertical space is worth another pass:** it is a shell redesign — a second chrome slot
-_inside_ the app header row, which keeps the shell plan-unaware by providing a slot rather than
-knowing about plans, plus an answer for the organisation nav that already does not fit. Measure first:
-`measure-toolbar/vertical-stack.spec.ts` reports the row's horizontal budget (`appHeaderRoom`) for
-exactly this question, and at 1920 it reported **one child using 1888 of 1920 px** — there is no gap to
-slot into today.
 
 ## 130. The zoom trigger's icon says "date range", and it now owns the viewport
 
@@ -2494,37 +2262,45 @@ about isolation, not about waiting, and does not cover this.
 **Impact:** a red CI run on an unrelated PR, roughly one run in several. **Fix:** wait on the
 expected count in test 1, and give test 2 a wait that is specific to its own row.
 
-## 133. Every toolbar measurement ever taken assumed a mouse
+## 133. A coarse pointer costs the merged strip two commands, and one of them is Next conflict
 
 `toolbarControlVariants` carries `pointer-coarse:px-3` (`toolbar-styles.ts`), which takes every
 toolbar control from 32 px to 40 px. A Surface Pro — the device this toolbar is judged on — reports
 `pointer: coarse` **in tablet mode** and `fine` with its keyboard attached.
 
-**Every measurement in this repository was taken with a fine pointer**, because that is Playwright's
-default: the whole of ADR-0090, the whole of ADR-0091, and every figure in
-`m2-item-widths.md`. So the label budget both epics were designed against describes only half of the
-target device's usage, and nobody had noticed because the harness never asked.
+**Re-measured 2026-08-20 against the merged strip**, because every figure this row previously carried
+described the two-row surface ADR-0099 M5 deleted, and two of the three levers it named
+(`Report progress…`, `Snap to grid`) have since been removed from the product entirely by ADR-0093
+and ADR-0092. A row whose evidence and whose remedies have both gone is worse than no row.
 
-Measured 2026-08-12 at 1646 px (`item-widths` → `m2-item-widths-coarse.json`), after the ADR-0091
-label fix:
+At **1646** — the width this work is judged on — with the same plan and the same build:
 
-| pointer | Row 2 unlabelled                        |
-| ------- | --------------------------------------- |
-| fine    | none (`undo`/`redo` are `render` items) |
-| coarse  | **all nine `auto` items**               |
+| pointer    | inline | labelled | what leaves the row                |
+| ---------- | ------ | -------- | ---------------------------------- |
+| fine       | 14     | 10       | —                                  |
+| **coarse** | **12** | **8**    | `zoom-out` and **`next-conflict`** |
 
-Row 1 is fine on both — the band fix covers it. Row 2 is ~167 px over on the coarse branch, because
-+8 px × 14 controls outruns what the three shortened labels bought.
+**The second one is the finding.** `next-conflict` carries `priority: 110`, the highest rank on the
+strip, and it is still evicted — so the coarse padding costs more than any ranking can defend
+against. ADR-0094 exists because a conflict count beside no way to act on it is the defect that
+epic was opened on, and `docs/TECH_DEBT.md` #134 records that command being pushed into the `⋯`
+once already. This is the same eviction, reached by a different route, on the device the product
+owner actually uses in the mode they use it in.
 
-**This is not a regression**; it is a gap that predates both epics and was invisible until the
-harness was pointed at it. It matters only if the product owner uses the device detached, which is
-an open question at the time of writing.
+It is **not a regression** and not a WCAG failure: the command is still reachable in the `⋯`, and
+40 px targets are further from 2.5.8's floor than 32 px ones. It is a gap that predates both the
+merge and the fit gate, and it stayed invisible because Playwright defaults to a fine pointer.
 
-**The levers, in the order the ui-architect pass ranked them:** shorten more labels (`Share &
-export`, `Report progress…`, `Snap to grid` are the next three, ≈161 px together); `gap-1.5` →
-`gap-1`; reduce the coarse padding itself (`pointer-coarse:px-3` → `px-2.5`, 40 → 36 px, still well
-clear of WCAG 2.5.8's 24 px floor). Note that reducing `px-2` does **not** help here — the coarse
-variant overrides it.
+**What is gated already, and what is not.** `e2e-toolbar-fit`'s `coarse pointer` block (ADR-0090
+M3-T4) runs at 1024 × 1366 and asserts every control clears 40 × 36 — so the _geometry_ is gated and
+the _budget_ is not. Nothing anywhere asserts what the row can still afford to show under a coarse
+pointer, which is why this needed a hand-run probe to find.
+
+**The levers, re-derived rather than carried:** shorten `Share & export` (the longest survivor);
+`gap-1.5` → `gap-1`; reduce the coarse padding itself (`pointer-coarse:px-3` → `px-2.5`, 40 → 36 px,
+still well clear of 24 px). Reducing `px-2` does **not** help — the coarse variant overrides it.
+Cheapest real fix is probably none of those: extend the fit gate to assert a _labelled_ floor under
+coarse, so the next width decision is made with both pointers in view rather than one.
 
 ## 134. A `render` item outranks every command on its row, and nothing says so
 
@@ -2540,6 +2316,13 @@ count chip beside it; the chip is a `render` item, so the ~130 px it takes the i
 conflict pushed the button it labels into the `⋯` — a count on the row beside no way to act on it,
 in the only state that epic exists for. The fix was `priority: 90` on that one command, which is
 correct and local and does nothing for the next occurrence.
+
+**It happened again, and the row predicted the shape exactly.** ADR-0099 M5 merged the two rows onto
+one budget and `recalculate` fell into the `⋯` at **every** width from 768 to 2133 — ranked **−7
+because it registered eighth**, not because anyone judged it eighth. The fix was `priority: 95` on
+that one command: the second local constant, applied for the second time, by an author who had this
+row available and did not reach for it. `docs/TECH_DEBT.md` #133 then found a **third** eviction of
+the same class under a coarse pointer, which no `priority` can answer at all.
 
 **What is owed is a rule, not a constant.** Either a `render` item declares a rank and the ladder
 honours it when deciding what to shed (which needs a way for a non-demotable item to _withdraw_, as
