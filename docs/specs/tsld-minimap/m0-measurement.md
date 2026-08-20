@@ -67,3 +67,41 @@ better final word; M4-T2 re-derives against final code either way.
 ---
 
 ## Runs (appended; nothing above this line changes after the first run)
+
+### Run 1 — 2026-08-20, headless container (software raster)
+
+**Setup.** Chromium (Playwright's pinned build at `/opt/pw-browsers/chromium`), viewport
+1646×1097, scene canvas measured 1297×896. Plan: the seed catalogue's `scale-2000`
+(2,160 activities, 3,200 links) freshly seeded through the public REST API and
+recalculated. The canvas's own mount path auto-fits to content
+(`TsldCanvas.tsx:1300-1309`), so every run measured the **Fit** framing — the dearest
+case, as the condition requires; no preset was pressed. Prototype: the throwaway
+working-tree probe in `TsldCanvas.tsx` (bitmap built once per session; rectangle a pure
+`style.transform`/width/height write on `movedThisFrame`), toggled per-arm at runtime by
+`window.__minimapProbe` — both arms ran the same build in one browser session against one
+server, interleaved B1,T1,B2,T2,B3,T3 after a 3 s warm-up pan. Each run: 2 s idle phase
+(display-refresh baseline; idle median 16.7 ms in every run), then a 10 s sustained
+drag-pan; dropped = inter-frame interval > 1.5× that run's own idle median.
+
+**Runs (dropped-frame %):**
+
+| Arm       | Run 1 | Run 2 | Run 3 | Median    |
+| --------- | ----- | ----- | ----- | --------- |
+| Baseline  | 45.15 | 45.65 | 46.71 | **45.65** |
+| Treatment | 46.34 | 46.25 | 45.77 | **46.25** |
+
+Interval p95: 50.1 ms in five of six runs (T3: 66.6 ms). Heaviest-callback p95: 22.3–25.6
+ms, both arms overlapping — the pan cost is the existing painter's, in both arms.
+
+**Verdict: PASS.** `median(treatment) − median(baseline) = 46.25 − 45.65 = +0.60 pp`,
+inside the +2.0 pp band. **The baseline triple's spread is 1.56 pp (46.71 − 45.15), which
+sits inside the 2.0 pp band** — the band can resolve the effect, and no extra runs were
+needed. The treatment's own spread (0.57 pp) brackets the baseline median: the two
+distributions overlap, i.e. the measured effect is indistinguishable from run noise, which
+is the strongest available form of "the rectangle write costs nothing the eye could see".
+
+Read with the deviation above: the absolute ~45–47 % dropped figures are the software
+rasteriser's, are far above the 10.2 % hardware reference, and are **never compared to
+it** — only treatment-vs-baseline is read, and software raster overstates a second canvas
+surface, so this pass is conservative. The ladder was not entered. M4-T2 re-derives this
+against the shipped implementation.
