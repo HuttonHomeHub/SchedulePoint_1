@@ -12,6 +12,7 @@ import {
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
+import { activityEditor } from '../e2e-support/activity-editor';
 import { clickToolbarCommand, toolbarOffers } from '../e2e-support/toolbar';
 
 /**
@@ -71,13 +72,16 @@ test('a planner acts on a Gantt selection from the docked object bar', async ({ 
   // **The promise itself.** Report progress is reachable from a Gantt selection, and it opens the
   // editor on the Progress scope rather than somewhere the planner must then navigate from.
   await bar.getByRole('button', { name: 'Report progress' }).click();
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('tab', { name: /Progress/ })).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  await editor.getByRole('button', { name: 'Close dialog' }).click();
+  // `Close`, not `Close dialog`: the editor is the drawer's now (ADR-0099), and the ✕ this used to
+  // press was the `Dialog` chrome's own. The button below is the editor's, which is the route that
+  // clears the subject in either chrome.
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(editor).toBeHidden();
 });
 
