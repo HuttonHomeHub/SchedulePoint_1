@@ -24,7 +24,13 @@ import { writeMeasurement } from './output';
  * the strip does not fit at 1280, the strip narrows — it is not shaved for a sixth epic.
  */
 
-const WIDTHS = [1920, 1646, 1440, 1280];
+// **1024, 960 and 768 were added at M5-T1, and adding them is the point.** M0 measured the four
+// widest and ADR-0099 then said the ladder and the `⋯` "become unnecessary and are deleted". The
+// fit gate targets 960 and 768, so that claim was never measured where it is most likely to be
+// false — and deleting the overflow at a width the strip does not fit reproduces the ADR-0090
+// defect this epic was opened on: controls painted at 0 px, pointer-unreachable, with no `⋯` to
+// reach them through. A WCAG 2.5.8 failure with no exception available.
+const WIDTHS = [1920, 1646, 1440, 1280, 1024, 960, 768];
 
 /** The Graphite strip, in order. Rail tools and object actions are deliberately absent. */
 const STRIP: readonly string[] = [
@@ -59,6 +65,21 @@ const STRIP: readonly string[] = [
 
 /** Commands Graphite adds that have no control to clone; charged at a measured icon width. */
 const NEW_ICON_ITEMS = ['level-resources', 'print'];
+
+/**
+ * The three moves M0 proposed, so the REDUCED strip is measured rather than arithmetic'd.
+ *
+ * M0's reduced figures were computed from its own per-item measurements and its final section says
+ * so in as many words: "re-measure once the strip is built — that is M5's own gate, not this
+ * document's claim". This is that re-measure, one step earlier: the reduced strip is composed from
+ * the same real cloned controls, minus the items that leave and plus one `Plan ▾` trigger charged
+ * at the width of the widest labelled trigger it replaces.
+ */
+const MODE_SEGMENTS = ['mode-early', 'mode-visual', 'view-tsld', 'view-gantt'];
+/** Folded into one `Plan ▾`. `print` has no control to clone and is in NEW_ICON_ITEMS. */
+const PLAN_MENU_MEMBERS = ['calendar', 'analysis', 'comments', 'export'];
+/** Moves to the status bar at M7, so it is reported both ways rather than assumed. */
+const STATUS_BAR_ITEMS = ['finish-chip'];
 
 test('M0 — the Graphite strip, composed from real controls', async ({ page }) => {
   test.setTimeout(240_000);
@@ -118,7 +139,7 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
     await page.waitForTimeout(700);
 
     report[String(width)] = await page.evaluate(
-      ({ strip, newItems }) => {
+      ({ strip, newItems, modeSegments, planMenu, statusBar }) => {
         const host = document.createElement('div');
         host.style.cssText =
           'position:fixed;top:-9999px;left:0;display:flex;align-items:center;' +
@@ -183,9 +204,26 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
         const measured = Math.round(host.getBoundingClientRect().width * 10) / 10;
         host.remove();
 
+        // 48 since Graphite M4 — `w-12`, because `w-[46px]` is an arbitrary sizing value and the
+        // ratchet in `token-architecture.test.ts` correctly refused it.
         const RAIL = 48;
         const total = Math.round((measured + groupChrome + newItemsCost) * 10) / 10;
         const available = window.innerWidth - RAIL;
+
+        // **The reduced strip, composed rather than arithmetic'd.** M0 computed it from per-item
+        // widths and said in its own caveats that a real run was M5's gate. This is that run.
+        const byId = new Map(found.map((f) => [f.id, f]));
+        const widthOf = (id: string): number => byId.get(id)?.iconOnly ?? 0;
+        const leaving = new Set([...modeSegments, ...planMenu]);
+        const widestFolded = Math.max(0, ...planMenu.map(widthOf));
+        const reducedItems = found
+          .filter((f) => !leaving.has(f.id))
+          .reduce((sum, f) => sum + f.iconOnly, 0);
+        // One `Plan ▾` trigger charged at the widest labelled trigger it replaces — a menu naming a
+        // subject is not narrower than the widest command it swallows, and guessing lower is how a
+        // reduced figure flatters itself.
+        const reduced = reducedItems + widestFolded + groupChrome + newItemsCost;
+        const reducedNoFinish = reduced - statusBar.reduce((sum, id) => sum + widthOf(id), 0);
         return {
           viewport: window.innerWidth,
           itemsFound: found.length,
@@ -202,10 +240,24 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
           graphiteSlack:
             Math.round((available - (iconMeasured + groupChrome + newItemsCost)) * 10) / 10,
           graphiteFits: iconMeasured + groupChrome + newItemsCost <= available,
+          // **The M5 answer.** `reduced` is what M5 ships (the finish read-out stays until the
+          // status bar exists at M7); `reducedNoFinish` is what M7 leaves behind.
+          reduced: Math.round(reduced * 10) / 10,
+          reducedSlack: Math.round((available - reduced) * 10) / 10,
+          reducedFits: reduced <= available,
+          reducedNoFinish: Math.round(reducedNoFinish * 10) / 10,
+          reducedNoFinishSlack: Math.round((available - reducedNoFinish) * 10) / 10,
+          reducedNoFinishFits: reducedNoFinish <= available,
           items: found,
         };
       },
-      { strip: STRIP, newItems: NEW_ICON_ITEMS },
+      {
+        strip: STRIP,
+        newItems: NEW_ICON_ITEMS,
+        modeSegments: MODE_SEGMENTS,
+        planMenu: PLAN_MENU_MEMBERS,
+        statusBar: STATUS_BAR_ITEMS,
+      },
     );
   }
 
