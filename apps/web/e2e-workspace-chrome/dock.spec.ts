@@ -42,8 +42,16 @@ async function canvasHeight(page: Page): Promise<number> {
 }
 
 /** The activities row at the foot of the workspace — the dock's host. */
+/**
+ * The collapsed activities bar — **the `CanvasDockOutlet`'s host** (ADR-0092), which is why this
+ * journey needs it.
+ *
+ * Located by `data-activities-bar`, not by the word "Activities". The copy locator resolved to two
+ * elements the moment Graphite M7 put an activity **count** in the status bar, and it would have
+ * broken again on any wording change — the standing rule after three journeys broke on one.
+ */
 function activitiesRow(page: Page) {
-  return page.getByText('Activities', { exact: true }).locator('xpath=..');
+  return page.locator('[data-activities-bar]');
 }
 
 test.describe('The canvas dock', () => {

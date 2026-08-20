@@ -164,7 +164,15 @@ export function ActivityPanelCollapsedBar({
   }, [focusExpandOnMount]);
 
   return (
-    <div className="border-border flex min-h-9 shrink-0 items-center gap-2 border-t px-4">
+    <div
+      // A test hook in this codebase's established shape (`data-toolbar-item`, `data-plan-identity`,
+      // `data-tool-rail`). This row IS the `CanvasDockOutlet`'s host (ADR-0092), so the dock journey
+      // has to find it — and it was finding it by the word "Activities", which the status bar's
+      // activity-count fact started matching too (Graphite M7). Locating chrome by its copy is what
+      // the standing rule after ADR-0091 forbids, and this is the third time it has bitten.
+      data-activities-bar
+      className="border-border flex min-h-9 shrink-0 items-center gap-2 border-t px-4"
+    >
       <span className="shrink-0 text-sm font-medium">Activities</span>
       <CanvasDockOutlet />
       <Button

@@ -226,7 +226,7 @@ function ShellFrame(): React.ReactElement {
     <ShellContext.Provider value={shell}>
       <NavigatorCrud orgSlug={orgSlug} canWrite={canWrite} expansion={expansion}>
         <ChromeSlotHost>
-          {({ rowsSlotRef, railSlotRef, drawerSlotRef }) => (
+          {({ rowsSlotRef, railSlotRef, drawerSlotRef, statusSlotRef }) => (
             <>
               {/* **The shell is ONE grid** (Graphite M2). It replaces nested flex columns, and the
                   reason is §4a: the command band spans the columns the drawer sits inside, so
@@ -342,6 +342,20 @@ function ShellFrame(): React.ReactElement {
 
                     Below `lg` it is not rendered at all: there it would have to overlay, and
                     overlaying means modal, which the `Sheet` below already is. */}
+                {/* Row 3, columns 2–3 — **the plan status bar** (ADR-0099 D5). It mirrors the
+                    command band above: same span, so the drawer's width changes it by zero, and the
+                    rail is outside the span because it owns column 1 for all three rows.
+
+                    The row is `auto` and the slot is `empty:hidden`, so a screen that portals
+                    nothing into it is a zero-height row and keeps exactly the frame it had. That is
+                    the same content-driven-height property M2 built this grid for, and it is why
+                    twelve non-plan screens need no opt-out. */}
+                <ChromeSlot
+                  slotRef={statusSlotRef}
+                  name="status"
+                  className="border-border col-span-2 col-start-2 row-start-3 border-t"
+                />
+
                 {drawer.collapsed ? null : (
                   <div className="col-start-3 row-start-2 hidden min-h-0 shrink-0 lg:flex">
                     <ContextDrawer

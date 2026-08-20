@@ -2622,13 +2622,17 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
        * (`e2e-edit`, `e2e-toolbar`) timed out clicking it within minutes of each other.
        *
        * 95: above the lenses at 60 and the whole authoring tail, below the viewport cluster at 100
-       * and `next-conflict` at 110. It earns that on two grounds — it is the command that makes the
-       * diagram TRUE after an edit, and its spinning icon is the only visible cue in the product
-       * that a recalculation is running at all (`isBusy` → `aria-busy`, below). A command inside a
-       * menu cannot spin at anybody.
+       * and `next-conflict` at 110. It earned that on two grounds — it is the command that makes
+       * the diagram TRUE after an edit, and its spinning icon was the only visible cue in the
+       * product that a recalculation is running at all.
        *
-       * ADR-0099 M7 re-homes the running state to the status bar. When it does, re-read this: the
-       * second ground goes with it, and 95 may then be more than the command needs.
+       * **Re-read at ADR-0099 M7, as this docblock instructed, and the rank stands on one ground.**
+       * The status bar now carries the running state, so the second ground is gone — the spinner
+       * here is no longer the only cue and no longer the reason. The first is enough on its own: a
+       * command that makes the schedule correct after an edit is not one to bury, and dropping the
+       * rank returns it to the `⋯` at every width, which is where `e2e-edit` and `e2e-toolbar` both
+       * timed out on it in M5. Recorded rather than silently kept, because a justification that has
+       * lost half its support and still reads as two grounds is the drift this register is about.
        */
       priority: 95,
       label: 'Recalculate',

@@ -50,7 +50,12 @@ import { cn } from '@/lib/utils';
  * the ADR-0060 per-scope gating and the mutation hooks it reads. Lifting any of that into the shell
  * is the thing ADR-0029 forbids; a portal moves the DOM node and leaves the React tree alone.
  */
-export type ChromeSlotName = 'rows' | 'rail' | 'drawer';
+/**
+ * `status` is the plan status bar's row (Graphite M7) — grid row 3, the mirror of the command
+ * band's row 1. Same argument as every other name here: the facts it shows belong to the plan, the
+ * row belongs to the shell, and a portal is what keeps the shell from learning the difference.
+ */
+export type ChromeSlotName = 'rows' | 'rail' | 'drawer' | 'status';
 
 const ChromeSlotContext = createContext<Partial<Record<ChromeSlotName, HTMLElement | null>>>({});
 
@@ -100,6 +105,9 @@ export function ChromeSlot({
         // is a tab rail beside a pane, and a row layout would lay them side by side in 224–420 px.
         name === 'drawer' && 'flex min-h-0 flex-1 flex-col',
         name === 'rail' && 'flex min-w-0 items-center',
+        // A status bar with nothing in it is a ZERO-HEIGHT row, which is what lets grid row 3 stay
+        // `auto` and keeps the twelve screens that are not a plan exactly as they were.
+        name === 'status' && 'flex min-w-0 items-center empty:hidden',
         className,
       )}
     />

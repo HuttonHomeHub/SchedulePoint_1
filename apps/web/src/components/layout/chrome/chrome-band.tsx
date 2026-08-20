@@ -74,6 +74,7 @@ export function ChromeSlotHost({
     rowsSlotRef: (node: HTMLDivElement | null) => void;
     railSlotRef: (node: HTMLDivElement | null) => void;
     drawerSlotRef: (node: HTMLDivElement | null) => void;
+    statusSlotRef: (node: HTMLDivElement | null) => void;
   }) => React.ReactNode;
 }): React.ReactElement {
   const rows = useChromeSlot();
@@ -82,13 +83,17 @@ export function ChromeSlotHost({
   // `'context'` subject, so a route's portal renders `null` the rest of the time rather than
   // painting into a hidden node — `ChromePortal`'s existing "no slot, no children" contract.
   const drawer = useChromeSlot();
+  const status = useChromeSlot();
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider nodes={{ rows: rows.node, rail: rail.node, drawer: drawer.node }}>
+      <ChromeSlotProvider
+        nodes={{ rows: rows.node, rail: rail.node, drawer: drawer.node, status: status.node }}
+      >
         {children({
           rowsSlotRef: rows.slotRef,
           railSlotRef: rail.slotRef,
           drawerSlotRef: drawer.slotRef,
+          statusSlotRef: status.slotRef,
         })}
       </ChromeSlotProvider>
     </HelpActionProvider>

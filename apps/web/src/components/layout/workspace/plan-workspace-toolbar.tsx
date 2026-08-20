@@ -28,6 +28,7 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
+import { PlanStatusBar } from '@/components/layout/status/plan-status-bar';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -71,7 +72,6 @@ import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
-import { ProjectFinishChip } from '@/features/schedule/components/ProjectFinishChip';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
@@ -1202,14 +1202,11 @@ export function ToolbarPlanWorkspace({
                 {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
                 ADR-0090 M2-T3 took it off the toolbar; ADR-0091 M7-S4 put it back as a
                 `presentational` registry item, so the `⋯` could stay the row's rightmost control.
-                It is here now because M5-T1 measured the reduced strip **not fitting** at 768, 960,
-                1280 or 1440, and because a finish date is a **fact about the plan** rather than a
-                command — which is what this row already carries (the breadcrumb, the status, the
-                edit pencil). ADR-0099 D4 sends it on to the status bar at M7; this is the interim
-                home, not a second decision.
-                M7-S4's reason survives the move: the `⋯` is still the toolbar's rightmost control,
-                because nothing was added to its right. */}
-                <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
+                It came here in M5 because M5-T1 measured the reduced strip **not fitting** at 768,
+                960, 1280 or 1440, and that entry called itself "the interim home, not a second
+                decision". **M7 is the decision**: a finish date is a fact, the status bar carries
+                facts, and it has gone there. This comment is kept rather than deleted so the two
+                moves read as one argument reaching its end. */}
                 {model.canWrite ? (
                   <Button
                     variant="ghost"
@@ -1536,6 +1533,20 @@ export function ToolbarPlanWorkspace({
 
       {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
       <PlanDialogs model={model} plan={plan} />
+
+      {/* **The status bar** (Graphite M7). Portalled into the shell's row 3 for the same reason the
+          command band and the mode cluster are portalled: the facts belong to the plan, the row
+          belongs to the shell, and ADR-0029 says the shell must not learn the difference. */}
+      <ChromePortal name="status">
+        <PlanStatusBar
+          activityCount={scheduleSummary.data?.activityCount}
+          criticalCount={scheduleSummary.data?.criticalCount}
+          dataDate={scheduleSummary.data?.dataDate}
+          projectFinish={scheduleSummary.data?.projectFinish}
+          recalculating={model.autoRecalc.isPending}
+          pending={scheduleSummary.isPending}
+        />
+      </ChromePortal>
 
       {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
       <ActivityCrudDialogs model={model} />
