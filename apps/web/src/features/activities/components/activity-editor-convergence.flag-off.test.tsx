@@ -85,6 +85,7 @@ describe('convergence flag-off — the row menu', () => {
     render(
       <QueryClientProvider client={client}>
         <ActivitiesTable
+          onOpenEditor={() => {}}
           orgSlug="acme"
           planId="pl1"
           canEditSchedule
@@ -106,6 +107,7 @@ describe('convergence flag-off — the row menu', () => {
     render(
       <QueryClientProvider client={client}>
         <ActivitiesTable
+          onOpenEditor={() => {}}
           orgSlug="acme"
           planId="pl1"
           canEditSchedule

@@ -50,6 +50,7 @@ function renderTable(props: { onDuplicate?: (a: ActivitySummary) => void } = {})
   return render(
     <QueryClientProvider client={queryClient}>
       <ActivitiesTable
+        onOpenEditor={() => {}}
         orgSlug="acme"
         planId="pl1"
         canEditSchedule

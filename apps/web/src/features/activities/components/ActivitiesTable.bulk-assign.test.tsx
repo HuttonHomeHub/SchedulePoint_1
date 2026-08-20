@@ -36,6 +36,7 @@ function renderTable(rows: Partial<ActivitySummary>[], canEditSchedule = true) {
   return render(
     <QueryClientProvider client={queryClient}>
       <ActivitiesTable
+        onOpenEditor={() => {}}
         orgSlug="acme"
         planId="pl1"
         canEditSchedule={canEditSchedule}

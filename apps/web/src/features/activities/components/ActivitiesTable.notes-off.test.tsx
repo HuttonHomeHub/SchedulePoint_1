@@ -88,6 +88,7 @@ describe('ActivitiesTable — note count badge (flag off)', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <ActivitiesTable
+          onOpenEditor={() => {}}
           orgSlug="acme"
           planId="pl1"
           canEditSchedule

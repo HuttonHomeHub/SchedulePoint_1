@@ -156,12 +156,21 @@ gets a fix and its neighbour does not (ADR-0064 §7, recorded five times in this
 - The canvas selection bar's **Edit** — and the other two ADR-0060 intents — fill it.
 - With nothing selected the drawer says so explicitly, and renders **no editor at all**.
 
-**The activities table's row menu still opens the modal.** That is a second editor mount with its
-own `editorIntent` state (`ActivitiesTable.tsx:894`), and re-pointing it is T4's work rather than a
-line to add here — the table is a feature component that does not hold the workspace model, so
-routing its three row actions through one editor is a props change with its own tests. Recorded
-rather than left to be discovered: until T4, the same activity opens in a drawer from the canvas
-and a modal from the table.
+**~~The activities table's row menu still opens the modal.~~ Closed by T4.** The table held its own
+`editorIntent` and mounted its own `ActivityEditorDialog` beside the workspace's — two mounts, two
+sets of scope forms and two dirty states for one activity, and after T2 also two different chromes
+for the same Edit. Its own comment called it "the table's ONE editor", which was true of the table
+and false of the plan.
+
+It now mounts none, and `onOpenEditor` is **required** rather than optional: an optional seam lets a
+host mount the table and silently leave four row actions doing nothing, and the compiler is a better
+reviewer than a convention. The cost was 19 stub props across 17 suites and one real rewrite —
+`activity-editor-entry-points.test.tsx` asserts the _whole chain_ (a row action reaches one editor on
+the right tab), so it grew a five-line host rather than losing its assertions. Testing the callback
+alone would prove the door opens and nothing about the room.
+
+Dropping the mount also orphaned `calendarsError`, a prop the table only ever forwarded. Removed
+rather than left as a prop with no consumer.
 
 ### What the browser found, and what I got wrong diagnosing it
 

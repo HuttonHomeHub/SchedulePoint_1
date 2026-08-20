@@ -110,6 +110,7 @@ function renderTable(
   return render(
     <QueryClientProvider client={queryClient}>
       <ActivitiesTable
+        onOpenEditor={() => {}}
         orgSlug="acme"
         planId="pl1"
         canEditSchedule

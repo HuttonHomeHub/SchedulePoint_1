@@ -5,7 +5,7 @@ import { CanvasDockOutlet } from './canvas-dock';
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Button } from '@/components/ui/button';
-import { ActivitiesTable, CreateActivityButton } from '@/features/activities';
+import { ActivitiesTable, CreateActivityButton, openActivityEditor } from '@/features/activities';
 import { BaselineVarianceSummary } from '@/features/baselines';
 
 /**
@@ -109,12 +109,20 @@ export function ActivityBottomPanel({
           canEditSchedule={model.canEditSchedule}
           canReportProgress={model.canProgress}
           editorGating={model.activityEditorGating}
+          /*
+           * **One editor for the plan** (Graphite M6-T4). The table used to mount its own beside
+           * the workspace's; after M6-T2 that also meant Edit opened a drawer from the canvas and a
+           * modal from here, for the same activity. It routes to the workspace's intent now, so the
+           * chrome is decided in one place.
+           */
+          onOpenEditor={(activity, purpose) =>
+            model.setEditorIntent(openActivityEditor(activity, purpose))
+          }
           onOpenLogic={model.onOpenLogic}
           onOpenResources={model.onResourcesActivity}
           onDuplicate={(a) => void model.onDuplicateActivity(a)}
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
-          calendarsError={model.calendars.isError}
           {...(model.plan.data?.calendarId == null
             ? {}
             : { planCalendarId: model.plan.data.calendarId })}

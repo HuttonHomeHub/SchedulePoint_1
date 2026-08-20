@@ -85,7 +85,13 @@ function renderTable(data: ActivitySummary[]) {
   queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), data);
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivitiesTable orgSlug="acme" planId="pl1" canEditSchedule calendars={[]} />
+      <ActivitiesTable
+        onOpenEditor={() => {}}
+        orgSlug="acme"
+        planId="pl1"
+        canEditSchedule
+        calendars={[]}
+      />
     </QueryClientProvider>,
   );
 }
