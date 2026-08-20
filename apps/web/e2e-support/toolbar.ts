@@ -57,3 +57,41 @@ export async function revealToolbarCommand(page: Page, id: string): Promise<Loca
   // The menu portals to `document.body`, so it is scoped from the page rather than from the row.
   return page.locator(`[role="menu"] [data-toolbar-item="${id}"]`);
 }
+
+/**
+ * Click a plan command by registry id, wherever the ladder has put it.
+ *
+ * The overwhelmingly common shape — `await (await revealToolbarCommand(page, id)).click()` reads
+ * badly and every call site wrote it the same way. Added when a **third** suite needed it: the
+ * `e2e-gantt-editing` specs had ten `getByRole('button', { name: 'Recalculate' })` calls, which
+ * work only while the ladder happens to leave that command on the row in that view at that width.
+ */
+export async function clickToolbarCommand(page: Page, id: string): Promise<void> {
+  const control = await revealToolbarCommand(page, id);
+  await control.click();
+}
+
+/**
+ * Is `id` offered by the command strip at all — on the row **or** in the `⋯`?
+ *
+ * The negative form matters as much as the positive one. A journey asserting a command is *gone*
+ * has to look in both places, or it passes the moment the ladder demotes it — which is what
+ * happened to `e2e-gantt-editing`'s "switching back brings Add note home": that assertion had been
+ * failing since the two command rows merged and `add-note` moved into the menu, in the one suite a
+ * sweep never finished.
+ *
+ * Leaves the `⋯` as it found it, so a caller can assert either way without a side effect.
+ */
+export async function toolbarOffers(page: Page, id: string): Promise<boolean> {
+  const row = planCommands(page);
+  await expect(row).toBeVisible();
+  if ((await row.locator(`[data-toolbar-item="${id}"]`).count()) > 0) return true;
+
+  const more = row.getByRole('button', { name: 'More toolbar actions' });
+  if ((await more.count()) === 0) return false;
+  const wasOpen = (await more.getAttribute('aria-expanded')) === 'true';
+  if (!wasOpen) await more.click();
+  const offered = (await page.locator(`[role="menu"] [data-toolbar-item="${id}"]`).count()) > 0;
+  if (!wasOpen) await page.keyboard.press('Escape');
+  return offered;
+}

@@ -53,7 +53,9 @@ import type { GanttRowStructureActions } from './GanttRowMenu';
 import { GanttRowMenu } from './GanttRowMenu';
 import { GanttRuler, RULER_HEIGHT } from './GanttRuler';
 
+import { PanelResizer } from '@/components/ui/panel-resizer';
 import { Surface } from '@/components/ui/surface';
+import { useResizablePanelPrefs } from '@/components/ui/use-resizable-panel-prefs';
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { OFF_FLOAT_PATH_LABEL } from '@/features/float-paths';
 import type { SelectionBarContext } from '@/features/plan-actions/selection-actions';
@@ -97,6 +99,24 @@ const DEFAULT_ZOOM: ZoomLevel = 'month';
  * apart produce identical output and nothing in a test depends on the clock.
  */
 const UNSCHEDULED_ANCHOR = '1970-01-01';
+
+/**
+ * The grid pane's drag ceiling (Graphite M8). A fixed number rather than a share of the container,
+ * because what it protects is the **chart's** usable width — and that requirement does not shrink
+ * when the window does. The floor is not a constant: it is whatever the fixed columns need, which
+ * changes as columns are hidden, and is computed per render.
+ */
+const GANTT_GRID_MAX_WIDTH = 720;
+
+/**
+ * The **name** column's floor. Everything else is fixed, so this is the column that absorbs the
+ * difference between the pane's width and its content — which is what makes a splitter mean
+ * something. Without it, dragging wider adds blank space and dragging narrower paints the columns
+ * over the chart (measured: at the 180 px minimum the headers still occupied 0–584 while the
+ * Timeline began at 180 — the ADR-0095 defect exactly, which `m8-gantt-split.md` had named as the
+ * one to avoid and which the first version of this splitter reproduced).
+ */
+const NAME_COLUMN_MIN_WIDTH = 120;
 
 /** On-screen column widths, keyed to the shared {@link GANTT_COLUMNS} semantics. */
 const SCREEN_COLUMN_WIDTHS: Record<string, number> = {
@@ -346,6 +366,15 @@ export function GanttPanel({
     [hiddenColumns],
   );
   const GRID_WIDTH = useMemo(() => COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0), [COLUMNS]);
+  /** What the fixed columns need — the floor a resizable pane may not go below. */
+  const FIXED_WIDTH = useMemo(
+    () =>
+      COLUMNS.reduce(
+        (sum, c) => sum + (c.key === 'name' ? NAME_COLUMN_MIN_WIDTH : columnWidth(c)),
+        0,
+      ),
+    [COLUMNS],
+  );
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
   // The bar region's own width, measured so the zoom preset can frame its target range in the
@@ -366,7 +395,66 @@ export function GanttPanel({
   }, [GRID_WIDTH]);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
-  const gridWidth = GRID_WIDTH + (showVariance ? VARIANCE_COLUMN_WIDTH : 0);
+  const derivedGridWidth = GRID_WIDTH + (showVariance ? VARIANCE_COLUMN_WIDTH : 0);
+  /**
+   * **The grid pane's width, draggable** (ADR-0099 D6, Graphite M8).
+   *
+   * Until now this was `derivedGridWidth` — the visible columns' intrinsic widths summed — so a
+   * planner could change how much room the identity columns get only by hiding one. `design.md` §2
+   * asks for a draggable splitter, and the splitter itself needed no design: `PanelResizer` is
+   * already an APG window splitter and `useResizablePanelPrefs` already the single implementation
+   * behind the Explorer rail and the Graphite drawer.
+   *
+   * **`gridWidth` was already routed as ONE value through all fourteen sites** — the header cell,
+   * every activity row, every WBS bucket row, the chart's left offset and the content width — so
+   * this is a change of source, not a change of shape. That matters more than it sounds: ADR-0095
+   * found `GRID_WIDTH` as a literal disagreeing with its own columns, which painted the Float
+   * column 80 px on top of the chart. A resizable width has the same failure mode and a wider blast
+   * radius, and the reason it cannot recur here is that there is nowhere else for the number to
+   * come from.
+   *
+   * **The planner's width wins over a column change**, once there is a splitter to set one with.
+   * The stored size seeds from the derived width on first use and then stands: hiding a column
+   * afterwards does not move a divider the planner placed. That is the opposite of what this
+   * component did before — and it is the right way round only *because* the splitter exists. A
+   * width nobody can set should follow its content; a width somebody placed should not move under
+   * them.
+   */
+  const gridPrefs = useResizablePanelPrefs({
+    storageKey: 'schedulepoint:gantt-grid-width',
+    // The floor keeps the identity column — code and name — readable; below that the pane stops
+    // being a grid and becomes a margin. The ceiling is a fixed number rather than a share of the
+    // container because the chart's own minimum is what is being protected, and that does not
+    // shrink with the window.
+    // **The floor is what the fixed columns need**, not a round number. A pane narrower than that
+    // cannot lay its columns out and they overflow onto the chart — measured at the first
+    // 180 px guess, which clipped nothing and painted five columns over the bars.
+    min: FIXED_WIDTH,
+    max: GANTT_GRID_MAX_WIDTH,
+    defaultSize: derivedGridWidth,
+  });
+  const gridWidth = gridPrefs.size;
+
+  /**
+   * **One width per column, resolved against the pane** — used by the header, the activity rows and
+   * the WBS bucket rows alike.
+   *
+   * `name` takes whatever the pane has beyond the fixed columns, floored at
+   * {@link NAME_COLUMN_MIN_WIDTH}. That is what makes the splitter mean something in both
+   * directions: wider gives the activity name more room rather than adding blank space, narrower
+   * takes it back rather than pushing the columns over the chart.
+   *
+   * Three call sites read it and none computes its own, which is the property ADR-0095's `Float`
+   * incident argues for: that defect was a width literal disagreeing with its own columns.
+   */
+  const resolveColumnWidth = useCallback(
+    (column: GanttColumn): number =>
+      column.key === 'name'
+        ? Math.max(NAME_COLUMN_MIN_WIDTH, gridWidth - (FIXED_WIDTH - NAME_COLUMN_MIN_WIDTH))
+        : columnWidth(column),
+    [gridWidth, FIXED_WIDTH],
+  );
+
   // The row menu occupies a COLUMN, and every index after it shifts. `role="row"` may contain only
   // cells (`gridcell`/`columnheader`/`rowheader`), so M5-T3's trigger sitting as a direct child of
   // the row was an `aria-required-children` violation — axe rates it critical, and it fired once
@@ -848,31 +936,42 @@ export function GanttPanel({
     // the page, and the ground is 1.02:1 from it. What it buys is that every pair the panel can
     // composite is now swept by `token-contrast.test.ts` under the `canvas` scope, which none of
     // them were before.
-    <Surface
-      tone="canvas"
-      ref={scrollRef}
-      className="relative min-h-0 flex-1 overflow-auto"
-      data-testid="gantt-scroll"
-    >
-      {/* The explanation stays even though the grid now renders (M2-T4). Dropping it was the first
+    // **A positioned wrapper, so the splitter does not scroll with the content** (Graphite M8).
+    //
+    // The grid column is `position: sticky; left: 0`, so its right edge is always `gridWidth` from
+    // the scroller's left edge whatever the horizontal scroll. A divider drawn at that offset
+    // therefore has to be measured from the SCROLLER, not from the content — an absolutely
+    // positioned sibling outside the scrolling box, never a child of it.
+    //
+    // It is also outside `role="treegrid"` deliberately: a `row` may contain only cells, and
+    // ADR-0095 M5-T3 already paid for putting a non-cell inside one (an `aria-required-children`
+    // violation axe rates critical, firing once per rendered row).
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <Surface
+        tone="canvas"
+        ref={scrollRef}
+        className="relative min-h-0 flex-1 overflow-auto"
+        data-testid="gantt-scroll"
+      >
+        {/* The explanation stays even though the grid now renders (M2-T4). Dropping it was the first
           version of this change and it was wrong twice over: a reader met a chart column with no
           bars and nothing saying why, and a screen-reader user met it with no cue at all. The grid
           appearing is the fix for "the cells were unreachable"; it is not a reason to stop saying
           the plan has not been calculated. */}
-      {/* **The cap says what it withheld.** A silent truncation reads as "that is all the links there
+        {/* **The cap says what it withheld.** A silent truncation reads as "that is all the links there
           are", and a reader draws a conclusion from an absence that is an artefact — the defect
           class ADR-0081 (a dark capability), ADR-0059 M6 (an inert control) and ADR-0090 ("no
           silent caps") each record separately. Either the count is visible or there is no cap.
           `role="status"` so it is not sight-only, since the arrows themselves are aria-hidden. */}
-      {linkSet.withheld > 0 ? (
-        <div
-          role="status"
-          className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
-        >
-          {linkSet.withheld} more {linkSet.withheld === 1 ? 'link is' : 'links are'} not shown.
-        </div>
-      ) : null}
-      {/* **The collapse cap says what it withheld, for the same reason the link cap does.**
+        {linkSet.withheld > 0 ? (
+          <div
+            role="status"
+            className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
+          >
+            {linkSet.withheld} more {linkSet.withheld === 1 ? 'link is' : 'links are'} not shown.
+          </div>
+        ) : null}
+        {/* **The collapse cap says what it withheld, for the same reason the link cap does.**
           `serialiseCollapsed` computed this count from the day it shipped, its docblock said it was
           "reported rather than silently truncated", ADR-0095 and `docs/TECH_DEBT.md` #136 both
           recorded it as reported — and NOTHING read it. A planner on a programme with more than 40
@@ -882,205 +981,239 @@ export function GanttPanel({
           pull request, CI and the register row that claimed it — and was caught by the
           reconciliation pass's own step 7, eight lines below a comment reading "Either the count is
           visible or there is no cap." */}
-      {viewState !== undefined && viewState.collapsedWithheld > 0 ? (
+        {viewState !== undefined && viewState.collapsedWithheld > 0 ? (
+          <div
+            role="status"
+            className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
+          >
+            {viewState.collapsedWithheld} collapsed{' '}
+            {viewState.collapsedWithheld === 1 ? 'section is' : 'sections are'} not remembered in
+            this link — the address can only carry {MAX_COLLAPSED_IN_URL}.
+          </div>
+        ) : null}
+        {notCalculated ? (
+          <div role="status" className="border-border bg-muted border-b px-3 py-2">
+            <p className="text-foreground text-sm font-medium">This plan has not been calculated</p>
+            <p className="text-muted-foreground text-sm">
+              {rows.length === 1 ? 'The activity has' : `All ${rows.length} activities have`} no
+              scheduled dates yet. Recalculate the schedule to see the bar chart. You can still name
+              activities and set their durations.
+            </p>
+          </div>
+        ) : null}
         <div
-          role="status"
-          className="border-border bg-muted text-muted-foreground border-b px-3 py-1 text-xs"
-        >
-          {viewState.collapsedWithheld} collapsed{' '}
-          {viewState.collapsedWithheld === 1 ? 'section is' : 'sections are'} not remembered in this
-          link — the address can only carry {MAX_COLLAPSED_IN_URL}.
-        </div>
-      ) : null}
-      {notCalculated ? (
-        <div role="status" className="border-border bg-muted border-b px-3 py-2">
-          <p className="text-foreground text-sm font-medium">This plan has not been calculated</p>
-          <p className="text-muted-foreground text-sm">
-            {rows.length === 1 ? 'The activity has' : `All ${rows.length} activities have`} no
-            scheduled dates yet. Recalculate the schedule to see the bar chart. You can still name
-            activities and set their durations.
-          </p>
-        </div>
-      ) : null}
-      <div
-        role="treegrid"
-        aria-label="Schedule as a bar chart"
-        aria-rowcount={rows.length + 1}
-        aria-colcount={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
-        // Rows carry the roving tab stop, so the grid itself is never tabbed to — but an
-        // interactive role must still be focusable, so it stays a programmatic focus target.
-        tabIndex={-1}
-        onKeyDown={onKeyDown}
-        style={{ width: contentWidth }}
-      >
-        <div
-          role="row"
-          aria-rowindex={1}
-          className="bg-background sticky top-0 z-20 flex"
-          style={{ height: RULER_HEIGHT }}
+          role="treegrid"
+          aria-label="Schedule as a bar chart"
+          aria-rowcount={rows.length + 1}
+          aria-colcount={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
+          // Rows carry the roving tab stop, so the grid itself is never tabbed to — but an
+          // interactive role must still be focusable, so it stays a programmatic focus target.
+          tabIndex={-1}
+          onKeyDown={onKeyDown}
+          style={{ width: contentWidth }}
         >
           <div
-            className="bg-background border-border sticky left-0 z-10 flex shrink-0 items-end border-r border-b"
-            style={{ width: gridWidth }}
+            role="row"
+            aria-rowindex={1}
+            className="bg-background sticky top-0 z-20 flex"
+            style={{ height: RULER_HEIGHT }}
           >
-            {COLUMNS.map((column, i) => {
-              const active = sort.key === column.key;
-              const sortable = column.sortable !== false;
-              return (
-                <div
-                  key={column.key}
-                  role="columnheader"
-                  aria-colindex={i + 1}
-                  // `aria-sort` only where sorting is offered. On a column that cannot be sorted,
-                  // `none` is not "no sort applied" — it announces a sortable column nobody has
-                  // sorted yet, which is a promise the header does not keep.
-                  {...(sortable
-                    ? {
-                        'aria-sort': active
-                          ? sort.direction === 'asc'
-                            ? ('ascending' as const)
-                            : ('descending' as const)
-                          : ('none' as const),
-                      }
-                    : {})}
-                  className="shrink-0 px-2 pb-1"
-                  style={{ width: columnWidth(column) }}
-                >
-                  {sortable ? (
-                    <button
-                      type="button"
-                      onClick={() => onSort(column.key as GanttSortKey)}
-                      className={cn(
-                        'focus-visible:ring-ring w-full rounded-sm text-xs font-medium focus-visible:ring-2 focus-visible:outline-none',
-                        column.align === 'right' ? 'text-right' : 'text-left',
-                        active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-                      )}
-                    >
-                      {column.label}
-                      {active ? (
-                        <span aria-hidden="true">{sort.direction === 'asc' ? ' ▲' : ' ▼'}</span>
-                      ) : null}
-                    </button>
-                  ) : (
-                    // Plain text, NOT a shaded button: there is nothing here a planner could do if
-                    // only they had permission, so a disabled control would be ADR-0082's "omit"
-                    // case dressed as its "shade with a reason" case.
-                    <span
-                      className={cn(
-                        'text-muted-foreground block w-full text-xs font-medium',
-                        column.align === 'right' ? 'text-right' : 'text-left',
-                      )}
-                    >
-                      {column.label}
-                    </span>
-                  )}
+            <div
+              className="bg-background border-border sticky left-0 z-10 flex shrink-0 items-end border-r border-b"
+              style={{ width: gridWidth }}
+            >
+              {COLUMNS.map((column, i) => {
+                const active = sort.key === column.key;
+                const sortable = column.sortable !== false;
+                return (
+                  <div
+                    key={column.key}
+                    role="columnheader"
+                    aria-colindex={i + 1}
+                    // `aria-sort` only where sorting is offered. On a column that cannot be sorted,
+                    // `none` is not "no sort applied" — it announces a sortable column nobody has
+                    // sorted yet, which is a promise the header does not keep.
+                    {...(sortable
+                      ? {
+                          'aria-sort': active
+                            ? sort.direction === 'asc'
+                              ? ('ascending' as const)
+                              : ('descending' as const)
+                            : ('none' as const),
+                        }
+                      : {})}
+                    className="shrink-0 px-2 pb-1"
+                    style={{ width: resolveColumnWidth(column) }}
+                  >
+                    {sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => onSort(column.key as GanttSortKey)}
+                        className={cn(
+                          'focus-visible:ring-ring w-full rounded-sm text-xs font-medium focus-visible:ring-2 focus-visible:outline-none',
+                          column.align === 'right' ? 'text-right' : 'text-left',
+                          active
+                            ? 'text-foreground'
+                            : 'text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        {column.label}
+                        {active ? (
+                          <span aria-hidden="true">{sort.direction === 'asc' ? ' ▲' : ' ▼'}</span>
+                        ) : null}
+                      </button>
+                    ) : (
+                      // Plain text, NOT a shaded button: there is nothing here a planner could do if
+                      // only they had permission, so a disabled control would be ADR-0082's "omit"
+                      // case dressed as its "shade with a reason" case.
+                      <span
+                        className={cn(
+                          'text-muted-foreground block w-full text-xs font-medium',
+                          column.align === 'right' ? 'text-right' : 'text-left',
+                        )}
+                      >
+                        {column.label}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              {actionColumns === 0 ? null : (
+                // `sr-only`, so it names the column for assistive technology without taking layout —
+                // the trigger sits in the slack at the end of the pinned block and has no visible
+                // heading of its own.
+                <div role="columnheader" aria-colindex={COLUMNS.length + 1} className="sr-only">
+                  Actions
                 </div>
-              );
-            })}
-            {actionColumns === 0 ? null : (
-              // `sr-only`, so it names the column for assistive technology without taking layout —
-              // the trigger sits in the slack at the end of the pinned block and has no visible
-              // heading of its own.
-              <div role="columnheader" aria-colindex={COLUMNS.length + 1} className="sr-only">
-                Actions
-              </div>
-            )}
-            {showVariance ? (
-              <div
-                role="columnheader"
-                aria-colindex={COLUMNS.length + actionColumns + 1}
-                aria-sort="none"
-                className="text-muted-foreground shrink-0 px-2 pb-1 text-right text-xs font-medium"
-                style={{ width: VARIANCE_COLUMN_WIDTH }}
-              >
-                vs baseline
-              </div>
-            ) : null}
-          </div>
-          <div
-            role="columnheader"
-            aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
-            aria-sort="none"
-            className="border-border shrink-0 border-b"
-            style={{ width: chartPx }}
-          >
-            <span className="sr-only">Timeline</span>
-            {/* No ruler on an uncalculated plan: a date scale over an empty chart would be the
+              )}
+              {showVariance ? (
+                <div
+                  role="columnheader"
+                  aria-colindex={COLUMNS.length + actionColumns + 1}
+                  aria-sort="none"
+                  className="text-muted-foreground shrink-0 px-2 pb-1 text-right text-xs font-medium"
+                  style={{ width: VARIANCE_COLUMN_WIDTH }}
+                >
+                  vs baseline
+                </div>
+              ) : null}
+            </div>
+            <div
+              role="columnheader"
+              aria-colindex={COLUMNS.length + actionColumns + (showVariance ? 2 : 1)}
+              aria-sort="none"
+              className="border-border shrink-0 border-b"
+              style={{ width: chartPx }}
+            >
+              <span className="sr-only">Timeline</span>
+              {/* No ruler on an uncalculated plan: a date scale over an empty chart would be the
                 invented fact the fallback anchor exists to avoid showing. */}
-            {notCalculated ? null : (
-              <GanttRuler anchorIso={safeAnchor} widthPx={chartPx} pxPerDay={pxPerDay} />
-            )}
+              {notCalculated ? null : (
+                <GanttRuler anchorIso={safeAnchor} widthPx={chartPx} pxPerDay={pxPerDay} />
+              )}
+            </div>
           </div>
-        </div>
 
-        <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-          {/* The logic overlay sits ABOVE the rows and takes no pointer events, so an arrow is
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+            {/* The logic overlay sits ABOVE the rows and takes no pointer events, so an arrow is
               never a hole in the drag surface — without that the resize handle under a passing
               link would silently stop responding on exactly the dense plans where both matter. */}
-          <GanttLinkOverlay
-            paths={linkSet.paths}
-            withheld={linkSet.withheld}
-            rowHeight={GANTT_ROW_HEIGHT}
-            height={virtualizer.getTotalSize()}
-            width={contentWidth}
-            chartLeft={gridWidth}
-            barBoundsForRow={(index) => {
-              const target = rows[index];
-              if (target === undefined || target.kind !== 'activity') return null;
-              const g = barGeometry(target.activity, safeAnchor, pxPerDay, barDateSource);
-              return g === null ? null : { x: g.x, width: g.width };
-            }}
-          />
-          {virtualizer.getVirtualItems().map((item) => {
-            const row = rows[item.index];
-            if (!row) return null;
-            const id = rowId(row);
-            const shared = {
-              rowIndex: item.index,
-              top: item.start,
-              anchorIso: safeAnchor,
-              chartPx,
-              pxPerDay,
-              barDateSource,
-              hoursPerDayFor,
-              editing,
-              drag,
-              dependencies,
-              predecessorsById,
-              rowMenuContextFor,
-              rowStructureFor,
-              actionColumns,
-              columns: COLUMNS,
-              gridWidth,
-              showVariance,
-              isTabStop: item.index === tabStopIndex,
-              registerRef: (element: HTMLDivElement | null) => {
-                if (element) rowRefs.current.set(id, element);
-                else rowRefs.current.delete(id);
-              },
-              onFocusRow: () => setFocusedId(id),
-              onToggle: toggleCollapsed,
-              // Only when a path is actually selected: an absent/empty set leaves every row's
-              // classes and cells exactly as they are, which is the parity contract.
-              offFloatPath:
-                emphasisIds !== undefined && emphasisIds.size > 0 && !emphasisIds.has(id),
-            };
-            return row.kind === 'bucket' ? (
-              <GanttBucketRowView key={id} row={row} {...shared} />
-            ) : (
-              <GanttRowView
-                key={id}
-                row={row}
-                variance={varianceByActivityId?.get(id)}
-                isSelected={id === selectedActivityId}
-                onSelect={onSelectActivity}
-                {...shared}
-              />
-            );
-          })}
+            <GanttLinkOverlay
+              paths={linkSet.paths}
+              withheld={linkSet.withheld}
+              rowHeight={GANTT_ROW_HEIGHT}
+              height={virtualizer.getTotalSize()}
+              width={contentWidth}
+              chartLeft={gridWidth}
+              barBoundsForRow={(index) => {
+                const target = rows[index];
+                if (target === undefined || target.kind !== 'activity') return null;
+                const g = barGeometry(target.activity, safeAnchor, pxPerDay, barDateSource);
+                return g === null ? null : { x: g.x, width: g.width };
+              }}
+            />
+            {virtualizer.getVirtualItems().map((item) => {
+              const row = rows[item.index];
+              if (!row) return null;
+              const id = rowId(row);
+              const shared = {
+                rowIndex: item.index,
+                top: item.start,
+                anchorIso: safeAnchor,
+                chartPx,
+                pxPerDay,
+                barDateSource,
+                hoursPerDayFor,
+                editing,
+                drag,
+                dependencies,
+                predecessorsById,
+                rowMenuContextFor,
+                rowStructureFor,
+                actionColumns,
+                columns: COLUMNS,
+                gridWidth,
+                resolveColumnWidth,
+                showVariance,
+                isTabStop: item.index === tabStopIndex,
+                registerRef: (element: HTMLDivElement | null) => {
+                  if (element) rowRefs.current.set(id, element);
+                  else rowRefs.current.delete(id);
+                },
+                onFocusRow: () => setFocusedId(id),
+                onToggle: toggleCollapsed,
+                // Only when a path is actually selected: an absent/empty set leaves every row's
+                // classes and cells exactly as they are, which is the parity contract.
+                offFloatPath:
+                  emphasisIds !== undefined && emphasisIds.size > 0 && !emphasisIds.has(id),
+              };
+              return row.kind === 'bucket' ? (
+                <GanttBucketRowView key={id} row={row} {...shared} />
+              ) : (
+                <GanttRowView
+                  key={id}
+                  row={row}
+                  variance={varianceByActivityId?.get(id)}
+                  isSelected={id === selectedActivityId}
+                  onSelect={onSelectActivity}
+                  {...shared}
+                />
+              );
+            })}
+          </div>
         </div>
+      </Surface>
+      {/* The divider itself. `PanelResizer` is the APG window splitter this app already uses for the
+          Explorer rail and the Graphite drawer — `role="separator"`, `aria-valuenow`, arrow-key
+          steps, Home/End — so §A15's "not a mouse-only handle" is satisfied by reusing the thing
+          that satisfies it rather than by writing a second one. */}
+      <div
+        // `w-1.5` (6 px) is the sizing scale's own answer for a grab strip; the half-width offset
+        // rides in the dynamic style, where the position already lives. The first version wrote
+        // `w-[6px] -left-[3px]` and `token-architecture.test.ts` refused both — correctly, since a
+        // ratchet that admits an arbitrary value whenever something new arrives is a counter.
+        className="absolute inset-y-0 z-30 w-1.5"
+        style={{ left: gridWidth - 3 }}
+        data-gantt-grid-splitter
+      >
+        <PanelResizer
+          orientation="vertical"
+          size={gridWidth}
+          min={FIXED_WIDTH}
+          max={GANTT_GRID_MAX_WIDTH}
+          label="Grid width"
+          onResize={gridPrefs.setSize}
+          // Measured from the SCROLLER's left edge, because that is what the sticky column's width
+          // is measured from — `clientX` alone would be the viewport's and would be wrong by
+          // however far the panel sits from the window edge.
+          pointerToSize={(event) => {
+            const box = scrollRef.current?.getBoundingClientRect();
+            return box ? event.clientX - box.left : gridWidth;
+          }}
+          className="absolute inset-0"
+        />
       </div>
-    </Surface>
+    </div>
   );
 }
 
@@ -1103,6 +1236,7 @@ function GanttBucketRowView({
   chartPx,
   pxPerDay,
   gridWidth,
+  resolveColumnWidth,
   showVariance,
   isTabStop,
   registerRef,
@@ -1117,6 +1251,8 @@ function GanttBucketRowView({
   chartPx: number;
   pxPerDay: number;
   gridWidth: number;
+  /** One width per column, resolved against the pane — see the panel's own docblock. */
+  resolveColumnWidth: (column: GanttColumn) => number;
   showVariance: boolean;
   actionColumns: number;
   /** The columns THIS render draws — hideable since M5-T1, so never a module constant. */
@@ -1172,7 +1308,7 @@ function GanttBucketRowView({
           role="gridcell"
           aria-colindex={1}
           className="text-muted-foreground shrink-0 truncate px-2 text-xs"
-          style={{ width: columnWidth(COLUMNS[0]!), paddingLeft: 8 }}
+          style={{ width: resolveColumnWidth(COLUMNS[0]!), paddingLeft: 8 }}
         >
           <span aria-hidden="true" className="text-muted-foreground mr-1 inline-flex align-middle">
             {row.expanded ? (
@@ -1186,7 +1322,7 @@ function GanttBucketRowView({
           role="gridcell"
           aria-colindex={2}
           className="text-muted-foreground shrink-0 truncate px-2 text-xs italic"
-          style={{ width: gridWidth - columnWidth(COLUMNS[0]!) }}
+          style={{ width: gridWidth - resolveColumnWidth(COLUMNS[0]!) }}
         >
           {label}
           {/* The bucket fades with everything else off the path, so it needs the same marker the
@@ -1256,6 +1392,8 @@ interface GanttRowViewProps {
   /** The columns THIS render draws — hideable since M5-T1, so never a module constant. */
   columns: readonly GanttColumn[];
   gridWidth: number;
+  /** One width per column, resolved against the pane — see the panel's own docblock. */
+  resolveColumnWidth: (column: GanttColumn) => number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
   isTabStop: boolean;
@@ -1310,6 +1448,7 @@ function GanttRowView({
   predecessorsById,
   rowMenuContextFor,
   gridWidth,
+  resolveColumnWidth,
   variance,
   showVariance,
   isTabStop,
@@ -1489,7 +1628,7 @@ function GanttRowView({
                 // the value being replaced and still the best identifier the row has.
                 label={`${column.label}, ${activity.name}`}
                 colIndex={i + 1}
-                width={columnWidth(column)}
+                width={resolveColumnWidth(column)}
                 align={column.align}
                 gate={editing.gateFor(cellKey, activity.id)}
                 editing={cellOpen}
@@ -1522,7 +1661,7 @@ function GanttRowView({
                 column.align === 'right' ? 'text-right' : 'text-left',
               )}
               style={{
-                width: columnWidth(column),
+                width: resolveColumnWidth(column),
                 // Indentation belongs to the first column only, so the date columns stay aligned
                 // down the page however deep the hierarchy goes.
                 ...(i === 0 ? { paddingLeft: 8 + depth * 14 } : {}),

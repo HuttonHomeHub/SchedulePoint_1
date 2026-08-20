@@ -12,6 +12,7 @@ import {
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
+import { clickToolbarCommand } from '../e2e-support/toolbar';
 
 /**
  * **M2-T5 — a duration typed into the Gantt grid, checked at the API.**
@@ -153,7 +154,7 @@ test('a sub-day duration typed into the grid is stored as minutes', async ({ pag
   await startEditing(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
 
   await durationCell(page).dblclick();
@@ -181,7 +182,7 @@ test('a whole-day duration on the same calendar stores its own minutes', async (
   await startEditing(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
 
   await durationCell(page).dblclick();
@@ -207,7 +208,7 @@ test('Escape discards, so a mistyped cell writes nothing', async ({ page }) => {
   await startEditing(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
 
   const before = (await readActivity(page, orgSlug, 'Seeded 0')).durationMinutes;
@@ -233,7 +234,7 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
 
   // Focus a row the way a keyboard planner does, then enter cell mode. The unit suite proves F2

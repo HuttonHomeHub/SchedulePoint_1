@@ -11,6 +11,7 @@ import {
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
+import { clickToolbarCommand } from '../e2e-support/toolbar';
 
 /**
  * **M3 — a bar moved from the Gantt, checked at the API in BOTH scheduling modes.**
@@ -103,7 +104,7 @@ async function ganttPlan(page: Page, count = 3): Promise<string> {
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, count);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   return orgSlug;
 }
 
