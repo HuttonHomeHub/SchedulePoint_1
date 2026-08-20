@@ -148,6 +148,54 @@ the guard belongs on the subject transition, not only on the close.** Whatever s
 must be one guard both hosts route through, because two copies of a discard rule is how one host
 gets a fix and its neighbour does not (ADR-0064 §7, recorded five times in this register).
 
+## What T2 ships, and what it deliberately does not
+
+**Entry points** (ADR-0081: a milestone names them or declares itself dark):
+
+- The tool rail's **Activity details** button opens the drawer on the activity subject.
+- The canvas selection bar's **Edit** — and the other two ADR-0060 intents — fill it.
+- With nothing selected the drawer says so explicitly, and renders **no editor at all**.
+
+**The activities table's row menu still opens the modal.** That is a second editor mount with its
+own `editorIntent` state (`ActivitiesTable.tsx:894`), and re-pointing it is T4's work rather than a
+line to add here — the table is a feature component that does not hold the workspace model, so
+routing its three row actions through one editor is a props change with its own tests. Recorded
+rather than left to be discovered: until T4, the same activity opens in a drawer from the canvas
+and a modal from the table.
+
+### What the browser found, and what I got wrong diagnosing it
+
+Driving the real product turned up one thing worth fixing and one wrong diagnosis, and the wrong one
+is recorded because it is the more instructive.
+
+**The labelling fix, which stands.** The rail button was called **Activity**, which collides with the
+Add split-button's caret (`Activity type: Task`) under any substring match — the probe hit it
+immediately as a strict-mode violation. It is now **Activity details**, and the better reason is not
+the collision: a rail button should say what pressing it _shows_, as "Project Explorer" beside it
+does. A bare noun names the subject, not the panel.
+
+**The wrong diagnosis.** I saw a modal `<Dialog>` open while the drawer was on screen and concluded
+that `useDrawerSubject` was unregistering its subject on every change — a cleanup returned from the
+registering effect runs on each dependency change, so a new `title` would null the registration for
+one commit, flip the shell's `showingContext`, and flip the editor's chrome. I wrote that up as a
+found defect. **Then I could not make a test fail against it.** React batches the cleanup's
+`register(null)` with the effect's re-registration into one commit, so no render ever observes the
+`null`. The real cause was that my probe clicked the **activities table's** editor — the second
+mount named above — rather than the workspace's, which the instrumented render log then showed had
+never received `open: true` at all.
+
+The two-effect split is kept, on a smaller and honest argument: it is what the code _means_. This
+hook unregisters when its route goes away, and expressing that as a dependency-change cleanup relies
+on a batching detail to keep a wrong statement harmless. It is not kept on the strength of a defect
+it did not fix.
+
+Same for the icon: `icon: <Info … />` in a dependency array is a new element every render, which is
+a register → setState → re-render loop. **Reasoned, not observed** — the one call site hoists it to
+a module constant, so the loop was never reachable. Held in a ref so it is unreachable for the next
+caller too.
+
+Two claims corrected rather than quietly dropped, in the milestone that made them (ADR-0076 Class 3).
+
 ## Sequence
 
 | Task                                                                                         | Ends with                                                                                                                     |

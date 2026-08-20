@@ -1,10 +1,18 @@
+import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
+import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
+import { ContextDrawerEmpty } from '@/components/layout/drawer/context-drawer';
+import {
+  useDrawerSubject,
+  useDrawerSubjectShowing,
+} from '@/components/layout/drawer/drawer-subject';
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Dialog } from '@/components/ui/dialog';
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
@@ -13,7 +21,8 @@ import {
 } from '@/config/env';
 import {
   ActivityCreateDialog,
-  ActivityEditorDialog,
+  ActivityEditor,
+  type ActivityEditorShell,
   deleteActivityDescription,
   dissolveSummaryDescription,
   useDeleteActivity,
@@ -36,6 +45,92 @@ import { ActivityNotesSection } from '@/features/notes';
  * `VITE_ACTIVITY_EDITOR_TABS` (ADR-0089); there is no longer another surface for an entry point to
  * open.
  */
+/**
+ * Hoisted to module scope so the registration's icon is one element rather than a new one per
+ * render. `useDrawerSubject` holds it in a ref for the same reason, but a stable element at the
+ * call site is the honest fix — the icon is a property of the subject, not of this render.
+ */
+const ACTIVITY_SUBJECT_ICON = <Info aria-hidden="true" className="size-4" />;
+
+/**
+ * The workspace's one activity editor, **in whichever chrome the shell is offering** (Graphite
+ * M6-T2).
+ *
+ * It renders exactly once. `ActivityEditor` takes a `shell` render prop (M6-T1), so the choice
+ * between a modal dialog and the trailing context drawer is a choice of chrome around an unchanged
+ * component — not two mounts. Mounting one of each would give a single activity two independent
+ * sets of scope forms and two independent dirty states, and a planner could save one and lose the
+ * other with both on screen.
+ *
+ * **The drawer's shell is a passthrough**, which is what makes "the drawer must not inherit focus
+ * containment" structural rather than a rule someone has to remember: there is no `<Dialog>` in its
+ * tree to trap focus, so there is nothing to opt out of.
+ *
+ * The subject is registered for as long as this workspace is mounted, so the rail's button appears
+ * with the plan and leaves with it. Its `title` is the activity's own name — and deliberately
+ * absent when nothing is selected, because the drawer then says so rather than keeping the last
+ * subject's heading over an empty body.
+ */
+function PlanActivityEditor({
+  activity,
+  ...props
+}: Omit<Parameters<typeof ActivityEditor>[0], 'shell'>): React.ReactElement {
+  const showingInDrawer = useDrawerSubjectShowing();
+  useDrawerSubject({
+    // **"Activity details", not "Activity".** The shorter name collides with the Add split-button's
+    // caret ("Activity type: Task") under any substring match, which is how the browser probe found
+    // it — but the reason to change it is that a rail button should say what pressing it SHOWS, as
+    // "Project Explorer" beside it does. A bare noun names the subject and not the panel.
+    label: 'Activity details',
+    icon: ACTIVITY_SUBJECT_ICON,
+    ...(activity ? { title: activity.name } : {}),
+  });
+
+  /**
+   * **The drawer's chrome is a passthrough — and its empty state is not optional.**
+   *
+   * A modal hides itself when `open` is false; a drawer has no such state, so without this branch
+   * selecting nothing would paint the whole four-tab editor against `activity: undefined`. That is
+   * worse than it sounds: the tabs render, the Save bars render, and the fields read as an activity
+   * with no name — a screen that looks like data and is not. The M4 rule ("never the last subject's
+   * stale data") is the same rule; this is the case where there is no data at all.
+   *
+   * Found by looking at a screenshot rather than by a test, which is the standing instruction after
+   * `orientation` passed typecheck and 119 unit tests while rendering a row that overflowed a 48 px
+   * rail.
+   */
+  const drawerShell: ActivityEditorShell = ({ children }) => (
+    <ChromePortal name="drawer">
+      {props.open ? (
+        children
+      ) : (
+        <ContextDrawerEmpty>Select an activity to see its details here.</ContextDrawerEmpty>
+      )}
+    </ChromePortal>
+  );
+  const dialogShell: ActivityEditorShell = ({ requestClose, title, description, children }) => (
+    <Dialog
+      open={props.open}
+      onClose={requestClose}
+      confirmBeforeClose
+      size="xl"
+      body="flush"
+      title={title}
+      {...(description === undefined ? {} : { description })}
+    >
+      {children}
+    </Dialog>
+  );
+
+  return (
+    <ActivityEditor
+      {...props}
+      {...(activity ? { activity } : { activity: undefined })}
+      shell={showingInDrawer ? drawerShell : dialogShell}
+    />
+  );
+}
+
 export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): React.ReactElement {
   const { orgSlug, planId } = model;
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -136,7 +231,7 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
 
   return (
     <>
-      <ActivityEditorDialog
+      <PlanActivityEditor
         orgSlug={orgSlug}
         planId={planId}
         open={intended !== undefined}

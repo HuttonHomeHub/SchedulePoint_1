@@ -59,7 +59,7 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   ActivityFormDialog: () => null,
   ActivityProgressDialog: () => null,
   ActivityStepsDialog: () => null,
-  ActivityEditorDialog: (props: Record<string, unknown>) => {
+  ActivityEditor: (props: Record<string, unknown>) => {
     editorProps(props);
     return <div data-testid="activity-editor" />;
   },

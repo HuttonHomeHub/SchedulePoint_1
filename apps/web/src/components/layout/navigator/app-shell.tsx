@@ -15,7 +15,13 @@ import { ToolRail, type DrawerSubject } from './tool-rail';
 const STAGE_MIN_WIDTH = 360;
 
 import { ChromeBandRow, ChromeSlotHost } from '@/components/layout/chrome/chrome-band';
+import { ChromeSlot } from '@/components/layout/chrome/chrome-slot';
 import { ContextDrawer } from '@/components/layout/drawer/context-drawer';
+import {
+  DrawerSubjectProvider,
+  DrawerSubjectShowingProvider,
+  useDrawerSubjectRegistration,
+} from '@/components/layout/drawer/drawer-subject';
 import {
   CONTEXT_DRAWER_MIN_WIDTH,
   useContextDrawerPrefs,
@@ -39,7 +45,12 @@ const LG_QUERY = '(min-width: 64rem)';
 export function AppShell(): React.ReactElement {
   return (
     <AnnouncerProvider>
-      <ShellFrame />
+      {/* Above `ShellFrame`, because the rail reads the registration to decide whether to render a
+          button and the drawer reads it for its heading — and the route that WRITES it renders
+          inside `<Outlet/>`, below both. */}
+      <DrawerSubjectProvider>
+        <ShellFrame />
+      </DrawerSubjectProvider>
     </AnnouncerProvider>
   );
 }
@@ -52,6 +63,18 @@ function ShellFrame(): React.ReactElement {
   const drawer = useContextDrawerPrefs();
   const [subject, setSubject] = useState<DrawerSubject>('explorer');
   const announce = useAnnounce();
+  const contextSubject = useDrawerSubjectRegistration();
+  /**
+   * **A registration that goes away takes its subject with it.**
+   *
+   * Navigating off a plan unregisters, and without this the drawer would keep showing the
+   * `'context'` subject — an empty portal target under a heading naming something no longer on
+   * screen, with no rail button beside it to change. Derived rather than corrected in an effect:
+   * an effect would paint the stale panel for a frame first, and setting state from one is the
+   * cascading-render pattern the lint rule rejects (the same argument `ActivityEditorDialog` makes
+   * about its landing tab).
+   */
+  const showingContext = subject === 'context' && contextSubject !== null;
 
   /**
    * **The drawer's effective maximum, clamped against the live shell width.**
@@ -107,25 +130,41 @@ function ShellFrame(): React.ReactElement {
    * The announcement is here rather than in the rail because only the shell knows which of the
    * three outcomes happened; the rail knows only which button was pressed.
    */
+  /**
+   * What to CALL the drawer when speaking about it.
+   *
+   * Both announcements said "Project Explorer" unconditionally, which was true while that was the
+   * only subject and becomes a false statement the moment a second one exists — a reader who opens
+   * the activity panel would be told the Explorer opened. The register keeps recording this exact
+   * shape (ADR-0064's confirmation naming the wrong edit, ADR-0060's invented pen message that was
+   * false whenever nobody held the pen); it is cheaper to fix while adding the second subject than
+   * to find later from a report.
+   */
+  const subjectName = useCallback(
+    (which: DrawerSubject) =>
+      which === 'context' ? (contextSubject?.label ?? 'Details') : 'Project Explorer',
+    [contextSubject],
+  );
+
   const selectSubject = useCallback(
     (next: DrawerSubject) => {
       const showing = !drawer.collapsed;
       if (showing && next === subject) {
         drawer.collapse();
-        announce('Project Explorer closed.');
+        announce(`${subjectName(next)} closed.`);
         return;
       }
       setSubject(next);
       if (!showing) drawer.expand();
-      announce('Project Explorer opened.');
+      announce(`${subjectName(next)} opened.`);
     },
-    [drawer, subject, announce],
+    [drawer, subject, announce, subjectName],
   );
 
   const closeDrawerPanel = useCallback(() => {
     drawer.collapse();
-    announce('Project Explorer closed.');
-  }, [drawer, announce]);
+    announce(`${subjectName(subject)} closed.`);
+  }, [drawer, announce, subjectName, subject]);
 
   /**
    * **Escape closes the drawer — as the OUTERMOST rung of the existing ladder, never a new
@@ -187,7 +226,7 @@ function ShellFrame(): React.ReactElement {
     <ShellContext.Provider value={shell}>
       <NavigatorCrud orgSlug={orgSlug} canWrite={canWrite} expansion={expansion}>
         <ChromeSlotHost>
-          {({ rowsSlotRef, railSlotRef }) => (
+          {({ rowsSlotRef, railSlotRef, drawerSlotRef }) => (
             <>
               {/* **The shell is ONE grid** (Graphite M2). It replaces nested flex columns, and the
                   reason is §4a: the command band spans the columns the drawer sits inside, so
@@ -256,6 +295,11 @@ function ShellFrame(): React.ReactElement {
                     subject={subject}
                     drawerOpen={!drawer.collapsed}
                     onSelectSubject={selectSubject}
+                    contextSubject={
+                      contextSubject
+                        ? { label: contextSubject.label, icon: contextSubject.icon }
+                        : null
+                    }
                   />
                 </div>
 
@@ -282,7 +326,12 @@ function ShellFrame(): React.ReactElement {
                   tabIndex={-1}
                   className="col-start-2 row-start-2 flex min-h-0 min-w-0 flex-col overflow-auto focus-visible:outline-none"
                 >
-                  <Outlet />
+                  {/* The route learns whether the shell is showing what it registered, because
+                      that decides the editor's chrome — a drawer portal or a modal — and one
+                      activity must never have two of them. */}
+                  <DrawerSubjectShowingProvider showing={showingContext}>
+                    <Outlet />
+                  </DrawerSubjectShowingProvider>
                 </main>
 
                 {/* Row 2, column 3 — **the context drawer** (ADR-0099 D2). An `auto` column with
@@ -296,13 +345,28 @@ function ShellFrame(): React.ReactElement {
                 {drawer.collapsed ? null : (
                   <div className="col-start-3 row-start-2 hidden min-h-0 shrink-0 lg:flex">
                     <ContextDrawer
-                      title="Project Explorer"
+                      // The registered subject names ITSELF ("Excavate"), and says so explicitly
+                      // when it has nothing selected rather than keeping the previous subject's
+                      // heading over an empty body — the M4 rule ("never the last subject's stale
+                      // data") applied to the heading as well as the content.
+                      title={
+                        showingContext
+                          ? (contextSubject?.title ?? contextSubject?.label ?? 'Details')
+                          : 'Project Explorer'
+                      }
                       onClose={closeDrawerPanel}
                       width={drawerWidth}
                       onResize={drawer.setSize}
                       className="flex min-h-0"
                     >
-                      <NavigatorRail orgSlug={orgSlug} expansion={expansion} />
+                      {showingContext ? (
+                        // The route's own markup arrives by portal, so it stays in the plan's React
+                        // tree and keeps reading the plan's model and gating (ADR-0029). The shell
+                        // hosts a `<div>` and learns nothing.
+                        <ChromeSlot slotRef={drawerSlotRef} name="drawer" />
+                      ) : (
+                        <NavigatorRail orgSlug={orgSlug} expansion={expansion} />
+                      )}
                     </ContextDrawer>
                   </div>
                 )}

@@ -9,8 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
 import { OrgSwitcher } from '@/features/organizations';
 
-/** The drawer subjects the shell itself owns. Plan-scoped subjects arrive with the plan. */
-export type DrawerSubject = 'explorer';
+/**
+ * The drawer subjects the shell itself owns, plus **one generic slot** for a subject a route
+ * registers (Graphite M6-T2).
+ *
+ * `'context'` is deliberately not `'activity'`. The rule above this line has held since M4 — the
+ * shell owns its own subjects and plan-scoped ones arrive with the plan — and an `'activity'`
+ * literal here would be the shell knowing what a plan is, which is what ADR-0029 exists to prevent.
+ * What fills this subject is `useDrawerSubject`'s business; the shell only learns a label, a title
+ * and an icon, and hosts the markup through the `drawer` chrome slot.
+ */
+export type DrawerSubject = 'explorer' | 'context';
 
 /**
  * The **tool rail** — the leading edge, top to bottom, at a fixed 48 px (ADR-0099 D1).
@@ -41,6 +50,7 @@ export function ToolRail({
   subject,
   drawerOpen,
   onSelectSubject,
+  contextSubject,
 }: {
   orgSlug?: string | undefined;
   /**
@@ -59,6 +69,15 @@ export function ToolRail({
    * opens the drawer, re-points it, or closes it because the reader pressed the one already shown.
    */
   onSelectSubject: (subject: DrawerSubject) => void;
+  /**
+   * What the current route has registered for the generic `'context'` subject, or `null`.
+   *
+   * **`null` renders no button at all**, which is the same contract `empty:hidden` gives the rail
+   * slot on the twelve screens that are not a plan: a control that opens nothing is worse than an
+   * absent one, and ADR-0082's rule for a menu whose every item would be shaded is exactly this
+   * one column along.
+   */
+  contextSubject?: { label: string; icon: React.ReactNode } | null | undefined;
 }): React.ReactElement {
   return (
     <Surface
@@ -93,6 +112,17 @@ export function ToolRail({
         >
           <PanelLeft aria-hidden="true" className="size-4" />
         </Button>
+        {contextSubject ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={contextSubject.label}
+            aria-pressed={drawerOpen && subject === 'context'}
+            onClick={() => onSelectSubject('context')}
+          >
+            {contextSubject.icon}
+          </Button>
+        ) : null}
       </div>
 
       {/* **The plan's mode cluster** — `Early | Visual` and `Diagram | Gantt`. It was 400 px of the

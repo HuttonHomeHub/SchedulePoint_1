@@ -48,7 +48,7 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   )),
   // A probe standing in for the real editor — surfaces the open state + which activity, and
   // captures the `onSaved` prop so we can assert the workspace's undo-recording seam is wired through.
-  ActivityEditorDialog: ({
+  ActivityEditor: ({
     open,
     activity,
     onSaved,

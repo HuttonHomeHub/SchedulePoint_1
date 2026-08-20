@@ -43,7 +43,14 @@ import { cn } from '@/lib/utils';
  * cluster into the RAIL, which the shell renders and which must stay plan-unaware (ADR-0029) — the
  * same problem the band solved in ADR-0055 §3, one column along.
  */
-export type ChromeSlotName = 'rows' | 'rail';
+/**
+ * `drawer` is the trailing context drawer's body (Graphite M6-T2) — the third name, and taken on
+ * exactly the terms the paragraph above sets. An activity editor belongs *visually* to the drawer,
+ * which the shell owns, and *logically* to the plan workspace, which owns `usePlanWorkspaceModel`,
+ * the ADR-0060 per-scope gating and the mutation hooks it reads. Lifting any of that into the shell
+ * is the thing ADR-0029 forbids; a portal moves the DOM node and leaves the React tree alone.
+ */
+export type ChromeSlotName = 'rows' | 'rail' | 'drawer';
 
 const ChromeSlotContext = createContext<Partial<Record<ChromeSlotName, HTMLElement | null>>>({});
 
@@ -87,7 +94,14 @@ export function ChromeSlot({
       data-chrome-slot={name}
       // The rows slot stacks; the identity slot is one item in a flex row and must be able to
       // shrink, or a long plan name pushes the account chip off the header.
-      className={cn(name === 'rows' ? 'flex flex-col' : 'flex min-w-0 items-center', className)}
+      className={cn(
+        name === 'rows' && 'flex flex-col',
+        // The drawer body is a COLUMN that must be able to shrink and scroll — the editor inside it
+        // is a tab rail beside a pane, and a row layout would lay them side by side in 224–420 px.
+        name === 'drawer' && 'flex min-h-0 flex-1 flex-col',
+        name === 'rail' && 'flex min-w-0 items-center',
+        className,
+      )}
     />
   );
 }
