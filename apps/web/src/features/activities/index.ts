@@ -33,7 +33,11 @@ export { ActivityEditorDialog } from './components/ActivityEditorDialog';
 // returns its children, so the drawer inherits no focus trap by construction rather than by
 // discipline. The file keeps its `ActivityEditorDialog` name deliberately: renaming it would
 // rewrite the imports of the eight suites whose passing UNCHANGED is this milestone's proof.
-export { ActivityEditor, type ActivityEditorShell } from './components/ActivityEditorDialog';
+export {
+  ActivityEditor,
+  type ActivityEditorShell,
+  modalShell,
+} from './components/ActivityEditorDialog';
 export {
   deriveActivityEditorGating,
   type ActivityEditorGating,

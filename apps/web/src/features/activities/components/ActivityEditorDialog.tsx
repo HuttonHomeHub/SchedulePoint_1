@@ -860,8 +860,14 @@ export function ActivityEditor({
 }
 
 /**
- * The tabbed activity editor **as a modal dialog** — the shape every existing host renders and the
- * only one before Graphite M6.
+ * The tabbed activity editor **as a modal dialog** — the shape every host rendered before Graphite
+ * M6.
+ *
+ * **It has no production caller as of M6-T5, and that is recorded rather than left to be
+ * discovered.** The plan workspace composes `ActivityEditor` with {@link modalShell} directly,
+ * because it must choose between that and a drawer portal at render time. What survives here is the
+ * tested public composition — eleven suites mount it — and the modal itself is very much alive: the
+ * context drawer is `hidden lg:flex`, so every viewport below 1024 gets this chrome.
  *
  * Its public signature is deliberately unchanged by the shell extraction, which is what makes the
  * milestone's proof condition mean anything: all eight `ActivityEditorDialog.*.test.tsx` suites
@@ -872,26 +878,43 @@ export function ActivityEditor({
 export function ActivityEditorDialog(
   props: Omit<Parameters<typeof ActivityEditor>[0], 'shell'>,
 ): React.ReactElement {
-  return (
-    <ActivityEditor
-      {...props}
-      shell={({ requestClose, title, description, children }) => (
-        <Dialog
-          open={props.open}
-          // Escape and the backdrop route through the same guard as the Close button — an Escape
-          // reflex is exactly the case the confirmation exists for.
-          onClose={requestClose}
-          confirmBeforeClose
-          size="xl"
-          body="flush"
-          title={title}
-          {...(description === undefined ? {} : { description })}
-        >
-          {children}
-        </Dialog>
-      )}
-    />
-  );
+  return <ActivityEditor {...props} shell={modalShell(props.open)} />;
+}
+
+/**
+ * **The modal chrome, defined once** (Graphite M6-T5).
+ *
+ * A factory rather than a constant, because the shell needs `open` and the editor does not pass it:
+ * `open` belongs to the host, and threading it through the shell's argument would put a host
+ * concern into a contract every shell has to honour.
+ *
+ * It exists because T2 wrote a second copy of this `<Dialog>` inside the plan workspace's own
+ * chrome-chooser — the duplication this epic keeps removing, arriving inside the milestone that
+ * removes it. The workspace swaps `shell` between this and a drawer portal; it must never swap
+ * between two *components*, because different components remount and take the scope forms' unsaved
+ * state with them. That is what the render prop bought.
+ */
+export function modalShell(open: boolean): ActivityEditorShell {
+  // Named, because `react/display-name` cannot tell a **called** render function from a mounted
+  // component and neither can a stack trace. This is called — `shell(chrome)` — never `<Shell/>`,
+  // which is what keeps swapping chrome from remounting the editor and losing its unsaved scopes.
+  return function ActivityEditorModalShell({ requestClose, title, description, children }) {
+    return (
+      <Dialog
+        open={open}
+        // Escape and the backdrop route through the same guard as the Close button — an Escape
+        // reflex is exactly the case the confirmation exists for.
+        onClose={requestClose}
+        confirmBeforeClose
+        size="xl"
+        body="flush"
+        title={title}
+        {...(description === undefined ? {} : { description })}
+      >
+        {children}
+      </Dialog>
+    );
+  };
 }
 
 /**

@@ -250,6 +250,34 @@ conditional spread widens to `{}` in one branch, so TS never checks the other �
 rendered "Cancel" while the code said otherwise. The same widening ADR-0074 records for
 `...(FLAG ? [route] : [])`. The prop now exists and is passed directly.
 
+## T5 — the modal's fate, and the numbers that decided it
+
+Three counts, taken rather than reasoned:
+
+| Question                                      | Answer                                                                          |
+| --------------------------------------------- | ------------------------------------------------------------------------------- |
+| Production mounts of `<ActivityEditorDialog>` | **0**                                                                           |
+| Test files mounting it                        | 11                                                                              |
+| Viewports that get the modal                  | **every one below 1024** — the drawer is `hidden lg:flex` (`app-shell.tsx:346`) |
+
+**So the modal stays, and the question the plan asked turns out to be the wrong one.** "Delete it or
+keep it" assumes the modal is a legacy path. It is not: it is the chrome for every narrow viewport,
+because a drawer needs width the shell will not spend below `lg`. Deleting it would leave the editor
+unreachable on a tablet in portrait.
+
+**What the numbers did find is a duplication I introduced in T2.** `PlanActivityEditor` built its own
+inline `<Dialog>` rather than reusing the wrapper's — two definitions of the modal chrome, in the
+epic that keeps removing exactly that. One exported `modalShell(open)` factory now serves both. It is
+a **factory returning a called function**, not a component: the workspace swaps `shell` between it
+and the drawer portal, and swapping two _components_ would remount the editor and take the scope
+forms' unsaved state with it. That is what T1's render prop bought, and it is why the returned
+function is named (`react/display-name` cannot tell a called render function from a mounted one, and
+neither can a stack trace).
+
+`ActivityEditorDialog` therefore has **zero production callers** and is kept as the tested public
+composition. Recorded in its own docblock rather than left for a reader to discover — a component
+with no caller is worth knowing about even when keeping it is right.
+
 ## Gates
 
 `pnpm lint && typecheck && test` · `scripts/e2e-local.sh web` (the base journey) ·

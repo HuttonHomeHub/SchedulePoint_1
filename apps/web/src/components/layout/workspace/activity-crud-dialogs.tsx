@@ -12,7 +12,6 @@ import {
 } from '@/components/layout/drawer/drawer-subject';
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Dialog } from '@/components/ui/dialog';
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
@@ -23,6 +22,7 @@ import {
   ActivityCreateDialog,
   ActivityEditor,
   type ActivityEditorShell,
+  modalShell,
   deleteActivityDescription,
   dissolveSummaryDescription,
   useDeleteActivity,
@@ -108,25 +108,11 @@ function PlanActivityEditor({
       )}
     </ChromePortal>
   );
-  const dialogShell: ActivityEditorShell = ({ requestClose, title, description, children }) => (
-    <Dialog
-      open={props.open}
-      onClose={requestClose}
-      confirmBeforeClose
-      size="xl"
-      body="flush"
-      title={title}
-      {...(description === undefined ? {} : { description })}
-    >
-      {children}
-    </Dialog>
-  );
-
   return (
     <ActivityEditor
       {...props}
       {...(activity ? { activity } : { activity: undefined })}
-      shell={showingInDrawer ? drawerShell : dialogShell}
+      shell={showingInDrawer ? drawerShell : modalShell(props.open)}
     />
   );
 }
