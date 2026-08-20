@@ -37,14 +37,7 @@ function renderRows(context: TsldToolbarContext) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
     <div>
-      <Toolbar
-        items={rows.look}
-        context={context}
-        label="View and navigate"
-        authoringEnabled
-        alignEndGroup="object"
-      />
-      <Toolbar items={rows.do} context={context} label="Build and manage" authoringEnabled />
+      <Toolbar items={rows.strip} context={context} label="Plan commands" authoringEnabled />
     </div>,
   );
 }
@@ -180,11 +173,10 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
     const { container } = render(
       <div style={{ width: 320 }}>
         <Toolbar
-          items={splitByRow(buildTsldToolbarItems()).look}
+          items={splitByRow(buildTsldToolbarItems()).strip}
           context={ctx()}
-          label="View and navigate"
+          label="Plan commands"
           authoringEnabled
-          alignEndGroup="object"
         />
       </div>,
     );

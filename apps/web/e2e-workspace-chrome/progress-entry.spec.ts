@@ -33,7 +33,7 @@ const STAMP = Date.now() + 1500;
 
 /** The command surface's Row 2, by its accessible name. */
 function buildRow(page: Page) {
-  return page.getByRole('toolbar', { name: 'Build and manage' });
+  return page.getByRole('toolbar', { name: 'Plan commands' });
 }
 
 test.describe('Progress entry', () => {

@@ -62,9 +62,12 @@ async function stackHeights(page: Page): Promise<unknown> {
     // band is their common parent.
     const rowOf = (label: string): Element | null =>
       document.querySelector(`[role="toolbar"][aria-label="${label}"]`)?.parentElement ?? null;
-    const rowLook = rowOf('View and navigate');
-    const rowDo = rowOf('Build and manage');
-    const commandBand = rowLook?.parentElement ?? null;
+    // **One strip since Graphite M5.** ADR-0031's Look/Do split is deleted, so there is one row of
+    // commands. It is still located by its `role`+name rather than by position: a band that cannot
+    // be found must throw, which is this harness's own rule and the reason the ADR-0090 M5 gap was
+    // findable at all.
+    const rowStrip = rowOf('Plan commands');
+    const commandBand = rowStrip?.parentElement ?? null;
 
     // The **identity line** — plan name, status, edit pencil, mode toolbar, pen status.
     //
@@ -124,9 +127,8 @@ async function stackHeights(page: Page): Promise<unknown> {
       // not exist at these widths. Its height is reported rather than asserted, so the trade the
       // milestone made — lose a 56 px header, gain back a 44 px identity row — is checkable.
       ['identity row', identityRow],
-      ['command band (identity + both rows)', commandBand],
-      ['row 1 · View and navigate', rowLook],
-      ['row 2 · Build and manage', rowDo],
+      ['command band', commandBand],
+      ['the command strip', rowStrip],
     ].map(([name, el]) => {
       const band = read(name as string, el as Element | null);
       if (!band) throw new Error(`vertical-stack: band "${name as string}" could not be located`);
@@ -315,7 +317,7 @@ test('M4-T1 — the vertical stack on a populated plan, pen held', async ({ page
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Riverside — Phase 2 Substructure' }).click();
-  await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Start editing' }).click();
   await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();

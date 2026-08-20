@@ -138,7 +138,7 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: /Riverside Quarter — Phase 2/ }).click();
-  await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Start editing' }).click();
   await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();

@@ -311,46 +311,48 @@ describe('defineToolbar — demotionGroup companions share a tier', () => {
  * Verified red by removing the row check from `defineToolbar`.
  */
 describe('defineToolbar — demotionGroup companions share a row', () => {
-  const seg = (id: string, row: 'mode' | 'look' | 'do'): ToolbarItem<Ctx> =>
+  const seg = (id: string, row: 'mode' | 'strip'): ToolbarItem<Ctx> =>
     base({ id, tier: 1, row, demotionGroup: 'view-mode', isActive: () => false });
 
   it('accepts a pair on the same row', () => {
     expect(() => defineToolbar([seg('left', 'mode'), seg('right', 'mode')])).not.toThrow();
   });
 
-  it('treats an absent row as `look`, so a bare pair still agrees', () => {
+  it('treats an absent row as `strip`, so a bare pair still agrees', () => {
     const bare = (id: string): ToolbarItem<Ctx> =>
       base({ id, tier: 1, demotionGroup: 'view-mode', isActive: () => false });
-    expect(() => defineToolbar([bare('left'), seg('right', 'look')])).not.toThrow();
+    expect(() => defineToolbar([bare('left'), seg('right', 'strip')])).not.toThrow();
   });
 
   it('rejects a pair whose rows disagree, naming both rows', () => {
-    expect(() => defineToolbar([seg('left', 'mode'), seg('right', 'look')])).toThrow(
-      /spans rows "mode" and "look"/,
+    expect(() => defineToolbar([seg('left', 'mode'), seg('right', 'strip')])).toThrow(
+      /spans rows "mode" and "strip"/,
     );
   });
 });
 
 /**
  * `splitByRow` is total by construction (ADR-0091 M1, B1) — it was a ternary, which is total for two
- * rows and silently routes a third into `look`.
+ * rows and silently routes a third into the default.
+ *
+ * **Graphite M5 merged `look` and `do` into `strip`, and this guard is what made that safe**: the
+ * record is seeded with every key, so removing a member of the union is a typecheck failure at every
+ * call site rather than a silent mis-partition. It failed at four of them, which is the point.
  */
-describe('splitByRow — every row is a key, and the default is `look`', () => {
-  it('partitions all three rows and defaults a row-less item to look', () => {
+describe('splitByRow — every row is a key, and the default is `strip`', () => {
+  it('partitions both rows and defaults a row-less item to the strip', () => {
     const rows = splitByRow([
       base({ id: 'm', tier: 1, row: 'mode' }),
-      base({ id: 'l', tier: 1, row: 'look' }),
-      base({ id: 'd', tier: 1, row: 'do' }),
+      base({ id: 's', tier: 1, row: 'strip' }),
       base({ id: 'bare', tier: 1 }),
     ]);
     expect(rows.mode.map((i) => i.id)).toEqual(['m']);
-    expect(rows.look.map((i) => i.id)).toEqual(['l', 'bare']);
-    expect(rows.do.map((i) => i.id)).toEqual(['d']);
+    expect(rows.strip.map((i) => i.id)).toEqual(['s', 'bare']);
   });
 
   it('returns an entry for every row even when the registry is empty', () => {
     // The mode row must exist as an empty array rather than `undefined`: the workspace renders
     // `rows.mode` unconditionally, and a missing key is a crash rather than an empty toolbar.
-    expect(splitByRow([])).toEqual({ mode: [], look: [], do: [] });
+    expect(splitByRow([])).toEqual({ mode: [], strip: [] });
   });
 });

@@ -2448,7 +2448,7 @@ progress` off the command surface because **an object action belongs on the obje
   `Object.keys(storage)`, which works only because the Web Storage API happens to expose stored keys
   as own properties. **The CPM engine is not imported and no migration runs.**
 
-- **ADR-0099** _(Accepted; M0–M4 landed 2026-08-20)_ — Graphite: workstation density in rail
+- **ADR-0099** _(Accepted; M0–M5 landed 2026-08-20)_ — Graphite: workstation density in rail
   chrome. Four consecutive epics (ADR-0090/0091/0092/0094) worked the plan workspace's command
   surface and each asked the same question — **does the row fit?** The answer was always "nearly",
   so the answer was always to shave; ADR-0097 Landing C proposed the one genuinely different shape
@@ -2521,6 +2521,49 @@ progress` off the command surface because **an object action belongs on the obje
   **child** process. `scripts/e2e-local.sh` now refuses to run while anything answers on 3000 or 5173. And a **sweep measures the tree it runs against**: one was left running while the next
   milestone was written, so every suite after the first edit failed on a half-applied change and
   none of it was a finding.
+  **M5 merges the two command rows and keeps everything the ADR said it would delete.** Three
+  command rows become one: `ToolbarRow` goes `'mode' | 'look' | 'do'` → `'mode' | 'strip'`, and the
+  four mode segments move to the rail as **registry items on a vertical toolbar**, never hand-rolled
+  buttons — the five modal tools need arm/disarm, Escape precedence, announcement and pen gating,
+  and hand-rolling is how one control gets a rule and its neighbour does not. Measured,
+  `aboveCanvas` falls 240 → 184 (M3) → **135**, and the canvas at 1646 goes 576 → **681 (+18 %)**.
+  The ADR's own Consequences said the width ladder, band floors, hysteresis, `CHROME_RESIDUAL_PX`
+  and the `⋯` "become unnecessary and are deleted with the row they served"; M5-T1 measured the
+  reduced strip against 768–1920 and it fits at neither 1280 nor 1440, so **the ADR was corrected
+  and all five are kept** — along with the tier model, whose bullet was struck for the same reason
+  one paragraph later: its protasis ("a single strip that fits") is false.
+  **The real cost was found rather than predicted, and it is one property wearing three costumes:
+  eleven pinned `render` items now share one budget.** ADR-0090 M3 earned the 768 floor by removing
+  pinned items from Row 1, and the load it left was **split across two rows**; one row makes it
+  additive. Instrumented at 768, the ladder had already demoted **all twelve** demotable commands
+  into the `⋯` and the eleven survivors sum 720 px against a 752 px container — so
+  `PINNED_FLOOR_WIDTH` rises **768 → 960** and the strip scrolls below that (`docs/TECH_DEBT.md`
+  #147; corroborated independently by `graphite-strip.json`, which puts the boundary in the same
+  place). Then `ToolbarItem.priority`, which defaults to `-order`, **stopped being an inert
+  convenience and started deciding what a planner can reach**: it dropped `Next conflict` — ranked 90
+  by a rule that was about **Row 1** — reproducing verbatim the ADR-0094 M2 defect that a shading
+  nobody opens the menu to see is not a shading; and it dropped `Recalculate`, ranked **−7 because
+  it registered eighth**, into the `⋯` at every width from 768 to 2133, where the only spinning cue
+  that a recalculation is running cannot spin at anybody. Both are now ranked deliberately, with
+  the reason in the registry. **All three were found by journeys, none by a unit suite.**
+  **Two more findings are the instruments, not the product.** The first fix attempted — narrowing
+  `recalculate`'s `showLabel: 'always'` — returned the **identical** 866 px, because the probe showed
+  that command had been inside the `⋯` at every width for the whole epic; it was reverted rather than
+  kept as harmless, since the comment written with it asserted a measurement that was false
+  (ADR-0076 Class 3), and a change that helped a little would have shipped. And raising the floor
+  unmasked a **latent bug in the fit gate itself**: S9 compared `getBoundingClientRect` values
+  gathered inside the sweep that calls `scrollIntoView`, so the first time the row genuinely scrolled
+  it named `export` as the row's rightmost control while the product was correct throughout —
+  invisible until now because the row had never overflowed at any measured width.
+  **And one of M5's own write-ups was wrong in the way this register warns about most.** Three suites
+  located the toolbar by **selector string** rather than by role+name, so their axe `.include()`
+  calls were left naming deleted rows; that was first written up as "a scan matching nothing, green
+  for having tested nothing" — the shape #124 records — and then the dependency was opened:
+  `axe-core`'s `validateContext` (`axe.js:19178-19183`) **throws** on an empty include, so all three
+  would have gone red loudly. A breakage, not a hole. Corrected in place rather than rewritten, because reaching for the
+  register's own favourite failure mode instead of reading the code is ADR-0076 Class 2 committed in
+  the same document that was praising an instrument for catching one; the citation is now in
+  `scripts/dependency-claims.json`.
   **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation parity
   gate is untouched by construction.
 

@@ -41,11 +41,10 @@ function renderDoRow(context: TsldToolbarContext, authoringEnabled: boolean) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
     <Toolbar
-      items={rows.do}
+      items={rows.strip}
       context={context}
       label="Author and act"
       authoringEnabled={authoringEnabled}
-      alignEndGroup="object"
     />,
   );
 }

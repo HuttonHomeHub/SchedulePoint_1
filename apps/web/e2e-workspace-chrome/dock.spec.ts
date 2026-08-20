@@ -71,12 +71,12 @@ test.describe('The canvas dock', () => {
     // Its statement is the strip the product owner named. Arming it is the whole gesture: no
     // second click, so nothing else about the layout has changed between the two measurements.
     await page
-      .getByRole('toolbar', { name: 'Build and manage' })
+      .getByRole('toolbar', { name: 'Plan commands' })
       .getByRole('button', { name: 'Link', exact: true })
       .click();
     await expect(
       page
-        .getByRole('toolbar', { name: 'Build and manage' })
+        .getByRole('toolbar', { name: 'Plan commands' })
         .getByRole('button', { name: /^Linking/ }),
     ).toBeVisible();
 

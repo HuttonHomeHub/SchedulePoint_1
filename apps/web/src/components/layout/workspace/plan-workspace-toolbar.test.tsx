@@ -250,8 +250,9 @@ function rowLens(name: string): HTMLElement {
 describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
   it('renders the two command rows over the canvas', () => {
     renderScreen();
-    expect(screen.getByRole('toolbar', { name: 'View and navigate' })).toBeInTheDocument();
-    expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
+    // One command strip and the rail's mode cluster — two toolbars, not three (Graphite M5).
+    expect(screen.getByRole('toolbar', { name: 'Plan commands' })).toBeInTheDocument();
+    expect(screen.queryByRole('toolbar', { name: 'Build and manage' })).toBeNull();
     expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
     // Row 1 · Look hosts Fit; Row 2 · Do hosts Add activity.
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
@@ -324,7 +325,7 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     const finish = screen.getByText('Finish');
     expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
 
-    const row1 = screen.getByRole('toolbar', { name: 'View and navigate' });
+    const row1 = screen.getByRole('toolbar', { name: 'Plan commands' });
     expect(row1.contains(finish)).toBe(false);
     expect(finish.closest('[data-toolbar-focusable]')).toBeNull();
   });

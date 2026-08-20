@@ -64,7 +64,7 @@ import { expect, test, type Page } from '@playwright/test';
 // It is not left uncovered: `tool-rail.test.tsx` pins where the cluster lives, and `Toolbar`'s own
 // suite pins that a vertical toolbar announces `aria-orientation="vertical"`, opts out of the
 // ladder and never labels its items.
-const ROWS = ['View and navigate', 'Build and manage'] as const;
+const ROWS = ['Plan commands'] as const;
 // 1646 is the product owner's Surface Pro (2880 x 1920 at 175%). Added with the band fix, because
 // that defect was only ever visible at a width this gate had never been run at.
 const WIDTHS = [2133, 1920, 1646, 1600, 1440, 1280, 1024, 960, 768];
@@ -84,11 +84,32 @@ const WIDTHS = [2133, 1920, 1646, 1600, 1440, 1280, 1024, 960, 768];
  * container — 680 px at 768 included, where Row 1 was 203 px over before this milestone
  * (`docs/specs/workspace-layout/m3-narrow-widths.md`).
  *
- * Keeping the constant at 768 rather than deleting the branch is deliberate: it says *this is a
+ * Keeping the constant rather than deleting the branch is deliberate: it says *this is a
  * measured claim about the narrowest supported width*, and it is the line to move if a future
  * viewport is added below it rather than a branch to reconstruct.
+ *
+ * **Raised 768 → 960 by ADR-0099 M5, and this is a cost of the merge rather than a defect.** M3
+ * earned 768 with the pinned load split across TWO rows; one merged strip makes it additive, and a
+ * `render` item is pinned because it renders bespoke chrome and therefore has no `menuitem` form to
+ * demote INTO — a sound rule, not an oversight. Instrumented at 768 (`__ladderDebug`, since
+ * removed): the ladder had already demoted **every one of the twelve demotable commands** into the
+ * `⋯` and the eleven surviving `render` items — `today` 58, `view` 52, `search` 156, `filter` 52,
+ * `add-activity` 91, `link-tool` 92, `undo` 32, `redo` 32, `summary` 52, `analysis` 52, `export`
+ * 52 — sum **720 px** on their own, against a 752 px container that also owes 40 px of gaps, 81 px
+ * of chrome and 41 px of `⋯`. The row laid out at **866**. No label policy can close 114 px when
+ * nothing labelled is left; the first attempt was `recalculate`, and the probe showed it had been
+ * in the `⋯` at every width in `WIDTHS` for the whole epic, so pinning its label cost nothing and
+ * releasing it bought nothing.
+ *
+ * Modelled minimum container for the merged strip is 882 px ⇒ ~898 px of viewport, so 960 is the
+ * next width in `WIDTHS` that fits and the floor is measured, not rounded up for comfort.
+ *
+ * **What still holds below it is the part that matters**: the row is `overflow-x-auto` (M1-T5), and
+ * at 768 S1 (nothing past the right edge after scrolling), S5 and S7 (every target ≥ 24 px) all pass
+ * — the strip scrolls and no command becomes unreachable. Buying 768 back is `docs/TECH_DEBT.md`
+ * #147, which names the two candidate narrowings and what each was measured to be worth.
  */
-const PINNED_FLOOR_WIDTH = 768;
+const PINNED_FLOOR_WIDTH = 960;
 
 /**
  * How far the trailing group may sit from the row's end (S10). Generous on purpose: the real value
@@ -185,19 +206,28 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
       let overflowLeft: number | null = null;
 
       const startScroll = container.scrollLeft;
-      for (const node of container.querySelectorAll<HTMLElement>('[data-toolbar-item]')) {
-        const id = node.getAttribute('data-toolbar-item') ?? '';
-        if (id === '__overflow__') overflowPresent = true;
-        else inline.push(id);
-        // A read-out rather than a command: nothing inside it is focusable.
-        if (
-          id !== '__overflow__' &&
-          !node.matches('[data-toolbar-focusable]') &&
-          node.querySelector('[data-toolbar-focusable]') === null
-        ) {
-          presentational.push(id);
-        }
+      const items = [...container.querySelectorAll<HTMLElement>('[data-toolbar-item]')];
 
+      /**
+       * **Pass 1 — ordering, read at ONE scroll position.**
+       *
+       * S9/S10 ask where controls sit *relative to each other*, and `getBoundingClientRect` answers
+       * in viewport coordinates, which move when the row scrolls. Pass 2 scrolls — that is its whole
+       * point — so reading order inside it compares boxes taken at different offsets.
+       *
+       * That was latent until Graphite M5 (`docs/TECH_DEBT.md` #147) merged the two rows: until then
+       * the row fitted at every width in `WIDTHS`, every `scrollIntoView` was a no-op, and every box
+       * happened to be read at the same offset. The first width where the strip genuinely scrolls,
+       * S9 reported `export` as the row's rightmost control — because scrolling `export` into view
+       * shifted the `⋯` 73 px left before its box was read, so the button that really ends the row
+       * measured *narrower* on the right than its neighbour. The product was correct; the instrument
+       * was measuring two things in two frames of reference.
+       *
+       * Reset to a known offset, read every box, restore. Pass 2 then scrolls freely.
+       */
+      container.scrollLeft = 0;
+      for (const node of items) {
+        const id = node.getAttribute('data-toolbar-item') ?? '';
         const ownBox = node.getBoundingClientRect();
         // A zero-width box is not "rightmost" in any sense a reader would recognise.
         if (ownBox.width > 0 && ownBox.right > rightmostEdge) {
@@ -209,6 +239,22 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowState> {
           overflowLeft = (node.parentElement ?? node).getBoundingClientRect().left;
         } else if (ownBox.width > 0 && ownBox.right > rightmostNonOverflowEdge) {
           rightmostNonOverflowEdge = ownBox.right;
+        }
+      }
+      container.scrollLeft = startScroll;
+
+      // **Pass 2 — reachability**, which is allowed to scroll and must.
+      for (const node of items) {
+        const id = node.getAttribute('data-toolbar-item') ?? '';
+        if (id === '__overflow__') overflowPresent = true;
+        else inline.push(id);
+        // A read-out rather than a command: nothing inside it is focusable.
+        if (
+          id !== '__overflow__' &&
+          !node.matches('[data-toolbar-focusable]') &&
+          node.querySelector('[data-toolbar-focusable]') === null
+        ) {
+          presentational.push(id);
         }
 
         // **Scroll to it first.** Since M1-T5 the row is `overflow-x-auto`, so "past the right edge"
@@ -362,7 +408,7 @@ async function openPlan(page: Page, stamp: number): Promise<void> {
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Logic' }).click();
-  await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
   // The mode cluster must still be asserted at mount (ADR-0091 M1) even though it is no longer
   // swept: without it, a cluster that fails to render leaves every remaining assertion passing on a
   // shorter list — coverage that looks like coverage, `docs/TECH_DEBT.md` #124 one row over. It is
@@ -505,7 +551,13 @@ test('every toolbar command is reachable at every targeted width', async ({ page
           .innerText()
           .catch(() => '');
         const labelled = text.trim().length > 0;
-        const roomy = state.containerWidth >= 1024;
+        // **1280, tracking `triggersAreCompact`** (`tsld-toolbar-items.tsx`). That predicate is the
+        // rule; this is a restatement of it, and the two must move together — Graphite M5 widened it
+        // from `collapsed` to `condensed`-and-narrower because one merged strip needs the width that
+        // two rows did not, and this assertion went red on the old number while the product was
+        // behaving exactly as designed. A restated threshold is a second source of truth; it is kept
+        // (an e2e spec cannot import a component module) and named, so the next change finds it.
+        const roomy = state.containerWidth >= 1280;
         expect(
           labelled,
           `S11 ${where}: ${id} should be ${roomy ? 'labelled' : 'icon-only'} in this band ` +
@@ -594,9 +646,9 @@ test('the layout settles rather than oscillating', async ({ page }) => {
   for (const width of [1920, 1600, 1440]) {
     await page.setViewportSize({ width, height: 1080 });
     await settle(page);
-    const first = await readRow(page, 'View and navigate');
+    const first = await readRow(page, 'Plan commands');
     await settle(page);
-    const second = await readRow(page, 'View and navigate');
+    const second = await readRow(page, 'Plan commands');
     expect(second.inline, `S6 @ ${width}: the inline set changed with no input`).toEqual(
       first.inline,
     );
@@ -723,7 +775,7 @@ test.describe('coarse pointer', () => {
     // pointer layout against a fine-pointer expectation — green for having tested nothing.
     expect(coarse, 'the browser must actually report a coarse pointer').toBe(true);
 
-    const boxes = await page.getByRole('toolbar', { name: 'Build and manage' }).evaluate((el) =>
+    const boxes = await page.getByRole('toolbar', { name: 'Plan commands' }).evaluate((el) =>
       [...(el as HTMLElement).querySelectorAll<HTMLElement>('[data-toolbar-item]')].map((n) => ({
         id: n.getAttribute('data-toolbar-item') ?? '',
         width: Math.round(n.getBoundingClientRect().width),

@@ -85,16 +85,9 @@ function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
   return render(
     <div>
       <Toolbar
-        items={rows.look}
+        items={rows.strip}
         context={context}
-        label="View and navigate"
-        authoringEnabled={authoringEnabled}
-        alignEndGroup="object"
-      />
-      <Toolbar
-        items={rows.do}
-        context={context}
-        label="Build and manage"
+        label="Plan commands"
         authoringEnabled={authoringEnabled}
       />
     </div>,
@@ -141,8 +134,11 @@ describe('TSLD toolbar registry (two-row)', () => {
   it('keeps the two rows on distinct toolbars (Look / Do)', () => {
     renderRows(ctx());
     // Row 1 hosts view/navigate; Row 2 hosts build/manage. Both are APG toolbars.
-    expect(screen.getByRole('toolbar', { name: 'View and navigate' })).toBeInTheDocument();
-    expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
+    // **One strip since Graphite M5.** ADR-0031's two-row split is deleted, so there is one
+    // `role="toolbar"` for commands — and the assertion says "exactly one", because "at least one"
+    // would pass equally against the two-row state this milestone exists to leave behind.
+    expect(screen.getAllByRole('toolbar')).toHaveLength(1);
+    expect(screen.getByRole('toolbar', { name: 'Plan commands' })).toBeInTheDocument();
   });
 
   it('does not carry the Project-finish read-out — it is a fact, not a command (Graphite M5)', () => {
@@ -158,7 +154,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     // M7-S4's reason survives: nothing was added to the `⋯`'s right, so it is still the rightmost
     // control on the row. ADR-0099 D4 sends it on to the status bar at M7.
     renderRows(ctx());
-    const lookRow = screen.getByRole('toolbar', { name: 'View and navigate' });
+    const lookRow = screen.getByRole('toolbar', { name: 'Plan commands' });
     expect(within(lookRow).queryByTestId('finish-chip-body')).toBeNull();
   });
 
@@ -188,14 +184,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     const opened = ctx({ legendOpen: true });
     rerender(
       <div>
-        <Toolbar
-          items={rows.look}
-          context={opened}
-          label="View and navigate"
-          authoringEnabled
-          alignEndGroup="object"
-        />
-        <Toolbar items={rows.do} context={opened} label="Build and manage" authoringEnabled />
+        <Toolbar items={rows.strip} context={opened} label="Plan commands" authoringEnabled />
       </div>,
     );
     expect(screen.getByRole('button', { name: 'Legend' })).toHaveAttribute('aria-pressed', 'true');
@@ -211,14 +200,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     const rows = splitByRow(buildTsldToolbarItems());
     rerender(
       <div>
-        <Toolbar
-          items={rows.look}
-          context={ctx()}
-          label="View and navigate"
-          authoringEnabled
-          alignEndGroup="object"
-        />
-        <Toolbar items={rows.do} context={ctx()} label="Build and manage" authoringEnabled />
+        <Toolbar items={rows.strip} context={ctx()} label="Plan commands" authoringEnabled />
       </div>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));

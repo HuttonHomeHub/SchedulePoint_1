@@ -7,7 +7,8 @@
     "zod": "4.4.3",
     "@nestjs/throttler": "6.5.0",
     "react-hook-form": "7.84.0",
-    "lucide-react": "1.29.0"
+    "lucide-react": "1.29.0",
+    "axe-core": "4.12.1"
   },
   "claims": [
     {
@@ -517,6 +518,14 @@
         "docs/adr/0091-modes-density-and-the-command-band.md",
         "docs/specs/workspace-modes/feature-spec.md"
       ]
+    },
+    {
+      "ref": "axe.js:19178-19183",
+      "package": "axe-core",
+      "path": "axe.js",
+      "lines": "19178-19183",
+      "anchor": "throw new Error('No elements found for include in ' + env + ' Context');",
+      "citedBy": ["docs/specs/graphite/m5-command-strip.md", "CLAUDE.md"]
     }
   ]
 }

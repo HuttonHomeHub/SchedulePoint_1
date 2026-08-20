@@ -201,19 +201,19 @@ shaved for a sixth epic.**
 
 ## C. Milestones
 
-| #       | Slice                                                                    | Ends with                                                                                                                |
-| ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| **M0**  | Measure (no product code)                                                | A measurement document; falsification conditions stated first                                                            |
-| **M1**  | Palette — _landed_                                                       | Confirm the new pairs are gated; fix A8                                                                                  |
-| **M2**  | The shell grid with **today's** occupants; retire `VITE_DESIGNED_CHROME` | **Pixel-identical screenshots.** If not, the grid is wrong and it is cheap to learn here                                 |
-| **M3**  | Rail trailing; top bar deleted; **skip link**                            | Re-shoot all nine non-plan screens; axe on five routes                                                                   |
-| **M4**  | Drawer, Explorer as first subject; Notes folds in                        | A Playwright assertion that the strip's `getBoundingClientRect().width` is **unchanged** across drawer open/close/resize |
-| **M5**  | The single command strip — deletes ladder, tiers, rows, band, `⋯`        | `e2e-toolbar-fit` **rewritten, not retired**; Escape target guard re-asserted                                            |
-| **M6**  | Drawer as the activity context — replaces the modal                      | Every existing `ActivityEditorDialog.*.test.tsx` passes **unchanged** (the ADR-0062 bar)                                 |
-| **M7**  | Status bar; dock re-hosted; `Recalculate` becomes a state                | Three states — not calculated / calculating / calculated-zero-critical — must not collapse into one sentence             |
-| **M8**  | Gantt grid beside chart                                                  | **One** virtualizer, not two synced scrollers; row heights identical by construction                                     |
-| **M9**  | Diagram stage; WBS colouring                                             | `sceneTopOffset` re-derived, not re-assumed                                                                              |
-| **M10** | Gate pass                                                                | Five specialists; screenshots at four widths **plus a coarse-pointer run**                                               |
+| #       | Slice                                                         | Ends with                                                                                                                |
+| ------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **M0**  | Measure (no product code)                                     | A measurement document; falsification conditions stated first                                                            |
+| **M1**  | Palette — _landed_                                            | Confirm the new pairs are gated; fix A8                                                                                  |
+| **M2**  | The shell grid — _landed_ (`m2-shell-grid.md`)                | **Pixel-identical screenshots.** If not, the grid is wrong and it is cheap to learn here                                 |
+| **M3**  | Rail; top bar deleted — _landed_ (`m3-rail-and-skip-link.md`) | Re-shoot all nine non-plan screens; axe on five routes                                                                   |
+| **M4**  | Drawer — _landed_ (`m4-context-drawer.md`)                    | A Playwright assertion that the strip's `getBoundingClientRect().width` is **unchanged** across drawer open/close/resize |
+| **M5**  | The single command strip — _landed_ (`m5-command-strip.md`)   | `e2e-toolbar-fit` **rewritten, not retired**; Escape target guard re-asserted                                            |
+| **M6**  | Drawer as the activity context — replaces the modal           | Every existing `ActivityEditorDialog.*.test.tsx` passes **unchanged** (the ADR-0062 bar)                                 |
+| **M7**  | Status bar; dock re-hosted; `Recalculate` becomes a state     | Three states — not calculated / calculating / calculated-zero-critical — must not collapse into one sentence             |
+| **M8**  | Gantt grid beside chart                                       | **One** virtualizer, not two synced scrollers; row heights identical by construction                                     |
+| **M9**  | Diagram stage; WBS colouring                                  | `sceneTopOffset` re-derived, not re-assumed                                                                              |
+| **M10** | Gate pass                                                     | Five specialists; screenshots at four widths **plus a coarse-pointer run**                                               |
 
 Standing gates every slice: `pnpm lint && typecheck && test`, plus `scripts/e2e-local.sh web`
 (the base journey), plus **the full sweep on any slice that moves a label or a

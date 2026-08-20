@@ -129,7 +129,7 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   // bands this item is icon-only by design (`showLabel: { atLeast: 'comfortable' }`) and its
   // visible text is not something a journey may assume.
   await expect(
-    page.getByRole('toolbar', { name: 'View and navigate' }).locator('[data-toolbar-item="fit"]'),
+    page.getByRole('toolbar', { name: 'Plan commands' }).locator('[data-toolbar-item="fit"]'),
   ).toBeVisible();
 
   // The plan view with the rendered logic diagram is accessible.

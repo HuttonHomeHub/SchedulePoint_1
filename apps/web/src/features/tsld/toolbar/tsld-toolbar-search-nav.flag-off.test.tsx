@@ -43,13 +43,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
 function renderRows(context: TsldToolbarContext) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
-    <Toolbar
-      items={rows.look}
-      context={context}
-      label="View and navigate"
-      authoringEnabled
-      alignEndGroup="object"
-    />,
+    <Toolbar items={rows.strip} context={context} label="Plan commands" authoringEnabled />,
   );
 }
 

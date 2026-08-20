@@ -29,8 +29,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   // chrome bands, and not the legacy long-scrolling page. On a fresh plan the canvas shows its
   // empty-state prompt (the labelled diagram region only appears once activities exist), and the
   // activities panel is collapsed to give the canvas the room (canvas-maximal).
-  await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
-  await expect(page.getByRole('toolbar', { name: 'Build and manage' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
   await expect(page.getByText(/No activities to diagram yet/i)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Expand activities panel' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeHidden();
@@ -62,7 +61,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   // `role="toolbar"` and could therefore never be the row's last thing while the chip sat to its
   // right. What M2-T3 was protecting is asserted directly below rather than through placement: the
   // read-out is not a stop in the arrow-key sequence.
-  const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
+  const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
   await expect(lookRow.getByRole('button', { name: /^View/ })).toBeVisible();
 
   // **The Project-finish read-out is no longer in the row, and that is the assertion.** Its third

@@ -43,7 +43,7 @@ test('a planner composes a level-of-effort span from two picked driver activitie
   // tool-mode the same way Add/Link do ("Adding <kind>" / "Linking · <type>"). Once armed, the Add
   // trigger swaps its label to the mid-pick prompt (B4): "Pick start driver" before the first pick.
   await armLoeTool(page);
-  const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
   await expect(toolbar.getByRole('button', { name: 'Pick start driver' })).toBeVisible();
 
   // (3) Pick Excavate as the start driver, then Pour slab as the finish driver — composes the LOE
@@ -54,7 +54,7 @@ test('a planner composes a level-of-effort span from two picked driver activitie
 
   // (4) The authoring toolbar + diagram hosting the multi-step pick affordance stay accessible.
   const results = await new AxeBuilder({ page })
-    .include('[role="toolbar"][aria-label="Build and manage"]')
+    .include('[role="toolbar"][aria-label="Plan commands"]')
     .include('section[aria-label="Time-scaled logic diagram"]')
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze();

@@ -32,7 +32,7 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
   // Take the pen — the Row 2 · Do authoring cluster (Add split-button, Link tool) lights up. (The
   // data date lives off the toolbar now — set silently on first draw, changed via Edit plan.)
   await startEditing(page);
-  const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
   // Match the Add split-button ("Add" / "Adding <kind>") without colliding with the inline
   // "Add note" placeholder that now shares the row (Playwright name matching is substring).
   await expect(toolbar.getByRole('button', { name: /^Add(ing .+)?$/ })).toBeVisible();

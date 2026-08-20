@@ -94,13 +94,6 @@ import { cn } from '@/lib/utils';
 const MD_QUERY = '(min-width: 48rem)';
 
 /**
- * Row 1's group-name override. Only `object` differs from the primitive's defaults, and only because
- * that group holds a read-out on this row and commands on the other; a name shared by two visible
- * regions is the collision M2-T6 exists to remove, not a tidy-up.
- */
-const ROW_LOOK_GROUP_LABELS = { object: 'Plan info' } as const;
-
-/**
  * The mode row's `lens` group name (ADR-0091 D1). Overridden because the shared default is
  * "Display", which is simultaneously Row 1's `lens` group name — leaving two on-screen regions with
  * one name, and announcing "Plan mode, toolbar" then "Display, group" for a cluster that is neither.
@@ -1290,32 +1283,27 @@ export function ToolbarPlanWorkspace({
               `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
               equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
               everything below it. */}
-          {/* Visible row-purpose cues (ux review): the "Row 1 · Look" / "Row 2 · Do" split otherwise
-              lived only in each row's `aria-label`, invisible to sighted users. Plain words rather than
-              those internal ADR-0031 codenames — "Look"/"Do" read as jargon to a first-time user — and
-              each is a literal word from its row's own `aria-label` below, so it isn't a wholly separate
-              caption. `aria-hidden` avoids a redundant/out-of-context announcement — the toolbar's own
-              `aria-label` already names the row for AT. */}
-          <div className="border-border flex items-center gap-2 border-b px-2 py-1">
-            <Toolbar
-              items={rows.look}
-              context={ctx}
-              label="View and navigate"
-              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-              alignEndGroup="object"
-              // Row 1's `object` group is a single **read-out** — `Summary ▾` — so the shared default
-              // "Plan actions" is wrong twice: it is not an action, and Row 2's `object` group
-              // (Analysis, Schedule settings, Report progress, Comments) genuinely is, leaving two
-              // on-screen regions with one name. M2-T6 step 2, landed at M5.
-              groupLabels={ROW_LOOK_GROUP_LABELS}
-              className="flex-1"
-            />
-          </div>
+          {/* **One strip** (Graphite M5). ADR-0031's two-row amendment split the surface into "what
+              you look at" and "what you build with", and four epics (ADR-0090/0091/0092/0094) then
+              spent themselves making both rows fit. The split is deleted rather than re-grouped:
+              `TOOLBAR_GROUPS` was already a menu structure — `frame · lens · find · tools · object ·
+              output · help` — so the merged strip's order is the taxonomy's, unchanged.
+
+              The row captions go with it. They existed because the Look/Do split lived only in each
+              row's `aria-label` and was invisible to sighted readers; with one row there is nothing
+              to distinguish, and a caption naming the only thing present is noise.
+
+              `alignEndGroup="object"` does NOT survive, and that is a decision rather than an
+              omission: it right-aligned Row 1's single read-out, and `object` on the merged strip is
+              the plan-action cluster (Analysis, Settings, Comments) that Row 2 carried. Pushing
+              those to the trailing edge would put the commands a planner reaches for most at the far
+              end of the widest row in the product. The `⋯` keeps the trailing edge, which is what
+              ADR-0091 M7's S9 asserts. */}
           <div className="flex items-center gap-2 px-2 py-1">
             <Toolbar
-              items={rows.do}
+              items={rows.strip}
               context={ctx}
-              label="Build and manage"
+              label="Plan commands"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               className="flex-1"
             />

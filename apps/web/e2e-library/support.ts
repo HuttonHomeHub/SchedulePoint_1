@@ -90,7 +90,7 @@ export async function drawActivity(
  * canvas's parallel activity listbox, so a page-wide `getByRole('listbox')` would be ambiguous.
  */
 export async function calendarPickerOptions(page: Page): Promise<string[]> {
-  const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
   // Located by its REGISTRY ID, not its label. That label was `Schedule settings…` until ADR-0091
   // shortened it to `Settings…` to fit every Row 2 label at 1646 px, and this locator broke — the
   // only journey in the repository that named it. A name-based locator has to be re-edited on every

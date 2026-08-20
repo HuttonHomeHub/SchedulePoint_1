@@ -49,7 +49,7 @@ const STAMP = Date.now() + 3000;
 
 /** The command surface's Row 1, which carries the find group. */
 function lookRow(page: Page) {
-  return page.getByRole('toolbar', { name: 'View and navigate' });
+  return page.getByRole('toolbar', { name: 'Plan commands' });
 }
 
 /** The canvas dock's selection bar, whatever activity it currently names. */

@@ -226,7 +226,7 @@ export function diagramActivityList(page: Page): ReturnType<Page['getByRole']> {
 
 /** Toggle a `View▾ ▸ Structure` switch by its label. */
 export async function toggleView(page: Page, label: string): Promise<void> {
-  const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
+  const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
   await lookRow.getByRole('button', { name: 'View', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'View' });
   await panel.getByLabel(label).click();

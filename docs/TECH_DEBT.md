@@ -2741,3 +2741,89 @@ Graphite M10's gate pass is the natural place to choose, with the epic's own scr
 **Why it is debt rather than a defect:** the pair is very likely fine — `--foreground` on the chrome
 band's ground is already gated by `token-contrast.test.ts`. What is missing is the _measurement of
 the state_, which is precisely the class of thing this suite exists to catch and axe does not.
+
+## 147. The merged command strip stops fitting below ~900 px, and the eleven items that pin it cannot demote
+
+**Raised 2026-08-20 (Graphite M5).** ADR-0099 M5 merges the two TSLD command rows into one
+`Plan commands` strip — the change that buys the canvas its last 49 px of height. The cost, measured
+rather than predicted, is that `e2e-toolbar-fit`'s `PINNED_FLOOR_WIDTH` rises **768 → 960**: below
+about 900 px of viewport the strip lays out wider than its container and scrolls horizontally.
+
+**Why, exactly.** ADR-0090 M3 earned the 768 floor by _removing pinned items_ from Row 1, and the
+pinned load it left was split across two rows. One row makes it additive. An item is pinned when it
+is a `render` item, and that is a sound rule rather than an oversight: a `render` item paints
+bespoke chrome and therefore has no `menuitem` form to demote **into**. Instrumented at 768 (a
+temporary `__ladderDebug` hook on `computeLadder`'s input, since removed), the ladder had already
+demoted **all twelve** demotable commands into the `⋯`, and the eleven survivors —
+
+| item           | px  |     | item       | px  |
+| -------------- | --- | --- | ---------- | --- |
+| `today`        | 58  |     | `undo`     | 32  |
+| `view`         | 52  |     | `redo`     | 32  |
+| `search`       | 156 |     | `summary`  | 52  |
+| `filter`       | 52  |     | `analysis` | 52  |
+| `add-activity` | 91  |     | `export`   | 52  |
+| `link-tool`    | 92  |     |            |     |
+
+— sum **720 px** against a **752 px** container that also owes 40 px of item gaps, 81 px of derived
+chrome and 41 px of `⋯`. The row laid out at **866**. Modelled minimum container is 882 px ⇒ ~898 px
+of viewport.
+
+**The first attempt was wrong, and the probe is why it did not ship.** `recalculate` carries
+`showLabel: 'always'` with a ~110 px label, so narrowing it to `{ atLeast: 'condensed' }` looked like
+the whole 114 px. The instrumented input showed `recalculate` has been in the `⋯` at _every_ width in
+the gate's list for the entire epic: pinning its label cost nothing and releasing it bought nothing.
+The change was reverted rather than kept as harmless, because its comment asserted a measurement that
+was false (ADR-0076 Class 3).
+
+**What still holds below the floor**, and it is the part that matters: the row is `overflow-x-auto`
+(ADR-0090 M1-T5), and at 768 the gate's S1 (nothing past the right edge after scrolling), S5 and S7
+(every target ≥ 24 px) all **pass**. The strip scrolls; no command becomes unreachable. 768 stays in
+`WIDTHS` and keeps being asserted for reachability — only the fits-outright claim moved.
+
+**Two candidate narrowings, with what each was measured to be worth.** Fold `Filter` into the search
+field (the narrowing ADR-0099 M5-T1 already named): **−56 px** (52 + one gap), leaving 810. Drop the
+five group rules (`ml-1 border-l pl-2`) in the `collapsed` band only, where a hairline separator is
+decoration the row cannot afford: **−65 px**, leaving 801. Both together reach 745 and clear 752, but
+only just, and each is a design change rather than a tune — which is why neither was taken under M5
+and both are recorded here with their numbers instead.
+
+**Corroborated by a second, independent instrument.** `measure-toolbar/graphite-strip.spec.ts`
+composes the strip from cloned real controls rather than reading the live row, and it puts the same
+boundary in the same place: `768` reports `fits: false` at **−40 px** of slack and every width from
+`960` up reports `fits: true` (`apps/web/measure-output/graphite-strip.json`). The absolute totals
+differ from the live row's — 760 against 866, because the clone models a _reduced_ strip — so the
+agreement worth having is the verdict boundary, not the number.
+
+**Why it is debt rather than a defect:** 768 is iPad portrait, where the TSLD workspace is already
+marginal (`#133` records that every toolbar measurement in this repository until ADR-0091 assumed a
+mouse), and the degradation is a scroll rather than a loss. Revisit with Graphite M10's screenshots,
+or the first time a planner works at that width.
+
+### Found alongside it: `priority` had never been a ranking
+
+`ToolbarItem.priority` defaults to `-order`, so most of the authoring cluster was ranked by
+**registration position**. On ADR-0031's two rows that was harmless — Row 2 had room for the whole
+cluster, so an unranked field is indistinguishable from a ranked one. The merge turns it into a
+decision about what a planner can reach, and two commands fell out of the row on it:
+`next-conflict` (ranked 90 for a rule about Row 1) and `Recalculate` (ranked −7 for registering
+eighth). Both are now ranked deliberately — 110 and 95 — with the reason in the registry.
+
+**The rest of the cluster is still on `-order`** and has not been re-examined: `marquee-select` −2,
+`auto-arrange` −3, `add-note` −4. None is currently causing a defect, and inventing ranks for them
+without a reported problem would be guessing. What is worth knowing is that on a single strip
+`-order` is a live default with consequences, not the inert convenience it was on two rows.
+
+### Found alongside it: the fit gate measured ordering in two frames of reference
+
+Raising the floor unmasked a **latent instrument bug** in `readRow`, which S4 had been failing before
+and therefore hiding. S9 ("the `⋯` is the row's rightmost control") compared `getBoundingClientRect`
+values gathered _inside_ the reachability sweep — and that sweep calls `scrollIntoView` on every
+item, which is its whole purpose. Once the row genuinely scrolled, scrolling `export` into view
+shifted the `⋯` 73 px left before its box was read, so the button that really ends the row measured
+a smaller `right` than its neighbour and S9 reported `export`. The product was correct throughout.
+
+It was invisible until now because the row had never overflowed at any width in `WIDTHS`, so every
+`scrollIntoView` was a no-op and every box happened to be read at the same offset. `readRow` is now
+two passes — ordering at one fixed scroll position, then reachability, which may scroll freely —
+and the reasoning is recorded in the function so the next reader does not merge them back.

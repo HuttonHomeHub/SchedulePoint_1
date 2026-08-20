@@ -326,7 +326,7 @@ function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
     return {
       id: t.id,
       group: 'lens',
-      row: 'look',
+      row: 'strip',
       tier: 2,
       showLabel: { atLeast: 'comfortable' },
       order: promotion.order,
@@ -878,7 +878,16 @@ const OVER_ALLOCATION_EMPTY_REASON = 'No over-allocation to show';
  * each, which closes 768 with room to spare.
  */
 function triggersAreCompact(layout: ToolbarLayoutMode): boolean {
-  return layout === 'collapsed';
+  // **`condensed` and narrower since Graphite M5, and the reason is that these thresholds encode
+  // "how much does this row need".** They were calibrated when ADR-0031's split gave the surface
+  // TWO rows, so Row 1 carried about fourteen items and only ran out of width below 1024. One
+  // merged strip carries all of them, and the fit gate said so: at 1280 it laid out **1363 px
+  // against a 1216 px container — 147 px over** — while `collapsed` alone left the field at its
+  // full 240 px and every trigger labelled.
+  //
+  // ADR-0099 said the band floors would be deleted; M5-T1 measured that they are needed and kept
+  // them. **Kept means re-tuned**: a floor is a number about a row, and the row changed.
+  return layout === 'condensed' || layout === 'collapsed';
 }
 
 /**
@@ -966,7 +975,12 @@ function SearchFieldControl({
         placeholder="Search or filter activities…"
         aria-label="Search or filter activities (coming soon)"
         title="Search / filter activities (coming soon)"
-        className={cn('h-8 pl-8 text-sm', searchFieldWidth(layout))}
+        // `pointer-coarse:h-9` — 36 px, the coarse-pointer floor. The field is `h-8` at 32, which
+        // is below it, and that was true before Graphite M5: the coarse sweep in `e2e-toolbar-fit`
+        // only ever measured Row 2, and the search field was on Row 1. Merging the rows put it in
+        // the sweep for the first time and it failed immediately. A gate that measures half a
+        // surface reports on half a surface (WCAG 2.5.8).
+        className={cn('h-8 pl-8 text-sm pointer-coarse:h-9', searchFieldWidth(layout))}
       />
     </div>
   );
@@ -1083,7 +1097,7 @@ function LiveSearchControl({
         {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
         className={cn(
-          'h-8 pl-8 text-sm',
+          'h-8 pl-8 text-sm pointer-coarse:h-9',
           searchFieldWidth(api.layout),
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is
@@ -1798,7 +1812,7 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       placeholderItem({
         id: 'undo',
         group: 'tools',
-        row: 'do',
+        row: 'strip',
         tier: 2,
         order: 8,
         label: 'Undo',
@@ -1807,7 +1821,7 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       placeholderItem({
         id: 'redo',
         group: 'tools',
-        row: 'do',
+        row: 'strip',
         tier: 2,
         order: 9,
         label: 'Redo',
@@ -1819,7 +1833,7 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'undo',
       group: 'tools',
-      row: 'do',
+      row: 'strip',
       tier: 2,
       order: 8,
       label: 'Undo',
@@ -1831,7 +1845,7 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'redo',
       group: 'tools',
-      row: 'do',
+      row: 'strip',
       tier: 2,
       order: 9,
       label: 'Redo',
@@ -1848,10 +1862,10 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * {@link ToolbarItem} over the {@link TsldToolbarContext}, grouped by the fixed 7-group taxonomy and
  * split across **two toolbar rows** via each item's `row`:
  *
- * - **Row 1 · Look** (`row: 'look'`) — view & navigate: Go-to-date, the zoom cluster, View toggles,
+ * - **Row 1 · Look** (`row: 'strip'`) — view & navigate: Go-to-date, the zoom cluster, View toggles,
  *   the Early | Visual scheduling-mode segment, the search field + find/analyse lenses, and the
  *   right-aligned Finish read-out + Summary + Legend. Always live; nothing here needs the pen.
- * - **Row 2 · Do** (`row: 'do'`) — build & manage: a pen-gated **authoring cluster** (Add, Link,
+ * - **Row 2 · Do** (`row: 'strip'`) — build & manage: a pen-gated **authoring cluster** (Add, Link,
  *   Auto-arrange, note/snap/clear, Recalculate, Undo/Redo) that shades as one set when the pen isn't
  *   held, then plan & deliverable actions (Baselines, Calendar, Update progress,
  *   Export/Print/Share/Comments) that stay live because they don't author. (Plan details + Edit plan
@@ -1888,7 +1902,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   const todayShape = {
     id: 'today',
     group: 'frame' as const,
-    row: 'look' as const,
+    row: 'strip' as const,
     tier: 2 as const,
     order: 13,
     // Navigation survives longest on Row 1 — see ADR-0090 D3 / `priority`.
@@ -1899,7 +1913,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   const addNoteShape = {
     id: 'add-note',
     group: 'tools' as const,
-    row: 'do' as const,
+    row: 'strip' as const,
     tier: 2 as const,
     order: 4,
     label: 'Add note',
@@ -1912,7 +1926,27 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   const commentsShape = {
     id: 'comments',
     group: 'object' as const,
-    row: 'do' as const,
+    row: 'strip' as const,
+    // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
+    // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
+    // measured: the strip laid out wider than its container at 1280. Something has to demote first,
+    // and it should be the commands a planner reaches for least. `priority` is exactly that axis —
+    // "what can this row afford to lose" — and it is deliberately separate from `tier`, which is
+    // "how prominent should this be".
+    //
+    // **Tier 3 was tried first and is the wrong instrument**: tier 3 is admitted LAST, so with no
+    // budget it is not "demotes first" but "starts in the overflow". In jsdom every width is 0, so
+    // it put four commands behind the `⋯` unconditionally and broke 37 unit tests that click them by
+    // name — tests which would then have been rewritten to reach through an overflow, i.e. made worse
+    // to accommodate a mis-read of the mechanism.
+    //
+    // **`Plan ▾` was the plan and is not what shipped.** ADR-0099 D3 and M5-T1 both name one trigger
+    // folding Calendar · Analysis · Comments · Share · Print. Building it means putting `Share &
+    // export` and `Analysis` — both already menus — INSIDE another menu, so the surface meant to
+    // simplify the strip would introduce this product's first nested menus, with their own focus and
+    // announcement rules. The `⋯` is the same "one press away" through a mechanism already built,
+    // already tested and already swept by this gate.
+    priority: -100,
     tier: 2 as const,
     order: 10,
     label: 'Comments',
@@ -1926,7 +1960,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   const searchShape = {
     id: 'search',
     group: 'find' as const,
-    row: 'look' as const,
+    row: 'strip' as const,
     tier: 1 as const,
     order: -1,
     label: 'Search or filter activities',
@@ -1934,7 +1968,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   const filterShape = {
     id: 'filter',
     group: 'find' as const,
-    row: 'look' as const,
+    row: 'strip' as const,
     tier: 2 as const,
     order: 0,
     label: 'Filter',
@@ -1948,7 +1982,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   const nextConflictShape = {
     id: 'next-conflict',
     group: 'find' as const,
-    row: 'look' as const,
+    row: 'strip' as const,
     // **Tier 1 since ADR-0094, and the label stays STATIC.** Tier 3 is admitted last, so at 1646 this
     // sat in the `⋯` — where its "No conflicts to review" shading was a shading nobody saw, and its
     // count could not tell a planner whether opening the menu was worth it.
@@ -1973,11 +2007,21 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
      * (default priority is `-order`, i.e. −2, below every neighbour). The result was a count sitting
      * on the row beside no way to act on it, in the only state this epic exists for.
      *
-     * 90 rather than 100: navigation still survives longest (ADR-0090 D3), but this outranks the
-     * lenses at 60 and everything on default. The read-out cannot be given the lower rank instead —
-     * it has no rank, which is precisely the asymmetry that caused this.
+     * **Raised 90 → 110 by Graphite M5, and the reason it was 90 is the reason it cannot stay
+     * there.** "Navigation survives longest" (ADR-0090 D3) was a rule about **Row 1**, where the
+     * only thing this command could displace was a viewport button with a second route. Merging
+     * ADR-0031's two rows puts the viewport cluster and this command on ONE budget, and the flag-on
+     * journey found the result at the product owner's 1646: the ladder demoted `next-conflict` and
+     * kept `zoom-out`, so ADR-0094 M2's whole finding — a shading nobody opens the menu to see is
+     * not a shading — was back, one epic later, without anyone deciding it.
+     *
+     * The trade is deliberate and asymmetric. Zooming out survives the `⋯` intact: it is also
+     * `View ▾ ▸ Zoom`, and Ctrl+scroll. `Next conflict` in the `⋯` has no second route, and its
+     * whole value is a shaded state and a count that must be **seen without opening anything**.
+     * The read-out still cannot be given the lower rank instead — it has no rank, which is the
+     * asymmetry that caused this in the first place.
      */
-    priority: 90,
+    priority: 110,
     label: 'Next conflict',
     icon: <TriangleAlert className="size-4" />,
   };
@@ -1992,7 +2036,27 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   const exportShape = {
     id: 'export',
     group: 'output' as const,
-    row: 'do' as const,
+    row: 'strip' as const,
+    // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
+    // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
+    // measured: the strip laid out wider than its container at 1280. Something has to demote first,
+    // and it should be the commands a planner reaches for least. `priority` is exactly that axis —
+    // "what can this row afford to lose" — and it is deliberately separate from `tier`, which is
+    // "how prominent should this be".
+    //
+    // **Tier 3 was tried first and is the wrong instrument**: tier 3 is admitted LAST, so with no
+    // budget it is not "demotes first" but "starts in the overflow". In jsdom every width is 0, so
+    // it put four commands behind the `⋯` unconditionally and broke 37 unit tests that click them by
+    // name — tests which would then have been rewritten to reach through an overflow, i.e. made worse
+    // to accommodate a mis-read of the mechanism.
+    //
+    // **`Plan ▾` was the plan and is not what shipped.** ADR-0099 D3 and M5-T1 both name one trigger
+    // folding Calendar · Analysis · Comments · Share · Print. Building it means putting `Share &
+    // export` and `Analysis` — both already menus — INSIDE another menu, so the surface meant to
+    // simplify the strip would introduce this product's first nested menus, with their own focus and
+    // announcement rules. The `⋯` is the same "one press away" through a mechanism already built,
+    // already tested and already swept by this gate.
+    priority: -100,
     tier: 2 as const,
     order: 0,
     label: SHARE_EXPORT_LABEL,
@@ -2017,7 +2081,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'zoom-out',
       group: 'frame',
-      row: 'look',
+      row: 'strip',
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
@@ -2038,7 +2102,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'zoom-in',
       group: 'frame',
-      row: 'look',
+      row: 'strip',
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
@@ -2057,7 +2121,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'fit',
       group: 'frame',
-      row: 'look',
+      row: 'strip',
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
@@ -2116,7 +2180,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'view',
       group: 'lens',
-      row: 'look',
+      row: 'strip',
       tier: 2,
       order: 0,
       // Always shown (display toggles apply to the empty canvas grid too) — part of the stable
@@ -2310,7 +2374,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           {
             id: 'float-paths',
             group: 'find',
-            row: 'look',
+            row: 'strip',
             tier: 3,
             order: 4,
             label: 'Float paths',
@@ -2352,7 +2416,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'next-conflict-status',
       group: 'find',
-      row: 'look',
+      row: 'strip',
       tier: 2,
       order: 3,
       label: 'Current conflict',
@@ -2408,7 +2472,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'add-activity',
       group: 'tools',
-      row: 'do',
+      row: 'strip',
       tier: 1,
       // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
       showLabel: 'always',
@@ -2430,7 +2494,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'link-tool',
       group: 'tools',
-      row: 'do',
+      row: 'strip',
       tier: 1,
       order: 1,
       label: 'Link activities',
@@ -2462,7 +2526,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
           {
             id: 'marquee-select',
             group: 'tools' as const,
-            row: 'do' as const,
+            row: 'strip' as const,
             tier: 2 as const,
             order: 2,
             label: 'Select',
@@ -2476,7 +2540,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'auto-arrange',
       group: 'tools',
-      row: 'do',
+      row: 'strip',
       tier: 2,
       order: 3,
       label: 'Arrange',
@@ -2541,11 +2605,32 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'recalculate',
       group: 'tools',
-      row: 'do',
+      row: 'strip',
       tier: 1,
       // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
       showLabel: 'always',
       order: 7,
+      /**
+       * **Ranked by Graphite M5, and the reason it needed ranking is the finding.**
+       *
+       * `priority` defaults to `-order`, so this command's rank was **−7 because it registered
+       * eighth**, not because anyone judged it eighth. On ADR-0031's two rows that never mattered:
+       * Row 2 had room for the whole authoring cluster, so an unranked field is indistinguishable
+       * from a ranked one. Merging the rows makes every command compete on one budget, and the
+       * artefact starts deciding what a planner can reach — `Recalculate` fell into the `⋯` at
+       * **every width from 768 to 2133**, behind `Legend` and `Resource view`, and TWO journeys
+       * (`e2e-edit`, `e2e-toolbar`) timed out clicking it within minutes of each other.
+       *
+       * 95: above the lenses at 60 and the whole authoring tail, below the viewport cluster at 100
+       * and `next-conflict` at 110. It earns that on two grounds — it is the command that makes the
+       * diagram TRUE after an edit, and its spinning icon is the only visible cue in the product
+       * that a recalculation is running at all (`isBusy` → `aria-busy`, below). A command inside a
+       * menu cannot spin at anybody.
+       *
+       * ADR-0099 M7 re-homes the running state to the status bar. When it does, re-read this: the
+       * second ground goes with it, and 95 may then be more than the command needs.
+       */
+      priority: 95,
       label: 'Recalculate',
       // In flight the icon spins — the same `Loader2 … animate-spin` idiom the export items above
       // use, so this is an established pattern rather than a new one. The spin is the *only* cue a
@@ -2583,7 +2668,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'summary',
       group: 'object',
-      row: 'look',
+      row: 'strip',
       tier: 2,
       order: 1,
       label: 'Summary',
@@ -2626,7 +2711,27 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'analysis',
       group: 'object',
-      row: 'do',
+      row: 'strip',
+      // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
+      // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
+      // measured: the strip laid out wider than its container at 1280. Something has to demote first,
+      // and it should be the commands a planner reaches for least. `priority` is exactly that axis —
+      // "what can this row afford to lose" — and it is deliberately separate from `tier`, which is
+      // "how prominent should this be".
+      //
+      // **Tier 3 was tried first and is the wrong instrument**: tier 3 is admitted LAST, so with no
+      // budget it is not "demotes first" but "starts in the overflow". In jsdom every width is 0, so
+      // it put four commands behind the `⋯` unconditionally and broke 37 unit tests that click them by
+      // name — tests which would then have been rewritten to reach through an overflow, i.e. made worse
+      // to accommodate a mis-read of the mechanism.
+      //
+      // **`Plan ▾` was the plan and is not what shipped.** ADR-0099 D3 and M5-T1 both name one trigger
+      // folding Calendar · Analysis · Comments · Share · Print. Building it means putting `Share &
+      // export` and `Analysis` — both already menus — INSIDE another menu, so the surface meant to
+      // simplify the strip would introduce this product's first nested menus, with their own focus and
+      // announcement rules. The `⋯` is the same "one press away" through a mechanism already built,
+      // already tested and already swept by this gate.
+      priority: -100,
       tier: 2,
       order: 2,
       label: ANALYSIS_LABEL,
@@ -2642,7 +2747,27 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     {
       id: 'calendar',
       group: 'object',
-      row: 'do',
+      row: 'strip',
+      // **Lowest priority on the strip since Graphite M5.** Merging ADR-0031's two command rows put
+      // every command in competition for one row's width, and the fit gate's S4 said what M5-T1 had
+      // measured: the strip laid out wider than its container at 1280. Something has to demote first,
+      // and it should be the commands a planner reaches for least. `priority` is exactly that axis —
+      // "what can this row afford to lose" — and it is deliberately separate from `tier`, which is
+      // "how prominent should this be".
+      //
+      // **Tier 3 was tried first and is the wrong instrument**: tier 3 is admitted LAST, so with no
+      // budget it is not "demotes first" but "starts in the overflow". In jsdom every width is 0, so
+      // it put four commands behind the `⋯` unconditionally and broke 37 unit tests that click them by
+      // name — tests which would then have been rewritten to reach through an overflow, i.e. made worse
+      // to accommodate a mis-read of the mechanism.
+      //
+      // **`Plan ▾` was the plan and is not what shipped.** ADR-0099 D3 and M5-T1 both name one trigger
+      // folding Calendar · Analysis · Comments · Share · Print. Building it means putting `Share &
+      // export` and `Analysis` — both already menus — INSIDE another menu, so the surface meant to
+      // simplify the strip would introduce this product's first nested menus, with their own focus and
+      // announcement rules. The `⋯` is the same "one press away" through a mechanism already built,
+      // already tested and already swept by this gate.
+      priority: -100,
       tier: 2,
       order: 3,
       label: 'Settings…',

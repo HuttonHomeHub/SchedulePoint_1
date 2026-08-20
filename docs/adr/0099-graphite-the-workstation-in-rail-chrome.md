@@ -102,8 +102,21 @@ of the first choices failed, one of them badly:
   measurements six times, and the seventh should be visible.
   What M5 still delivers is three command rows becoming one. The `e2e-toolbar-fit` gate is
   rewritten around the single strip rather than retired.
-- `ADR-0031`'s seven-group taxonomy survives as the toolbar's grouping; its three-tier
-  prominence model does not, because a single strip that fits has nothing to demote.
+- ~~`ADR-0031`'s seven-group taxonomy survives as the toolbar's grouping; its three-tier
+  prominence model does not, because a single strip that fits has nothing to demote.~~
+  **Corrected 2026-08-20 when M5 landed.** The taxonomy survives; so does the tier model, for the
+  same reason the ladder does — the strip's protasis ("a single strip that fits") is false, and
+  the apodosis went with it. Struck in place for the reason the bullet above is: this is the
+  **seventh** width expectation in this register contradicted by its own measurement, and the
+  seventh should be as visible as the sixth.
+- **M5's real cost, measured rather than predicted, is that eleven pinned `render` items now
+  share one budget** (`docs/specs/graphite/m5-command-strip.md`). Two consequences follow, both
+  found by journeys rather than by reading. The strip stops fitting outright below ~900 px and
+  scrolls there instead, so `e2e-toolbar-fit`'s `PINNED_FLOOR_WIDTH` rises 768 → 960
+  (`docs/TECH_DEBT.md` #147, with the two candidate narrowings and their measured values). And
+  `ToolbarItem.priority`, which defaults to `-order`, **stops being an inert convenience and starts
+  deciding what a planner can reach** — it dropped `Next conflict` and `Recalculate` off the row,
+  each of which is now ranked deliberately with its reason in the registry.
 - The activity dialog's _content_ moves to the drawer. ADR-0060's per-scope save model
   and ADR-0061's form-layout primitives still apply — a drawer is a container change,
   not a permission change.

@@ -50,16 +50,9 @@ function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
   return render(
     <div>
       <Toolbar
-        items={rows.look}
+        items={rows.strip}
         context={context}
-        label="View and navigate"
-        authoringEnabled={authoringEnabled}
-        alignEndGroup="object"
-      />
-      <Toolbar
-        items={rows.do}
-        context={context}
-        label="Build and manage"
+        label="Plan commands"
         authoringEnabled={authoringEnabled}
       />
     </div>,

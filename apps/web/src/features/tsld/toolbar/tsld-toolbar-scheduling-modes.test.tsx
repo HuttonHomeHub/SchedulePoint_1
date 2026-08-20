@@ -32,11 +32,10 @@ function renderToolbar(context: TsldToolbarContext, authoringEnabled = true) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
     <Toolbar
-      items={rows.look}
+      items={rows.strip}
       context={context}
-      label="View and navigate"
+      label="Plan commands"
       authoringEnabled={authoringEnabled}
-      alignEndGroup="object"
     />,
   );
 }

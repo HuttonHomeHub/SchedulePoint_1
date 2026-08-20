@@ -27,7 +27,7 @@ test('a planner undoes and redoes canvas edits with the toolbar and the keyboard
 
   // Take the pen — the Row 2 · Do authoring cluster (Add split-button, Undo/Redo) lights up.
   await startEditing(page);
-  const toolbar = page.getByRole('toolbar', { name: 'Build and manage' });
+  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
   const announcer = page.getByTestId('announcer');
 
   // Draw two tasks; the first draw silently sets the plan start and the schedule auto-recalcs, so each
@@ -61,7 +61,7 @@ test('a planner undoes and redoes canvas edits with the toolbar and the keyboard
 
   // (5) The authoring toolbar hosting the undo/redo controls is accessible.
   const results = await new AxeBuilder({ page })
-    .include('[role="toolbar"][aria-label="Build and manage"]')
+    .include('[role="toolbar"][aria-label="Plan commands"]')
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze();
   expect(results.violations).toEqual([]);

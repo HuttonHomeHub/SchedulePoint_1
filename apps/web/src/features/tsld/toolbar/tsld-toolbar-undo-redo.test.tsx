@@ -41,13 +41,13 @@ function doRow(context: TsldToolbarContext, authoringEnabled = true) {
   const rows = splitByRow(buildTsldToolbarItems());
   render(
     <Toolbar
-      items={rows.do}
+      items={rows.strip}
       context={context}
-      label="Build and manage"
+      label="Plan commands"
       authoringEnabled={authoringEnabled}
     />,
   );
-  return screen.getByRole('toolbar', { name: 'Build and manage' });
+  return screen.getByRole('toolbar', { name: 'Plan commands' });
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -107,11 +107,17 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
    * bar until every demotable button is pushed into `⋯` and check the two survive.
    */
   it('keeps Undo/Redo on the bar at a width that overflows their demotable neighbours', () => {
-    // The control: jsdom reports every width as 0, so unsqueezed the row overflows nothing. If this
-    // ever stopped holding, the squeezed assertions below would pass without proving anything.
-    expect(
-      within(doRow(ctx())).queryByRole('button', { name: 'More toolbar actions' }),
-    ).not.toBeInTheDocument();
+    // The control: unsqueezed, Undo and Redo are inline. If this ever stopped holding, the squeezed
+    // assertions below would pass without proving anything.
+    //
+    // **It used to assert that no `⋯` existed at all**, on the reasoning that jsdom reports every
+    // width as 0 so an unsqueezed row overflows nothing. Graphite M5 merged the two command rows,
+    // and tier 3 is admitted LAST — so the single strip carries tier-3 items in the `⋯` at any
+    // width, which is the ladder working rather than a squeeze. The control moves to the thing this
+    // case is actually about: these two controls, on the bar.
+    const unsqueezed = doRow(ctx());
+    expect(within(unsqueezed).getByRole('button', { name: /^Undo/ })).toBeInTheDocument();
+    expect(within(unsqueezed).getByRole('button', { name: /^Redo/ })).toBeInTheDocument();
     cleanup();
 
     // Now give every item a real width and the container almost none: the pinned controls alone

@@ -46,13 +46,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
 function renderRows(context: TsldToolbarContext) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
-    <Toolbar
-      items={rows.look}
-      context={context}
-      label="View and navigate"
-      authoringEnabled
-      alignEndGroup="object"
-    />,
+    <Toolbar items={rows.strip} context={context} label="Plan commands" authoringEnabled />,
   );
 }
 
@@ -129,11 +123,10 @@ describe('TSLD toolbar — Float paths (flag on)', () => {
     const rows = splitByRow(buildTsldToolbarItems());
     render(
       <Toolbar
-        items={rows.look}
+        items={rows.strip}
         context={ctx({ canEditSchedule: false })}
-        label="View and navigate"
+        label="Plan commands"
         authoringEnabled={false}
-        alignEndGroup="object"
       />,
     );
     expect(floatPathsButton()).not.toHaveAttribute('aria-disabled', 'true');

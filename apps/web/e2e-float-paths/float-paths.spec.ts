@@ -63,7 +63,7 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // So it is located by `[data-toolbar-item]` and never by role or copy: inline it is a
   // `button[aria-pressed]`, in the menu a `menuitemcheckbox`, and a locator that names either one
   // is a locator that breaks the next time the row's width changes.
-  const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
+  const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
   const more = lookRow.getByRole('button', { name: 'More toolbar actions' });
   const inlineFloatPaths = lookRow.locator('[data-toolbar-item="float-paths"]');
   /** The control, wherever it is — opening the `⋯` only when it is not on the row. */

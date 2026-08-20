@@ -27,8 +27,9 @@ test.describe('the chrome band', () => {
     await expect(band.locator('header')).toHaveCount(1);
     // …and so are both toolbar rows, which live in the workspace's React tree and only reach
     // here through the portal.
-    await expect(band.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
-    await expect(band.getByRole('toolbar', { name: 'Build and manage' })).toBeVisible();
+    // One strip since Graphite M5 — the two rows this asserted are merged, so asserting it twice
+    // would be asserting the same element twice and reading as coverage of a split that is gone.
+    await expect(band.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
     // The rail and the workspace are BELOW the band, not inside it.
     await expect(band.locator('nav[aria-label="Project Explorer"]')).toHaveCount(0);
@@ -46,7 +47,7 @@ test.describe('the chrome band', () => {
     await createClient(page, `Band Client ${stamp}`);
     await createProject(page, `Band Project ${stamp}`);
     await createPlan(page, `Band Plan ${stamp}`);
-    await expect(band.getByRole('toolbar', { name: 'Build and manage' })).toBeVisible();
+    await expect(band.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
     // Height is content-driven: a fixed band would either waste a strip on every non-plan
     // screen or clip the toolbar.
@@ -61,7 +62,7 @@ test.describe('the chrome band', () => {
     await createClient(page, `Band Client ${stamp}`);
     await createProject(page, `Band Project ${stamp}`);
     await createPlan(page, `Band Plan ${stamp}`);
-    await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
     /** Tab until `predicate` matches, or give up — reports what it reached for a readable failure. */
     async function tabUntil(label: string, predicate: RegExp, limit = 30): Promise<void> {
@@ -95,7 +96,7 @@ test.describe('the chrome band', () => {
     await createClient(page, `Band Client ${stamp}`);
     await createProject(page, `Band Project ${stamp}`);
     await createPlan(page, `Band Plan ${stamp}`);
-    await expect(page.getByRole('toolbar', { name: 'Build and manage' })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .include('[data-surface="chrome"]')

@@ -35,13 +35,13 @@ function renderDoRow(over: Partial<TsldToolbarContext> = {}) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
     <Toolbar
-      items={rows.do}
+      items={rows.strip}
       context={makeTsldToolbarContext({
         summaryContent: null,
         canRecalc: true,
         ...over,
       })}
-      label="Build and manage"
+      label="Plan commands"
       authoringEnabled
     />,
   );
