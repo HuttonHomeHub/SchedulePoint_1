@@ -117,3 +117,51 @@ this tree, and editing source under a sweep invalidates every suite after the ed
 already happened once in this epic. **M5 fixes it**, and the fix is the clamp, not a change to the
 grid: making column 3 `minmax(0,auto)` would let the drawer shrink below its own minimum, which is a
 different defect wearing the same clothes.
+
+## The sweep's two failures, and the product defect underneath one of them
+
+**`workspace-chrome` — three faults in one harness, none of them the drawer.** The failure read "the
+drag never reached the server", and the drawer's ~300 px was the obvious suspect. It was the
+trigger, not the cause:
+
+1. `dragBarBy` moved the pointer to `box.x + from.x + dx` with no clamp. `findBarInRow` probes from
+   x = 30, so a bar found in an early column plus a leftward `dx` put the **pointerup outside the
+   canvas**, where the gesture is simply lost. Clamped — a drag that leaves the canvas is not a drag.
+2. `placeOnDay` **threw** when the version did not move, which made one mis-aimed drag fatal to a
+   helper whose entire design is aim, measure, correct. A version that does not move is an
+   observation: the drop changed nothing. It is now recorded, the estimate widened, and the loop
+   given its next attempt — which is what its own docblock always promised.
+3. The real one. `placeOnDay` **aims from where the bar is DRAWN and succeeds on where it is
+   STORED**, and for the placement this helper exists to build those are different numbers: ADR-0033
+   flags a `visualStart` earlier than the network allows and never moves the bar, so the drawn day
+   reaches the target while `visualStart` sits days behind. `(targetDay - from)` then rounds to zero,
+   a zero-distance drag is a click, and the loop spends its remaining attempts asking for nothing.
+   The trace said so in as many words — `drawn day 0 +0px -> no change`, twice.
+
+   A third-of-a-day nudge was tried first and is recorded because it looks right and is not: it
+   registers as a gesture (`+20px`) and still writes nothing, because it lands on the day the bar is
+   already on and the client does not PATCH an unchanged `visualStart`. **The only way to rewrite a
+   placement at the day it is drawn on is to leave that day and come back**, so the nudge is a whole
+   day and the budget went 5 → 8.
+
+`findBar`'s probe columns were a fixed list capped at 200 px, and the day→pixel scale is derived
+from the canvas width at pick time (ADR-0056) — so a narrower canvas moved every bar past the last
+column and it reported "no probed canvas point hit …", which reads as a missing bar rather than as a
+probe that stopped looking. It now continues across the real width.
+
+**`designed-ui` — and a live accessibility defect it had been scoped away from.** D3 measures the
+`aria-current="page"` treatment axe never looks at. Its locator was `header a[aria-current="page"]`,
+and M3 moved the wordmark into the rail, so it resolved to a hidden element.
+
+Re-pointing it surfaced the real thing: **two links claimed to be the current page.** TanStack's
+`Link` sets `aria-current="page"` itself whenever it considers itself active, and its default match
+is a **prefix** — so `/orgs/:slug` was active on `/clients`, `/calendars` and every other org route,
+alongside the rail destination that genuinely was current. A reader asking their screen reader
+"where am I" got two answers. `brand-mark.tsx` now passes `activeOptions={{ exact: true }}`.
+
+It was live from the moment the wordmark became a link (ADR-0098 M4) and **structurally invisible to
+every gate**: the unit suites mock `Link`, so the router's own attribute never appears in them, and
+the journey's locator was scoped to `header`, so it only ever saw one of the two. It became visible
+only when M3 put the brand and the destinations in one container and a **strict-mode violation**
+counted them. D3 now measures each site where it is actually current, and asserts the count is one —
+because the defect is only ever visible as a count.

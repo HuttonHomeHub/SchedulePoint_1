@@ -96,9 +96,19 @@ export function BrandLink({
       to="/orgs/$orgSlug"
       params={{ orgSlug }}
       aria-label="SchedulePoint — organisation overview"
-      // `aria-current` is set from the pathname rather than left to the router's `.active` class:
-      // this is the affordance the "Overview" nav item provided with `activeOptions={{ exact:
-      // true }}`, and it has to survive that item's removal in M5.
+      // **`activeOptions={{ exact: true }}`, and without it TWO links claim to be the current
+      // page.** TanStack's `Link` sets `aria-current="page"` itself whenever it considers itself
+      // active, and its default match is a PREFIX — so `/orgs/:slug` is active on `/orgs/:slug/
+      // clients`, `/calendars`, every org route there is. The rail's real current destination is
+      // marked at the same time, and a reader asking their screen reader "where am I" got two
+      // answers.
+      //
+      // It was live from the moment the wordmark became a link (ADR-0098 M4) and invisible until
+      // Graphite M3 put the brand and the destinations in the same container: `e2e-designed-ui`'s
+      // D3 scoped its locator to `header`, so it only ever saw one of the two. The explicit
+      // `aria-current` below was written to make the landing state deliberate and could not undo
+      // the router's — a prop cannot remove an attribute a library adds.
+      activeOptions={{ exact: true }}
       aria-current={isLanding ? 'page' : undefined}
       className={BRAND_LINK_CLASS}
     >

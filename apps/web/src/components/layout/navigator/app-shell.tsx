@@ -1,14 +1,25 @@
 import { Outlet, useParams } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { NavigatorCrud } from './navigator-crud';
 import { NavigatorRail } from './navigator-rail';
 import { ShellContext } from './shell-context';
 import { ToolRail, type DrawerSubject } from './tool-rail';
 
+/**
+ * Width kept for the stage when the drawer's stored width would otherwise eat it. The plan
+ * workspace reserves the same 360 px for the diagram (`CANVAS_MIN_WIDTH`), and this is the shell's
+ * equivalent one layer out — the shell cannot import that constant without learning what a plan is
+ * (ADR-0029), so it is named here and the two are deliberately the same number.
+ */
+const STAGE_MIN_WIDTH = 360;
+
 import { ChromeBandRow, ChromeSlotHost } from '@/components/layout/chrome/chrome-band';
 import { ContextDrawer } from '@/components/layout/drawer/context-drawer';
-import { useContextDrawerPrefs } from '@/components/layout/drawer/use-context-drawer-prefs';
+import {
+  CONTEXT_DRAWER_MIN_WIDTH,
+  useContextDrawerPrefs,
+} from '@/components/layout/drawer/use-context-drawer-prefs';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
 import { useExpansionState } from '@/features/navigator';
@@ -41,6 +52,37 @@ function ShellFrame(): React.ReactElement {
   const drawer = useContextDrawerPrefs();
   const [subject, setSubject] = useState<DrawerSubject>('explorer');
   const announce = useAnnounce();
+
+  /**
+   * **The drawer's effective maximum, clamped against the live shell width.**
+   *
+   * `useContextDrawerPrefs` clamps to a static 224–420, and the grid gives the drawer's column
+   * `auto` — so without this the drawer takes its stored width whatever is left and the stage
+   * (`minmax(0,1fr)`) absorbs the shortfall: 676 px of stage at 1024, 420 px at 768. The rule is
+   * `use-notes-panel-prefs.ts`'s, stated there and missing here — the effective maximum reserves
+   * room for the stage, because the static one can exceed the space available.
+   *
+   * It is a **best-effort floor, not a guarantee**, exactly as the notes dock records: below about
+   * 750 px the reservation and the drawer's own minimum cannot both hold, and the minimum wins.
+   * The alternative — letting the drawer shrink under its minimum — is a different defect wearing
+   * the same clothes, because 224 px is where its content stops being readable at all.
+   */
+  const shellRef = useRef<HTMLDivElement>(null);
+  const [shellWidth, setShellWidth] = useState(0);
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setShellWidth(el.getBoundingClientRect().width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const drawerWidth = Math.min(
+    drawer.size,
+    Math.max(
+      CONTEXT_DRAWER_MIN_WIDTH,
+      (shellWidth || drawer.size + STAGE_MIN_WIDTH) - STAGE_MIN_WIDTH,
+    ),
+  );
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
 
@@ -174,6 +216,7 @@ function ShellFrame(): React.ReactElement {
                   the same words, as the workspace root one layer in. */}
               {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
               <div
+                ref={shellRef}
                 className="relative grid h-dvh grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
                 onKeyDown={onShellKeyDown}
               >
@@ -254,7 +297,7 @@ function ShellFrame(): React.ReactElement {
                     <ContextDrawer
                       title="Project Explorer"
                       onClose={closeDrawerPanel}
-                      width={drawer.size}
+                      width={drawerWidth}
                       onResize={drawer.setSize}
                       className="flex min-h-0"
                     >

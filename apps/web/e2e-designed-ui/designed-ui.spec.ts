@@ -145,14 +145,39 @@ for (const { choice, colorScheme } of THEMES) {
 
       // D3 — the current-page state (`aria-current="page"`), likewise unmeasured by axe.
       //
-      // **Two sites now, in two scopes, which is more coverage than before rather than less.**
-      // The wordmark became the route home in ADR-0098 M4 and carries `aria-current` on the
-      // landing — that is the `chrome` scope's only current-state left, and it is new. The rail's
-      // current destination is the `panel` scope's. Measuring one and calling it D3 would leave
-      // whichever scope was dropped unmeasured for exactly the state axe never looks at.
-      const currentBrand = 'header a[aria-current="page"]';
+      // **Two sites, and since Graphite M3 they are in the SAME scope — which is a loss recorded
+      // rather than a locator updated.** ADR-0098 M4 made the wordmark the route home, carrying
+      // `aria-current` on the landing, and this comment called it "the `chrome` scope's only
+      // current-state left" against the rail's destination in `panel`. M3 deleted the top bar and
+      // moved the wordmark into the rail, so the header still exists but is `lg:hidden` and this
+      // locator resolved to a hidden element. The measurement follows the control (ADR-0097 D1a's
+      // rule, which this file already applies to D1 one screen up), and both sites are now `panel`.
+      //
+      // **The `chrome` scope therefore has no current-state site on the screens this suite
+      // visits.** Its only remaining one is the breadcrumb's final crumb (`breadcrumbs.tsx:58`),
+      // which renders solely inside a plan's identity row — and driving four theme variants through
+      // a project and a plan to reach one token pair is real cost for one measurement.
+      // `docs/TECH_DEBT.md` #146 carries it rather than a silent gap. Both sites are still measured
+      // because they are different components: a link that IS the brand and a link in a list.
+      // **Each site is measured where it is actually current**, which this case did not do and got
+      // away with for a reason worth keeping: TanStack's `Link` marks itself active on a PREFIX
+      // match, so `/orgs/:slug` was "current" on every org route and the wordmark carried
+      // `aria-current` everywhere. That is now `activeOptions={{ exact: true }}` (`brand-mark.tsx`)
+      // — a real defect, since two links claiming to be the current page is two answers to "where
+      // am I" — so reaching the brand's current state means going to the landing.
+      //
+      // Scoped by the rail's `data-tool-rail` hook. Two weaker selectors were tried first and both
+      // resolved to the WRONG element rather than to nothing, which is the failure mode worth
+      // naming: `nav[aria-label="Project Explorer"] a[...]` finds the drawer's tree, and the
+      // accessible name alone finds two links, because the below-`lg` top bar still renders the
+      // same brand behind `display: none`. A selector that resolves and measures a real pair is how
+      // a green assertion ends up describing a control nobody can see.
+      await page.goto(`/orgs/${orgSlug}`);
+      const currentBrand = '[data-tool-rail] a[aria-current="page"]';
       await expect(page.locator(currentBrand)).toBeVisible();
       expect(contrast(await computedPair(page, currentBrand))).toBeGreaterThanOrEqual(TEXT_MIN);
+      // And exactly ONE thing claims it. The prefix-match defect above is only visible as a count.
+      await expect(page.locator('[data-tool-rail] a[aria-current="page"]')).toHaveCount(1);
 
       await page.goto(`/orgs/${orgSlug}/calendars`);
       const currentRail = 'nav[aria-label="Organisation"] a[aria-current="page"]';

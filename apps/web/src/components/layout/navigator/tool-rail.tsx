@@ -54,6 +54,12 @@ export function ToolRail({
   return (
     <Surface
       tone="panel"
+      // A test hook, in the established shape (`data-toolbar-item`, `data-plan-identity`). The rail
+      // is a `Surface` div with no landmark of its own — it is chrome, not navigation — and the
+      // below-`lg` top bar still renders the same brand link behind `display: none`, so a selector
+      // written by role or accessible name resolves to two elements. Scoping by copy would be worse
+      // (the standing rule after three journeys broke on a label change).
+      data-tool-rail
       className="border-border flex h-full w-12 flex-col items-center gap-1 border-r py-2"
     >
       <BrandLink orgSlug={orgSlug} variant="tile" />

@@ -2713,3 +2713,31 @@ moment it was created, only by editing it afterwards. It rendered, it looked rig
 covered the host. One correct pattern applied to one neighbour and not the other — the ADR-0064 §7
 shape, and the fifth epic running. Fixed with a regression test verified red first
 (`CreateResourceButton.test.tsx`).
+
+## 146. The `chrome` surface scope has no measured current-page state
+
+**Raised 2026-08-20 (Graphite M3/M4).** `e2e-designed-ui`'s D3 measures the `aria-current="page"`
+treatment that axe never looks at, and it did so at **two** sites in **two** scopes: the wordmark in
+`chrome` and the rail's current destination in `panel`. Its own comment said measuring one and
+calling it D3 "would leave whichever scope was dropped unmeasured for exactly the state axe never
+looks at".
+
+Graphite M3 deleted the top bar and moved the wordmark into the tool rail, so **both sites are now
+`panel`** and the argument for having two has collapsed into having one twice. The selector was
+re-pointed rather than deleted — the measurement follows the control — but the gap is real: on the
+screens that suite visits, the `chrome` scope paints no current state at all.
+
+Its only remaining site is the **breadcrumb's final crumb** (`breadcrumbs.tsx:58`, a
+`text-foreground font-medium` span carrying `aria-current="page"`), which renders solely inside a
+plan's identity row. Reaching it means driving each of the suite's four theme variants through a
+client, a project and a plan — real cost for one token pair, on a suite that already onboards four
+times.
+
+**Two ways to close it, neither obviously right yet.** Extend the theme sweep to a plan screen
+(honest, slow), or measure the crumb pair in the token contrast matrix instead (fast, but the matrix
+computes token-to-token ratios and cannot see that this pair is the one a reader's eye lands on).
+Graphite M10's gate pass is the natural place to choose, with the epic's own screenshots in hand.
+
+**Why it is debt rather than a defect:** the pair is very likely fine — `--foreground` on the chrome
+band's ground is already gated by `token-contrast.test.ts`. What is missing is the _measurement of
+the state_, which is precisely the class of thing this suite exists to catch and axe does not.
