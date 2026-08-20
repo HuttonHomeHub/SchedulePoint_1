@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+
 import { showActivities } from './workspace';
 
 /**
@@ -57,7 +59,7 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   // "Actions for …" menu (TECH_DEBT #38): open it, then choose Logic.
   await page.getByRole('button', { name: 'Actions for Excavate' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = activityEditor(page);
   // With the tabbed activity editor as the Logic entry point (ADR-0062), the dialog's title is
   // the activity's own name and the tab list shows Logic as the section that opened.
   await expect(dialog.getByRole('heading', { name: 'Excavate', exact: true })).toBeVisible();
@@ -114,7 +116,7 @@ test('a planner adds a dependency, is stopped from making a loop, and removes it
     await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
   }
 
-  const dialog = page.getByRole('dialog');
+  const dialog = activityEditor(page);
 
   // Add Excavate as a predecessor of Pour slab (Excavate → Pour slab).
   await page.getByRole('button', { name: 'Actions for Pour slab' }).click();

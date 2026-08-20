@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+
 import { showActivities } from './workspace';
 
 /**
@@ -108,36 +110,55 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   // progress-only dialog — Report progress, Edit and Steps are three doors into one editor. This
   // suite runs at the shipped defaults, so it describes that; the previous surface is pinned by the
   // dedicated flag-off suites, and the tabbed permission model by `e2e-activity-editor/`.
+  //
+  // **`activityEditor`, not `dialog`** (ADR-0099): the editor moved out of a modal and into the
+  // context drawer at `lg`+, so this `const` — which is the CREATE dialog, still a modal — stopped
+  // being the same surface. One name had been serving two things that used to share a chrome.
   const actionsButton = page.getByRole('button', { name: 'Actions for Excavate' });
   await actionsButton.click();
   await page.getByRole('menuitem', { name: 'Report progress' }).click();
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('tab', { name: 'Progress', selected: true })).toBeVisible();
+  const editor = activityEditor(page);
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('tab', { name: 'Progress', selected: true })).toBeVisible();
   // The editor (three progress panels, live status preview) is accessible.
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
-  // Closing with nothing edited returns focus to the trigger (native <dialog> focus restore) — the
-  // menu's own close-and-restore already returned focus to the "Actions for …" trigger before the
-  // dialog opened, so that's what the dialog restores focus to. Nothing is dirty, so the editor
-  // closes straight away rather than asking to discard.
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(actionsButton).toBeFocused();
+  /**
+   * **Closing hands focus to the rail's panel button, not to whatever opened the editor.**
+   *
+   * This asserted the trigger until ADR-0099, and that behaviour was a property of the modal rather
+   * than a decision: `<dialog>.close()` restores focus to whatever held it when `showModal()` ran,
+   * which happened to be the row menu's "Actions for …" trigger. The drawer has no such reflex, and
+   * its Close button sits INSIDE the subtree that goes away, so something has to be chosen.
+   *
+   * The rail button is chosen deliberately, on three grounds: the drawer's subject changes as a
+   * planner selects bars, so "whatever opened it" is frequently stale or gone; it is the one control
+   * that always exists and always brings the panel back; and it is what a persistent panel's
+   * dismissal ordinarily returns to. The alternative — remembering an invoker and restoring to it —
+   * was considered and rejected as reproducing a platform side-effect by hand, with an ordering
+   * dependency on the row menu's own focus restore that has already produced two wrong diagnoses in
+   * this epic.
+   *
+   * Nothing is dirty, so the editor closes straight away rather than asking to discard.
+   */
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Activity details' })).toBeFocused();
 
   await actionsButton.click();
   await page.getByRole('menuitem', { name: 'Report progress' }).click();
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Percent complete').fill('40');
+  await expect(editor).toBeVisible();
+  await editor.getByLabel('Percent complete').fill('40');
   // On/before the plan data date (2026-01-05) — an actual after "now" is rejected by N07 (ADR-0035 §6).
-  await dialog.getByLabel(/Actual start/).fill('2026-01-02');
-  await expect(dialog.getByText('In progress')).toBeVisible();
-  await dialog.getByRole('button', { name: 'Save progress' }).click();
+  await editor.getByLabel(/Actual start/).fill('2026-01-02');
+  await expect(editor.getByText('In progress')).toBeVisible();
+  await editor.getByRole('button', { name: 'Save progress' }).click();
   // The editor stays open after a save (ADR-0060) — a multi-scope session would be pointless if
   // saving one section closed the others — so close it before reading the row behind it.
-  await expect(dialog.getByText('Saved.')).toBeVisible();
-  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(dialog).toBeHidden();
+  await expect(editor.getByText('Saved.')).toBeVisible();
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toBeHidden();
 
   await expect(page.getByRole('cell', { name: 'In progress · 40%', exact: true })).toBeVisible();
 });
