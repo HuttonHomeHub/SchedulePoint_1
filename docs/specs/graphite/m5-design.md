@@ -94,3 +94,27 @@ owns it.
   suite (418), `CHROME_RESIDUAL_PX` (`Toolbar.tsx:52`), `resolveLayoutMode`, the band floors and the
   hysteresis. `toolbar-band.tsx` stays — it publishes the band width, which the strip still needs for
   the label decision.
+
+## What reading `ActivityEditorDialog` settles for M6
+
+Recorded here because it was read while M5 was blocked, and because it decides M6's shape before
+M6 starts rather than during it.
+
+The plan's bar for M6 is that **every existing `ActivityEditorDialog.*.test.tsx` passes unchanged**
+— nine files. That is only achievable if the milestone is an **extraction**, not a rewrite, which is
+ADR-0062's rule and the reason that epic's own extraction could claim its proof ("every pre-existing
+suite passed unchanged through it").
+
+`ActivityEditorDialog.tsx` is 793 lines whose body is already a self-contained composition inside a
+`<Dialog>` wrapper opened at `:411`. So M6 is two steps, and only the first is provable:
+
+1. **Extract `ActivityEditorBody`.** The dialog keeps existing and renders it. Every suite passes
+   untouched — and if one does not, the extraction is wrong and it is cheap to learn there.
+2. **Render the same body as the drawer's Properties subject** and move the entry points. The
+   dialog's suites now prove the body, wherever it is mounted.
+
+Two things the dialog gets from `<Dialog>` that the drawer does not, and that step 2 owes
+explicitly: `confirmBeforeClose` (ADR-0060 M6's guard over three independently-dirty scopes — and
+plan.md §A9 records that **a drawer never closes**, so _selecting a different bar_ is the implicit
+dismiss and nothing covers that path today), and focus containment, which a non-modal panel must not
+have. Neither is a detail to discover while wiring.
