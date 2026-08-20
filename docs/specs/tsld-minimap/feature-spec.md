@@ -70,23 +70,32 @@ Go to date, zoom-to-selection, search-jump, Next conflict — every one of them 
 to already know what you are looking for. There is no way to see the shape of the whole
 programme, and no way to move to a region you can only point at.
 
-The pain has two axes and they are not equal:
+The pain has two axes, and M0-T2 measured both (2026-08-20, in a browser at a 1646 CSS px
+viewport; scene canvas measured **1297×896**; seed-catalogue plans standing proxy for the
+operator's real plans — stated, since this environment cannot reach that database; lanes
+packed by the product's own `packLanes` before measuring):
 
-- **Horizontal (the stronger argument).** The Day preset frames **14 days**
-  (`render/geometry.ts:278`). On a two-year programme that is **~1.9% of the plan
-  visible** — so reaching a region two quarters away is zoom out, hunt, zoom in, repeat.
-- **Vertical.** `LANE_HEIGHT` is 28 px (`render/geometry.ts:35`) and the canvas at 1646 CSS
-  px is ~681 px tall after ADR-0099 M5, so roughly **24 lanes** are visible against the
-  60–80 a large import produces.
+- **Horizontal — the axis that carries the argument on every plan measured.** The
+  catalogue's 540-activity plan spans **1,059 days**; the working presets frame **1.3%
+  (Day, 14 days) / 2.8% (Week) / 8.6% (Month)** of it. The 2,160-activity programme spans
+  **4,125 days**, and the same presets frame **0.3% / 0.7% / 2.2%** — even the Year preset
+  shows ~26% of it. Reaching a region two quarters away is zoom out, hunt, zoom in,
+  repeat, at every scale a planner actually works at.
+- **Vertical — real on large programmes, compounding rather than carrying.** The canvas
+  shows **32 lanes** (896 px / `LANE_HEIGHT` 28, `render/geometry.ts:35`). The
+  540-activity plan packs to **41 lanes (78% visible)** — mostly in view; the
+  2,160-activity programme packs to **274 lanes (11.7% visible)**, where the vertical hunt
+  is as blind as the horizontal one.
 
-> **Both figures are marked pending M0 re-derivation and neither may be quoted as
-> established.** ADR-0079's "60–80 lanes, ~a dozen visible" predates Graphite's canvas
-> height change and is stale by construction (ADR-0076 Class 1); the ~24 above is derived
-> from that change, not measured; the 1.9% is arithmetic over one assumed plan length. M0
-> re-derives all of it against the operator's largest real plan and a 500-activity import.
-> **The design must not be justified on the vertical case with a horizontal anecdote, or
-> the reverse** — M0 says which axis carries the need, and the problem statement above is
-> rewritten from its numbers before M1 starts.
+> Re-derivation notes (M0-T2): ADR-0079's "60–80 lanes, ~a dozen visible" was stale as
+> predicted — visible lanes are 32 at 1646 post-Graphite, and lane count is a property of
+> the plan, not a constant. The earlier draft's "~24 lanes visible" (derived from a 681 px
+> canvas) was also low: the measured canvas is 896 px tall at 1646×1097. The "~1.9% at
+> Day on a two-year plan" anecdote was directionally right and understated the large-plan
+> case by an order of magnitude. One sentence, as M0-T2 requires: **the time axis carries
+> the need (0.3–8.6% visible at the working presets on both plans), and the lane axis
+> compounds it on programmes that pack past ~32 lanes.** S1's withdrawal condition is not
+> met — both axes support the control.
 
 **Why now.** It is the last unbuilt Should-have on the primary surface
 (`docs/PROJECT_BRIEF.md:92`), ADR-0026 reserved a `Minimap` component in the folder layout
