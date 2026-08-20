@@ -25,8 +25,10 @@ import { GANTT_COLUMNS } from './layout/grid-columns';
  * **What it deliberately does not claim.** It pins the arithmetic and the single source, not the
  * rendering: a site that ignored `resolveColumnWidth` and wrote its own `style={{ width }}` would
  * still be caught only by the second assertion below, which is a text scan and therefore weaker
- * than the compiler. The browser-level proof that the Timeline begins where the grid ends belongs
- * to `e2e-gantt`, and is stated here so a reader does not take a green run as covering it.
+ * than the compiler. **And there is no browser-level proof at all**: nothing in `e2e-gantt` or
+ * `e2e-gantt-editing` drives the splitter, the pane width or a column resize — checked, not
+ * assumed, after this sentence first read that such proof "belongs to `e2e-gantt`", which is how a
+ * gap comes to read as coverage held somewhere else. The arithmetic is pinned; the picture is not.
  */
 describe('the Gantt grid width', () => {
   /**

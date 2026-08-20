@@ -2,9 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 28
-> models across 48 committed migrations (counted 2026-08-09, `grep -c '^model '` /
-> `ls migrations`, not memory) — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 29
+> models across 57 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy

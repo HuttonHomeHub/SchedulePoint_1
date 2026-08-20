@@ -21,18 +21,23 @@ Product direction lives in [ROADMAP.md](ROADMAP.md) and
 the ADR-0034 capability matrix. Listed here only when a candidate is neither —
 a product idea that has not yet earned a roadmap line:
 
-- `M` **The activity editor as a docked panel** — ADR-0097 Landing **D2**, deferred out of that
-  epic by the product owner on 2026-08-19 rather than dropped. The editor is a modal dialog today;
-  the proposal is a panel docked into the workspace, so a planner can see the diagram while editing
-  the activity they picked from it.
+- `S` **The activity editor's docked panel — the part ADR-0099 did not close.** This entry described
+  the whole thing as unbuilt until the 2026-08-20 reconciliation pass, **on the day it shipped**. It
+  read "The editor is a modal dialog today; the proposal is a panel docked into the workspace, so a
+  planner can see the diagram while editing the activity they picked from it." That is ADR-0099 M6,
+  released in `web-v0.95.0`: at `lg`+ the three ADR-0060 intents open the editor in the trailing
+  context drawer, and the modal is now the chrome for narrow viewports only. Left standing, it was
+  the top line of the file that decides what gets built next, pointing at work that exists — which
+  is the same failure four Graphite milestones spent themselves discovering.
 
-  **It is a workflow change, not a styling one, which is why it wants its own pass.** ADR-0060's
-  per-scope save exists because the editor spans scopes that do not share a permission, and its
-  unsaved-work guard (ADR-0060 M6) is **dialog-shaped** — it hangs off backdrop-click and the close
-  button. A docked panel removes the thing that guard is attached to, across three independently
-  dirty scopes, so "what happens to unsaved changes when the planner clicks the canvas" is a real
-  design question rather than an implementation detail. Named here rather than discovered by a
-  failing suite.
+  **What the entry got right, and what it therefore still owes.** It said the unsaved-work question
+  was "a real design question rather than an implementation detail", and the epic proved it three
+  times: closing the drawer dropped focus to `<body>` (WCAG 2.4.3), Escape stopped closing the editor
+  because the modal had been getting that from the platform, and a modal opened for one commit and
+  took focus with it. All three are fixed. What is genuinely **left** is the case that entry named
+  and the epic did not reach: **there is still no guard on navigating away** from a plan with unsaved
+  scope edits — unchanged from the modal, and now easier to hit, because a drawer does not block the
+  canvas behind it.
 
 - `S` **The Gantt's remaining editing gaps.** The epic landed (ADR-0095, M1–M5,
   `web-v0.92.0` 2026-08-18) and this entry is rewritten to be about what is

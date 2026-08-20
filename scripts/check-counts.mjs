@@ -92,8 +92,23 @@ const phrase = (text) => new RegExp(text.replace(/ /g, '\\s*>?\\s*'));
  */
 const claimed = {
   'API modules': [phrase('(\\d+) API modules'), phrase('(\\d+) feature modules')],
-  'Prisma models': [phrase('(\\d+) Prisma models')],
-  migrations: [phrase('across (\\d+) migrations'), phrase('\\+ (\\d+) migrations')],
+  // **Bare `models` / `migrations`, not the two wordings that happened to be in front of somebody.**
+  // The narrow forms were `(\\d+) Prisma models`, `across (\\d+) migrations` and `\\+ (\\d+) migrations`,
+  // and the 2026-08-20 pass found `docs/ARCHITECTURE.md` — a file this gate ALREADY scans — saying
+  // "48 migrations are committed" while the gate reported OK, because that sentence matches none of
+  // them. Same file, seventy-five lines below a comment claiming the gate "has never covered this
+  // file". Third distinct way this gate has been wrong about these six numbers (ADR-0076 §1), and
+  // the second where the fix was a wording it did not know rather than a file it did not read.
+  //
+  // Verified safe rather than assumed: across all four target documents these two patterns match
+  // exactly the intended occurrences and nothing else.
+  //
+  // The optional adjective is not speculative either: DATABASE.md says "48 **committed**
+  // migrations", and the first version of this widening — `(\\d+) migrations` — still missed it,
+  // in the same run that proved the point. One optional lower-case word between the number and the
+  // noun covers that and the next one.
+  'Prisma models': [phrase('(\\d+) Prisma models'), phrase('(\\d+) (?:[a-z]+ )?models')],
+  migrations: [phrase('(\\d+) (?:[a-z]+ )?migrations')],
   'web source files': [phrase('(\\d+) web source files')],
   'flag-scoped Playwright suites': [phrase('(\\d+) flag-scoped Playwright suites')],
   ADRs: [phrase('(\\d+) ADRs')],
@@ -109,6 +124,11 @@ const documents = [
   { path: 'CLAUDE.md', label: 'CLAUDE.md', required: true },
   { path: 'README.md', label: "README.md's status paragraph", required: false },
   { path: 'docs/ARCHITECTURE.md', label: 'docs/ARCHITECTURE.md', required: false },
+  // Added by the 2026-08-20 pass. Its opening blockquote states the model and migration counts and
+  // was **nine migrations and one model stale** — with a "(counted 2026-08-09…)" parenthetical
+  // beside them, which is the advice this gate exists to replace: a reader who trusts a number does
+  // not check its date.
+  { path: 'docs/DATABASE.md', label: 'docs/DATABASE.md', required: false },
 ];
 
 const problems = [];

@@ -30,16 +30,24 @@ supersedes the old one rather than diverging silently.
 
 The frontend is not a blank slate; most "new" structure has a precedent.
 
-- **A persistent app shell** (ADR-0029): mounted once, top bar + Project Explorer
-  rail (an ARIA `tree`, lazy + virtualized) + a single workspace region, with
-  selection derived from the URL.
+- **A persistent app shell** (ADR-0029), reshaped by ADR-0099: mounted once, and
+  since Graphite it is a CSS **grid** — a fixed 48 px tool rail on the leading
+  edge (brand, organisation switcher, drawer panel buttons, the plan's mode
+  cluster, destinations, account), a stage, and a trailing **context drawer**
+  whose subjects are the Project Explorer (an ARIA `tree`, lazy + virtualized)
+  and whatever the route registers. **There is no top bar at `lg`+** — this line
+  said there was until the 2026-08-20 pass, three weeks after M3 deleted it;
+  below `lg` it survives to carry the off-canvas trigger. Selection is still
+  derived from the URL, and the shell still knows nothing about plans.
 - **A canvas-first plan workspace** (ADR-0030) with a shared orientation-aware
   resizable-panel primitive, and a declarative **toolbar registry** (ADR-0031) —
   a 7-group taxonomy, three prominence tiers, responsive overflow. New plan
   commands are registry entries, not new chrome.
 - **Surface scopes** (ADR-0055): one token vocabulary rebound per surface by
-  `[data-surface]`. New surfaces get a complete 17-token family or they get a
-  trap — the original bug was a three-token stub.
+  `[data-surface]`. A new surface gets the **complete** family or it gets a trap
+  — the original bug was a three-token stub. Do not quote the size here: it was
+  17 when this line was written, 18 after ADR-0077 §9 and is computed by closure
+  since ADR-0097. `styles/token-architecture.test.ts` owns the number.
 - **The canvas render layer is pure** and framework-free (`features/tsld/render/`);
   the component layer owns flags, React and the DOM a11y mirror.
 - **Server state in TanStack Query, URL state in TanStack Router**, forms via

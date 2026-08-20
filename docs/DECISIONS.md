@@ -10,6 +10,58 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-20 — Reconciliation pass at the ADR-0099 epic boundary
+
+**What it found**, in the order the runbook walks:
+
+**The count gate was passing over two stale numbers in a file it already reads.**
+`docs/ARCHITECTURE.md` said "28 models … 48 migrations are committed" against 29 and 57 — not an
+ungated copy but a **gated file whose sentence no pattern matched** (`across (\d+) migrations` and
+`\+ (\d+) migrations` do not see "48 migrations are committed"). Seventy-five lines above the stale
+figures, that file claims the gate "has never covered this file", which stopped being true in the
+commit that wrote it. `docs/DATABASE.md` carried the same two numbers behind a "(counted
+2026-08-09…)" note — the advice this gate exists to replace. Patterns widened to a bare noun plus one
+optional adjective, which was not speculative: the first widening still missed "48 **committed**
+migrations" in the run that proved the point. Third distinct way this gate has been wrong about the
+same six numbers.
+
+**Five register rows were annotated CLOSED in their titles**, which the register forbids in bold on
+line 10 — and the previous pass deleted two of that shape and left five. #113 said CLOSED in its
+title and **open** in its status line. Two more were falsified by the epic (#126's "the segments
+carry no icon field at all"; #129's "the 56 px header row is the last recoverable band"). All seven
+verified against the code, deleted, ledgered.
+
+**#133 was re-measured rather than re-worded**, because every figure it held described the two-row
+surface M5 deleted and two of its three named remedies have since been removed from the product. On
+the merged strip at 1646 a coarse pointer costs **two commands off the row, one of them
+`next-conflict`** — which carries the highest rank on the strip, so the padding costs more than any
+ranking can defend. The geometry is gated; the budget is not.
+
+**`DESIGN_SYSTEM.md` still described the palette ADR-0099 replaced, one day later** — "Navy chrome
+around a light working canvas", `#14213D`, `#f8f9fa`, four ratios computed against those grounds,
+against live tokens that are dark graphite on dark graphite. That is the governing document for
+colour. Rewritten as the **rule**, pointing at `token-contrast.test.ts` instead of holding figures,
+because restating numbers it does not own is how it came to be wrong about all of them.
+`TOOLBAR_ROADMAP.md`'s first substantive sentence named a `row` union the codebase does not have;
+`.claude/agents/ui-architect.md` asserted a top bar deleted three weeks earlier; `ROADMAP.md` said
+the docked editor "is deferred to its own epic" one paragraph after describing the epic that shipped
+it; and `BACKLOG.md`'s **top line** described that editor as unbuilt on the day it shipped.
+
+**Step 7 blocked, and the sharpest finding was a claim of mine.** Three specialists over the 1,075
+lines written after the M10 gate pass — code no reviewer had seen. The drawer's new Escape rung
+answered presses belonging to nested confirmations, so dismissing "Delete note" closed the editor
+under it; and the new programmatic entry point opened silently, where the modal it replaced was
+announced by the platform. Both fixed with tests verified red. Then: `plan-status-bar.test.tsx`
+asserted the bar had "no coverage at all, direct or indirect" — disproved in one command, because
+`plan-workspace-toolbar.test.tsx` mounts `TestChromeHost` and reads the bar's own label. An
+unverified claim **about missing verification**, inside the milestone whose subject is exactly that,
+and repeated into `CLAUDE.md` and ADR-0099. Corrected in all three.
+
+**The lesson, which is not a new one:** every gate that failed here failed by **wording** or by
+**scope**, never by arithmetic. A gate is only ever pointed at the copies somebody remembered.
+
+---
+
 ### 2026-08-20 — Four milestones lost their headline task to re-reading the problem
 
 **Decision.** A plan's **problem statement** is re-verified at the start of each milestone, the same

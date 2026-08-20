@@ -32,6 +32,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
+import { aNativeModalIsOpen } from '@/lib/escape-rungs';
 
 /** `lg` breakpoint (64rem) as a media query — the pinned rail takes over at/above it. */
 const LG_QUERY = '(min-width: 64rem)';
@@ -216,9 +217,26 @@ function ShellFrame(): React.ReactElement {
    * direction and needs no second rule.
    */
   const showContextSubject = useCallback(() => {
+    /**
+     * **Announced when it OPENS, and only then.**
+     *
+     * The manual path (`selectSubject`) has always said "… opened."; this one said nothing, and the
+     * gap mattered more than the symmetry suggests: before ADR-0099 every one of these entry points
+     * opened a native `<dialog>`, which the platform announces as a dialog and moves focus into. The
+     * drawer does neither — deliberately, since the subject follows the canvas selection and
+     * stealing focus each time would make the canvas unusable — so without this a planner pressing
+     * **Edit** from a row menu got a silent swap of the workspace's trailing column. WCAG 4.1.3, on
+     * the capability this fallout patch exists to add.
+     *
+     * The `opening` test is what keeps it from becoming noise: the same call fires on every
+     * selection change once the drawer is already on this subject, and announcing there would talk
+     * over the canvas's own `describeActivity`. It says "opened" when something opened.
+     */
+    const opening = subject !== 'context' || drawer.collapsed;
     setSubject('context');
     if (drawer.collapsed) drawer.expand();
-  }, [drawer]);
+    if (opening) announce(`${subjectName('context')} opened.`);
+  }, [drawer, subject, announce, subjectName]);
 
   const drawerControls = useMemo(
     () => ({ show: showContextSubject, focusRailButton }),
@@ -260,7 +278,7 @@ function ShellFrame(): React.ReactElement {
       ) {
         return;
       }
-      if (document.querySelector('dialog[open]')) return;
+      if (aNativeModalIsOpen()) return;
       event.preventDefault();
       closeDrawerPanel();
     },

@@ -255,7 +255,8 @@ keep `main` releasable.
   **Two of the epic's own proposals were disproved by the instruments it insisted on** — the
   command-surface reshape on the falsification condition its spec set in advance, and the header band
   merge on a browser, when the flag-on journey found the diagram/Gantt view switch buried in an
-  overflow menu. The docked activity editor is deferred to its own epic.
+  overflow menu. The docked activity editor was deferred to its own epic and **shipped as ADR-0099 M6**
+  — this sentence still read "is deferred" the day after.
 - **The landing is the organisation overview** (ADR-0098). `/orgs/:slug` is where every sign-in
   lands, and it showed a centred card telling the reader to select a plan from the rail one column
   away. It now answers what a planner arrives with: what changed recently, what needs attention, and

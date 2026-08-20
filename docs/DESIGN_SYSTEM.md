@@ -213,52 +213,44 @@ declarations, comparable to what `.dark` used to hold. What that does **not** bu
 choosing those values is a week of design work, and a dark diagram whose colours carry meaning needs
 its plot separations re-derived rather than re-tinted (`--plot-*`, ADR-0097 Landing E).
 
-### The palette (navy + amber)
+### The palette (Graphite)
 
-**This is the product's only theme, and it is declared at `:root`** (ADR-0097) —
-no class is stamped on `<html>`, and there is no picker. Navy chrome around a light
-working canvas. The product owner asked for it to become "the main theme that the app
-is designed to"; light, dark and system are withdrawn rather than deprecated, and the
-mechanism that would carry a future dark theme is kept live rather than deleted (see
-`docs/FRONTEND_ARCHITECTURE.md` → Theme management).
+**This is the product's only theme, and it is declared at `:root`** (ADR-0097) — no class is
+stamped on `<html>`, and there is no picker. `apps/web/src/styles/globals.css` is the source of
+truth for every value; this section is the **rule**, not a second copy of the values, because a
+document restating numbers it does not own is how the previous version of this section came to be
+wrong about all of them.
 
-| Role                    | Colour                 | Token                                            |
-| ----------------------- | ---------------------- | ------------------------------------------------ |
-| Chrome (top bar, rail)  | Navy `#14213D`         | `--chrome`, `--panel` (see Surface scopes below) |
-| Primary action (page)   | Navy `#14213D`         | `--primary` (ink: off-white)                     |
-| Primary action (chrome) | Amber `#fca311`        | `--chrome-primary` (ink: navy, 7.9:1)            |
-| Secondary surface       | Lighter navy `#1f3661` | `--secondary`, `--info`, `--accent` on chrome    |
-| Page background         | Off-white `#f8f9fa`    | `--background`                                   |
-| Body text               | `#333`                 | `--foreground`                                   |
+> **This section described the navy-and-amber palette until the 2026-08-20 reconciliation pass — a
+> day after ADR-0099 replaced it.** It said "Navy chrome around a light working canvas", gave
+> `--chrome` as navy `#14213D` and the page as off-white `#f8f9fa`, and closed with four verified
+> ratios computed against those grounds. The live tokens are `--chrome: oklch(0.154 0.009 264.3)`
+> and `--page-background: oklch(0.177 0.011 260.6)` — a dark graphite chrome around a dark graphite
+> page. This is the governing document for colour: the one a next author opens before choosing one.
+> Kept as a note rather than deleted, because the rules below survived the repalette and the reason
+> they exist is the interesting part.
 
-Two rules make the palette work rather than merely look right on a swatch sheet:
+**One rule underneath it: _cool means interface, warm means attention._** Azure is the only
+interactive colour, so anything blue is something you can press or have selected. Warm is reserved
+for the schedule telling you something — critical, near-critical, conflict, today. A control that
+borrows a warm hue and a bar that borrows the interactive one both break the same promise.
 
-1. **Amber is a fill on navy, never a fill on the page and never ink or a line on a light
-   surface.** `#fca311` on `#f8f9fa` is **1.9:1** — it fails the 4.5:1 text bar, the 3:1
-   non-text bar, and (the case that is easy to miss) the 3:1
-   [1.4.11](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast) bar a solid
-   button's fill must clear against the page behind it. Darkening amber far enough to reach
-   3:1 lands on the bronze `--warning` already uses. So on the page the primary action is
-   the brand **navy** (12:1), and amber is the primary on the navy chrome, where it carries
-   navy ink at **7.9:1**. Same rule for focus: the ring is navy on light surfaces (`--ring`)
-   and amber on chrome (`--chrome-ring`, 7.9:1).
-2. **Near-critical is bronze rather than amber.** `--warning` is the TSLD's near-critical bar
-   fill. With amber promoted to `--primary` — which is also the ordinary bar fill — a normal bar and
-   a near-critical bar would have been the same colour, so `--warning` moved to a deeper bronze.
+Two consequences worth stating, because both were learnt the expensive way:
 
-   > **ADR-0097 Landing E removed the constraint that forced this**, and the entry is kept because
-   > the reasoning is still instructive. The diagram now has its own family (`--plot-*`), so the
-   > ordinary bar fill is no longer the same token as the page's primary button: a theme need never
-   > again recolour the canvas because it recoloured a control. The three bar states are separated
-   > **by measurement** there — near-critical against critical was 1.34:1 and is now 1.61:1, with
-   > 1.70:1 established as the ceiling under a white inside-label and a 3:1 floor on the ground —
-   > and `token-contrast.test.ts` asserts it rather than a reader checking a swatch. The shape cue
-   > (solid outline critical, dashed near-critical) still carries
-   > [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color) regardless of hue.
+1. **A pair is measured, not eyeballed.** ADR-0099 computed the palette before anything was drawn
+   and two of the first choices failed: the critical / non-critical pair at **1.23:1** — the single
+   most important distinction in the product, differing in hue and almost nothing else — and a white
+   label on the critical fill at 3.77:1. Both are now separated on **lightness**, and the selection
+   ring sits **outside** the bar because no one ring colour clears both fills.
+2. **The diagram has its own family** (`--plot-*`, ADR-0097 Landing E), so the ordinary bar fill is
+   not the page's primary button. A theme need never again recolour the canvas because it recoloured
+   a control. The three bar states are separated by measurement and `token-contrast.test.ts` asserts
+   it rather than a reader checking a swatch; the shape cue (solid outline critical, dashed
+   near-critical) carries
+   [WCAG 1.4.1](https://www.w3.org/WAI/WCAG22/Understanding/use-of-color) regardless of hue.
 
-Verified pairings (sRGB, WCAG 2.x): navy chrome / white text **16:1**; body `#333` on
-off-white **12:1**; amber fill / navy ink **7.9:1**; destructive `#b91c1c` on off-white
-**6.1:1**.
+Every pair that matters is asserted by `styles/token-contrast.test.ts` across the surface scopes
+below. **Do not quote a ratio here** — quote the gate.
 
 **The typeface is Space Grotesk** (ADR-0097), chosen from four candidates rendered on real product
 chrome. The palette's source description named Roboto; a per-theme typeface was rejected on the
@@ -268,8 +260,10 @@ gain colour does not already deliver — and with one theme the question no long
 ### Surface scopes (ADR-0055)
 
 A **surface scope** answers "what does this token mean _here_". It exists because one product
-carries regions whose grounds are genuinely different — a navy chrome band above an off-white page —
-so `--muted-foreground` cannot be one colour. The first attempt gave the header three bespoke tokens
+carries regions whose grounds are genuinely different — when it was written, a navy chrome band
+above an off-white page; under Graphite, a near-black rail and command band against a slightly
+lighter graphite stage — so `--muted-foreground` cannot be one colour. The mechanism outlived the
+palette that motivated it, which is the argument for it. The first attempt gave the header three bespoke tokens
 and no muted grey, and every piece of secondary text in the chrome fell through to the page's grey:
 invisible on navy, in six separate places.
 

@@ -1,16 +1,25 @@
 # TSLD toolbar roadmap — future-feature placeholders
 
-The plan toolbar (ADR-0031, two-row amendment 2026-07-15) shows a curated set of **future-feature
+The plan toolbar (ADR-0031; two-row amendment 2026-07-15, merged back to one strip by ADR-0099 M5)
+shows a curated set of **future-feature
 placeholders**: controls that are part of the intended design but whose behaviour isn't built yet.
 Each renders as a permanently-disabled button with a **"Coming soon"** tooltip, so the toolbar reads
 as fully designed and the roadmap is visible in-product. They are defined via `placeholderItem(...)`
 in `apps/web/src/features/tsld/toolbar/tsld-toolbar-items.tsx`.
 
-**Two rows (ADR-0031 two-row amendment).** Each item carries a `row: 'look' | 'do'`. **Row 1 · Look**
-is always live (view/navigate/find); **Row 2 · Do** is build/manage, whose pen-gated authoring cluster
-shades as a set. Placeholders now render **inline** (tier 2 icon buttons) on their row so a normal
-desktop shows the whole intended command set — the `⋯` overflow only appears when a row is too narrow
-to fit (e.g. below `md`), at which point tier-2 items demote into it.
+**One strip and a mode row (ADR-0099 M5).** Each item carries a `row: 'mode' | 'strip'`. The **mode
+row** is the four segments that live on the **tool rail** — `Early | Visual` and `Diagram | Gantt` —
+because a mode is not a command (ADR-0091 D1); the **strip** is every command, on one row. Placeholders
+render **inline** (tier 2 icon buttons) so a normal desktop shows the whole intended command set, and
+the `⋯` appears when the row cannot afford everything, at which point items demote into it by
+`priority`.
+
+> This paragraph read **"Two rows … `row: 'look' | 'do'`. Row 1 · Look … Row 2 · Do"** until the
+> 2026-08-20 reconciliation pass. `ToolbarRow` has been `'mode' | 'strip'`
+> (`toolbar-registry.ts:174`) since ADR-0099 M5 merged the rows, so the first substantive sentence of
+> this document named a type the codebase does not have — and the pen-gated authoring cluster it
+> describes as "Row 2" is no longer a row. The taxonomy, the tiers and the gating are unchanged;
+> only the number of rows that render them.
 
 **Turning one on:** replace its `placeholderItem({...})` stub with a real `ToolbarItem` (wire
 `onActivate`/`render`, `isEnabled`, `disabledReason`, and a context seam), add tests, and remove the

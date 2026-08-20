@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1033 web
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1035 web
 > source files with 34 flag-scoped Playwright suites beside the base journey, and
 > 99 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -2597,10 +2597,16 @@ progress` off the command surface because **an object action belongs on the obje
   Each was established by a probe recording the actual sequence (`in BUTTON[Close dialog]` → `out` →
   `dialog removed`), not by reading.
   Two further blocking findings were **missing tests rather than defects**, and both were structurally
-  invisible: `PlanStatusBar` had no coverage direct or indirect, because it is portalled and
-  `ChromePortal` returns `null` with no host — so every suite that renders the toolbar renders it zero
-  times; and M8's own written acceptance condition ("the three sites read one value; a structural test
+  invisible: `PlanStatusBar` had no **branch** coverage, and M8's own written acceptance condition ("the three sites read one value; a structural test
   says so") had never been met, leaving unpinned the exact arithmetic ADR-0095 shipped wrong once.
+  **The status-bar half of that sentence was itself a Class 3 claim and is corrected here.** It read
+  "no coverage direct or indirect… every suite that renders the toolbar renders it zero times", and
+  the 2026-08-20 reconciliation pass disproved it in one command: `plan-workspace-toolbar.test.tsx`
+  mounts `TestChromeHost`, which has carried a `status` slot since M7, and asserts on `Finish` — the
+  bar's own label. So it was rendered and read. What was true is narrower and still worth the file:
+  that coverage is incidental and single-branch, and says nothing about pending, the singular/plural
+  count, or the recalculating cue. An unverified claim about missing verification, inside the
+  milestone whose subject is exactly that.
   `m6-activity-context.md`'s acceptance table is **corrected rather than edited**: three of its six
   rows were wrong in both directions — Close and Escape do **not** need a discard guard (the hooks
   live above the `shell` call, so a portal returning nothing unmounts the fields and not the

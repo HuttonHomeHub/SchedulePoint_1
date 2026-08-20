@@ -54,9 +54,11 @@ There is deliberately **no cache, queue, or object store in the running system**
 - Layered: **controllers** (HTTP + validation) → **services** (business logic)
   → **repositories** → **Prisma** (persistence). One Nest module per feature;
   23 feature modules under `src/modules/` (this said 20 until the 2026-08-09
-  pass — `pnpm check:counts` gates the same figure in `CLAUDE.md` and
-  `README.md` and has never covered this file, which is why it drifted here and
-  nowhere else).
+  pass, which added this file to `pnpm check:counts` — so the parenthetical's
+  own "has never covered this file" stopped being true in the commit that wrote
+  it, and the 2026-08-20 pass then found the model and migration figures
+  seventy-five lines below **still stale on a green gate**, because neither
+  wording matched a pattern. Both are covered now).
 - **Two of those modules are not domain features and are worth knowing apart.**
   `staff/` is the operations console (ADR-0086): it resolves a `StaffPrincipal`,
   which carries no memberships and no permissions, so passing one to a member
@@ -127,8 +129,8 @@ ESLint flat-config presets (`base`, `react`, `nest`) and tsconfig presets.
 
 ### PostgreSQL + Prisma
 
-Prisma is the ORM and migration tool. `apps/api/prisma/schema.prisma` (28
-models) is the source of truth for the data model; 48 migrations are committed.
+Prisma is the ORM and migration tool. `apps/api/prisma/schema.prisma` (29
+models) is the source of truth for the data model; 57 migrations are committed.
 Constraints Prisma cannot express — partial uniques, CHECK constraints, partial
 indexes — are written as raw SQL in the migration and documented as a comment on
 the model, never as an `@@index` that would drift (see
