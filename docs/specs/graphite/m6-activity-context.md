@@ -142,7 +142,27 @@ lose them **multiply** rather than reduce:
 | **Switching drawer subject** | n/a                | **new**                                                                                                                              |
 | Navigating away              | unguarded (as now) | unguarded (as now)                                                                                                                   |
 
-The last two are the milestone's real work. A modal makes "change the subject" impossible by
+### Corrected at M10: three of those six rows were wrong, and in both directions
+
+The table above was written from an analogy — _a modal loses its scopes when it closes, so a drawer
+must too_ — and the M10 gate pass established that the analogy does not hold. It is left in place
+rather than edited, because the correction is more useful than a tidy table.
+
+- **Close button and Escape do NOT need guarding.** The editor's hooks live in `ActivityEditor`,
+  above the `shell` call, so a portal returning nothing unmounts the rendered fields and **not the
+  component**; RHF does not unregister fields by default, so the draft is still there when the panel
+  comes back. This file already says exactly that about a _different_ route two sections down ("safe
+  by construction"), and nobody applied it to these two. Now pinned by
+  `ActivityEditor.drawer-chrome.test.tsx` — if it ever goes red the table was right and a guard is
+  owed. Verifying the claim rather than trusting the document is ADR-0058's rule; the document here
+  was this one.
+- **`Navigating away` is unchanged and stays unguarded**, as stated.
+- **What the table missed entirely is focus.** Both of those routes unmount the element the reader
+  has just pressed, and a browser drops focus from a removed element to `<body>` — WCAG 2.4.3, and
+  the third instance of that class in this register. Fixed by handing focus to the rail button, which
+  survives the transition and is _about_ the panel that went away.
+
+The last two rows are the milestone's real work. A modal makes "change the subject" impossible by
 construction; a drawer makes it a click on the canvas. **`requestClose` is therefore not enough —
 the guard belongs on the subject transition, not only on the close.** Whatever shape that takes, it
 must be one guard both hosts route through, because two copies of a discard rule is how one host
@@ -284,3 +304,37 @@ with no caller is worth knowing about even when keeping it is right.
 `scripts/e2e-local.sh web:activity-editor` · `web:wbs` · `web:copy-paste` (all three drive the
 editor) · `node scripts/shoot.mjs --width 1646`. Per plan.md's sweep table this is a **targeted**
 milestone, not a sweep one — M10 is the backstop.
+
+## T4 was not met, and the M10 gate pass is what found it
+
+**The three intents did not open the drawer.** They filled it — but only if the planner had already
+discovered the rail's Activity-details button and pressed it. Registering a subject makes a button
+appear and nothing else; there was no channel for a route to say _show me_. So pressing **Edit** on a
+selected activity opened the **modal**, at every width, exactly as before this epic, and the drawer —
+this milestone's headline capability — was dark in the product's default path.
+
+That is ADR-0081's defect verbatim, and it is the fifth recorded instance: _a milestone claiming
+user-facing capability with no entry point_. Its unit tests passed throughout, because they mount the
+editor and not the shell. The one thing that would have caught it is the one thing ADR-0081 says to
+do — a flag-on journey landing with the first user-facing milestone — and this epic's gate table
+routed M6 to "targeted suites", none of which drives the shell.
+
+**The fix is a third channel** (`DrawerSubjectControls`), and it stays a _request_: the route asks
+for its registered subject to be shown, and the shell decides what that means. The shell therefore
+still learns nothing about plans (ADR-0029). It is asked on the **transition** into open, never per
+render — asking every render would take the Explorer away from a planner who had deliberately pointed
+the drawer back at it.
+
+Two more things fell out of the same seam, both found by the same pass:
+
+- **The tab rail did not fit.** `railFits` asked a **viewport** query, which is the right question for
+  a dialog sized by the window and the wrong one for a panel sized by a splitter. The drawer only
+  exists at `lg`+, so the query was always true and the 208 px vertical rail always rendered inside a
+  224–420 px panel — about 92 px of content beside it at the default width. `use-context-drawer-prefs.ts`
+  says in its own words that "its tabs are a horizontal strip"; nothing had wired that up.
+- **Below `lg` the editor vanished.** `showingContext` had no viewport term, so narrowing the window
+  portalled the editor into a `display: none` slot with no fallback and no message. Nothing was lost —
+  which is why it read as breakage, because nothing on screen said where it had gone.
+
+All three are covered by `drawer-entry-point.test.tsx` and `ActivityEditor.drawer-chrome.test.tsx`,
+each verified red against the pre-fix code first.

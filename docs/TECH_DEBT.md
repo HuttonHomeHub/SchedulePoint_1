@@ -2884,3 +2884,44 @@ export path. Two shapes are plausible and they are not equivalent:
 
 (1) is cheap and wrong for this product; (2) is right and is not a one-line change. Choosing between
 them at the end of another epic is how the wrong one gets picked, so it is written down instead.
+
+## 149. The Graphite M10 gate pass's non-blocking findings
+
+**Raised 2026-08-20.** Five specialists over the ADR-0099 epic diff. Security and
+frontend-performance passed outright, both having re-derived the epic's own numbers from the code
+rather than trusting them (performance built both refs: **+1.9 kB gzip JS** for 163 files, and the
+painter untouched, so TECH_DEBT #75's known overage is not attributable here). Component,
+accessibility and UX each blocked, and every blocking finding was folded with a regression test
+verified red first. What follows is what was deliberately **not** folded, with the reason.
+
+- **`MenuItem.itemId` bakes toolbar vocabulary into a general primitive.** It emits the literal
+  `data-toolbar-item`, and nine of `Menu`'s ten consumers are not toolbars. Kept as-is: the
+  alternative is a name-agnostic passthrough, which is a wider API for one caller, and renaming it
+  `toolbarItemId` would make the attribute and the prop disagree. Revisit when a second, non-toolbar
+  consumer wants a stable per-row locator — that is the point at which the generic shape earns its
+  keep rather than being speculative.
+- **Nested landmarks share a name.** With the Explorer subject showing, `<aside aria-label="Project
+Explorer">` wraps `<nav aria-label="Project Explorer">`, so a rotor lists the same words twice. Not
+  a WCAG failure. The fix is a prop telling `NavigatorRail` it is hosted rather than freestanding,
+  which is a change to a component eight screens render for a duplication on one.
+- **`localStorage` is written at drag frame rate.** `useResizablePanelPrefs` persists on every
+  `setSize`, i.e. ~60×/s while a splitter is moving. Pre-existing (the Explorer rail and the activity
+  panel have done this since ADR-0030); Graphite adds two more consumers of the same hook. Each write
+  is a `JSON.stringify` of a two-field object and nothing has been profiled as hot, so a debounce
+  would be an unmeasured optimisation — which is the thing this register keeps saying not to do.
+- **`Toolbar`'s `ResizeObserver` re-observes on every commit.** Deliberate and documented in place
+  (the item set changes without a dependency it could key on); `observe()` on an already-observed
+  node is a no-op per spec. It now iterates the union of what were two rows' `render` items, which is
+  a larger no-op, not a new cost.
+- **The status bar says nothing when a computed plan has no critical activities.** Suggested as an
+  inconsistency with `Finish`'s "Not calculated". Left alone, and the reason is that the state is
+  very nearly unreachable: with the default TF ≤ 0 rule (ADR-0035) every computed network has a
+  critical path, so "computed and clean" is not a state a planner meets. Adding copy for it would be
+  reassuring about something that does not happen.
+
+**One finding is recorded as a process note rather than debt.** The UX review's blocking finding —
+the drawer's entry point not existing — was reachable only by driving the shell, and this epic's own
+gate table routed M6 to targeted suites. ADR-0081's rule (the flag-on journey lands with the first
+user-facing milestone) is the standing answer and it was not applied, because Graphite ships no flag
+and the rule is written in terms of one. The rule's subject is a **user-facing milestone**, not a
+flag; `docs/RECONCILE.md` is the place that wording gets fixed.

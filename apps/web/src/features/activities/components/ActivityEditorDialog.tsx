@@ -132,6 +132,7 @@ export function ActivityEditor({
   planId,
   open,
   onClose,
+  tabRailAllowed = true,
   onSaved,
   gating,
   intent,
@@ -158,6 +159,14 @@ export function ActivityEditor({
   planId: string;
   open: boolean;
   onClose: () => void;
+  /**
+   * Whether this host has room for the **vertical** tab rail (~208 px) beside the pane.
+   *
+   * Defaults to `true`, so every existing caller keeps the viewport-only rule it had. The drawer
+   * passes `false`: it is 224–420 px wide at a viewport where the media query is always true, so
+   * without this the rail rendered and left about 92 px for the content it labels.
+   */
+  tabRailAllowed?: boolean;
   /**
    * Why the editor was opened (ADR-0060 §7): which tab to land on, and whether to move focus to the
    * Weighted-steps panel. Omitted ⇒ General, the plain **Edit** behaviour.
@@ -493,7 +502,13 @@ export function ActivityEditor({
   // grids into unusable stubs. Below `md` the same list becomes the horizontal strip it was — a
   // structural switch, which is what `useMediaQuery` is for rather than a CSS utility. The fallback
   // is the rail, so jsdom and a server render both get the desktop shape.
-  const railFits = useMediaQuery('(min-width: 768px)', true);
+  //
+  // **The viewport is not always the right question**, which is what `tabRailAllowed` is for: a host
+  // sized by a splitter rather than by the window can be narrow at a wide viewport, and the drawer
+  // always is (224–420 against the rail's 208). A host that says no is believed; a host that says
+  // nothing gets the viewport answer it always had.
+  const viewportFitsRail = useMediaQuery('(min-width: 768px)', true);
+  const railFits = tabRailAllowed && viewportFitsRail;
 
   return shell({
     requestClose,

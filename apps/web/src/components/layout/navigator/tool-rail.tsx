@@ -51,6 +51,7 @@ export function ToolRail({
   drawerOpen,
   onSelectSubject,
   contextSubject,
+  buttonRef,
 }: {
   orgSlug?: string | undefined;
   /**
@@ -78,6 +79,13 @@ export function ToolRail({
    * one column along.
    */
   contextSubject?: { label: string; icon: React.ReactNode } | null | undefined;
+  /**
+   * Hands each panel button back to the shell, which needs somewhere to put focus when the drawer's
+   * contents unmount under a reader (WCAG 2.4.3 — see `focusRailButton` in `app-shell.tsx`). A
+   * callback rather than two ref props because the subjects are a union and the rail should not
+   * grow a prop per member.
+   */
+  buttonRef?: ((subject: DrawerSubject, node: HTMLButtonElement | null) => void) | undefined;
 }): React.ReactElement {
   return (
     <Surface
@@ -108,6 +116,7 @@ export function ToolRail({
           size="icon"
           aria-label="Project Explorer"
           aria-pressed={drawerOpen && subject === 'explorer'}
+          ref={(node) => buttonRef?.('explorer', node)}
           onClick={() => onSelectSubject('explorer')}
         >
           <PanelLeft aria-hidden="true" className="size-4" />
@@ -118,6 +127,7 @@ export function ToolRail({
             size="icon"
             aria-label={contextSubject.label}
             aria-pressed={drawerOpen && subject === 'context'}
+            ref={(node) => buttonRef?.('context', node)}
             onClick={() => onSelectSubject('context')}
           >
             {contextSubject.icon}

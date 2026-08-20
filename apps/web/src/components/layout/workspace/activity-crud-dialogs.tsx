@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
@@ -8,6 +8,7 @@ import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { ContextDrawerEmpty } from '@/components/layout/drawer/context-drawer';
 import {
   useDrawerSubject,
+  useDrawerSubjectControls,
   useDrawerSubjectShowing,
 } from '@/components/layout/drawer/drawer-subject';
 import { useAnnounce } from '@/components/ui/announcer';
@@ -76,6 +77,7 @@ function PlanActivityEditor({
   ...props
 }: Omit<Parameters<typeof ActivityEditor>[0], 'shell'>): React.ReactElement {
   const showingInDrawer = useDrawerSubjectShowing();
+  const drawerControls = useDrawerSubjectControls();
   useDrawerSubject({
     // **"Activity details", not "Activity".** The shorter name collides with the Add split-button's
     // caret ("Activity type: Task") under any substring match, which is how the browser probe found
@@ -99,6 +101,31 @@ function PlanActivityEditor({
    * `orientation` passed typecheck and 119 unit tests while rendering a row that overflowed a 48 px
    * rail.
    */
+  /**
+   * **Opening the editor asks the shell to show it** — the entry point M6-T4 claimed and did not
+   * have (ADR-0081, found by the M10 gate pass).
+   *
+   * Registering a subject only makes a rail button appear. Without this, pressing **Edit** on a
+   * selected activity opened the modal at every width unless the planner had already discovered and
+   * pressed that button — so the drawer, the milestone's headline capability, was reachable only by
+   * a gesture nothing in the product suggested. Its unit tests passed throughout, because they mount
+   * the editor and not the shell.
+   *
+   * **On the transition, not on `open`.** Asking every render would fight the planner: they could
+   * never point the drawer back at the Explorer while an activity was selected, because the next
+   * commit would take it away again. Asking once, when the editor goes from shut to open, is the
+   * user's own action being honoured.
+   *
+   * Below `lg` this is inert by construction: the shell's `showingContext` carries a viewport term,
+   * so the subject changes, nothing shows, and `modalShell` still renders — which is the chrome
+   * every narrow viewport has always used (M6-T5).
+   */
+  const wasOpen = useRef(props.open);
+  useEffect(() => {
+    if (props.open && !wasOpen.current) drawerControls.show();
+    wasOpen.current = props.open;
+  }, [props.open, drawerControls]);
+
   const drawerShell: ActivityEditorShell = ({ children }) => (
     <ChromePortal name="drawer">
       {props.open ? (
@@ -108,10 +135,33 @@ function PlanActivityEditor({
       )}
     </ChromePortal>
   );
+  /**
+   * **The drawer is 224–420 px wide and the tab rail is 208** (Graphite M10).
+   *
+   * `ActivityEditor` chose its tab orientation from a VIEWPORT query, which is the right question
+   * for a dialog sized by the window and the wrong one for a panel sized by a splitter: the drawer
+   * only exists at `lg`+, so the query was always true there and the vertical rail always rendered —
+   * leaving about 92 px of content beside it at the default width, and less than the rail itself at
+   * the minimum. `use-context-drawer-prefs.ts` says in its own words that "its tabs are a horizontal
+   * strip"; nothing had wired that up until the M10 gate pass found it.
+   *
+   * A boolean rather than a container query because orientation is a structural choice — two
+   * different DOM shapes — and because the answer does not depend on the drawer's current width:
+   * the rail does not fit at 420 either.
+   */
   return (
     <ActivityEditor
       {...props}
       {...(activity ? { activity } : { activity: undefined })}
+      onClose={() => {
+        props.onClose();
+        // The editor's own Close button is INSIDE the portalled subtree, so closing unmounts the
+        // element that has focus and the browser drops it to `<body>` — WCAG 2.4.3, the third
+        // instance of this class in this repository. The rail button survives and is about the panel
+        // whose contents just went away. Only in the drawer: the modal restores focus itself.
+        if (showingInDrawer) drawerControls.focusRailButton();
+      }}
+      tabRailAllowed={!showingInDrawer}
       shell={showingInDrawer ? drawerShell : modalShell(props.open)}
     />
   );

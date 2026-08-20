@@ -134,6 +134,38 @@ const SCREEN_COLUMN_WIDTHS: Record<string, number> = {
 const columnWidth = (column: GanttColumn): number => SCREEN_COLUMN_WIDTHS[column.key] ?? 90;
 
 /**
+ * What the **fixed** columns need — the floor a resizable pane may not go below.
+ *
+ * Pure and exported so `grid-width.structural.test.ts` can assert the property this arithmetic
+ * exists for, rather than a component test asserting a pixel it read out of the same expression.
+ */
+export function ganttFixedWidth(columns: readonly GanttColumn[]): number {
+  return columns.reduce(
+    (sum, c) => sum + (c.key === 'name' ? NAME_COLUMN_MIN_WIDTH : columnWidth(c)),
+    0,
+  );
+}
+
+/**
+ * One column's width **resolved against the pane**: `name` absorbs whatever the pane has beyond the
+ * fixed columns, floored at {@link NAME_COLUMN_MIN_WIDTH}; everything else is its intrinsic width.
+ *
+ * The invariant worth stating, because it is the one ADR-0095's `Float` incident violated: summed
+ * over the visible columns this equals the pane width whenever the pane is at or above
+ * {@link ganttFixedWidth}. Columns therefore fill the grid exactly and can never paint over the
+ * chart — which is what the splitter's floor is for, and what the structural test pins.
+ */
+export function ganttColumnWidth(
+  column: GanttColumn,
+  paneWidth: number,
+  fixedWidth: number,
+): number {
+  return column.key === 'name'
+    ? Math.max(NAME_COLUMN_MIN_WIDTH, paneWidth - (fixedWidth - NAME_COLUMN_MIN_WIDTH))
+    : columnWidth(column);
+}
+
+/**
  * The hidden set a panel with no `viewState` uses — `predecessors` only, i.e. exactly the six
  * columns that shipped in ADR-0059. A module constant so it is one allocation rather than a new
  * Set per render, which would re-identify the `COLUMNS` memo on every pass.
@@ -367,14 +399,7 @@ export function GanttPanel({
   );
   const GRID_WIDTH = useMemo(() => COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0), [COLUMNS]);
   /** What the fixed columns need — the floor a resizable pane may not go below. */
-  const FIXED_WIDTH = useMemo(
-    () =>
-      COLUMNS.reduce(
-        (sum, c) => sum + (c.key === 'name' ? NAME_COLUMN_MIN_WIDTH : columnWidth(c)),
-        0,
-      ),
-    [COLUMNS],
-  );
+  const FIXED_WIDTH = useMemo(() => ganttFixedWidth(COLUMNS), [COLUMNS]);
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
   // The bar region's own width, measured so the zoom preset can frame its target range in the
@@ -448,10 +473,7 @@ export function GanttPanel({
    * incident argues for: that defect was a width literal disagreeing with its own columns.
    */
   const resolveColumnWidth = useCallback(
-    (column: GanttColumn): number =>
-      column.key === 'name'
-        ? Math.max(NAME_COLUMN_MIN_WIDTH, gridWidth - (FIXED_WIDTH - NAME_COLUMN_MIN_WIDTH))
-        : columnWidth(column),
+    (column: GanttColumn): number => ganttColumnWidth(column, gridWidth, FIXED_WIDTH),
     [gridWidth, FIXED_WIDTH],
   );
 

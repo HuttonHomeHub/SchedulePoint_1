@@ -1,4 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 /**
  * A **registered drawer subject** — how a route offers the context drawer something to show
@@ -36,14 +45,64 @@ export interface DrawerSubjectRegistration {
   icon: React.ReactNode;
 }
 
+/**
+ * What a route may **ask the shell to do** about the subject it registered.
+ *
+ * A third channel, and it exists because the second one was not enough: registering a subject makes
+ * a rail button appear, and nothing else. The M10 gate pass found that the consequence was
+ * ADR-0081's defect exactly — `m6-activity-context.md` T4 says "the three ADR-0060 intents open the
+ * drawer", and they did not: pressing **Edit** on a selected activity opened the *modal*, at every
+ * width, unless the planner had separately discovered the rail's Activity-details button and
+ * pressed it first. The drawer — the milestone's headline capability — was dark in the default path
+ * while its unit tests passed, which is the shape this register keeps recording.
+ *
+ * It stays a **request**, not a command: the route says "show what I registered", and the shell
+ * decides what that means (which subject, whether to expand, whether there is a drawer at this
+ * width at all). The shell therefore still learns nothing about plans, which is ADR-0029's rule and
+ * the reason the registration is generic in the first place.
+ */
+export interface DrawerSubjectControls {
+  /** Show the registered subject, expanding the drawer if it is collapsed. */
+  show: () => void;
+  /**
+   * Put focus on the rail button for whatever the drawer is showing.
+   *
+   * For the route this closes a WCAG 2.4.3 hole rather than being a nicety: the editor's own Close
+   * button lives **inside** the portalled subtree, so pressing it unmounts the element that has
+   * focus and the browser drops it to `<body>`. The rail button is the nearest thing that both
+   * survives the transition and is about the panel that just went away.
+   */
+  focusRailButton: () => void;
+}
+
 interface DrawerSubjectValue {
   registration: DrawerSubjectRegistration | null;
   register: (registration: DrawerSubjectRegistration | null) => void;
+  /**
+   * The handlers live in a ref **the provider owns**, and both sides reach them through functions
+   * rather than by touching it.
+   *
+   * A ref because the shell renders *inside* this provider — the rail and the drawer both read the
+   * registration, and the route that writes it is below both — so the shell cannot pass its
+   * callbacks in as props, and installing them must not cost a render.
+   *
+   * Handing the ref itself out through the context was the first shape and the React Compiler
+   * rejected it (`This value cannot be modified`): a context value is immutable as far as the
+   * compiler is concerned, and writing `controls.current` from a consumer is exactly the assumption
+   * it optimises against. Two stable functions defined here express the same thing without anyone
+   * outside this file mutating anything.
+   */
+  setControls: (controls: DrawerSubjectControls | null) => void;
+  show: () => void;
+  focusRailButton: () => void;
 }
 
 const DrawerSubjectContext = createContext<DrawerSubjectValue>({
   registration: null,
   register: () => {},
+  setControls: () => {},
+  show: () => {},
+  focusRailButton: () => {},
 });
 
 /** Owns the registration. Rendered by the shell, above both the rail and the drawer. */
@@ -53,9 +112,15 @@ export function DrawerSubjectProvider({
   children: React.ReactNode;
 }): React.ReactElement {
   const [registration, setRegistration] = useState<DrawerSubjectRegistration | null>(null);
+  const controls = useRef<DrawerSubjectControls | null>(null);
+  const setControls = useCallback((next: DrawerSubjectControls | null) => {
+    controls.current = next;
+  }, []);
+  const show = useCallback(() => controls.current?.show(), []);
+  const focusRailButton = useCallback(() => controls.current?.focusRailButton(), []);
   const value = useMemo(
-    () => ({ registration, register: setRegistration }),
-    [registration, setRegistration],
+    () => ({ registration, register: setRegistration, setControls, show, focusRailButton }),
+    [registration, setRegistration, setControls, show, focusRailButton],
   );
   return <DrawerSubjectContext value={value}>{children}</DrawerSubjectContext>;
 }
@@ -63,6 +128,35 @@ export function DrawerSubjectProvider({
 /** What the shell reads: the current registration, or `null` when no route offers one. */
 export function useDrawerSubjectRegistration(): DrawerSubjectRegistration | null {
   return useContext(DrawerSubjectContext).registration;
+}
+
+/**
+ * **Shell side**: install the handlers a route may call. One caller — `ShellFrame`.
+ *
+ * A layout effect rather than a plain one so the handlers are in place before any route effect
+ * could reach for them: effects run child-first, so a route mounting in the same commit as the
+ * shell would otherwise call `show()` against an empty ref and be silently ignored — a dead entry
+ * point that works on the second render and not the first, which is the worst kind.
+ */
+export function useProvideDrawerSubjectControls(handlers: DrawerSubjectControls): void {
+  const { setControls } = useContext(DrawerSubjectContext);
+  useLayoutEffect(() => {
+    setControls(handlers);
+    return () => setControls(null);
+  }, [setControls, handlers]);
+}
+
+/**
+ * **Route side**: ask the shell to show, or to take focus back after the panel's contents go away.
+ *
+ * The returned object is stable and its methods read the ref at call time, so a route may keep it
+ * in a dependency array without re-running anything. Both are **no-ops when no shell is listening**
+ * — which is every unit test that mounts a plan surface without the shell, and is deliberate: a
+ * route asking for a drawer that does not exist should do nothing, not throw.
+ */
+export function useDrawerSubjectControls(): DrawerSubjectControls {
+  const { show, focusRailButton } = useContext(DrawerSubjectContext);
+  return useMemo(() => ({ show, focusRailButton }), [show, focusRailButton]);
 }
 
 /**

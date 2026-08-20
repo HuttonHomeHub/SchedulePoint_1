@@ -21,6 +21,7 @@ import {
   DrawerSubjectProvider,
   DrawerSubjectShowingProvider,
   useDrawerSubjectRegistration,
+  useProvideDrawerSubjectControls,
 } from '@/components/layout/drawer/drawer-subject';
 import {
   CONTEXT_DRAWER_MIN_WIDTH,
@@ -28,6 +29,7 @@ import {
 } from '@/components/layout/drawer/use-context-drawer-prefs';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
+import { useMediaQuery } from '@/components/ui/use-media-query';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
@@ -74,7 +76,21 @@ function ShellFrame(): React.ReactElement {
    * cascading-render pattern the lint rule rejects (the same argument `ActivityEditorDialog` makes
    * about its landing tab).
    */
-  const showingContext = subject === 'context' && contextSubject !== null;
+  /**
+   * **There is no drawer below `lg`**, and that has to reach the route rather than only the CSS.
+   *
+   * The drawer's wrapper is `hidden lg:flex`, so below 1024 it occupies no space — but
+   * `showingContext` had no viewport term, so a planner who narrowed the window with the editor in
+   * the drawer portalled it into a `display: none` slot and the editor vanished with no fallback and
+   * no message. Their work was not lost (the component stays mounted above the portal), and that is
+   * precisely why it read as breakage: nothing on screen said where it had gone. Found by the M10
+   * gate pass; the same "hidden, not shaded" class ADR-0082 exists to name.
+   *
+   * With the viewport in the term, narrowing hands the editor back to `modalShell` — the chrome
+   * every width below `lg` has used all along (M6-T5's finding that the modal is not a legacy path).
+   */
+  const isDesktop = useMediaQuery(LG_QUERY, true);
+  const showingContext = isDesktop && subject === 'context' && contextSubject !== null;
 
   /**
    * **The drawer's effective maximum, clamped against the live shell width.**
@@ -161,10 +177,54 @@ function ShellFrame(): React.ReactElement {
     [drawer, subject, announce, subjectName],
   );
 
+  /**
+   * **Where focus goes when the panel's contents leave under it.**
+   *
+   * Collapsing the drawer unmounts the whole `<ContextDrawer>` subtree — including the "Close
+   * context drawer" button the reader has just pressed — and a browser drops focus from a removed
+   * element to `<body>`. That is WCAG 2.4.3, and this repository has now shipped it three times
+   * (ADR-0080 M2, TECH_DEBT #64/#67), each time in a different control. The rail button is the right
+   * destination on the same argument ADR-0080 used: it survives the transition, and it is *about*
+   * the panel that went away, so a reader who presses Enter again gets it back.
+   *
+   * The route needs the same target for the same reason one layer in — the editor's own Close button
+   * is inside the portalled subtree — so this is exposed through `DrawerSubjectControls` rather than
+   * kept private.
+   */
+  const railButtons = useRef(new Map<DrawerSubject, HTMLButtonElement | null>());
+  const focusRailButton = useCallback(() => {
+    const button = railButtons.current.get(subject) ?? railButtons.current.get('explorer');
+    button?.focus();
+  }, [subject]);
+
   const closeDrawerPanel = useCallback(() => {
     drawer.collapse();
     announce(`${subjectName(subject)} closed.`);
-  }, [drawer, announce, subjectName, subject]);
+    focusRailButton();
+  }, [drawer, announce, subjectName, subject, focusRailButton]);
+
+  /**
+   * **The route's entry point into the drawer** — what M6-T4 said it had built and had not.
+   *
+   * A route calls this when it opens something the drawer should host (the three ADR-0060 activity
+   * intents). The shell decides what "show" means, so it stays ignorant of plans: point the drawer at
+   * the registered subject and expand it if the planner had it closed.
+   *
+   * **Silent below `lg`** by construction rather than by a guard — `showingContext` carries the
+   * viewport term, so the subject is set, nothing is shown, and the route keeps its modal. Widening
+   * the window then reveals the editor in the drawer, which is the same transition in the other
+   * direction and needs no second rule.
+   */
+  const showContextSubject = useCallback(() => {
+    setSubject('context');
+    if (drawer.collapsed) drawer.expand();
+  }, [drawer]);
+
+  const drawerControls = useMemo(
+    () => ({ show: showContextSubject, focusRailButton }),
+    [showContextSubject, focusRailButton],
+  );
+  useProvideDrawerSubjectControls(drawerControls);
 
   /**
    * **Escape closes the drawer — as the OUTERMOST rung of the existing ladder, never a new
@@ -279,13 +339,13 @@ function ShellFrame(): React.ReactElement {
                 </a>
 
                 {/* Column 1 — the tool rail, spanning EVERY row. It is the leading edge top to
-                    bottom at a fixed 46 px (Graphite M3 gave it the column, M4 gave it its width):
+                    bottom at a fixed 48 px (Graphite M3 gave it the column, M4 gave it its width):
                     the brand, the organisation switcher, the drawer's panel buttons, the six
                     organisation destinations and the account menu, none of them behind anything.
 
                     It comes BEFORE the band in the DOM, and that is reading order rather than a
                     preference: the rail's top-left corner is the document's, and the band starts
-                    46 px in. plan.md §A4's rule is that DOM order IS visual order — never `order:`,
+                    48 px in. plan.md §A4's rule is that DOM order IS visual order — never `order:`,
                     `row-reverse` or `direction: rtl`, each of which decouples focus from reading.
                     The cost is the tab traversal the skip link above exists to answer. */}
                 <div className="col-start-1 row-span-3 row-start-1 hidden shrink-0 lg:block">
@@ -295,6 +355,7 @@ function ShellFrame(): React.ReactElement {
                     subject={subject}
                     drawerOpen={!drawer.collapsed}
                     onSelectSubject={selectSubject}
+                    buttonRef={(which, node) => railButtons.current.set(which, node)}
                     contextSubject={
                       contextSubject
                         ? { label: contextSubject.label, icon: contextSubject.icon }

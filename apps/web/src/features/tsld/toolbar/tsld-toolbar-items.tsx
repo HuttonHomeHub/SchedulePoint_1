@@ -2208,7 +2208,12 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'lens',
       row: 'mode',
       tier: 1,
-      // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
+      // `showLabel: 'always'` is the row's rule and the RAIL overrides it (Graphite M5): a vertical
+      // 48 px toolbar has no room for a word, so these four render icon-only there with the label as
+      // the accessible name. The comment said "stays labelled at every width" until the M10 gate pass
+      // read it beside the rail it now lives in — true when written, false since the mode cluster
+      // moved, and the kind of stale claim ADR-0076 exists to catch. The declaration is kept rather
+      // than dropped: it is still the rule for any host that has a row (TECH_DEBT #61).
       showLabel: 'always',
       order: 1,
       demotionGroup: 'scheduling-mode',
@@ -2228,7 +2233,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'lens',
       row: 'mode',
       tier: 1,
-      // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
+      // Icon-only on the rail; see `mode-early` above (TECH_DEBT #61).
       showLabel: 'always',
       order: 2,
       demotionGroup: 'scheduling-mode',
@@ -2259,7 +2264,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'lens',
       row: 'mode',
       tier: 1,
-      // Its name is the affordance — a nameless view switch is a coin toss (TECH_DEBT #61).
+      // Icon-only on the rail; see `mode-early` above (TECH_DEBT #61).
       showLabel: 'always',
       order: 10,
       demotionGroup: 'view-mode',
@@ -2474,7 +2479,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'tools',
       row: 'strip',
       tier: 1,
-      // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
+      // Its name is the affordance, so it stays labelled wherever the row can afford it
+      // (TECH_DEBT #61).
       showLabel: 'always',
       order: 0,
       label: 'Add activity',
@@ -2607,7 +2613,8 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'tools',
       row: 'strip',
       tier: 1,
-      // Its name is the affordance, so it stays labelled at every width (TECH_DEBT #61).
+      // Its name is the affordance, so it stays labelled wherever the row can afford it
+      // (TECH_DEBT #61).
       showLabel: 'always',
       order: 7,
       /**
