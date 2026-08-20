@@ -124,6 +124,48 @@ of the first choices failed, one of them badly:
   today's values. They are deliberately theme-invariant already (ADR-0077 §8), so they
   do not break; revisiting them is a later slice, and this ADR does not pretend
   otherwise.
+- **The gate pass (M10) found more in the product than in the diff, and its largest finding is
+  this register's own shape landing on the epic that keeps quoting it.** Six specialists; security
+  and frontend-performance passed having re-derived the epic's own numbers from the final code
+  (+1.9 kB gzip for 186 files; zero commits under `render/`). The other three blocked, and the
+  headline was that **the drawer had no entry point**: `m6-activity-context.md` T4 says the three
+  ADR-0060 intents open the drawer, and registering a subject only ever made a rail button appear —
+  so pressing **Edit** opened the modal at every width unless the planner had separately discovered
+  that button. ADR-0081's defect, fifth recorded instance, with the milestone's unit tests green
+  throughout because they mount the editor and not the shell.
+
+  Fixing it produced three more defects that only a browser could report, each after reasoning had
+  been wrong twice. A modal opened for **one commit** and took focus into the top layer before being
+  unmounted, leaving focus on `<body>` — WCAG 2.4.3, and every workspace keyboard accelerator
+  silently dead with it; a `useLayoutEffect` does **not** fix that, because React flushes a commit's
+  passive effects before the re-render a layout effect schedules, so the shipped answer is derived
+  rather than latched. Escape stopped closing the editor, because the modal had been getting that
+  from the platform (`<dialog>`'s `cancel` fires wherever focus is) while the shell's own rung
+  defers to text entry (ADR-0079) — the editor now has its own rung, inner to the shell's. And
+  reopening the editor from the row menu did nothing, because the ask was derived from an `open`
+  transition and Escape leaves the intent set: **a gesture is not a state change**, so the ask moved
+  onto `setEditorIntent`, the one funnel every entry point already used.
+
+  Two blocking findings were **missing tests rather than defects**, and both were structurally
+  invisible: `PlanStatusBar` had no coverage direct or indirect, because it is portalled and
+  `ChromePortal` returns `null` with no host — so every suite that renders the toolbar rendered it
+  zero times; and M8's own written acceptance condition ("the three sites read one value; a
+  structural test says so") had never been met, leaving unpinned the exact arithmetic ADR-0095
+  shipped wrong once.
+
+  One correction belongs here rather than in a commit message: the first fix for the Escape finding
+  was to **rewrite the journey to assert the new behaviour**, and the assertion it deleted had been
+  right all along. Changing the test to match the code instead of deciding what the product should
+  do is the failure this register records most often, and it happened inside the milestone written
+  to catch it. Reverted, with the reason in the test.
+
+  Six non-blocking findings are `docs/TECH_DEBT.md` #149. `Recalculate` also stopped pinning its
+  label — measured in the `⋯` at 1646 and 1920 while inline at 1280, which is backwards — and it is
+  now inline at 1920 and 1280. **At 1646 it is still in the menu**, and that is recorded rather than
+  claimed fixed: every other inline control there wears its label and is pinned, so the demotable
+  budget is zero. TECH_DEBT #147 has been read as a narrow-width problem since it was raised; it is
+  a _labelled_-width one, and 1646 is where both conditions meet.
+
 - **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation
   parity gate is untouched by construction.
 
