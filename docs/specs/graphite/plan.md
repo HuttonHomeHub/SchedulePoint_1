@@ -213,7 +213,7 @@ shaved for a sixth epic.**
 | **M7**  | Status bar — _landed_ (`m7-status-bar.md`); the dock re-host **withdrawn**, ADR-0092 had already settled it                | Three states — not calculated / calculating / calculated-zero-critical — must not collapse into one sentence             |
 | **M8**  | Gantt grid splitter — _landed_ (`m8-gantt-split.md`); the layout fork was moot, ADR-0095 shipped the grid beside the chart | **One** virtualizer, not two synced scrollers; row heights identical by construction                                     |
 | **M9**  | Diagram stage — _no work owed_ (`m9-diagram-stage.md`); the screenshot found something older instead                       | `sceneTopOffset` re-derived, not re-assumed                                                                              |
-| **M10** | Gate pass — _landed_                                                                                                       | Five specialists; screenshots at four widths **plus a coarse-pointer run**                                               |
+| **M10** | Gate pass — _landed_                                                                                                       | Five specialists; screenshots at four widths; the coarse-pointer run is a standing gate, not new work — see below        |
 
 Standing gates every slice: `pnpm lint && typecheck && test`, plus `scripts/e2e-local.sh web`
 (the base journey), plus **the full sweep on any slice that moves a label or a
@@ -388,3 +388,21 @@ targeted suites for M6 were the editor's, which mount the editor and not the she
 flag-on journey lands with the first user-facing milestone; Graphite ships no flag, and that is
 precisely why the rule was not reached for. The rule's subject is a **user-facing milestone**, not a
 flag.
+
+## M10's fourth stale problem statement
+
+The gate pass's own definition of done asked for "a coarse-pointer run", on ADR-0091's record that
+the first one ever taken in this repository had found Row 2 losing all nine labels in tablet mode.
+Building it turned out to be building a second one: ADR-0090 M3-T4 had already made it a **standing
+gate** — `e2e-toolbar-fit/fit.spec.ts`'s `coarse pointer` describe block, which runs at 1024×1366,
+asserts that the browser really reports `(pointer: coarse)` before measuring anything, and passed in
+the sweep along with the rest of that suite.
+
+The draft config written before checking reached for `hasTouch` **and** `isMobile` — and that file's
+own comment records `isMobile` being tried and rejected, because its mobile meta-viewport reflows the
+New-activity dialog until the description covers the Create button. So the second harness would have
+been worse than the one that exists, for the reason already written down beside it.
+
+That is the **fourth** time in this epic that re-verifying a problem statement removed the work
+(M7's dock re-host, M8's layout fork, M9 entirely, and now this). The first three were milestones;
+this one was the gate pass's own checklist, which is the last place anybody would think to re-read.
