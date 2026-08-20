@@ -1,5 +1,112 @@
 # @repo/web
 
+## 0.95.0
+
+### Minor Changes
+
+- [#335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/335) [`977c3dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/977c3dd3121bc46cec4a21bbab156e18f87dc5c1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Graphite M2 — the plan workspace's shell becomes one CSS grid, so the command band can span the
+  columns a context drawer will sit inside. Opening the drawer will change the band's width by zero
+  because of where it is placed, not because anything measures it (ADR-0099). Nothing moves on screen:
+  verified by pixel-diffing every screen at three widths against the same build without the grid.
+
+  Completes the Graphite palette. `--card`, `--popover` and the canvas ground were still light, so
+  every dialog, menu and popover painted low-contrast grey on white — 58 WCAG contrast failures on the
+  base journey.
+
+  Retires the `VITE_DESIGNED_CHROME` feature flag. The grid shell has to place the band and the body
+  as siblings, so the flag's off-branch became a second layout of the shell rather than a guard; its
+  two Playwright harnesses were converted first, and the theme-parity sweep now runs against the
+  shipped shell.
+
+- [#335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/335) [`977c3dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/977c3dd3121bc46cec4a21bbab156e18f87dc5c1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Graphite M3 — the Project Explorer rail becomes the leading edge of the app, top to bottom, and the
+  top bar is deleted. The brand, the organisation switcher and the account menu move into the rail and
+  stay reachable when it is collapsed. The plan's identity line joins the mode row rather than taking
+  a row of its own, which is what turns the change into a real gain: measured, the diagram grows from
+  576 px to 632 px at 1646 (+9.7%), with 184 px of chrome above it instead of 240 px.
+
+  Adds a skip link — the app had none — because the rail now sits between a keyboard user and the page
+  content on every screen.
+
+- [#335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/335) [`977c3dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/977c3dd3121bc46cec4a21bbab156e18f87dc5c1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Graphite M4 — the plan workspace gains a context drawer on the trailing edge, resizable and
+  persisted, and the Project Explorer becomes its first subject rather than a column of its own. The
+  leading edge is now a fixed 48px tool rail carrying the brand, the organisation switcher, the
+  drawer's panel buttons, the six organisation destinations and the account menu — none of them behind
+  a toggle.
+
+  The command band's width no longer changes when the drawer opens, closes or is resized. That is a
+  consequence of where the band sits in the grid rather than of anything measuring it, and it is
+  asserted in a browser at three drawer states.
+
+  Escape closes the drawer as the outermost rung of the workspace's existing key ladder: it defers to
+  any inner rung that already acted, ignores keystrokes typed into a field, and leaves an open dialog
+  alone.
+
+- [#335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/335) [`977c3dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/977c3dd3121bc46cec4a21bbab156e18f87dc5c1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Graphite M5 (first half) — the plan's mode switches (Early/Visual, Diagram/Gantt) move from the
+  command band to the tool rail, and the project-finish read-out moves to the plan's identity line. A
+  mode is not a command and a finish date is a fact, so neither belongs in a row of commands; together
+  they were over 500px of a band that measurement showed does not fit at four of seven widths.
+
+  The toolbar primitive gains a vertical orientation: it announces the axis it actually runs along,
+  stacks its groups, separates them along that axis, and stays icon-only — and it opts out of the
+  width ladder entirely, because a stack has no row to overflow.
+
+- [#335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/335) [`977c3dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/977c3dd3121bc46cec4a21bbab156e18f87dc5c1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Graphite M5 (second half) — the plan's two command rows become one strip. Nothing is deleted: the
+  same registry, the same seven-group taxonomy, the same pen gating, rendered into one toolbar instead
+  of two. Measured, the chrome above the diagram falls from 184px to 135px and the diagram at 1646
+  gains 18% over where this epic started.
+
+  Merging the rows made two ranking bugs reachable that had been harmless on two. `Next conflict` was
+  ranked by a rule written for the old Row 1, so on a plan that has conflicts it demoted into the `…`
+  menu — the exact "a shading nobody opens the menu to see is not a shading" defect the conflict work
+  was written to remove. And `Recalculate` was ranked by the order it happened to be registered in, so
+  the only cue that a recalculation is running could not spin anywhere a planner would see it. Both are
+  now ranked deliberately.
+
+  The strip fits at every width from 960 up. Below that it scrolls rather than hiding controls, because
+  eleven pinned items now share one budget where they used to share two.
+
+- [#335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/335) [`977c3dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/977c3dd3121bc46cec4a21bbab156e18f87dc5c1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Graphite M6–M10 — the activity editor moves out of a modal dialog and into the trailing context
+  drawer, so a planner can edit an activity and still see the diagram it sits in. Pressing **Edit**,
+  **Report progress** or **Steps** on a selected activity now opens the drawer; below 1024px, where a
+  drawer would have to cover the stage, the dialog is still the right chrome and is what you get.
+
+  The plan also gains a **status bar** — activities, data date, project finish, the critical count, and
+  whether a recalculation is running. `Recalculate` stops being a button that doubles as a status.
+
+  The Gantt's grid pane becomes **draggable**: drag the divider and the activity-name column takes the
+  difference, rather than the columns sliding over the bars. The floor is what the visible columns
+  actually need, so it tracks the columns you have chosen to show.
+
+  Two defects fixed on the way, both of which only appeared once the product was driven rather than
+  unit-tested. Closing the drawer or the editor inside it dropped keyboard focus to the page body,
+  which also silently disabled every keyboard shortcut in the workspace; focus now returns to the rail
+  button that reopens the panel. And the editor's tab rail was sized against the window rather than
+  against the panel it was in, leaving about 90px for the fields it labels — the tabs are a horizontal
+  strip in the drawer.
+
+- [#335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/335) [`977c3dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/977c3dd3121bc46cec4a21bbab156e18f87dc5c1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The app is now Graphite — a dark, near-neutral palette built for long sessions, with one rule
+  underneath it: **cool means interface, warm means attention.** Azure is the only interactive
+  colour, so anything blue is something you can press or have selected. Warm is reserved for the
+  schedule telling you something: critical, near-critical, conflict, today.
+
+  The most important change is one you would not have noticed was wrong. **A critical bar and an
+  ordinary bar used to differ almost entirely in hue**, which is invisible at a glance, on a poor
+  monitor, or to a reader with a colour deficiency. The three states now separate by _lightness_ as
+  well — ordinary, near-critical and critical sit 3.1:1, 4.6:1 and 7.2:1 against the diagram ground
+  and every pair is at least 1.5:1 apart, so you can read the critical path without inspecting it.
+
+  Layout is unchanged in this release; the new workspace shape follows.
+
+### Patch Changes
+
+- [#335](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/335) [`977c3dd`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/977c3dd3121bc46cec4a21bbab156e18f87dc5c1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix two links claiming to be the current page. The SchedulePoint wordmark links to the organisation
+  overview, and the router marked it active on every organisation route rather than only on the
+  overview itself — so alongside the navigation item that genuinely was current, a screen reader gave
+  two answers to "where am I". The wordmark now marks itself current only on the overview.
+
+  Also clamps the context drawer's width against the space available, so a stored width can no longer
+  squeeze the diagram on a narrow screen.
+
 ## 0.94.0
 
 ### Minor Changes
