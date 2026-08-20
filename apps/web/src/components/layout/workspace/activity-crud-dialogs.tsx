@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
@@ -104,35 +104,6 @@ function PlanActivityEditor({
    * rail.
    */
   /**
-   * **Opening the editor asks the shell to show it** — the entry point M6-T4 claimed and did not
-   * have (ADR-0081, found by the M10 gate pass).
-   *
-   * Registering a subject only makes a rail button appear. Without this, pressing **Edit** on a
-   * selected activity opened the modal at every width unless the planner had already discovered and
-   * pressed that button — so the drawer, the milestone's headline capability, was reachable only by
-   * a gesture nothing in the product suggested. Its unit tests passed throughout, because they mount
-   * the editor and not the shell.
-   *
-   * **On the transition, not on `open`.** Asking every render would fight the planner: they could
-   * never point the drawer back at the Explorer while an activity was selected, because the next
-   * commit would take it away again. Asking once, when the editor goes from shut to open, is the
-   * user's own action being honoured.
-   *
-   * **The shell agrees one commit later, and a modal rendered in that gap is the defect** — see
-   * `modalWouldBeWrong` below. A browser established that, not reasoning: `Dialog`'s own effect
-   * calls `showModal()`, focus goes into the top layer, and the next commit swaps the chrome and
-   * unmounts it, leaving focus on `<body>` (WCAG 2.4.3, and every workspace keyboard accelerator
-   * silently dead). A probe in `progress-entry.spec.ts` recorded the sequence — `in BUTTON[Close
-   * dialog]` → `out` → `dialog removed` — after two guesses had each been wrong, the second because
-   * React flushes a commit's passive effects before the re-render a layout effect schedules.
-   */
-  const wasOpen = useRef(props.open);
-  useLayoutEffect(() => {
-    if (props.open && !wasOpen.current) drawerControls.show();
-    wasOpen.current = props.open;
-  }, [props.open, drawerControls]);
-
-  /**
    * **No modal while a drawer could hold this instead** — derived, not a latch.
    *
    * The first version kept an `asking` flag and cleared it in the effect, which is a `setState`
@@ -147,10 +118,37 @@ function PlanActivityEditor({
    */
   const modalWouldBeWrong = canShowInDrawer && !showingInDrawer;
 
-  const drawerShell: ActivityEditorShell = ({ children }) => (
+  const drawerShell: ActivityEditorShell = ({ children, requestClose }) => (
     <ChromePortal name="drawer">
       {props.open ? (
-        children
+        /* **Escape closes the editor, and it is an INNER rung of ADR-0080's ladder** — the same
+           thing it has always meant here, restored rather than invented.
+
+           A modal got this from the platform: `<dialog>`'s `cancel` fires wherever focus is, so
+           Escape in a field closed the editor and `confirmBeforeClose` asked about unsaved work. A
+           drawer has no such reflex, and the shell's own Escape rung deliberately defers to text
+           entry (ADR-0079) — so with the caret in a field Escape did nothing at all, and there was
+           no keyboard way out of the editor. That is a real loss of operability, and its first
+           symptom was a journey going red that had asserted the correct behaviour all along.
+
+           `preventDefault()` is what makes it a rung rather than a competitor: the shell's handler
+           sees the press was answered and leaves the drawer open, so one press cannot both close the
+           editor and collapse the panel behind it. `defaultPrevented` on the way in defers to
+           anything inner still — an open combobox or select answers first.
+
+           The root is a DELEGATION root, not a control: no role, no tabIndex, never focusable. Same
+           case, and the same words, as the shell root and the workspace root one layer out. */
+        // eslint-disable-next-line jsx-a11y/no-static-element-interactions
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return;
+            event.preventDefault();
+            requestClose();
+          }}
+        >
+          {children}
+        </div>
       ) : (
         <ContextDrawerEmpty>Select an activity to see its details here.</ContextDrawerEmpty>
       )}

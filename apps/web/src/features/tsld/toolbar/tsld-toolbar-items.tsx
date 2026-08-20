@@ -2613,9 +2613,33 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       group: 'tools',
       row: 'strip',
       tier: 1,
-      // Its name is the affordance, so it stays labelled wherever the row can afford it
-      // (TECH_DEBT #61).
-      showLabel: 'always',
+      /**
+       * **`showLabel: 'always'` is deliberately absent, and it is what makes the rank below work.**
+       *
+       * M5 ranked this 95 so a planner would not have to open a menu for the command that makes the
+       * diagram true — and then M10 measured the shipped row and found it in the `⋯` at 1646 and
+       * 1920 while it was **inline at 1280**, which is backwards. The rank was not the problem: at
+       * the narrow band every other plain button goes icon-only at ~40 px, and this one could not,
+       * so a labelled 163 px command was cheap relative to a row of icons and ruinous relative to a
+       * row of words. Pinning its label bought a name at two widths and lost the command at three.
+       *
+       * So it takes the ordinary label policy and keeps the rank: the ladder drops its word before
+       * it drops the command, which is the right way round for something whose icon already spins
+       * while it runs. The read-out that says a recalculation is happening lives in the status bar
+       * now (ADR-0099 D5), so nothing depends on this label being present.
+       *
+       * **Measured before and after, and it is an improvement rather than a fix.** Inline at 1280
+       * only → inline at 1920 and 1280. At **1646 it is still in the `⋯`**, and the reason is not
+       * this item: the row there is 1582 px and every other inline control is a pinned `render`
+       * item wearing its label, so the demotable budget is zero however cheap this one is. That is
+       * `docs/TECH_DEBT.md` #147 — eleven pinned items sharing one budget — surfacing at a WIDE
+       * width because labels are on, rather than at a narrow one. Recorded rather than claimed
+       * fixed: the sentence above would otherwise be the third consecutive width expectation in
+       * this register contradicted by its own measurement.
+       *
+       * TECH_DEBT #61's "its name is the affordance" still holds for the four rail modes, where
+       * there is no row to run out of.
+       */
       order: 7,
       /**
        * **Ranked by Graphite M5, and the reason it needed ranking is the finding.**

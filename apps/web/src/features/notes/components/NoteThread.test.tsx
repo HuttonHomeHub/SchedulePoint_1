@@ -192,6 +192,35 @@ describe('NoteThread', () => {
     );
   });
 
+  it.each([
+    ['populated', [note({ id: 'n1', body: 'Only note' })], 'Only note'],
+    ['empty', [], 'No notes yet.'],
+  ])('offers a focus sink in the %s state', async (_label, notes, text) => {
+    /**
+     * **The sink's node must not depend on what the thread holds.** It lived on the populated
+     * branch alone, so deleting the *last* note focused a node that was about to unmount and the
+     * reader landed on `<body>` — WCAG 2.4.3, invisible for as long as the editor was a modal whose
+     * `cancel` fires wherever focus is.
+     *
+     * **What this cannot see, stated rather than left for a reader to assume.** The first fix added
+     * the ref to the empty branch too, and these assertions passed against it — and the browser said
+     * it was still wrong, because `onFocusRegion()` runs from a mutation callback *before* the
+     * re-render that empties the list, so it focused the old node either way. Only a stable wrapper
+     * fixes that, and only `e2e-notes/notes.spec.ts` can tell the two apart: it deletes the last
+     * note for real and then presses Escape, which reaches a React handler only if focus survived.
+     * These cases pin the cheaper half — that a sink exists at all in both states.
+     */
+    vi.mocked(apiFetchEnvelope).mockResolvedValue(
+      page(notes, { nextCursor: null, hasMore: false }),
+    );
+    renderThread();
+
+    const region = (await screen.findByText(text)).closest('[tabindex="-1"]');
+    expect(region).not.toBeNull();
+    (region as HTMLElement).focus();
+    expect(region).toHaveFocus();
+  });
+
   it('gives same-author, same-minute notes distinct Edit/Delete accessible names (a 1-based ordinal)', async () => {
     vi.mocked(apiFetchEnvelope).mockResolvedValue(
       page(

@@ -37,6 +37,17 @@ async function signUp(page: Page, name: string, email: string): Promise<void> {
 test('a Planner requests control and the holder hands the pen over (peer hand-off)', async ({
   browser,
 }) => {
+  /**
+   * **120 s, matching every other multi-actor journey here.** This drives two whole browser
+   * contexts through two sign-ups, an invitation, a plan, and a full request → hand-off → mirror
+   * cycle, and it had been running just inside Playwright's 30 s default. ADR-0099's heavier plan
+   * mount pushed it over, and the failure was a timeout in the last third rather than anything
+   * disagreeing — established by reading where it stopped (line 154, the second-to-last assertion),
+   * not by assuming. Raising the cap is the honest fix for a fixture that is genuinely long; the
+   * alternative, splitting it, would give up the thing it exists to prove, which is that both ends
+   * of ONE hand-off agree.
+   */
+  test.setTimeout(120_000);
   const stamp = Date.now();
   const orgName = `Handoff Co ${stamp}`;
 

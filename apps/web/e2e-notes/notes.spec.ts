@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+
 import { addActivity, createAndOpenPlan, onboard, openProject } from './support';
 
 /**
@@ -32,7 +34,7 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   // to Notes (ADR-0062: Notes is its own tab of the tabbed editor, not a section under Logic).
   await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  const logic = page.getByRole('dialog');
+  const logic = activityEditor(page);
   await expect(logic.getByRole('heading', { name: 'Erect frame', exact: true })).toBeVisible();
   await logic.getByRole('tab', { name: 'Notes' }).click();
   await expect(logic.getByRole('heading', { name: 'Notes' })).toBeVisible();

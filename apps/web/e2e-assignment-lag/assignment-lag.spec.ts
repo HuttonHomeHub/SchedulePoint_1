@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { chooseComboboxOption } from '../e2e/combobox';
+import { activityEditor } from '../e2e-support/activity-editor';
 
 import {
   addActivity,
@@ -51,7 +52,7 @@ test('the join lag round-trips through the real API, pen-gated', async ({ page }
   await addActivity(page, 'Steel erection');
   await openResources(page, 'Steel erection');
 
-  const dialog = page.getByRole('dialog');
+  const dialog = activityEditor(page);
   const assign = dialog.getByRole('group', { name: 'Assign a resource' });
   // ------------------------------------------------------ 1. A typed day is the CALENDAR's day
   // The label itself is the first assertion: `Joins after` (not `Joins after (hours or minutes)`)
@@ -135,7 +136,7 @@ test('the join lag round-trips through the real API, pen-gated', async ({ page }
   await expect(page.getByRole('button', { name: 'Start editing' })).toBeVisible();
 
   await openResources(page, 'Steel erection');
-  const readOnly = page.getByRole('dialog');
+  const readOnly = activityEditor(page);
   await expect(readOnly.getByLabel('Joins after')).toHaveCount(0);
   await expect(
     readOnly.getByRole('button', { name: 'Save join delay for Tower crane' }),

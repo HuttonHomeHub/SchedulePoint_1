@@ -2841,6 +2841,19 @@ It was invisible until now because the row had never overflowed at any width in 
 two passes — ordering at one fixed scroll position, then reachability, which may scroll freely —
 and the reasoning is recorded in the function so the next reader does not merge them back.
 
+### Measured again at M10, at a width nobody had probed
+
+`Recalculate` was found in the `⋯` at **1646 and 1920** while it was **inline at 1280** — backwards,
+and not a ranking bug. Its `showLabel: 'always'` made it a 163 px command: cheap next to a row of
+icons at the narrow band, ruinous next to a row of words at the wide one. Dropping the pin puts it
+inline at 1920 and 1280.
+
+**At 1646 it is still in the menu, and that is this row's entry rather than that item's.** The row
+there is 1582 px and every other inline control is a pinned `render` item wearing its label, so the
+demotable budget is zero however cheap a demotable command becomes. #147 has been read as a narrow-
+width problem since it was raised; it is a _labelled_-width problem, and 1646 — the one screen this
+work is judged on — is where both conditions meet.
+
 ## 148. The canvas date pills are painted on top of the first two lanes
 
 **Raised 2026-08-20 (Graphite M9), pre-existing since 2026-08-07.** The TSLD paints three date

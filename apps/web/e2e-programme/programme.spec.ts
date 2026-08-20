@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+
 import {
   addActivity,
   awaitComputedSchedule,
@@ -52,7 +54,7 @@ test('a planner links plans across projects and recalculates the programme', asy
   // rather than a standalone "Logic for …" dialog).
   await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  const logic = page.getByRole('dialog');
+  const logic = activityEditor(page);
   await expect(logic.getByRole('heading', { name: 'Erect frame', exact: true })).toBeVisible();
   await expect(logic.getByRole('heading', { name: 'Cross-plan links' })).toBeVisible();
   await logic.getByRole('button', { name: 'Add cross-plan link' }).click();

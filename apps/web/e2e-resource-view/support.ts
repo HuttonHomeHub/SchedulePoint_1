@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 import { chooseComboboxOption } from '../e2e/combobox';
+import { activityEditor } from '../e2e-support/activity-editor';
 
 /**
  * Journey helpers for the flag-ON **canvas-axis-aligned resource strip** suite
@@ -112,7 +113,7 @@ export async function assignResource(
   await page.getByRole('button', { name: `Actions for ${activityName}` }).click();
   await page.getByRole('menuitem', { name: 'Resources' }).click();
 
-  const dialog = page.getByRole('dialog');
+  const dialog = activityEditor(page);
   await expect(dialog).toBeVisible();
   // The assign form's resource picker lists each unassigned library resource as "<name> (<kind>)"; a
   // freshly created resource defaults to Labour. Behind `VITE_LIBRARY_SCOPING` it is the shared APG

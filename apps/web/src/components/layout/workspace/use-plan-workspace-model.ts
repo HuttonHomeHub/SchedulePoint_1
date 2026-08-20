@@ -1,6 +1,7 @@
 import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useDrawerSubjectControls } from '@/components/layout/drawer/drawer-subject';
 import { useAnnounce } from '@/components/ui/announcer';
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
@@ -243,10 +244,33 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
    * drift. `null` ⇒ closed. Flag-off it is never set: each opener below falls back to the legacy
    * per-dialog state, so the old surface is byte-for-byte what it was.
    */
-  const [editorIntent, setEditorIntent] = useState<ActivityEditorIntent | null>(null);
+  const [editorIntent, setEditorIntentState] = useState<ActivityEditorIntent | null>(null);
+
+  /**
+   * **Setting an intent asks the shell to show the editor** (ADR-0099 M10).
+   *
+   * The ask lives here, on the one funnel every entry point already goes through, rather than in an
+   * effect watching `open` inside `PlanActivityEditor`. That was the first shape and the journeys
+   * found its hole: Escape collapses the drawer without clearing the intent, so `open` was already
+   * `true` when the planner reopened the editor from the row menu — no transition, no ask, and the
+   * menu item did nothing at all. A gesture is not a state change, and deriving one from the other
+   * loses exactly the repeat.
+   *
+   * A no-op wherever no shell is listening (every unit test that mounts the workspace alone) and
+   * below `lg`, where the shell has no drawer to show and the modal renders as it always has.
+   */
+  const drawerControls = useDrawerSubjectControls();
+  const setEditorIntent = useCallback(
+    (next: ActivityEditorIntent | null) => {
+      setEditorIntentState(next);
+      if (next) drawerControls.show();
+    },
+    [drawerControls],
+  );
+
   const onEditActivity = useCallback(
     (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'edit')),
-    [],
+    [setEditorIntent],
   );
   // The **Logic** entry point, shared by the canvas selection bar, the canvas keyboard (Enter on a
   // focused bar), the row menu and the bottom panel. Flag-on it opens the editor's Logic tab
@@ -257,21 +281,24 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       ACTIVITY_EDITOR_CONVERGENCE_ENABLED
         ? setEditorIntent(openActivityEditor(a, 'logic'))
         : setLogicActivity(a),
-    [setLogicActivity],
+    [setLogicActivity, setEditorIntent],
   );
   // Toolbar **Add note** (quick-wins F4/U4): open the selected activity's Logic panel AND flag that it
   // should reveal + focus its Notes section — parity with the Comments reveal for plan-level notes.
   // Flag-on there is nothing to reveal: **Add note** opens the editor's Notes tab, which IS the
   // notes surface. Flag-off it keeps the scroll-and-focus plumbing, which is still the only way to
   // reach a section buried three panels down the Logic dialog.
-  const revealActivityNotes = useCallback((activity: ActivitySummary) => {
-    if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
-      setEditorIntent(openActivityEditor(activity, 'notes'));
-      return;
-    }
-    setLogicRevealNotes(true);
-    setLogicActivityState(activity);
-  }, []);
+  const revealActivityNotes = useCallback(
+    (activity: ActivitySummary) => {
+      if (ACTIVITY_EDITOR_CONVERGENCE_ENABLED) {
+        setEditorIntent(openActivityEditor(activity, 'notes'));
+        return;
+      }
+      setLogicRevealNotes(true);
+      setLogicActivityState(activity);
+    },
+    [setEditorIntent],
+  );
   // Plan notes right-side drawer (entry-route win 1, `VITE_ENTRY_ROUTES`): the open flag the toolbar
   // **Comments** button opens (`revealComments` → `setNotesOpen(true)` when the flag is on) and the
   // drawer's Close button clears. Inert when nothing reads it (flag off) — the notes stay inline.
@@ -289,7 +316,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       ACTIVITY_EDITOR_CONVERGENCE_ENABLED
         ? setEditorIntent(openActivityEditor(a, 'resources'))
         : setResourcesActivityId(a.id),
-    [],
+    [setEditorIntent],
   );
   /**
    * Open the editor **where a conflict actually lives** (ADR-0094 M4) — the route behind the
@@ -316,7 +343,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       }
       onEditActivity(a);
     },
-    [onResourcesActivity, onEditActivity],
+    [onResourcesActivity, onEditActivity, setEditorIntent],
   );
   const setResourcesActivity = useCallback(
     (a: ActivitySummary | undefined) => setResourcesActivityId(a?.id ?? null),
@@ -328,7 +355,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // second surface for it to open.
   const onStepsActivity = useCallback(
     (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'steps')),
-    [],
+    [setEditorIntent],
   );
   // The canvas selection lifted to the workspace (toolbar quick-wins F0, spec
   // `docs/specs/toolbar-quick-wins/`): the TSLD panel reports its selection here so the main toolbar's
@@ -384,7 +411,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // `VITE_ACTIVITY_EDITOR_TABS` retired (ADR-0089).
   const onProgressActivity = useCallback(
     (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'progress')),
-    [],
+    [setEditorIntent],
   );
 
   const plan = usePlan(orgSlug, planId);

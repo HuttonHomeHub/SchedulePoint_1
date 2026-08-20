@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+
 import {
   addActivity,
   createAndOpenPlan,
@@ -68,7 +70,7 @@ test.describe('the create dialog and the editor agree', () => {
 
     // The same activity, opened the other way.
     await openEditor(page, 'Phase 1', 'Edit');
-    const editor = page.getByRole('dialog');
+    const editor = activityEditor(page);
 
     await expect(
       editor.getByText('A WBS summary’s dates roll up from the activities grouped under it', {
@@ -115,7 +117,7 @@ test.describe('the create dialog and the editor agree', () => {
     await expect(page.getByRole('cell', { name: 'Pour slab', exact: true })).toBeVisible();
 
     await openEditor(page, 'Pour slab', 'Edit');
-    const editor = page.getByRole('dialog');
+    const editor = activityEditor(page);
     await expect(
       editor
         .getByLabel('Parent WBS summary', { exact: true })
@@ -136,7 +138,11 @@ test.describe('the create dialog and the editor agree', () => {
     // The hint is reached through `aria-describedby`, which is how a screen-reader user reaches it
     // — comparing the rendered paragraph would pass on two controls that point at neither.
     const hintOf = async (scope: 'create' | 'editor'): Promise<string> => {
-      const control = page.getByRole('dialog').getByLabel('Duration type', { exact: true });
+      // The create surface is still a modal and the editor is now the drawer (ADR-0099), so the
+      // scope this helper already took decides which one to read — the same two surfaces, named
+      // by what they are rather than by the chrome they happen to wear.
+      const surface = scope === 'editor' ? activityEditor(page) : page.getByRole('dialog');
+      const control = surface.getByLabel('Duration type', { exact: true });
       const ids = ((await control.getAttribute('aria-describedby')) ?? '')
         .split(/\s+/)
         .filter(Boolean);
@@ -147,7 +153,7 @@ test.describe('the create dialog and the editor agree', () => {
 
     await openEditor(page, 'Excavate', 'Edit');
     const editorHint = await hintOf('editor');
-    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+    await activityEditor(page).getByRole('button', { name: 'Close', exact: true }).click();
 
     await showActivities(page);
     await page.getByRole('button', { name: 'New activity' }).click();
