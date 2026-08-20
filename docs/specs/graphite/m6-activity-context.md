@@ -1,6 +1,6 @@
 # Graphite M6 — the drawer as the activity context
 
-**Status:** planned · **ADR:**
+**Status:** planned (T1 shape decided against the code) · **ADR:**
 [ADR-0099](../../adr/0099-graphite-the-workstation-in-rail-chrome.md) · **Follows**
 [`m4-context-drawer.md`](m4-context-drawer.md) (the shell) and
 [`m5-command-strip.md`](m5-command-strip.md)
@@ -24,18 +24,39 @@ activity two ways ever sees one is a version behind.
 `members`, `resources-matrix`, `round-trips`, `sub-day`, and the base `test`. Counted rather than
 carried — ADR-0076 Class 1, and cheaper to catch here than in the definition of done.)
 
-## The shape
+## The shape, decided by reading the code rather than from the shape it looks like
+
+The obvious split — a `<Dialog>` wrapping an `<ActivityEditorBody>` — **does not compose**, and the
+reason is one line in the primitive. `Dialog`'s `confirmBeforeClose` (`ui/dialog.tsx:49-57`) does
+exactly one thing: it stops the native `<dialog>`'s `cancel` from tearing the element down before
+`onClose` has had a say. **It hosts no confirmation of its own.** The confirmation is the editor's:
+`requestClose` reads `dirtyScopeNames`, derived from three `useScopeForm` results, which live in the
+body. So a body nested inside a `<Dialog>` cannot hand its own `requestClose` up to that dialog's
+`onClose` prop — the wrapper needs a value the child computes.
+
+So the split is a **hook plus a presenter**, not a wrapper plus a child:
 
 ```
-ActivityEditorDialog  =  <Dialog … onClose={requestClose} confirmBeforeClose>
-                           <ActivityEditorBody … />
-                         </Dialog>
-drawer subject 'activity'  =  <ActivityEditorBody … />        ← no Dialog at all
+useActivityEditor(props)  ->  { requestClose, confirmingClose, tabs, facts, saveScope, ... }
+
+ActivityEditorDialog   =  const editor = useActivityEditor(props)
+                          <Dialog onClose={editor.requestClose} confirmBeforeClose ...>
+                            <ActivityEditorBody editor={editor} ... />
+                          </Dialog>
+
+drawer subject 'activity' =  const editor = useActivityEditor(props)
+                             <ActivityEditorBody editor={editor} ... />   <- no Dialog at all
 ```
 
 `ActivityEditorBody` owns the `ContextStrip`, the tab rail, every scope panel, and the discard
-`ConfirmDialog`. `Dialog` keeps only what a _modal_ contributes: the backdrop, the focus trap,
-the top-layer promotion and the Escape reflex.
+`ConfirmDialog` — that last one deliberately, because the drawer needs it as much as the modal does
+and a confirmation rendered by the _wrapper_ would be the one thing the drawer could not inherit.
+`Dialog` keeps only what a **modal** contributes: the backdrop, the focus trap, the top-layer
+promotion and the Escape reflex.
+
+The hook returns a wide object, and that is accepted rather than worked around. The alternative —
+letting the body register its `requestClose` upward through a ref — makes the close guard depend on
+commit ordering, which is the class of bug ADR-0092 records the drawer outlet paying for twice.
 
 ## Three things the drawer does NOT inherit, each a decision
 
