@@ -175,18 +175,40 @@ export function useDrawerSubjectControls(): DrawerSubjectControls {
  */
 const DrawerSubjectShowingContext = createContext(false);
 
+/**
+ * Whether the shell **could** show the registered subject — a drawer exists at this width and
+ * something is registered — regardless of what it is pointed at right now.
+ *
+ * Separate from {@link DrawerSubjectShowingContext} because the route needs both and they answer
+ * different questions. "Showing" decides the chrome; "could show" decides whether a *modal* would be
+ * a mistake. The gap between them is one commit long and real: the shell can only agree to show
+ * after the route has asked, and a modal rendered in that gap opens, takes focus into the top layer
+ * and is then unmounted — which is how focus reached `<body>` (Graphite M10).
+ */
+const DrawerSubjectCanShowContext = createContext(false);
+
 export function DrawerSubjectShowingProvider({
   showing,
+  canShow,
   children,
 }: {
   showing: boolean;
+  canShow: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
-  return <DrawerSubjectShowingContext value={showing}>{children}</DrawerSubjectShowingContext>;
+  return (
+    <DrawerSubjectShowingContext value={showing}>
+      <DrawerSubjectCanShowContext value={canShow}>{children}</DrawerSubjectCanShowContext>
+    </DrawerSubjectShowingContext>
+  );
 }
 
 export function useDrawerSubjectShowing(): boolean {
   return useContext(DrawerSubjectShowingContext);
+}
+
+export function useDrawerSubjectCanShow(): boolean {
+  return useContext(DrawerSubjectCanShowContext);
 }
 
 /**

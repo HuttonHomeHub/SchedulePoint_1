@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
@@ -8,6 +8,7 @@ import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { ContextDrawerEmpty } from '@/components/layout/drawer/context-drawer';
 import {
   useDrawerSubject,
+  useDrawerSubjectCanShow,
   useDrawerSubjectControls,
   useDrawerSubjectShowing,
 } from '@/components/layout/drawer/drawer-subject';
@@ -77,6 +78,7 @@ function PlanActivityEditor({
   ...props
 }: Omit<Parameters<typeof ActivityEditor>[0], 'shell'>): React.ReactElement {
   const showingInDrawer = useDrawerSubjectShowing();
+  const canShowInDrawer = useDrawerSubjectCanShow();
   const drawerControls = useDrawerSubjectControls();
   useDrawerSubject({
     // **"Activity details", not "Activity".** The shorter name collides with the Add split-button's
@@ -116,31 +118,34 @@ function PlanActivityEditor({
    * commit would take it away again. Asking once, when the editor goes from shut to open, is the
    * user's own action being honoured.
    *
-   * **`asking` closes the modal for exactly that one commit, and a browser is what established that
-   * it had to.** The shell can only agree one commit later, and in between `modalShell` rendered
-   * `open` — so `Dialog`'s own effect called `showModal()`, focus went into the top layer, and the
-   * next commit swapped the chrome and unmounted it, leaving focus on `<body>`: WCAG 2.4.3, plus
-   * every workspace keyboard accelerator silently dead. A probe in `progress-entry.spec.ts` recorded
-   * the sequence (`in BUTTON[Close dialog]` → `out` → `dialog removed`) after two guesses — a layout
-   * effect, then a passive one — had each been wrong, because React flushes a commit's passive
-   * effects before the re-render a layout effect schedules. Suppressing `open` for the asking commit
-   * is the only shape that keeps the dialog from opening at all.
-   *
-   * Below `lg` this costs one frame of a **closed** dialog and nothing else: the shell's
-   * `showingContext` carries a viewport term, so `asking` clears, `showingInDrawer` stays false and
-   * the modal opens — the chrome every narrow viewport has always used (M6-T5).
+   * **The shell agrees one commit later, and a modal rendered in that gap is the defect** — see
+   * `modalWouldBeWrong` below. A browser established that, not reasoning: `Dialog`'s own effect
+   * calls `showModal()`, focus goes into the top layer, and the next commit swaps the chrome and
+   * unmounts it, leaving focus on `<body>` (WCAG 2.4.3, and every workspace keyboard accelerator
+   * silently dead). A probe in `progress-entry.spec.ts` recorded the sequence — `in BUTTON[Close
+   * dialog]` → `out` → `dialog removed` — after two guesses had each been wrong, the second because
+   * React flushes a commit's passive effects before the re-render a layout effect schedules.
    */
-  const [seenOpen, setSeenOpen] = useState(props.open);
-  const [asking, setAsking] = useState(false);
-  if (props.open !== seenOpen) {
-    setSeenOpen(props.open);
-    if (props.open) setAsking(true);
-  }
+  const wasOpen = useRef(props.open);
   useLayoutEffect(() => {
-    if (!asking) return;
-    drawerControls.show();
-    setAsking(false);
-  }, [asking, drawerControls]);
+    if (props.open && !wasOpen.current) drawerControls.show();
+    wasOpen.current = props.open;
+  }, [props.open, drawerControls]);
+
+  /**
+   * **No modal while a drawer could hold this instead** — derived, not a latch.
+   *
+   * The first version kept an `asking` flag and cleared it in the effect, which is a `setState`
+   * inside an effect and is the cascading-render pattern the lint rule rejects. Deriving says the
+   * same thing without any state: if the shell *could* show the registered subject and is not
+   * showing it, a modal is the wrong chrome — either because the request is still in flight, or
+   * because the planner has pointed the drawer at the Explorer, and popping a modal over their
+   * choice would be worse than waiting for the rail button they can see is lit.
+   *
+   * Below `lg` `canShowInDrawer` is false, so this is inert and the modal opens exactly as it always
+   * has (M6-T5: the modal is not a legacy path, it is the chrome for every narrow viewport).
+   */
+  const modalWouldBeWrong = canShowInDrawer && !showingInDrawer;
 
   const drawerShell: ActivityEditorShell = ({ children }) => (
     <ChromePortal name="drawer">
@@ -178,7 +183,7 @@ function PlanActivityEditor({
         if (showingInDrawer) drawerControls.focusRailButton();
       }}
       tabRailAllowed={!showingInDrawer}
-      shell={showingInDrawer ? drawerShell : modalShell(props.open && !asking)}
+      shell={showingInDrawer ? drawerShell : modalShell(props.open && !modalWouldBeWrong)}
     />
   );
 }

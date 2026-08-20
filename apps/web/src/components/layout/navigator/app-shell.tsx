@@ -390,7 +390,10 @@ function ShellFrame(): React.ReactElement {
                   {/* The route learns whether the shell is showing what it registered, because
                       that decides the editor's chrome — a drawer portal or a modal — and one
                       activity must never have two of them. */}
-                  <DrawerSubjectShowingProvider showing={showingContext}>
+                  <DrawerSubjectShowingProvider
+                    showing={showingContext}
+                    canShow={isDesktop && contextSubject !== null}
+                  >
                     <Outlet />
                   </DrawerSubjectShowingProvider>
                 </main>
