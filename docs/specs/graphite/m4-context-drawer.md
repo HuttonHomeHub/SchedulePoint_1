@@ -99,3 +99,21 @@ under it invalidates everything after the edit; it was restarted once M4 was sti
 `pnpm lint` · `pnpm typecheck` · `pnpm test` (4,818 web + API) ·
 `scripts/e2e-local.sh web:toolbar-fit` (6 passed, including the new band assertion, verified red) ·
 `scripts/e2e-sweep.sh` (every flag-on journey).
+
+## Known follow-up, found by reading rather than by a failure
+
+**The drawer has no live clamp against the available width.** `useContextDrawerPrefs` clamps to its
+static 224–420, and the grid gives column 3 `auto` — so the drawer takes its stored width whatever
+is left, and the stage (`minmax(0,1fr)`) absorbs the shortfall. At 1024 the stage is
+1024 − 48 − 300 = **676 px**; at 768 it is 420 px and falling.
+
+`use-notes-panel-prefs.ts` already states the rule this is missing — "the _effective_ maximum is
+additionally clamped at render against the live workspace width (reserving `CANVAS_MIN_WIDTH` for
+the canvas), since the static max can exceed the available room" — and reserves 360 px. The drawer
+needs the same reservation.
+
+It is recorded here rather than fixed in M4 because a full journey sweep was already running against
+this tree, and editing source under a sweep invalidates every suite after the edit — which had
+already happened once in this epic. **M5 fixes it**, and the fix is the clamp, not a change to the
+grid: making column 3 `minmax(0,auto)` would let the drawer shrink below its own minimum, which is a
+different defect wearing the same clothes.

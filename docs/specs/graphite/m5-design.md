@@ -73,3 +73,24 @@ band-width assertion M4 added is untouched: it is about the band, not its conten
 
 ADR-0079's Escape target guard is re-asserted, because merging two rows re-enters the code that
 owns it.
+
+## Implementation notes, from reading the code
+
+- **`ToolbarRow`** is `'mode' | 'look' | 'do'` (`toolbar-registry.ts:165`). It becomes
+  `'mode' | 'strip'`. `splitByRow` is already keyed by a `Record<ToolbarRow, …>` seeded with every
+  key **precisely so that changing the union is a typecheck failure rather than a silent
+  mis-partition** — ADR-0091 M1 B1 records the two-row ternary that dropped every mode item into
+  `look` while the registry said they had moved. That guard is what makes this edit safe.
+- **`Toolbar` already handles both arrow axes** (`Toolbar.tsx:518` treats `ArrowDown` as `ArrowRight`)
+  and hard-codes `aria-orientation="horizontal"` at `:582`. The rail's mode cluster needs one
+  `orientation` prop threaded to that attribute — the same shape `Tabs` took in ADR-0061, and for
+  the same reason. It is **not** a new primitive.
+- **The `⋯` cannot simply be dropped from `role="toolbar"`.** ADR-0091 M7 records why it is a
+  registry item: it is a roving stop, the arrow keys are a handler on the container, and
+  `e2e-toolbar-fit` scopes its sweep to that element — moving it out would take it out of the gate's
+  reach **silently**. So if outcome 2 holds, the `⋯` survives below W as a registry item and the
+  deletion is of the _ladder above W_, not of the control.
+- **Deletion set, if outcome 1 holds:** `computeLadder` + `toolbar-ladder.ts` (326 lines) and its
+  suite (418), `CHROME_RESIDUAL_PX` (`Toolbar.tsx:52`), `resolveLayoutMode`, the band floors and the
+  hysteresis. `toolbar-band.tsx` stays — it publishes the band width, which the strip still needs for
+  the label decision.
