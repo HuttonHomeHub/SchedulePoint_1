@@ -1,5 +1,22 @@
 # @repo/web
 
+## 0.95.1
+
+### Patch Changes
+
+- [#337](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/337) [`60a4ca5`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/60a4ca5c89b76fe0668165d81a540c7d9914881c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix two things in the plan workspace's context drawer.
+
+  Pressing Escape to dismiss a confirmation inside the activity editor — "Discard unsaved changes?",
+  or "Delete note" on the Notes tab — also closed the editor underneath it. A native confirmation is
+  painted above everything else but still sits inside the panel, so the drawer was treating a keypress
+  meant for the confirmation as one meant for it.
+
+  And opening the editor said nothing to a screen reader. Pressing **Edit**, **Report progress** or
+  **Steps** used to open a dialog, which a screen reader announces by itself; in the drawer it swapped
+  the panel silently. It now announces what opened — and deliberately stays quiet when you simply
+  select a different activity with the drawer already open, which is a change of subject rather than
+  something opening. Closing the editor is announced too, which it was not.
+
 ## 0.95.0
 
 ### Minor Changes
