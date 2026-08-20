@@ -105,3 +105,40 @@ rasteriser's, are far above the 10.2 % hardware reference, and are **never compa
 it** — only treatment-vs-baseline is read, and software raster overstates a second canvas
 surface, so this pass is conservative. The ladder was not entered. M4-T2 re-derives this
 against the shipped implementation.
+
+### Run 2 — 2026-08-20, same environment, lanes packed (the realistic shape)
+
+**Why a second run.** Run 1's fixture was found to be **one lane deep**: the seed catalogue
+does not author `laneIndex`, so all 2,160 bars sat at lane 0 — a stress bound (every bar
+painted every frame, nothing vertically culled) but not the "realistic programme" the
+condition names. The fixture was re-shaped with **the product's own packer** —
+`packLanes` from `@repo/layout`, the same function Auto-arrange and the interchange
+importer call — applied to both scale plans (2,160 activities → 274 lanes; 540 → 41
+lanes), lane indices written directly since the write is presentation-only
+(`computeSchedule` has never seen `lane_index`, ADR-0069). Same build, same probe, same
+interleaving as Run 1.
+
+**Runs (dropped-frame %):**
+
+| Arm       | Run 1 | Run 2 | Run 3 | Median    |
+| --------- | ----- | ----- | ----- | --------- |
+| Baseline  | 45.73 | 45.21 | 46.34 | **45.73** |
+| Treatment | 48.00 | 46.79 | 47.25 | **47.25** |
+
+**Verdict: PASS.** Delta **+1.52 pp**, inside the +2.0 pp band; **baseline spread 1.13 pp
+(46.34 − 45.21), inside the band**. The ladder is not entered.
+
+**Stated rather than absorbed:** the alongside metrics are asymmetric in a way the
+dropped-% metric does not capture. Treatment runs recorded ~219–226 frames per 10 s pan
+against the baseline's ~329–335 (mean inter-frame ≈ 45 ms vs ≈ 30 ms), with interval p95
+83–100 ms vs 83 ms and heaviest-callback p95 22.0–22.3 ms vs 19.3–20.6 ms. The JS cost
+difference is ~2–3 ms; the frame-count difference is larger than that, which points at
+**compositing** — the probe adds a second visible canvas layer and a `will-change:
+transform` rectangle layer, and this environment rasterises and composites in software.
+That is precisely the cost the environment-deviation section predicts software raster
+overstates (its consequence 1), and it did not appear in Run 1, where the scene canvas's
+own repaint was cheap (one-lane plan). The pre-registered condition passes on both
+fixtures; the compositing asymmetry is flagged for **M4-T2's re-derivation on real
+hardware**, and the operator's named-machine run remains the better final word. If M4-T2
+reproduces a frame-rate cost of this order on hardware, the M0-T1 ladder applies to it
+(rungs 3–4: demote the rectangle to pan-end updates; withdraw to a static picture).
