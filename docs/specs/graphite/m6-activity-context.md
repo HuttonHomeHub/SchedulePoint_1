@@ -84,6 +84,39 @@ the drawer's shell renders no `<Dialog>`, so there is no trap to opt out of.
 `ActivityEditorDialog` keeps its exact public signature either way, which is what makes the proof
 condition — eight suites unchanged — mean the same thing under either shape.
 
+## T2's decision: the shell offers a slot, never an activity
+
+`tool-rail.tsx:13` already draws the line this milestone has to respect:
+
+```ts
+/** The drawer subjects the shell itself owns. Plan-scoped subjects arrive with the plan. */
+export type DrawerSubject = 'explorer';
+```
+
+An activity is plan-scoped, and ADR-0029's rule is that the shell mounts once and knows nothing
+about plans. So `DrawerSubject` must **not** grow an `'activity'` literal — that string in the shell
+_is_ the shell knowing what a plan is, and it would be the fourth epic to put a plan concept into
+chrome written to avoid exactly that.
+
+Instead the shell gains one generic second subject — a **registered context subject** — and stays
+ignorant of what fills it:
+
+- **Content travels by portal**, reusing `ChromeSlot`'s established mechanism with a third name.
+  Its own docblock already licenses this: _"a third slot costs a string"_, and the `rail` name was
+  added in M5 for the same reason one column along. So `ChromeSlotName` becomes
+  `'rows' | 'rail' | 'drawer'`, and the plan's editor stays exactly where it is in the **React**
+  tree while only its DOM node moves — which is what lets it keep reading `usePlanWorkspaceModel`
+  and the ADR-0060 gating without any of that crossing the boundary.
+- **The label and title travel by context**, because they are data the shell must render (a rail
+  button's accessible name, the drawer's `<h2>`) rather than markup it can host. A portal cannot
+  carry them; a two-field context can.
+- **The rail button exists only while something is registered.** No registration, no button — the
+  same contract `empty:hidden` gives the rail slot on the twelve screens that are not a plan.
+
+The alternative — one registration carrying a `render()` the shell calls — was rejected: it reads
+tidier and it runs the plan's hooks inside the shell's tree, which inverts the ownership the portal
+exists to preserve.
+
 ## Three things the drawer does NOT inherit, each a decision
 
 1. **Focus containment.** A modal traps focus because nothing behind it is usable; a drawer's whole
