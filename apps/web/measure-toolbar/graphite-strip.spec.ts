@@ -67,6 +67,27 @@ const STRIP: readonly string[] = [
 const NEW_ICON_ITEMS = ['level-resources', 'print'];
 
 /**
+ * **Registry items that are `isVisible`-gated off in the measured plan, and must still be charged.**
+ *
+ * `zoom` (a `▾` trigger), `baseline-overlay` (needs a captured baseline) and `over-allocation`
+ * (needs a resource assignment) did not render, so the first run simply left them out of the total
+ * and reported a strip 141 px narrower than the one a planner with a baseline and a resource sees.
+ * That is the ADR-0097 closure harness's failure exactly — a verdict produced from a measurement
+ * that quietly excluded part of its subject — and it flipped the answer at three of seven widths.
+ *
+ * They are charged rather than seeded, because seeding them means capturing a baseline and
+ * assigning a resource inside a width harness, which is a lot of plan-building for three controls
+ * whose widths are already measurable from their neighbours. `trigger` takes the widest measured
+ * labelled `▾`; `icon` takes the measured icon width. Both are upper bounds of their class, which
+ * is the direction an estimate in a fit decision has to err.
+ */
+const CHARGED_IF_ABSENT: Readonly<Record<string, 'trigger' | 'icon'>> = {
+  zoom: 'trigger',
+  'baseline-overlay': 'icon',
+  'over-allocation': 'icon',
+};
+
+/**
  * The three moves M0 proposed, so the REDUCED strip is measured rather than arithmetic'd.
  *
  * M0's reduced figures were computed from its own per-item measurements and its final section says
@@ -139,7 +160,7 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
     await page.waitForTimeout(700);
 
     report[String(width)] = await page.evaluate(
-      ({ strip, newItems, modeSegments, planMenu, statusBar }) => {
+      ({ strip, newItems, modeSegments, planMenu, statusBar, chargedIfAbsent }) => {
         const host = document.createElement('div');
         host.style.cssText =
           'position:fixed;top:-9999px;left:0;display:flex;align-items:center;' +
@@ -222,7 +243,16 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
         // One `Plan ▾` trigger charged at the widest labelled trigger it replaces — a menu naming a
         // subject is not narrower than the widest command it swallows, and guessing lower is how a
         // reduced figure flatters itself.
-        const reduced = reducedItems + widestFolded + groupChrome + newItemsCost;
+        // Charge the `isVisible`-gated items that did not render. Leaving them out reports a strip
+        // narrower than the one a planner with a baseline and a resource actually sees.
+        const triggerWidth = Math.max(0, ...planMenu.map(widthOf), widthOf('view'));
+        const absentCost = missing
+          .filter((id) => id in chargedIfAbsent && !leaving.has(id))
+          .reduce(
+            (sum, id) => sum + (chargedIfAbsent[id] === 'trigger' ? triggerWidth : iconWidth || 26),
+            0,
+          );
+        const reduced = reducedItems + widestFolded + groupChrome + newItemsCost + absentCost;
         const reducedNoFinish = reduced - statusBar.reduce((sum, id) => sum + widthOf(id), 0);
         return {
           viewport: window.innerWidth,
@@ -242,6 +272,7 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
           graphiteFits: iconMeasured + groupChrome + newItemsCost <= available,
           // **The M5 answer.** `reduced` is what M5 ships (the finish read-out stays until the
           // status bar exists at M7); `reducedNoFinish` is what M7 leaves behind.
+          absentCost: Math.round(absentCost * 10) / 10,
           reduced: Math.round(reduced * 10) / 10,
           reducedSlack: Math.round((available - reduced) * 10) / 10,
           reducedFits: reduced <= available,
@@ -257,6 +288,7 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
         modeSegments: MODE_SEGMENTS,
         planMenu: PLAN_MENU_MEMBERS,
         statusBar: STATUS_BAR_ITEMS,
+        chargedIfAbsent: CHARGED_IF_ABSENT,
       },
     );
   }

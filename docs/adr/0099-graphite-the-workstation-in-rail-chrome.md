@@ -90,9 +90,18 @@ of the first choices failed, one of them badly:
 
 ## Consequences
 
-- The width ladder, band floors, hysteresis, `CHROME_RESIDUAL_PX` and the `⋯` overflow
-  built by ADR-0090/0091 become unnecessary and are deleted with the row they served.
-  The `e2e-toolbar-fit` gate is rewritten around the single strip rather than retired.
+- ~~The width ladder, band floors, hysteresis, `CHROME_RESIDUAL_PX` and the `⋯` overflow
+  built by ADR-0090/0091 become unnecessary and are deleted with the row they served.~~
+  **Corrected 2026-08-20 by M5-T1's measurement** (`docs/specs/graphite/m5-t1-measurement.md`):
+  they are **kept**. The reduced strip does not fit at 768, 960, 1280 or 1440 — and the result is
+  non-monotonic, because a `▾` trigger is icon-only in a narrow band and labelled in a roomy one, so
+  the strip is cheapest where it has least room and dearest where it has most. A ladder is what
+  makes one row fit across a width range, and 768–1920 needs one. The sentence above was written
+  from the mockup, before M0 measured anything; it is struck rather than deleted because the
+  epic's own record is that width expectations here have been contradicted by their own
+  measurements six times, and the seventh should be visible.
+  What M5 still delivers is three command rows becoming one. The `e2e-toolbar-fit` gate is
+  rewritten around the single strip rather than retired.
 - `ADR-0031`'s seven-group taxonomy survives as the toolbar's grouping; its three-tier
   prominence model does not, because a single strip that fits has nothing to demote.
 - The activity dialog's _content_ moves to the drawer. ADR-0060's per-scope save model
