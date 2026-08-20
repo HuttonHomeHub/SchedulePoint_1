@@ -100,3 +100,23 @@ The second was verified red: removing `tabIndex={-1}` fails the case.
 `pnpm lint` · `pnpm typecheck` · `pnpm test` (4,823 web + API) · `scripts/e2e-local.sh web`
 (17 passed) · `scripts/e2e-local.sh web:toolbar-fit` (5 passed) · `scripts/e2e-sweep.sh` (every
 flag-on journey, because this milestone moved a layout) · `node scripts/shoot.mjs` at 1646 / 1920 / 1280.
+
+## What the full sweep found afterwards
+
+Two journeys failed on the shell move, and both are the "the site MOVED, it was not deleted" case
+this repository already has a name for (ADR-0097 Landing D1a, recorded in `e2e-designed-ui`'s own
+comments).
+
+**`designed-ui` — the wordmark's `aria-current` site left the `chrome` scope.** D3 measures the
+current-page state that axe never looks at, and its comment claimed "two sites now, in two scopes,
+which is more coverage than before rather than less": the wordmark in `chrome`, the rail's current
+destination in `panel`. M3 moved the wordmark into the rail, so **both sites are now `panel`** and
+the two-scopes argument has collapsed. The selector is re-pointed rather than deleted — the
+measurement follows the control — and the honest consequence is recorded rather than papered over:
+**on the screens this suite visits, the `chrome` scope paints no current state at all.** Its only
+remaining site is the breadcrumb's final crumb (`breadcrumbs.tsx:58`), which renders only inside a
+plan's identity row. Extending four theme variants through a project and a plan to reach it is real
+cost for one pair, so it is `docs/TECH_DEBT.md` rather than a silent gap.
+
+**`workspace-chrome` — a drag that leaves the canvas.** See `m4-context-drawer.md`; the fix belongs
+with the drawer that narrowed the stage.
