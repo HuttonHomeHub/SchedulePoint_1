@@ -2840,3 +2840,47 @@ It was invisible until now because the row had never overflowed at any width in 
 `scrollIntoView` was a no-op and every box happened to be read at the same offset. `readRow` is now
 two passes — ordering at one fixed scroll position, then reachability, which may scroll freely —
 and the reasoning is recorded in the function so the next reader does not merge them back.
+
+## 148. The canvas date pills are painted on top of the first two lanes
+
+**Raised 2026-08-20 (Graphite M9), pre-existing since 2026-08-07.** The TSLD paints three date
+pills at the top of the scene — the cursor date chip, the Today pill and the Data date pill — and
+all three sit in the same vertical space as the first two lanes' bars. On the flagship screen at
+1646 the words `Data date` print across the first activity's name.
+
+In scene coordinates:
+
+|                  | occupies                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| cursor date chip | y 4 – 20                                                                                         |
+| Today pill       | y 24 – 40                                                                                        |
+| Data date pill   | y 44 – 60                                                                                        |
+| **lane 0's bar** | y 5 – 23 — `screenYOfLane(0, view) = view.originY = 0`, `+ (LANE_HEIGHT 28 − BAR_HEIGHT 18) / 2` |
+| **lane 1's bar** | y 33 – 51                                                                                        |
+
+So every plan with an activity in lane 0 or 1 has a pill over a bar, and the packer fills lanes from
+0 upward, so that is every plan.
+
+**What makes it interesting rather than merely untidy** is that the pills are meticulous about each
+other and blind to what is underneath. `TODAY_CHIP_TOP` is derived as `CURSOR_CHIP_TOP +
+CURSOR_CHIP_H + 4` and `DATA_DATE_CHIP_TOP` from the row above it, each with a docblock explaining
+that a literal offset would let a future edit "silently reintroduce the collision" — and both
+collisions they guard against are between two pills. Nothing in the reasoning asks what the scene
+does at y 4.
+
+**Not a Graphite regression**, established rather than assumed: `git log -S "DATA_DATE_CHIP_TOP"`
+dates the constant to `779a5b3`, 2026-08-07, twelve days before that epic began, and
+`git log --since` over `src/features/tsld/render/` returns **zero** commits for the whole of it.
+
+**Why it was deferred rather than fixed in M9.** The fix is a canvas _geometry_ change, and
+`screenYOfLane` is read by hit-testing, dragging, link routing, the parallel a11y layer and the
+export path. Two shapes are plausible and they are not equivalent:
+
+1. **Reserve a band at the top of the scene** — the content origin starts below the pill stack.
+   Costs 60 px of diagram on every plan, forever, in an epic whose thesis is diagram height.
+2. **Move the permanent pills into the ruler** — where a date marker arguably belongs, since the
+   ruler is what the x-axis means. The ruler is 40 px and already carries two tiers of date labels,
+   so this needs a design pass rather than a constant.
+
+(1) is cheap and wrong for this product; (2) is right and is not a one-line change. Choosing between
+them at the end of another epic is how the wrong one gets picked, so it is written down instead.
