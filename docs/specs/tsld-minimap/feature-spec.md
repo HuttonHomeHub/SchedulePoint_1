@@ -145,16 +145,16 @@ Diagram in §4.3.
 
 ### Success criteria
 
-| #   | Criterion                                                                                                                                 | How it is known                                                                                  |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| S1  | The M0 need re-derivation shows the visible fraction on a real plan is small enough that the control is warranted, **on a named axis**    | M0-T2; if it does not, the feature is withdrawn before M1                                        |
-| S2  | Dropped-frame % at Fit zoom with the minimap open and live does **not** exceed the same-session baseline by more than 2 percentage points | M0-T1 falsification condition, re-run at M4-T2                                                   |
-| S3  | The bitmap is rebuilt on scene change and **not** on a pan-only frame                                                                     | `TsldCanvas.hidden-pane.test.tsx` extension (M2-T4), verified red against a naive implementation |
-| S4  | Zero new `ResizeObserver`s (seven exist — input-performance §4)                                                                           | code review + M4                                                                                 |
-| S5  | The count of AT-reachable activities is unchanged with the minimap open (ADR-0063)                                                        | set-equality structural test (M2-T5)                                                             |
-| S6  | Every viewport position reachable by pointer on the minimap is reachable by keyboard                                                      | journey (M3-T7) + axe with `wcag22aa` and `target-size` enabled                                  |
-| S7  | The entry point exists and a real browser presses it                                                                                      | `apps/web/e2e-minimap/` lands with M2, not at M4 (ADR-0081)                                      |
-| S8  | `maxLane` is derived in exactly one place afterwards, not three                                                                           | one-derivation structural test (M1-T1)                                                           |
+| #   | Criterion                                                                                                                                                                                                                                                                                      | How it is known                                                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| S1  | The M0 need re-derivation shows the visible fraction on a real plan is small enough that the control is warranted, **on a named axis**                                                                                                                                                         | M0-T2; if it does not, the feature is withdrawn before M1                                        |
+| S2  | Dropped-frame % at Fit zoom with the minimap open and live does **not** exceed the same-session baseline by more than 2 percentage points — **and the baseline triple's own spread is stated in the verdict and sits inside that band** (else runs are added or the band re-derived, recorded) | M0-T1 falsification condition, re-run at M4-T2                                                   |
+| S3  | The bitmap is rebuilt on scene change and **not** on a pan-only frame                                                                                                                                                                                                                          | `TsldCanvas.hidden-pane.test.tsx` extension (M2-T4), verified red against a naive implementation |
+| S4  | Zero new `ResizeObserver`s (seven exist — input-performance §4)                                                                                                                                                                                                                                | code review + M4                                                                                 |
+| S5  | The count of AT-reachable activities is unchanged with the minimap open (ADR-0063)                                                                                                                                                                                                             | set-equality structural test (M2-T5)                                                             |
+| S6  | Every viewport position reachable by pointer on the minimap is reachable by keyboard                                                                                                                                                                                                           | journey (M3-T7) + axe with `wcag22aa` and `target-size` enabled                                  |
+| S7  | The entry point exists and a real browser presses it                                                                                                                                                                                                                                           | `apps/web/e2e-minimap/` lands with M2, not at M4 (ADR-0081)                                      |
+| S8  | `maxLane` is derived in exactly one place afterwards, not three                                                                                                                                                                                                                                | one-derivation structural test (M1-T1)                                                           |
 
 ### Open questions
 
@@ -422,6 +422,16 @@ and box size, neither of which changes when the main canvas moves.
 | ------------------ | ---------------------------------- | --------------------------------------- | ------------------ |
 | Plan picture       | `<canvas>` (cached bitmap)         | activity data / box resize / theme bump | **0**              |
 | Viewport rectangle | **DOM `<div>`**, `style.transform` | every frame the view moves              | one style write    |
+| Selection marker   | DOM `<div>` (`aria-hidden`)        | selection change (an ordinary render)   | **0**              |
+| Today vertical     | DOM `<div>` (`aria-hidden`)        | the `useNow(60_000)` tick               | **0**              |
+
+The last two rows are the agreement round's second blocking finding folded in: the selection
+and Today both move without the scene changing, so leaving them in the bitmap meant a stale
+selection marker until an unrelated rebuild and a Today line that goes wrong at midnight —
+the defect ADR-0056 F6a fixed on the main canvas, re-introduced one layer down. Putting them
+in the DOM is the table's own thesis applied consistently: the picture is invariant, and
+everything that moves is DOM. The **data-date** vertical stays in the bitmap — it is plan
+data and changes only with the scene.
 
 The DOM rectangle is ADR-0059's argument one level down: the minimap's interactive content
 is exactly **one** rectangle, and the DOM gives it focus ring, role, name, pointer capture
@@ -690,6 +700,11 @@ parallel a11y layer instead. It also amends the folder layout ADR-0026 `:315` re
   ADR-0079 took a number that had been claimed between its plan and its milestone).
 - **Context:** the last unbuilt Should-have; the two navigation axes with M0's numbers; the
   pan path's existing 10.2% dropped frames.
+- **One deliberate deviation to name in the ADR** (agreement round, accessibility
+  non-blocking note): the frame token is gated against `MINIMAP_GROUNDS` — the canvas ground
+  plus the two bar inks — rather than the existing `PLOT_GROUNDS`, because the minimap has no
+  month band and DOES have dense bar ink under the rectangle at scale. Named so it reads as a
+  decision, not an oversight.
 - **Decisions:** (1) the picture is invariant under pan and zoom, so it is a cached bitmap
   rebuilt on scene change only; (2) the rectangle is DOM, not canvas — the interactive
   content is one rectangle, so the platform gives us D7's expensive half free; (3) the

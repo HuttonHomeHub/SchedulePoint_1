@@ -88,7 +88,14 @@ naive minimap is a second full-canvas raster. This is the risk that can kill the
 percentage points`. Interval p95 and heaviest-callback p95 are reported alongside.
   - **Why a 2 pp band and not strict inequality:** 10.2% is 54 of 527 frames; run-to-run
     noise on that sample would fail a strict gate on day one, and a gate that does that gets
-    deleted rather than fixed (ADR-0058).
+    deleted rather than fixed (ADR-0058). Reasoned as ~1.5× a single run's binomial sampling
+    noise (SE ≈ 1.3 pp at 54/527) — reasoned, not yet observed, which is the next clause's job.
+  - **The band must exceed the noise it absorbs, and the run itself proves it** (agreement
+    round, blocking finding 3): the baseline triple's own spread (max − min dropped-frame %)
+    is recorded and **stated in the verdict**. If it exceeds the 2.0 pp band, the band cannot
+    resolve the effect and a pass proves nothing while reading as proof — so runs are added
+    until the spread sits inside the band, or the band is re-derived from the observed spread
+    with the re-derivation recorded. A verdict that does not state the spread is not a verdict.
 - **On failure, an ordered ladder — not a binary:**
   1. Confirm the rectangle is a pure `style.transform` write and nothing else per frame.
   2. Confirm the bitmap is **not** rebuilt per frame (the M2-T4 spy, run early).
@@ -150,15 +157,18 @@ percentage points`. Interval p95 and heaviest-callback p95 are reported alongsid
 ##### Task M0-T4 — Re-run the bitmap-build probe, headed, on a named machine
 
 - **Description:** confirm the input report's headless order-of-magnitude figures on real
-  hardware, and confirm the reasoned ~2× saving from folding extent and bar geometry into
-  one O(n) pass.
+  hardware, for the shape M1 will actually build: `worldExtent()` followed by one O(n)
+  bar-geometry pass. The input report's reasoned ~2× fold saving is **not** measured because
+  the fold is not built — the agreement round withdrew it (it collides with M1-T1's
+  one-derivation invariant, and the whole cost sits on the scene-change path where 2 ms is
+  noise). Recorded here so the premise does not resurface as an optimisation PR.
 - **Complexity:** S
 - **Dependencies:** M0-T1's prototype
 - **Risks:** the headless numbers (input-performance §2) are explicitly order-of-magnitude
   only; building on them unverified is ADR-0076 Class 2.
 - **Testing:** n/a.
-- **Development steps:** run the probe headed; record p50/p95/max for the folded single pass
-  and for a two-pass control; state whether the saving materialised.
+- **Development steps:** run the probe headed; record p50/p95/max for the two-pass shape;
+  state the figure beside the headless one so the order-of-magnitude claim is settled.
 
 ##### Task M0-T5 — File the `zoomToSelection` vertical-framing gap; do not absorb it
 
@@ -249,13 +259,29 @@ no toolbar row exists, no pixel changes. The capability is surfaced by **M2**.
 ##### Task M1-T2 — `render/minimap.ts`, the pure core
 
 - **Description:** `minimapViewport(extent, box)`, `minimapRects(activities, dataDate, extent, box)`
-  and `buildMinimapBitmap(...)` — one O(n) pass computing extent and bar geometry together.
+  and `buildMinimapBitmap(...)`, which **calls `worldExtent()` first and then makes one O(n)
+  bar-geometry pass** — two passes, by decision. The agreement round caught the first wording
+  ("one O(n) pass computing extent and bar geometry together") specifying the thing M1-T1's
+  structural test forbids in the same milestone: folding the extent into the bar pass is a
+  fourth inline derivation, and S8 sits exactly on that collision. The ~2× fold saving the
+  performance input reasoned about is **withdrawn as a premise**: it would buy ~2 ms on a
+  scene-change-only path measured in single-digit milliseconds, at the price of the epic's own
+  one-derivation invariant. M0-T4 measures the two-pass shape as built.
 - **Complexity:** L
 - **Dependencies:** M1-T1
 - **Design constraints carried from the spec:**
   - Draws, in this order (the order **is** the decimation policy): ground; non-critical bars;
-    critical bars; data-date and Today verticals at 1 px; the selection at ≥3×3 px. Later
-    strokes overwrite earlier ones, so **the critical path survives the merge**.
+    critical bars; the **data-date** vertical at 1 px. Later strokes overwrite earlier ones,
+    so **the critical path survives the merge**.
+  - **The selection marker and the Today vertical are NOT in the bitmap** — the agreement
+    round caught both violating the dirty rule: a selection change and midnight both move
+    marks that the rebuild triggers (data/resize/theme) never fire for, so the bitmap would
+    show the previous selection until something unrelated invalidated it, and Today would go
+    stale at midnight — the exact defect ADR-0056 F6a fixed on the main canvas, re-introduced
+    one layer down. Both render as **DOM overlays beside the rectangle** (M2-T2), which is
+    §4.1's own thesis applied consistently: the picture is invariant, and everything that
+    moves is DOM. The data-date vertical stays in the bitmap because the data date is plan
+    data — it changes only with the scene.
   - `w`/`h` floored at 1 px on both axes.
   - **x uses `screenXOfDay`; y deliberately does not use `screenYOfLane`** (which hardcodes
     `LANE_HEIGHT`) — `y = laneIndex * boxHeight / (maxLane + 1)`. The docblock says why.
@@ -378,7 +404,14 @@ ADR-0059 M6's lit-but-inert shape: it would look finished and answer nothing.
     **nowhere** in `apps/web/src` and every hand-rolled widget here is semantic HTML plus
     explicit roles (`CLAUDE.md` §12).
   - Bitmap rebuilt on `minimapDirtyRef` only — set on activity-data change, box resize and
-    theme bump. **Not** on `movedThisFrame`.
+    theme bump. **Not** on `movedThisFrame`, not on selection change, not on a clock tick.
+  - **Two DOM overlays beside the rectangle, for the two marks whose subjects move without
+    the scene changing** (agreement round, blocking finding 2): the selection marker
+    (≥3×3 px, positioned from the selected activity's minimap coords on the React render a
+    selection change already causes) and the Today vertical (1 px, positioned via the
+    existing `useNow(60_000)` tick — `render/use-now.ts`, the ADR-0056 F6a instrument, so
+    minimap-Today and canvas-Today go stale or stay fresh together). Neither costs a rebuild;
+    both are `aria-hidden` decoration like the picture beneath them.
   - Rectangle updated on `movedThisFrame` (`TsldCanvas.tsx:1315`) by one `style.transform`
     write on a ref'd div — no `setState` per frame (ADR-0026 D3).
   - Sizing joins `measure()`'s existing single `getDpr()` block (`:1213-1256`, `:1436-1437`).
@@ -395,7 +428,9 @@ ADR-0059 M6's lit-but-inert shape: it would look finished and answer nothing.
   rather than dismissed.
 - **Testing:** `TsldMinimap.test.tsx` — renders the group with its name; the canvas is
   `aria-hidden`; the rectangle reflects a given viewport; the empty-plan sentence renders
-  instead of a blank box; the strip offset applies when active.
+  instead of a blank box; the strip offset applies when active; **a selection change moves
+  the marker while the bitmap-build spy records zero calls** (the finding's regression test,
+  verified red against a bitmap-resident selection).
 - **Development steps:** pure-to-host wiring → the panel → the rectangle → the strip offset →
   the `icon-lg` size and its `docs/DESIGN_SYSTEM.md` line.
 
