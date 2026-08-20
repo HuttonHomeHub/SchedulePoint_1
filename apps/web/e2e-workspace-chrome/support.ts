@@ -500,6 +500,12 @@ export async function placeOnDay(
     const moved = await expect
       .poll(async () => requirePlacement(await placements(page, orgSlug), activity.name).version, {
         timeout: 8_000,
+        // **Explicit intervals, because the default polls hard and this helper polls a lot.** The
+        // API's global throttler is 100 requests / 60 s per IP (ADR-0051), and CI is one IP running
+        // these suites back to back: on 2026-08-20 this loop tripped it and the run failed with a
+        // 429 that read as a product error. Backing off costs a few hundred milliseconds on the
+        // happy path and takes the request count out of the range where the limiter is reachable.
+        intervals: [250, 500, 1_000, 2_000],
       })
       .toBeGreaterThan(before)
       .then(() => true)
@@ -512,10 +518,22 @@ export async function placeOnDay(
     await expect
       .poll(
         async () => {
-          const dropped = await droppedDay();
-          return dropped === null ? -1 : (await drawnDay()) - dropped;
+          // **One read, two numbers.** This asked `droppedDay()` and then `drawnDay()`, which is two
+          // list requests per poll iteration AND two different snapshots — so the comparison could
+          // straddle a recalculation and answer about a state that never existed. Reading the row
+          // once fixes both, and halves the request count that reached the rate limiter.
+          const placement = requirePlacement(await placements(page, orgSlug), activity.name);
+          const raw = isoDay(placement.visualStart);
+          if (raw === null) return -1;
+          const drawn = isoDay(placement.visualEffectiveStart) ?? isoDay(placement.earlyStart);
+          if (drawn === null) return -1;
+          return daysBetweenIso(DATA_DATE, drawn) - daysBetweenIso(DATA_DATE, raw);
         },
-        { message: 'the recalculation never caught up with the drop', timeout: 15_000 },
+        {
+          message: 'the recalculation never caught up with the drop',
+          timeout: 15_000,
+          intervals: [250, 500, 1_000, 2_000],
+        },
       )
       .toBeGreaterThanOrEqual(0);
 
