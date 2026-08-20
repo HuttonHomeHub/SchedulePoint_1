@@ -54,9 +54,35 @@ and a confirmation rendered by the _wrapper_ would be the one thing the drawer c
 `Dialog` keeps only what a **modal** contributes: the backdrop, the focus trap, the top-layer
 promotion and the Escape reflex.
 
-The hook returns a wide object, and that is accepted rather than worked around. The alternative —
-letting the body register its `requestClose` upward through a ref — makes the close guard depend on
-commit ordering, which is the class of bug ADR-0092 records the drawer outlet paying for twice.
+### Corrected after reading the rest of the file: a `shell` render prop, not a hook plus a presenter
+
+The hook-plus-presenter sketch above was written after reading the file's first 400 lines. Reading
+the remaining 350 changed it, and the reason is worth keeping: the render body touches **~25**
+locals — `announce`, `update`, `active`/`setActive`, `saveError`, `savedScope`, `confirmingClose`,
+three `useScopeForm` results, `hoursPerDay`, `seedFactor`, `scopeCalendarId`, `type`,
+`parentOptions`, `dirtyScopeNames`, `requestClose`, `scopeError`, `saveScope`, `tabs`, `facts`,
+`railFits` — so a hook boundary means a 25-field object threaded through a prop and kept in step by
+hand. That is a lot of surface to buy one thing: letting the wrapper see `requestClose`.
+
+**Inverting the control buys the same thing for nothing.** One component keeps every hook exactly
+where it is today and takes a `shell` render prop:
+
+```
+function ActivityEditor({ shell, ...props }) {
+  /* every hook, unmoved */
+  return shell({ requestClose, title, description, children: <>...</> });
+}
+
+ActivityEditorDialog =        shell -> <Dialog onClose={requestClose} confirmBeforeClose ...>
+drawer subject 'activity' =   shell -> <>{children}</>          <- no Dialog at all
+```
+
+No wide object, no ref dance, one source of truth, and the drawer's shell is a passthrough. The
+"must not inherit focus containment" rule then holds **by construction** rather than by discipline:
+the drawer's shell renders no `<Dialog>`, so there is no trap to opt out of.
+
+`ActivityEditorDialog` keeps its exact public signature either way, which is what makes the proof
+condition — eight suites unchanged — mean the same thing under either shape.
 
 ## Three things the drawer does NOT inherit, each a decision
 
