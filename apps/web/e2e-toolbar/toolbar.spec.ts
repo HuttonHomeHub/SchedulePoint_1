@@ -65,22 +65,22 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   const lookRow = page.getByRole('toolbar', { name: 'View and navigate' });
   await expect(lookRow.getByRole('button', { name: /^View/ })).toBeVisible();
 
-  // **Widened deliberately for this one assertion.** The read-out is band-conditional since M7-S4 —
-  // withheld below `compact`, where the row needs its width for commands and the number is one press
-  // away in `Summary ▾` — and this journey runs at Playwright's default 1280, which lands under that
-  // floor once the rail is open. Asserting it at the default width would be asserting the wrong
-  // thing; asserting it conditionally would assert nothing.
+  // **The Project-finish read-out is no longer in the row, and that is the assertion.** Its third
+  // placement: ADR-0090 M2-T3 took it out of the toolbar, ADR-0091 M7-S4 put it back as a
+  // `presentational` item so the `⋯` could stay rightmost, and Graphite M5 moved it to the plan's
+  // identity line — 127 px of a strip M5-T1 measured as not fitting at four of seven widths, and a
+  // fact about the plan rather than a command, which is what that line already carries.
   //
-  // **1920, not the 1600 that held until Graphite M3.** The band stopped being the viewport when the
-  // rail took the leading column top to bottom: it is now the viewport MINUS the rail, so 1600 buys
-  // the band ~1320 and the chip correctly withdraws. The figure has to move with the geometry — this
-  // is a width chosen to clear a floor, not a width that means anything on its own.
-  await page.setViewportSize({ width: 1920, height: 900 });
-  const finish = lookRow.getByText('Finish', { exact: true });
+  // M7-S4's reason survives the move: nothing was added to the `⋯`'s right, so it is still the
+  // row's last control. ADR-0099 D4 sends the read-out on to the status bar at M7.
+  //
+  // Both halves are asserted, because "not in the row" alone passes equally against a read-out that
+  // has been deleted — which is what four of this assertion's rewrites have been guarding against.
+  const finish = page.getByText('Finish', { exact: true });
   await expect(finish).toBeVisible();
-  await expect(
-    lookRow.locator('[data-toolbar-item="finish-chip"] [data-toolbar-focusable]'),
-  ).toHaveCount(0);
+  await expect(lookRow.getByText('Finish', { exact: true })).toHaveCount(0);
+  await expect(lookRow.locator('[data-toolbar-item="finish-chip"]')).toHaveCount(0);
+
   const diagram = page.getByRole('region', { name: 'Time-scaled logic diagram' });
   await expect(diagram).toBeVisible();
   await expect(diagram.getByRole('option')).toHaveCount(2);

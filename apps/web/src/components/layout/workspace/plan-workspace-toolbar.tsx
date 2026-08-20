@@ -71,6 +71,7 @@ import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
+import { ProjectFinishChip } from '@/features/schedule/components/ProjectFinishChip';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
@@ -1205,6 +1206,17 @@ export function ToolbarPlanWorkspace({
                   ]}
                 />
                 <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+                {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
+                ADR-0090 M2-T3 took it off the toolbar; ADR-0091 M7-S4 put it back as a
+                `presentational` registry item, so the `⋯` could stay the row's rightmost control.
+                It is here now because M5-T1 measured the reduced strip **not fitting** at 768, 960,
+                1280 or 1440, and because a finish date is a **fact about the plan** rather than a
+                command — which is what this row already carries (the breadcrumb, the status, the
+                edit pencil). ADR-0099 D4 sends it on to the status bar at M7; this is the interim
+                home, not a second decision.
+                M7-S4's reason survives the move: the `⋯` is still the toolbar's rightmost control,
+                because nothing was added to its right. */}
+                <ProjectFinishChip orgSlug={model.orgSlug} planId={plan.id} />
                 {model.canWrite ? (
                   <Button
                     variant="ghost"
@@ -1219,21 +1231,32 @@ export function ToolbarPlanWorkspace({
                 ) : null}
               </div>
             </div>
-            <Toolbar
-              items={rows.mode}
-              context={ctx}
-              label="Plan mode"
-              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-              // All four are `group: 'lens'`, whose default label is "Display" — also Row 1's
-              // `lens` group name, so unoverridden this announces a second, unrelated name for the
-              // cluster AND collides with a region one row below (the ADR-0090 M5 `output` rename).
-              groupLabels={ROW_MODE_GROUP_LABELS}
-              // `shrink-0`, never `flex-1`: `Toolbar`'s container carries `min-w-0`, so a
-              // default-shrinking mode row squeezes below its content width and starts demoting —
-              // putting an armed mode behind a `⋯`, which is the ADR-0064 dead end and exactly what
-              // the header could not avoid.
-              className="shrink-0"
-            />
+            {/* **The mode cluster now portals into the RAIL** (Graphite M5). It was 400 px of this
+                band — a quarter of the room at 1646 — spent on four controls that are not commands,
+                which is ADR-0091 D1's own thesis about where a mode belongs. It stays a registry
+                `Toolbar` rather than becoming four hand-rolled rail buttons: arm/disarm, Escape
+                precedence, announcement and pen gating are the registry's, and hand-rolling is how
+                one control gets a rule and its neighbour does not (plan.md §E).
+
+                `orientation="vertical"` is one prop on the primitive, not a second one: the keyboard
+                already answered both axes, and what was hard-coded was the ANNOUNCEMENT. A vertical
+                toolbar also opts out of the ladder — its items stack, so there is no row to overflow
+                and its `clientWidth` says nothing about whether its content fits. That replaces the
+                `shrink-0` this needed here, which existed to stop a squeezed row demoting an armed
+                mode into a `⋯` (the ADR-0064 dead end). */}
+            <ChromePortal name="rail">
+              <Toolbar
+                items={rows.mode}
+                context={ctx}
+                label="Plan mode"
+                authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+                // All four are `group: 'lens'`, whose default label is "Display" — also the strip's
+                // `lens` group name, so unoverridden this announces a second, unrelated name for
+                // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
+                groupLabels={ROW_MODE_GROUP_LABELS}
+                orientation="vertical"
+              />
+            </ChromePortal>
             <CompactPenStatus
               pen={model.pen}
               {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}

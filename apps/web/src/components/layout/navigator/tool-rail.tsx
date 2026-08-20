@@ -4,6 +4,7 @@ import { OrgDestinationsCollapsed } from './org-destinations';
 
 import { AccountChip } from '@/components/layout/account-chip';
 import { BrandLink } from '@/components/layout/brand-mark';
+import { ChromeSlot } from '@/components/layout/chrome/chrome-slot';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
 import { OrgSwitcher } from '@/features/organizations';
@@ -36,11 +37,19 @@ export type DrawerSubject = 'explorer';
  */
 export function ToolRail({
   orgSlug,
+  railSlotRef,
   subject,
   drawerOpen,
   onSelectSubject,
 }: {
   orgSlug?: string | undefined;
+  /**
+   * Where a plan portals its **mode cluster** (Graphite M5). Empty on the twelve screens that are
+   * not a plan, so `empty:hidden` costs them nothing — the same contract the command band's slot
+   * has kept since ADR-0055 §3, and the reason the rail can carry a plan's modes without the shell
+   * ever learning what a plan is (ADR-0029).
+   */
+  railSlotRef?: ((node: HTMLDivElement | null) => void) | undefined;
   /** The drawer's active subject, so the matching button reads as pressed. */
   subject: DrawerSubject;
   /** Whether the drawer is showing anything at all — a pressed button with a closed drawer lies. */
@@ -85,6 +94,21 @@ export function ToolRail({
           <PanelLeft aria-hidden="true" className="size-4" />
         </Button>
       </div>
+
+      {/* **The plan's mode cluster** — `Early | Visual` and `Diagram | Gantt`. It was 400 px of the
+          command strip, a quarter of the room at 1646, spent on four controls that are not commands:
+          ADR-0091 D1's thesis is that a mode is not a command, and the rail is the leading-edge
+          cluster where a mode belongs. They stay REGISTRY items rather than becoming hand-rolled
+          buttons here (plan.md §E): arm/disarm, Escape precedence, announcement and pen gating are
+          all the registry's, and hand-rolling is how one control gets a rule and its neighbour does
+          not. */}
+      {railSlotRef ? (
+        <ChromeSlot
+          slotRef={railSlotRef}
+          name="rail"
+          className="mt-1 flex-col items-center gap-1 empty:hidden"
+        />
+      ) : null}
 
       {/* Pinned to the bottom, so the same things are in the same place whatever the drawer shows. */}
       <div className="min-h-0 flex-1" />

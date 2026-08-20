@@ -34,7 +34,16 @@ import { cn } from '@/lib/utils';
  * be two of everything that has to stay in step, which this register keeps recording as how things
  * drift.
  */
-export type ChromeSlotName = 'rows';
+/**
+ * `rows` is the command band; `rail` is the tool rail's mode cluster (Graphite M5).
+ *
+ * A second name came back here for a better reason than the one that took it away. ADR-0097 D1b's
+ * `identity` slot existed to carry a plan's identity line across the shell boundary, and M3 removed
+ * it because the identity and the modes ended up in the same component. This one carries the mode
+ * cluster into the RAIL, which the shell renders and which must stay plan-unaware (ADR-0029) — the
+ * same problem the band solved in ADR-0055 §3, one column along.
+ */
+export type ChromeSlotName = 'rows' | 'rail';
 
 const ChromeSlotContext = createContext<Partial<Record<ChromeSlotName, HTMLElement | null>>>({});
 

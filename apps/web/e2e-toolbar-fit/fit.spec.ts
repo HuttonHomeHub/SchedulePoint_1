@@ -55,7 +55,16 @@ import { expect, test, type Page } from '@playwright/test';
  * than no coverage, because it looks like coverage. Recorded as `docs/TECH_DEBT.md` #124 instead.
  */
 
-const ROWS = ['View and navigate', 'Build and manage', 'Plan mode'] as const;
+// **`Plan mode` is no longer a row.** Graphite M5 moved the mode cluster to the tool rail, where it
+// is a VERTICAL toolbar: its items stack, so there is no row to overflow, its `clientWidth` is not
+// an input to any fit decision, and every assertion in this file is about a row that can run out of
+// width. Sweeping it here asked a rail whether it fitted horizontally and hung — three minutes,
+// then a timeout, which is what an assertion aimed at the wrong axis looks like.
+//
+// It is not left uncovered: `tool-rail.test.tsx` pins where the cluster lives, and `Toolbar`'s own
+// suite pins that a vertical toolbar announces `aria-orientation="vertical"`, opts out of the
+// ladder and never labels its items.
+const ROWS = ['View and navigate', 'Build and manage'] as const;
 // 1646 is the product owner's Surface Pro (2880 x 1920 at 175%). Added with the band fix, because
 // that defect was only ever visible at a width this gate had never been run at.
 const WIDTHS = [2133, 1920, 1646, 1600, 1440, 1280, 1024, 960, 768];
@@ -354,10 +363,13 @@ async function openPlan(page: Page, stamp: number): Promise<void> {
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Logic' }).click();
   await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
-  // The mode row must be asserted at mount too (ADR-0091 M1). Without this, a row that fails to
-  // render leaves `readRow` returning an empty item list, which passes every assertion in this file
-  // — coverage that looks like coverage, which is the `docs/TECH_DEBT.md` #124 lesson one row over.
-  await expect(page.getByRole('toolbar', { name: 'Plan mode' })).toBeVisible();
+  // The mode cluster must still be asserted at mount (ADR-0091 M1) even though it is no longer
+  // swept: without it, a cluster that fails to render leaves every remaining assertion passing on a
+  // shorter list — coverage that looks like coverage, `docs/TECH_DEBT.md` #124 one row over. It is
+  // in the rail since Graphite M5, and it is a VERTICAL toolbar, which is why it is not in `ROWS`.
+  const modes = page.getByRole('toolbar', { name: 'Plan mode' });
+  await expect(modes).toBeVisible();
+  await expect(modes).toHaveAttribute('aria-orientation', 'vertical');
 
   // A populated plan, or three Row-1 items self-hide (`hasDiagram`) and the row measured is not the
   // row a planner looks at — the blind spot the first measurement pass shipped with.

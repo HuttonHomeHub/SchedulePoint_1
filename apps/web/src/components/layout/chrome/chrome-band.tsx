@@ -70,13 +70,17 @@ export function ChromeBandRow({
 export function ChromeSlotHost({
   children,
 }: {
-  children: (slots: { rowsSlotRef: (node: HTMLDivElement | null) => void }) => React.ReactNode;
+  children: (slots: {
+    rowsSlotRef: (node: HTMLDivElement | null) => void;
+    railSlotRef: (node: HTMLDivElement | null) => void;
+  }) => React.ReactNode;
 }): React.ReactElement {
   const rows = useChromeSlot();
+  const rail = useChromeSlot();
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider nodes={{ rows: rows.node }}>
-        {children({ rowsSlotRef: rows.slotRef })}
+      <ChromeSlotProvider nodes={{ rows: rows.node, rail: rail.node }}>
+        {children({ rowsSlotRef: rows.slotRef, railSlotRef: rail.slotRef })}
       </ChromeSlotProvider>
     </HelpActionProvider>
   );

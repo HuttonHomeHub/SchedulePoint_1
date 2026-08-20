@@ -286,7 +286,7 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('shows the Project-finish read-out on the identity line, above the commands (M2-T3/M4-T2)', () => {
+  it('shows the Project-finish read-out on the identity line, not in the strip (Graphite M5)', () => {
     // This assertion kept passing across the M2-T3 move without being touched, because it was scoped
     // to the document — which is exactly why it was rewritten rather than left alone. A test that
     // passes for a new reason is worse than one that fails: it reads as coverage of a thing it has
@@ -312,15 +312,20 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     // gate scopes its sweep to that element), so while the chip sat outside and to its right the
     // `⋯` could never be the row's last thing — which is what the product owner saw.
     //
-    // So the assertions invert: it renders, it IS inside the toolbar, and it is NOT a roving stop.
+    // **And a fifth time, for Graphite M5 — the assertions invert back.** M5-T1 measured the reduced
+    // strip not fitting at 768, 960, 1280 or 1440, and this read-out is 127 px of it. It sits on the
+    // identity line, which already carries the breadcrumb, the status badge and the edit pencil:
+    // facts about the plan, which is what a finish date is. M7-S4's reason survives the move — the
+    // `⋯` is still the row's rightmost control, because nothing was added to its right.
+    //
+    // So: it renders, it is NOT inside the toolbar, and it is still not a roving stop. All three,
+    // because the second alone would pass equally against a read-out that had been deleted — which
+    // is what four of this assertion's five rewrites have been guarding against.
     const finish = screen.getByText('Finish');
     expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
 
     const row1 = screen.getByRole('toolbar', { name: 'View and navigate' });
-    expect(row1.contains(finish)).toBe(true);
-    // The whole of what M2-T3 was protecting, asserted directly rather than via placement.
-    const item = finish.closest('[data-toolbar-item]') ?? finish.closest('span');
-    expect(item?.querySelector('[data-toolbar-focusable]')).toBeNull();
+    expect(row1.contains(finish)).toBe(false);
     expect(finish.closest('[data-toolbar-focusable]')).toBeNull();
   });
 
