@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
  * be two of everything that has to stay in step, which this register keeps recording as how things
  * drift.
  */
-export type ChromeSlotName = 'rows' | 'identity';
+export type ChromeSlotName = 'rows';
 
 const ChromeSlotContext = createContext<Partial<Record<ChromeSlotName, HTMLElement | null>>>({});
 

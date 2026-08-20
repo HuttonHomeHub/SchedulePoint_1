@@ -21,12 +21,11 @@ import { Surface } from '@/components/ui/surface';
  */
 export function ChromeBand({ children }: { children: React.ReactNode }): React.ReactElement {
   const rows = useChromeSlot();
-  const identity = useChromeSlot();
 
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider nodes={{ rows: rows.node, identity: identity.node }}>
-        <ChromeBandRow rowsSlotRef={rows.slotRef} identitySlotRef={identity.slotRef} />
+      <ChromeSlotProvider nodes={{ rows: rows.node }}>
+        <ChromeBandRow rowsSlotRef={rows.slotRef} />
         {children}
       </ChromeSlotProvider>
     </HelpActionProvider>
@@ -44,20 +43,21 @@ export function ChromeBand({ children }: { children: React.ReactNode }): React.R
  */
 export function ChromeBandRow({
   rowsSlotRef,
-  identitySlotRef,
   className,
 }: {
   rowsSlotRef: (node: HTMLDivElement | null) => void;
-  identitySlotRef: (node: HTMLDivElement | null) => void;
   className?: string;
 }): React.ReactElement {
   return (
     <Surface tone="chrome" className={`border-border z-20 border-b ${className ?? ''}`}>
-      {/* A plan's identity line portals into the header ROW (ADR-0097 D1b), not into a row of
-          its own — the merge ADR-0092 M5 withdrew for want of the width D1a freed by moving the
-          organisation nav to the rail. The slot is empty on every screen that is not a plan and
-          the band's height is content-driven, so nothing is reserved for it. */}
-      <AppHeaderRow identitySlot={<ChromeSlot slotRef={identitySlotRef} name="identity" />} />
+      {/* **Below `lg` only** (Graphite M3). At `lg`+ the Project Explorer rail is the leading
+          column top to bottom and carries the brand, the switcher and the account itself, so the
+          top bar is deleted and the band starts with the plan's own rows. Below `lg` the rail is
+          an off-canvas `Sheet` with nothing pinned to open it, so the bar survives there to carry
+          the trigger. */}
+      <div className="lg:hidden">
+        <AppHeaderRow />
+      </div>
       <ChromeSlot slotRef={rowsSlotRef} />
     </Surface>
   );
@@ -70,17 +70,13 @@ export function ChromeBandRow({
 export function ChromeSlotHost({
   children,
 }: {
-  children: (slots: {
-    rowsSlotRef: (node: HTMLDivElement | null) => void;
-    identitySlotRef: (node: HTMLDivElement | null) => void;
-  }) => React.ReactNode;
+  children: (slots: { rowsSlotRef: (node: HTMLDivElement | null) => void }) => React.ReactNode;
 }): React.ReactElement {
   const rows = useChromeSlot();
-  const identity = useChromeSlot();
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider nodes={{ rows: rows.node, identity: identity.node }}>
-        {children({ rowsSlotRef: rows.slotRef, identitySlotRef: identity.slotRef })}
+      <ChromeSlotProvider nodes={{ rows: rows.node }}>
+        {children({ rowsSlotRef: rows.slotRef })}
       </ChromeSlotProvider>
     </HelpActionProvider>
   );

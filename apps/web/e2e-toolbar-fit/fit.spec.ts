@@ -477,6 +477,14 @@ test('every toolbar command is reachable at every targeted width', async ({ page
       // TECH_DEBT #126 failure (four blank 16 px buttons) in a different costume. The trigger is
       // located by its item id, never by its copy — the standing rule after three journeys broke on
       // a label change.
+      //
+      // **Keyed to the BAND's width, not the viewport's** (Graphite M3). The threshold is the
+      // toolbar's own density band, and `ToolbarBandProvider` resolves that from the band — which
+      // stopped being the viewport when the rail took the leading column top to bottom, so the band
+      // is now the viewport MINUS the rail. At 1280 with the rail expanded that is ~1000 px, one
+      // side of 1024, and this assertion went red against a ladder behaving exactly as designed.
+      // Comparing a density decision against a number the decision is not a function of is the
+      // ADR-0091 M7 conflation, on the gate's side of the fence this time.
       for (const id of ['analysis', 'export']) {
         if (!state.inline.includes(id)) continue;
         const text = await page
@@ -485,10 +493,12 @@ test('every toolbar command is reachable at every targeted width', async ({ page
           .innerText()
           .catch(() => '');
         const labelled = text.trim().length > 0;
+        const roomy = state.containerWidth >= 1024;
         expect(
           labelled,
-          `S11 ${where}: ${id} should be ${width >= 1024 ? 'labelled' : 'icon-only'} in this band`,
-        ).toBe(width >= 1024);
+          `S11 ${where}: ${id} should be ${roomy ? 'labelled' : 'icon-only'} in this band ` +
+            `(band ${state.containerWidth} px at viewport ${width} px)`,
+        ).toBe(roomy);
       }
 
       // S3 — no command has been lost; it is inline or the ⋯ offers it.

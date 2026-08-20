@@ -1128,60 +1128,6 @@ export function ToolbarPlanWorkspace({
 
           Flag-off `ChromePortal` is an identity wrapper, so this renders in place exactly as it did
           before the band existed. */}
-      <ChromePortal name="identity">
-        <div className="flex min-w-0 items-center gap-3">
-          {/* **`flex-1` here, not on the toolbar** — this block is the one that should give way.
-              It is text with a `title`, so shrinking it truncates a name a reader can still get at;
-              shrinking the mode cluster puts `Early | Visual | Diagram | Gantt` behind a `⋯`, which
-              is ADR-0091 D1's whole objection (a mode is not a command and must be visible beside
-              the pen). Measured: with `flex-1` on the toolbar instead, all four demoted into the
-              overflow at 1646 — the product owner's own width. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            {/* **Two crumbs: the project, then this plan.**
-                D1b first shipped the plan name alone, on the measurement that the four-crumb trail
-                cost 455 px and that the Project Explorer already answers "where am I". Right about
-                orientation, wrong about navigation, and **three Playwright suites failed on one
-                locator** saying so — `programme`, `multi-select` and `authoring-flow` all click a
-                project link from inside an open plan.
-
-                Checking rather than assuming made it worse than the failing assertion:
-                `HierarchyTree.tsx:208-219` navigates only for `kind === 'plan'` — a client or a
-                project row calls `tree.toggle`, which is what the chevron beside it already does —
-                and the rows are `treeitem` divs, not links. So this crumb was the ONLY route from
-                an open plan to its project, i.e. to the screen holding that project's calendars
-                (ADR-0053 M2). The tree's own hole is older and is `docs/TECH_DEBT.md` #143.
-
-                Two rather than four: the 455 px bought the whole trail, and Clients → client IS the
-                duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
-                is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
-                was measured to win. */}
-            <Breadcrumbs
-              variant="nowrap"
-              items={[
-                {
-                  label: model.project.data?.name ?? 'Project',
-                  to: '/orgs/$orgSlug/projects/$projectId',
-                  params: { orgSlug: model.orgSlug, projectId: plan.projectId },
-                },
-                { label: plan.name },
-              ]}
-            />
-            <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-            {model.canWrite ? (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => model.setEditing(true)}
-                title="Edit plan…"
-                aria-label="Edit plan"
-                className="text-muted-foreground shrink-0"
-              >
-                <SquarePen aria-hidden="true" className="size-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </ChromePortal>
 
       <ChromePortal>
         {/* Publishes the BAND's width to every `<Toolbar>` inside it (`toolbar-band.tsx`), so a
@@ -1205,6 +1151,74 @@ export function ToolbarPlanWorkspace({
               `m0-landing-d1-measurement.md`**; this is not that decision, it is declining to leave
               a shipped regression in place while the decision is open. */}
           <div className="border-border flex items-center justify-end gap-3 border-b px-4 py-1">
+            {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
+                app header through a portal until then (ADR-0097 D1b), and Graphite deleted that
+                header — so without a home it would have taken a 44 px row of its own inside the
+                band, and MEASUREMENT said so: deleting a 56 px bar bought 12 px, which is ADR-0092
+                M4's "relocating a row inside one column removes nothing" happening again to the
+                milestone that quotes it.
+
+                It fits here because this row holds only four mode buttons and the pen status —
+                none of the brand, switcher and account that made the header merge impossible at
+                1280 (ADR-0091's retrospective: "the identity wants ~1170 px against ~861 px").
+                Measured at 1920 / 1646 / 1440 / 1280 before it shipped, with the mode toolbar
+                checked for demotion at each: an armed mode behind a `⋯` is the ADR-0064 dead end
+                and the reason the header attempt was withdrawn.
+
+                No portal any more: the identity and the modes are rendered by the same component,
+                so the slot that carried it across the shell boundary has nothing left to carry. */}
+            <div data-plan-identity className="flex min-w-0 flex-1 items-center gap-3">
+              {/* **`flex-1` here, not on the toolbar** — this block is the one that should give way.
+              It is text with a `title`, so shrinking it truncates a name a reader can still get at;
+              shrinking the mode cluster puts `Early | Visual | Diagram | Gantt` behind a `⋯`, which
+              is ADR-0091 D1's whole objection (a mode is not a command and must be visible beside
+              the pen). Measured: with `flex-1` on the toolbar instead, all four demoted into the
+              overflow at 1646 — the product owner's own width. */}
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                {/* **Two crumbs: the project, then this plan.**
+                D1b first shipped the plan name alone, on the measurement that the four-crumb trail
+                cost 455 px and that the Project Explorer already answers "where am I". Right about
+                orientation, wrong about navigation, and **three Playwright suites failed on one
+                locator** saying so — `programme`, `multi-select` and `authoring-flow` all click a
+                project link from inside an open plan.
+
+                Checking rather than assuming made it worse than the failing assertion:
+                `HierarchyTree.tsx:208-219` navigates only for `kind === 'plan'` — a client or a
+                project row calls `tree.toggle`, which is what the chevron beside it already does —
+                and the rows are `treeitem` divs, not links. So this crumb was the ONLY route from
+                an open plan to its project, i.e. to the screen holding that project's calendars
+                (ADR-0053 M2). The tree's own hole is older and is `docs/TECH_DEBT.md` #143.
+
+                Two rather than four: the 455 px bought the whole trail, and Clients → client IS the
+                duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
+                is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
+                was measured to win. */}
+                <Breadcrumbs
+                  variant="nowrap"
+                  items={[
+                    {
+                      label: model.project.data?.name ?? 'Project',
+                      to: '/orgs/$orgSlug/projects/$projectId',
+                      params: { orgSlug: model.orgSlug, projectId: plan.projectId },
+                    },
+                    { label: plan.name },
+                  ]}
+                />
+                <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+                {model.canWrite ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => model.setEditing(true)}
+                    title="Edit plan…"
+                    aria-label="Edit plan"
+                    className="text-muted-foreground shrink-0"
+                  >
+                    <SquarePen aria-hidden="true" className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
             <Toolbar
               items={rows.mode}
               context={ctx}

@@ -3,10 +3,13 @@ import { useEffect, useRef } from 'react';
 
 import { OrgDestinations, OrgDestinationsCollapsed } from './org-destinations';
 
+import { AccountChip } from '@/components/layout/account-chip';
+import { BrandLink } from '@/components/layout/brand-mark';
 import { Button } from '@/components/ui/button';
 import { SheetHeader } from '@/components/ui/sheet';
 import { Surface } from '@/components/ui/surface';
 import { HierarchyTree, useNavigatorCrud, type UseExpansionState } from '@/features/navigator';
+import { OrgSwitcher } from '@/features/organizations';
 import { AppVersionLine } from '@/features/system';
 
 /**
@@ -49,6 +52,19 @@ export function NavigatorRail({
       aria-label="Project Explorer"
       className="border-border flex h-full min-h-0 flex-col border-r"
     >
+      {/* **The identity zone, moved here when the top bar was deleted** (Graphite M3, ADR-0099 D1).
+          Rendered only for the pinned rail — the drawer below `lg` opens from a top bar that still
+          carries all three, and repeating them inside it would put two brand links and two account
+          menus in one accessibility tree. `onCollapse` is the pinned rail's own discriminator: the
+          drawer passes `onClose` instead. */}
+      {onCollapse ? (
+        <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-3">
+          <BrandLink orgSlug={orgSlug} />
+          {/* `min-w-0` and `flex-1`: the switcher is the one thing here that can truncate, and a
+              long organisation name must not push the brand out of a 224 px rail. */}
+          <OrgSwitcher className="min-w-0 flex-1 truncate" />
+        </div>
+      ) : null}
       {/* Shared drawer header chrome ({@link SheetHeader}) — class overrides keep this rail's exact look
           (sidebar border, fixed h-12/no padding, semibold title, gap-1, size-`icon` buttons). The
           rail's extra controls (New client / Collapse) ride the `actions` slot; the Close button is the
@@ -115,6 +131,14 @@ export function NavigatorRail({
           scrolled them out of reach would put the product's whole secondary navigation behind an
           interaction. The tree above takes the flexible height, which is the rail's purpose. */}
       {orgSlug ? <OrgDestinations orgSlug={orgSlug} /> : null}
+      {/* The account menu, likewise relocated from the deleted top bar. Below the destinations
+          because it is about the reader rather than the organisation, and above the version line
+          because that is metadata and not a control. */}
+      {onCollapse ? (
+        <div className="border-border flex shrink-0 items-center border-t px-2 py-1">
+          <AccountChip />
+        </div>
+      ) : null}
       {/* A quiet footer with both service versions — subtle build metadata, not a nav item. */}
       <div className="border-border shrink-0 border-t px-4 py-2">
         <AppVersionLine />
@@ -153,7 +177,23 @@ export function NavigatorRailCollapsed({
   }, [focusToggleOnMount]);
 
   return (
-    <Surface tone="panel" className="border-border flex h-full flex-col items-center border-r py-2">
+    <Surface
+      tone="panel"
+      className="border-border flex h-full flex-col items-center gap-1 border-r py-2"
+    >
+      {/* **The brand, the switcher and the account survive the collapse, and that is the point.**
+          Until Graphite M3 they lived in a top bar that a rail collapse could not reach. Relocating
+          them into the rail and rendering only the expand toggle here would have put the product's
+          identity and account behind a toggle they had never been behind — the same argument
+          `OrgDestinationsCollapsed` records for the six destinations one epic earlier, and the
+          reason that component exists at all.
+
+          The switcher stays a native `<select>` at 36 px: its visible text truncates, its popup
+          does not, and it keeps full keyboard and screen-reader operation with the accessible name
+          ("Active organisation") it already had. `title` carries the current organisation for a
+          pointer user, since the visible text cannot. */}
+      <BrandLink orgSlug={orgSlug} variant="tile" />
+      <OrgSwitcher className="w-9 px-1" title={orgSlug} />
       <Button
         ref={toggleRef}
         variant="ghost"
@@ -163,10 +203,11 @@ export function NavigatorRailCollapsed({
       >
         <PanelLeftOpen aria-hidden="true" className="size-4" />
       </Button>
-      {/* Pinned to the bottom, matching the expanded rail's zone order, so the same six things are
-          in the same place either way and collapsing does not shuffle them. */}
+      {/* Pinned to the bottom, matching the expanded rail's zone order, so the same things are in
+          the same place either way and collapsing does not shuffle them. */}
       <div className="min-h-0 flex-1" />
       {orgSlug ? <OrgDestinationsCollapsed orgSlug={orgSlug} /> : null}
+      <AccountChip />
     </Surface>
   );
 }

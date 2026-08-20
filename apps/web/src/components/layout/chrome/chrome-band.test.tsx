@@ -43,15 +43,11 @@ describe('ChromeBand', () => {
     const band = container.querySelector('[data-surface="chrome"]');
     expect(band).not.toBeNull();
     expect(band).toContainElement(screen.getByRole('banner'));
-    // BOTH slots (ADR-0097 D1b) — asserted by name, because they sit in different places and a
-    // bare `[data-chrome-slot]` query would be satisfied by either one.
     expect(band!.querySelector('[data-chrome-slot="rows"]')).not.toBeNull();
-    expect(band!.querySelector('[data-chrome-slot="identity"]')).not.toBeNull();
-    // The identity slot is INSIDE the header row, which is the whole point of the merge: a plan's
-    // identity line costs the band no height of its own.
-    expect(screen.getByRole('banner')).toContainElement(
-      band!.querySelector('[data-chrome-slot="identity"]'),
-    );
+    // ONE slot again. ADR-0097 D1b added an `identity` slot so a plan's identity line could reach
+    // the app header row; Graphite M3 deleted that row and merged the line into the mode row,
+    // which the workspace renders itself — so there is no shell boundary left to portal across.
+    expect(band!.querySelector('[data-chrome-slot="identity"]')).toBeNull();
     // Everything else is BELOW the band, not inside it.
     expect(band).not.toContainElement(screen.getByTestId('below'));
   });
@@ -75,23 +71,14 @@ describe('ChromeBand', () => {
     );
     const slot = (name: string) => container.querySelector(`[data-chrome-slot="${name}"]`)!;
     expect(slot('rows').childElementCount).toBe(0);
-    expect(slot('identity').childElementCount).toBe(0);
 
     rerender(
       <ChromeBand>
         <ChromePortal>
           <div data-testid="toolbar-rows" />
         </ChromePortal>
-        <ChromePortal name="identity">
-          <div data-testid="plan-identity" />
-        </ChromePortal>
       </ChromeBand>,
     );
     expect(slot('rows')).toContainElement(screen.getByTestId('toolbar-rows'));
-    // Each portal lands in ITS OWN slot. Asserting both ways round matters: a `name` that fell
-    // through to the default would put the identity line in the rows slot, which paints in a
-    // plausible-looking place and silently undoes the merge.
-    expect(slot('identity')).toContainElement(screen.getByTestId('plan-identity'));
-    expect(slot('rows')).not.toContainElement(screen.getByTestId('plan-identity'));
   });
 });

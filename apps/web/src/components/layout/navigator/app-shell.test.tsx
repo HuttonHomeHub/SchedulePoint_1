@@ -20,6 +20,24 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   Outlet: () => <div data-testid="workspace">workspace</div>,
   useParams: () => ({}),
+  // The rail renders the brand link since Graphite M3, and it reads the pathname to decide
+  // whether it is the current page. This suite mounts the shell without a router.
+  useRouterState: () => '/',
+  useNavigate: () => vi.fn(),
+  Link: ({
+    children,
+    to,
+    params: _params,
+    ...props
+  }: {
+    children: React.ReactNode;
+    to?: string;
+    params?: unknown;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={typeof to === 'string' ? to : '/'} {...props}>
+      {children}
+    </a>
+  ),
 }));
 
 // The real header pulls in session/org queries; the shell wiring is what we test, so stub it
@@ -73,5 +91,30 @@ describe('AppShell', () => {
     expect(
       screen.queryByRole('button', { name: 'Close Project Explorer' }),
     ).not.toBeInTheDocument();
+  });
+
+  /**
+   * **WCAG 2.4.1 Bypass Blocks** (plan.md §A4). `apps/web/src` contained no skip link at all until
+   * Graphite M3, and did not obviously need one while the header came first: a keyboard user
+   * reached the page in three stops. The rail now owns the leading column top to bottom, so the
+   * traversal is brand → switcher → create → collapse → a `tree` of every client, project and plan
+   * in the organisation → six destinations → the account menu, on all thirteen authed routes.
+   *
+   * Two things are asserted rather than one, because each fails on its own and neither failure is
+   * visible: a link that is not FIRST bypasses nothing, and a target with no `tabIndex` scrolls
+   * without moving focus, so the next Tab resumes inside the rail — the link appears to work and
+   * changes nothing.
+   */
+  it('puts a skip link first in the document, pointing at a focusable main', () => {
+    const { container } = renderShell();
+    const link = screen.getByRole('link', { name: 'Skip to main content' });
+    expect(link).toHaveAttribute('href', '#main');
+
+    const focusable = container.querySelectorAll('a[href], button, [tabindex]');
+    expect(focusable[0]).toBe(link);
+
+    const main = screen.getByRole('main');
+    expect(main).toHaveAttribute('id', 'main');
+    expect(main).toHaveAttribute('tabindex', '-1');
   });
 });

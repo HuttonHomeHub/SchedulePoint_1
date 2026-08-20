@@ -9,7 +9,10 @@ import { cn } from '@/lib/utils';
  * changing the selection navigates to `/orgs/$orgSlug`. Rendered as a native
  * select for full keyboard/screen-reader support. Hidden until the user has orgs.
  */
-export function OrgSwitcher({ className }: { className?: string } = {}): React.ReactElement | null {
+export function OrgSwitcher({
+  className,
+  title,
+}: { className?: string; title?: string | undefined } = {}): React.ReactElement | null {
   const { data: organizations } = useOrganizations();
   const params = useParams({ strict: false });
   const navigate = useNavigate();
@@ -27,6 +30,11 @@ export function OrgSwitcher({ className }: { className?: string } = {}): React.R
       </label>
       <select
         id="org-switcher"
+        // Carries the current organisation for a pointer user where the control is too narrow to
+        // show it — the collapsed rail at 36 px (Graphite M3). Never a substitute for the label:
+        // `title` is unreliable for assistive technology, which is why the `sr-only <label>` above
+        // is the accessible name in every presentation.
+        {...(title === undefined ? {} : { title })}
         value={current}
         onChange={(event) =>
           void navigate({ to: '/orgs/$orgSlug', params: { orgSlug: event.target.value } })

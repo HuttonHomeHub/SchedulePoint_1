@@ -87,7 +87,7 @@ function ShellFrame(): React.ReactElement {
     <ShellContext.Provider value={shell}>
       <NavigatorCrud orgSlug={orgSlug} canWrite={canWrite} expansion={expansion}>
         <ChromeSlotHost>
-          {({ rowsSlotRef, identitySlotRef }) => (
+          {({ rowsSlotRef }) => (
             <>
               {/* **The shell is ONE grid** (Graphite M2). It replaces nested flex columns, and the
                   reason is §4a: the command band spans the columns the drawer sits inside, so
@@ -108,22 +108,38 @@ function ShellFrame(): React.ReactElement {
                   and rendered every row (ADR-0059 §1's premise, falsified by a layout bug rather
                   than by the substrate choice). The shell is therefore exactly the viewport and
                   `<main>` scrolls, rather than the document scrolling. */}
-              <div className="grid h-dvh grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
-                {/* Row 1 — the command band. It spans every column TODAY because the header is
-                    full-width; Graphite M5 narrows the span to the stage + drawer once the rail
-                    becomes the leading column. */}
-                <ChromeBandRow
-                  rowsSlotRef={rowsSlotRef}
-                  identitySlotRef={identitySlotRef}
-                  className="col-span-3 col-start-1 row-start-1"
-                />
+              <div className="relative grid h-dvh grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+                {/* **The skip link** — the first focusable thing in the document, and the only
+                    one there is (`apps/web/src` had none at all before Graphite M3, plan.md §A4).
+                    It became load-bearing when the rail took the leading column top to bottom: a
+                    keyboard user now tabs brand → switcher → the New-client and collapse controls →
+                    a `tree` of however many clients, projects and plans the organisation has → six
+                    destinations → the account menu, before reaching any of the thirteen routes'
+                    content. That is WCAG 2.4.1 Bypass Blocks.
 
-                {/* Row 2, column 1 — the Project Explorer. Still the leading column, still
-                    resizable, still collapsing to an icon strip. Graphite M3 replaces its contents
-                    with the tool rail and moves the tree into the drawer; nothing about its
-                    placement changes. */}
+                    `sr-only focus:not-sr-only` rather than an off-screen box that animates in: it
+                    must be reachable, not decorative, and `not-sr-only` restores a real box the
+                    moment it takes focus. Absolutely positioned so revealing it cannot reflow the
+                    grid under the reader's cursor. */}
+                <a
+                  href="#main"
+                  className="bg-primary text-primary-foreground focus-visible:ring-ring sr-only absolute top-2 left-2 z-50 rounded-md px-3 py-2 text-sm font-medium focus:not-sr-only focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  Skip to main content
+                </a>
+
+                {/* Column 1 — the rail, spanning EVERY row (Graphite M3). It is the leading edge
+                    top to bottom, which is what deleting the top bar buys: the brand, the
+                    organisation switcher and the account menu move into it, and the ~56 px the bar
+                    held goes back to the stage.
+
+                    It comes BEFORE the band in the DOM, and that is reading order rather than a
+                    preference: the rail's top-left corner is the document's, and the band starts
+                    46 px in. plan.md §A4's rule is that DOM order IS visual order — never `order:`,
+                    `row-reverse` or `direction: rtl`, each of which decouples focus from reading.
+                    The cost is the tab traversal the skip link above exists to answer. */}
                 {rail.collapsed ? (
-                  <div className="col-start-1 row-start-2 hidden shrink-0 lg:block">
+                  <div className="col-start-1 row-span-3 row-start-1 hidden shrink-0 lg:block">
                     <NavigatorRailCollapsed
                       onExpand={expand}
                       focusToggleOnMount={interacted}
@@ -131,7 +147,7 @@ function ShellFrame(): React.ReactElement {
                     />
                   </div>
                 ) : (
-                  <div className="col-start-1 row-start-2 hidden min-h-0 shrink-0 lg:flex">
+                  <div className="col-start-1 row-span-3 row-start-1 hidden min-h-0 shrink-0 lg:flex">
                     <div className="min-h-0" style={{ width: rail.width }}>
                       <NavigatorRail
                         orgSlug={orgSlug}
@@ -149,10 +165,29 @@ function ShellFrame(): React.ReactElement {
                   </div>
                 )}
 
+                {/* Row 1, columns 2–3 — the command band. It spans the stage AND the drawer's
+                    column, which is §4a solved by geometry: opening the drawer redistributes width
+                    between `<main>` and the drawer, both inside this span, so the band changes by
+                    zero. The rail is outside the span and is a fixed column, so it cannot affect it
+                    either. */}
+                <ChromeBandRow
+                  rowsSlotRef={rowsSlotRef}
+                  className="col-span-2 col-start-2 row-start-1"
+                />
+
                 {/* Row 2, column 2 — the one `<main>` for the page. `min-h-0` lets it shrink to the
                     shell; `overflow-auto` gives screens taller than the viewport somewhere to go,
-                    so the band and the rail stay put while the content moves. */}
-                <main className="col-start-2 row-start-2 flex min-h-0 min-w-0 flex-col overflow-auto">
+                    so the band and the rail stay put while the content moves.
+
+                    `id="main"` is the skip link's target and `tabIndex={-1}` is what makes the jump
+                    actually move focus: without it the browser scrolls to the element and leaves
+                    focus where it was, so the next Tab resumes inside the rail — the failure the
+                    link exists to fix, silently reintroduced. */}
+                <main
+                  id="main"
+                  tabIndex={-1}
+                  className="col-start-2 row-start-2 flex min-h-0 min-w-0 flex-col overflow-auto focus-visible:outline-none"
+                >
                   <Outlet />
                 </main>
 
