@@ -236,6 +236,19 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
         planId={planId}
         open={intended !== undefined}
         onClose={() => model.setEditorIntent(null)}
+        /*
+         * **Keep editing** on the subject-change guard: put the intent back to the activity the
+         * editor is still holding, so the host and the editor agree about the subject rather than
+         * the drawer editing one activity while everything else names another.
+         *
+         * Wired now although nothing changes the subject under the editor **yet** — the drawer does
+         * not follow the canvas selection until T4. A guard that arrives with the path it guards is
+         * a guard somebody has to remember to add, and this register records that shape (ADR-0064
+         * §7) more often than any other.
+         */
+        onSubjectHeld={(activityId) =>
+          model.setEditorIntent({ ...(model.editorIntent ?? { tab: 'general' }), activityId })
+        }
         onSaved={model.recordActivityUpdate}
         gating={model.activityEditorGating}
         calendars={model.calendars.data ?? []}

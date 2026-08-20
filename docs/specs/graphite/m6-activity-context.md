@@ -198,13 +198,48 @@ Two claims corrected rather than quietly dropped, in the milestone that made the
 
 ## Sequence
 
-| Task                                                                                         | Ends with                                                                                                                     |
-| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **T1** Extract `ActivityEditorBody`; `ActivityEditorDialog` becomes a thin wrapper           | All eight suites pass **unchanged**. Any suite needing an edit means the extraction changed behaviour — stop and find out why |
-| **T2** `DrawerSubject` gains `'activity'`; rail button; empty state when nothing is selected | `tool-rail.test.tsx` covers the new button's pressed state; the empty state is explicit, never the last activity's stale data |
-| **T3** The subject-change guard                                                              | A test that dirties a scope, selects another bar, and proves the edit is not silently discarded — **verified red first**      |
-| **T4** Entry points re-pointed: the three ADR-0060 intents open the drawer                   | The modal path stays available and tested until T5 decides otherwise                                                          |
-| **T5** Decide the modal's fate, with the numbers                                             | Either it is deleted (and its suites move to the body) or it stays with a written reason. Not left ambiguous                  |
+| Task                                                                                         | Ends with                                                                                                                                                                        |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **T1** Extract `ActivityEditorBody`; `ActivityEditorDialog` becomes a thin wrapper           | All eight suites pass **unchanged**. Any suite needing an edit means the extraction changed behaviour — stop and find out why                                                    |
+| **T2** `DrawerSubject` gains `'activity'`; rail button; empty state when nothing is selected | `tool-rail.test.tsx` covers the new button's pressed state; the empty state is explicit, never the last activity's stale data                                                    |
+| **T3** The subject-change guard — _landed_                                                   | Four cases, three of them verified RED against the pre-guard component; the fourth pins unchanged behaviour and passes both ways, which is stated rather than counted as a proof |
+| **T4** Entry points re-pointed: the three ADR-0060 intents open the drawer                   | The modal path stays available and tested until T5 decides otherwise                                                                                                             |
+| **T5** Decide the modal's fate, with the numbers                                             | Either it is deleted (and its suites move to the body) or it stays with a written reason. Not left ambiguous                                                                     |
+
+## T3, as built
+
+The editor holds a **`seededId`**, and renders the activity that id names rather than the one the
+host is currently offering. When they differ:
+
+- nothing dirty ⇒ adopt immediately, adjusted during render (the pattern this file already uses for
+  `seenIntent` — an effect would paint the new subject and then take it back);
+- work outstanding ⇒ keep rendering the old subject and raise the existing discard confirmation,
+  which now names **where the work is going** ("Switching to Pour slab will discard them") because a
+  discard prompt that does not say what you are switching to cannot be answered.
+
+`Discard` adopts. **Keep editing** holds the subject _and_ calls `onSubjectHeld(heldId)`, so the host
+can put its selection back — without it the drawer would go on editing one activity while the
+diagram highlights another, which is two surfaces disagreeing about what the reader is working on.
+The id is held, never the row: the editor reads `version` from the **live** row at submit time,
+which is what makes a two-scope session work, and a snapshot would go stale on the first save.
+
+**Sequencing, stated honestly: nothing changes the subject under the editor yet.** The drawer does
+not follow the canvas selection until T4. The guard and its host wiring land first deliberately — a
+guard that arrives with the path it guards is a guard somebody has to remember to add, and this
+register records that shape (ADR-0064 §7) more often than any other.
+
+**Switching drawer subject is a third route and it is safe by construction**, which is worth stating
+because the plan listed it as a hazard: the editor's hooks live in `ActivityEditor`, above the
+`shell` call, so the portal returning `null` unmounts the rendered fields and not the component.
+RHF does not unregister fields by default, so the draft is still there when the subject comes back.
+
+### A finding from building it
+
+`ConfirmDialog` had no `cancelLabel`, and the first version passed one through a conditional spread:
+`{...(confirming === 'subject' ? { cancelLabel: … } : {})}`. **Typecheck accepted it** — a
+conditional spread widens to `{}` in one branch, so TS never checks the other — and the button
+rendered "Cancel" while the code said otherwise. The same widening ADR-0074 records for
+`...(FLAG ? [route] : [])`. The prop now exists and is passed directly.
 
 ## Gates
 

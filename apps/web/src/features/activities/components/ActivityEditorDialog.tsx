@@ -133,9 +133,10 @@ export function ActivityEditor({
   open,
   onClose,
   onSaved,
-  activity,
   gating,
   intent,
+  activity: incomingActivity,
+  onSubjectHeld,
   calendars = [],
   calendarsLoading = false,
   calendarsError = false,
@@ -211,6 +212,14 @@ export function ActivityEditor({
    * Absent ⇒ no Notes tab, which is what a host without the flag wants.
    */
   notesSlot?: React.ReactNode;
+  /**
+   * The host's chance to put its selection back when a planner chooses **Keep editing** on a
+   * subject change (Graphite M6-T3). Called with the id the editor is holding.
+   *
+   * Optional, and absent is honest rather than lax: `ActivityEditorDialog` is modal, so its subject
+   * cannot change while it is open and there is nothing for it to restore.
+   */
+  onSubjectHeld?: (activityId: string) => void;
 }): React.ReactElement {
   const announce = useAnnounce();
   const update = useUpdateActivityFields(orgSlug, planId);
@@ -226,7 +235,33 @@ export function ActivityEditor({
   const [saveError, setSaveError] = useState<{ scope: TabKey; message: string } | null>(null);
   /** The scope that last saved, cleared on its next edit — the visible half of the save signal. */
   const [savedScope, setSavedScope] = useState<TabKey | null>(null);
-  const [confirmingClose, setConfirmingClose] = useState(false);
+  /**
+   * **What the discard confirmation is currently guarding**, or `null`.
+   *
+   * One state rather than two booleans: a close and a subject change can both be pending in
+   * principle, and two independent flags would let two confirmations render at once — each
+   * describing work the other is about to discard.
+   */
+  const [confirming, setConfirming] = useState<'close' | 'subject' | null>(null);
+
+  /**
+   * **The subject the forms are seeded from — which is not always the one the host is offering.**
+   *
+   * `useScopeForm` re-seeds whenever `activity?.id` changes, so a new subject silently replaces
+   * every unsaved edit in all three scopes. In a modal that could not happen: the dialog is the
+   * only thing on screen, so the subject cannot change while it is open. **A drawer sits beside a
+   * live canvas**, and selecting another bar is one click — so the guard that a modal got for free
+   * has to be built (Graphite M6-T3).
+   *
+   * Held as an **id** and re-derived, never as a snapshot of the row: the editor reads `version`
+   * from the live row at submit time, which is what makes a two-scope session work at all
+   * (see the docblock above). A held object would go stale on the first save.
+   */
+  const [seededId, setSeededId] = useState(incomingActivity?.id);
+  const activity =
+    incomingActivity?.id === seededId
+      ? incomingActivity
+      : planActivities.find((a) => a.id === seededId);
 
   // The entry point chooses the landing tab (ADR-0060 §7): **Report progress** and **Steps** open
   // the same editor as **Edit**, on the tab that answers the action. The hosts keep this dialog
@@ -306,10 +341,30 @@ export function ActivityEditor({
     cost.isDirty && gating.cost.readable ? 'Cost' : null,
   ].filter((name): name is string => name !== null);
 
+  /**
+   * **Adopt a new subject, or hold the old one and ask** (Graphite M6-T3).
+   *
+   * Adjusted during render, not in an effect — the same reason `seenIntent` above gives: an effect
+   * would paint the new subject's editor for a frame and then take it back, and setting state from
+   * one is the cascading-render pattern the lint rule rejects.
+   *
+   * With nothing dirty this is invisible and costs one extra render on a selection change. With
+   * work outstanding the editor **keeps rendering the old subject** while the confirmation names
+   * both, so a planner is never shown one activity's heading over another's draft.
+   */
+  if (incomingActivity?.id !== seededId) {
+    if (dirtyScopeNames.length === 0) {
+      setSeededId(incomingActivity?.id);
+      if (confirming === 'subject') setConfirming(null);
+    } else if (confirming !== 'subject') {
+      setConfirming('subject');
+    }
+  }
+
   /** Close, unless there is work to lose — then ask (spec US-5). */
   const requestClose = (): void => {
     if (dirtyScopeNames.length > 0) {
-      setConfirmingClose(true);
+      setConfirming('close');
       return;
     }
     onClose();
@@ -768,17 +823,36 @@ export function ActivityEditor({
           dialogs this replaces: up to three scopes can be independently dirty at once, so one
           Escape reflex now risks three forms' worth of work instead of one. */}
         <ConfirmDialog
-          open={confirmingClose}
-          onClose={() => setConfirmingClose(false)}
+          open={confirming !== null}
+          onClose={() => {
+            // **Keeping the old subject is the cancel path, and it must put the host back.**
+            // Without `onSubjectHeld` the canvas selection has already moved, so the drawer would
+            // go on editing one activity while the diagram highlights another — two surfaces
+            // disagreeing about what the reader is working on, which is worse than either answer.
+            if (confirming === 'subject' && seededId !== undefined) onSubjectHeld?.(seededId);
+            setConfirming(null);
+          }}
           onConfirm={() => {
-            setConfirmingClose(false);
-            onClose();
+            const which = confirming;
+            setConfirming(null);
+            if (which === 'subject') setSeededId(incomingActivity?.id);
+            else onClose();
           }}
           title="Discard unsaved changes?"
           description={`${dirtyScopeNames.join(', ')} ${
             dirtyScopeNames.length === 1 ? 'has' : 'have'
-          } unsaved changes. Closing will discard them.`}
+          } unsaved changes. ${
+            confirming === 'subject'
+              ? `Switching to ${incomingActivity?.name ?? 'another activity'} will discard them.`
+              : 'Closing will discard them.'
+          }`}
           confirmLabel="Discard"
+          // Passed directly, NOT through a conditional spread. The first version wrote
+          // `{...(confirming === 'subject' ? { cancelLabel: … } : {})}` and typecheck accepted it
+          // against a `ConfirmDialog` that had no such prop at all — a conditional spread widens to
+          // `{}` in one branch, so TS never checks the other. It rendered "Cancel" and said nothing.
+          // The same widening ADR-0074 records for `...(FLAG ? [route] : [])`.
+          cancelLabel={confirming === 'subject' ? 'Keep editing' : 'Cancel'}
         />
       </>
     ),
