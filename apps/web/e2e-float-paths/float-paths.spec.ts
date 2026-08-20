@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { revealToolbarCommand } from '../e2e-support/toolbar';
+
 import {
   canvasListbox,
   canvasOptionText,
@@ -66,17 +68,22 @@ test('a planner reads the float paths into an activity, in both views', async ({
   const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
   const more = lookRow.getByRole('button', { name: 'More toolbar actions' });
   const inlineFloatPaths = lookRow.locator('[data-toolbar-item="float-paths"]');
-  /** The control, wherever it is — opening the `⋯` only when it is not on the row. */
-  const revealFloatPaths = async () => {
-    // Wait for the row to EXIST before asking where the item is. `count()` is a point-in-time read
-    // with no auto-wait, so on a slower machine the first call ran before the toolbar mounted,
-    // found nothing inline, and then waited two minutes for a `⋯` that a wide row never renders —
-    // a helper that reports "the item is in the menu" when what it saw was an empty page.
-    await expect(lookRow).toBeVisible();
-    if ((await inlineFloatPaths.count()) > 0) return inlineFloatPaths;
-    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-    return page.getByRole('menuitemcheckbox', { name: 'Float paths' });
-  };
+  /**
+   * The control, wherever it is — opening the `⋯` only when it is not on the row.
+   *
+   * **Converged onto the shared `revealToolbarCommand`** in Graphite M5's follow-up. This suite
+   * solved the problem first and correctly, including the trap its own comment recorded: `count()`
+   * is a point-in-time read with no auto-wait, so on a slower machine the first call ran before the
+   * toolbar mounted, found nothing inline, and then waited two minutes for a `⋯` that a wide row
+   * never renders — a helper that reports "the item is in the menu" when what it saw was an empty
+   * page. `e2e-library` then hit the same problem and had no such helper. Two implementations of
+   * "where is this command" would drift, and the drift would be invisible until a width changed.
+   *
+   * The one behavioural difference is an improvement: the shared version locates the menu row by
+   * `data-toolbar-item` rather than by the `menuitemcheckbox` role and its copy, so a rename of
+   * this command no longer breaks this line.
+   */
+  const revealFloatPaths = () => revealToolbarCommand(page, 'float-paths');
   /** What focus must return to after the panel closes: the control if it is still mounted, else
    *  the `⋯` it was reached through — a menu item unmounts with its menu. */
   const restoreTarget = async () =>

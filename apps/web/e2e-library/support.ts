@@ -1,5 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
+import { revealToolbarCommand } from '../e2e-support/toolbar';
+
 /**
  * Journey helpers for the **library scoping & manageability** suite
  * (ADR-0053, `docs/specs/library-scoping-and-manageability/`) — no longer flag-on since ADR-0088
@@ -90,13 +92,19 @@ export async function drawActivity(
  * canvas's parallel activity listbox, so a page-wide `getByRole('listbox')` would be ambiguous.
  */
 export async function calendarPickerOptions(page: Page): Promise<string[]> {
-  const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
   // Located by its REGISTRY ID, not its label. That label was `Schedule settings…` until ADR-0091
   // shortened it to `Settings…` to fit every Row 2 label at 1646 px, and this locator broke — the
   // only journey in the repository that named it. A name-based locator has to be re-edited on every
   // copy change, which is churn that says nothing about whether the control still works; the id is
   // what the registry actually guarantees.
-  await toolbar.locator('[data-toolbar-item="calendar"]').click();
+  //
+  // **That last sentence was aspirational until Graphite M5's follow-up.** `data-toolbar-item` was
+  // written by `Toolbar` on the inline control and by nothing in `ToolbarOverflow`, so the id was a
+  // handle only while the ladder happened to leave `calendar` on the row. Merging ADR-0031's two
+  // command rows onto one budget put this command in the `⋯` at every width and this line timed
+  // out. `ToolbarOverflow` now stamps the id too, and `revealToolbarCommand` finds the control
+  // wherever the ladder has put it.
+  await (await revealToolbarCommand(page, 'calendar')).click();
   const dialog = page.getByRole('dialog', { name: 'Schedule settings' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('combobox', { name: 'Calendar' }).press('ArrowDown');

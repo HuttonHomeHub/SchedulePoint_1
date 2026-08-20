@@ -87,6 +87,11 @@ function renderItem<Ctx>(r: ResolvedToolbarItem<Ctx>, context: Ctx): React.React
         // independent reviews of one diff found it; `MenuItem` grew the prop rather than this file
         // growing a bespoke span, so the composition order stays in one place.
         {...(r.srDescription ? { srDescription: r.srDescription } : {})}
+        // The registry id follows the command into the menu (Graphite M5 follow-up). Without it
+        // `data-toolbar-item` marked only the INLINE control, so a locator written against the id
+        // silently depended on the ladder leaving that command on the row — which stopped being
+        // true for `calendar` the moment the two rows merged onto one budget.
+        itemId={r.item.id}
         onSelect={() => r.item.onActivate!(context)}
       >
         {icon}
@@ -110,6 +115,10 @@ function renderItem<Ctx>(r: ResolvedToolbarItem<Ctx>, context: Ctx): React.React
       {...(r.busy ? { busy: true } : {})}
       {...(r.disabledReason ? { disabledReason: r.disabledReason } : {})}
       {...(r.srDescription ? { srDescription: r.srDescription } : {})}
+      // Both branches, deliberately: a shaded command is exactly the one a journey most needs to
+      // find, and "one correct pattern applied to a control and not its neighbour" is the shape
+      // this register keeps recording (ADR-0064 §7).
+      itemId={r.item.id}
       onSelect={NOOP}
     >
       {icon}

@@ -2647,6 +2647,19 @@ robust: wait for the dialog's `close` event, or poll until `document.activeEleme
 rather than betting on frame ordering. Until then this costs triage time on every sweep, which is
 how a suite ends up being ignored.
 
+### A second suite joined it, 2026-08-20 (Graphite M5's sweep)
+
+`e2e-overview/overview.spec.ts:129` — "the landing offers the plans this browser was recently in" —
+went red under the sweep and **passes alone**, verified by running it both ways on the same commit
+rather than inferred. Its `createPlan` helper clicks through to the plan and navigates straight back
+to the landing without waiting for the workspace to settle, so the "remember this plan" write races
+the navigation away from it. Same shape as the row above and the same cost: a red line in a sweep
+that means nothing about the product, which is exactly how a real red gets waved through.
+
+Worth noting what this pair costs together, because it is the case for fixing them rather than
+re-triaging: the Graphite M5 sweep returned **31 green, 2 red, and one of the two reds was noise.**
+A gate that cries wolf once per run trains its reader to open the log expecting noise.
+
 ## 145. A hand-rolled `Combobox` takes the platform picker away on touch, and nobody has measured what that costs
 
 **Raised 2026-08-19**, blocking the last two conversions of ADR-0097 Landing F1.
