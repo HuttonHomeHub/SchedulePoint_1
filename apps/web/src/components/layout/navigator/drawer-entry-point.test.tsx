@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -131,6 +131,32 @@ describe('a route asking the shell to show its subject', () => {
     expect(screen.getByText('Activity fields')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Excavate' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+  });
+
+  it('announces the panel it opened, and only when it opens one', async () => {
+    /**
+     * **A silent open is a WCAG 4.1.3 regression, not a stylistic gap.** Before ADR-0099 every one
+     * of these entry points opened a native `<dialog>`, which the platform announces and moves focus
+     * into. The drawer does neither — deliberately, since the subject follows the canvas selection
+     * — so without this a planner pressing Edit from a row menu got a silent swap of the workspace's
+     * trailing column. The manual rail path had always announced; the programmatic one did not.
+     *
+     * The second half is what keeps it from becoming noise: the same call fires on every selection
+     * change once the drawer is already on this subject, and announcing there would talk over the
+     * canvas's own activity announcement.
+     */
+    renderShell();
+    const announcer = () => screen.getByTestId('announcer');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
+    // The announcer clears-then-sets on an animation frame, so this polls rather than reads.
+    await waitFor(() => expect(announcer()).toHaveTextContent('Activity details opened.'));
+
+    // Already showing this subject: a re-ask is a subject change, not an open.
+    announcer().textContent = '';
+    fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    expect(announcer()).toHaveTextContent('');
   });
 
   it('expands a drawer the planner had closed', () => {

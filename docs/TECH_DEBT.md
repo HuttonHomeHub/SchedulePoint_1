@@ -2738,3 +2738,52 @@ is a rule with no gate behind it, one layer up from the rule it enforces.
 `CLAUDE.md` §19 instead — and the edit that was supposed to correct it here ran without an assertion,
 did not match, and reported nothing. Found by re-reading rather than by anything failing, which is
 the ADR-0058 rule doing its job on a document written about instruments not being reached for.
+
+## 150. The drawer overloads "Close", and the editor's Close leaves an empty panel open
+
+**Raised 2026-08-20** (reconciliation pass, step 7 — ux review of the post-M10 diff). **Size:** S.
+
+The context drawer carries two controls whose names both begin with "Close", in one panel, doing
+materially different things:
+
+| Control                               | Where              | What it does                                                                                                   |
+| ------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| ✕ `aria-label="Close context drawer"` | the chrome, top    | Collapses the whole panel. Both subjects become unreachable until the rail is pressed again.                   |
+| `Close` (text button)                 | the editor, bottom | Clears the editor intent only. The panel **stays open**, showing "Select an activity to see its details here." |
+
+Neither loses work — the editor's form state lives above the `shell()` call and survives its portal
+target going away, which `ActivityEditor.drawer-chrome.test.tsx` pins. So this is a discoverability
+gap rather than a risk, and it is **not** a WCAG failure: the accessible names differ.
+
+**What makes it worth a row** is that a planner arrives from the modal, where one "Close" dismissed
+the whole thing. In the drawer the editor's Close leaves an empty panel sitting where the diagram
+used to have room, which reads as a control that half-worked.
+
+**Two candidate fixes, and the choice is a product one.** Rename the chrome control so it does not
+overload the word (`Hide panel` / `Collapse drawer`); **or** have the editor's Close also collapse
+the drawer when nothing else is registered to show, which matches the modal's mental model and costs
+the planner the panel when they might have wanted the Explorer back in it. Not folded in the pass
+because it is copy-and-behaviour rather than a defect, and the product owner has a view on both.
+
+## 151. The Gantt grid splitter has no browser-level coverage
+
+**Raised 2026-08-20** (reconciliation pass, step 7 — component review). **Size:** S.
+
+`grid-width.structural.test.ts` pins the arithmetic — the columns fill the pane exactly at and above
+the floor, `name` absorbs the difference, and only the two pure helpers may read the intrinsic width.
+Nothing drives the **splitter**: checked, and `e2e-gantt` and `e2e-gantt-editing` contain no
+reference to the separator, the pane width or a column resize.
+
+That matters here more than it usually would, because the defect this arithmetic exists to prevent
+is a _picture_ one — ADR-0095 shipped a `GRID_WIDTH` literal that disagreed with its own columns and
+painted Float over the chart, and the first version of this splitter reproduced it at a guessed
+180 px floor. Both were found by looking at a browser, and neither would have been caught by the
+structural test that now guards the sums.
+
+**What is owed:** one journey assertion in `e2e-gantt` that drags the separator to its floor and
+checks the chart's left edge equals the grid's right edge. `PanelResizer` is `role="separator"` with
+`aria-valuenow`, so it is drivable by keyboard without a pointer gesture.
+
+**How this row came to exist** is worth one line: the structural test's own docblock said the
+browser-level proof "belongs to `e2e-gantt`", which reads as coverage held elsewhere. It was not
+checked when written.

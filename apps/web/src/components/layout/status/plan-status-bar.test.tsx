@@ -4,18 +4,23 @@ import { describe, expect, it } from 'vitest';
 import { PlanStatusBar } from './plan-status-bar';
 
 /**
- * **Cover for a component nothing could reach** (Graphite M10).
+ * **Branch cover for the plan status bar** (Graphite M10; title corrected 2026-08-20).
  *
- * The M10 component review found `PlanStatusBar` with no coverage at all, direct or indirect — and
- * the indirect half is the part worth recording, because it is not obvious from a diff.
- * `plan-workspace-toolbar.tsx` renders this bar inside `<ChromePortal name="status">`, and
- * `ChromePortal` returns `null` when no slot of that name is mounted. `plan-workspace-toolbar.test.tsx`
- * mounts no chrome host, so every test in this repository that renders the toolbar renders this
- * component **zero times**. A reader counting suites would have concluded the opposite.
+ * **This docblock was wrong, and the reconciliation pass that followed caught it in one command.**
+ * It said the M10 review had found `PlanStatusBar` with "no coverage at all, direct or indirect",
+ * because `plan-workspace-toolbar.test.tsx` mounts no chrome host and `ChromePortal` returns `null`
+ * without one. That file **does** mount `TestChromeHost`, which has provided a `status` slot since
+ * Graphite M7, and its "shows the Project-finish read-out in the status bar" case asserts on
+ * `Finish` — this component's own `Fact` label. So the bar was rendered, and read, by an existing
+ * suite. The claim shipped in the milestone whose whole subject is claims nobody checked
+ * (ADR-0076 Class 3), and it is corrected here rather than quietly replaced.
  *
- * That is the portal's own contract working as designed (ADR-0029: the shell stays plan-unaware),
- * not a defect — but it means a portalled component gets no coverage by association and has to be
- * tested directly.
+ * **What was true, and is the reason this file exists:** that coverage is incidental and
+ * single-branch. It renders the bar to find one label in one slot, and it says nothing about the
+ * `pending` state, the singular/plural critical count, the withheld-count cases, "Not calculated",
+ * or the recalculating cue — the branches below. A portalled component gets no coverage *by
+ * association* worth the name, which is a narrower claim than the one it replaces and still worth
+ * acting on.
  *
  * The bar has real branching: three facts with a pending state, a count with a
  * singular/plural/absent split, and a run state. Each is asserted below by what a reader sees,

@@ -146,12 +146,20 @@ of the first choices failed, one of them badly:
   transition and Escape leaves the intent set: **a gesture is not a state change**, so the ask moved
   onto `setEditorIntent`, the one funnel every entry point already used.
 
-  Two blocking findings were **missing tests rather than defects**, and both were structurally
-  invisible: `PlanStatusBar` had no coverage direct or indirect, because it is portalled and
-  `ChromePortal` returns `null` with no host — so every suite that renders the toolbar rendered it
-  zero times; and M8's own written acceptance condition ("the three sites read one value; a
-  structural test says so") had never been met, leaving unpinned the exact arithmetic ADR-0095
-  shipped wrong once.
+  Two blocking findings were **missing tests rather than defects**: `PlanStatusBar` had no **branch**
+  coverage, and M8's own written acceptance condition ("the three sites read one value; a structural
+  test says so") had never been met, leaving unpinned the exact arithmetic ADR-0095 shipped wrong
+  once.
+
+  **The status-bar half of that sentence was itself a Class 3 claim and is corrected here rather
+  than left standing.** It read "no coverage direct or indirect… every suite that renders the
+  toolbar rendered it zero times", and the 2026-08-20 reconciliation pass disproved it in one
+  command: `plan-workspace-toolbar.test.tsx` mounts `TestChromeHost`, which has carried a `status`
+  slot since M7, and asserts on `Finish` — the bar's own label. So it was rendered, and read, by an
+  existing suite. What was true is narrower and still worth the file: that coverage is incidental
+  and single-branch, and says nothing about `pending`, the singular/plural critical count or the
+  recalculating cue. An unverified claim about missing verification, inside the milestone whose
+  subject is exactly that — which is the argument for the pass, made by the pass.
 
   One correction belongs here rather than in a commit message: the first fix for the Escape finding
   was to **rewrite the journey to assert the new behaviour**, and the assertion it deleted had been

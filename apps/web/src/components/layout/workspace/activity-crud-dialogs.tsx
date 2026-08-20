@@ -32,6 +32,7 @@ import {
 } from '@/features/activities';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
+import { handleDrawerEscape } from '@/lib/escape-rungs';
 
 /**
  * The activity **edit / delete** dialogs opened from the floating {@link SelectionActionsBar} on the
@@ -77,6 +78,7 @@ function PlanActivityEditor({
   activity,
   ...props
 }: Omit<Parameters<typeof ActivityEditor>[0], 'shell'>): React.ReactElement {
+  const announce = useAnnounce();
   const showingInDrawer = useDrawerSubjectShowing();
   const canShowInDrawer = useDrawerSubjectCanShow();
   const drawerControls = useDrawerSubjectControls();
@@ -141,11 +143,7 @@ function PlanActivityEditor({
         // eslint-disable-next-line jsx-a11y/no-static-element-interactions
         <div
           className="flex min-h-0 flex-1 flex-col"
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape' || event.defaultPrevented) return;
-            event.preventDefault();
-            requestClose();
-          }}
+          onKeyDown={(event) => handleDrawerEscape(event, requestClose)}
         >
           {children}
         </div>
@@ -174,6 +172,11 @@ function PlanActivityEditor({
       {...(activity ? { activity } : { activity: undefined })}
       onClose={() => {
         props.onClose();
+        // **The inner rung speaks too.** Closing the drawer announces "… closed."; closing the
+        // EDITOR inside it announced nothing, so one ladder gave two different signals — silence on
+        // the first press, a sentence on the second. Only in the drawer: the modal's own dismissal
+        // is announced by the platform.
+        if (showingInDrawer) announce('Activity details closed.');
         // The editor's own Close button is INSIDE the portalled subtree, so closing unmounts the
         // element that has focus and the browser drops it to `<body>` — WCAG 2.4.3, the third
         // instance of this class in this repository. The rail button survives and is about the panel
