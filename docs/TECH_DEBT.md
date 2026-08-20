@@ -2932,9 +2932,26 @@ Explorer">` wraps `<nav aria-label="Project Explorer">`, so a rotor lists the sa
   critical path, so "computed and clean" is not a state a planner meets. Adding copy for it would be
   reassuring about something that does not happen.
 
-**One finding is recorded as a process note rather than debt.** The UX review's blocking finding —
-the drawer's entry point not existing — was reachable only by driving the shell, and this epic's own
-gate table routed M6 to targeted suites. ADR-0081's rule (the flag-on journey lands with the first
-user-facing milestone) is the standing answer and it was not applied, because Graphite ships no flag
-and the rule is written in terms of one. The rule's subject is a **user-facing milestone**, not a
-flag; `docs/RECONCILE.md` is the place that wording gets fixed.
+**Two instruments existed and neither was reached for, which is the same shape twice.**
+
+The first is ADR-0081's rule — the journey lands with the first user-facing milestone. The UX
+review's blocking finding, the drawer's entry point not existing, was reachable only by driving the
+shell, and this epic's own gate table routed M6 to targeted suites. The rule is the standing answer
+and it was not applied, because Graphite ships no flag and the rule is written in terms of one. Its
+subject is a **user-facing milestone**, not a flag — now stated that way in `CLAUDE.md` §19 beside
+its sibling about problem statements, rather than left as a note here.
+
+The second is `scripts/frontend-only.json`, which exists to refuse a change under `apps/api/` while a
+frontend-only epic is in flight. Graphite is exactly such an epic — its parity argument is that the
+CPM engine is not imported — and the declaration sat `active: false` throughout, because ADR-0096
+had correctly deactivated it and nobody re-read it at this epic's start. Nothing went wrong: the
+epic genuinely changed no server code, so the gate would have had nothing to catch. What is worth
+recording is that **the same file's own instructions say to arm it, and its own history is a case of
+it being left in the wrong state for months** — so "arm it when the next frontend-only epic starts"
+is a rule with no gate behind it, one layer up from the rule it enforces.
+
+**And this paragraph nearly shipped pointing at the wrong file.** The sentence above ended
+"`docs/RECONCILE.md` is the place that wording gets fixed" until the rule was actually written into
+`CLAUDE.md` §19 instead — and the edit that was supposed to correct it here ran without an assertion,
+did not match, and reported nothing. Found by re-reading rather than by anything failing, which is
+the ADR-0058 rule doing its job on a document written about instruments not being reached for.
