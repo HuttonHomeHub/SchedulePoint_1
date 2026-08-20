@@ -216,8 +216,24 @@ shaved for a sixth epic.**
 | **M10** | Gate pass                                                                | Five specialists; screenshots at four widths **plus a coarse-pointer run**                                               |
 
 Standing gates every slice: `pnpm lint && typecheck && test`, plus `scripts/e2e-local.sh web`
-(the base journey), plus **all 31 Playwright suites on any slice that moves a label or a
+(the base journey), plus **the full sweep on any slice that moves a label or a
 layout** — locating controls by `[data-toolbar-item]`, never by copy.
+
+**When the sweep runs, decided rather than drifted into.** `scripts/e2e-sweep.sh` is 33 suites and
+about **two hours** on this machine, and six milestones remain. ADR-0096's own record says it "is
+not a per-change step — its trigger is a change every journey passes through". Applying that
+literally:
+
+| Milestone      | Changes                            | Under every journey?                | Sweep    |
+| -------------- | ---------------------------------- | ----------------------------------- | -------- |
+| M3, M4         | the app shell                      | yes                                 | ran      |
+| M5             | the command surface                | yes — every plan                    | yes      |
+| M6, M7, M8, M9 | the editor / dock / Gantt / canvas | no — the affected suites cover them | targeted |
+| M10            | gate pass                          | —                                   | yes      |
+
+For M6–M9 the gate is the base journey plus the suites that drive the changed surface; M10's sweep
+is the backstop. Running two-hour sweeps back to back for epic-internal states nobody will ship
+buys confidence in a configuration that never existed.
 
 ---
 
