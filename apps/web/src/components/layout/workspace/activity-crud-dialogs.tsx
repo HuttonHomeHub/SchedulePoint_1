@@ -1,5 +1,5 @@
 import { Info } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
@@ -116,15 +116,31 @@ function PlanActivityEditor({
    * commit would take it away again. Asking once, when the editor goes from shut to open, is the
    * user's own action being honoured.
    *
-   * Below `lg` this is inert by construction: the shell's `showingContext` carries a viewport term,
-   * so the subject changes, nothing shows, and `modalShell` still renders — which is the chrome
-   * every narrow viewport has always used (M6-T5).
+   * **`asking` closes the modal for exactly that one commit, and a browser is what established that
+   * it had to.** The shell can only agree one commit later, and in between `modalShell` rendered
+   * `open` — so `Dialog`'s own effect called `showModal()`, focus went into the top layer, and the
+   * next commit swapped the chrome and unmounted it, leaving focus on `<body>`: WCAG 2.4.3, plus
+   * every workspace keyboard accelerator silently dead. A probe in `progress-entry.spec.ts` recorded
+   * the sequence (`in BUTTON[Close dialog]` → `out` → `dialog removed`) after two guesses — a layout
+   * effect, then a passive one — had each been wrong, because React flushes a commit's passive
+   * effects before the re-render a layout effect schedules. Suppressing `open` for the asking commit
+   * is the only shape that keeps the dialog from opening at all.
+   *
+   * Below `lg` this costs one frame of a **closed** dialog and nothing else: the shell's
+   * `showingContext` carries a viewport term, so `asking` clears, `showingInDrawer` stays false and
+   * the modal opens — the chrome every narrow viewport has always used (M6-T5).
    */
-  const wasOpen = useRef(props.open);
-  useEffect(() => {
-    if (props.open && !wasOpen.current) drawerControls.show();
-    wasOpen.current = props.open;
-  }, [props.open, drawerControls]);
+  const [seenOpen, setSeenOpen] = useState(props.open);
+  const [asking, setAsking] = useState(false);
+  if (props.open !== seenOpen) {
+    setSeenOpen(props.open);
+    if (props.open) setAsking(true);
+  }
+  useLayoutEffect(() => {
+    if (!asking) return;
+    drawerControls.show();
+    setAsking(false);
+  }, [asking, drawerControls]);
 
   const drawerShell: ActivityEditorShell = ({ children }) => (
     <ChromePortal name="drawer">
@@ -162,7 +178,7 @@ function PlanActivityEditor({
         if (showingInDrawer) drawerControls.focusRailButton();
       }}
       tabRailAllowed={!showingInDrawer}
-      shell={showingInDrawer ? drawerShell : modalShell(props.open)}
+      shell={showingInDrawer ? drawerShell : modalShell(props.open && !asking)}
     />
   );
 }
