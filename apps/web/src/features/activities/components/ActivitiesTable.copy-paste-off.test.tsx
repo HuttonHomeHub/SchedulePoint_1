@@ -37,6 +37,7 @@ describe('ActivitiesTable — VITE_ACTIVITY_COPY_PASTE off (parity)', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <ActivitiesTable
+          onOpenEditor={() => {}}
           orgSlug="acme"
           planId="pl1"
           canEditSchedule

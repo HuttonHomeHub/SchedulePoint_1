@@ -305,6 +305,18 @@ Restarting between suites is load-bearing rather than tidy: the `VITE_` flags ba
 start and `reuseExistingServer` is true outside CI, so a suite that inherits the previous one's
 servers silently runs against the previous one's configuration.
 
+**And a server _you_ left running does the same thing, which is why `e2e-local.sh` now refuses to
+start while one is up.** The trap is worse than the sweep's, because the leftover server is usually
+invisible: `nest start --watch` puts the environment on the CHILD process, so the watcher's
+`/proc/<pid>/environ` is empty and even checking looks like it cleared it. On 2026-08-19 an API
+server left over from a flag-on harness (`PLAN_EDIT_LOCK_ENFORCED=true`) made the base journey fail
+seven specs, and the failure was blamed in turn on a palette change, on a grid refactor and finally
+on the product — three false diagnoses, each argued from evidence, none of them the cause. Later the
+same session a leftover **web** server produced the identical seven failures from the other side,
+with no flag pin reaching the bundle. The script now probes 3000 and 5173 and exits rather than
+running; `E2E_ALLOW_EXISTING_SERVER=1` overrides it, and is only ever right if you started that
+server with the suite's exact environment.
+
 **It is not a per-change step** — thirty-three suites is about forty minutes. Its trigger is a change
 every journey passes through, and its first two runs say why:
 

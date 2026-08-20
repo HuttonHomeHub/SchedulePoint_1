@@ -5,7 +5,7 @@ import { flushSync } from 'react-dom';
 
 import { useActivities, useDeleteActivity, useDissolveSummary } from '../api/use-activities';
 import type { ActivityEditorGating } from '../lib/activity-editor-gating';
-import { openActivityEditor, type ActivityEditorIntent } from '../lib/activity-editor-intent';
+import type { ActivityEditorPurpose } from '../lib/activity-editor-intent';
 import { deleteActivityDescription, dissolveSummaryDescription } from '../lib/delete-activity-copy';
 import { formatDurationRead } from '../model/duration-field';
 import {
@@ -14,8 +14,6 @@ import {
   isDurationDerivedType,
   isMilestoneType,
 } from '../schemas/activity-schemas';
-
-import { ActivityEditorDialog } from './ActivityEditorDialog';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
@@ -136,6 +134,7 @@ export function ActivitiesTable({
   canEditSchedule,
   canReportProgress = false,
   editorGating,
+  onOpenEditor,
   onOpenLogic,
   onDuplicate,
   onOpenResources,
@@ -144,7 +143,6 @@ export function ActivitiesTable({
   calendars = [],
   planCalendarId,
   calendarsLoading = false,
-  calendarsError = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -160,6 +158,16 @@ export function ActivitiesTable({
    * cannot say WHICH of the two is missing.
    */
   editorGating?: ActivityEditorGating;
+  /**
+   * Open the tabbed editor on the tab a row action belongs to (ADR-0060 §7).
+   *
+   * **Required, and that is the point.** This table used to hold its own editor state and mount its
+   * own `ActivityEditorDialog` beside the workspace's — two mounts, two sets of scope forms and two
+   * dirty states for one activity. After Graphite M6-T2 it was also two different chromes: a drawer
+   * from the canvas and a modal from here. Making the seam required means a host cannot mount this
+   * table and silently leave three row actions doing nothing; the compiler asks.
+   */
+  onOpenEditor: (activity: ActivitySummary, purpose: ActivityEditorPurpose) => void;
   /** Open the logic (predecessors/successors) panel for a row. Available to any
    * member (read); the host owns the panel so this feature stays dependency-free. */
   onOpenLogic?: (activity: ActivitySummary) => void;
@@ -200,7 +208,6 @@ export function ActivitiesTable({
   /** The calendars list is still loading (an assigned calendar reads "Loading…", not "inherit"). */
   calendarsLoading?: boolean;
   /** The calendars list failed to load — forwarded to the edit dialog's picker to surface it. */
-  calendarsError?: boolean;
   /**
    * The plan's own calendar id — what an activity's empty `calendarId` ("inherit") resolves to.
    * Route-composed like {@link calendars}; forwarded to the editors so the duration field can read
@@ -235,7 +242,6 @@ export function ActivitiesTable({
   // The row menu's Edit / Report progress / Steps all resolve to ONE intent and ONE editor
   // (ADR-0060 §7) — they carried three separate ids and three separate dialogs until the tabbed
   // editor's flag retired.
-  const [editorIntent, setEditorIntent] = useState<ActivityEditorIntent | null>(null);
   const [deleting, setDeleting] = useState<ActivitySummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // Dissolve is deliberately its OWN confirm state, not a mode on `deleting`. Sharing one would put
@@ -264,9 +270,6 @@ export function ActivitiesTable({
     activityCalendarId: managingResources?.calendarId ?? '',
     ...(planCalendarId === undefined ? {} : { planCalendarId }),
   });
-  const intended = editorIntent
-    ? activities.data?.find((a) => a.id === editorIntent.activityId)
-    : undefined;
   /**
    * Whether **Resources** belongs to the host (the convergence epic) rather than to this table's
    * own dialog. Narrowed as a const so the row action can call `onOpenResources` without a second
@@ -323,8 +326,8 @@ export function ActivitiesTable({
   const clearSelection = (): void => setSelectedIds(new Set());
 
   /** Open the tabbed editor on the tab this purpose belongs to (ADR-0060 §7). */
-  const openFor = (activity: ActivitySummary, purpose: 'edit' | 'progress' | 'steps'): void => {
-    setEditorIntent(openActivityEditor(activity, purpose));
+  const openFor = (activity: ActivitySummary, purpose: ActivityEditorPurpose): void => {
+    onOpenEditor(activity, purpose);
   };
 
   // The per-row action list, role-/flag-gated (ADR-0039/0044). Feeds both the decision to show a
@@ -364,7 +367,7 @@ export function ActivitiesTable({
       actions.push({
         key: 'members',
         label: 'Members',
-        onSelect: () => setEditorIntent(openActivityEditor(activity, 'members')),
+        onSelect: () => openFor(activity, 'members'),
       });
     }
     // Dark surface (ADR-0039): any member may open the assignments editor (reads are member-level;
@@ -887,27 +890,12 @@ export function ActivitiesTable({
         />
       ) : null}
 
-      {/* The table's ONE editor — the same component the canvas workspace hosts, opened by all
-          three row actions. Mounted for any role that can reach a scope (a Contributor reaches
-          Progress), unlike the legacy edit dialog it replaced, which was writer-only. */}
-      {editorGating ? (
-        <ActivityEditorDialog
-          orgSlug={orgSlug}
-          planId={planId}
-          open={intended !== undefined}
-          onClose={() => setEditorIntent(null)}
-          gating={editorGating}
-          calendars={calendars}
-          calendarsLoading={calendarsLoading}
-          calendarsError={calendarsError}
-          {...(planCalendarId === undefined ? {} : { planCalendarId })}
-          planActivities={activities.data ?? []}
-          planActivitiesLoading={activities.isPending}
-          planActivitiesError={activities.isError}
-          activity={intended}
-          {...(editorIntent ? { intent: editorIntent } : {})}
-        />
-      ) : null}
+      {/* **The table mounts no editor** (Graphite M6-T4). It had its own, beside the workspace's,
+          and this file's previous comment called it "the table's ONE editor" — true of the table
+          and false of the plan, which had two. Two mounts means two sets of scope forms and two
+          dirty states for one activity, and after M6-T2 it also meant the same Edit opened a drawer
+          from the canvas and a modal from here. The row actions now call `onOpenEditor`, and the
+          workspace decides the chrome. */}
 
       {canEditSchedule ? (
         <>

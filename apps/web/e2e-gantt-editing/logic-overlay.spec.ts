@@ -11,6 +11,7 @@ import {
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
+import { clickToolbarCommand } from '../e2e-support/toolbar';
 
 /**
  * **M4 — the logic overlay, driven against a real plan with real dependencies.**
@@ -67,7 +68,7 @@ async function planWithLink(page: Page): Promise<string> {
   );
   if (failure !== null) throw new Error(failure);
 
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   return orgSlug;
 }
 

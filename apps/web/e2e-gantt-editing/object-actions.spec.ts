@@ -12,6 +12,8 @@ import {
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
+import { activityEditor } from '../e2e-support/activity-editor';
+import { clickToolbarCommand, toolbarOffers } from '../e2e-support/toolbar';
 
 /**
  * **M1 — object actions in the Gantt**, driven against a real API with the pen enforced.
@@ -54,7 +56,7 @@ test('a planner acts on a Gantt selection from the docked object bar', async ({ 
 
   // Recalculate so the chart has bars — the Gantt renders its not-calculated state otherwise, and a
   // selection assertion against that state would be testing the empty view.
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
   await expect(ganttGrid(page)).toBeVisible();
 
@@ -70,13 +72,16 @@ test('a planner acts on a Gantt selection from the docked object bar', async ({ 
   // **The promise itself.** Report progress is reachable from a Gantt selection, and it opens the
   // editor on the Progress scope rather than somewhere the planner must then navigate from.
   await bar.getByRole('button', { name: 'Report progress' }).click();
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('tab', { name: /Progress/ })).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  await editor.getByRole('button', { name: 'Close dialog' }).click();
+  // `Close`, not `Close dialog`: the editor is the drawer's now (ADR-0099), and the ✕ this used to
+  // press was the `Dialog` chrome's own. The button below is the editor's, which is the route that
+  // clears the subject in either chrome.
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(editor).toBeHidden();
 });
 
@@ -89,7 +94,7 @@ test('the Gantt offers no canvas-only action, and no longer offers Add note', as
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
   await ganttRow(page, 'Seeded 0').click();
 
@@ -108,12 +113,19 @@ test('the Gantt offers no canvas-only action, and no longer offers Add note', as
   // discoverability failure this milestone exists to fix. Leaving it beside the correctly-labelled
   // route would be a third entry point rather than a replacement: ADR-0093's own defect reproduced
   // inside the milestone meant to discharge it.
-  await expect(page.getByRole('button', { name: 'Add note', exact: true })).toHaveCount(0);
+  //
+  // **Asked of the whole command strip, not of the row** (Graphite M8). This was
+  // `getByRole('button', { name: 'Add note' })`, which asks only whether the command is *inline* —
+  // so it answered "retired" the moment M5's merge demoted `add-note` into the `⋯`, and the
+  // positive assertion below answered "gone" for the same reason. Both were wrong about the same
+  // fact, in the one suite a sweep never finished.
+  expect(await toolbarOffers(page, 'add-note')).toBe(false);
 
   // It is still the canvas's route into the Logic panel, so the retirement is scoped to this view
-  // rather than a deletion. Switching back must bring it home.
+  // rather than a deletion. Switching back must bring it home — on the row or in the `⋯`, which is
+  // the ladder's business and not this journey's.
   await page.getByRole('button', { name: 'Diagram', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Add note', exact: true })).toHaveCount(1);
+  expect(await toolbarOffers(page, 'add-note')).toBe(true);
 });
 
 test('the docked bar in the Gantt is accessible', async ({ page }) => {
@@ -125,7 +137,7 @@ test('the docked bar in the Gantt is accessible', async ({ page }) => {
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
   await ganttRow(page, 'Seeded 0').click();
   await expect(page.getByRole('toolbar', { name: /Actions for/ })).toBeVisible();

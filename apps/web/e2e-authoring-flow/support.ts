@@ -280,7 +280,7 @@ export async function selectedActivityId(page: Page): Promise<string | null> {
 
 /** The toolbar row that carries the authoring cluster (Add / Link). */
 export function doToolbar(page: Page): Locator {
-  return page.getByRole('toolbar', { name: 'Build and manage' });
+  return page.getByRole('toolbar', { name: 'Plan commands' });
 }
 
 /**

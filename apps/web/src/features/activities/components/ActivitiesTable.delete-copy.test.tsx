@@ -34,7 +34,13 @@ function renderTable(rows: Partial<ActivitySummary>[]) {
   );
   return render(
     <QueryClientProvider client={queryClient}>
-      <ActivitiesTable orgSlug="acme" planId="pl1" canEditSchedule calendars={[]} />
+      <ActivitiesTable
+        onOpenEditor={() => {}}
+        orgSlug="acme"
+        planId="pl1"
+        canEditSchedule
+        calendars={[]}
+      />
     </QueryClientProvider>,
   );
 }

@@ -159,7 +159,7 @@ vi.mock('@/features/activities', async (importOriginal) => ({
   // than its own dialog, so the pen gate for links is read from the editor's gating object. Its
   // `logic` scope is the same object as `general` by construction (ADR-0062 §3) — this asserts it
   // arrives at the host with the pen already folded in.
-  ActivityEditorDialog: ({ gating }: { gating: { logic: { writable: boolean } } }) => (
+  ActivityEditor: ({ gating }: { gating: { logic: { writable: boolean } } }) => (
     <div data-testid="activity-editor" data-can-manage={String(gating.logic.writable)} />
   ),
   ActivityProgressDialog: () => null,

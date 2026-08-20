@@ -196,8 +196,13 @@ vi.mock('@/features/schedule', () => ({
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   usePlanAutoRecalc: () => ({ notify: vi.fn(), flush: vi.fn(), isPending: false }),
   // The canvas's recalculation-settle announcement reads the project finish from the SAME
-  // summary query the toolbar's Finish chip runs (a cache read, not a second request).
-  useScheduleSummary: () => ({ data: undefined, isPending: false, isError: false }),
+  // summary query the status bar shows (a cache read, not a second request) — so the two mocks
+  // must AGREE. They did not: this one answered `undefined` while the api-path mock below answered
+  // a real date, so one query returned two answers depending on which import path reached it. That
+  // was invisible while the only consumer of this path was an announcement nothing asserted; the
+  // status bar reads it too (Graphite M7), and the disagreement surfaced immediately as a missing
+  // date on a screen the product renders correctly.
+  useScheduleSummary: () => query({ projectFinish: '2026-08-01' }),
 }));
 vi.mock('@/features/schedule/api/use-schedule', () => ({
   useRecalculate: () => ({ mutate: vi.fn(), isPending: false }),
@@ -250,8 +255,9 @@ function rowLens(name: string): HTMLElement {
 describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
   it('renders the two command rows over the canvas', () => {
     renderScreen();
-    expect(screen.getByRole('toolbar', { name: 'View and navigate' })).toBeInTheDocument();
-    expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
+    // One command strip and the rail's mode cluster — two toolbars, not three (Graphite M5).
+    expect(screen.getByRole('toolbar', { name: 'Plan commands' })).toBeInTheDocument();
+    expect(screen.queryByRole('toolbar', { name: 'Build and manage' })).toBeNull();
     expect(screen.getByTestId('tsld-panel')).toBeInTheDocument();
     // Row 1 · Look hosts Fit; Row 2 · Do hosts Add activity.
     expect(screen.getByRole('button', { name: 'Fit to plan' })).toBeInTheDocument();
@@ -286,7 +292,7 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('shows the Project-finish read-out on the identity line, above the commands (M2-T3/M4-T2)', () => {
+  it('shows the Project-finish read-out in the status bar, not in the strip (Graphite M7)', () => {
     // This assertion kept passing across the M2-T3 move without being touched, because it was scoped
     // to the document — which is exactly why it was rewritten rather than left alone. A test that
     // passes for a new reason is worse than one that fails: it reads as coverage of a thing it has
@@ -312,15 +318,24 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     // gate scopes its sweep to that element), so while the chip sat outside and to its right the
     // `⋯` could never be the row's last thing — which is what the product owner saw.
     //
-    // So the assertions invert: it renders, it IS inside the toolbar, and it is NOT a roving stop.
+    // **And a fifth time, for Graphite M5 — the assertions invert back.** M5-T1 measured the reduced
+    // strip not fitting at 768, 960, 1280 or 1440, and this read-out is 127 px of it. It moved to
+    // the identity line, which already carries the breadcrumb, the status badge and the edit pencil.
+    //
+    // **A sixth, for Graphite M7, and this one is the argument reaching its end rather than another
+    // reversal.** M5 called the identity line "the interim home, not a second decision"; ADR-0099 D5
+    // gives the status bar the job of carrying facts, and a finish date is one. It is there now, and
+    // there is nowhere further for it to go.
+    //
+    // Still three assertions, for the reason four of the six rewrites have needed: "it is not in the
+    // toolbar" passes equally against a read-out that has been DELETED. So — it renders, it is in
+    // the status row, and it is not a roving stop anywhere.
     const finish = screen.getByText('Finish');
     expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
 
-    const row1 = screen.getByRole('toolbar', { name: 'View and navigate' });
-    expect(row1.contains(finish)).toBe(true);
-    // The whole of what M2-T3 was protecting, asserted directly rather than via placement.
-    const item = finish.closest('[data-toolbar-item]') ?? finish.closest('span');
-    expect(item?.querySelector('[data-toolbar-focusable]')).toBeNull();
+    expect(finish.closest('[data-chrome-slot="status"]')).not.toBeNull();
+    const row1 = screen.getByRole('toolbar', { name: 'Plan commands' });
+    expect(row1.contains(finish)).toBe(false);
     expect(finish.closest('[data-toolbar-focusable]')).toBeNull();
   });
 

@@ -182,12 +182,12 @@ export async function selectedActivityId(page: Page): Promise<string | null> {
 
 /** The find/look toolbar row, which carries the search field and the frame commands. */
 export function lookToolbar(page: Page): Locator {
-  return page.getByRole('toolbar', { name: 'View and navigate' });
+  return page.getByRole('toolbar', { name: 'Plan commands' });
 }
 
 /** The toolbar row that carries the authoring cluster (Add / Link). */
 export function doToolbar(page: Page): Locator {
-  return page.getByRole('toolbar', { name: 'Build and manage' });
+  return page.getByRole('toolbar', { name: 'Plan commands' });
 }
 
 /** The search field itself — located by its accessible name, which is what an assumption breaks on. */

@@ -122,3 +122,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0096](0096-deleted-work-expires-and-purge-is-refused.md)                 | Deleted work expires, and purge is refused         | Accepted           |
 | [0097](0097-a-theme-is-a-system-not-a-palette.md)                         | A theme is a system, not a palette                 | Accepted           |
 | [0098](0098-the-landing-is-the-organisation-overview.md)                  | The landing is the organisation overview           | Accepted           |
+| [0099](0099-graphite-the-workstation-in-rail-chrome.md)                   | Graphite — workstation density in rail chrome      | Accepted           |

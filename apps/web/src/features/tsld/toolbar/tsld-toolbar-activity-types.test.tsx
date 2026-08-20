@@ -41,7 +41,7 @@ function openTypeMenu(): HTMLElement {
 function renderDoRow(context: TsldToolbarContext) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
-    <Toolbar items={rows.do} context={context} label="Build and manage" authoringEnabled />,
+    <Toolbar items={rows.strip} context={context} label="Plan commands" authoringEnabled />,
   );
 }
 
@@ -83,7 +83,7 @@ describe('TSLD toolbar — on-canvas advanced activity types (flag on)', () => {
     // `Linking · FS`); once a start is picked it flips to the finish driver.
     const rows = splitByRow(buildTsldToolbarItems());
     const doToolbar = (context: TsldToolbarContext) => (
-      <Toolbar items={rows.do} context={context} label="Build and manage" authoringEnabled />
+      <Toolbar items={rows.strip} context={context} label="Plan commands" authoringEnabled />
     );
     const { rerender } = render(doToolbar(ctx({ isLoeSpanning: true, loeStartPicked: false })));
     expect(screen.getByRole('button', { name: 'Pick start driver' })).toBeInTheDocument();

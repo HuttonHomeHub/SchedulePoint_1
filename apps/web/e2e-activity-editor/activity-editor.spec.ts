@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+
 import {
   addActivity,
   createAndOpenPlan,
@@ -36,7 +38,7 @@ test('a planner edits two scopes in one session, and the second save carries the
   await addActivity(page, 'Erect frame');
 
   await openEditor(page, 'Erect frame', 'Edit');
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
 
   // General first.
   await expect(editor.getByRole('tab', { name: 'General', selected: true })).toBeVisible();
@@ -73,7 +75,7 @@ test('Report progress and Steps open the same editor on the Progress tab', async
   await addActivity(page, 'Pour slab');
 
   await openEditor(page, 'Pour slab', 'Report progress');
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
   await expect(editor.getByRole('tab', { name: 'Progress', selected: true })).toBeVisible();
   // The three panels the epic co-located, each headed by what it does to the schedule.
   await expect(editor.getByRole('heading', { name: 'Reported progress' })).toBeVisible();
@@ -101,7 +103,7 @@ test('weighted steps save, then take over the physical % with a reason', async (
   await addActivity(page, 'Fit windows');
 
   await openEditor(page, 'Fit windows', 'Steps');
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
 
   // Before any steps, the manual physical % is the planner's to set.
   await expect(editor.getByLabel('Physical % complete')).toBeEnabled();
@@ -134,7 +136,7 @@ test('losing the pen shuts the definition scopes and leaves progress open', asyn
   await releasePen(page);
 
   await openEditor(page, 'Strip formwork', 'Report progress');
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
 
   // Progress is never pen-gated (ADR-0028 Q-C) — and it really saves, against the enforcing API.
   await editor.getByLabel('Percent complete').fill('40');
@@ -172,11 +174,21 @@ test('asks before discarding unsaved work on Escape', async ({ page }) => {
   await addActivity(page, 'Backfill');
 
   await openEditor(page, 'Backfill', 'Edit');
-  const editor = page.getByRole('dialog').first();
+  const editor = activityEditor(page);
   await editor.getByLabel('Name').fill('Backfill and compact');
 
-  // The Escape reflex is precisely the case this guard exists for — and with up to three scopes
-  // independently dirty, it now risks three forms' work rather than one.
+  /**
+   * The Escape reflex is precisely the case this guard exists for — and with up to three scopes
+   * independently dirty, it risks three forms' work rather than one.
+   *
+   * **This assertion went red at ADR-0099 M10 and was right the whole time.** Moving the editor into
+   * the drawer took away the platform reflex it had been resting on: a `<dialog>`'s `cancel` fires
+   * wherever focus is, and a drawer has no such thing, while the shell's own Escape rung defers to
+   * text entry (ADR-0079) — so with the caret in this very field Escape did nothing at all. The
+   * first fix was to rewrite this test to assert the new behaviour, which is the failure this
+   * repository records most often: changing the test to match the code instead of deciding what the
+   * product should do. Reverted, and the editor got the Escape rung the modal had for free.
+   */
   await page.keyboard.press('Escape');
   const confirm = page.getByRole('alertdialog', { name: 'Discard unsaved changes?' });
   await expect(confirm).toBeVisible();
@@ -209,7 +221,7 @@ test('a planner adds a link from the Logic tab, and the row appears in Predecess
   await addActivity(page, 'Pour slab');
 
   await openEditor(page, 'Pour slab', 'Logic');
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
   await expect(editor.getByRole('tab', { name: /Logic/, selected: true })).toBeVisible();
 
   await editor.getByLabel('Predecessor activity').selectOption({ label: 'Excavate' });
@@ -245,7 +257,7 @@ test('without the pen, the Logic tab is read-only and the server refuses a write
   await releasePen(page);
 
   await openEditor(page, 'Pour slab', 'Logic');
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
   // Shaded with the reason, not hidden and not silently inert.
   const add = editor.getByRole('button', { name: 'Add link' });
   await expect(add).toHaveAttribute('aria-disabled', 'true');
@@ -300,7 +312,7 @@ test('a resource assigned from the Resources tab persists', async ({ page }) => 
   }, orgSlug);
 
   await openEditor(page, 'Pour slab', 'Resources');
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
   await expect(editor.getByRole('tab', { name: /Resources/, selected: true })).toBeVisible();
   // The picker is the shared searched Combobox (`VITE_LIBRARY_SCOPING` is default-on), not a
   // native select — the `e2e-library` precedent.

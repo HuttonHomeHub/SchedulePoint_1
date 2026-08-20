@@ -156,15 +156,39 @@ export function NoteItem({
     );
   });
 
+  /**
+   * **Focus moves in an effect, not beside the close** — and the difference is a race I lost twice.
+   *
+   * The precedent this followed (`ClientsTable`, `ActivityLogicPanel`) is
+   * `flushSync(close); …; focus()`, on the reasoning that focusing outside a still-modal `<dialog>`
+   * is a no-op. That is true, and it is not sufficient: `Dialog` calls `dialog.close()` from a
+   * PASSIVE effect, and whether `flushSync` has flushed that effect by the time it returns is not
+   * something the caller can rely on. When it has not, the order becomes focus-the-region →
+   * `close()` → the browser restores focus to the Delete button → the row unmounts → `<body>`.
+   * WCAG 2.4.3, intermittently, which is exactly how it presented: `e2e-notes` passed once and
+   * failed twice on the same code.
+   *
+   * Arming a flag and focusing from an effect makes the ordering a property of React rather than of
+   * `flushSync`: effects run child-first, so `Dialog`'s close has already happened by the time this
+   * one runs. `deleting` is in the dependency list so it fires on the transition rather than every
+   * commit.
+   */
+  const focusRegionAfterClose = useRef(false);
+  useEffect(() => {
+    if (deleting || !focusRegionAfterClose.current) return;
+    focusRegionAfterClose.current = false;
+    onFocusRegion();
+  }, [deleting, onFocusRegion]);
+
   const confirmDelete = (): void => {
     setDeleteError(null);
     remove.mutate(note.id, {
       onSuccess: () => {
-        // Close the dialog synchronously before the row unmounts on refetch, then move focus to the
-        // thread region so it doesn't fall to <body> (the ClientsTable/DependencyEditor precedent).
+        focusRegionAfterClose.current = true;
+        // Still synchronous, so the dialog is gone before the row unmounts on refetch. What moved
+        // is only WHERE focus is claimed — see the docblock above.
         flushSync(() => setDeleting(false));
         announce('Note deleted.');
-        onFocusRegion();
       },
       onError: (error) => setDeleteError(error.message),
     });

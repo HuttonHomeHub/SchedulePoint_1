@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * **The designed chrome band, flag ON** (`VITE_DESIGNED_CHROME=true`, ADR-0055 S2).
+ * **The designed chrome band** (ADR-0055 S2). The flag it used to pin ON retired in Graphite
+ * M2, so this now covers the shell unconditionally — which is the shipped one either way.
  *
  * A sibling of `playwright.designed-ui.config.ts`, which deliberately stays flag-OFF so the
  * shipped default surface keeps its four-theme accessibility scan. This one proves the three
@@ -54,7 +55,6 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            env: { VITE_DESIGNED_CHROME: 'true' },
           },
         ],
       }),

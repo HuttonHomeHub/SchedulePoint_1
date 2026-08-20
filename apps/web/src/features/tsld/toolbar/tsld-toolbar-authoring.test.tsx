@@ -38,9 +38,9 @@ function doRow(context: TsldToolbarContext, authoringEnabled = true) {
   const rows = splitByRow(buildTsldToolbarItems());
   return (
     <Toolbar
-      items={rows.do}
+      items={rows.strip}
       context={context}
-      label="Build and manage"
+      label="Plan commands"
       authoringEnabled={authoringEnabled}
     />
   );

@@ -39,16 +39,26 @@ const arg = (name) => {
 const stamp = Date.now();
 const password = 'correct-horse-battery';
 
-/** Sign up and create an organisation; returns the slug. Each run gets its own tenant. */
-async function onboard(page) {
-  const slug = `shoot-co-${stamp}`;
+/**
+ * Sign up and create an organisation; returns the slug. Each run gets its own tenant.
+ *
+ * **The tenant is per WIDTH, not per run**, and that is a repair rather than a nicety: the
+ * identity was `shoot-${stamp}` alone, so the first width onboarded and every later one tried to
+ * sign up an address that already existed, sat on the organisation heading and threw after 30 s.
+ * The harness could therefore only ever complete ONE of its three widths — and it reported that
+ * as an uncaught exception AFTER writing a full, correct-looking set of pictures for 1646, which
+ * is the shape of failure this file's own docblock is about (2026-08-19).
+ */
+async function onboard(page, width) {
+  const id = `${stamp}-${width}`;
+  const slug = `shoot-co-${id}`;
   await page.goto(`${BASE}/sign-up`);
   await page.getByLabel('Full name').fill('Ada Lovelace');
-  await page.getByLabel('Email').fill(`shoot-${stamp}@example.com`);
+  await page.getByLabel('Email').fill(`shoot-${id}@example.com`);
   await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: /create an account/i }).click();
   await page.getByRole('heading', { name: /create your organisation/i }).waitFor();
-  await page.getByLabel('Organisation name').fill(`Shoot Co ${stamp}`);
+  await page.getByLabel('Organisation name').fill(`Shoot Co ${id}`);
   await page.getByRole('button', { name: /create organisation/i }).click();
   await page.waitForURL(new RegExp(`/orgs/${slug}`));
   return slug;
@@ -97,6 +107,60 @@ async function seed(page, slug) {
   console.log(`      seeded ${created} plans`);
 }
 
+/**
+ * Seed ONE plan with a real programme — six linked activities of differing durations, recalculated
+ * — and return its id.
+ *
+ * **Separate from {@link seed} because that one photographs a lie.** It gives each plan a single
+ * five-day activity called "Pour slab", which is ample for a table screen and useless for the
+ * canvas: the diagram renders one bar in the first week and 90 % hatching, so the shot looks like
+ * a seeding artefact rather than what it is. The plan workspace is the one screen where the CONTENT
+ * is the design under review, so it gets content.
+ */
+async function seedProgramme(page, slug) {
+  return page.evaluate(async (org) => {
+    const post = async (path, body) => {
+      const response = await fetch(`/api/v1/organizations/${org}${path}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`${path}: ${response.status} ${await response.text()}`);
+      return (await response.json()).data;
+    };
+    const client = await post('/clients', { name: 'Northgate Developments' });
+    const project = await post(`/clients/${client.id}/projects`, { name: 'Riverside Quarter' });
+    const plan = await post(`/projects/${project.id}/plans`, {
+      name: 'Riverside — Phase 2 Substructure',
+      plannedStart: '2026-01-05',
+    });
+    await post(`/plans/${plan.id}/edit-lock`, {});
+    const made = [];
+    const work = [
+      ['A1000', 'Site setup & hoarding', 5],
+      ['A1010', 'Excavate to formation', 8],
+      ['A1020', 'Blind & reinforce', 6],
+      ['A1030', 'Pour ground slab', 4],
+      ['A1040', 'Cure & strike', 7],
+      ['A1050', 'Erect frame — core', 12],
+    ];
+    for (const [code, name, durationDays] of work) {
+      made.push(await post(`/plans/${plan.id}/activities`, { name, code, durationDays }));
+    }
+    // A chain, so the canvas draws logic rather than a column of unrelated bars starting on the
+    // data date — which is exactly how the pre-repair screenshot read.
+    for (let i = 1; i < made.length; i += 1) {
+      await post(`/plans/${plan.id}/dependencies`, {
+        predecessorId: made[i - 1].id,
+        successorId: made[i].id,
+      });
+    }
+    await post(`/plans/${plan.id}/schedule/recalculate`, {});
+    return plan.id;
+  }, slug);
+}
+
 const SHOTS = [
   { name: 'sign-in', signedOut: true, go: (p) => p.goto(`${BASE}/sign-in`) },
   { name: 'sign-up', signedOut: true, go: (p) => p.goto(`${BASE}/sign-up`) },
@@ -110,6 +174,23 @@ const SHOTS = [
   { name: 'resources', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/resources`) },
   { name: 'members', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/members`) },
   { name: 'recently-deleted', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/recently-deleted`) },
+  // **The plan workspace, which this harness omitted for its whole existence.** Nine screens were
+  // shot and the TSLD canvas — the product's reason to exist, and the subject of four consecutive
+  // epics of command-surface work — was not one of them. The design-system work had this camera and
+  // the toolbar work had a ruler, so the screen that needed the camera fell in the gap between two
+  // workstreams and was argued from band heights for months. Both pen states, because the shaded
+  // read-only row is what a reader actually arrives to and it looks nothing like the editing one.
+  {
+    name: 'plan-workspace',
+    programme: true,
+    go: (p, slug, planId) => p.goto(`${BASE}/orgs/${slug}/plans/${planId}`),
+  },
+  {
+    name: 'plan-workspace-readonly',
+    programme: true,
+    releasePen: true,
+    go: (p, slug, planId) => p.goto(`${BASE}/orgs/${slug}/plans/${planId}`),
+  },
 ];
 
 // `--only` takes a comma-separated list. It was a single name until two consecutive runs of
@@ -155,8 +236,9 @@ for (const width of widths) {
   // One context per width, so the sign-up happens once and every authenticated shot reuses it.
   const context = await browser.newContext({ viewport: { width, height: 1000 } });
   const page = await context.newPage();
-  const slug = wanted.some((s) => !s.signedOut) ? await onboard(page) : null;
+  const slug = wanted.some((s) => !s.signedOut) ? await onboard(page, width) : null;
   let seeded = false;
+  let planId = null;
 
   for (const shot of wanted) {
     if (shot.signedOut) {
@@ -172,8 +254,37 @@ for (const width of widths) {
         await seed(page, slug);
         seeded = true;
       }
-      await shot.go(page, slug);
+      if (shot.programme && !planId) planId = await seedProgramme(page, slug);
+      await shot.go(page, slug, planId);
+      // **A shot that photographed a 404 reported success.** The first run of `plan-workspace`
+      // used the wrong route, wrote a picture of "Not Found", and printed the shot's name as
+      // though it had worked — a green result about nothing, which is the failure class this
+      // repository keeps recording. A photograph nobody looks at is worth less than nothing, so
+      // the harness refuses to write one it can already tell is wrong.
+      if (
+        await page
+          .getByText('Not Found', { exact: true })
+          .isVisible()
+          .catch(() => false)
+      ) {
+        throw new Error(`${shot.name}: the page is a 404 — the route is wrong, not the screen.`);
+      }
       await page.waitForLoadState('networkidle');
+      // The canvas paints from a ResizeObserver and an animation frame, neither of which
+      // `networkidle` waits for — a shot taken on the idle event alone catches an empty canvas and
+      // is indistinguishable from a canvas that IS empty, which is the confusion this whole shot
+      // exists to resolve.
+      if (shot.programme) await page.waitForTimeout(1200);
+      if (shot.releasePen) {
+        // The state a reader ARRIVES in. It is a different screen: five controls shade out, and
+        // the pen cluster changes width. Shooting only the editing state photographs the rarer half.
+        const stop = page.getByRole('button', { name: 'Stop editing' });
+        if (await stop.isVisible().catch(() => false)) {
+          await stop.click();
+          await page.getByRole('button', { name: 'Start editing' }).waitFor();
+          await page.waitForTimeout(400);
+        }
+      }
       await page.screenshot({ path: join(dir, `${shot.name}.png`) });
     }
     console.log(`${width}  ${shot.name}`);

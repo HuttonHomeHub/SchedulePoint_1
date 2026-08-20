@@ -105,6 +105,7 @@ function renderTable(
   return render(
     <QueryClientProvider client={queryClient}>
       <ActivitiesTable
+        onOpenEditor={() => {}}
         orgSlug="acme"
         planId="pl1"
         canEditSchedule={canEditSchedule}
@@ -289,6 +290,7 @@ describe('ActivitiesTable', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <ActivitiesTable
+          onOpenEditor={() => {}}
           orgSlug="acme"
           planId="pl1"
           canEditSchedule={false}
@@ -330,6 +332,7 @@ describe('ActivitiesTable — baseline variance', () => {
     return render(
       <QueryClientProvider client={queryClient}>
         <ActivitiesTable
+          onOpenEditor={() => {}}
           orgSlug="acme"
           planId="pl1"
           canEditSchedule={false}
@@ -345,7 +348,12 @@ describe('ActivitiesTable — baseline variance', () => {
     queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [ACTIVITY]);
     const { rerender } = render(
       <QueryClientProvider client={queryClient}>
-        <ActivitiesTable orgSlug="acme" planId="pl1" canEditSchedule={false} />
+        <ActivitiesTable
+          onOpenEditor={() => {}}
+          orgSlug="acme"
+          planId="pl1"
+          canEditSchedule={false}
+        />
       </QueryClientProvider>,
     );
     expect(screen.queryByRole('columnheader', { name: 'Finish variance' })).not.toBeInTheDocument();
@@ -354,6 +362,7 @@ describe('ActivitiesTable — baseline variance', () => {
     rerender(
       <QueryClientProvider client={queryClient}>
         <ActivitiesTable
+          onOpenEditor={() => {}}
           orgSlug="acme"
           planId="pl1"
           canEditSchedule={false}

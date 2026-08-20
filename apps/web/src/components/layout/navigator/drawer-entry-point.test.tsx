@@ -1,0 +1,183 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type * as ReactRouter from '@tanstack/react-router';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AppShell } from './app-shell';
+
+import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
+import {
+  useDrawerSubject,
+  useDrawerSubjectControls,
+  useDrawerSubjectShowing,
+} from '@/components/layout/drawer/drawer-subject';
+
+/**
+ * **The drawer's entry point, and where focus goes when its contents leave** (Graphite M10).
+ *
+ * The M10 gate pass found the M6 milestone's headline capability unreachable: `m6-activity-context.md`
+ * T4 says "the three ADR-0060 intents open the drawer", and registering a subject only ever made a
+ * rail button appear. Pressing **Edit** opened the modal at every width unless the planner had
+ * already discovered that button — ADR-0081's defect exactly, and invisible to every unit suite,
+ * because they mount the editor and not the shell.
+ *
+ * So these tests drive the **whole chain** rather than the callback: a probe route that registers a
+ * subject and asks for it, mounted inside the real shell, asserted by what a reader can see. The
+ * M6 spec's own words about a different seam apply here — *"testing the callback alone would prove
+ * the door opens and nothing about the room"*.
+ *
+ * The probe stands in for the plan workspace deliberately. Mounting the real one would need the
+ * plan's whole query surface, and what is under test is the shell's contract with **any** route.
+ */
+
+vi.mock('@tanstack/react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof ReactRouter>()),
+  Outlet: () => <ProbeRoute />,
+  useParams: () => ({}),
+  useRouterState: () => '/',
+  useNavigate: () => vi.fn(),
+  Link: ({
+    children,
+    to,
+    params: _params,
+    ...props
+  }: {
+    children: React.ReactNode;
+    to?: string;
+    params?: unknown;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a href={typeof to === 'string' ? to : '/'} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
+vi.mock('@/components/layout/app-header', () => ({ AppHeaderRow: () => null }));
+
+const PROBE_ICON = <span aria-hidden="true">i</span>;
+
+/** A route that offers the drawer a subject and asks for it, exactly as the plan workspace does. */
+function ProbeRoute(): React.ReactElement {
+  const [open, setOpen] = useState(false);
+  const controls = useDrawerSubjectControls();
+  const showing = useDrawerSubjectShowing();
+  useDrawerSubject({
+    label: 'Activity details',
+    icon: PROBE_ICON,
+    ...(open ? { title: 'Excavate' } : {}),
+  });
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          controls.show();
+        }}
+      >
+        Edit activity
+      </button>
+      <span data-testid="chrome">{showing ? 'drawer' : 'modal'}</span>
+      {showing ? (
+        <ChromePortal name="drawer">
+          <p>Activity fields</p>
+        </ChromePortal>
+      ) : null}
+    </div>
+  );
+}
+
+function renderShell(): void {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <AppShell />
+    </QueryClientProvider>,
+  );
+}
+
+/** `lg`+ unless a test says otherwise — the width at which the drawer exists at all. */
+function stubViewport(matchesLg: boolean): void {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: query.includes('64rem') ? matchesLg : false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  });
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  stubViewport(true);
+});
+
+describe('a route asking the shell to show its subject', () => {
+  it('opens the drawer on the registered subject, so the entry point is not the rail button alone', () => {
+    renderShell();
+    // Before: the drawer is on the Explorer and the route is in modal chrome.
+    expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
+    expect(screen.getByTestId('chrome')).toHaveTextContent('modal');
+    expect(screen.queryByText('Activity fields')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
+
+    // After: the drawer names the subject and hosts its markup, and the route knows to render in
+    // drawer chrome rather than opening a second copy of itself in a modal.
+    expect(screen.getByTestId('chrome')).toHaveTextContent('drawer');
+    expect(screen.getByText('Activity fields')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Excavate' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+  });
+
+  it('expands a drawer the planner had closed', () => {
+    renderShell();
+    // Close it first, the way a planner does.
+    fireEvent.click(screen.getByRole('button', { name: 'Project Explorer' }));
+    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
+    expect(screen.getByText('Activity fields')).toBeInTheDocument();
+  });
+
+  it('shows nothing below lg, so the route keeps its modal instead of portalling into a hidden slot', () => {
+    // The drawer's wrapper is `hidden lg:flex`. Without the viewport term in `showingContext` the
+    // editor portalled into a `display: none` slot and vanished with no fallback and no message —
+    // work not lost, but nothing on screen saying where it had gone.
+    stubViewport(false);
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
+    expect(screen.getByTestId('chrome')).toHaveTextContent('modal');
+    expect(screen.queryByText('Activity fields')).not.toBeInTheDocument();
+  });
+});
+
+describe('closing the drawer', () => {
+  it('puts focus on the rail button rather than dropping it to the body', () => {
+    // WCAG 2.4.3. The Close button lives inside the subtree the collapse unmounts, so the browser
+    // drops focus to `<body>` — which also silently disables every keyboard accelerator bound on
+    // the workspace root (the ADR-0080 M2 finding, in its third costume).
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
+    const railButton = screen.getByRole('button', { name: 'Activity details' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close context drawer' }));
+
+    expect(screen.queryByText('Activity fields')).not.toBeInTheDocument();
+    expect(railButton).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
+  });
+
+  it('puts focus on the rail button when Escape closes it', () => {
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
+    const railButton = screen.getByRole('button', { name: 'Activity details' });
+
+    fireEvent.keyDown(screen.getByRole('main'), { key: 'Escape' });
+
+    expect(railButton).toHaveFocus();
+  });
+});

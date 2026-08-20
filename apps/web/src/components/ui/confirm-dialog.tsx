@@ -14,6 +14,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = 'Delete',
+  cancelLabel = 'Cancel',
   pendingLabel = 'Deleting…',
   confirmVariant = 'destructive',
   pending = false,
@@ -25,6 +26,13 @@ export function ConfirmDialog({
   title: string;
   description?: string;
   confirmLabel?: string;
+  /**
+   * The dismiss button's label. `Cancel` is right when the confirmation guards one irreversible
+   * act; it is ambiguous when the dialog offers a **choice between two outcomes** — "cancel" the
+   * switch, or "cancel" the edit? The activity editor's subject-change guard says `Keep editing`,
+   * which names what pressing it does.
+   */
+  cancelLabel?: string;
   pendingLabel?: string;
   confirmVariant?: 'destructive' | 'default';
   pending?: boolean;
@@ -46,7 +54,7 @@ export function ConfirmDialog({
         ) : null}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {cancelLabel}
           </Button>
           <Button
             variant={confirmVariant}

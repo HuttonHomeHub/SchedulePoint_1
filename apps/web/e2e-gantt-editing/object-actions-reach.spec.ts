@@ -10,6 +10,8 @@ import {
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
+import { activityEditor } from '../e2e-support/activity-editor';
+import { clickToolbarCommand } from '../e2e-support/toolbar';
 
 /**
  * **Every remaining action the Gantt's object bar offers, driven from a Gantt selection.**
@@ -39,7 +41,7 @@ async function ganttPlanWithSelection(page: Page, stamp: number): Promise<string
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
   await ganttRow(page, 'Seeded 0').click();
   await expect(page.getByRole('toolbar', { name: /Actions for/ })).toBeVisible();
@@ -54,7 +56,7 @@ test('Resources opens the editor on its own scope', async ({ page }) => {
   const bar = page.getByRole('toolbar', { name: /Actions for/ });
 
   await bar.getByRole('button', { name: 'Resources' }).click();
-  const editor = page.getByRole('dialog');
+  const editor = activityEditor(page);
   await expect(editor).toBeVisible();
   // Routed to the scope the control names, not merely to the editor — the ADR-0060 per-scope
   // contract, which is the whole reason these entry routes exist rather than one "Edit".

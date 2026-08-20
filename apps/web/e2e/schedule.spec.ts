@@ -1,6 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+import { revealToolbarCommand } from '../e2e-support/toolbar';
+
 import { chooseComboboxOption, comboboxField } from './combobox';
 import { awaitComputedSchedule, showActivities } from './workspace';
 
@@ -77,7 +80,7 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   // overflow "Actions for …" menu (TECH_DEBT #38): open it, then choose Logic.
   await page.getByRole('button', { name: 'Actions for Pour slab' }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = activityEditor(page);
   // The add form is inline in the Logic tab of the activity editor (ADR-0061 §2 / ADR-0062), so
   // there is no sub-dialog to wait out before Close. `exact: true` disambiguates the editor's own
   // "Close" footer button from the dialog chrome's "Close dialog" ✕, whose accessible name is a
@@ -137,9 +140,19 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   //
   // It sits in **Schedule settings** on the workspace, not inline on the page: the legacy stacked
   // layout could afford a settings block beside the table, and the canvas-maximal one collects
-  // "everything that changes how this plan's dates are calculated" behind one Row-2 trigger
-  // (`Settings…`). So the dialog has to be opened before the picker exists.
-  await page.getByRole('button', { name: 'Settings…' }).click();
+  // "everything that changes how this plan's dates are calculated" behind one trigger. So the
+  // dialog has to be opened before the picker exists.
+  //
+  // **Located by registry id, wherever the ladder has put it** (Graphite M5 follow-up). This line
+  // clicked a top-level button named `Settings…` and started timing out the moment M5 merged the
+  // two command rows onto one budget: `calendar` carries `priority: -100`, so it is in the `⋯` at
+  // every width. The same defect as `e2e-library`'s — and it survived that fix because that one was
+  // found by grepping for `data-toolbar-item="calendar"` and this site names the COPY instead.
+  //
+  // Worse, it went unnoticed because `scripts/e2e-sweep.sh` does not include the base journey, so
+  // "change a screen, run the base journey" (ADR-0096's rule, `docs/TESTING.md`) is the only thing
+  // that catches it — and it is a rule rather than a gate.
+  await (await revealToolbarCommand(page, 'calendar')).click();
   await expect(page.getByRole('dialog', { name: 'Schedule settings' })).toBeVisible();
   const calendar = comboboxField(page, 'Calendar');
   await expect(calendar).toHaveValue('Standard');

@@ -210,6 +210,35 @@ keep `main` releasable.
   conflict-flavoured twin would be ADR-0093's defect reproduced inside one surface. The flag-on
   journey caught the epic's purpose inverting on its first run — the count's own read-out cannot
   demote, so it pushed the command it labels off the row in the only state the epic exists for.
+- **The plan workspace is a workstation, not a page** (ADR-0099, "Graphite"). A ground-up redesign
+  of the surface the product exists to be. The shell becomes a CSS grid — a leading-edge tool rail,
+  a stage, and a trailing context drawer — so the command band spans the drawer and opening it
+  changes the band by **zero pixels as geometry rather than as arithmetic**. The top bar is deleted
+  and the wordmark, organisation switcher and account chip move onto the rail.
+  It also settles the **plan command surface** — the one ADR-0031 built, where every canvas control
+  is declared as a registry item under one fixed seven-group taxonomy, rendered into a single APG
+  toolbar, with authoring gated as a group state rather than as a banner card. That decision put the
+  commands on **two rows**, and three later epics spent themselves making those rows fit. Graphite
+  merges them into one strip and moves the four **mode** segments to the rail, because ADR-0091's own
+  thesis is that **a mode is not a command** and a command row is the wrong home for one. The
+  registry, the taxonomy and the gating are untouched — only the number of rows that render them.
+  Measured, the chrome above the diagram falls
+  **240 → 135 px** and the canvas at the product owner's 1646 gains **18 %**.
+  **Two of the ADR's own claims were disproved by its own instruments before anything was deleted.**
+  It said the width ladder, band floors, hysteresis and the `⋯` overflow "become unnecessary and are
+  deleted with the row they served"; the measurement said the reduced strip does not fit at 1280, so
+  the ADR was corrected and all five were kept. And the merge's real cost was found rather than
+  predicted: eleven pinned `render` items now share one budget, so the strip stops fitting outright
+  below ~900 px and scrolls there instead (`docs/TECH_DEBT.md` #147). The flag-on journey then caught
+  ADR-0094's finding arriving back a epic later — the merged budget demoted **Next conflict** at 1646,
+  which is precisely the "a shading nobody opens the menu to see is not a shading" defect that ADR
+  was written to remove.
+  Four consecutive milestones then lost their headline task to a **re-read of the problem** — one of
+  which would have reversed ADR-0092 — because a plan's problem statement is a claim and nothing in
+  this process was re-verifying those. The activity editor moves out of a modal and into the drawer,
+  and the gate pass found that half of that had not happened: registering a subject made a rail
+  button appear and nothing more, so pressing **Edit** still opened the modal at every width. The
+  drawer, the redesign's headline surface, was reachable only by a gesture nothing suggested.
 - **The design system is a system rather than a palette** (ADR-0097). The product owner called the
   Corporate skin "a badly designed skin" and asked for it to become the theme the app is designed to,
   then widened the mandate until it was a ground-up rewrite. Reading the code turned the adjective

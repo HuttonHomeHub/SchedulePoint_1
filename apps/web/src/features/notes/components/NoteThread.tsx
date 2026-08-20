@@ -54,53 +54,63 @@ export function NoteThread({
     });
   };
 
-  if (thread.isPending) {
-    return (
-      <div className="py-6">
-        <Spinner label="Loading notes…" />
-      </div>
-    );
-  }
-
-  if (thread.isError) {
-    return (
-      <div
-        role="alert"
-        className="border-destructive-text/40 text-destructive-text rounded-lg border p-4 text-sm"
-      >
-        Couldn’t load notes. Please try again.
-      </div>
-    );
-  }
-
-  if (notes.length === 0) {
-    return (
-      <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-        No notes yet.
-      </div>
-    );
-  }
-
+  /**
+   * **ONE region, rendered in every state** — the sink's node identity must not depend on what the
+   * thread currently holds.
+   *
+   * `regionRef` was on the populated branch alone, and the first fix was to add it to the empty and
+   * error branches too. That was still wrong, and the browser said so: `onFocusRegion()` runs from a
+   * mutation callback, **before** the re-render that empties the list, so it focused the node that
+   * was about to unmount and the reader still landed on `<body>`. A stable wrapper is the only shape
+   * where "focus the region" means the same element before and after the update.
+   *
+   * Why it matters here at all: it is WCAG 2.4.3, it is pre-existing, and it was invisible for as
+   * long as the editor was a modal — a `<dialog>`'s `cancel` fires wherever focus is, so Escape kept
+   * working and nobody could tell. ADR-0099 put the editor in a drawer, whose Escape rung is a React
+   * handler and therefore cannot see a keypress on `<body>`; a journey went red on the second Escape
+   * while the first, with a note still in the list, kept passing. Found with a probe reading
+   * `document.activeElement`, after two guesses had been wrong.
+   */
   return (
     <div
       ref={regionRef}
       tabIndex={-1}
-      className={cn('flex flex-col gap-2 outline-none', bounded && 'max-h-64 overflow-y-auto pr-1')}
+      className={cn(
+        'flex flex-col gap-2 outline-none',
+        bounded && notes.length > 0 && 'max-h-64 overflow-y-auto pr-1',
+      )}
     >
-      <ul className="flex flex-col gap-2">
-        {notes.map((note, index) => (
-          <NoteItem
-            key={note.id}
-            orgSlug={orgSlug}
-            target={target}
-            note={note}
-            position={index + 1}
-            currentUserId={currentUserId}
-            onThreadStale={() => void thread.refetch()}
-            onFocusRegion={() => regionRef.current?.focus()}
-          />
-        ))}
-      </ul>
+      {thread.isPending ? (
+        <div className="py-6">
+          <Spinner label="Loading notes…" />
+        </div>
+      ) : thread.isError ? (
+        <div
+          role="alert"
+          className="border-destructive-text/40 text-destructive-text rounded-lg border p-4 text-sm"
+        >
+          Couldn’t load notes. Please try again.
+        </div>
+      ) : notes.length === 0 ? (
+        <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+          No notes yet.
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {notes.map((note, index) => (
+            <NoteItem
+              key={note.id}
+              orgSlug={orgSlug}
+              target={target}
+              note={note}
+              position={index + 1}
+              currentUserId={currentUserId}
+              onThreadStale={() => void thread.refetch()}
+              onFocusRegion={() => regionRef.current?.focus()}
+            />
+          ))}
+        </ul>
+      )}
       {thread.hasNextPage ? (
         <div className="flex justify-center">
           <Button

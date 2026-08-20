@@ -1,9 +1,8 @@
 import { ChromeSlot, ChromeSlotProvider, useChromeSlot } from './chrome-slot';
 import { HelpActionProvider } from './help-action';
 
-import { AppHeader, AppHeaderRow } from '@/components/layout/app-header';
+import { AppHeaderRow } from '@/components/layout/app-header';
 import { Surface } from '@/components/ui/surface';
-import { DESIGNED_CHROME_ENABLED } from '@/config/env';
 
 /**
  * The **chrome band** (ADR-0055 §3): the header row and, when a plan is open, its two toolbar
@@ -13,39 +12,89 @@ import { DESIGNED_CHROME_ENABLED } from '@/config/env';
  * portal anything into it. That keeps ADR-0029's contract intact — the shell mounts once, knows
  * nothing about plans, and does not remount when one opens.
  *
- * Height is content-driven rather than fixed, so a screen with no plan is one row and a plan is
- * three. A fixed height would either waste a strip on every non-plan screen or clip the toolbar.
+ * **Graphite M2 splits the band's two jobs apart.** It used to be one component that both
+ * *provided* the slots and *wrapped* the rest of the app, which is fine in a flex column and
+ * impossible in a grid: the band and the body have to be siblings in the same grid, not nested.
+ * So {@link ChromeSlotHost} is now the provider (structure-free, wraps everything) and
+ * {@link ChromeBandRow} is the row itself (placed by the shell into grid row 1). {@link ChromeBand}
+ * survives as the flag-off composition of the two, so the ~35 suites that mount it are untouched.
  */
 export function ChromeBand({ children }: { children: React.ReactNode }): React.ReactElement {
   const rows = useChromeSlot();
-  const identity = useChromeSlot();
-
-  if (!DESIGNED_CHROME_ENABLED) {
-    // Flag off: today's shell exactly — a header, then everything else. `ChromePortal` is an
-    // identity wrapper in this state, so the toolbar renders in place inside the workspace.
-    return (
-      <HelpActionProvider>
-        <AppHeader />
-        {children}
-      </HelpActionProvider>
-    );
-  }
 
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider nodes={{ rows: rows.node, identity: identity.node }}>
-        {/* `z-20` clears the canvas ruler's `z-10` (TsldCanvas) and the resizer, so a scrolled
-          workspace never rides over the band. The `Sheet` drawer is a native `<dialog>` in the
-          top layer, which is above every z-index — the drawer still covers the band, correctly. */}
-        <Surface tone="chrome" className="border-border sticky top-0 z-20 border-b">
-          {/* A plan's identity line portals into the header ROW (ADR-0097 D1b), not into a row of
-              its own — the merge ADR-0092 M5 withdrew for want of the width D1a freed by moving the
-              organisation nav to the rail. The slot is empty on every screen that is not a plan and
-              the band's height is content-driven, so nothing is reserved for it. */}
-          <AppHeaderRow identitySlot={<ChromeSlot slotRef={identity.slotRef} name="identity" />} />
-          <ChromeSlot slotRef={rows.slotRef} />
-        </Surface>
+      <ChromeSlotProvider nodes={{ rows: rows.node }}>
+        <ChromeBandRow rowsSlotRef={rows.slotRef} />
         {children}
+      </ChromeSlotProvider>
+    </HelpActionProvider>
+  );
+}
+
+/**
+ * The band's **row**, with no opinion about what sits beneath it — so a grid shell can place it in
+ * row 1 and put the body in row 2 as a sibling.
+ *
+ * `sticky` is gone and is not missed: it existed because the document scrolled, and the shell is
+ * now exactly the viewport with `<main>` as the scroller. `z-20` stays — it clears the canvas
+ * ruler's `z-10` and the rail resizer, so a scrolled workspace never rides over the band. A `Sheet`
+ * is a native `<dialog>` in the top layer, above every z-index, and still covers the band correctly.
+ */
+export function ChromeBandRow({
+  rowsSlotRef,
+  className,
+}: {
+  rowsSlotRef: (node: HTMLDivElement | null) => void;
+  className?: string;
+}): React.ReactElement {
+  return (
+    <Surface tone="chrome" className={`border-border z-20 border-b ${className ?? ''}`}>
+      {/* **Below `lg` only** (Graphite M3). At `lg`+ the Project Explorer rail is the leading
+          column top to bottom and carries the brand, the switcher and the account itself, so the
+          top bar is deleted and the band starts with the plan's own rows. Below `lg` the rail is
+          an off-canvas `Sheet` with nothing pinned to open it, so the bar survives there to carry
+          the trigger. */}
+      <div className="lg:hidden">
+        <AppHeaderRow />
+      </div>
+      <ChromeSlot slotRef={rowsSlotRef} />
+    </Surface>
+  );
+}
+
+/**
+ * The slot **provider** with no layout of its own — the half a grid shell needs, since it must
+ * wrap the whole grid while the band's row sits inside it.
+ */
+export function ChromeSlotHost({
+  children,
+}: {
+  children: (slots: {
+    rowsSlotRef: (node: HTMLDivElement | null) => void;
+    railSlotRef: (node: HTMLDivElement | null) => void;
+    drawerSlotRef: (node: HTMLDivElement | null) => void;
+    statusSlotRef: (node: HTMLDivElement | null) => void;
+  }) => React.ReactNode;
+}): React.ReactElement {
+  const rows = useChromeSlot();
+  const rail = useChromeSlot();
+  // The trailing drawer's body (Graphite M6-T2). Mounted only while the drawer shows the registered
+  // `'context'` subject, so a route's portal renders `null` the rest of the time rather than
+  // painting into a hidden node — `ChromePortal`'s existing "no slot, no children" contract.
+  const drawer = useChromeSlot();
+  const status = useChromeSlot();
+  return (
+    <HelpActionProvider>
+      <ChromeSlotProvider
+        nodes={{ rows: rows.node, rail: rail.node, drawer: drawer.node, status: status.node }}
+      >
+        {children({
+          rowsSlotRef: rows.slotRef,
+          railSlotRef: rail.slotRef,
+          drawerSlotRef: drawer.slotRef,
+          statusSlotRef: status.slotRef,
+        })}
       </ChromeSlotProvider>
     </HelpActionProvider>
   );

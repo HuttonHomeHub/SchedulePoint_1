@@ -162,7 +162,16 @@ export function bandIsAtLeast(layout: ToolbarLayoutMode, atLeast: ToolbarLayoutM
  * shades as a set). Absent ⇒ `look`. The workspace renders one {@link Toolbar} per row, so this only
  * partitions items — grouping, tiering, gating and overflow are unchanged within each row.
  */
-export type ToolbarRow = 'mode' | 'look' | 'do';
+/**
+ * `mode` is the tool rail's vertical cluster; `strip` is the one command row.
+ *
+ * **`look` and `do` merged at Graphite M5.** ADR-0031's two-row amendment split the surface into
+ * "what you look at" and "what you build with", and four epics then spent themselves making both
+ * rows fit. One row of commands is the shape ADR-0099 chose, and `TOOLBAR_GROUPS` was already a
+ * menu structure — `frame · lens · find · tools · object · output · help` — so the merge is a
+ * deletion of the split rather than a re-grouping.
+ */
+export type ToolbarRow = 'mode' | 'strip';
 
 /**
  * What the row's current width means, handed to the two places a consumer can act on it: an item's
@@ -443,7 +452,7 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
   const rowByGroup = new Map<string, ToolbarRow>();
   for (const item of items) {
     if (!item.demotionGroup) continue;
-    const row = item.row ?? 'look';
+    const row = item.row ?? 'strip';
     const seen = rowByGroup.get(item.demotionGroup);
     if (seen === undefined) rowByGroup.set(item.demotionGroup, row);
     else if (seen !== row) {
@@ -471,8 +480,8 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
  * which is what makes it worth the extra three lines (ADR-0091 M1, B1).
  */
 export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, ToolbarItem<Ctx>[]> {
-  const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { mode: [], look: [], do: [] };
-  for (const item of items) rows[item.row ?? 'look'].push(item);
+  const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { mode: [], strip: [] };
+  for (const item of items) rows[item.row ?? 'strip'].push(item);
   return rows;
 }
 

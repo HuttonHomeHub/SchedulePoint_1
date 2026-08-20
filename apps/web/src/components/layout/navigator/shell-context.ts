@@ -4,7 +4,7 @@ import { createContext, useContext } from 'react';
  * Shell services the {@link AppShell} exposes to chrome rendered inside it (notably
  * the header's drawer toggle below `lg`). `null` when there is no persistent shell, so consumers
  * render nothing extra. Since `VITE_NAV_TREE` retired that means one case rather than two: chrome
- * rendered outside {@link AppShell}, which today is the `DESIGNED_CHROME`-off header.
+ * rendered outside {@link AppShell}.
  */
 export interface ShellContextValue {
   /** Open the navigator rail as an off-canvas drawer (small screens). */

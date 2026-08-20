@@ -49,7 +49,7 @@ const STAMP = Date.now() + 3000;
 
 /** The command surface's Row 1, which carries the find group. */
 function lookRow(page: Page) {
-  return page.getByRole('toolbar', { name: 'View and navigate' });
+  return page.getByRole('toolbar', { name: 'Plan commands' });
 }
 
 /** The canvas dock's selection bar, whatever activity it currently names. */
@@ -278,11 +278,16 @@ test.describe('Conflict review', () => {
     await expect(remedy).toContainText('Review the constraint…');
 
     await remedy.click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('Steel beam');
+    // **The editor lands in the context drawer, not a modal** (Graphite M10). This read
+    // `getByRole('dialog')` until the M10 gate pass wired up the entry point `m6-activity-context.md`
+    // T4 claimed and had not built — before that fix every editor intent opened the modal, at every
+    // width, and this assertion passed for the reason the epic exists to remove. The claim it makes
+    // is unchanged: the route arrives at the constraint, on the right tab, for the right activity.
+    // The drawer's `aria-label` is its subject, so naming it asserts the activity too.
+    const editor = page.getByRole('complementary', { name: 'Steel beam' });
+    await expect(editor).toBeVisible();
     await expect(
-      dialog.getByRole('tab', { name: 'Scheduling', selected: true }),
+      editor.getByRole('tab', { name: 'Scheduling', selected: true }),
       'send someone to fix a constraint and they should arrive where the constraint is — the ' +
         'General tab would be the editor opening, not the route working',
     ).toBeVisible();

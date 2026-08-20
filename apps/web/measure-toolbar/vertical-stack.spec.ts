@@ -30,6 +30,9 @@ const VIEWPORTS = [
   // which is how both epics shipped decisions taken against widths nobody uses.
   { width: 1646, height: 1097 },
   { width: 1440, height: 960 },
+  // 1280 is the width ADR-0091's retrospective recorded the header merge failing at ("~1170 px of
+  // identity against ~861 px available"), so it is the one the Graphite M3 merge has to clear.
+  { width: 1280, height: 900 },
 ];
 
 interface BandHeight {
@@ -59,9 +62,12 @@ async function stackHeights(page: Page): Promise<unknown> {
     // band is their common parent.
     const rowOf = (label: string): Element | null =>
       document.querySelector(`[role="toolbar"][aria-label="${label}"]`)?.parentElement ?? null;
-    const rowLook = rowOf('View and navigate');
-    const rowDo = rowOf('Build and manage');
-    const commandBand = rowLook?.parentElement ?? null;
+    // **One strip since Graphite M5.** ADR-0031's Look/Do split is deleted, so there is one row of
+    // commands. It is still located by its `role`+name rather than by position: a band that cannot
+    // be found must throw, which is this harness's own rule and the reason the ADR-0090 M5 gap was
+    // findable at all.
+    const rowStrip = rowOf('Plan commands');
+    const commandBand = rowStrip?.parentElement ?? null;
 
     // The **identity line** — plan name, status, edit pencil, mode toolbar, pen status.
     //
@@ -75,20 +81,35 @@ async function stackHeights(page: Page): Promise<unknown> {
     // actually targets rather than a position that happens to be right today. The prior lookup
     // would now throw — correctly: this harness's own rule is that a band it cannot find is a
     // failure, not a `null` that filters away. That rule is why the move is visible here at all.
-    const identityRow = document.querySelector('[data-chrome-slot="identity"]');
+    // Graphite M3 merged it into the mode row, so it is no longer a portal target at all — it is
+    // the mode row's leading child, found by the breadcrumb it carries. That the previous lookup
+    // (`[data-chrome-slot="identity"]`) still resolves to an EMPTY div is exactly why it cannot be
+    // used: it would report a band of height 0 and read as a merge that cost nothing, when what is
+    // wanted is the width the identity takes inside the row it joined.
+    const identityRow = document.querySelector('[data-plan-identity]');
 
     // **The shell's own chrome band** (ADR-0055 S2), which sits above everything the plan owns and
     // which `design.md` §2.1 does not account for at all. Located as the command band's nearest
-    // `sticky` ancestor — the toolbar rows portal INTO this band, so the relationship is structural
-    // rather than a class match.
+    // ancestor carrying the `chrome` surface scope — the toolbar rows portal INTO this band, so the
+    // relationship is structural rather than a class match.
+    //
+    // **It used to be found by `position: sticky`, and Graphite M2 took that away**: the shell is
+    // one CSS grid that is exactly the viewport, with `<main>` as the scroller, so nothing needs to
+    // stick to a document that no longer scrolls. The band throwing rather than reporting `null` is
+    // this harness's own rule working — the same rule ADR-0091's retrospective records catching a
+    // missing band by arithmetic five milestones too late. `[data-surface]` is the seam the scope
+    // actually stamps, so it cannot rot the way a computed-style probe just did.
     const chromeBand = (() => {
       for (let el = commandBand?.parentElement; el; el = el.parentElement) {
-        if (getComputedStyle(el).position === 'sticky') return el;
+        if (el.getAttribute('data-surface') === 'chrome') return el;
       }
       return null;
     })();
-    // What the band holds besides the portalled rows — the app header row.
-    const appHeaderRow = chromeBand?.firstElementChild ?? null;
+    // What the band holds besides the portalled rows — the app header row. **Below `lg` only** since
+    // Graphite M3 deleted the top bar: at the widths measured here it is `display: none`, so this
+    // reports 0 and that zero IS the milestone's headline. Located by the landmark rather than by
+    // `firstElementChild`, which now finds the wrapper that hides it.
+    const appHeaderRow = chromeBand?.querySelector('header') ?? null;
 
     // The canvas itself — what all of the above costs.
     const canvas = document.querySelector('canvas');
@@ -100,15 +121,14 @@ async function stackHeights(page: Page): Promise<unknown> {
     // fails, because its output gets quoted into a design document (ADR-0058: verify the claim).
     const bands = [
       ['shell chrome band (total)', chromeBand],
-      ['app header row', appHeaderRow],
-      // Inside the app header row since D1b, NOT a band of its own. Its height is reported so the
-      // merge can be checked rather than asserted: if it exceeds the header row's own height the
-      // band grew, and the merge bought nothing — which is exactly the outcome ADR-0092 M4 recorded
-      // for a relocation that "gained exactly nothing".
-      ['identity slot (in the header row)', identityRow],
-      ['command band (identity + both rows)', commandBand],
-      ['row 1 · View and navigate', rowLook],
-      ['row 2 · Build and manage', rowDo],
+      // 0 at every width measured here since Graphite M3 — the top bar survives only below `lg`.
+      ['app header row (below lg only)', appHeaderRow],
+      // A row of its own again since Graphite M3, because the header row it was merged into does
+      // not exist at these widths. Its height is reported rather than asserted, so the trade the
+      // milestone made — lose a 56 px header, gain back a 44 px identity row — is checkable.
+      ['identity row', identityRow],
+      ['command band', commandBand],
+      ['the command strip', rowStrip],
     ].map(([name, el]) => {
       const band = read(name as string, el as Element | null);
       if (!band) throw new Error(`vertical-stack: band "${name as string}" could not be located`);
@@ -297,7 +317,7 @@ test('M4-T1 — the vertical stack on a populated plan, pen held', async ({ page
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Riverside — Phase 2 Substructure' }).click();
-  await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Start editing' }).click();
   await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();

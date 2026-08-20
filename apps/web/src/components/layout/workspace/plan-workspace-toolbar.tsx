@@ -28,6 +28,7 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
+import { PlanStatusBar } from '@/components/layout/status/plan-status-bar';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -91,13 +92,6 @@ import { cn } from '@/lib/utils';
 
 /** The `md` breakpoint (48rem) — at/above it the canvas + bottom panel split; below it, one pane. */
 const MD_QUERY = '(min-width: 48rem)';
-
-/**
- * Row 1's group-name override. Only `object` differs from the primitive's defaults, and only because
- * that group holds a read-out on this row and commands on the other; a name shared by two visible
- * regions is the collision M2-T6 exists to remove, not a tidy-up.
- */
-const ROW_LOOK_GROUP_LABELS = { object: 'Plan info' } as const;
 
 /**
  * The mode row's `lens` group name (ADR-0091 D1). Overridden because the shared default is
@@ -200,8 +194,8 @@ export function ToolbarPlanWorkspace({
   // not through the raw `close`: unmounting the focused Close button with nothing to catch focus
   // strands it on `<body>` (WCAG 2.4.3), which is what shipped until the a11y gate found it.
   //
-  // Searched from `document`, not `rootRef`: with `VITE_DESIGNED_CHROME` on the toolbar lives in
-  // the chrome band and is no longer a DOM descendant of the workspace root.
+  // Searched from `document`, not `rootRef`: the toolbar lives in the chrome band and is not a
+  // DOM descendant of the workspace root.
   const closeFloatPathsAndFocus = useCallback(() => {
     closeFloatPaths();
     // **Falls back to the `⋯` trigger, and that is not defensive coding.** ADR-0090 M2 moved this
@@ -433,10 +427,10 @@ export function ToolbarPlanWorkspace({
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
   // the Comments button itself doesn't go through here (it stays mounted + focused), so no double-move.
   //
-  // Searched from `document`, NOT from `rootRef`: with `VITE_DESIGNED_CHROME` on, the toolbar's
-  // DOM node lives in the chrome band (ADR-0055 §3) and is no longer a DOM descendant of the
-  // workspace root, so a root-scoped query silently found nothing and stranded focus. Only one
-  // plan workspace is mounted at a time, so the attribute is unambiguous document-wide.
+  // Searched from `document`, NOT from `rootRef`: the toolbar's DOM node lives in the chrome band
+  // (ADR-0055 §3) and is not a DOM descendant of the workspace root, so a root-scoped query
+  // silently found nothing and stranded focus. Only one plan workspace is mounted at a time, so
+  // the attribute is unambiguous document-wide.
   const closeNotes = useCallback(() => {
     setNotesOpen(false);
     document.querySelector<HTMLElement>('[data-toolbar-item="comments"]')?.focus();
@@ -1110,10 +1104,9 @@ export function ToolbarPlanWorkspace({
           Do carries the pen-gated authoring cluster (shaded as a set when the pen isn't held) beside
           the always-live plan & deliverable actions. Both rows share one `authoringEnabled` — only
           Row 2's `penGated` items react. Row 1 right-aligns its status read-outs (Finish/Summary/Legend). */}
-      {/* Flag-on (`VITE_DESIGNED_CHROME`) these two rows portal into the chrome band, so the top of
-          the app reads as one surface. Only the DOM node moves — in the React tree they stay right
-          here, which is why `ctx`, the registry predicates and the workspace key scope are all
-          untouched by the move. Flag-off `ChromePortal` is an identity wrapper. */}
+      {/* These two rows portal into the chrome band, so the top of the app reads as one surface.
+          Only the DOM node moves — in the React tree they stay right here, which is why `ctx`, the
+          registry predicates and the workspace key scope are all untouched by the move. */}
       {/* **The plan identity line, merged into the app header row** (ADR-0097 D1b) — the merge
           ADR-0092 M5 withdrew at "134 px short at 1646", which Landing D1a paid for by moving the
           organisation nav into the rail (+250 px of slack at 1440; `m0-landing-d1-measurement.md`).
@@ -1129,60 +1122,6 @@ export function ToolbarPlanWorkspace({
 
           Flag-off `ChromePortal` is an identity wrapper, so this renders in place exactly as it did
           before the band existed. */}
-      <ChromePortal name="identity">
-        <div className="flex min-w-0 items-center gap-3">
-          {/* **`flex-1` here, not on the toolbar** — this block is the one that should give way.
-              It is text with a `title`, so shrinking it truncates a name a reader can still get at;
-              shrinking the mode cluster puts `Early | Visual | Diagram | Gantt` behind a `⋯`, which
-              is ADR-0091 D1's whole objection (a mode is not a command and must be visible beside
-              the pen). Measured: with `flex-1` on the toolbar instead, all four demoted into the
-              overflow at 1646 — the product owner's own width. */}
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            {/* **Two crumbs: the project, then this plan.**
-                D1b first shipped the plan name alone, on the measurement that the four-crumb trail
-                cost 455 px and that the Project Explorer already answers "where am I". Right about
-                orientation, wrong about navigation, and **three Playwright suites failed on one
-                locator** saying so — `programme`, `multi-select` and `authoring-flow` all click a
-                project link from inside an open plan.
-
-                Checking rather than assuming made it worse than the failing assertion:
-                `HierarchyTree.tsx:208-219` navigates only for `kind === 'plan'` — a client or a
-                project row calls `tree.toggle`, which is what the chevron beside it already does —
-                and the rows are `treeitem` divs, not links. So this crumb was the ONLY route from
-                an open plan to its project, i.e. to the screen holding that project's calendars
-                (ADR-0053 M2). The tree's own hole is older and is `docs/TECH_DEBT.md` #143.
-
-                Two rather than four: the 455 px bought the whole trail, and Clients → client IS the
-                duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
-                is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
-                was measured to win. */}
-            <Breadcrumbs
-              variant="nowrap"
-              items={[
-                {
-                  label: model.project.data?.name ?? 'Project',
-                  to: '/orgs/$orgSlug/projects/$projectId',
-                  params: { orgSlug: model.orgSlug, projectId: plan.projectId },
-                },
-                { label: plan.name },
-              ]}
-            />
-            <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-            {model.canWrite ? (
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => model.setEditing(true)}
-                title="Edit plan…"
-                aria-label="Edit plan"
-                className="text-muted-foreground shrink-0"
-              >
-                <SquarePen aria-hidden="true" className="size-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      </ChromePortal>
 
       <ChromePortal>
         {/* Publishes the BAND's width to every `<Toolbar>` inside it (`toolbar-band.tsx`), so a
@@ -1206,21 +1145,108 @@ export function ToolbarPlanWorkspace({
               `m0-landing-d1-measurement.md`**; this is not that decision, it is declining to leave
               a shipped regression in place while the decision is open. */}
           <div className="border-border flex items-center justify-end gap-3 border-b px-4 py-1">
-            <Toolbar
-              items={rows.mode}
-              context={ctx}
-              label="Plan mode"
-              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-              // All four are `group: 'lens'`, whose default label is "Display" — also Row 1's
-              // `lens` group name, so unoverridden this announces a second, unrelated name for the
-              // cluster AND collides with a region one row below (the ADR-0090 M5 `output` rename).
-              groupLabels={ROW_MODE_GROUP_LABELS}
-              // `shrink-0`, never `flex-1`: `Toolbar`'s container carries `min-w-0`, so a
-              // default-shrinking mode row squeezes below its content width and starts demoting —
-              // putting an armed mode behind a `⋯`, which is the ADR-0064 dead end and exactly what
-              // the header could not avoid.
-              className="shrink-0"
-            />
+            {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
+                app header through a portal until then (ADR-0097 D1b), and Graphite deleted that
+                header — so without a home it would have taken a 44 px row of its own inside the
+                band, and MEASUREMENT said so: deleting a 56 px bar bought 12 px, which is ADR-0092
+                M4's "relocating a row inside one column removes nothing" happening again to the
+                milestone that quotes it.
+
+                It fits here because this row holds only four mode buttons and the pen status —
+                none of the brand, switcher and account that made the header merge impossible at
+                1280 (ADR-0091's retrospective: "the identity wants ~1170 px against ~861 px").
+                Measured at 1920 / 1646 / 1440 / 1280 before it shipped, with the mode toolbar
+                checked for demotion at each: an armed mode behind a `⋯` is the ADR-0064 dead end
+                and the reason the header attempt was withdrawn.
+
+                No portal any more: the identity and the modes are rendered by the same component,
+                so the slot that carried it across the shell boundary has nothing left to carry. */}
+            <div data-plan-identity className="flex min-w-0 flex-1 items-center gap-3">
+              {/* **`flex-1` here, not on the toolbar** — this block is the one that should give way.
+              It is text with a `title`, so shrinking it truncates a name a reader can still get at;
+              shrinking the mode cluster puts `Early | Visual | Diagram | Gantt` behind a `⋯`, which
+              is ADR-0091 D1's whole objection (a mode is not a command and must be visible beside
+              the pen). Measured: with `flex-1` on the toolbar instead, all four demoted into the
+              overflow at 1646 — the product owner's own width. */}
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                {/* **Two crumbs: the project, then this plan.**
+                D1b first shipped the plan name alone, on the measurement that the four-crumb trail
+                cost 455 px and that the Project Explorer already answers "where am I". Right about
+                orientation, wrong about navigation, and **three Playwright suites failed on one
+                locator** saying so — `programme`, `multi-select` and `authoring-flow` all click a
+                project link from inside an open plan.
+
+                Checking rather than assuming made it worse than the failing assertion:
+                `HierarchyTree.tsx:208-219` navigates only for `kind === 'plan'` — a client or a
+                project row calls `tree.toggle`, which is what the chevron beside it already does —
+                and the rows are `treeitem` divs, not links. So this crumb was the ONLY route from
+                an open plan to its project, i.e. to the screen holding that project's calendars
+                (ADR-0053 M2). The tree's own hole is older and is `docs/TECH_DEBT.md` #143.
+
+                Two rather than four: the 455 px bought the whole trail, and Clients → client IS the
+                duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
+                is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
+                was measured to win. */}
+                <Breadcrumbs
+                  variant="nowrap"
+                  items={[
+                    {
+                      label: model.project.data?.name ?? 'Project',
+                      to: '/orgs/$orgSlug/projects/$projectId',
+                      params: { orgSlug: model.orgSlug, projectId: plan.projectId },
+                    },
+                    { label: plan.name },
+                  ]}
+                />
+                <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+                {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
+                ADR-0090 M2-T3 took it off the toolbar; ADR-0091 M7-S4 put it back as a
+                `presentational` registry item, so the `⋯` could stay the row's rightmost control.
+                It came here in M5 because M5-T1 measured the reduced strip **not fitting** at 768,
+                960, 1280 or 1440, and that entry called itself "the interim home, not a second
+                decision". **M7 is the decision**: a finish date is a fact, the status bar carries
+                facts, and it has gone there. This comment is kept rather than deleted so the two
+                moves read as one argument reaching its end. */}
+                {model.canWrite ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => model.setEditing(true)}
+                    title="Edit plan…"
+                    aria-label="Edit plan"
+                    className="text-muted-foreground shrink-0"
+                  >
+                    <SquarePen aria-hidden="true" className="size-4" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            {/* **The mode cluster now portals into the RAIL** (Graphite M5). It was 400 px of this
+                band — a quarter of the room at 1646 — spent on four controls that are not commands,
+                which is ADR-0091 D1's own thesis about where a mode belongs. It stays a registry
+                `Toolbar` rather than becoming four hand-rolled rail buttons: arm/disarm, Escape
+                precedence, announcement and pen gating are the registry's, and hand-rolling is how
+                one control gets a rule and its neighbour does not (plan.md §E).
+
+                `orientation="vertical"` is one prop on the primitive, not a second one: the keyboard
+                already answered both axes, and what was hard-coded was the ANNOUNCEMENT. A vertical
+                toolbar also opts out of the ladder — its items stack, so there is no row to overflow
+                and its `clientWidth` says nothing about whether its content fits. That replaces the
+                `shrink-0` this needed here, which existed to stop a squeezed row demoting an armed
+                mode into a `⋯` (the ADR-0064 dead end). */}
+            <ChromePortal name="rail">
+              <Toolbar
+                items={rows.mode}
+                context={ctx}
+                label="Plan mode"
+                authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+                // All four are `group: 'lens'`, whose default label is "Display" — also the strip's
+                // `lens` group name, so unoverridden this announces a second, unrelated name for
+                // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
+                groupLabels={ROW_MODE_GROUP_LABELS}
+                orientation="vertical"
+              />
+            </ChromePortal>
             <CompactPenStatus
               pen={model.pen}
               {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
@@ -1254,32 +1280,27 @@ export function ToolbarPlanWorkspace({
               `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
               equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
               everything below it. */}
-          {/* Visible row-purpose cues (ux review): the "Row 1 · Look" / "Row 2 · Do" split otherwise
-              lived only in each row's `aria-label`, invisible to sighted users. Plain words rather than
-              those internal ADR-0031 codenames — "Look"/"Do" read as jargon to a first-time user — and
-              each is a literal word from its row's own `aria-label` below, so it isn't a wholly separate
-              caption. `aria-hidden` avoids a redundant/out-of-context announcement — the toolbar's own
-              `aria-label` already names the row for AT. */}
-          <div className="border-border flex items-center gap-2 border-b px-2 py-1">
-            <Toolbar
-              items={rows.look}
-              context={ctx}
-              label="View and navigate"
-              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-              alignEndGroup="object"
-              // Row 1's `object` group is a single **read-out** — `Summary ▾` — so the shared default
-              // "Plan actions" is wrong twice: it is not an action, and Row 2's `object` group
-              // (Analysis, Schedule settings, Report progress, Comments) genuinely is, leaving two
-              // on-screen regions with one name. M2-T6 step 2, landed at M5.
-              groupLabels={ROW_LOOK_GROUP_LABELS}
-              className="flex-1"
-            />
-          </div>
+          {/* **One strip** (Graphite M5). ADR-0031's two-row amendment split the surface into "what
+              you look at" and "what you build with", and four epics (ADR-0090/0091/0092/0094) then
+              spent themselves making both rows fit. The split is deleted rather than re-grouped:
+              `TOOLBAR_GROUPS` was already a menu structure — `frame · lens · find · tools · object ·
+              output · help` — so the merged strip's order is the taxonomy's, unchanged.
+
+              The row captions go with it. They existed because the Look/Do split lived only in each
+              row's `aria-label` and was invisible to sighted readers; with one row there is nothing
+              to distinguish, and a caption naming the only thing present is noise.
+
+              `alignEndGroup="object"` does NOT survive, and that is a decision rather than an
+              omission: it right-aligned Row 1's single read-out, and `object` on the merged strip is
+              the plan-action cluster (Analysis, Settings, Comments) that Row 2 carried. Pushing
+              those to the trailing edge would put the commands a planner reaches for most at the far
+              end of the widest row in the product. The `⋯` keeps the trailing edge, which is what
+              ADR-0091 M7's S9 asserts. */}
           <div className="flex items-center gap-2 px-2 py-1">
             <Toolbar
-              items={rows.do}
+              items={rows.strip}
               context={ctx}
-              label="Build and manage"
+              label="Plan commands"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
               className="flex-1"
             />
@@ -1512,6 +1533,20 @@ export function ToolbarPlanWorkspace({
 
       {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
       <PlanDialogs model={model} plan={plan} />
+
+      {/* **The status bar** (Graphite M7). Portalled into the shell's row 3 for the same reason the
+          command band and the mode cluster are portalled: the facts belong to the plan, the row
+          belongs to the shell, and ADR-0029 says the shell must not learn the difference. */}
+      <ChromePortal name="status">
+        <PlanStatusBar
+          activityCount={scheduleSummary.data?.activityCount}
+          criticalCount={scheduleSummary.data?.criticalCount}
+          dataDate={scheduleSummary.data?.dataDate}
+          projectFinish={scheduleSummary.data?.projectFinish}
+          recalculating={model.autoRecalc.isPending}
+          pending={scheduleSummary.isPending}
+        />
+      </ChromePortal>
 
       {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
       <ActivityCrudDialogs model={model} />

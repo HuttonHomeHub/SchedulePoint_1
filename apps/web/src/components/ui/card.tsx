@@ -76,7 +76,6 @@ export interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement>
 export function CardTitle({ className, level = 1, ...props }: CardTitleProps): React.ReactElement {
   const Heading = `h${level}` as const;
   return (
-    // eslint-disable-next-line jsx-a11y/heading-has-content -- content is supplied by consumers via children
     <Heading
       className={cn('text-xl leading-tight font-semibold tracking-tight wrap-anywhere', className)}
       {...props}

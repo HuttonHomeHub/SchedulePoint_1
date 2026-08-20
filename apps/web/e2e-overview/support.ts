@@ -44,6 +44,19 @@ export async function createPlan(page: Page, name: string): Promise<void> {
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name }).click();
+  /**
+   * **Wait for the plan to have LOADED, not merely for the click to have landed.**
+   *
+   * `useRememberPlan` records on `planQuery.isSuccess` (ADR-0098 M3), so a helper that returns as
+   * soon as the link is clicked lets the caller navigate away before anything is remembered — and
+   * the "Jump back in" case then fails intermittently, asserting a product rule against a fixture
+   * that never satisfied its precondition. Seen twice in one sweep and once passing, which is what
+   * a race looks like from the outside.
+   *
+   * The pen control is the signal because it renders only once the plan workspace has its plan; the
+   * heading is not, since the identity line paints from the route before the query resolves.
+   */
+  await expect(page.getByRole('button', { name: /^(Start|Stop) editing$/ })).toBeVisible();
 }
 
 /** Hold the pen, whether or not this session already does. */

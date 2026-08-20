@@ -237,7 +237,6 @@ export interface TsldToolbarContext {
    * calculated, so its own `null` is the "nothing to show" state and the registry never has to
    * know why.
    */
-  projectFinishContent: ReactNode;
 
   // --- Visibility gates ---------------------------------------------------------------------
   /** True once the plan has activities to plot — the view/summary/legend controls appear then. */

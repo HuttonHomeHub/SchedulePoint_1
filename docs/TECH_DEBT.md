@@ -2647,6 +2647,19 @@ robust: wait for the dialog's `close` event, or poll until `document.activeEleme
 rather than betting on frame ordering. Until then this costs triage time on every sweep, which is
 how a suite ends up being ignored.
 
+### A second suite joined it, 2026-08-20 (Graphite M5's sweep)
+
+`e2e-overview/overview.spec.ts:129` — "the landing offers the plans this browser was recently in" —
+went red under the sweep and **passes alone**, verified by running it both ways on the same commit
+rather than inferred. Its `createPlan` helper clicks through to the plan and navigates straight back
+to the landing without waiting for the workspace to settle, so the "remember this plan" write races
+the navigation away from it. Same shape as the row above and the same cost: a red line in a sweep
+that means nothing about the product, which is exactly how a real red gets waved through.
+
+Worth noting what this pair costs together, because it is the case for fixing them rather than
+re-triaging: the Graphite M5 sweep returned **31 green, 2 red, and one of the two reds was noise.**
+A gate that cries wolf once per run trains its reader to open the log expecting noise.
+
 ## 145. A hand-rolled `Combobox` takes the platform picker away on touch, and nobody has measured what that costs
 
 **Raised 2026-08-19**, blocking the last two conversions of ADR-0097 Landing F1.
@@ -2713,3 +2726,232 @@ moment it was created, only by editing it afterwards. It rendered, it looked rig
 covered the host. One correct pattern applied to one neighbour and not the other — the ADR-0064 §7
 shape, and the fifth epic running. Fixed with a regression test verified red first
 (`CreateResourceButton.test.tsx`).
+
+## 146. The `chrome` surface scope has no measured current-page state
+
+**Raised 2026-08-20 (Graphite M3/M4).** `e2e-designed-ui`'s D3 measures the `aria-current="page"`
+treatment that axe never looks at, and it did so at **two** sites in **two** scopes: the wordmark in
+`chrome` and the rail's current destination in `panel`. Its own comment said measuring one and
+calling it D3 "would leave whichever scope was dropped unmeasured for exactly the state axe never
+looks at".
+
+Graphite M3 deleted the top bar and moved the wordmark into the tool rail, so **both sites are now
+`panel`** and the argument for having two has collapsed into having one twice. The selector was
+re-pointed rather than deleted — the measurement follows the control — but the gap is real: on the
+screens that suite visits, the `chrome` scope paints no current state at all.
+
+Its only remaining site is the **breadcrumb's final crumb** (`breadcrumbs.tsx:58`, a
+`text-foreground font-medium` span carrying `aria-current="page"`), which renders solely inside a
+plan's identity row. Reaching it means driving each of the suite's four theme variants through a
+client, a project and a plan — real cost for one token pair, on a suite that already onboards four
+times.
+
+**Two ways to close it, neither obviously right yet.** Extend the theme sweep to a plan screen
+(honest, slow), or measure the crumb pair in the token contrast matrix instead (fast, but the matrix
+computes token-to-token ratios and cannot see that this pair is the one a reader's eye lands on).
+Graphite M10's gate pass is the natural place to choose, with the epic's own screenshots in hand.
+
+**Why it is debt rather than a defect:** the pair is very likely fine — `--foreground` on the chrome
+band's ground is already gated by `token-contrast.test.ts`. What is missing is the _measurement of
+the state_, which is precisely the class of thing this suite exists to catch and axe does not.
+
+## 147. The merged command strip stops fitting below ~900 px, and the eleven items that pin it cannot demote
+
+**Raised 2026-08-20 (Graphite M5).** ADR-0099 M5 merges the two TSLD command rows into one
+`Plan commands` strip — the change that buys the canvas its last 49 px of height. The cost, measured
+rather than predicted, is that `e2e-toolbar-fit`'s `PINNED_FLOOR_WIDTH` rises **768 → 960**: below
+about 900 px of viewport the strip lays out wider than its container and scrolls horizontally.
+
+**Why, exactly.** ADR-0090 M3 earned the 768 floor by _removing pinned items_ from Row 1, and the
+pinned load it left was split across two rows. One row makes it additive. An item is pinned when it
+is a `render` item, and that is a sound rule rather than an oversight: a `render` item paints
+bespoke chrome and therefore has no `menuitem` form to demote **into**. Instrumented at 768 (a
+temporary `__ladderDebug` hook on `computeLadder`'s input, since removed), the ladder had already
+demoted **all twelve** demotable commands into the `⋯`, and the eleven survivors —
+
+| item           | px  |     | item       | px  |
+| -------------- | --- | --- | ---------- | --- |
+| `today`        | 58  |     | `undo`     | 32  |
+| `view`         | 52  |     | `redo`     | 32  |
+| `search`       | 156 |     | `summary`  | 52  |
+| `filter`       | 52  |     | `analysis` | 52  |
+| `add-activity` | 91  |     | `export`   | 52  |
+| `link-tool`    | 92  |     |            |     |
+
+— sum **720 px** against a **752 px** container that also owes 40 px of item gaps, 81 px of derived
+chrome and 41 px of `⋯`. The row laid out at **866**. Modelled minimum container is 882 px ⇒ ~898 px
+of viewport.
+
+**The first attempt was wrong, and the probe is why it did not ship.** `recalculate` carries
+`showLabel: 'always'` with a ~110 px label, so narrowing it to `{ atLeast: 'condensed' }` looked like
+the whole 114 px. The instrumented input showed `recalculate` has been in the `⋯` at _every_ width in
+the gate's list for the entire epic: pinning its label cost nothing and releasing it bought nothing.
+The change was reverted rather than kept as harmless, because its comment asserted a measurement that
+was false (ADR-0076 Class 3).
+
+**What still holds below the floor**, and it is the part that matters: the row is `overflow-x-auto`
+(ADR-0090 M1-T5), and at 768 the gate's S1 (nothing past the right edge after scrolling), S5 and S7
+(every target ≥ 24 px) all **pass**. The strip scrolls; no command becomes unreachable. 768 stays in
+`WIDTHS` and keeps being asserted for reachability — only the fits-outright claim moved.
+
+**Two candidate narrowings, with what each was measured to be worth.** Fold `Filter` into the search
+field (the narrowing ADR-0099 M5-T1 already named): **−56 px** (52 + one gap), leaving 810. Drop the
+five group rules (`ml-1 border-l pl-2`) in the `collapsed` band only, where a hairline separator is
+decoration the row cannot afford: **−65 px**, leaving 801. Both together reach 745 and clear 752, but
+only just, and each is a design change rather than a tune — which is why neither was taken under M5
+and both are recorded here with their numbers instead.
+
+**Corroborated by a second, independent instrument.** `measure-toolbar/graphite-strip.spec.ts`
+composes the strip from cloned real controls rather than reading the live row, and it puts the same
+boundary in the same place: `768` reports `fits: false` at **−40 px** of slack and every width from
+`960` up reports `fits: true` (`apps/web/measure-output/graphite-strip.json`). The absolute totals
+differ from the live row's — 760 against 866, because the clone models a _reduced_ strip — so the
+agreement worth having is the verdict boundary, not the number.
+
+**Why it is debt rather than a defect:** 768 is iPad portrait, where the TSLD workspace is already
+marginal (`#133` records that every toolbar measurement in this repository until ADR-0091 assumed a
+mouse), and the degradation is a scroll rather than a loss. Revisit with Graphite M10's screenshots,
+or the first time a planner works at that width.
+
+### Found alongside it: `priority` had never been a ranking
+
+`ToolbarItem.priority` defaults to `-order`, so most of the authoring cluster was ranked by
+**registration position**. On ADR-0031's two rows that was harmless — Row 2 had room for the whole
+cluster, so an unranked field is indistinguishable from a ranked one. The merge turns it into a
+decision about what a planner can reach, and two commands fell out of the row on it:
+`next-conflict` (ranked 90 for a rule about Row 1) and `Recalculate` (ranked −7 for registering
+eighth). Both are now ranked deliberately — 110 and 95 — with the reason in the registry.
+
+**The rest of the cluster is still on `-order`** and has not been re-examined: `marquee-select` −2,
+`auto-arrange` −3, `add-note` −4. None is currently causing a defect, and inventing ranks for them
+without a reported problem would be guessing. What is worth knowing is that on a single strip
+`-order` is a live default with consequences, not the inert convenience it was on two rows.
+
+### Found alongside it: the fit gate measured ordering in two frames of reference
+
+Raising the floor unmasked a **latent instrument bug** in `readRow`, which S4 had been failing before
+and therefore hiding. S9 ("the `⋯` is the row's rightmost control") compared `getBoundingClientRect`
+values gathered _inside_ the reachability sweep — and that sweep calls `scrollIntoView` on every
+item, which is its whole purpose. Once the row genuinely scrolled, scrolling `export` into view
+shifted the `⋯` 73 px left before its box was read, so the button that really ends the row measured
+a smaller `right` than its neighbour and S9 reported `export`. The product was correct throughout.
+
+It was invisible until now because the row had never overflowed at any width in `WIDTHS`, so every
+`scrollIntoView` was a no-op and every box happened to be read at the same offset. `readRow` is now
+two passes — ordering at one fixed scroll position, then reachability, which may scroll freely —
+and the reasoning is recorded in the function so the next reader does not merge them back.
+
+### Measured again at M10, at a width nobody had probed
+
+`Recalculate` was found in the `⋯` at **1646 and 1920** while it was **inline at 1280** — backwards,
+and not a ranking bug. Its `showLabel: 'always'` made it a 163 px command: cheap next to a row of
+icons at the narrow band, ruinous next to a row of words at the wide one. Dropping the pin puts it
+inline at 1920 and 1280.
+
+**At 1646 it is still in the menu, and that is this row's entry rather than that item's.** The row
+there is 1582 px and every other inline control is a pinned `render` item wearing its label, so the
+demotable budget is zero however cheap a demotable command becomes. #147 has been read as a narrow-
+width problem since it was raised; it is a _labelled_-width problem, and 1646 — the one screen this
+work is judged on — is where both conditions meet.
+
+## 148. The canvas date pills are painted on top of the first two lanes
+
+**Raised 2026-08-20 (Graphite M9), pre-existing since 2026-08-07.** The TSLD paints three date
+pills at the top of the scene — the cursor date chip, the Today pill and the Data date pill — and
+all three sit in the same vertical space as the first two lanes' bars. On the flagship screen at
+1646 the words `Data date` print across the first activity's name.
+
+In scene coordinates:
+
+|                  | occupies                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| cursor date chip | y 4 – 20                                                                                         |
+| Today pill       | y 24 – 40                                                                                        |
+| Data date pill   | y 44 – 60                                                                                        |
+| **lane 0's bar** | y 5 – 23 — `screenYOfLane(0, view) = view.originY = 0`, `+ (LANE_HEIGHT 28 − BAR_HEIGHT 18) / 2` |
+| **lane 1's bar** | y 33 – 51                                                                                        |
+
+So every plan with an activity in lane 0 or 1 has a pill over a bar, and the packer fills lanes from
+0 upward, so that is every plan.
+
+**What makes it interesting rather than merely untidy** is that the pills are meticulous about each
+other and blind to what is underneath. `TODAY_CHIP_TOP` is derived as `CURSOR_CHIP_TOP +
+CURSOR_CHIP_H + 4` and `DATA_DATE_CHIP_TOP` from the row above it, each with a docblock explaining
+that a literal offset would let a future edit "silently reintroduce the collision" — and both
+collisions they guard against are between two pills. Nothing in the reasoning asks what the scene
+does at y 4.
+
+**Not a Graphite regression**, established rather than assumed: `git log -S "DATA_DATE_CHIP_TOP"`
+dates the constant to `779a5b3`, 2026-08-07, twelve days before that epic began, and
+`git log --since` over `src/features/tsld/render/` returns **zero** commits for the whole of it.
+
+**Why it was deferred rather than fixed in M9.** The fix is a canvas _geometry_ change, and
+`screenYOfLane` is read by hit-testing, dragging, link routing, the parallel a11y layer and the
+export path. Two shapes are plausible and they are not equivalent:
+
+1. **Reserve a band at the top of the scene** — the content origin starts below the pill stack.
+   Costs 60 px of diagram on every plan, forever, in an epic whose thesis is diagram height.
+2. **Move the permanent pills into the ruler** — where a date marker arguably belongs, since the
+   ruler is what the x-axis means. The ruler is 40 px and already carries two tiers of date labels,
+   so this needs a design pass rather than a constant.
+
+(1) is cheap and wrong for this product; (2) is right and is not a one-line change. Choosing between
+them at the end of another epic is how the wrong one gets picked, so it is written down instead.
+
+## 149. The Graphite M10 gate pass's non-blocking findings
+
+**Raised 2026-08-20.** Five specialists over the ADR-0099 epic diff. Security and
+frontend-performance passed outright, both having re-derived the epic's own numbers from the code
+rather than trusting them (performance built both refs: **+1.9 kB gzip JS** for 163 files, and the
+painter untouched, so TECH_DEBT #75's known overage is not attributable here). Component,
+accessibility and UX each blocked, and every blocking finding was folded with a regression test
+verified red first. What follows is what was deliberately **not** folded, with the reason.
+
+- **`MenuItem.itemId` bakes toolbar vocabulary into a general primitive.** It emits the literal
+  `data-toolbar-item`, and nine of `Menu`'s ten consumers are not toolbars. Kept as-is: the
+  alternative is a name-agnostic passthrough, which is a wider API for one caller, and renaming it
+  `toolbarItemId` would make the attribute and the prop disagree. Revisit when a second, non-toolbar
+  consumer wants a stable per-row locator — that is the point at which the generic shape earns its
+  keep rather than being speculative.
+- **Nested landmarks share a name.** With the Explorer subject showing, `<aside aria-label="Project
+Explorer">` wraps `<nav aria-label="Project Explorer">`, so a rotor lists the same words twice. Not
+  a WCAG failure. The fix is a prop telling `NavigatorRail` it is hosted rather than freestanding,
+  which is a change to a component eight screens render for a duplication on one.
+- **`localStorage` is written at drag frame rate.** `useResizablePanelPrefs` persists on every
+  `setSize`, i.e. ~60×/s while a splitter is moving. Pre-existing (the Explorer rail and the activity
+  panel have done this since ADR-0030); Graphite adds two more consumers of the same hook. Each write
+  is a `JSON.stringify` of a two-field object and nothing has been profiled as hot, so a debounce
+  would be an unmeasured optimisation — which is the thing this register keeps saying not to do.
+- **`Toolbar`'s `ResizeObserver` re-observes on every commit.** Deliberate and documented in place
+  (the item set changes without a dependency it could key on); `observe()` on an already-observed
+  node is a no-op per spec. It now iterates the union of what were two rows' `render` items, which is
+  a larger no-op, not a new cost.
+- **The status bar says nothing when a computed plan has no critical activities.** Suggested as an
+  inconsistency with `Finish`'s "Not calculated". Left alone, and the reason is that the state is
+  very nearly unreachable: with the default TF ≤ 0 rule (ADR-0035) every computed network has a
+  critical path, so "computed and clean" is not a state a planner meets. Adding copy for it would be
+  reassuring about something that does not happen.
+
+**Two instruments existed and neither was reached for, which is the same shape twice.**
+
+The first is ADR-0081's rule — the journey lands with the first user-facing milestone. The UX
+review's blocking finding, the drawer's entry point not existing, was reachable only by driving the
+shell, and this epic's own gate table routed M6 to targeted suites. The rule is the standing answer
+and it was not applied, because Graphite ships no flag and the rule is written in terms of one. Its
+subject is a **user-facing milestone**, not a flag — now stated that way in `CLAUDE.md` §19 beside
+its sibling about problem statements, rather than left as a note here.
+
+The second is `scripts/frontend-only.json`, which exists to refuse a change under `apps/api/` while a
+frontend-only epic is in flight. Graphite is exactly such an epic — its parity argument is that the
+CPM engine is not imported — and the declaration sat `active: false` throughout, because ADR-0096
+had correctly deactivated it and nobody re-read it at this epic's start. Nothing went wrong: the
+epic genuinely changed no server code, so the gate would have had nothing to catch. What is worth
+recording is that **the same file's own instructions say to arm it, and its own history is a case of
+it being left in the wrong state for months** — so "arm it when the next frontend-only epic starts"
+is a rule with no gate behind it, one layer up from the rule it enforces.
+
+**And this paragraph nearly shipped pointing at the wrong file.** The sentence above ended
+"`docs/RECONCILE.md` is the place that wording gets fixed" until the rule was actually written into
+`CLAUDE.md` §19 instead — and the edit that was supposed to correct it here ran without an assertion,
+did not match, and reported nothing. Found by re-reading rather than by anything failing, which is
+the ADR-0058 rule doing its job on a document written about instruments not being reached for.

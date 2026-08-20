@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1025 web
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1033 web
 > source files with 34 flag-scoped Playwright suites beside the base journey, and
-> 98 ADRs.
+> 99 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2448,6 +2448,168 @@ progress` off the command surface because **an object action belongs on the obje
   `Object.keys(storage)`, which works only because the Web Storage API happens to expose stored keys
   as own properties. **The CPM engine is not imported and no migration runs.**
 
+- **ADR-0099** _(Accepted; M0–M10 landed 2026-08-20)_ — Graphite: workstation density in rail
+  chrome. Four consecutive epics (ADR-0090/0091/0092/0094) worked the plan workspace's command
+  surface and each asked the same question — **does the row fit?** The answer was always "nearly",
+  so the answer was always to shave; ADR-0097 Landing C proposed the one genuinely different shape
+  and killed it on a **width** criterion a menu-driven design cannot win and a row-shaped one always
+  can. The instrument could only ever select the incumbent. The register had recorded the symptom
+  four times and read it as an estimation problem; four identical failures are evidence the **frame**
+  is wrong. What settled it was **looking**: `scripts/shoot.mjs` had existed since ADR-0097 and its
+  shot list covered nine screens and **not the plan workspace**. The first correct screenshot showed
+  what no measurement had reported — a letterboxed diagram between 192 px of chrome and a table
+  owning the bottom third, five controls dead on arrival before the pen is taken, and the loudest
+  thing on the canvas being the weekend hatching. Five layout studies went to the product owner, who
+  chose a hybrid: workstation **density** inside a rail-and-drawer **chrome model**.
+  **The decisions.** No top bar — a fixed icon rail on the leading edge, top to bottom. One context
+  drawer on the trailing edge, resizable, replacing the modal activity dialog. One command strip
+  carrying every command, with modes on the rail (a mode is not a command — ADR-0091's own thesis)
+  and object actions on the object (ADR-0093's rule, unchanged). A status bar for facts, where
+  `Recalculate` stops being a button pretending to be a status. The Gantt grid **beside** the chart.
+  A graphite palette with one rule — **cool means interface, warm means attention** — so anything
+  blue is pressable and warm is reserved for the schedule speaking. **Values only, no new
+  structure**: ADR-0097's 31-name vocabulary rebound per surface scope is kept exactly, which is
+  what makes the epic affordable at all.
+  **The palette was computed before anything was drawn, and two of the first choices failed** — the
+  critical/non-critical pair at **1.23:1** (the single most important distinction in the product,
+  differing in hue and almost nothing else) and a white label on the critical fill at 3.77:1. Both
+  are now separated on **lightness**, and the selection ring sits **outside** the bar because no one
+  ring colour clears both fills.
+  **M0 measured before anything was built, and said NO.** The strip as drawn is 302 px over at
+  1646 — the sixth consecutive epic in this register whose width expectation was contradicted by its
+  own measurement, and the **first caught before building**. It exists because Graphite deletes the
+  `⋯` that made the previous five embarrassing rather than broken. The fix was derived from what
+  each thing _is_: modes to the rail (−400 px), the finish read-out to the status bar (−127 px),
+  five document commands into one `Plan ▾` (−283 px). Reduced strip fits at every measured width
+  with 182–718 px of slack.
+  **M2 proved the grid is a no-op** by pixel-diffing every screen at three widths — a `sha256`
+  comparison could not, because the screenshot harness mints a tenant per run and paints its name
+  into the header, so a byte comparison reports "everything changed" for a milestone whose whole
+  condition is "nothing changed". It also retired `VITE_DESIGNED_CHROME` **ahead of its batch and
+  against its own `keep`**: the register's reason ("guard-only") stopped being true in the same
+  commit, because a grid cannot render the flag-off composition without a second JSX root — ADR-0088's
+  Class A discriminator. Both harness pins were **converted first, not stranded** (the ADR-0084
+  batch-1 lesson applied in advance).
+  **M3's measurement changed the milestone.** Deleting the 56 px top bar bought **12 px**, because
+  the identity line had been merged into that bar and took a row of its own — ADR-0092 M4's
+  "relocating a row inside one column removes nothing", happening to the milestone that quotes it,
+  and it would have shipped as a 56 px headline had the harness not been run against the before
+  state. The line moved into the **mode row** instead (whose only other occupants are four buttons
+  and the pen status, unlike the header that made the same merge impossible at 1280), giving
+  240 → **184 px** above the canvas and +9.7 % of diagram at 1646. A **skip link** landed with it:
+  there was none in `apps/web/src`, and none was obviously needed while the header came first.
+  **M4 answers the product owner's requirement with geometry, not measurement**: the band spans the
+  grid columns the drawer sits inside, so opening it redistributes width between the stage and the
+  drawer and changes the band by **zero** — asserted in a browser at three drawer states (open/closed
+  alone passes equally against a band reserving a fixed width) and **verified red**. The drawer is
+  the first **non-modal persistent panel** in this codebase, so every protection a modal gets free is
+  a decision: Escape is the **outermost rung** of ADR-0080's ladder deferring to `defaultPrevented`,
+  never a new listener; focus never moves in on a subject change; the empty state is explicit.
+  **Three defects the gates found, one of them in a gate.** The six organisation destinations
+  rendered **twice** (rail icons and drawer list), surfacing as a strict-mode locator resolving to
+  two elements rather than as anything anyone saw. The drawer **named its subject twice**, caught by
+  the _weight_ ratchet rising by one — a gate for a different thing catching a real duplication
+  because the duplicate had to be styled. And the **sizing ratchet still had the hole the weight
+  ratchet had already fixed**: it scanned raw text, so documenting an arbitrary value counted as
+  using one, and it went red at the exact moment its own rule was being obeyed. Comments are stripped
+  now and the ceiling re-measured 20 → 18 rather than left where it was.
+  **Two process findings are recorded rather than absorbed.** `reuseExistingServer` is true outside
+  CI, so a dev server left over from a _different_ harness is silently adopted and a config's flag
+  pins never apply — that produced **three consecutive false diagnoses in one session** (a palette,
+  then a refactor, then very nearly a product defect) when the cause was an API server carrying
+  `PLAN_EDIT_LOCK_ENFORCED=true`, hidden because `nest start --watch` puts the environment on the
+  **child** process. `scripts/e2e-local.sh` now refuses to run while anything answers on 3000 or 5173. And a **sweep measures the tree it runs against**: one was left running while the next
+  milestone was written, so every suite after the first edit failed on a half-applied change and
+  none of it was a finding.
+  **M5 merges the two command rows and keeps everything the ADR said it would delete.** Three
+  command rows become one: `ToolbarRow` goes `'mode' | 'look' | 'do'` → `'mode' | 'strip'`, and the
+  four mode segments move to the rail as **registry items on a vertical toolbar**, never hand-rolled
+  buttons — the five modal tools need arm/disarm, Escape precedence, announcement and pen gating,
+  and hand-rolling is how one control gets a rule and its neighbour does not. Measured,
+  `aboveCanvas` falls 240 → 184 (M3) → **135**, and the canvas at 1646 goes 576 → **681 (+18 %)**.
+  The ADR's own Consequences said the width ladder, band floors, hysteresis, `CHROME_RESIDUAL_PX`
+  and the `⋯` "become unnecessary and are deleted with the row they served"; M5-T1 measured the
+  reduced strip against 768–1920 and it fits at neither 1280 nor 1440, so **the ADR was corrected
+  and all five are kept** — along with the tier model, whose bullet was struck for the same reason
+  one paragraph later: its protasis ("a single strip that fits") is false.
+  **The real cost was found rather than predicted, and it is one property wearing three costumes:
+  eleven pinned `render` items now share one budget.** ADR-0090 M3 earned the 768 floor by removing
+  pinned items from Row 1, and the load it left was **split across two rows**; one row makes it
+  additive. Instrumented at 768, the ladder had already demoted **all twelve** demotable commands
+  into the `⋯` and the eleven survivors sum 720 px against a 752 px container — so
+  `PINNED_FLOOR_WIDTH` rises **768 → 960** and the strip scrolls below that (`docs/TECH_DEBT.md`
+  #147; corroborated independently by `graphite-strip.json`, which puts the boundary in the same
+  place). Then `ToolbarItem.priority`, which defaults to `-order`, **stopped being an inert
+  convenience and started deciding what a planner can reach**: it dropped `Next conflict` — ranked 90
+  by a rule that was about **Row 1** — reproducing verbatim the ADR-0094 M2 defect that a shading
+  nobody opens the menu to see is not a shading; and it dropped `Recalculate`, ranked **−7 because
+  it registered eighth**, into the `⋯` at every width from 768 to 2133, where the only spinning cue
+  that a recalculation is running cannot spin at anybody. Both are now ranked deliberately, with
+  the reason in the registry. **All three were found by journeys, none by a unit suite.**
+  **Two more findings are the instruments, not the product.** The first fix attempted — narrowing
+  `recalculate`'s `showLabel: 'always'` — returned the **identical** 866 px, because the probe showed
+  that command had been inside the `⋯` at every width for the whole epic; it was reverted rather than
+  kept as harmless, since the comment written with it asserted a measurement that was false
+  (ADR-0076 Class 3), and a change that helped a little would have shipped. And raising the floor
+  unmasked a **latent bug in the fit gate itself**: S9 compared `getBoundingClientRect` values
+  gathered inside the sweep that calls `scrollIntoView`, so the first time the row genuinely scrolled
+  it named `export` as the row's rightmost control while the product was correct throughout —
+  invisible until now because the row had never overflowed at any measured width.
+  **And one of M5's own write-ups was wrong in the way this register warns about most.** Three suites
+  located the toolbar by **selector string** rather than by role+name, so their axe `.include()`
+  calls were left naming deleted rows; that was first written up as "a scan matching nothing, green
+  for having tested nothing" — the shape #124 records — and then the dependency was opened:
+  `axe-core`'s `validateContext` (`axe.js:19178-19183`) **throws** on an empty include, so all three
+  would have gone red loudly. A breakage, not a hole. Corrected in place rather than rewritten, because reaching for the
+  register's own favourite failure mode instead of reading the code is ADR-0076 Class 2 committed in
+  the same document that was praising an instrument for catching one; the citation is now in
+  `scripts/dependency-claims.json`.
+  **M6–M9 each lost their headline task to a re-read of the problem, and that is the epic's most
+  transferable finding.** M7's plan was to re-host the canvas dock in the status bar; reading it
+  showed ADR-0092 had already put the dock where it belongs and the re-host would have **reversed**
+  that decision. M8's §A15 fork asked which of two Gantt layouts to build and the answer was
+  neither — ADR-0095 had shipped the grid beside the chart already. M9 was empty on the same test.
+  What survived was in each case a smaller, different thing: a status bar of facts, a draggable grid
+  splitter, a screenshot. `docs/RECONCILE.md`'s rule is _verify the claim_, and a **plan's problem
+  statement is a claim** — one nothing in this process was re-verifying, because a milestone that
+  fixes something does not go back and edit the spec that complained about it.
+  **M10 is the gate pass, and it earned its place for the seventh epic running.** Six specialists;
+  security and frontend-performance passed having re-derived the epic's own numbers from the final
+  code (measured **+1.9 kB gzip** for 163 files, and zero commits under `render/`, so TECH_DEBT #75's
+  known overage is not attributable here). The other three blocked, and the largest finding is this
+  register's own favourite shape landing on the epic that keeps quoting it: **the drawer had no entry
+  point.** `m6-activity-context.md` T4 says "the three ADR-0060 intents open the drawer"; registering
+  a subject only ever made a rail button appear, so pressing **Edit** opened the modal at every width
+  unless the planner had separately discovered that button. The milestone's headline capability was
+  dark in the default path, with its unit tests green throughout because they mount the editor and
+  not the shell — ADR-0081, fifth recorded instance.
+  **Fixing it produced two more defects that only a browser could report**, and both took two wrong
+  guesses first. The shell can only agree to show the drawer **one commit** after the route asks, and
+  in that gap the modal still rendered `open` — so `Dialog`'s effect called `showModal()`, focus went
+  into the top layer, and the next commit swapped the chrome and unmounted it, leaving focus on
+  `<body>`: WCAG 2.4.3, and every workspace keyboard accelerator silently dead with it. A layout
+  effect does **not** fix that, because React flushes a commit's passive effects before the re-render
+  a layout effect schedules; the shipped answer is derived rather than latched — _no modal while a
+  drawer could hold this instead_ — which also stops a modal popping over a planner who has
+  deliberately pointed the drawer at the Explorer. And Escape does something different from what I
+  twice assumed: with focus on the dock button no inner rung of ADR-0080's ladder claims the press,
+  so the shell's outermost one takes it, the selection survives, and focus lands on the rail button.
+  Each was established by a probe recording the actual sequence (`in BUTTON[Close dialog]` → `out` →
+  `dialog removed`), not by reading.
+  Two further blocking findings were **missing tests rather than defects**, and both were structurally
+  invisible: `PlanStatusBar` had no coverage direct or indirect, because it is portalled and
+  `ChromePortal` returns `null` with no host — so every suite that renders the toolbar renders it zero
+  times; and M8's own written acceptance condition ("the three sites read one value; a structural test
+  says so") had never been met, leaving unpinned the exact arithmetic ADR-0095 shipped wrong once.
+  `m6-activity-context.md`'s acceptance table is **corrected rather than edited**: three of its six
+  rows were wrong in both directions — Close and Escape do **not** need a discard guard (the hooks
+  live above the `shell` call, so a portal returning nothing unmounts the fields and not the
+  component, which that same file already says about a different route), and what the table missed
+  entirely was focus. Every fix carries a regression test verified red first; six non-blocking
+  findings are `docs/TECH_DEBT.md` #149.
+  **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation parity
+  gate is untouched by construction.
+
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
   alerts — turned out to need no principal at all (an alert is an outbound POST), but the question
@@ -2769,6 +2931,16 @@ When operating in this repo, Claude Code should:
   does not go back and edit the specs that complained about them**. Everything in
   this process re-verifies the solution's citations; nothing was re-verifying the
   problem's. See [`docs/DECISIONS.md`](docs/DECISIONS.md), 2026-08-19.
+
+- **A milestone that claims user-facing capability lands with a journey that
+  drives the real product — flag or no flag.** ADR-0081 states this rule in terms
+  of "the flag-on journey", and Graphite ships no `VITE_` flag (ADR-0088 D1), so
+  the rule was not reached for — and its M6 shipped a drawer with **no entry
+  point**, the fifth recorded instance of the class, caught by a specialist review
+  rather than by anything automatic. The rule's subject is the **capability**, not
+  the flag. A targeted unit suite is not a substitute: the suites for that
+  milestone mounted the editor, and the defect was in the seam between the editor
+  and the shell.
 
 - **The brief is not evidence.** A claim inherited from the task that started
   the work gets checked like any other. Both recorded instances of this

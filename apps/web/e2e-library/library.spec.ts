@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+
 import {
   calendarPickerOptions,
   createClient,
@@ -102,7 +104,7 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   // With the activity-editor convergence flag default-on (ADR-0062), this opens the tabbed
   // activity editor on its Resources tab (titled with the activity's own name) rather than the
   // standalone `ActivityResourcesDialog`.
-  const assignDialog = page.getByRole('dialog');
+  const assignDialog = activityEditor(page);
   await expect(assignDialog).toBeVisible();
   // The picker is the shared searched Combobox behind the flag, not a native select.
   await assignDialog.getByRole('combobox', { name: 'Resource' }).press('ArrowDown');
@@ -138,7 +140,7 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   await startEditing(page);
   await selectOnlyActivity(page);
   await page.getByRole('button', { name: 'Resources', exact: true }).click();
-  const reopened = page.getByRole('dialog');
+  const reopened = activityEditor(page);
   await expect(reopened).toBeVisible();
   // The assignment is untouched: the row is still listed under "Assigned".
   await expect(reopened.getByText('Crew A')).toBeVisible();

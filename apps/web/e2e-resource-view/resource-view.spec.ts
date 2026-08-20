@@ -58,7 +58,7 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
   await expect(diagram.getByRole('option')).toHaveCount(1, { timeout: 15_000 });
   await assignResource(page, 'Survey', 'Crew A', 8);
 
-  const lookToolbar = page.getByRole('toolbar', { name: 'View and navigate' });
+  const lookToolbar = page.getByRole('toolbar', { name: 'Plan commands' });
 
   // (2) Reveal the resource view: the docked panel + the aria-hidden canvas strip both appear, and
   // focus moves into the panel (mirrors the activities-panel expand focus move).
@@ -125,7 +125,7 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
   // (6) The Look-row toolbar + the open "Resource loading" region stay accessible with the strip open
   // and the table expanded.
   const results = await new AxeBuilder({ page })
-    .include('[role="toolbar"][aria-label="View and navigate"]')
+    .include('[role="toolbar"][aria-label="Plan commands"]')
     .include('section[aria-label="Resource loading"]')
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze();

@@ -1,0 +1,120 @@
+# Graphite M5 — the single command strip: design, and the measurement that must come first
+
+**Status:** design · **ADR:** [ADR-0099](../../adr/0099-graphite-the-workstation-in-rail-chrome.md) D3
+
+## The shape
+
+Three command rows above the stage become **one**:
+
+| Today (after M4)                      | After M5              |
+| ------------------------------------- | --------------------- |
+| identity + mode segments + pen status | identity + pen status |
+| Row 1 — `View and navigate`           | **one strip**         |
+| Row 2 — `Build and manage`            | —                     |
+
+- `ToolbarRow` goes `'mode' \| 'look' \| 'do'` → `'mode' \| 'strip'`; `look` and `do` merge.
+- The four **mode segments move to the rail** — ADR-0091's own thesis is that a mode is not a
+  command, and the rail is now the leading-edge cluster where a mode belongs. **−400 px**, a quarter
+  of the available width at 1646 spent on things that are not commands.
+- **Calendar · Analysis · Comments · Share · Print fold into one `Plan ▾`** — five document-level
+  commands used occasionally, behind one trigger. **−283 px net.**
+- `search` stays an **inline field at full width**. The UX review's B10 is explicit that collapsing
+  the product's highest-frequency find affordance into a popover is a click-cost regression, and the
+  reduced strip does not need the width.
+
+**The modes stay registry items on the rail, never hand-rolled buttons.** plan.md §E names this:
+the five modal tools need arm/disarm, Escape precedence, announcement and pen gating, and the
+registry already gives all five. Hand-rolling is how one control gets a rule and its neighbour does
+not — the ADR-0064 §7 shape, recorded four times in this register.
+
+## The claim that has not been measured, and must be before anything is deleted
+
+ADR-0099's Consequences say the width ladder, the band floors, the hysteresis,
+`CHROME_RESIDUAL_PX` and the `⋯` overflow "become unnecessary and are deleted with the row they
+served".
+
+**M0 measured 1920, 1646, 1440 and 1280. `e2e-toolbar-fit` targets 960 and 768 as well.**
+Extrapolating from M0's own figures, the reduced strip is ~1052 px against ~912 px available at 960
+— i.e. it does **not** fit, and deleting the overflow there would reproduce the ADR-0090 defect this
+whole epic was opened on: controls painted at 0 px, pointer-unreachable, with no `⋯` to reach them
+through. That is a WCAG 2.5.8 failure with no exception available.
+
+So **M5-T1 is a measurement, not an implementation**: extend `graphite-strip.spec.ts` to 1024, 960
+and 768 and read the answer. Three outcomes, decided in advance so the result cannot be rationalised
+after the fact:
+
+1. **Fits at every width** — the ladder goes, exactly as ADR-0099 says.
+2. **Fits down to some width W and not below** — the ladder is **kept below W and deleted above
+   it**, and ADR-0099's Consequences are corrected in the same commit rather than left reading as
+   though the deletion were total.
+3. **Does not fit at 1280** — the strip narrows further before anything is deleted. It is not
+   shaved for a seventh epic.
+
+This is the sixth consecutive epic in the register whose width expectation was contradicted by its
+own measurement, and M0 was the first to catch it before building. Extending that habit one rung
+down costs one harness run.
+
+## What M5 does NOT do
+
+- **`finish-chip` stays in the strip.** ADR-0099 D4 moves it to the status bar and M0 counts −127 px
+  for that, but the status bar is **M7**. Moving it now would strand a read-out with nowhere to go;
+  keeping it costs 127 px against 490 px of measured slack at 1646. M7 removes it and re-measures.
+- **The identity row stays.** The strip's own measured width plus the identity block (~394 px at
+  1920, more with a real 62-character plan name) is ~1504 px against 1394 px available at 1440 —
+  it does not fit, so folding identity into the strip is not available and is not attempted. Two
+  bands above the stage is the honest outcome, down from three.
+
+## Gates
+
+`e2e-toolbar-fit` is **rewritten, not retired** — S4 (the row fits as laid out), S3 (no command has
+no route), S11 (a trigger's density matches its band) and the coarse-pointer sweep all still have
+subjects; what goes is every assertion about the `⋯`, which will not exist above W. The
+band-width assertion M4 added is untouched: it is about the band, not its contents.
+
+ADR-0079's Escape target guard is re-asserted, because merging two rows re-enters the code that
+owns it.
+
+## Implementation notes, from reading the code
+
+- **`ToolbarRow`** is `'mode' | 'look' | 'do'` (`toolbar-registry.ts:165`). It becomes
+  `'mode' | 'strip'`. `splitByRow` is already keyed by a `Record<ToolbarRow, …>` seeded with every
+  key **precisely so that changing the union is a typecheck failure rather than a silent
+  mis-partition** — ADR-0091 M1 B1 records the two-row ternary that dropped every mode item into
+  `look` while the registry said they had moved. That guard is what makes this edit safe.
+- **`Toolbar` already handles both arrow axes** (`Toolbar.tsx:518` treats `ArrowDown` as `ArrowRight`)
+  and hard-codes `aria-orientation="horizontal"` at `:582`. The rail's mode cluster needs one
+  `orientation` prop threaded to that attribute — the same shape `Tabs` took in ADR-0061, and for
+  the same reason. It is **not** a new primitive.
+- **The `⋯` cannot simply be dropped from `role="toolbar"`.** ADR-0091 M7 records why it is a
+  registry item: it is a roving stop, the arrow keys are a handler on the container, and
+  `e2e-toolbar-fit` scopes its sweep to that element — moving it out would take it out of the gate's
+  reach **silently**. So if outcome 2 holds, the `⋯` survives below W as a registry item and the
+  deletion is of the _ladder above W_, not of the control.
+- **Deletion set, if outcome 1 holds:** `computeLadder` + `toolbar-ladder.ts` (326 lines) and its
+  suite (418), `CHROME_RESIDUAL_PX` (`Toolbar.tsx:52`), `resolveLayoutMode`, the band floors and the
+  hysteresis. `toolbar-band.tsx` stays — it publishes the band width, which the strip still needs for
+  the label decision.
+
+## What reading `ActivityEditorDialog` settles for M6
+
+Recorded here because it was read while M5 was blocked, and because it decides M6's shape before
+M6 starts rather than during it.
+
+The plan's bar for M6 is that **every existing `ActivityEditorDialog.*.test.tsx` passes unchanged**
+— nine files. That is only achievable if the milestone is an **extraction**, not a rewrite, which is
+ADR-0062's rule and the reason that epic's own extraction could claim its proof ("every pre-existing
+suite passed unchanged through it").
+
+`ActivityEditorDialog.tsx` is 793 lines whose body is already a self-contained composition inside a
+`<Dialog>` wrapper opened at `:411`. So M6 is two steps, and only the first is provable:
+
+1. **Extract `ActivityEditorBody`.** The dialog keeps existing and renders it. Every suite passes
+   untouched — and if one does not, the extraction is wrong and it is cheap to learn there.
+2. **Render the same body as the drawer's Properties subject** and move the entry points. The
+   dialog's suites now prove the body, wherever it is mounted.
+
+Two things the dialog gets from `<Dialog>` that the drawer does not, and that step 2 owes
+explicitly: `confirmBeforeClose` (ADR-0060 M6's guard over three independently-dirty scopes — and
+plan.md §A9 records that **a drawer never closes**, so _selecting a different bar_ is the implicit
+dismiss and nothing covers that path today), and focus containment, which a non-modal panel must not
+have. Neither is a detail to discover while wiring.

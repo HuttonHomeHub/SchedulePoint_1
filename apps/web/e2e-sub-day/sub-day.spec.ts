@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import { activityEditor } from '../e2e-support/activity-editor';
+
 import {
   addActivity,
   createAndOpenPlan,
@@ -80,7 +82,7 @@ test('a sub-day duration and lag round-trip through the real API', async ({ page
 
   // ------------------------------------- 3. An unrelated edit must not flatten the sub-day value
   await openEdit(page, 'Lift plant');
-  const editDialog = page.getByRole('dialog');
+  const editDialog = activityEditor(page);
   // The field is seeded with the exact value, in the grammar it was typed in.
   await expect(editDialog.getByLabel('Duration', { exact: true })).toHaveValue('4h');
   await editDialog.getByLabel('Name').fill('Lift plant (revised)');
@@ -116,7 +118,7 @@ test('a sub-day lag round-trips, and the 24-hour calendar measures elapsed time'
 
   // ------------------------------------------------------------------ 4. A four-hour cure lag
   await openLogic(page, 'Strike formwork');
-  const logic = page.getByRole('dialog');
+  const logic = activityEditor(page);
   await logic.getByLabel('Predecessor activity').selectOption({ label: 'Pour slab' });
   await logic.getByLabel(/^Lag \(/).fill('4h');
   await logic.getByRole('button', { name: 'Add link' }).click();
@@ -142,7 +144,7 @@ test('a sub-day lag round-trips, and the 24-hour calendar measures elapsed time'
     .getByRole('button', { name: /^Edit link/ })
     .first()
     .click();
-  const edit = page.getByRole('dialog').last();
+  const edit = page.getByRole('dialog', { name: 'Edit dependency' });
   await edit.getByLabel('Lag calendar').selectOption('TWENTY_FOUR_HOUR');
   await edit.getByLabel(/^Lag \(/).fill('1d');
   await edit.getByRole('button', { name: 'Save changes' }).click();
@@ -169,5 +171,5 @@ function rowCell(page: Page, name: string) {
 async function openLogic(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: `Actions for ${name}` }).click();
   await page.getByRole('menuitem', { name: 'Logic' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(activityEditor(page)).toBeVisible();
 }

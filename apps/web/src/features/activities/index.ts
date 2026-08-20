@@ -28,6 +28,16 @@ export { ActivitiesTable } from './components/ActivitiesTable';
 export { CreateActivityButton } from './components/CreateActivityButton';
 export { ActivityCreateDialog } from './components/ActivityCreateDialog';
 export { ActivityEditorDialog } from './components/ActivityEditorDialog';
+// The same editor without a modal around it (Graphite M6-T1). `ActivityEditorDialog` is this
+// component plus a `shell` that returns a `<Dialog>`; the context drawer supplies a shell that
+// returns its children, so the drawer inherits no focus trap by construction rather than by
+// discipline. The file keeps its `ActivityEditorDialog` name deliberately: renaming it would
+// rewrite the imports of the eight suites whose passing UNCHANGED is this milestone's proof.
+export {
+  ActivityEditor,
+  type ActivityEditorShell,
+  modalShell,
+} from './components/ActivityEditorDialog';
 export {
   deriveActivityEditorGating,
   type ActivityEditorGating,

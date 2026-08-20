@@ -10,6 +10,51 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+### 2026-08-20 — Four milestones lost their headline task to re-reading the problem
+
+**Decision.** A plan's **problem statement** is re-verified at the start of each milestone, the same
+way its citations are (`CLAUDE.md` §19). Recorded here because Graphite made the case four times in
+a row rather than once.
+
+M7 was to re-host the canvas dock into the status bar; ADR-0092 had already put the dock where it
+belongs and the re-host would have **reversed** that decision. M8's §A15 asked which of two Gantt
+layouts to build; ADR-0095 had shipped the grid beside the chart, so the answer was neither. M9 was
+empty on the same test. And M6 was the mirror image — a task recorded as done that had not been
+done at all.
+
+**Why the process could not catch it.** Everything here re-verifies a **solution's** claims. Nothing
+was re-verifying a problem's, because a milestone that fixes something does not go back and edit the
+spec that complained about it. A stale problem statement makes no false claim a reader can check; it
+simply describes a world that has moved on, and the plan still reads as work owed.
+
+**Consequence.** Each of those milestones still shipped something, and something smaller and
+different from what its plan named — a status bar of facts, a grid splitter, a screenshot that found
+a defect twelve days older than the epic. Writing the withdrawal down was the milestone's product in
+two of the four cases, which is the part that feels like nothing and is not.
+
+---
+
+### 2026-08-20 — Two guesses about React's effect ordering, and a probe that settled it
+
+**Decision.** The activity editor's chrome swap suppresses the modal by a **derived** condition
+(_no modal while a drawer could hold this instead_), not by a latch cleared in an effect.
+
+**What was measured, after reasoning failed twice.** Opening the editor asks the shell to show the
+drawer; the shell can only agree one commit later, and in that gap `modalShell` rendered `open`. The
+first guess was that this was harmless. The second was that a `useLayoutEffect` would beat it —
+wrong, because React flushes a commit's **passive** effects before the re-render a layout effect
+schedules, so `Dialog`'s `showModal()` still ran, focus still went into the top layer, and the next
+commit still unmounted it. A probe in `progress-entry.spec.ts` recorded the actual sequence — the
+button still connected, `document.activeElement` the body, `in BUTTON[Close dialog]` → `out` →
+`dialog removed` — which named the top-layer restore in one run.
+
+**Consequence.** The derived form covers a second case the latch did not: a planner who has
+deliberately pointed the drawer at the Explorer no longer gets a modal popped over their choice. It
+also carries no state, so the `setState`-in-an-effect lint rule has nothing to object to — the latch
+was committed red and caught on the next run.
+
+---
+
 ### 2026-08-18 — A flag's class was wrong, and the gate that checks it cannot see the shape
 
 **Decision.** `VITE_NAV_TREE` retires (ADR-0098 M0), and its register entry records that it had been

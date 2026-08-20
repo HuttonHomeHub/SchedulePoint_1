@@ -12,6 +12,7 @@ import {
   showGantt,
   startEditing,
 } from '../e2e-gantt/support';
+import { clickToolbarCommand } from '../e2e-support/toolbar';
 
 /**
  * **M5 — the chart comes back the way it was left, and can be restructured.**
@@ -42,7 +43,7 @@ async function ganttPlan(page: Page): Promise<string> {
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await clickToolbarCommand(page, 'recalculate');
   await showGantt(page);
   await expect(ganttGrid(page)).toBeVisible();
   return orgSlug;

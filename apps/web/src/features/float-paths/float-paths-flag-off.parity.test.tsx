@@ -55,11 +55,10 @@ describe('VITE_FLOAT_PATHS off — parity with the prior product', () => {
     const rows = splitByRow(buildTsldToolbarItems());
     render(
       <Toolbar
-        items={rows.look}
+        items={rows.strip}
         context={makeTsldToolbarContext({ activityCount: 12, selectedActivity: SELECTED })}
-        label="View and navigate"
+        label="Plan commands"
         authoringEnabled
-        alignEndGroup="object"
       />,
     );
     expect(screen.queryByRole('button', { name: /float paths/i })).not.toBeInTheDocument();

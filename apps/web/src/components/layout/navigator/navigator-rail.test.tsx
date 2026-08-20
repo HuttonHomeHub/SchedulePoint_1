@@ -1,17 +1,23 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type * as NavigatorModule from '@/features/navigator';
 import { NavigatorCrudProvider } from '@/features/navigator/lib/navigator-crud-context';
+import type * as OrganizationsModule from '@/features/organizations';
 
-// The rail's bottom zone renders router `Link`s (ADR-0097 Landing D1). This suite mounts the rail
-// without a router — its subject is the rail's own chrome — so `Link` becomes an anchor, the same
-// stand-in `app-header.test.tsx` and `breadcrumbs.test.tsx` use. `org-destinations.test.tsx` owns
-// the destinations' own assertions.
+// The rail's bottom zone renders router `Link`s (ADR-0097 Landing D1) and, since Graphite M3, its
+// top zone renders the brand link — which reads the pathname to decide whether it is the current
+// page. This suite mounts the rail without a router — its subject is the rail's own chrome — so
+// `Link` becomes an anchor and `useRouterState` returns a path, the same stand-ins
+// `app-header.test.tsx` and `breadcrumbs.test.tsx` use. `org-destinations.test.tsx` owns the
+// destinations' own assertions.
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
+  useRouterState: () => '/',
+  useParams: () => ({}),
+  useNavigate: () => vi.fn(),
   Link: ({
     children,
     to,
@@ -28,6 +34,26 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ),
 }));
 
+// The identity and account zones Graphite M3 moved into the rail have suites of their own
+// (`account-chip.test.tsx`, `OrgSwitcher`'s), and the chip alone reaches a session query, a staff
+// query and a `Menu` portal. Stubbed to their landmarks so this suite stays about WHERE the rail
+// puts them.
+vi.mock('@/components/layout/account-chip', () => ({
+  AccountChip: () => (
+    <button type="button" aria-label="Account: ada@example.com">
+      AL
+    </button>
+  ),
+}));
+vi.mock('@/features/organizations', async (importOriginal) => ({
+  ...(await importOriginal<typeof OrganizationsModule>()),
+  OrgSwitcher: ({ title }: { title?: string }) => (
+    <select aria-label="Active organisation" title={title}>
+      <option>Acme</option>
+    </select>
+  ),
+}));
+
 // The tree reads route params, so it needs a router this suite has no reason to mount — the
 // subject here is the rail's own header chrome. Everything else from the barrel is real.
 vi.mock('@/features/navigator', async (importOriginal) => ({
@@ -35,7 +61,7 @@ vi.mock('@/features/navigator', async (importOriginal) => ({
   HierarchyTree: (): React.ReactElement => <div data-testid="tree-stub" />,
 }));
 
-const { NavigatorRail, NavigatorRailCollapsed } = await import('./navigator-rail');
+const { NavigatorRail } = await import('./navigator-rail');
 
 // The rail's version footer reads the API version via TanStack Query, so it needs a client
 // in scope (in the app it's always inside the shell's QueryClientProvider).
@@ -50,21 +76,30 @@ describe('NavigatorRail', () => {
     expect(screen.getByText(/select an organisation/i)).toBeInTheDocument();
   });
 
-  it('shows a collapse control (pinned rail) that fires onCollapse', () => {
-    const onCollapse = vi.fn();
-    renderRail(<NavigatorRail onCollapse={onCollapse} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse Project Explorer' }));
-    expect(onCollapse).toHaveBeenCalledTimes(1);
-    expect(
-      screen.queryByRole('button', { name: 'Close Project Explorer' }),
-    ).not.toBeInTheDocument();
-  });
-
   it('shows a close control (drawer) that fires onClose', () => {
     const onClose = vi.fn();
     renderRail(<NavigatorRail onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close Project Explorer' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * **The destinations are the rail's, and this renders them only as the `Sheet`'s content.**
+   * Rendering them in both put "Clients" on screen twice in two treatments — ADR-0093's rule, and
+   * it was caught by a strict-mode locator resolving to two elements rather than by anyone looking
+   * at the screen. Below `lg` the rail is hidden and this IS the navigator, so they have to be here
+   * and nowhere else.
+   *
+   * Both directions are asserted: pinning only the drawer case passes equally against a component
+   * that always renders them, which is the state that was wrong.
+   */
+  it('carries the organisation destinations in the Sheet and not in the drawer', () => {
+    const { unmount } = renderRail(<NavigatorRail orgSlug="acme" onClose={vi.fn()} />);
+    expect(screen.getByRole('navigation', { name: 'Organisation' })).toBeInTheDocument();
+    unmount();
+
+    renderRail(<NavigatorRail orgSlug="acme" />);
+    expect(screen.queryByRole('navigation', { name: 'Organisation' })).not.toBeInTheDocument();
   });
 
   it('names the root create control "New client", not just "Client"', () => {
@@ -86,37 +121,5 @@ describe('NavigatorRail', () => {
     expect(create).toHaveTextContent('Client');
     fireEvent.click(create);
     expect(onCreateClient).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('NavigatorRailCollapsed', () => {
-  it('offers a single control to reopen the rail', () => {
-    const onExpand = vi.fn();
-    render(<NavigatorRailCollapsed onExpand={onExpand} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Show Project Explorer' }));
-    expect(onExpand).toHaveBeenCalledTimes(1);
-  });
-
-  /**
-   * The state ADR-0097 Landing D1 owed (`migration.md`): before D1 the six organisation
-   * destinations lived in the app header and survived a rail collapse. Collapsing is exactly what a
-   * planner does to gain canvas width, so a collapsed rail with only a toggle would have put the
-   * whole secondary navigation behind one control it had never been behind.
-   */
-  it('keeps the organisation destinations reachable as an icon strip', () => {
-    renderRail(<NavigatorRailCollapsed onExpand={vi.fn()} orgSlug="acme" />);
-    const nav = screen.getByRole('navigation', { name: 'Organisation' });
-    // Named, not just present: an icon link with no accessible name is not a link anyone can use,
-    // and the name has to be the SAME word the expanded rail shows (WCAG 2.5.3 Label in Name) or a
-    // speech-input user says one thing when the rail is open and another when it is shut.
-    expect(within(nav).getByRole('link', { name: 'Clients' })).toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: 'Members' })).toBeInTheDocument();
-    // Icon-only: no destination renders its label as text, or the strip is not a strip.
-    expect(within(nav).getByRole('link', { name: 'Clients' })).toHaveTextContent('');
-  });
-
-  it('renders no destinations outside an organisation — there are none to show', () => {
-    renderRail(<NavigatorRailCollapsed onExpand={vi.fn()} />);
-    expect(screen.queryByRole('navigation', { name: 'Organisation' })).toBeNull();
   });
 });

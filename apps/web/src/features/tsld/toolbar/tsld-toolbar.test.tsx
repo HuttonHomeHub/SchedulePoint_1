@@ -85,16 +85,9 @@ function renderRows(context: TsldToolbarContext, authoringEnabled = true) {
   return render(
     <div>
       <Toolbar
-        items={rows.look}
+        items={rows.strip}
         context={context}
-        label="View and navigate"
-        authoringEnabled={authoringEnabled}
-        alignEndGroup="object"
-      />
-      <Toolbar
-        items={rows.do}
-        context={context}
-        label="Build and manage"
+        label="Plan commands"
         authoringEnabled={authoringEnabled}
       />
     </div>,
@@ -141,25 +134,28 @@ describe('TSLD toolbar registry (two-row)', () => {
   it('keeps the two rows on distinct toolbars (Look / Do)', () => {
     renderRows(ctx());
     // Row 1 hosts view/navigate; Row 2 hosts build/manage. Both are APG toolbars.
-    expect(screen.getByRole('toolbar', { name: 'View and navigate' })).toBeInTheDocument();
-    expect(screen.getByRole('toolbar', { name: 'Build and manage' })).toBeInTheDocument();
+    // **One strip since Graphite M5.** ADR-0031's two-row split is deleted, so there is one
+    // `role="toolbar"` for commands — and the assertion says "exactly one", because "at least one"
+    // would pass equally against the two-row state this milestone exists to leave behind.
+    expect(screen.getAllByRole('toolbar')).toHaveLength(1);
+    expect(screen.getByRole('toolbar', { name: 'Plan commands' })).toBeInTheDocument();
   });
 
-  it('paints the Project-finish read-out in the row without making it a stop (ADR-0091 M7-S4)', () => {
-    // ADR-0090 M2-T3 took this read-out out of the toolbar for two reasons: 150 px of pinned width,
-    // and a number sitting in a `role="toolbar"` whose every other member is a command. M7 puts it
-    // back, knowingly. The width objection no longer holds (Row 1 carries 382 px of slack at the
-    // product owner's 1646 px), and the principled half is kept rather than traded: `presentational`
-    // means the row paints it and the arrow keys never land on it.
+  it('does not carry the Project-finish read-out — it is a fact, not a command (Graphite M5)', () => {
+    // Its third placement, and each move was measured rather than argued. ADR-0090 M2-T3 took it
+    // out of the toolbar (150 px of pinned width, and a number in a `role="toolbar"` whose every
+    // other member is a command); ADR-0091 M7-S4 put it back as `presentational`, because the `⋯`
+    // is a roving stop that cannot leave the toolbar and a chip to its right made it impossible for
+    // the `⋯` to be the row's last thing.
     //
-    // It had to come back because the `⋯` cannot leave — it is a roving stop, the arrow-key handler
-    // is on the toolbar container, and the fit gate sweeps that element — so a chip sitting outside
-    // and to its right made it impossible for the `⋯` to be the row's last thing.
+    // M5-T1 then measured the reduced strip NOT fitting at 768, 960, 1280 or 1440, and this is
+    // 127 px of it. It moves to the plan's identity row, which already carries the breadcrumb, the
+    // status badge and the edit pencil — facts about the plan, which is what a finish date is.
+    // M7-S4's reason survives: nothing was added to the `⋯`'s right, so it is still the rightmost
+    // control on the row. ADR-0099 D4 sends it on to the status bar at M7.
     renderRows(ctx());
-    const lookRow = screen.getByRole('toolbar', { name: 'View and navigate' });
-    const chip = within(lookRow).getByTestId('finish-chip-body');
-    expect(chip).toBeInTheDocument();
-    expect(chip.closest('[data-toolbar-focusable]')).toBeNull();
+    const lookRow = screen.getByRole('toolbar', { name: 'Plan commands' });
+    expect(within(lookRow).queryByTestId('finish-chip-body')).toBeNull();
   });
 
   it('renders the Summary popover body from the context', () => {
@@ -188,14 +184,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     const opened = ctx({ legendOpen: true });
     rerender(
       <div>
-        <Toolbar
-          items={rows.look}
-          context={opened}
-          label="View and navigate"
-          authoringEnabled
-          alignEndGroup="object"
-        />
-        <Toolbar items={rows.do} context={opened} label="Build and manage" authoringEnabled />
+        <Toolbar items={rows.strip} context={opened} label="Plan commands" authoringEnabled />
       </div>,
     );
     expect(screen.getByRole('button', { name: 'Legend' })).toHaveAttribute('aria-pressed', 'true');
@@ -211,14 +200,7 @@ describe('TSLD toolbar registry (two-row)', () => {
     const rows = splitByRow(buildTsldToolbarItems());
     rerender(
       <div>
-        <Toolbar
-          items={rows.look}
-          context={ctx()}
-          label="View and navigate"
-          authoringEnabled
-          alignEndGroup="object"
-        />
-        <Toolbar items={rows.do} context={ctx()} label="Build and manage" authoringEnabled />
+        <Toolbar items={rows.strip} context={ctx()} label="Plan commands" authoringEnabled />
       </div>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Add activity' }));

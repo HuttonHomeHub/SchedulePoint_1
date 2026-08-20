@@ -162,7 +162,14 @@ export function ToolbarSplitButton({
           // shape its own docblock is about.
           caretRef.current?.focus();
         }}
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none"
+        // `pointer-coarse:px-3` matches `toolbarControlVariants`, and its absence here was the
+        // "one correct pattern applied to a control and not its neighbour" shape (ADR-0064 §7)
+        // sitting latent: while this region carried a LABEL its width was never near the floor, so
+        // nothing measured it. Graphite M5's merged strip made it icon-only, and the coarse-pointer
+        // sweep immediately read `today` at **32 px against a 40 px floor** — a WCAG 2.5.8 failure
+        // that had been one label away the whole time. ADR-0090 M3 records the caret failing the
+        // same gate for the mirror-image reason.
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none pointer-coarse:px-3"
       >
         {icon}
         {compact ? null : <span className="truncate">{label}</span>}

@@ -1,12 +1,15 @@
 import type { ActivitySummary } from '@repo/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { activityKeys } from '../api/use-activities';
 import { deriveActivityEditorGating } from '../lib/activity-editor-gating';
+import { openActivityEditor } from '../lib/activity-editor-intent';
 
 import { ActivitiesTable } from './ActivitiesTable';
+import { ActivityEditorDialog } from './ActivityEditorDialog';
 
 import { expectInert } from '@/components/ui/scope-save-bar-assertions';
 
@@ -59,18 +62,57 @@ const CONTRIBUTOR = deriveActivityEditorGating({
   canReadCost: false,
 });
 
-function renderTable(gating = PLANNER_WITH_PEN, canEditSchedule = true) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [BASE]);
-  return render(
-    <QueryClientProvider client={queryClient}>
+/**
+ * **A host, because the table no longer mounts an editor** (Graphite M6-T4).
+ *
+ * It used to hold its own `editorIntent` and its own `ActivityEditorDialog`, beside the
+ * workspace's — two mounts, two sets of scope forms and two dirty states for one activity, and
+ * after M6-T2 two different chromes for the same Edit. The row actions call `onOpenEditor` now and
+ * the workspace decides.
+ *
+ * This test grew a five-line host rather than losing its assertions, and that is the honest trade:
+ * the property under test is *the whole chain* — a row action reaches one editor on the right tab —
+ * so testing the table's callback alone would prove the door opens and nothing about the room.
+ */
+function Host({
+  gating,
+  canEditSchedule,
+}: {
+  gating: ReturnType<typeof deriveActivityEditorGating>;
+  canEditSchedule: boolean;
+}): React.ReactElement {
+  const [intent, setIntent] = useState<ReturnType<typeof openActivityEditor> | null>(null);
+  const activity = intent ? BASE : undefined;
+  return (
+    <>
       <ActivitiesTable
         orgSlug="acme"
         planId="pl1"
         canEditSchedule={canEditSchedule}
         canReportProgress
         editorGating={gating}
+        onOpenEditor={(a, purpose) => setIntent(openActivityEditor(a, purpose))}
       />
+      <ActivityEditorDialog
+        orgSlug="acme"
+        planId="pl1"
+        open={intent !== null}
+        onClose={() => setIntent(null)}
+        gating={gating}
+        activity={activity}
+        planActivities={[BASE]}
+        {...(intent ? { intent } : {})}
+      />
+    </>
+  );
+}
+
+function renderTable(gating = PLANNER_WITH_PEN, canEditSchedule = true) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(activityKeys.listByPlan('acme', 'pl1'), [BASE]);
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Host gating={gating} canEditSchedule={canEditSchedule} />
     </QueryClientProvider>,
   );
 }

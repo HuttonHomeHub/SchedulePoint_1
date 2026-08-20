@@ -347,4 +347,48 @@ describe('an overflowed item keeps its standing description', () => {
       'No conflicts to review 0 conflicts in this plan',
     );
   });
+  /**
+   * **The registry id follows the command into the menu** (Graphite M5 follow-up).
+   *
+   * Both branches, because a shaded command is the one a journey most needs to find and this
+   * register keeps recording one correct pattern applied to a control and not its neighbour.
+   *
+   * Verified RED against the pre-fix code: `data-toolbar-item` was written by `Toolbar` on the
+   * INLINE control and by nothing here, so an id was a handle only while the ladder happened to
+   * leave the command on the row. `e2e-library/support.ts` had been locating `calendar` by id since
+   * ADR-0091 with a comment promising "the id is what the registry actually guarantees" — and it
+   * timed out the moment Graphite M5 merged the two rows onto one budget and that command became
+   * menu-only at every width. The promise is now true rather than aspirational.
+   */
+  it('stamps an enabled command with its registry id', () => {
+    render(
+      <ToolbarOverflow
+        items={[resolved()]}
+        context={{ ok: true }}
+        groupLabels={GROUP_LABELS}
+        tabIndex={0}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
+    expect(screen.getByRole('menuitem', { name: 'Add activity' })).toHaveAttribute(
+      'data-toolbar-item',
+      'add',
+    );
+  });
+
+  it('stamps a SHADED command with its registry id too', () => {
+    render(
+      <ToolbarOverflow
+        items={[resolved({ enabled: false, disabledReason: 'You need the pen' })]}
+        context={{ ok: true }}
+        groupLabels={GROUP_LABELS}
+        tabIndex={0}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More toolbar actions' }));
+    expect(screen.getByRole('menuitem', { name: 'Add activity' })).toHaveAttribute(
+      'data-toolbar-item',
+      'add',
+    );
+  });
 });

@@ -170,6 +170,20 @@ export interface ToolbarProps<Ctx> {
    * Legend). No-op if the group isn't currently rendered inline.
    */
   alignEndGroup?: ToolbarGroupId;
+  /**
+   * `'horizontal'` (default) is the band's row. `'vertical'` stacks the items — the tool rail, where
+   * the mode cluster lives since Graphite M5.
+   *
+   * **One prop, not a second primitive.** The keyboard already answers both axes (`ArrowDown` is
+   * treated as `ArrowRight` below), so what was actually hard-coded was the ANNOUNCEMENT: a
+   * vertical stack that tells assistive technology it is horizontal is wrong about the only thing
+   * `aria-orientation` exists to say. Same shape as `Tabs` in ADR-0061, and for the same reason.
+   *
+   * A vertical toolbar is **never width-constrained** — its items stack, so there is no row to
+   * overflow — which is why it opts out of the ladder entirely rather than measuring a width that
+   * is an output of its own content.
+   */
+  orientation?: 'horizontal' | 'vertical';
   className?: string;
 }
 
@@ -211,6 +225,7 @@ export function Toolbar<Ctx>({
   authoringEnabled = true,
   groupLabels,
   alignEndGroup,
+  orientation = 'horizontal',
   className,
 }: ToolbarProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -336,7 +351,10 @@ export function Toolbar<Ctx>({
     // safely give anything up (so it never demotes) — because on such a row `clientWidth` is an
     // OUTPUT of the demotion decision, which makes demotion a one-way door. See
     // `LadderInput.allowDemotion` for the 37 px row this was measured on.
-    const widthConstrained = isWidthConstrained(container);
+    // A **vertical** toolbar is never width-constrained: its items stack, so there is no row to
+    // overflow and its `clientWidth` says nothing about whether its content fits. Asking the ladder
+    // anyway would be the ADR-0091 M7 conflation with the axes swapped.
+    const widthConstrained = orientation === 'horizontal' && isWidthConstrained(container);
     // Only when something on the row could take a label: `getComputedStyle` is a style recalc, and a
     // row whose every item is `showLabel: 'always'` has nothing to measure text for (perf gate).
     const needsFont = bar.some(
@@ -402,7 +420,7 @@ export function Toolbar<Ctx>({
         previouslyAdmitted: admittedIdsRef.current,
       }),
     );
-  }, [bar, staticOverflow, applyLadder, bandWidth, layout]);
+  }, [bar, staticOverflow, applyLadder, bandWidth, layout, orientation]);
 
   // Re-measure synchronously after layout whenever the resolved items change, keeping the ref current.
   const measureRef = useRef(measure);
@@ -579,7 +597,7 @@ export function Toolbar<Ctx>({
       ref={containerRef}
       role="toolbar"
       aria-label={label}
-      aria-orientation="horizontal"
+      aria-orientation={orientation}
       onKeyDown={onKeyDown}
       /*
        * `overflow-x-auto` is the sub-floor remedy (M1-T5, remedy (b)), chosen after remedy (a) was
@@ -598,7 +616,18 @@ export function Toolbar<Ctx>({
        * eat canvas height. M3's responsive ladder should make this unreachable in practice; until
        * then, reachable-by-scrolling beats hidden.
        */
-      className={cn('flex min-w-0 items-center gap-1 overflow-x-auto overflow-y-hidden', className)}
+      className={cn(
+        'flex gap-1',
+        // **The vertical variant stacks and never scrolls.** The `overflow-x-auto` above is the
+        // horizontal row's sub-floor remedy — a row can run out of width, and reachable-by-scrolling
+        // beats hidden. A rail cannot: its items stack, so its content grows in the direction the
+        // rail already has, and giving it a scroller would be reserving a remedy for a state it has
+        // no way to reach.
+        orientation === 'vertical'
+          ? 'flex-col items-center'
+          : 'min-w-0 items-center overflow-x-auto overflow-y-hidden',
+        className,
+      )}
     >
       {groups.map(({ group, items: groupItems }, i) => (
         <div
@@ -617,8 +646,15 @@ export function Toolbar<Ctx>({
             // **0 px visible**, and a `render` item can never demote, so there was no route to it at
             // all. Hiding a command inside a tidy row is the same defect as pushing it out of an
             // untidy one.
-            'flex items-center gap-1',
-            i > 0 && 'border-border ml-1 border-l pl-2', // a hairline separates groups
+            'flex gap-1',
+            orientation === 'vertical' ? 'flex-col items-center' : 'items-center',
+            // A hairline separates groups — along the axis the toolbar actually runs. A vertical
+            // rail with a left border draws a line down the side of a group rather than between
+            // two, which reads as a container and not as a division.
+            i > 0 &&
+              (orientation === 'vertical'
+                ? 'border-border mt-1 w-full border-t pt-2'
+                : 'border-border ml-1 border-l pl-2'),
             // Right-align this group (and everything after it) — the trailing status read-outs on Row 1.
             group === alignEndGroup && 'ml-auto',
           )}
@@ -657,7 +693,14 @@ export function Toolbar<Ctx>({
                 {...(r.busy ? { busy: true } : {})}
                 // Presentation reads the item's own label policy — never its `tier`, which is
                 // priority and answers a different question (TECH_DEBT #61).
-                showLabel={labelPolicy(r.item, layout) === 'always' || labelledIds.has(r.item.id)}
+                // **A vertical toolbar is always icon-only.** The rail is 48 px; a label there
+                // either wraps, clips or widens the leading edge of the whole application. This is
+                // the one place the label decision is not the ladder's — the ladder answers "is
+                // there room on this row", and a rail has no row.
+                showLabel={
+                  orientation === 'horizontal' &&
+                  (labelPolicy(r.item, layout) === 'always' || labelledIds.has(r.item.id))
+                }
                 {...(r.item.isActive ? { pressed: r.active } : {})}
                 disabled={!r.enabled}
                 disabledReason={r.disabledReason}

@@ -49,9 +49,22 @@ const actual = {
   'Prisma models': (read('apps/api/prisma/schema.prisma').match(/^model /gm) ?? []).length,
   migrations: dirs('apps/api/prisma/migrations').length,
   'web source files': countSourceFiles('apps/web/src'),
-  'flag-scoped Playwright suites': readdirSync(join(root, 'apps/web')).filter((n) =>
-    n.startsWith('e2e-'),
-  ).length,
+  /**
+   * A **suite** is a directory of specs, not any directory whose name begins `e2e-`.
+   *
+   * This counted the name alone until Graphite M10, when `e2e-support/` was added to hold helpers
+   * two suites share — no specs, not a suite, and the gate immediately reported 35 where the
+   * repository has 34. That is this gate failing in its own mode: a count that is wrong in a way a
+   * reader cannot check, on the line that tells them the counts are checked. Requiring a spec is
+   * derived rather than an exclusion list, so the next helper directory needs no edit here.
+   */
+  'flag-scoped Playwright suites': readdirSync(join(root, 'apps/web'))
+    .filter((n) => n.startsWith('e2e-'))
+    .filter((n) =>
+      readdirSync(join(root, 'apps/web', n), { recursive: true }).some((f) =>
+        String(f).endsWith('.spec.ts'),
+      ),
+    ).length,
   ADRs: readdirSync(join(root, 'docs/adr')).filter((n) => /^\d{4}-.*\.md$/.test(n)).length,
 };
 

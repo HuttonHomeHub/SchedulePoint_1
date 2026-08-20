@@ -5,17 +5,16 @@ import { defineConfig, devices } from '@playwright/test';
  * It boots the shell once per theme — a thing the shared `e2e` project cannot express, since the
  * theme is chosen before first paint — and scans each for WCAG violations.
  *
- * `VITE_DESIGNED_CHROME` is pinned **false** below, and what that pin now proves is narrower
- * than it was. It used to be a rollback-parity suite covering STRUCTURE and COLOUR across four
- * themes: the flag carried token values in a `[data-designed-chrome]` layer (ADR-0055 §6), so
- * flag-off painted a different palette as well as a different shell.
+ * This began as a rollback-parity suite: `VITE_DESIGNED_CHROME` was pinned **false**, and the flag
+ * carried token values in a `[data-designed-chrome]` layer (ADR-0055 §6), so flag-off painted a
+ * different palette as well as a different shell.
  *
- * **ADR-0097 removed both halves of that.** There is one theme, so there are no longer four to
- * parametrise over, and the flagged value layers are folded into the theme block — so flag-off
- * and flag-on paint the same colours by construction and the colour half of the contract has
- * nothing left to assert. What survives is worth keeping and is stated rather than implied: the
- * flag still selects a SHELL, and this suite proves that shell is accessible.
- * `playwright.designed-chrome.config.ts` is its flag-ON sibling and covers the shipped default.
+ * **ADR-0097 removed the colour half and Graphite M2 removed the rest.** There is one theme, the
+ * flagged value layers folded into the theme block, and the flag itself is retired — so this suite
+ * now runs against the shipped shell, which is strictly MORE coverage than proving a shell no
+ * published bundle could produce (ADR-0088's finding, applied rather than quoted). What it proves
+ * is unchanged and is the reason it survives the flag: a reader still carrying `dark`, `system` or
+ * `corporate` in storage from before the collapse gets the same painted theme as everybody else.
  *
  * Chromium only (TECH_DEBT #25a), serial (each test onboards its own org).
  */
@@ -63,8 +62,10 @@ export default defineConfig({
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
-            // Explicit since the S5-T4 flip made ON the default — this suite is the rollback side.
-            env: { VITE_DESIGNED_CHROME: 'false', VITE_CANVAS_VISUAL_LANGUAGE: 'false' },
+            // `VITE_CANVAS_VISUAL_LANGUAGE` off keeps the diagram out of the theme sweep, which
+            // is about the shell's chrome and not the plot (ADR-0097 Landing E gave the canvas its
+            // own scope and its own pairs in the contrast matrix).
+            env: { VITE_CANVAS_VISUAL_LANGUAGE: 'false' },
           },
         ],
       }),

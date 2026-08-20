@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { DESIGNED_CHROME_ENABLED } from '@/config/env';
 import { cn } from '@/lib/utils';
 
 /**
@@ -35,7 +34,28 @@ import { cn } from '@/lib/utils';
  * be two of everything that has to stay in step, which this register keeps recording as how things
  * drift.
  */
-export type ChromeSlotName = 'rows' | 'identity';
+/**
+ * `rows` is the command band; `rail` is the tool rail's mode cluster (Graphite M5).
+ *
+ * A second name came back here for a better reason than the one that took it away. ADR-0097 D1b's
+ * `identity` slot existed to carry a plan's identity line across the shell boundary, and M3 removed
+ * it because the identity and the modes ended up in the same component. This one carries the mode
+ * cluster into the RAIL, which the shell renders and which must stay plan-unaware (ADR-0029) — the
+ * same problem the band solved in ADR-0055 §3, one column along.
+ */
+/**
+ * `drawer` is the trailing context drawer's body (Graphite M6-T2) — the third name, and taken on
+ * exactly the terms the paragraph above sets. An activity editor belongs *visually* to the drawer,
+ * which the shell owns, and *logically* to the plan workspace, which owns `usePlanWorkspaceModel`,
+ * the ADR-0060 per-scope gating and the mutation hooks it reads. Lifting any of that into the shell
+ * is the thing ADR-0029 forbids; a portal moves the DOM node and leaves the React tree alone.
+ */
+/**
+ * `status` is the plan status bar's row (Graphite M7) — grid row 3, the mirror of the command
+ * band's row 1. Same argument as every other name here: the facts it shows belong to the plan, the
+ * row belongs to the shell, and a portal is what keeps the shell from learning the difference.
+ */
+export type ChromeSlotName = 'rows' | 'rail' | 'drawer' | 'status';
 
 const ChromeSlotContext = createContext<Partial<Record<ChromeSlotName, HTMLElement | null>>>({});
 
@@ -79,19 +99,27 @@ export function ChromeSlot({
       data-chrome-slot={name}
       // The rows slot stacks; the identity slot is one item in a flex row and must be able to
       // shrink, or a long plan name pushes the account chip off the header.
-      className={cn(name === 'rows' ? 'flex flex-col' : 'flex min-w-0 items-center', className)}
+      className={cn(
+        name === 'rows' && 'flex flex-col',
+        // The drawer body is a COLUMN that must be able to shrink and scroll — the editor inside it
+        // is a tab rail beside a pane, and a row layout would lay them side by side in 224–420 px.
+        name === 'drawer' && 'flex min-h-0 flex-1 flex-col',
+        name === 'rail' && 'flex min-w-0 items-center',
+        // A status bar with nothing in it is a ZERO-HEIGHT row, which is what lets grid row 3 stay
+        // `auto` and keeps the twelve screens that are not a plan exactly as they were.
+        name === 'status' && 'flex min-w-0 items-center empty:hidden',
+        className,
+      )}
     />
   );
 }
 
 /**
- * Renders `children` into the chrome band's slot when the flag is on, and **in place** when it is
- * off — an identity wrapper, which is what makes the rollback byte-for-byte.
+ * Renders `children` into the chrome band's slot.
  *
- * With the flag on but no slot mounted yet (or a subtree with no band at all — a test harness),
- * it renders `null` for that commit rather than falling back to rendering in place. The fallback
- * would paint the toolbar twice for one frame on the way in, which is worse than a frame of
- * nothing.
+ * With no slot mounted yet (or a subtree with no band at all — a test harness) it renders `null`
+ * for that commit rather than falling back to rendering in place. The fallback would paint the
+ * toolbar twice for one frame on the way in, which is worse than a frame of nothing.
  */
 export function ChromePortal({
   children,
@@ -101,7 +129,6 @@ export function ChromePortal({
   name?: ChromeSlotName;
 }): React.ReactNode {
   const node = useContext(ChromeSlotContext)[name] ?? null;
-  if (!DESIGNED_CHROME_ENABLED) return children;
   if (!node) return null;
   return createPortal(children, node);
 }

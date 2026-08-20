@@ -800,41 +800,6 @@ export const CANVAS_LIVE_FEEDBACK_ENABLED = flagDefaultOn(
 );
 
 /**
- * The **designed chrome band** (ADR-0055 S2–S3, spec `docs/specs/designed-ui/`). Default **ON**
- * since 2026-07-26 (S5-T4), once the deferred specialist gates ran over the whole epic diff and
- * every blocking finding was folded — **accessibility** (the `--input` control boundary at 1.26:1
- * sitewide, `bg-muted` resolving light-on-light inside the Corporate chrome, the account menu's
- * theme radios with no programmatic group, and a `globals.css` comment claiming a contrast
- * coverage the suite did not have), **ux** (the client-row accent bar ADR-0055 §3 promised but
- * never shipped, and the unstated breadcrumb-seam decision, now named in the ADR), **component**
- * (catalogue gaps, `ToggleChip`'s zero consumers logged as debt — since closed: it is now the
- * calendar dialog's working-days picker) and **performance** (pass, no blockers). Light's and
- * Dark's own chrome values landed first and separately (S5-T1) so that the flag-off parity suites
- * still meant something on the day they were most needed.
- *
- * When on, the shell stops being "a centred header above a rail" and becomes one **full-bleed
- * chrome band**: the header row and, on a plan, the two toolbar rows render as a single navy
- * (Corporate) / neutral (Light, Dark) band across the top, with the Project Explorer and the
- * workspace below it. The toolbar reaches the band through a **portal**, so the React tree — and
- * therefore `usePlanWorkspaceModel`, `useTsldToolbarContext` and every registry predicate — is
- * untouched, and the shell never becomes plan-aware (which would contradict ADR-0029). Route
- * bodies keep their `max-w-6xl` measure cap: chrome is full-bleed, content is not.
- *
- * The flag also stamps `data-designed-chrome` on `<html>`, which is what activates the flagged
- * token-value layer in `styles/globals.css` (S3's light Corporate rail). That is deliberate: it
- * makes the rollback byte-for-byte for **colour** as well as structure, rather than leaving a
- * value change stranded behind a structural flag.
- *
- * Frontend-only — no API, DTO, schema or engine change. Set `VITE_DESIGNED_CHROME=false` for a
- * byte-for-byte rollback: `ChromePortal` becomes an identity wrapper, the shell renders today's
- * `column[ header ][ row(rail | main) ]`, the header re-centres at `max-w-6xl`, and the root
- * attribute is absent so every token keeps today's value (the flag-off shell parity suite).
- *
- * @enabled 2026-07-26
- */
-export const DESIGNED_CHROME_ENABLED = flagDefaultOn(import.meta.env.VITE_DESIGNED_CHROME);
-
-/**
  * The **canvas visual language** (ADR-0055 S4, spec `docs/specs/designed-ui/`). Default **ON**
  * since 2026-07-26 (S5-T4), once the browser draw measurement was made and recorded: at 2,000
  * activities the band pass sits **inside the baseline's own run-to-run spread** — several runs

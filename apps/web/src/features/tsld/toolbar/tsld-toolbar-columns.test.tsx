@@ -38,14 +38,7 @@ function renderRows(context: TsldToolbarContext) {
   const rows = splitByRow(buildTsldToolbarItems());
   return render(
     <div>
-      <Toolbar
-        items={rows.look}
-        context={context}
-        label="View and navigate"
-        authoringEnabled
-        alignEndGroup="object"
-      />
-      <Toolbar items={rows.do} context={context} label="Build and manage" authoringEnabled />
+      <Toolbar items={rows.strip} context={context} label="Plan commands" authoringEnabled />
     </div>,
   );
 }

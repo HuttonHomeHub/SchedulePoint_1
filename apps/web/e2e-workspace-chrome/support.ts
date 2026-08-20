@@ -277,7 +277,16 @@ export async function zoomOut(page: Page, times: number): Promise<void> {
   for (let i = 0; i < times; i += 1) await button.click();
 }
 
-/** The canvas columns the probe walks, in canvas-relative pixels, in the order it tries them. */
+/**
+ * The canvas columns the probe walks, in canvas-relative pixels, in the order it tries them.
+ *
+ * **The first six are a fast path, not the whole search.** They are where a bar sits on a plan
+ * framed to fit, and trying them first keeps the common case at one column. They stopped being
+ * sufficient when Graphite M4's context drawer took ~300 px off the canvas: the day→pixel scale is
+ * derived from the canvas width at pick time (ADR-0056), so a narrower canvas moves every bar, and
+ * a fixed list capped at 200 px reported "no probed canvas point hit …" — which reads as a missing
+ * bar rather than as a probe that stopped looking. `findBar` now continues across the full width.
+ */
 const PROBE_XS = [60, 90, 40, 120, 160, 200] as const;
 const PROBE_STEP_Y = 6;
 const PROBE_MAX_Y = 200;
@@ -293,7 +302,22 @@ const PROBE_MAX_Y = 200;
  * common case costs one column.
  */
 export async function findBar(page: Page, activityId: string): Promise<{ x: number; y: number }> {
-  for (const x of PROBE_XS) {
+  const box = await canvas(page).boundingBox();
+  if (!box) throw new Error('canvas has no bounding box');
+  // The fast path first, then every remaining column across the real canvas width — the same sweep
+  // `findBarWide` makes, so this can no longer fail for a reason that is about the probe rather
+  // than about the bar. Columns already tried are skipped, so the fast path stays free.
+  const columns = [
+    ...PROBE_XS,
+    ...Array.from(
+      { length: Math.max(0, Math.floor((box.width - 30) / 40)) },
+      (_, i) => 20 + i * 40,
+    ),
+  ].filter((x) => x < box.width - 10);
+  const seen = new Set<number>();
+  for (const x of columns) {
+    if (seen.has(x)) continue;
+    seen.add(x);
     for (let y = 16; y <= PROBE_MAX_Y; y += PROBE_STEP_Y) {
       await canvas(page).click({ position: { x, y } });
       if ((await selectedActivityId(page)) === activityId) return { x, y };
@@ -367,10 +391,18 @@ export async function dragBarBy(
 ): Promise<void> {
   const box = await canvas(page).boundingBox();
   if (!box) throw new Error('canvas has no bounding box');
-  await page.mouse.move(box.x + from.x, box.y + from.y);
+  // **Every point is clamped inside the canvas, because a drag that leaves it is not a drag.**
+  // The x it starts from comes from `findBarInRow`, which probes from x=30 — so a bar found in an
+  // early column plus a leftward `dx` put the pointerup outside the element, where the gesture is
+  // simply lost: no PATCH, no version change, and a failure that reads as "the drag never reached
+  // the server" rather than as a mis-aimed probe. That became reachable when Graphite M4's context
+  // drawer took ~300 px off the canvas and the same aim started landing off the left edge.
+  // Clamping keeps the gesture real; `placeOnDay`'s aim-measure-correct loop covers the shortfall.
+  const clampX = (x: number): number => Math.max(4, Math.min(box.width - 4, x));
+  await page.mouse.move(box.x + clampX(from.x), box.y + from.y);
   await page.mouse.down();
-  await page.mouse.move(box.x + from.x + dx / 2, box.y + from.y, { steps: 5 });
-  await page.mouse.move(box.x + from.x + dx, box.y + from.y, { steps: 5 });
+  await page.mouse.move(box.x + clampX(from.x + dx / 2), box.y + from.y, { steps: 5 });
+  await page.mouse.move(box.x + clampX(from.x + dx), box.y + from.y, { steps: 5 });
   await page.mouse.up();
 }
 
@@ -400,7 +432,10 @@ export async function placeOnDay(
   activity: { id: string; name: string },
   row: number,
   targetDay: number,
-  attempts = 5,
+  // 8 rather than 5: a placement whose drawn day already matches the target costs TWO drags to
+  // rewrite (away, then back), and the conflict case this helper exists to build hits that every
+  // time. Five was enough only while the aim happened to land first try.
+  attempts = 8,
 ): Promise<void> {
   /** Where the bar is DRAWN, in days from the data date — the position a drag is measured from. */
   const drawnDay = async (): Promise<number> => {
@@ -428,27 +463,77 @@ export async function placeOnDay(
     const from = await drawnDay();
     const before = requirePlacement(await placements(page, orgSlug), activity.name).version;
     const x = await findBarInRow(page, activity.id, row);
-    const dx = Math.round((targetDay - from) * pxPerDay);
+    // **A drag moves the bar from where it is DRAWN; the target is where it must be STORED, and
+    // those are different numbers for exactly the placement this helper exists to make.** ADR-0033
+    // flags a `visualStart` earlier than the network allows and never moves it, so the bar keeps
+    // being drawn at its logic-earliest while `visualStart` sits days behind. Once the drawn day
+    // reaches the target, `(targetDay - from)` is **zero** — and a zero-distance drag is a click:
+    // no write, no version change, and the loop spends its remaining attempts asking for nothing.
+    // The trace said so in as many words ("drawn day 0 +0px -> no change", twice).
+    //
+    // So a drag that would move less than half a day is widened to a **whole** one, deliberately
+    // overshooting: the next iteration then has a real distance to come back over. A third of a
+    // day was tried first and is recorded here because it looks right and is not — it registers as
+    // a gesture (the trace showed `+20px`) and still writes nothing, because it lands on the day
+    // the bar is already on and the client does not PATCH a `visualStart` that has not changed. The
+    // only way to rewrite a placement at the day it is drawn on is to leave that day and return.
+    const wanted = (targetDay - from) * pxPerDay;
+    const dx = Math.round(
+      Math.abs(wanted) < pxPerDay * 0.5 ? (wanted >= 0 ? 1 : -1) * pxPerDay : wanted,
+    );
     await dragBarBy(page, { x, y: row }, dx);
 
-    // Two waits, and they are different questions. First: did the PATCH land at all — a version
-    // that never moves means the gesture was not a drag, which is a different failure from a drag
-    // that missed. Second: has the engine caught up with THIS placement? Until the coalesced
-    // recalculation runs, `visualEffectiveStart` still describes where the bar used to be, so
-    // aiming the next drag from it would aim at a bar that has moved.
-    await expect
+    // Two waits, and they are different questions. First: did the PATCH land at all? Second: has
+    // the engine caught up with THIS placement? Until the coalesced recalculation runs,
+    // `visualEffectiveStart` still describes where the bar used to be, so aiming the next drag from
+    // it would aim at a bar that has moved.
+    //
+    // **A version that never moves is an OBSERVATION, not a failure** — and it used to throw here,
+    // which is what made one mis-aimed drag fatal to a helper whose whole design is aim, measure,
+    // correct. It means the drop changed nothing: either it landed on the day the bar was already
+    // on, or (before `dragBarBy` clamped) it left the canvas. Both are recoverable, and the loop
+    // that recovers from them already exists — it just never got a second iteration, because the
+    // first one threw. So it is recorded, the estimate is widened (nothing moved, so `dx` was worth
+    // less than half a day and the scale is coarser than we thought), and the next attempt aims
+    // again. The exhausted-attempts `throw` below still fails the run, and now does it with the
+    // whole trace rather than on the first wobble.
+    const moved = await expect
       .poll(async () => requirePlacement(await placements(page, orgSlug), activity.name).version, {
-        message: 'the drag never reached the server',
-        timeout: 15_000,
+        timeout: 8_000,
+        // **Explicit intervals, because the default polls hard and this helper polls a lot.** The
+        // API's global throttler is 100 requests / 60 s per IP (ADR-0051), and CI is one IP running
+        // these suites back to back: on 2026-08-20 this loop tripped it and the run failed with a
+        // 429 that read as a product error. Backing off costs a few hundred milliseconds on the
+        // happy path and takes the request count out of the range where the limiter is reachable.
+        intervals: [250, 500, 1_000, 2_000],
       })
-      .toBeGreaterThan(before);
+      .toBeGreaterThan(before)
+      .then(() => true)
+      .catch(() => false);
+    if (!moved) {
+      trace.push(`drawn day ${String(from)} ${dx >= 0 ? '+' : ''}${String(dx)}px -> no change`);
+      pxPerDay = Math.max(pxPerDay, Math.abs(dx) * 1.5) || pxPerDay;
+      continue;
+    }
     await expect
       .poll(
         async () => {
-          const dropped = await droppedDay();
-          return dropped === null ? -1 : (await drawnDay()) - dropped;
+          // **One read, two numbers.** This asked `droppedDay()` and then `drawnDay()`, which is two
+          // list requests per poll iteration AND two different snapshots — so the comparison could
+          // straddle a recalculation and answer about a state that never existed. Reading the row
+          // once fixes both, and halves the request count that reached the rate limiter.
+          const placement = requirePlacement(await placements(page, orgSlug), activity.name);
+          const raw = isoDay(placement.visualStart);
+          if (raw === null) return -1;
+          const drawn = isoDay(placement.visualEffectiveStart) ?? isoDay(placement.earlyStart);
+          if (drawn === null) return -1;
+          return daysBetweenIso(DATA_DATE, drawn) - daysBetweenIso(DATA_DATE, raw);
         },
-        { message: 'the recalculation never caught up with the drop', timeout: 15_000 },
+        {
+          message: 'the recalculation never caught up with the drop',
+          timeout: 15_000,
+          intervals: [250, 500, 1_000, 2_000],
+        },
       )
       .toBeGreaterThanOrEqual(0);
 
