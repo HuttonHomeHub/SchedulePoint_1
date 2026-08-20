@@ -201,19 +201,19 @@ shaved for a sixth epic.**
 
 ## C. Milestones
 
-| #       | Slice                                                         | Ends with                                                                                                                |
-| ------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **M0**  | Measure (no product code)                                     | A measurement document; falsification conditions stated first                                                            |
-| **M1**  | Palette — _landed_                                            | Confirm the new pairs are gated; fix A8                                                                                  |
-| **M2**  | The shell grid — _landed_ (`m2-shell-grid.md`)                | **Pixel-identical screenshots.** If not, the grid is wrong and it is cheap to learn here                                 |
-| **M3**  | Rail; top bar deleted — _landed_ (`m3-rail-and-skip-link.md`) | Re-shoot all nine non-plan screens; axe on five routes                                                                   |
-| **M4**  | Drawer — _landed_ (`m4-context-drawer.md`)                    | A Playwright assertion that the strip's `getBoundingClientRect().width` is **unchanged** across drawer open/close/resize |
-| **M5**  | The single command strip — _landed_ (`m5-command-strip.md`)   | `e2e-toolbar-fit` **rewritten, not retired**; Escape target guard re-asserted                                            |
-| **M6**  | Drawer as the activity context — replaces the modal           | Every existing `ActivityEditorDialog.*.test.tsx` passes **unchanged** (the ADR-0062 bar)                                 |
-| **M7**  | Status bar; dock re-hosted; `Recalculate` becomes a state     | Three states — not calculated / calculating / calculated-zero-critical — must not collapse into one sentence             |
-| **M8**  | Gantt grid beside chart                                       | **One** virtualizer, not two synced scrollers; row heights identical by construction                                     |
-| **M9**  | Diagram stage; WBS colouring                                  | `sceneTopOffset` re-derived, not re-assumed                                                                              |
-| **M10** | Gate pass                                                     | Five specialists; screenshots at four widths **plus a coarse-pointer run**                                               |
+| #       | Slice                                                                                                                      | Ends with                                                                                                                |
+| ------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **M0**  | Measure (no product code)                                                                                                  | A measurement document; falsification conditions stated first                                                            |
+| **M1**  | Palette — _landed_                                                                                                         | Confirm the new pairs are gated; fix A8                                                                                  |
+| **M2**  | The shell grid — _landed_ (`m2-shell-grid.md`)                                                                             | **Pixel-identical screenshots.** If not, the grid is wrong and it is cheap to learn here                                 |
+| **M3**  | Rail; top bar deleted — _landed_ (`m3-rail-and-skip-link.md`)                                                              | Re-shoot all nine non-plan screens; axe on five routes                                                                   |
+| **M4**  | Drawer — _landed_ (`m4-context-drawer.md`)                                                                                 | A Playwright assertion that the strip's `getBoundingClientRect().width` is **unchanged** across drawer open/close/resize |
+| **M5**  | The single command strip — _landed_ (`m5-command-strip.md`)                                                                | `e2e-toolbar-fit` **rewritten, not retired**; Escape target guard re-asserted                                            |
+| **M6**  | Drawer as the activity context — _landed_ (`m6-activity-context.md`)                                                       | Every existing `ActivityEditorDialog.*.test.tsx` passes **unchanged** (the ADR-0062 bar)                                 |
+| **M7**  | Status bar — _landed_ (`m7-status-bar.md`); the dock re-host **withdrawn**, ADR-0092 had already settled it                | Three states — not calculated / calculating / calculated-zero-critical — must not collapse into one sentence             |
+| **M8**  | Gantt grid splitter — _landed_ (`m8-gantt-split.md`); the layout fork was moot, ADR-0095 shipped the grid beside the chart | **One** virtualizer, not two synced scrollers; row heights identical by construction                                     |
+| **M9**  | Diagram stage — _no work owed_ (`m9-diagram-stage.md`); the screenshot found something older instead                       | `sceneTopOffset` re-derived, not re-assumed                                                                              |
+| **M10** | Gate pass — _landed_                                                                                                       | Five specialists; screenshots at four widths **plus a coarse-pointer run**                                               |
 
 Standing gates every slice: `pnpm lint && typecheck && test`, plus `scripts/e2e-local.sh web`
 (the base journey), plus **the full sweep on any slice that moves a label or a
@@ -364,3 +364,27 @@ Red-orange for _the schedule is in trouble_ (critical, today, conflict); amber f
 _resource/placement caution_ (near-critical, over-allocation, lane-overlap). Redundant on
 top of the shape cues, which stay load-bearing. Fixes the `today`/`conflict`/`critical`
 aliasing defect (A8) as a side effect rather than a separate patch.
+
+## What M6–M9 actually cost, and the rule that came out of it
+
+Four consecutive milestones lost their headline task to a **re-read of the problem statement**, and
+one of them would have reversed an accepted decision:
+
+| Milestone | Planned                                       | What reading the code said                                                                   |
+| --------- | --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| M7        | Re-host the canvas dock into the status bar   | ADR-0092 put the dock where it belongs; the re-host would have **undone** that               |
+| M8        | Pick one of two Gantt layouts (§A15's fork)   | Neither — ADR-0095 had already shipped the grid beside the chart                             |
+| M9        | Diagram stage + WBS colouring                 | Both already done; the screenshot found a **pre-existing** defect nobody had reported (#148) |
+| M6        | "Entry points re-pointed" was marked complete | It was not — see `m6-activity-context.md`; the drawer had no entry point at all              |
+
+The first three are the same failure as the fourth wearing the opposite clothes: a document
+describing work that was already done, versus a document describing work that had not been. Every
+part of this process re-verifies a **solution's** citations. Nothing was re-verifying the
+**problem's** — because a milestone that fixes something does not go back and edit the spec that
+complained about it. That rule now lives in `CLAUDE.md` §19 and `docs/DECISIONS.md`.
+
+**M10's own contribution to it**: the sweep table above routes M6–M9 to "targeted" suites, and the
+targeted suites for M6 were the editor's, which mount the editor and not the shell. ADR-0081 says a
+flag-on journey lands with the first user-facing milestone; Graphite ships no flag, and that is
+precisely why the rule was not reached for. The rule's subject is a **user-facing milestone**, not a
+flag.

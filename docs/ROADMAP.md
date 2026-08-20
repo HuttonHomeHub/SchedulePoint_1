@@ -233,6 +233,12 @@ keep `main` releasable.
   ADR-0094's finding arriving back a epic later — the merged budget demoted **Next conflict** at 1646,
   which is precisely the "a shading nobody opens the menu to see is not a shading" defect that ADR
   was written to remove.
+  Four consecutive milestones then lost their headline task to a **re-read of the problem** — one of
+  which would have reversed ADR-0092 — because a plan's problem statement is a claim and nothing in
+  this process was re-verifying those. The activity editor moves out of a modal and into the drawer,
+  and the gate pass found that half of that had not happened: registering a subject made a rail
+  button appear and nothing more, so pressing **Edit** still opened the modal at every width. The
+  drawer, the redesign's headline surface, was reachable only by a gesture nothing suggested.
 - **The design system is a system rather than a palette** (ADR-0097). The product owner called the
   Corporate skin "a badly designed skin" and asked for it to become the theme the app is designed to,
   then widened the mandate until it was a ground-up rewrite. Reading the code turned the adjective

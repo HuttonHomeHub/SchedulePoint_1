@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1025 web
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1033 web
 > source files with 34 flag-scoped Playwright suites beside the base journey, and
 > 99 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -2448,7 +2448,7 @@ progress` off the command surface because **an object action belongs on the obje
   `Object.keys(storage)`, which works only because the Web Storage API happens to expose stored keys
   as own properties. **The CPM engine is not imported and no migration runs.**
 
-- **ADR-0099** _(Accepted; M0–M5 landed 2026-08-20)_ — Graphite: workstation density in rail
+- **ADR-0099** _(Accepted; M0–M10 landed 2026-08-20)_ — Graphite: workstation density in rail
   chrome. Four consecutive epics (ADR-0090/0091/0092/0094) worked the plan workspace's command
   surface and each asked the same question — **does the row fit?** The answer was always "nearly",
   so the answer was always to shave; ADR-0097 Landing C proposed the one genuinely different shape
@@ -2564,6 +2564,49 @@ progress` off the command surface because **an object action belongs on the obje
   register's own favourite failure mode instead of reading the code is ADR-0076 Class 2 committed in
   the same document that was praising an instrument for catching one; the citation is now in
   `scripts/dependency-claims.json`.
+  **M6–M9 each lost their headline task to a re-read of the problem, and that is the epic's most
+  transferable finding.** M7's plan was to re-host the canvas dock in the status bar; reading it
+  showed ADR-0092 had already put the dock where it belongs and the re-host would have **reversed**
+  that decision. M8's §A15 fork asked which of two Gantt layouts to build and the answer was
+  neither — ADR-0095 had shipped the grid beside the chart already. M9 was empty on the same test.
+  What survived was in each case a smaller, different thing: a status bar of facts, a draggable grid
+  splitter, a screenshot. `docs/RECONCILE.md`'s rule is _verify the claim_, and a **plan's problem
+  statement is a claim** — one nothing in this process was re-verifying, because a milestone that
+  fixes something does not go back and edit the spec that complained about it.
+  **M10 is the gate pass, and it earned its place for the seventh epic running.** Six specialists;
+  security and frontend-performance passed having re-derived the epic's own numbers from the final
+  code (measured **+1.9 kB gzip** for 163 files, and zero commits under `render/`, so TECH_DEBT #75's
+  known overage is not attributable here). The other three blocked, and the largest finding is this
+  register's own favourite shape landing on the epic that keeps quoting it: **the drawer had no entry
+  point.** `m6-activity-context.md` T4 says "the three ADR-0060 intents open the drawer"; registering
+  a subject only ever made a rail button appear, so pressing **Edit** opened the modal at every width
+  unless the planner had separately discovered that button. The milestone's headline capability was
+  dark in the default path, with its unit tests green throughout because they mount the editor and
+  not the shell — ADR-0081, fifth recorded instance.
+  **Fixing it produced two more defects that only a browser could report**, and both took two wrong
+  guesses first. The shell can only agree to show the drawer **one commit** after the route asks, and
+  in that gap the modal still rendered `open` — so `Dialog`'s effect called `showModal()`, focus went
+  into the top layer, and the next commit swapped the chrome and unmounted it, leaving focus on
+  `<body>`: WCAG 2.4.3, and every workspace keyboard accelerator silently dead with it. A layout
+  effect does **not** fix that, because React flushes a commit's passive effects before the re-render
+  a layout effect schedules; the shipped answer is derived rather than latched — _no modal while a
+  drawer could hold this instead_ — which also stops a modal popping over a planner who has
+  deliberately pointed the drawer at the Explorer. And Escape does something different from what I
+  twice assumed: with focus on the dock button no inner rung of ADR-0080's ladder claims the press,
+  so the shell's outermost one takes it, the selection survives, and focus lands on the rail button.
+  Each was established by a probe recording the actual sequence (`in BUTTON[Close dialog]` → `out` →
+  `dialog removed`), not by reading.
+  Two further blocking findings were **missing tests rather than defects**, and both were structurally
+  invisible: `PlanStatusBar` had no coverage direct or indirect, because it is portalled and
+  `ChromePortal` returns `null` with no host — so every suite that renders the toolbar renders it zero
+  times; and M8's own written acceptance condition ("the three sites read one value; a structural test
+  says so") had never been met, leaving unpinned the exact arithmetic ADR-0095 shipped wrong once.
+  `m6-activity-context.md`'s acceptance table is **corrected rather than edited**: three of its six
+  rows were wrong in both directions — Close and Escape do **not** need a discard guard (the hooks
+  live above the `shell` call, so a portal returning nothing unmounts the fields and not the
+  component, which that same file already says about a different route), and what the table missed
+  entirely was focus. Every fix carries a regression test verified red first; six non-blocking
+  findings are `docs/TECH_DEBT.md` #149.
   **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation parity
   gate is untouched by construction.
 
@@ -2888,6 +2931,16 @@ When operating in this repo, Claude Code should:
   does not go back and edit the specs that complained about them**. Everything in
   this process re-verifies the solution's citations; nothing was re-verifying the
   problem's. See [`docs/DECISIONS.md`](docs/DECISIONS.md), 2026-08-19.
+
+- **A milestone that claims user-facing capability lands with a journey that
+  drives the real product — flag or no flag.** ADR-0081 states this rule in terms
+  of "the flag-on journey", and Graphite ships no `VITE_` flag (ADR-0088 D1), so
+  the rule was not reached for — and its M6 shipped a drawer with **no entry
+  point**, the fifth recorded instance of the class, caught by a specialist review
+  rather than by anything automatic. The rule's subject is the **capability**, not
+  the flag. A targeted unit suite is not a substitute: the suites for that
+  milestone mounted the editor, and the defect was in the seam between the editor
+  and the shell.
 
 - **The brief is not evidence.** A claim inherited from the task that started
   the work gets checked like any other. Both recorded instances of this
