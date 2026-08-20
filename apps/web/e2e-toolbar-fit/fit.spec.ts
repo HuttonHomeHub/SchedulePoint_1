@@ -511,6 +511,66 @@ test('every toolbar command is reachable at every targeted width', async ({ page
   }
 });
 
+/**
+ * **The command band's width does not change when the context drawer opens** (ADR-0099 §4a,
+ * Graphite M4) — the product owner's requirement, and the one this epic answers with geometry
+ * rather than with a measurement anyone has to keep correct.
+ *
+ * The band spans grid columns 2–3; `<main>` and the drawer are the two things inside that span.
+ * Opening the drawer redistributes width between them and changes their container by zero. There
+ * is no `ResizeObserver`, no measured reservation and no way to break it without editing
+ * `grid-column` — which is exactly what four epics of measuring a row against its own leftover
+ * width bought (ADR-0090 → ADR-0094).
+ *
+ * **Asserted at three states, not two.** Open/closed alone would pass against a band that reserved
+ * a fixed drawer width, which is a different design with the same two readings; dragging the
+ * splitter to a third width is what separates "spans the drawer's column" from "leaves room for a
+ * drawer". The stage must move at each step, or the drawer is not taking width from anything and
+ * the test is asserting that nothing happened.
+ */
+test('the command band is unchanged across drawer open, close and resize', async ({ page }) => {
+  await page.setViewportSize({ width: 1646, height: 1000 });
+  await openPlan(page, Date.now() + 5);
+
+  const band = page.locator('[data-surface="chrome"]').first();
+  const stage = page.getByRole('main');
+  const explorer = page.getByRole('button', { name: 'Project Explorer' });
+  const widthOf = async (locator: typeof band): Promise<number> =>
+    locator.evaluate((node: Element) => node.getBoundingClientRect().width);
+
+  // The drawer starts open on the Explorer, which is the shipped default.
+  await expect(page.getByRole('complementary', { name: 'Project Explorer' })).toBeVisible();
+  const bandOpen = await widthOf(band);
+  const stageOpen = await widthOf(stage);
+
+  await explorer.click();
+  await expect(page.getByRole('complementary', { name: 'Project Explorer' })).toBeHidden();
+  const bandClosed = await widthOf(band);
+  const stageClosed = await widthOf(stage);
+
+  await explorer.click();
+  await expect(page.getByRole('complementary', { name: 'Project Explorer' })).toBeVisible();
+  const splitter = page.getByRole('separator', { name: 'Resize context drawer' });
+  await splitter.focus();
+  // Six ArrowLeft presses at the primitive's 16 px step: 300 → 396, inside the 224–420 bounds and
+  // far enough that a band reserving a fixed width would be caught.
+  for (let i = 0; i < 6; i += 1) await splitter.press('ArrowLeft');
+  await expect(splitter).toHaveAttribute('aria-valuenow', '396');
+  const bandResized = await widthOf(band);
+  const stageResized = await widthOf(stage);
+
+  expect(bandClosed, 'the band changed width when the drawer closed').toBeCloseTo(bandOpen, 0);
+  expect(bandResized, 'the band changed width when the drawer was resized').toBeCloseTo(
+    bandOpen,
+    0,
+  );
+
+  // The control: the stage really did give up width at each step. Without this the band assertion
+  // passes just as well against a drawer that never opened.
+  expect(stageClosed, 'the stage did not widen when the drawer closed').toBeGreaterThan(stageOpen);
+  expect(stageResized, 'the stage did not narrow when the drawer grew').toBeLessThan(stageOpen);
+});
+
 test('the layout settles rather than oscillating', async ({ page }) => {
   const stamp = Date.now();
   await page.setViewportSize({ width: 1920, height: 1080 });

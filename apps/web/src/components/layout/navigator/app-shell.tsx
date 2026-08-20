@@ -2,15 +2,15 @@ import { Outlet, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { NavigatorCrud } from './navigator-crud';
-import { NavigatorRail, NavigatorRailCollapsed } from './navigator-rail';
-import { RailResizer } from './rail-resizer';
+import { NavigatorRail } from './navigator-rail';
 import { ShellContext } from './shell-context';
-import { useRailPrefs } from './use-rail-prefs';
+import { ToolRail, type DrawerSubject } from './tool-rail';
 
 import { ChromeBandRow, ChromeSlotHost } from '@/components/layout/chrome/chrome-band';
+import { ContextDrawer } from '@/components/layout/drawer/context-drawer';
+import { useContextDrawerPrefs } from '@/components/layout/drawer/use-context-drawer-prefs';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
-import { Surface } from '@/components/ui/surface';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
@@ -38,8 +38,8 @@ function ShellFrame(): React.ReactElement {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Only steal focus onto the (re)mounted rail toggle after a *user* collapse/expand,
   // never on first paint.
-  const [interacted, setInteracted] = useState(false);
-  const rail = useRailPrefs();
+  const drawer = useContextDrawerPrefs();
+  const [subject, setSubject] = useState<DrawerSubject>('explorer');
   const announce = useAnnounce();
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
@@ -56,17 +56,75 @@ function ShellFrame(): React.ReactElement {
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const shell = useMemo(() => ({ openDrawer }), [openDrawer]);
 
-  const collapse = useCallback(() => {
-    setInteracted(true);
-    rail.collapse();
-    announce('Project Explorer collapsed.');
-  }, [rail, announce]);
+  /**
+   * **Pressing the button for the subject already showing closes the drawer.** A panel button is a
+   * toggle over what the drawer shows, so pressing the lit one has to do something, and re-pointing
+   * it at itself does nothing visible — a control that appears inert. Pressing a different
+   * subject's button always opens, because that request is unambiguous.
+   *
+   * The announcement is here rather than in the rail because only the shell knows which of the
+   * three outcomes happened; the rail knows only which button was pressed.
+   */
+  const selectSubject = useCallback(
+    (next: DrawerSubject) => {
+      const showing = !drawer.collapsed;
+      if (showing && next === subject) {
+        drawer.collapse();
+        announce('Project Explorer closed.');
+        return;
+      }
+      setSubject(next);
+      if (!showing) drawer.expand();
+      announce('Project Explorer opened.');
+    },
+    [drawer, subject, announce],
+  );
 
-  const expand = useCallback(() => {
-    setInteracted(true);
-    rail.expand();
-    announce('Project Explorer expanded.');
-  }, [rail, announce]);
+  const closeDrawerPanel = useCallback(() => {
+    drawer.collapse();
+    announce('Project Explorer closed.');
+  }, [drawer, announce]);
+
+  /**
+   * **Escape closes the drawer — as the OUTERMOST rung of the existing ladder, never a new
+   * listener** (plan.md §A16).
+   *
+   * ADR-0080's ladder is tool → open pick → selection, enforced by guards rather than by hoping two
+   * listeners fire in a helpful order. The drawer is the rung after those, and three things make it
+   * one rather than a competitor:
+   *
+   * - **A React handler on the shell root, not a `window` listener.** A native listener follows the
+   *   DOM tree, and the toolbar is portalled into the chrome band (ADR-0055 S2), so it is not a DOM
+   *   descendant of the workspace. React events follow the React tree, which is the reason
+   *   `use-plan-workspace-key-scope.ts` exists in that shape.
+   * - **`defaultPrevented` defers to every inner rung.** The workspace's rungs call
+   *   `preventDefault()` when they act, so one press cannot take a planner's tool AND their
+   *   drawer — the ADR-0064 defect class, arriving through a door that decision did not have.
+   * - **ADR-0079's target guard**, the fourth consumer of the same selector: an Escape typed into a
+   *   text field belongs to that field. Deliberately about text ENTRY and not "anything that is not
+   *   the drawer" — Escape on a toolbar button still means Escape.
+   *
+   * An open native modal is skipped whole: `Dialog` and `Sheet` are `showModal()`, so the browser
+   * closes them on Escape and the keydown still bubbles. Without this, dismissing a dialog would
+   * also close the drawer behind it — one press, two dismissals, and the second invisible until the
+   * first finishes animating.
+   */
+  const onShellKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || drawer.collapsed) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, [contenteditable="true"]')
+      ) {
+        return;
+      }
+      if (document.querySelector('dialog[open]')) return;
+      event.preventDefault();
+      closeDrawerPanel();
+    },
+    [drawer.collapsed, closeDrawerPanel],
+  );
 
   // Close the drawer once the viewport reaches `lg`+, where the pinned rail is shown — otherwise a
   // modal drawer lingers behind it (duplicate landmark + stuck focus trap). This is a *transition
@@ -108,7 +166,17 @@ function ShellFrame(): React.ReactElement {
                   and rendered every row (ADR-0059 §1's premise, falsified by a layout bug rather
                   than by the substrate choice). The shell is therefore exactly the viewport and
                   `<main>` scrolls, rather than the document scrolling. */}
-              <div className="relative grid h-dvh grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+              {/* The shell root is an event DELEGATION root, not a control masquerading as one: no
+                  role, no tabIndex, no click handler, never focusable itself. It only observes
+                  keydowns bubbling from the real controls inside it — the case jsx-a11y cannot tell
+                  from a fake button. Making it focusable to satisfy the rule would add a meaningless
+                  tab stop, so the accessible answer is the disable, not the fix. Same reasoning, and
+                  the same words, as the workspace root one layer in. */}
+              {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+              <div
+                className="relative grid h-dvh grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
+                onKeyDown={onShellKeyDown}
+              >
                 {/* **The skip link** — the first focusable thing in the document, and the only
                     one there is (`apps/web/src` had none at all before Graphite M3, plan.md §A4).
                     It became load-bearing when the rail took the leading column top to bottom: a
@@ -128,42 +196,24 @@ function ShellFrame(): React.ReactElement {
                   Skip to main content
                 </a>
 
-                {/* Column 1 — the rail, spanning EVERY row (Graphite M3). It is the leading edge
-                    top to bottom, which is what deleting the top bar buys: the brand, the
-                    organisation switcher and the account menu move into it, and the ~56 px the bar
-                    held goes back to the stage.
+                {/* Column 1 — the tool rail, spanning EVERY row. It is the leading edge top to
+                    bottom at a fixed 46 px (Graphite M3 gave it the column, M4 gave it its width):
+                    the brand, the organisation switcher, the drawer's panel buttons, the six
+                    organisation destinations and the account menu, none of them behind anything.
 
                     It comes BEFORE the band in the DOM, and that is reading order rather than a
                     preference: the rail's top-left corner is the document's, and the band starts
                     46 px in. plan.md §A4's rule is that DOM order IS visual order — never `order:`,
                     `row-reverse` or `direction: rtl`, each of which decouples focus from reading.
                     The cost is the tab traversal the skip link above exists to answer. */}
-                {rail.collapsed ? (
-                  <div className="col-start-1 row-span-3 row-start-1 hidden shrink-0 lg:block">
-                    <NavigatorRailCollapsed
-                      onExpand={expand}
-                      focusToggleOnMount={interacted}
-                      orgSlug={orgSlug}
-                    />
-                  </div>
-                ) : (
-                  <div className="col-start-1 row-span-3 row-start-1 hidden min-h-0 shrink-0 lg:flex">
-                    <div className="min-h-0" style={{ width: rail.width }}>
-                      <NavigatorRail
-                        orgSlug={orgSlug}
-                        expansion={expansion}
-                        onCollapse={collapse}
-                        focusToggleOnMount={interacted}
-                      />
-                    </div>
-                    {/* The resizer sits between the rail and `<main>`, but it is rail chrome, so it
-                        takes the rail's colours. `contents` keeps the scope purely a colour
-                        context — custom properties still inherit, and no box is added. */}
-                    <Surface tone="panel" className="contents">
-                      <RailResizer width={rail.width} onResize={rail.setWidth} />
-                    </Surface>
-                  </div>
-                )}
+                <div className="col-start-1 row-span-3 row-start-1 hidden shrink-0 lg:block">
+                  <ToolRail
+                    orgSlug={orgSlug}
+                    subject={subject}
+                    drawerOpen={!drawer.collapsed}
+                    onSelectSubject={selectSubject}
+                  />
+                </div>
 
                 {/* Row 1, columns 2–3 — the command band. It spans the stage AND the drawer's
                     column, which is §4a solved by geometry: opening the drawer redistributes width
@@ -191,8 +241,27 @@ function ShellFrame(): React.ReactElement {
                   <Outlet />
                 </main>
 
-                {/* Row 2, column 3 — the context drawer's cell, empty until Graphite M4. An `auto`
-                    column with no child is zero wide, so today's layout is unchanged. */}
+                {/* Row 2, column 3 — **the context drawer** (ADR-0099 D2). An `auto` column with
+                    no child is zero wide, so a closed drawer costs the stage nothing — and because
+                    the command band spans columns 2–3, opening it redistributes width between
+                    `<main>` and the drawer and changes the band by exactly zero. That is §4a, and
+                    it is geometry rather than a measurement anyone has to keep correct.
+
+                    Below `lg` it is not rendered at all: there it would have to overlay, and
+                    overlaying means modal, which the `Sheet` below already is. */}
+                {drawer.collapsed ? null : (
+                  <div className="col-start-3 row-start-2 hidden min-h-0 shrink-0 lg:flex">
+                    <ContextDrawer
+                      title="Project Explorer"
+                      onClose={closeDrawerPanel}
+                      width={drawer.size}
+                      onResize={drawer.setSize}
+                      className="flex min-h-0"
+                    >
+                      <NavigatorRail orgSlug={orgSlug} expansion={expansion} />
+                    </ContextDrawer>
+                  </div>
+                )}
               </div>
 
               {/* Below lg: the rail as an off-canvas drawer. */}

@@ -64,18 +64,84 @@ describe('AppShell', () => {
     expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
   });
 
-  it('collapses and expands the pinned rail, moving focus to the acting control', () => {
+  /**
+   * **The rail's panel button is a toggle over what the drawer shows**, so pressing the lit one has
+   * to do something: re-pointing the drawer at the subject it already shows is invisible, and a
+   * control that appears inert is worse than one that is absent.
+   *
+   * Focus is deliberately NOT moved. The rail button that closed the drawer is still mounted and
+   * still focused, which is the behaviour the old collapse/expand pair had to reconstruct with a
+   * `focusToggleOnMount` flag precisely because its own control unmounted. A fixed rail has nothing
+   * to restore.
+   */
+  it('closes the drawer when its own subject button is pressed again, and reopens it', () => {
     renderShell();
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse Project Explorer' }));
-
-    const show = screen.getByRole('button', { name: 'Show Project Explorer' });
-    expect(show).toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
-    expect(show).toHaveFocus(); // focus followed the collapse, not dropped to <body>
-
-    fireEvent.click(show);
+    const explorer = screen.getByRole('button', { name: 'Project Explorer' });
     expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Collapse Project Explorer' })).toHaveFocus();
+    expect(explorer).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(explorer);
+    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+    expect(explorer).toHaveAttribute('aria-pressed', 'false');
+    // **Still the same element**, which is the whole reason focus needs no restoring. The
+    // collapse/expand pair this replaced swapped one control for another and had to reconstruct
+    // focus with a `focusToggleOnMount` flag; a fixed rail's button survives its own press.
+    // Asserted by identity rather than with `toHaveFocus`, which in jsdom would be asserting that
+    // `fireEvent.click` moves focus — it does not, and a real click does.
+    expect(screen.getByRole('button', { name: 'Project Explorer' })).toBe(explorer);
+
+    fireEvent.click(explorer);
+    expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
+    expect(explorer).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  /**
+   * **Escape is the ladder's outermost rung, not a competitor to it** (plan.md §A16).
+   *
+   * Three cases, because each failure mode is silent and different: an inner rung that already
+   * acted must keep its press (or one Escape takes a planner's tool AND their drawer — the ADR-0064
+   * defect class); an Escape typed into a text field belongs to the field (ADR-0079's guard, whose
+   * absence cost a planner the Link tool mid-search); and a closed drawer must not swallow the key
+   * from anything above it.
+   */
+  it('closes the drawer on Escape, deferring to inner rungs and to text entry', () => {
+    renderShell();
+    const grid = screen.getByRole('main').parentElement!;
+    const drawer = () => screen.queryByRole('complementary', { name: 'Project Explorer' });
+    expect(drawer()).toBeInTheDocument();
+
+    // An inner rung acted: `defaultPrevented` is the whole contract. It cannot be faked through
+    // `fireEvent`'s init — the flag is set by a real `preventDefault()` — so a native listener on a
+    // descendant plays the inner rung. React 19 delegates to the root container, so this runs
+    // first, exactly as a workspace rung would.
+    const main = screen.getByRole('main');
+    const innerRung = (event: Event): void => event.preventDefault();
+    main.addEventListener('keydown', innerRung);
+    fireEvent.keyDown(main, { key: 'Escape' });
+    expect(drawer()).toBeInTheDocument();
+    main.removeEventListener('keydown', innerRung);
+
+    // Typed into a field: the field's, not the drawer's. A real one, appended to the stage rather
+    // than looked up — the switcher renders `null` until the reader has organisations, and a
+    // locator that resolves to nothing would make this case pass by finding no field to type in.
+    const field = document.createElement('input');
+    main.appendChild(field);
+    fireEvent.keyDown(field, { key: 'Escape' });
+    expect(drawer()).toBeInTheDocument();
+    field.remove();
+
+    fireEvent.keyDown(grid, { key: 'Escape' });
+    expect(drawer()).not.toBeInTheDocument();
+  });
+
+  it('closes the drawer from its own close control', () => {
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: 'Close context drawer' }));
+    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Project Explorer' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('opens the rail as a drawer from the header toggle and closes it', () => {

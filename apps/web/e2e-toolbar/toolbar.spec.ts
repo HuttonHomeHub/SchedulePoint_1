@@ -70,7 +70,12 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   // away in `Summary ▾` — and this journey runs at Playwright's default 1280, which lands under that
   // floor once the rail is open. Asserting it at the default width would be asserting the wrong
   // thing; asserting it conditionally would assert nothing.
-  await page.setViewportSize({ width: 1600, height: 900 });
+  //
+  // **1920, not the 1600 that held until Graphite M3.** The band stopped being the viewport when the
+  // rail took the leading column top to bottom: it is now the viewport MINUS the rail, so 1600 buys
+  // the band ~1320 and the chip correctly withdraws. The figure has to move with the geometry — this
+  // is a width chosen to clear a floor, not a width that means anything on its own.
+  await page.setViewportSize({ width: 1920, height: 900 });
   const finish = lookRow.getByText('Finish', { exact: true });
   await expect(finish).toBeVisible();
   await expect(

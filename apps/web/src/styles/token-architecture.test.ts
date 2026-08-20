@@ -511,7 +511,17 @@ describe('the sizing rhythm ratchets down', () => {
       /\b(?:w|h|min-w|min-h|max-w|max-h|p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|top|left|right|bottom|inset|text|leading|tracking|rounded|basis|size)-\[[^\]]+\]/g;
     const sites: string[] = [];
     for (const file of files) {
-      for (const match of readFileSync(file, 'utf8').matchAll(pattern)) {
+      // **Comments are stripped, for the reason `weightSites` records one axis over** — and this
+      // scanner still had the hole after that one was fixed. A docblock explaining why a value is
+      // arbitrary counted as *using* one, so writing down the reasoning pushed the gate towards
+      // failing; Graphite M4 hit it by documenting a `w-[46px]` it had just replaced with `w-12`,
+      // which is a gate going red at the exact moment its rule was being obeyed. Fourth occurrence
+      // of a scan matching prose in this repository, and the first where the fix was already
+      // written twenty lines away.
+      const text = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/^\s*\/\/.*$/gm, '');
+      for (const match of text.matchAll(pattern)) {
         if (/\[(?:--|var\()/.test(match[0])) continue; // token-referencing: not the defect
         sites.push(`${file.slice(root.length + 1)}: ${match[0]}`);
       }
@@ -535,8 +545,12 @@ describe('the sizing rhythm ratchets down', () => {
    *
    * Lower this number when it drops. Never raise it without saying which relationship the new
    * value expresses that a token could not.
+   *
+   * **20 → 18 at Graphite M4**, and not because two were removed: stripping comments from the scan
+   * (see `countArbitrarySizing`) revealed that two of the twenty were prose all along. Re-measured
+   * rather than left at the old figure, which would have quietly bought two units of slack.
    */
-  const ARBITRARY_SIZING_CEILING = 20;
+  const ARBITRARY_SIZING_CEILING = 18;
 
   it(`uses no more than ${ARBITRARY_SIZING_CEILING} arbitrary sizing values`, () => {
     const { total, sites } = countArbitrarySizing();

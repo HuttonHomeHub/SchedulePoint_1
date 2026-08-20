@@ -183,7 +183,7 @@ test('M0 — the Graphite strip, composed from real controls', async ({ page }) 
         const measured = Math.round(host.getBoundingClientRect().width * 10) / 10;
         host.remove();
 
-        const RAIL = 46;
+        const RAIL = 48;
         const total = Math.round((measured + groupChrome + newItemsCost) * 10) / 10;
         const available = window.innerWidth - RAIL;
         return {
