@@ -340,14 +340,21 @@
 
   /* The minimap rectangle's frame (ADR-0100 decision 9, M2-T1): a TWO-TONE pair, the
      `outline`/`handleHalo` precedent, because the measurement said one solid cannot exist —
-     the boundary must clear WCAG 1.4.11's 3:1 on the 0.177-L canvas ground AND on both
-     ~0.65-L bar fills, and white (the best any single value can do) measures 2.62:1 on the
-     critical fill. So the light stroke holds the ground and the dark halo holds the bars:
-     for every MINIMAP_GROUNDS member, at least one of the pair clears 3:1, and the pair
-     clears 3:1 against each other so the edge reads as one line. The gate recomputes all
-     of it. */
-  --canvas-minimap-frame: oklch(1 0 0);
-  --canvas-minimap-frame-halo: oklch(0.15 0.01 260);
+     the boundary must clear WCAG 1.4.11's 3:1 on the canvas ground AND on both bar fills, and
+     no single value does. For every MINIMAP_GROUNDS member at least one of the pair clears
+     3:1, and the pair clears 3:1 against each other so the edge reads as one line.
+
+     **The pair INVERTED for the light theme, and the gate could not have told us to.** Its rule
+     is `max(stroke, halo) >= 3`, which is polarity-agnostic by design and therefore stayed green
+     with a white stroke on a near-white ground — the dark halo was carrying every assertion
+     while the line a reader actually sees had vanished into the ground on three sides. The
+     screenshot showed it: a white rectangle visible only where it crossed the red bars. So the
+     two halves swap — dark stroke holds the ground, white halo holds the bars — which is the
+     same rule with the grounds the other way up. Nothing about the gate changes, and that is
+     the point worth remembering: this is a defect a green gate is structurally incapable of
+     reporting, and only a picture finds it. */
+  --canvas-minimap-frame: oklch(0.25 0.015 260);
+  --canvas-minimap-frame-halo: oklch(1 0 0);
 
   /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
      Theme-INVARIANT, like `brand` and for the same reason one step further out.
