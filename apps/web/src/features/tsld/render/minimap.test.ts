@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMinimapBitmap, minimapRects, minimapViewport, type MinimapPalette } from './minimap';
 import { screenXOfDay, worldExtent, type RenderActivity } from './geometry';
+import { buildMinimapBitmap, minimapRects, minimapViewport, type MinimapPalette } from './minimap';
 
 const DATA_DATE = '2026-01-01';
 const BOX = { width: 200, height: 120 };
@@ -55,7 +55,7 @@ function recordingCtx() {
       return fillStyle;
     },
     set fillStyle(v: string | CanvasGradient | CanvasPattern) {
-      fillStyle = String(v);
+      fillStyle = typeof v === 'string' ? v : '[object]';
     },
   };
   return { ctx, fills };

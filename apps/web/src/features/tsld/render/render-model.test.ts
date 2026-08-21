@@ -1,6 +1,7 @@
 import type { ActivityType, DependencyType } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
+import { dayExtent } from './paint';
 import {
   activityRect,
   arrowhead,
@@ -66,8 +67,6 @@ import {
   type Size,
   type Viewport,
 } from './render-model';
-
-import { dayExtent } from './paint';
 
 const DATA_DATE = '2026-01-01';
 const VIEW: Viewport = { pxPerDay: 10, originX: 100, originY: 50 };

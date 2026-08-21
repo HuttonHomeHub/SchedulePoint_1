@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMinimapBitmap, type MinimapPalette } from './minimap';
 import type { RenderActivity } from './geometry';
+import { buildMinimapBitmap, type MinimapPalette } from './minimap';
 
 /**
  * **The minimap draw-budget gate** (M1-T3) — the counting-stub method of
@@ -67,7 +67,7 @@ function countingCtx() {
     },
     set fillStyle(v: string | CanvasGradient | CanvasPattern) {
       calls.styleWrites += 1;
-      fillStyle = String(v);
+      fillStyle = typeof v === 'string' ? v : '[object]';
     },
   };
   return { calls, ctx };

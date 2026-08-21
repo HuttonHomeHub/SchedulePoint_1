@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { screenXOfDay, worldExtent, type RenderActivity } from '../render/geometry';
 import { minimapViewport, type MinimapBox, type MinimapMapping } from '../render/minimap';
@@ -55,6 +55,20 @@ export function TsldMinimap({
   bitmapCanvasRef,
   rectRef,
 }: TsldMinimapProps): React.ReactElement {
+  // The control that opened the panel, captured so the panel's own Hide button returns focus
+  // there instead of dropping it to <body> — the TsldLegendPanel pattern, adopted because focus
+  // dropped to <body> is the most repeated named a11y regression in this codebase (M2-T6 lists
+  // five ADRs recording it). Toggle-off and responsive withdrawal need nothing here: the
+  // dismissing control survives, so focus never moves.
+  const openerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    openerRef.current = (document.activeElement as HTMLElement | null) ?? null;
+  }, []);
+  const handleClose = (): void => {
+    const opener = openerRef.current;
+    onClose();
+    opener?.focus();
+  };
   // The mapping for the two React-rendered overlays. Deliberately derived here from the same
   // pure functions the host's bitmap build uses (one derivation each), on the renders those
   // overlays already need — an O(n) fold on an activities/selection change, never per frame.
@@ -66,14 +80,16 @@ export function TsldMinimap({
   const selected =
     selectedId === null ? null : (activities.find((a) => a.id === selectedId) ?? null);
 
-  // Today, on the minute tick the canvas's own Today marker uses (ADR-0056 F6b).
-  const nowMs = useNow(60_000);
-  const todayX = useMemo(() => {
-    if (mapping === null) return null;
-    const dayFloat = (nowMs - Date.parse(dataDate)) / 86_400_000;
-    const x = screenXOfDay(dayFloat, mapping.view);
-    return x >= 0 && x <= MINIMAP_BOX.width ? x : null;
-  }, [mapping, nowMs, dataDate]);
+  // Today, on the minute tick the canvas's own Today marker uses (ADR-0056 F6b). `useNow`
+  // returns a CADENCE counter, never a timestamp — its docblock says consumers re-derive the
+  // wall clock per bump (the first draft read the counter AS epoch ms, and the component test
+  // caught it: no Today line, ever). Derived at plain render scope like the workspace model's
+  // `todayIso`, not inside a memo — the arithmetic is four operations, and memoising it would
+  // mean calling the clock inside a memoised render, which the compiler lint refuses.
+  useNow(60_000);
+  const dayFloat = (new Date().getTime() - Date.parse(dataDate)) / 86_400_000;
+  const todayAt = mapping === null ? null : screenXOfDay(dayFloat, mapping.view);
+  const todayX = todayAt !== null && todayAt >= 0 && todayAt <= MINIMAP_BOX.width ? todayAt : null;
 
   const marker = useMemo(() => {
     if (mapping === null || selected === null || selected.earlyStart === null) return null;
@@ -101,13 +117,13 @@ export function TsldMinimap({
       style={{ bottom: 12 + bottomOffsetPx }}
     >
       <div className="flex items-center justify-between pl-2">
-        <span className="text-muted-foreground text-xs font-medium">Overview</span>
+        <span className="text-muted-foreground text-xs">Overview</span>
         <Button
           variant="ghost"
           size="icon-lg"
           aria-label="Hide overview"
           className="text-muted-foreground"
-          onClick={onClose}
+          onClick={handleClose}
         >
           <X aria-hidden="true" className="size-4" />
         </Button>
