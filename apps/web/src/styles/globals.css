@@ -257,37 +257,37 @@
   --chrome-info-foreground: oklch(0.181 0.031 247.1); /* 6.06:1 on the fill */
 
   /* panel — the navigator rail */
-  --panel: oklch(0.252 0.056 264);
-  --panel-foreground: oklch(0.985 0 0);
-  --panel-muted-foreground: oklch(0.78 0.02 264);
-  --panel-muted: oklch(0.32 0.05 264);
-  --panel-border: oklch(1 0 0 / 14%);
+  --panel: oklch(0.968 0.003 250);
+  --panel-foreground: oklch(0.321 0 0);
+  --panel-muted-foreground: oklch(0.51 0 0);
+  --panel-muted: oklch(0.965 0.002 248);
+  --panel-border: oklch(0.885 0.004 252);
   --panel-input: oklch(0.62 0.02 264);
-  --panel-accent: oklch(0.338 0.081 262);
-  --panel-accent-foreground: oklch(0.985 0 0);
-  --panel-primary: oklch(0.786 0.167 70);
-  --panel-primary-foreground: oklch(0.252 0.056 264);
+  --panel-accent: oklch(0.955 0.04 78);
+  --panel-accent-foreground: oklch(0.252 0.056 264);
+  --panel-primary: oklch(0.252 0.056 264);
+  --panel-primary-foreground: oklch(0.985 0 0);
   --panel-field: oklch(1 0 0);
   --panel-field-foreground: oklch(0.321 0 0);
   --panel-field-muted-foreground: oklch(0.51 0 0);
-  --panel-destructive-text: oklch(0.74 0.15 25);
-  --panel-success-text: oklch(0.8 0.12 150);
-  --panel-warning-text: oklch(0.8 0.14 70);
-  --panel-info-text: oklch(0.8 0.09 245);
-  --panel-ring: oklch(0.786 0.167 70); /* 7.91:1 on the surface */
-  --panel-destructive: oklch(0.649 0.167 31.6); /* 4.57:1 on the surface */
-  --panel-destructive-foreground: oklch(0.176 0.025 42.3); /* 5.44:1 on the fill */
-  --panel-destructive-hover: oklch(0.7 0.16 31.6); /* 5.59:1 on the surface */
-  --panel-primary-hover: oklch(0.722 0.109 247.6); /* 6.54:1 on the surface */
-  --panel-secondary-hover: oklch(0.59 0.045 262); /* 3.88:1 on the surface */
-  --panel-secondary: oklch(0.54 0.045 262); /* 3.15:1 on the surface */
-  --panel-secondary-foreground: oklch(0.985 0 0); /* 4.85:1 on the fill */
-  --panel-success: oklch(0.72 0.115 156.4); /* 6.77:1 on the surface */
-  --panel-success-foreground: oklch(0.15 0.02 156); /* 8.31:1 on the fill */
-  --panel-warning: oklch(0.79 0.135 75.1); /* 8.12:1 on the surface */
-  --panel-warning-foreground: oklch(0.15 0.02 77.5); /* 10.00:1 on the fill */
-  --panel-info: oklch(0.66 0.128 249.5); /* 5.16:1 on the surface */
-  --panel-info-foreground: oklch(0.181 0.031 247.1); /* 6.06:1 on the fill */
+  --panel-destructive-text: oklch(0.505 0.19 27.5);
+  --panel-success-text: oklch(0.45 0.11 150);
+  --panel-warning-text: oklch(0.47 0.11 55);
+  --panel-info-text: oklch(0.3 0.075 262);
+  --panel-ring: oklch(0.35 0.09 262);
+  --panel-destructive: oklch(0.505 0.19 27.5);
+  --panel-destructive-foreground: oklch(0.985 0 0);
+  --panel-destructive-hover: oklch(0.455 0.19 27.5);
+  --panel-primary-hover: oklch(0.2 0.05 264);
+  --panel-secondary-hover: oklch(0.29 0.075 262);
+  --panel-secondary: oklch(0.338 0.081 262);
+  --panel-secondary-foreground: oklch(0.985 0 0);
+  --panel-success: oklch(0.52 0.15 143);
+  --panel-success-foreground: oklch(0.985 0 0);
+  --panel-warning: oklch(0.56 0.115 55);
+  --panel-warning-foreground: oklch(0.985 0 0);
+  --panel-info: oklch(0.338 0.081 262);
+  --panel-info-foreground: oklch(0.985 0 0);
 
   /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
      THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
@@ -444,10 +444,21 @@
   --auth-info-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
   /* The page the card floats on. A PAIR rather than a family member, the way
      `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
-     17-name vocabulary has no word for "the second stop". Values are the old
-     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
-  --ground: oklch(0.177 0.011 260.6);
-  --ground-end: oklch(0.154 0.009 264.3);
+     vocabulary has no word for "the second stop".
+
+     **Back to the old app's own gradient**, `linear-gradient(135deg, #f5f7fa, #c3cfe2)`, converted
+     to OKLCH by solving for the closest match (error < 0.0013 in sRGB) rather than eyeballed. This
+     comment already SAID these were the old app's values while holding Graphite's near-black —
+     re-valued for the dark theme with the prose left behind, which is the drift class this epic
+     keeps recording.
+
+     Restored because the flip made the discontinuity obvious: the card and its navy panel were
+     light corporate all along, and the void around them was not, so a visitor's first two screens
+     went black → white. The card, its panel, the photograph and the amber accents are untouched —
+     only the area around them moves. The accepted cost is that the login reads calmer: a floating
+     card gets much of its drama from a dark surround. */
+  --ground: oklch(0.975 0.005 263);
+  --ground-end: oklch(0.851 0.03 260);
 
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */

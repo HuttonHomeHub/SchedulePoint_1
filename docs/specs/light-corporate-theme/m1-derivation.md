@@ -106,3 +106,34 @@ month bands' step, and the categorical ramp CQ-3 put in scope. `m0-semantics.md`
 `token-contrast.test.ts` 216/216 · the whole `src/styles/` suite 285/285 · web unit 4905/4905 ·
 lint · typecheck · the base journey 17/17 (its axe scans run against the new values) ·
 `e2e-designed-chrome` 4/4 · `e2e-overview` 4/4 · `e2e-designed-ui` 9/9.
+
+## Two changes after the product owner saw the screens
+
+Both answered from the pictures rather than from the plan, which is what M1-T4's review gate exists
+for.
+
+**The Project Explorer goes light; the icon rail stays navy.** CQ-1(a) said "navy chrome, light
+working surfaces" and `panel` covered both the narrow rail and the wide Explorer, so both were navy —
+800–900 px of flat colour carrying no information, opposite a light page. One scope could not express
+both, so the **rail moves to `chrome`** (it is part of the frame, flush against the band it already
+sits beside) and the `panel` family is re-valued light. Its 31 members take the page's values, with
+its own ground at `oklch(0.968 0.003 250)` — one step below the page, so a sidebar reads as recessed
+rather than as another card — and a slightly stronger border, because it is the edge between two
+light regions rather than a divider inside one.
+
+**The sign-in surround returns to the old app's own gradient.** `--ground`/`--ground-end` go back to
+`linear-gradient(135deg, #f5f7fa, #c3cfe2)`, converted to OKLCH by solving for the closest match
+(error < 0.0013 in sRGB) rather than eyeballed. The card, its navy panel, the photograph and the
+amber accents are untouched. **The comment above those two tokens already claimed they were the old
+app's values while holding Graphite's near-black** — re-valued for the dark theme with the prose left
+behind, which is the third instance of that drift class this epic has found and the second inside
+`globals.css`.
+
+The accepted cost of the second change is stated rather than discovered later: a floating card gets
+much of its drama from a dark surround, so the login reads calmer than it did.
+
+**One journey broke and it was the right kind of break.** `e2e-designed-chrome` located the band as
+`[data-surface="chrome"]`**`.first()`**, which was true while the band was the only chrome surface;
+the rail now precedes it in the DOM, so `.first()` silently selected the wrong element. Re-pointed to
+filter on the `<header>` the band contains — locate by what a thing _is_, not by where it happens to
+sit. The suite's axe scan now covers both navy surfaces rather than one, which is a widening.
