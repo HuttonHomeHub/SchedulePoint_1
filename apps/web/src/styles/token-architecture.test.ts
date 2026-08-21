@@ -130,7 +130,7 @@ const OUTSIDE_THE_CLOSURE = {
     '--ground',
     '--ground-end',
   ],
-  data: ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'],
+  data: Array.from({ length: 12 }, (_, i) => `--chart-${i + 1}`),
 } as const;
 
 /**

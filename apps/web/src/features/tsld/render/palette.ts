@@ -2,6 +2,38 @@ import type { LensPalette } from './lenses';
 import type { ResourceStripPalette, TsldPalette, WbsBandPalette } from './paint';
 
 /**
+ * The categorical WBS ramp, declared ONCE — the fill token, its jsdom fallback, and the ink token
+ * that is legible on it.
+ *
+ * It is one list because three call sites consume it (the painter's fills, the painter's inks and
+ * the legend's swatches) and they were three hand-written arrays that had to be kept the same
+ * length and the same order. Going 5 → 12 for the light theme is exactly the edit that would have
+ * left one of them behind — and a legend one swatch short of the diagram is a defect nobody
+ * notices until they are counting phases.
+ *
+ * **The ink alternates because the ramp does.** A twelve-member categorical ramp spans too much
+ * lightness for one label colour to clear 4.5:1 on all of it, so the ramp alternates two lightness
+ * bands and the ink alternates with it: white on the darker members, the diagram's dark ink on the
+ * lighter ones. Both tokens already exist and are already gated as a pair with their own fills.
+ */
+const WHITE_INK = '--destructive-foreground';
+const DARK_INK = '--primary-foreground';
+const WBS_CYCLE_TOKENS: ReadonlyArray<readonly [fill: string, fallback: string, ink: string]> = [
+  ['--chart-1', '#4d43a8', WHITE_INK],
+  ['--chart-2', '#5f9a3f', DARK_INK],
+  ['--chart-3', '#8e3a86', WHITE_INK],
+  ['--chart-4', '#3f9c6a', DARK_INK],
+  ['--chart-5', '#a83550', WHITE_INK],
+  ['--chart-6', '#3f9a95', DARK_INK],
+  ['--chart-7', '#6c3ea3', WHITE_INK],
+  ['--chart-8', '#529a45', DARK_INK],
+  ['--chart-9', '#a3376c', WHITE_INK],
+  ['--chart-10', '#3d9a83', DARK_INK],
+  ['--chart-11', '#20707f', WHITE_INK],
+  ['--chart-12', '#3f92ad', DARK_INK],
+];
+
+/**
  * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006), so the canvas
  * takes its colour from the design system rather than hardcoding it — the tokens stay the single
  * source of truth and the canvas is just another consumer. Reads the computed `--color-*` custom
@@ -246,34 +278,26 @@ export function resolveLensPalette(root: Element): LensPalette {
     floatMedium: token('--info', '#3b6fbf'),
     floatHigh: token('--success', '#2f9e44'),
     // WBS groups cycle the five chart tokens (a deterministic, distinguishable categorical ramp).
-    wbsCycle: [
-      token('--chart-1', '#3b6fbf'),
-      token('--chart-2', '#2f9e44'),
-      token('--chart-3', '#d29628'),
-      token('--chart-4', '#9c5cc4'),
-      token('--chart-5', '#c83c3c'),
-    ],
-    // Contrast-safe inside-bar label inks paired 1:1 with the fills above (WCAG 1.4.3, ≥ 4.5:1). Each
-    // float band reuses its fill token's `*-foreground` (destructive/warning/info/success map 1:1); the
-    // neutral ink is the page `--color-background` (white-on-grey in light, dark-on-grey in dark); the
-    // WBS cycle pairs chart-1 with `primary-foreground` (theme-flipping, chart-1 mirrors `primary`) and
-    // chart-2…5 with the stable-dark `warning-foreground` (0.205 in both themes). Contrast ratios
-    // (computed from the oklch tokens in `styles/globals.css`, light / dark — see `lenses.test.ts`):
-    //   float critical 4.56 / 5.87 · low 8.48 / 10.12 · medium 5.51 / 6.82 · high 4.87 / 7.03
-    //   neutral 4.73 / 7.63 · wbs chart-1 4.72 / 5.50 · chart-2 5.01 / 7.21 · chart-3 4.82 / 7.03
-    //   chart-4 8.48 / 10.12 (the 2.02:1 white-on-yellow case, now fixed) · chart-5 4.58 / 6.14
+    wbsCycle: WBS_CYCLE_TOKENS.map(([name, fallback]) => token(name, fallback)),
+    // Contrast-safe inside-bar label inks paired 1:1 with the fills above (WCAG 1.4.3, ≥ 4.5:1).
+    // Each float band reuses its fill token's `*-foreground` (destructive/warning/info/success map
+    // 1:1); the neutral ink is the page background; the WBS cycle's inks come from
+    // `WBS_CYCLE_TOKENS`, alternating with the ramp's two lightness bands.
+    //
+    // **The per-member ratios that used to be listed here are gone deliberately.** They were
+    // quoted "light / dark" for five members of a three-theme product, and both halves of that
+    // are now wrong: ADR-0097 left one theme, and the ramp is twelve. Re-listing twelve numbers
+    // in a comment recreates exactly the drift that made the old list wrong — the ramp's
+    // derivation and its worst-case figures live beside the values themselves in
+    // `styles/globals.css`, which is the one place they cannot fall out of step with what ships.
     neutralInk: token('--background', '#ffffff'),
     floatCriticalInk: token('--destructive-foreground', '#ffffff'),
     floatLowInk: token('--warning-foreground', '#1a1a1a'),
     floatMediumInk: token('--info-foreground', '#ffffff'),
     floatHighInk: token('--success-foreground', '#ffffff'),
-    wbsInkCycle: [
-      token('--primary-foreground', '#ffffff'),
-      token('--warning-foreground', '#1a1a1a'),
-      token('--warning-foreground', '#1a1a1a'),
-      token('--warning-foreground', '#1a1a1a'),
-      token('--warning-foreground', '#1a1a1a'),
-    ],
+    wbsInkCycle: WBS_CYCLE_TOKENS.map(([, , ink]) =>
+      token(ink, ink === WHITE_INK ? '#ffffff' : '#1a1a1a'),
+    ),
   };
 }
 
@@ -297,13 +321,7 @@ export function lensLegendVarPalette(): LensPalette {
     floatLow: v('--color-warning'),
     floatMedium: v('--color-info'),
     floatHigh: v('--color-success'),
-    wbsCycle: [
-      v('--color-chart-1'),
-      v('--color-chart-2'),
-      v('--color-chart-3'),
-      v('--color-chart-4'),
-      v('--color-chart-5'),
-    ],
+    wbsCycle: WBS_CYCLE_TOKENS.map(([name]) => v(`--color${name.slice(1)}`)),
     // Inks are unused by the legend (it renders swatch fills + muted-foreground text), so mirror the
     // fill vars — never read.
     neutralInk: v('--color-background'),

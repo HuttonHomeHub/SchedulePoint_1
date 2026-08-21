@@ -3008,11 +3008,23 @@ therefore correct either way. The third is `var(--color-destructive)` for the mi
 which now differs from the scene's Today marker — both reds, visually near-identical today, and a
 real inconsistency waiting for the two families to diverge further.
 
-**The fix is not simply `var(--destructive)`**: the minimap is a floating panel and which
-`[data-surface]` it sits inside has not been established, so that substitution could pick up the
-panel scope's red instead. The robust answer is to pass the resolved palette down as a prop the way
-the painter already receives it, rather than resolving colour in the component at all. Establish the
-scope first, then choose.
+**The minimap half is now CLOSED.** The scope was established by probe rather than reasoned about:
+the minimap sits inside `[data-surface="canvas"]`, where `--color-destructive` gives the page's red
+(`oklch(0.505 0.19 27.5)`) and `--destructive` gives the diagram's (`oklch(0.439 0.175 27)`). So the
+plain rename was correct after all, and it shipped. The two frame reads stay on the alias because
+that pair is not scope-rebound and the alias is the only name Tailwind emits for it.
+
+**What is left is the LEGEND, and it is a different fix.** `resolveLegendSwatches` returns
+`var(--color-*)` strings for DOM swatches, and `TsldPanel.tsx:2466` renders `<TsldLegend />`
+**outside** the `tone="canvas"` Surface at `:2636`. So neither name reaches the diagram's family
+there: the alias is frozen at `:root` and the unprefixed name resolves to whatever scope the legend
+happens to sit in. A legend describes the diagram, so its swatches must be the diagram's values —
+which means wrapping it in `<Surface tone="canvas">` (the sanctioned route; components may not name
+family tokens, per the seam test) and accepting that this also gives it the diagram's ground, or
+passing the resolved palette down as props the way the painter already receives it.
+
+Visually marginal today — the page and plot reds differ by 0.066 L — and a real correctness gap that
+widens the moment the two families diverge further.
 
 **Also owed:** `token-contrast.test.ts` resolves a scope by reading the CSS text and following the
 rebind itself, so it asserts a mapping the browser does not perform for alias readers. It was right

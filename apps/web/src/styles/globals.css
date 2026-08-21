@@ -161,13 +161,44 @@
 
   /* Lines & focus — the ring is NAVY on light surfaces (note 1). */
 
-  /* Data visualisation — the brand pair first, then hues that stay apart from
-     both it and the status colours. */
-  --chart-1: oklch(0.786 0.167 70);
-  --chart-2: oklch(0.338 0.081 262);
-  --chart-3: oklch(0.6 0.13 200);
-  --chart-4: oklch(0.62 0.115 55);
-  --chart-5: oklch(0.55 0.14 300);
+  /* Data visualisation — the CATEGORICAL ramp (ADR-0097 light-theme CQ-3).
+     ---------------------------------------------------------------------------
+     Twelve, not five. P6 planners colour and group by WBS, and five swatches cycle on the
+     sixth phase — so two unrelated groups get the same fill on exactly the plans big enough
+     to need grouping. The values are derived here; the colour-by-WBS MODE and the surface for
+     assigning them are deliberately not built (`docs/specs/graphite/design.md` §5a's epic),
+     which is what "values only" means.
+
+     Three constraints, all measured against the light diagram ground:
+
+      1. **≥ 3:1 on both the ground AND the month band** (WCAG 1.4.11 — a bar's fill is what
+         identifies it). Worst member 3.10:1.
+      2. **A legible inside label.** Lightness alternates in two bands, so the odd members take
+         a white label and the even ones dark ink. Worst 4.93:1. One ink for all twelve is not
+         possible: a ramp wide enough to be categorical spans too much lightness.
+      3. **≥ 25° of hue from every RESERVED semantic** — critical (27), near-critical (62) and
+         on-schedule (249) — so a WBS fill is never mistaken for a criticality state. Worst gap
+         31°. That constraint is what shapes the odd-looking hue order: the ramp is walking
+         around three holes in the wheel.
+
+     Alternating lightness also means ADJACENT members differ on TWO channels rather than one;
+     worst adjacent pair 1.46:1. `--chart-1`'s old amber is gone deliberately — it was one of
+     the reserved hues.
+
+     NOT part of any surface scope's closure (ADR-0077): binding the login motif to these would
+     keep the page theme's values on a pinned panel. */
+  --chart-1: oklch(0.5 0.145 286);
+  --chart-2: oklch(0.615 0.115 104);
+  --chart-3: oklch(0.5 0.145 322);
+  --chart-4: oklch(0.615 0.115 140);
+  --chart-5: oklch(0.5 0.145 356);
+  --chart-6: oklch(0.615 0.115 176);
+  --chart-7: oklch(0.5 0.145 300);
+  --chart-8: oklch(0.615 0.115 122);
+  --chart-9: oklch(0.5 0.145 340);
+  --chart-10: oklch(0.615 0.115 158);
+  --chart-11: oklch(0.5 0.145 195);
+  --chart-12: oklch(0.615 0.115 212);
 
   /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
      ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
@@ -1114,6 +1145,13 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
+  --color-chart-10: var(--chart-10);
+  --color-chart-11: var(--chart-11);
+  --color-chart-12: var(--chart-12);
   --color-field: var(--field);
   --color-field-foreground: var(--field-foreground);
   --color-field-muted-foreground: var(--field-muted-foreground);
