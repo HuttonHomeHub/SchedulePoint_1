@@ -217,6 +217,54 @@ epic mildly compounds by taking the WBS ramp from 5 members to 12 — 20 `getCom
 cycle becoming 48. It fires only on a user-triggered lens or data change, and the fix is to share one
 resolve between the two `useMemo`s.
 
+## The gate pass (M4)
+
+Four specialists over the combined diff. **Performance passed**, having re-derived the epic's own
+numbers from the final code rather than trusting them. The other three blocked, on six findings —
+and the largest is this epic's own change landing on itself.
+
+**The WBS band painted one ink on two fills.** A group's name goes on whichever of two fills applies
+— a real summary's `--primary` or the derived "Unassigned" bucket's `--muted-foreground` — and
+reused a single ink. `--primary-foreground` pairs with `--primary` at 4.86:1 and landed on the
+derived fill at **3.01:1**. **It is a regression D5 introduced**, and the mechanism is the
+uncomfortable part: the band was masked by the very bug D5 fixes, painting the page's triple, which
+happened to be internally coherent at 8.15:1. Making the resolver read the canvas scope for the first
+time exposed a pairing nobody had ever checked — because D3 had inverted `--plot-primary-foreground`
+to dark _for its own fill_, and this second, unrelated consumer went with it. Live on any plan with
+an ungrouped activity, and in the exported diagram too.
+
+**And its selected-summary ring is stroked INSET**, on the bar's own fill, unlike the scene's ring
+which is offset outward onto the ground and never touches one — so `--ring` measured **1.68:1**
+against 1.4.11's 3. Not a new failure (it was 1:1 before, both tokens resolving to the same page
+value) but a real one.
+
+**Why 216 green assertions could not see either** is the finding worth carrying: the band reuses
+`--muted-foreground` — a token this matrix only ever validates as **ink** — as a **fill**, and there
+was no concept anywhere of a token repurposed that way and then painted with a _different_ ink than
+the one it was validated with. All three band pairs are now asserted, verified red at exactly 3.01:1
+and 1.68:1.
+
+The other four findings were documentation rather than pixels, and three of them are this register's
+own favourite class inside the epic that re-derives it: two `globals.css` comments still describing
+the canvas and the page as **"1.02:1 apart, two greys nobody can tell apart"** — wrong about the old
+state (it was 1.00:1, byte-identical) as well as the new one; **an invented function name** in a
+`TECH_DEBT` row filed by this epic (`resolveLegendSwatches` does not exist; it is
+`lensLegendVarPalette`); and a **seed docblock claiming a near-critical bar its own graph cannot
+produce** — caught by a reviewer running the real CPM engine over the activities the harness POSTs
+and reporting that both branch activities land at 18 days of float, structurally, since an unbranched
+FS(0) chain has uniform total float. That last one mattered beyond the comment: **no photographed
+state had ever shown a near-critical bar**, so the tightest pair in the ladder — 1.55:1, the one the
+whole solve exists to protect — had been verified by arithmetic and by nothing that renders. The
+fixture gained a third path sized for it.
+
+CQ-2's step is now **reported as a number** rather than eyeballed, which its own acceptance criterion
+required and the milestone had not delivered: **1.073:1, ΔL 0.024** against the ~0.02 threshold.
+
+Four non-blocking findings are `docs/TECH_DEBT.md` #161–#162, including one question that is the
+product owner's rather than a defect: the sign-in screens still sit on a near-black gradient, so the
+first two screens a user sees go black to white. It was true before the flip and the flip makes it
+starker.
+
 ## Consequences
 
 - One theme, light, corporate. The application and its front door are one identity.
