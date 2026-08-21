@@ -2689,6 +2689,7 @@ export function TsldPanel({
               resourceStrip={resourceStrip}
               minimapActive={minimapActive}
               {...(onMinimapClose ? { onMinimapClose } : {})}
+              minimapDismissFocusRef={listboxRef}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
               wbsBandGroups={wbsBandGroupRows}

@@ -44,6 +44,9 @@ export interface TsldMinimapProps {
   /** The host's refs: the picture canvas it blits into, and the rectangle it transforms. */
   bitmapCanvasRef: React.RefObject<HTMLCanvasElement | null>;
   rectRef: React.RefObject<HTMLDivElement | null>;
+  /** Where focus goes on × when the captured opener is unusable — the diagram's own keyboard
+   * surface (the parallel listbox). See the close handler for why the opener alone is not enough. */
+  dismissFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function TsldMinimap({
@@ -54,6 +57,7 @@ export function TsldMinimap({
   onClose,
   bitmapCanvasRef,
   rectRef,
+  dismissFocusRef,
 }: TsldMinimapProps): React.ReactElement {
   // The control that opened the panel, captured so the panel's own Hide button returns focus
   // there instead of dropping it to <body> — the TsldLegendPanel pattern, adopted because focus
@@ -65,9 +69,15 @@ export function TsldMinimap({
     openerRef.current = (document.activeElement as HTMLElement | null) ?? null;
   }, []);
   const handleClose = (): void => {
+    // The captured opener is unusable more often than the Legend's version admits: the panel
+    // persists across reloads (localStorage), and on a reloaded page nothing was focused at
+    // mount, so the capture is `<body>` — exactly the drop this handler exists to prevent. The
+    // journey caught it (the component test's opener was always real). Fallback: the diagram's
+    // own keyboard surface, which is where a planner dismissing the overview is standing anyway.
     const opener = openerRef.current;
     onClose();
-    opener?.focus();
+    if (opener && opener !== document.body && opener.isConnected) opener.focus();
+    else dismissFocusRef?.current?.focus();
   };
   // The mapping for the two React-rendered overlays. Deliberately derived here from the same
   // pure functions the host's bitmap build uses (one derivation each), on the renders those

@@ -349,6 +349,8 @@ export interface TsldCanvasProps {
   minimapActive?: boolean;
   /** The panel's close button (×). The panel is host-toggled, so closing is the host's move. */
   onMinimapClose?: () => void;
+  /** Fallback focus target for the panel's × when its captured opener is unusable (reload). */
+  minimapDismissFocusRef?: React.RefObject<HTMLElement | null>;
   /** Imperative handle so the toolbar can command zoom presets / steps (ADR-0026 D3 seam). */
   controlRef?: React.Ref<TsldCanvasHandle>;
   /** Fires only when the active zoom preset changes (a stop-boundary crossing) — never per frame —
@@ -668,6 +670,7 @@ export function TsldCanvas({
   resourceStripActive = false,
   minimapActive = false,
   onMinimapClose,
+  minimapDismissFocusRef,
   resourceStrip = null,
   controlRef,
   onZoomStopChange,
@@ -2140,6 +2143,7 @@ export function TsldCanvas({
           onClose={onMinimapClose ?? (() => {})}
           bitmapCanvasRef={minimapCanvasRef}
           rectRef={minimapRectRef}
+          {...(minimapDismissFocusRef ? { dismissFocusRef: minimapDismissFocusRef } : {})}
         />
       ) : null}
     </div>

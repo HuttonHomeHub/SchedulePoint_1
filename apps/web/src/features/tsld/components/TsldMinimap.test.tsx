@@ -130,6 +130,22 @@ describe('TsldMinimap', () => {
     opener.remove();
   });
 
+  it('falls back to the diagram surface when the captured opener is unusable (reloaded page)', () => {
+    // The journey's finding: the panel persists across reloads, and on a reloaded page nothing
+    // is focused at mount, so the opener capture is <body> — focusing it IS the drop this
+    // handler exists to prevent. Verified red against the opener-only close.
+    const surface = document.createElement('ul');
+    surface.tabIndex = 0;
+    document.body.appendChild(surface);
+    // Nothing focused at mount — activeElement is <body>, the reload shape.
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    const { onClose } = mount({ dismissFocusRef: { current: surface } });
+    fireEvent.click(screen.getByRole('button', { name: 'Hide overview' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(surface);
+    surface.remove();
+  });
+
   it('the close button is the 44px icon-lg size (UX_STANDARDS floor for new panel chrome)', () => {
     mount();
     expect(screen.getByRole('button', { name: 'Hide overview' }).className).toContain('size-11');
