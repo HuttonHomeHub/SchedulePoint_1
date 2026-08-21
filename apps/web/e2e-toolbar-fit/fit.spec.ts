@@ -596,7 +596,16 @@ test('the command band is unchanged across drawer open, close and resize', async
   await page.setViewportSize({ width: 1646, height: 1000 });
   await openPlan(page, Date.now() + 5);
 
-  const band = page.locator('[data-surface="chrome"]').first();
+  // **Located by the header it contains, not by document order.** `.first()` was true while the
+  // band was the only chrome surface; the light corporate theme moved the tool rail from `panel` to
+  // `chrome` (the rail stays navy, the Project Explorer went light), and the rail precedes the band
+  // in the DOM. This test would then have measured the RAIL — and passed, because a fixed-width
+  // rail is also unchanged across drawer open, close and resize. Green while asserting nothing,
+  // which is worse than red.
+  const band = page
+    .locator('[data-surface="chrome"]')
+    .filter({ has: page.locator('header') })
+    .first();
   const stage = page.getByRole('main');
   const explorer = page.getByRole('button', { name: 'Project Explorer' });
   const widthOf = async (locator: typeof band): Promise<number> =>
