@@ -663,15 +663,29 @@ describe('the auth scope earns its keep', () => {
     // **This assertion exists because the plan said to retire this scope and the measurement
     // said not to** (ADR-0097). ADR-0077 §2 pinned the login theme-invariant while the rest of
     // the product followed the theme; with one theme that argument distinguishes nothing, so
-    // `auth` looked like a scope with no remaining reason. Measured, 12 of its 18 tokens differ
-    // from their page counterparts by more than the ~0.02 OKLCH step at which a difference is
-    // visible — led by `--auth-ring`, which ADR-0077 M7 derived from the old app's failing
-    // 2.02:1 up to 3.01–3.36:1 to clear WCAG 1.4.11.
+    // `auth` looked like a scope with no remaining reason. So the scope survives on its VALUES
+    // rather than on its original reasoning, and this gate is what keeps that honest: if a later
+    // change quietly aligns `auth` to the page, the scope has genuinely become dead weight and
+    // should be retired deliberately — not left as aliases that look like a design decision and
+    // are not one.
     //
-    // So the scope survives on its VALUES rather than on its original reasoning, and this gate
-    // is what keeps that honest: if a later change quietly aligns `auth` to the page, the scope
-    // has genuinely become dead weight and should be retired deliberately — not left as 18
-    // aliases that look like a design decision and are not one.
+    // **RE-MEASURED at the light corporate theme (M3-T1), because the question genuinely
+    // reopened.** ADR-0097's finding was taken against a near-black page, where almost anything
+    // on a white card differs. The light theme removes that advantage entirely — an off-white
+    // page and a paper-white card — so the honest expectation was that the scope had collapsed.
+    // It has not. 17 of 31 `--auth-*` tokens differ from their page twin and 14 do so
+    // perceptibly; of the eight sampled below, seven clear the threshold:
+    //
+    //   --auth-ring          ΔL 0.298   --auth-info-text     ΔL 0.200
+    //   --auth-foreground    ΔL 0.069   --auth-warning-text  ΔL 0.050
+    //   --auth-success-text  ΔL 0.047   --auth-field         ΔL 0.038
+    //   --auth-accent        ΔC 0.034   --auth (the card)    ΔL 0.018  ← below threshold
+    //
+    // The card ground being the one that does NOT clear it is right rather than a near miss: a
+    // white card on an off-white page is a small step by design, with the border carrying the
+    // edge. What survives is the login's own INK — navy where the page is neutral grey — and the
+    // amber ring ADR-0077 M7 derived from the old app's failing 2.02:1 up to 3.01–3.36:1 to
+    // clear WCAG 1.4.11.
     const tokens = themeTokens(':root');
     const pairs: Array<[string, string]> = [
       ['--auth', '--background'],

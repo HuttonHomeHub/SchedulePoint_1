@@ -261,11 +261,18 @@ const SHOTS = [
     name: 'clients-error',
     intercept: { url: '**/api/v1/organizations/*/clients*', fulfil: 500 },
     go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/clients`),
+    // **`expectText`, because the first version of this shot photographed a SPINNER.** The query
+    // retries a 500 three times, so the error state does not arrive for ~5 s — and the harness
+    // wrote the picture and printed the shot's name as though it had worked. That is the same
+    // green-result-about-nothing the 404 guard above exists for, one state along: a shot NAMED for
+    // a state has to prove it reached it, or it is evidence of nothing.
+    expectText: /Couldn.t load clients/i,
   },
   {
     name: 'clients-loading',
     intercept: { url: '**/api/v1/organizations/*/clients*', hang: true },
     go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/clients`),
+    expectText: /Loading clients/i,
   },
   // **The plan workspace, which this harness omitted for its whole existence.** Nine screens were
   // shot and the TSLD canvas — the product's reason to exist, and the subject of four consecutive
@@ -548,6 +555,24 @@ for (const width of widths) {
         }
       }
       if (shot.after) await shot.after(page);
+      if (shot.expectText) {
+        // **Scoped to `main`.** A page-wide match would find the Project Explorer's own loading and
+        // error copy, which is a different pane in a different state — the guard would pass while
+        // the pane being photographed was still a spinner, committing the exact failure it exists
+        // to prevent. `waitFor` polls to a real deadline rather than a settle somebody guessed.
+        await page
+          .locator('main')
+          .getByText(shot.expectText)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 })
+          .catch(() => {
+            throw new Error(
+              `${shot.name}: never reached the state it is named for (${shot.expectText}). ` +
+                'The picture would be of some other state, which is worse than no picture.',
+            );
+          });
+        await page.waitForTimeout(300);
+      }
       await page.screenshot({ path: join(dir, `${shot.name}.png`) });
       // Disarm, or the next shot inherits this one's failure — the harness reuses one page per
       // width, so a route left armed is a defect that shows up several pictures later.
