@@ -217,7 +217,14 @@ export const PRINT_TOKEN_SOURCES = {
  *   Paper is light because it is declared light, not because the current theme happens to be.
  * - **The diagram fields** read the CANVAS surface scope, so a printed diagram cannot drift from
  *   the one on screen — the property this function has always promised, and the reason freezing
- *   them to literals is the wrong fix even though it would also produce a light picture.
+ *   them to literals is the wrong SHAPE of fix even though it would also produce a light picture.
+ *
+ * **What "cannot drift" does and does not cover.** It holds for hue and ink — bars, labels, edges,
+ * criticality — which are the same tokens the screen paints from. It does NOT hold for anything
+ * measured *against the ground*, because the ground was deliberately decoupled: the non-working
+ * wash sits ΔL 0.007 from the canvas ground on screen and ΔL 0.035 from paper. That is a chosen
+ * divergence (paper wants more separation than a lit screen), not parity, and saying so here is
+ * cheaper than someone rediscovering it from an artefact.
  *
  * **What this replaced, and why the obvious fix was rejected.** The paper trio used to read
  * `--background`/`--foreground`, so Graphite printed a near-black diagram panel inside white paper

@@ -466,8 +466,17 @@
      arrangement resolved the print ground from the live `--background`, so Graphite silently
      printed a near-black diagram panel inside white paper chrome.
 
-     A PAIR-style trio rather than a surface family: `PrintSurface.css` and `resolvePrintPalette()`
-     read these SAME three names, which is what actually stops them drifting. That file's own
+     **A surface family truncated to three members, NOT a pack** — the honest description, and the
+     flattering one was in this comment until the deferred review. It leaned on the
+     `--ground`/`--ground-end` precedent, and this repo's own discriminator refuses it: "if the
+     thing has a semantic sibling in the base vocabulary, rebind it; if it does not, pack it". A
+     gradient's second stop has no sibling; these three ARE the siblings of `--background`,
+     `--foreground` and `--muted-foreground`. The full answer is a `[data-surface="print"]` scope,
+     deferred on the design judgement it needs and filed as TECH_DEBT #163, with the trigger held
+     by `print-palette.structural.test.ts` rather than by this paragraph.
+
+     `PrintSurface.css`, `GanttPrintSurface.css` and `resolvePrintPalette()` read these SAME three
+     names, which is what actually stops the three print artefacts drifting. That file's own
      comment claimed its hexes were "PINNED to `resolvePrintPalette()`'s own light fallbacks so the
      two can't drift" — measured 2026-08-21, they had: the CSS said #ffffff/#1a1a1a/#6b7280 while
      the runtime resolved oklch(0.958)/oklch(0.321)/oklch(0.51). A comment is not a pin. The

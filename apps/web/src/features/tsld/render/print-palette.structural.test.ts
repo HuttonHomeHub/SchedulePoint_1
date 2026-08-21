@@ -36,14 +36,15 @@ import {
  * Graphite's values the luminance assertion fails at 0.026.
  */
 
-const PAPER_FIELDS = [
-  'ground',
-  'canvasGround',
-  'ink',
-  'mutedInk',
-  'dataDateInk',
-  'handleHalo',
-] as const;
+/**
+ * Derived, never restated. An earlier draft hand-listed these six, which is a second roster of the
+ * same facts — the very thing `PRINT_TOKEN_SOURCES`'s own docblock warns against, reproduced in
+ * the file that consumes it. A paper field added to the table without being added here would have
+ * gone ungated.
+ */
+const PAPER_FIELDS = (
+  Object.keys(PRINT_TOKEN_SOURCES) as (keyof typeof PRINT_TOKEN_SOURCES)[]
+).filter((field) => PRINT_TOKEN_SOURCES[field][0].startsWith('--print-'));
 
 /** Replay the cascade for the canvas surface — the scope the export resolves the diagram from. */
 function canvasScope(): Map<string, string> {
@@ -129,11 +130,17 @@ describe('the print palette resolves light (structural)', () => {
   });
 
   it('the washes drawn across the paper stay tints of it, never dark areas', () => {
-    // The hole the rest of this file would otherwise leave. Pinning paper light stops the GROUND
-    // going near-black, but the non-working wash, the month band and the day gridline are AREAS
-    // chosen against a light ground and still resolved from the canvas scope. A dark surface
-    // returning would paint them as near-black blocks on white paper — the same defect one layer
-    // in, and the deliverable would look broken in a way no bar-label ratio can see.
+    // ONE of the holes the rest of this file would otherwise leave — this said "the hole" until
+    // the deferred review, and the paper-vs-ink assertion below is the other. Pinning paper light
+    // stops the GROUND going near-black, but the non-working wash, the month band and the day
+    // gridline are AREAS chosen against a light ground and still resolved from the canvas scope. A
+    // dark surface returning would paint them as near-black blocks on white paper.
+    //
+    // **What this cannot claim, established by sampling the exported PNG rather than reasoning:**
+    // the export's scene sets neither `monthBands` nor `isWorkingDay`, so `paintScene` skips both
+    // layers and every pixel outside a gridline or a bar comes out pure white today. These four
+    // fields are gated but not currently reachable in the deliverable — a guard against the day
+    // that gap is closed, not a description of what the artefact contains (TECH_DEBT #164).
     //
     // Deliberately NOT applied to `gridLineMonth`/`gridLineYear`: those are RULES, and are meant
     // to be mid-dark. Applying a lightness floor to them would gate the wrong property.
@@ -142,6 +149,50 @@ describe('the print palette resolves light (structural)', () => {
       expect(luminance, `${field} (${resolved(field)}) is not a tint of paper`).toBeGreaterThan(
         0.5,
       );
+    }
+  });
+
+  it('every mark drawn straight onto paper clears its floor against the paper ground', () => {
+    // **The second hole, and the one that matters most under a returned dark theme.** These are
+    // painted directly onto `canvasGround`, which is now pinned light — while they themselves
+    // still resolve from the canvas scope. Nothing else in this file pairs the two regimes, so
+    // without this the build would break on the washes and stay green on an INVISIBLE criticality
+    // outline. That outline exists precisely so criticality is not carried by colour alone
+    // (WCAG 1.4.1), so losing it silently is worse than losing the wash.
+    //
+    // ADR-0097's completeness rule names this shape exactly: the defect is "a pair whose two
+    // halves are governed by different scopes". Splitting paper from diagram created three such
+    // pairs; this is what stops them being latent.
+    const text = ['labelBeside', 'dataDate'] as const; // 4.5:1 — WCAG 1.4.3
+    const marks = ['edge', 'outline', 'today', 'selection'] as const; // 3:1 — WCAG 1.4.11
+    for (const field of text) {
+      const r = ratio(resolved('canvasGround'), resolved(field));
+      expect(r, `${field} on paper is ${fmtRatio(r)}`).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const field of marks) {
+      const r = ratio(resolved('canvasGround'), resolved(field));
+      expect(r, `${field} on paper is ${fmtRatio(r)}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('each fallback still matches the token it stands in for', () => {
+    // The fallbacks are a hand-computed second copy of every value in `globals.css`, and in
+    // production they are dead code — `resolvePrintPalette` only ever runs against an attached,
+    // styled element, so `getComputedStyle` always answers. Their only live consumers are the
+    // jsdom unit suites, which assert against the literals: re-value a token and those suites go
+    // on passing against a colour nothing renders with.
+    //
+    // Raised independently by two reviewers, and it is this commit's own finding one level down —
+    // `PrintSurface.css` pinned three hexes by comment and they drifted. A comment is not a pin;
+    // neither is a literal in a table. This is the pin.
+    for (const field of Object.keys(PRINT_TOKEN_SOURCES) as (keyof typeof PRINT_TOKEN_SOURCES)[]) {
+      const [, fallback] = PRINT_TOKEN_SOURCES[field];
+      const live = relativeLuminance(srgb(resolved(field)));
+      const stated = relativeLuminance(srgb(fallback));
+      expect(
+        Math.abs(live - stated),
+        `${field}: fallback ${fallback} no longer matches ${resolved(field)}`,
+      ).toBeLessThan(0.005);
     }
   });
 

@@ -2984,7 +2984,16 @@ dark theme brought back on ADR-0097's own stated terms. Fix it on its own or clo
 
 **Closed on its own, as this row demanded — and the fix is NOT the one prescribed above.**
 
-**The prescription had gone stale, and the measurement is why.** "A `PRINT_GROUND` the function does
+**Freezing is the wrong SHAPE of fix, not merely the wrong numbers — and that is the durable half
+of this argument, so it goes first.** A printed diagram must not be able to drift from the one on
+screen; that is a structural property, it survives any re-valuing of the theme, and it is why the
+diagram fields keep resolving from the canvas scope. The staleness finding below is the proof the
+prescription was already unsafe; it is **not** the reason for the split. Stated the other way round
+— as an earlier draft of this note did — a reader takes away "the prescription was rejected because
+its numbers had gone stale", which is an open invitation to re-freeze with fresh numbers and
+reintroduce exactly the drift this commit closed on the CSS side.
+
+**And the prescription had gone stale, which is how we know.** "A `PRINT_GROUND` the function does
 not read from the DOM at all" was written before the light corporate theme landed. Measured against
 the shipped tokens before implementing (`compositeOver`/`relativeLuminance` over the canvas scope
 resolved from `globals.css`), freezing the palette to its existing literals would have shipped **two
@@ -3020,9 +3029,27 @@ fallbacks — they exercise the branch that is correct and can never reach the b
 gate reads `globals.css` and replays the cascade instead. When it fires, the fix is a
 `[data-surface="print"]` scope with paper values of its own.
 
-**Out of scope, deliberately:** `GanttPrintSurface.css` is a self-consistent hard-coded greyscale
-sheet with no token reads and no dependence on the theme, so it has neither the defect nor the
-drift. It is not touched, and that is a decision rather than an oversight.
+**`GanttPrintSurface.css` was called out of scope, and that was wrong — twice.** The original note
+here read: "a self-consistent hard-coded greyscale sheet with no token reads and no dependence on
+the theme, so it has neither the defect nor the drift. It is not touched, and that is a decision
+rather than an oversight." Both halves failed the deferred review, which found it independently
+from two directions.
+
+It **did** have the drift, before this fix: its docblock claimed its greys were "pinned to the same
+light-token fallbacks `PrintSurface.css` uses — ink #1a1a1a, muted #6b7280 — so the two printed
+artefacts look like one product", and the TSLD image had been baking at `oklch(0.321)` (#333333)
+since the light theme. The two sheets agreed with each other and neither agreed with the artefact.
+
+And moving `PrintSurface.css` to the tokens while leaving this one **made that claim newly false in
+the CSS as well** — a false comment created in the commit closing a row about false comments, which
+is the defect class this row exists to remove, committed while removing it. Its stated reason for
+hard-coding was the same mistaken belief corrected next door: "a `@media print` sheet cannot read a
+runtime token". A `@media print` rule cannot read a runtime _JS value_; a custom property is CSS.
+
+Both sheets now read the same three `--print-*` tokens, so the exported diagram and the printed
+programme share one source rather than agreeing by hand. The sheet's remaining greys — rules,
+baseline outlines, float dashes — stay literal: they are its own greyscale chart vocabulary, have
+no sibling in the token vocabulary, and nothing else draws them.
 
 ## 159. `--color-*` aliases are frozen at `:root` — CLOSED, with a gate still owed
 
@@ -3145,3 +3172,57 @@ describes.
 `<Surface tone="canvas">` it resolves to the page's card colour. The legend is now correctly scoped
 (ADR-0102 D5) and this one swatch still cannot follow, because the token it names was never part of
 the family. Naming `--primary` is the fix; the wrapper is not.
+
+## 163. The print palette is a surface family truncated to three members
+
+**Raised 2026-08-21** (the TECH_DEBT #158 deferred review, reached independently by the
+architecture and component gates). **Size:** M — mostly design judgement, not code.
+
+`--print-ground` / `--print-ink` / `--print-muted-ink` were introduced as a "pack", on the
+`--ground`/`--ground-end` precedent (ADR-0077 M7: "a PAIR rather than a family member"). **The
+precedent does not authorise them, and the discriminator that settles it is written in this
+repository.** `token-architecture.test.ts` states it verbatim: _"if the thing has a semantic
+sibling in the base vocabulary, rebind it; if it does not, pack it."_ A gradient's second stop has
+no sibling, which is what made `--ground-end` a pack. These three have exact siblings —
+`--background`, `--foreground`, `--muted-foreground`. By the repo's own rule they are family
+members, and the shape is precisely ADR-0055 §1's founding three-token header stub, one medium
+along: latent rather than live only because the print document renders no `Badge`, no
+`text-muted-foreground`, no footer. That is one component away.
+
+**What the full fix is:** a `[data-surface="print"]` scope with a complete family, which
+`ADR-0097`'s closure rules would then govern like every other scope. The real cost is the design
+decision — which of the 31 members genuinely differ on paper — not the plumbing. A claim that the
+plumbing was itself a blocker (that the image export has no DOM node to carry the attribute) was
+checked and is **false**: `use-diagram-image.ts:111` resolves against the live attached
+`<Surface tone="canvas">` element, and `lib/print-document.ts` already creates and appends a real
+container. It is recorded here because it was asserted before it was checked, and would otherwise
+have been cited later as evidence the scope is expensive.
+
+**Why deferring is a decision rather than debt-in-disguise:** the trigger is a gate, not a comment.
+`print-palette.structural.test.ts` fails the build if paper stops resolving light, if a scope
+rebinds a `--print-*` token, or if any mark drawn on paper falls under its contrast floor. The
+previous arrangement was a correct comment naming its own trigger, and the trigger fired past it
+two days later.
+
+## 164. The exported diagram silently drops two default-on view layers
+
+**Raised 2026-08-21** (the #158 deferred ux gate). **Size:** S. **Pre-existing** — not introduced
+by the print-palette work, and found while reviewing it.
+
+`paintScene` draws month bands only `if (scene.monthBands)` and the non-working wash only
+`if (toggles.nonWorking && scene.isWorkingDay && …)`. `TsldCanvas` composes both. The export's
+scene (`use-diagram-image.ts:85-95`) sets **neither key** — it sets `dataDateLine` explicitly,
+under a comment saying it mirrors `TsldCanvas`'s composition, and stops there.
+
+**Established by sampling the artefact, not by reading the code:** every pixel in the exported
+PNG outside a gridline or a bar is pure white. So the exported and printed diagram has never shown
+weekends or month banding, and differs from the screen in a way nothing reports — while
+`resolvePrintPalette` carries four fields (`nonWorking`, `nonWorkingHatch`, `monthBand`,
+`gridLineDay`) that exist to colour layers the export never runs. Those fields are gated by
+`print-palette.structural.test.ts` against the day this is fixed; the gate's docblock says so
+rather than implying the artefact contains them.
+
+Worth noting when it is fixed: on screen the wash sits ΔL 0.007 from the canvas ground and is
+nearly invisible; on the now-true-white paper the same token sits ΔL 0.035, five times the
+separation. Paper will show it more strongly than the screen ever has, which is probably right for
+print but is a deliberate divergence rather than parity.

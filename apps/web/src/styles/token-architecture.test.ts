@@ -111,6 +111,16 @@ describe('the brand family is declared, not inherited', () => {
  * - **Data vocabulary.** `--chart-*` is deliberately outside — ADR-0077 records that binding the
  *   login motif to chart tokens keeps the PAGE theme's values on a pinned panel, which is the
  *   failure being avoided rather than an oversight.
+ * - **Deferred scopes** (TECH_DEBT #158/#163). `--print-*` is the honest odd one out, and it is
+ *   filed under its own key rather than smuggled in beside the packs because **the packs
+ *   discriminator excludes it**: `--print-ground`/`--print-ink`/`--print-muted-ink` have exact
+ *   siblings in the base vocabulary (`--background`, `--foreground`, `--muted-foreground`), and
+ *   the rule two bullets up says a thing with a sibling gets REBOUND, not packed. It is a surface
+ *   family truncated to three members, pending the design decision about which of the 31 differ on
+ *   paper — not a pack, and calling it one would be the flattering description rather than the
+ *   true one. Note the shape: background / foreground / muted-foreground is exactly ADR-0055 §1's
+ *   founding three-token header stub, one medium along, so the trap is latent rather than absent.
+ *   `print-palette.structural.test.ts` holds the trigger.
  */
 const OUTSIDE_THE_CLOSURE = {
   resets: ['--card', '--card-foreground', '--popover', '--popover-foreground'],
@@ -131,7 +141,14 @@ const OUTSIDE_THE_CLOSURE = {
     '--ground-end',
   ],
   data: Array.from({ length: 12 }, (_, i) => `--chart-${i + 1}`),
+  deferredScopes: ['--print-ground', '--print-ink', '--print-muted-ink'],
 } as const;
+
+/**
+ * The four surface families' ROOT values — `--chrome: …` and friends, which each family's members
+ * alias from. Roots rather than members, so they are outside the closure by construction.
+ */
+const FAMILY_ROOTS = ['--chrome', '--panel', '--brand', '--auth'];
 
 /**
  * **The rebound family, COMPUTED rather than authored** (ADR-0097 §1.5).
@@ -236,6 +253,45 @@ describe('the rebound family is a closure, not a list', () => {
     ]);
     const orphans = [...exposed].filter((name) => !accounted.has(name));
     expect(orphans, `unaccounted colour tokens: ${orphans.join(', ')}`).toEqual([]);
+  });
+
+  it('sweeps :root, not just what @theme inline exposes', () => {
+    // **The gap the `--print-*` trio walked through, closed** (TECH_DEBT #158 review).
+    //
+    // The assertion above derives `exposed` from `@theme inline`, so its real subject is "every
+    // colour token EXPOSED AS A UTILITY", not "every colour token". A token declared at `:root`
+    // and never exposed is invisible to it: not in `REBOUND_NAMES`, not an orphan, not a pack,
+    // not a reset. `--print-ground` was the first thing to exploit that, and it did so under a
+    // docblock claiming a precedent whose own discriminator excluded it — which is exactly the
+    // "fails once per discovery" mode ADR-0097 §1.5 replaced the hand-written array to end.
+    //
+    // Measured before writing this: 246 colour-ish `:root` declarations, of which 182 are
+    // family-prefixed and 57 exposed, leaving SEVEN unaccounted — the four family roots and the
+    // three print tokens. A narrow gap, which is why closing it generally is four lines rather
+    // than a project.
+    const theme = blockBody('@theme inline');
+    const exposed = new Set(
+      [...theme.matchAll(/--color-[\w-]+\s*:\s*var\((--[\w-]+)\)/g)].map((m) => m[1]!),
+    );
+    const accounted = new Set([
+      ...exposed,
+      ...FAMILY_ROOTS,
+      ...OUTSIDE_THE_CLOSURE.resets,
+      ...OUTSIDE_THE_CLOSURE.packs,
+      ...OUTSIDE_THE_CLOSURE.data,
+      ...OUTSIDE_THE_CLOSURE.deferredScopes,
+    ]);
+    const unaccounted = [...declarations(blockBody(':root')).entries()]
+      .filter(([, value]) => /^(oklch|rgb|hsl|#)/.test(value.trim()))
+      .map(([name]) => name)
+      .filter(
+        (name) => !accounted.has(name) && !/^--(page|chrome|panel|brand|auth|plot)-/.test(name),
+      );
+    expect(
+      unaccounted,
+      `these :root colour tokens are in no family and named in no OUTSIDE_THE_CLOSURE key: ${unaccounted.join(', ')}.\n` +
+        'Rebind it, or name it outside the closure with a reason. There is no third option.',
+    ).toEqual([]);
   });
 
   it('pulls in the status fills three people found one at a time', () => {

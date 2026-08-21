@@ -2554,3 +2554,40 @@ but it **can** read a custom property. Both sides now read one set of `--print-*
 day the release that resolved them shipped — #161d explicitly labelled "the one item here that is a
 product-owner question rather than a defect", when the product owner had already been asked and had
 already answered. Left standing, it would have sent them a question they had settled that morning.
+
+## 2026-08-21 — The architecture decision inside a debt fix, recorded where it belongs
+
+The entry above this one records a **process** lesson from closing `docs/TECH_DEBT.md` #158 — that
+a filed remedy goes stale as readily as a filed problem. That was the transferable finding, and it
+is not the architectural call the same commit made. The deferred review pointed out that the call
+was living in two docblocks and nowhere a reader would look, which is that commit's own headline
+finding — a comment naming its own trigger is not a record — one level up.
+
+So, plainly: **a fourth non-rebound colour token group was introduced.** `--print-ground`,
+`--print-ink` and `--print-muted-ink` are declared at `:root`, rebound by no surface scope, and
+read by both `resolvePrintPalette()` and the two print stylesheets.
+
+**The alternative was a `[docs]`-worthy sixth surface scope** — `[data-surface="print"]` with a
+complete 31-member family, governed by ADR-0097's closure rules like every other scope. It was
+costed and deferred, for one reason only: choosing which of the 31 members genuinely differ on
+paper is design judgement nobody had done. A second stated blocker — that the image export has no
+DOM node to carry the attribute — was **checked and is false**, and is recorded as false in #163 so
+it cannot be cited later as evidence the scope is expensive.
+
+**The precedent leaned on was the wrong one, and two reviewers found that independently.** The
+justification given was ADR-0077's `--ground`/`--ground-end` pair. But this repo's own written
+discriminator is _"if the thing has a semantic sibling in the base vocabulary, rebind it; if it
+does not, pack it"_ — and these three have exact siblings. Invoking the _shape_ of a precedent
+while skipping the test that authorises it is how an exception becomes a category. The trio is now
+enrolled in `OUTSIDE_THE_CLOSURE` under its own `deferredScopes` key, described as what it is: a
+surface family truncated to three members, not a pack.
+
+**The accounting gap it walked through is closed.** The closure gate derived its subject from
+`@theme inline`, so its real scope was "every colour token exposed as a utility" rather than "every
+colour token" — and a `:root` declaration that is never exposed was invisible to it in all four
+directions (not rebound, not orphan, not pack, not reset). Measured: 246 colour-ish `:root`
+declarations, 182 family-prefixed, 57 exposed, leaving **seven** unaccounted — the four family
+roots and these three. A narrow gap, which is why closing it generally was four lines rather than a
+project. `token-architecture.test.ts` now sweeps `:root` and requires every colour token to be in a
+family or named outside the closure with a reason. There is no third option, which was the point of
+computing the closure in the first place.
