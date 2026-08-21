@@ -124,3 +124,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0098](0098-the-landing-is-the-organisation-overview.md)                    | The landing is the organisation overview                      | Accepted           |
 | [0099](0099-graphite-the-workstation-in-rail-chrome.md)                     | Graphite — workstation density in rail chrome                 | Accepted           |
 | [0100](0100-the-canvas-minimap-an-invariant-picture-and-a-dom-rectangle.md) | The canvas minimap — an invariant picture and a DOM rectangle | Accepted           |
+| [0101](0101-an-editor-is-a-dialog-not-a-drawer.md)                          | An editor is a dialog, not a drawer                           | Accepted           |

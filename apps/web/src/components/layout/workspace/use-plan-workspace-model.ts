@@ -1,7 +1,6 @@
 import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useDrawerSubjectControls } from '@/components/layout/drawer/drawer-subject';
 import { useAnnounce } from '@/components/ui/announcer';
 import {
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
@@ -247,26 +246,19 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const [editorIntent, setEditorIntentState] = useState<ActivityEditorIntent | null>(null);
 
   /**
-   * **Setting an intent asks the shell to show the editor** (ADR-0099 M10).
+   * Setting an intent opens the editor. It no longer asks a shell to reveal anything: the editor is
+   * a modal dialog again (ADR-0101), so `open` is the whole story, as it was before Graphite M6.
    *
-   * The ask lives here, on the one funnel every entry point already goes through, rather than in an
-   * effect watching `open` inside `PlanActivityEditor`. That was the first shape and the journeys
-   * found its hole: Escape collapses the drawer without clearing the intent, so `open` was already
-   * `true` when the planner reopened the editor from the row menu — no transition, no ask, and the
-   * menu item did nothing at all. A gesture is not a state change, and deriving one from the other
-   * loses exactly the repeat.
-   *
-   * A no-op wherever no shell is listening (every unit test that mounts the workspace alone) and
-   * below `lg`, where the shell has no drawer to show and the modal renders as it always has.
+   * The ADR-0099 M10 note this replaces is worth keeping in one line, because it records a real
+   * hole a journey found and the reason the ask lived on this funnel: Escape collapsed the drawer
+   * without clearing the intent, so `open` was already `true` when the planner reopened the editor
+   * from the row menu, and the menu item did nothing at all. A modal has no such state to get out
+   * of step with — closing it clears the intent — which is one of the reasons a dialog suits an
+   * editor that four entry points share.
    */
-  const drawerControls = useDrawerSubjectControls();
-  const setEditorIntent = useCallback(
-    (next: ActivityEditorIntent | null) => {
-      setEditorIntentState(next);
-      if (next) drawerControls.show();
-    },
-    [drawerControls],
-  );
+  const setEditorIntent = useCallback((next: ActivityEditorIntent | null) => {
+    setEditorIntentState(next);
+  }, []);
 
   const onEditActivity = useCallback(
     (a: ActivitySummary) => setEditorIntent(openActivityEditor(a, 'edit')),

@@ -280,11 +280,13 @@ test.describe('Conflict review', () => {
     await remedy.click();
     // **The editor lands in the context drawer, not a modal** (Graphite M10). This read
     // `getByRole('dialog')` until the M10 gate pass wired up the entry point `m6-activity-context.md`
-    // T4 claimed and had not built — before that fix every editor intent opened the modal, at every
-    // width, and this assertion passed for the reason the epic exists to remove. The claim it makes
-    // is unchanged: the route arrives at the constraint, on the right tab, for the right activity.
-    // The drawer's `aria-label` is its subject, so naming it asserts the activity too.
-    const editor = page.getByRole('complementary', { name: 'Steel beam' });
+    // The claim is unchanged across two changes of chrome, which is the point of writing it about
+    // the ROUTE rather than the panel: the remedy arrives at the constraint, on the right tab, for
+    // the right activity. It was a modal, then Graphite M6 made it the drawer, and ADR-0101 made it
+    // a dialog again because a 896 px form does not fit a 420 px panel. The heading carries the
+    // subject, so naming it asserts the activity too.
+    const editor = page.getByRole('dialog');
+    await expect(editor.getByRole('heading', { name: 'Steel beam' })).toBeVisible();
     await expect(editor).toBeVisible();
     await expect(
       editor.getByRole('tab', { name: 'Scheduling', selected: true }),

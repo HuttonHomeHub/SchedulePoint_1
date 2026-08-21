@@ -70,30 +70,31 @@ test.describe('Progress entry', () => {
     await expect(commandCopy, 'still absent with something selected').toHaveCount(0);
 
     await dock.getByRole('button', { name: 'Report progress' }).click();
-    // **The editor lands in the context drawer, not a modal** (Graphite M10) — see
-    // `activity-drawer.spec.ts` for why that changed and what it was before. The claim here is
-    // unchanged and is the one ADR-0093 rests on: the dock route reaches the progress editor for
-    // the activity that was selected.
-    // Named, not `getByRole('complementary')` alone: the drawer's `aria-label` IS its subject, so
-    // this asserts the panel and the activity in one locator.
-    const editor = page.getByRole('complementary', { name: dig.name });
+    // **The editor lands in a modal dialog** (ADR-0101) — see `activity-editor-chrome.spec.ts`
+    // for why it moved back out of the context drawer. The claim here is unchanged across both
+    // chromes, and is the one ADR-0093 rests on: the dock route reaches the progress editor for
+    // the activity that was selected. The heading carries the subject, so the two assertions
+    // together say the same thing the drawer's `aria-label` said in one.
+    const editor = page.getByRole('dialog');
     await expect(editor).toBeVisible();
+    await expect(editor.getByRole('heading', { name: dig.name })).toBeVisible();
     await expect(editor.getByRole('tab', { name: /Progress/, selected: true })).toBeVisible();
 
     // **Escape closes the drawer and hands focus to the rail button** — measured, after two
-    // guesses were wrong. The ladder (ADR-0080) is tool → open pick → selection → drawer, and with
-    // focus on the dock button no inner rung claims the press, so the shell's outermost one takes
-    // it. The selection survives, which is why the dock bar is still there in the failure shot that
-    // taught me this.
+    // **Escape closes the dialog and focus goes back to the control that opened it** (ADR-0101).
     //
     // The focus half is the assertion that matters and it cannot be made anywhere else: the Close
-    // control lives inside the subtree the collapse unmounts, so before Graphite M10 this landed on
-    // `<body>` — WCAG 2.4.3, and every workspace keyboard accelerator silently dead with it. jsdom's
-    // `fireEvent.click` does not move focus the way a real click does, which `app-shell.test.tsx`
-    // says in its own words.
+    // control lives inside the subtree that unmounts, so a chrome that does not restore focus
+    // leaves it on `<body>` — WCAG 2.4.3, and every workspace keyboard accelerator silently dead
+    // with it. jsdom's `fireEvent.click` does not move focus the way a real click does, which
+    // `app-shell.test.tsx` says in its own words.
+    //
+    // A native `<dialog>` restores focus itself, which is one of the reasons an editor belongs in
+    // one: the drawer had to be taught this by hand, and the teaching was a Graphite M10 finding.
+    // The selection survives the press, so the dock — and its button — are still there to take it.
     await page.keyboard.press('Escape');
     await expect(editor).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Activity details' })).toBeFocused();
+    await expect(dock.getByRole('button', { name: 'Report progress' })).toBeFocused();
 
     // ── A plural selection offers it nowhere. ─────────────────────────────────────────────────
     //

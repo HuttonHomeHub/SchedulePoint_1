@@ -191,7 +191,33 @@ const SHOTS = [
     releasePen: true,
     go: (p, slug, planId) => p.goto(`${BASE}/orgs/${slug}/plans/${planId}`),
   },
+  // **The activity editor, which nothing had ever photographed** (ADR-0101). The harness gained
+  // the plan workspace after the register found it had never been shot; the editor sitting ON that
+  // workspace fell into the same gap one level in, and the screen that reached the product owner
+  // was a four-tab form in a 300 px column with four scrollbars. A shot list that stops at the
+  // route and never opens what the route opens is the same blind spot with a smaller radius.
+  {
+    name: 'plan-workspace-editor',
+    programme: true,
+    go: (p, slug, planId) => p.goto(`${BASE}/orgs/${slug}/plans/${planId}`),
+    after: openActivityEditor,
+  },
 ];
+
+/**
+ * Select the first activity from the canvas's parallel listbox and open its editor — the keyboard
+ * route, because it needs no bar coordinates and it is a real path a planner has.
+ */
+async function openActivityEditor(page) {
+  const listbox = page.getByRole('listbox', { name: 'Activities in the diagram' });
+  await listbox.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.waitForTimeout(300);
+  const edit = page.getByRole('button', { name: 'Edit', exact: true });
+  await edit.first().click();
+  await page.getByRole('dialog').waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(600);
+}
 
 // `--only` takes a comma-separated list. It was a single name until two consecutive runs of
 // `--only <name>` produced one file: the wipe below is unconditional, so the second run deleted
@@ -285,6 +311,7 @@ for (const width of widths) {
           await page.waitForTimeout(400);
         }
       }
+      if (shot.after) await shot.after(page);
       await page.screenshot({ path: join(dir, `${shot.name}.png`) });
     }
     console.log(`${width}  ${shot.name}`);

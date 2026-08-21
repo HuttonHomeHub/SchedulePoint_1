@@ -210,6 +210,13 @@ keep `main` releasable.
   conflict-flavoured twin would be ADR-0093's defect reproduced inside one surface. The flag-on
   journey caught the epic's purpose inverting on its first run — the count's own read-out cannot
   demote, so it pushed the command it labels off the row in the only state the epic exists for.
+- **An editor is a dialog, not a drawer** (ADR-0101). First contact with the shipped workspace
+  returned the activity editor to the `xl` dialog it was designed for — a section rail beside a
+  content pane, at 896 px — after a release in a 300–420 px context drawer where it ran its
+  narrow-viewport layout permanently, four tabs overflowing sideways inside a panel that was
+  itself scrolling. The drawer keeps the Project Explorer. The rule it settles is a general one:
+  an editing surface belongs in a dialog, and a drawer is for what you read beside your work.
+
 - **The diagram can say where you are** (ADR-0100, the TSLD minimap). The last unbuilt
   Should-have on the primary surface: a 200×120 overview panel in the canvas's bottom-right —
   an invariant cached picture of the whole programme (critical path surviving 1 px decimation)

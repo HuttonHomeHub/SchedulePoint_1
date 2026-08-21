@@ -1,17 +1,19 @@
 import type { Locator, Page } from '@playwright/test';
 
 /**
- * The **activity editor**, wherever the shell is currently hosting it.
+ * The **activity editor**, which is a modal dialog (ADR-0101).
  *
- * ADR-0099 moved it out of a modal dialog and into the trailing context drawer at `lg`+; below that
- * the dialog is still the right chrome and is still what renders (`m6-activity-context.md` T5 —
- * the modal is not a legacy path). A journey that names one of those two is asserting the **chrome**
- * when what it means is the editor, and nine suites went red at once proving it.
+ * It was one before Graphite M6, the drawer for one release, and a dialog again once the widths
+ * were put beside each other: ADR-0061 sized this form at `xl` (896 px) with a section rail
+ * *because 448 px was already unusable*, and the drawer caps at 420 px. This helper survived both
+ * moves unchanged, which is the argument for having it — a journey that names the chrome is
+ * asserting the chrome when what it means is the editor, and nine suites went red at once proving
+ * that the first time.
  *
- * Filtered by the tab list rather than by the role alone, and that is not defensive tidying: the
- * drawer is a `complementary` whether it is showing the editor or the Project Explorer, and the
- * Explorer is what it shows by default — so an unfiltered `.or()` resolves to two elements on almost
- * every screen and fails strict mode rather than failing informatively.
+ * Still filtered by the tab list rather than trusting the role alone. That is not defensive
+ * tidying: `dialog` is a role several things in this product take, and the filter names the one
+ * fact that has been true of the editor in every chrome it has ever had — it is the thing with the
+ * activity's own sections in it.
  *
  * Shared from `e2e-support/` for the reason `toolbar.ts` beside it is: a Playwright `testDir` is its
  * own compilation root, so the alternative is nine copies of one rule about where the editor lives.
@@ -21,6 +23,5 @@ import type { Locator, Page } from '@playwright/test';
 export function activityEditor(page: Page): Locator {
   return page
     .getByRole('dialog')
-    .or(page.getByRole('complementary'))
     .filter({ has: page.getByRole('tablist', { name: 'Activity sections' }) });
 }

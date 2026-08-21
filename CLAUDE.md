@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1048 web
 > source files with 35 flag-scoped Playwright suites beside the base journey, and
-> 100 ADRs.
+> 101 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2651,6 +2651,38 @@ progress` off the command surface because **an object action belongs on the obje
   shipped code (+0.76 pp, PASS; the probe's compositing asymmetry did not reproduce).
   Non-blocking findings are `docs/TECH_DEBT.md` #155; the AT observations still owed are #154.
   **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0101** _(Accepted; landed 2026-08-21)_ — An editor is a dialog, not a drawer. The product
+  owner opened the released app and reported the activity editor as cramped and full of scrollbars,
+  and asked whether docking it had been the right call. It had not been, and the sharper finding is
+  that the call was never made: **ADR-0097 D2 deferred the docked editor on 2026-08-19 with the
+  words "it wants its own epic and its own design pass", and Graphite M6 shipped it the next day as
+  a sub-task of a shell epic.** The arithmetic nobody had put side by side: ADR-0061 widened this
+  form to `xl` — 896 px, with a section rail — **because 448 px had already proved unusable**, and
+  the context drawer caps at **420 px**. So a form judged too narrow at half its designed width was
+  docked into a third of it. ADR-0099 M10 then found the rail leaving "about 92 px of content beside
+  it" and fixed the **symptom** by switching to the horizontal tab strip, so on a 1920 px desktop the
+  editor ran its sub-768 px layout permanently: four tabs overflowing sideways inside a panel
+  scrolling vertically over a table scrolling sideways of its own. The editor returns to
+  `modalShell` (already extracted, already the live path below 1024 px), stops being a drawer
+  subject, and the drawer keeps the Project Explorer — which is what it is shaped for. The rule, in
+  the product owner's words: **an editing surface belongs in a dialog**; a drawer is for what you
+  read beside your work. One D2 prediction is recorded as **wrong**: the unsaved-work guard was not
+  the casualty — M6 extended it to cover the subject changing under an open editor, which a modal
+  cannot do, and that is kept. Three things are named rather than left: the drawer-subject
+  mechanism now has **no production registrant** (#156, with both exits written down);
+  `drawer-entry-point.test.tsx` mounts a **synthetic probe route**, which is why it stayed green
+  through the removal and why it never proved anything registers a subject (ADR-0081 one level
+  along); and the screenshot harness gains `plan-workspace-editor`, because the shot list covered
+  the workspace and **stopped at the route**, so the editor on it had never been photographed by
+  anything — which is how a four-scrollbar panel reached a user. Two colour values are softened as
+  **labelled stopgaps** ahead of the light corporate theme: the page foreground measured
+  **14.62:1** on the canvas ground (more than triple AA, double AAA — the halation profile behind
+  "hard on the eyes"), and the non-working hatch's 0.177 → 0.300 step is what stripes the diagram.
+  The structural cause is #157: **every colour gate here asserts a floor and none asserts a
+  ceiling**, so values could only ever be pushed apart. A ceiling is deliberately NOT gated now —
+  halation is a dark-ground phenomenon and the product is going light, so gating it for a theme
+  being replaced is work thrown away. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down

@@ -2868,3 +2868,52 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
 5. **The one-derivation gate matches the three original idioms only** (architecture S10):
    a fourth extent derivation in a different idiom would pass it. Recorded in ADR-0100
    decision 3 so the gate is not over-read.
+
+## 156. The drawer-subject mechanism has no registrant
+
+**Raised 2026-08-21** (ADR-0101). **Size:** M to delete, or it becomes ADR-0097 D2's foundation.
+
+The activity editor was the only caller of `useDrawerSubject`, and ADR-0101 moved it back to a
+modal dialog. So `drawer-subject.tsx` (273 lines), its rail button, its `show`/`focusRailButton`
+controls and `ContextDrawerEmpty` are now unreferenced by production code — the plan workspace
+runs the null-registration path every other route already ran. The drawer itself is very much
+alive: it holds the Project Explorer.
+
+**Kept rather than deleted, and this row is the reason it is not silent.** ADR-0097 D2 — a
+docked activity editor with its own epic and its own design pass — is still on `docs/BACKLOG.md`
+and this is precisely the foundation it would build on. The mechanism is self-contained and has
+its own tests, so the carrying cost is low.
+
+**Two exits, and one of them has to be taken.** Either D2 is built and this earns its place, or
+D2 is closed as "not wanted" and all of it is deleted — `CLAUDE.md` §5 is unambiguous that dead
+code goes and git remembers. What is not acceptable is the third thing, which is this row never
+being looked at again: an unused branch nobody maintains is the second product ADR-0088 was
+written about.
+
+**Related, and the sharper half:** `drawer-entry-point.test.tsx` mounts a synthetic `ProbeRoute`
+that registers a subject, so it stayed green through the removal of the only production
+registrant. It proves the shell _can_ show a subject; it never proved anything does. Its
+docblock now says so. That is ADR-0081's shape one level along, and worth remembering when
+reading any "the entry point works" test.
+
+## 157. Every colour gate is a floor; none is a ceiling
+
+**Raised 2026-08-21** (ADR-0101, from first contact with the shipped dark theme). **Size:** S,
+inside the light-theme epic.
+
+`token-contrast.test.ts` asserts `>= 3:1` and `>= 4.5:1` across the matrix. Nothing anywhere
+asserts that a pair is not too FAR apart. The consequence is one-directional drift: every fix in
+this register's history moved a value toward a floor from below, and the pair a planner reads
+all day — page foreground on the canvas ground — sat unquestioned at **14.62:1**, more than
+triple AA and more than double AAA. On a near-black ground that is the halation profile, and it
+is what "hard on the eyes over a long period" was reporting.
+
+ADR-0101 softened it to 10.84:1 as a labelled stopgap. The gate is deliberately **not** added
+there: a contrast ceiling is a dark-ground instrument, because halation does not work the same
+way on light, and the product is moving to a light corporate theme. Building the gate for a
+theme being deleted is work thrown away.
+
+**What is owed:** the light-theme epic decides whether a ceiling applies to its own grounds, and
+if it does, the gate lands with the values rather than after them (the ADR-0097 §9 rule, which
+the minimap's frame token proved again — a gate written after the CSS passes for the wrong
+reason). If a dark theme ever returns, this row is its first requirement.

@@ -421,7 +421,16 @@
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */
-  --canvas-nonworking-hatch: oklch(0.3 0.018 256);
+  /* **The other stopgap** (ADR-0101). The product owner's report was of a canvas "hard on the eyes",
+     and the striping in it is this: diagonal hatch ink over every non-working column, i.e. two days
+     in seven across the whole width, at a lightness step of 0.177 → 0.300 (1.39:1). A repeating
+     high-frequency pattern is perceptually much louder than its ratio suggests. 0.25 (1.18:1) still
+     sits clearly above the 0.212 wash, so a weekend still reads as a distinct KIND of surface
+     rather than a dimmer one — which is the whole job ADR-0056 F7a gave it — at about half the
+     shout. Measured before changing: turning canvas LAYERS off by default was the obvious move and
+     would have bought nothing, because `dayGrid` is already LOD-gated out at the zooms where the
+     striping was reported. */
+  --canvas-nonworking-hatch: oklch(0.25 0.018 256);
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
@@ -453,7 +462,16 @@
   /* the light values.                                                         */
   /* ----------------------------------------------------------------------- */
   --page-background: oklch(0.177 0.011 260.6);
-  --page-foreground: oklch(0.913 0.012 252.1);
+  /* **A STOPGAP, and labelled as one** (ADR-0101). 0.913 measured **14.62:1** on the 0.177 ground
+     — more than triple WCAG AA's 4.5 and more than double AAA's 7. On a near-black ground that is
+     the halation profile: light text appears to bleed at its edges, which is what makes a long
+     session tiring and is worse for astigmatic readers. Nothing in this repository could have
+     caught it: every colour gate here asserts a FLOOR (`>= 3:1`, `>= 4.5:1`) and not one asserts a
+     ceiling, so values could only ever be pushed apart. 0.82 gives 10.84:1 — still well clear of
+     AAA. The light corporate theme replaces this value wholesale; a proper ceiling is deliberately
+     NOT gated here, because halation is a dark-ground phenomenon and a blanket ceiling would be
+     wrong on the light theme this is making way for. */
+  --page-foreground: oklch(0.82 0.012 252.1);
   --page-muted: oklch(0.212 0.016 256.8);
   --page-muted-foreground: oklch(0.74 0.022 252.6);
   --page-border: oklch(0.29 0.023 256.4);

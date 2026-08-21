@@ -111,9 +111,9 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   // suite runs at the shipped defaults, so it describes that; the previous surface is pinned by the
   // dedicated flag-off suites, and the tabbed permission model by `e2e-activity-editor/`.
   //
-  // **`activityEditor`, not `dialog`** (ADR-0099): the editor moved out of a modal and into the
-  // context drawer at `lg`+, so this `const` — which is the CREATE dialog, still a modal — stopped
-  // being the same surface. One name had been serving two things that used to share a chrome.
+  // **`activityEditor`, not `dialog`**: the editor is a modal again (ADR-0101), so both surfaces
+  // share a chrome once more — but they are still two dialogs, and `dialog` here is the CREATE one.
+  // The helper filters on the editor's own section tablist, which the create dialog does not have.
   const actionsButton = page.getByRole('button', { name: 'Actions for Excavate' });
   await actionsButton.click();
   await page.getByRole('menuitem', { name: 'Report progress' }).click();
@@ -125,26 +125,20 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
   /**
-   * **Closing hands focus to the rail's panel button, not to whatever opened the editor.**
+   * **Closing hands focus back to whatever opened the editor**, which here is the row menu's
+   * "Actions for …" trigger.
    *
-   * This asserted the trigger until ADR-0099, and that behaviour was a property of the modal rather
-   * than a decision: `<dialog>.close()` restores focus to whatever held it when `showModal()` ran,
-   * which happened to be the row menu's "Actions for …" trigger. The drawer has no such reflex, and
-   * its Close button sits INSIDE the subtree that goes away, so something has to be chosen.
-   *
-   * The rail button is chosen deliberately, on three grounds: the drawer's subject changes as a
-   * planner selects bars, so "whatever opened it" is frequently stale or gone; it is the one control
-   * that always exists and always brings the panel back; and it is what a persistent panel's
-   * dismissal ordinarily returns to. The alternative — remembering an invoker and restoring to it —
-   * was considered and rejected as reproducing a platform side-effect by hand, with an ordering
-   * dependency on the row menu's own focus restore that has already produced two wrong diagnoses in
-   * this epic.
+   * That is the platform's own reflex rather than a decision of ours: `<dialog>.close()` restores
+   * focus to whatever held it when `showModal()` ran, and the row menu has already returned focus to
+   * its trigger by then. ADR-0099 docked the editor in the context drawer, which has no such reflex,
+   * so that milestone chose the drawer's rail button instead and this line asserted it; ADR-0101
+   * returned the editor to a dialog, and with it this behaviour to the one it originally asserted.
    *
    * Nothing is dirty, so the editor closes straight away rather than asking to discard.
    */
   await editor.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(editor).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Activity details' })).toBeFocused();
+  await expect(actionsButton).toBeFocused();
 
   await actionsButton.click();
   await page.getByRole('menuitem', { name: 'Report progress' }).click();
