@@ -1,0 +1,223 @@
+.corporate {
+  /* Surfaces — the working canvas stays light and quiet. */
+  --background: oklch(0.982 0.002 248);
+  --foreground: oklch(0.321 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.321 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.321 0 0);
+
+  /* Brand — NAVY fills on the page, amber on the chrome. Amber is the accent that
+     makes this theme recognisable, but a solid amber button on the off-white page
+     is 1.92:1 against it: WCAG 1.4.11 asks for 3:1 where a fill is what identifies
+     a control, and darkening amber far enough to reach it lands on the bronze this
+     theme already uses for `--warning`. So amber goes where it is genuinely legible
+     — `--chrome-primary` (7.9:1 on navy), `--chrome-ring`, the `--accent` row wash
+     and `--chart-1` — and the page's primary is the brand navy at 12:1. */
+  --primary: oklch(0.252 0.056 264);
+  --primary-foreground: oklch(0.985 0 0);
+  /* The lighter navy, as the quiet secondary surface. */
+  --secondary: oklch(0.338 0.081 262);
+  --secondary-foreground: oklch(0.985 0 0);
+  /* A pale amber wash for hover/selected rows — a tint, so ordinary dark text
+     keeps its contrast on top of it. */
+  --accent: oklch(0.955 0.04 78);
+  --accent-foreground: oklch(0.252 0.056 264);
+  --muted: oklch(0.965 0.002 248);
+  --muted-foreground: oklch(0.51 0 0);
+
+  /* Status */
+  --destructive: oklch(0.505 0.19 27.5);
+  --destructive-foreground: oklch(0.985 0 0);
+  --destructive-text: oklch(0.505 0.19 27.5);
+  --success: oklch(0.52 0.15 143);
+  --success-foreground: oklch(0.985 0 0);
+  --success-text: oklch(0.45 0.11 150);
+  /* Bronze, not amber — see note 2 above. */
+  --warning: oklch(0.56 0.115 55);
+  --warning-foreground: oklch(0.985 0 0);
+  --warning-text: oklch(0.47 0.11 55);
+  --info: oklch(0.338 0.081 262);
+  --info-foreground: oklch(0.985 0 0);
+  --info-text: oklch(0.3 0.075 262);
+
+  /* Lines & focus — the ring is NAVY on light surfaces (note 1). */
+  --border: oklch(0.907 0 0);
+  --input: oklch(0.62 0.02 264);
+  --ring: oklch(0.35 0.09 262);
+
+  /* Data visualisation — the brand pair first, then hues that stay apart from
+     both it and the status colours. */
+  --chart-1: oklch(0.786 0.167 70);
+  --chart-2: oklch(0.338 0.081 262);
+  --chart-3: oklch(0.6 0.13 200);
+  --chart-4: oklch(0.62 0.115 55);
+  --chart-5: oklch(0.55 0.14 300);
+
+  /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
+     ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
+     `panel` the navigator rail; the page is the `:root` case.
+
+     These families are deliberately NOT mapped into `@theme inline` below, so
+     `bg-chrome` / `text-panel-foreground` DO NOT COMPILE. The only route to them
+     is the `[data-surface]` rule, which is what makes the boundary structural
+     rather than a convention someone has to remember.
+
+     Each family is COMPLETE. The bug this replaces was a three-token header stub
+     and a `--sidebar-*` set with no muted-foreground: every piece of secondary
+     text in the chrome reached for the canvas grey, which was invisible the day
+     a theme made chrome and canvas diverge. A surface family is complete or it
+     is a trap. */
+
+  /* Corporate: the navy family, COMPLETED. Every ink measured against the navy
+     fill (#14213d): foreground 16:1, muted-foreground 8.0:1, destructive 6.5:1,
+     warning 8.4:1, info 8.6:1, ring 7.9:1 — the pairings the previous stub never
+     had, which is exactly why its greys were invisible. Amber is the ring here
+     because on navy it clears the 3:1 a focus indicator needs nearly three times
+     over; the page's ring stays navy. The panel is navy TODAY — the light rail is
+     a value change landing at S3. */
+
+  /* chrome — the top band */
+  --chrome: oklch(0.252 0.056 264);
+  --chrome-foreground: oklch(0.985 0 0);
+  --chrome-muted-foreground: oklch(0.78 0.02 264);
+  --chrome-muted: oklch(0.32 0.05 264);
+  --chrome-border: oklch(1 0 0 / 14%);
+  --chrome-input: oklch(0.62 0.02 264);
+  --chrome-accent: oklch(0.338 0.081 262);
+  --chrome-accent-foreground: oklch(0.985 0 0);
+  --chrome-primary: oklch(0.786 0.167 70);
+  --chrome-primary-foreground: oklch(0.252 0.056 264);
+  --chrome-field: oklch(1 0 0);
+  --chrome-field-foreground: oklch(0.321 0 0);
+  --chrome-field-muted-foreground: oklch(0.51 0 0);
+  --chrome-destructive-text: oklch(0.74 0.15 25);
+  --chrome-success-text: oklch(0.8 0.12 150);
+  --chrome-warning-text: oklch(0.8 0.14 70);
+  --chrome-info-text: oklch(0.8 0.09 245);
+  --chrome-ring: oklch(0.786 0.167 70);
+
+  /* panel — the navigator rail */
+  --panel: oklch(0.252 0.056 264);
+  --panel-foreground: oklch(0.985 0 0);
+  --panel-muted-foreground: oklch(0.78 0.02 264);
+  --panel-muted: oklch(0.32 0.05 264);
+  --panel-border: oklch(1 0 0 / 14%);
+  --panel-input: oklch(0.62 0.02 264);
+  --panel-accent: oklch(0.338 0.081 262);
+  --panel-accent-foreground: oklch(0.985 0 0);
+  --panel-primary: oklch(0.786 0.167 70);
+  --panel-primary-foreground: oklch(0.252 0.056 264);
+  --panel-field: oklch(1 0 0);
+  --panel-field-foreground: oklch(0.321 0 0);
+  --panel-field-muted-foreground: oklch(0.51 0 0);
+  --panel-destructive-text: oklch(0.74 0.15 25);
+  --panel-success-text: oklch(0.8 0.12 150);
+  --panel-warning-text: oklch(0.8 0.14 70);
+  --panel-info-text: oklch(0.8 0.09 245);
+  --panel-ring: oklch(0.786 0.167 70);
+
+  /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
+     THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
+
+     This family does not follow the theme. A signed-out visitor cannot choose one
+     — `theme-boot.js` picks Dark because their OS is dark, or Corporate because a
+     colleague signed in on this machine last month — so the one screen where the
+     product has to be recognisable would otherwise render in one of three
+     identities, selected by something the visitor did not do and cannot undo.
+
+     It is repeated per theme rather than declared once on `:root` because the
+     repetition is what makes the *values* visible where a reader looks for them,
+     and because `token-contrast.test.ts` resolves each theme independently. Note
+     what the repetition does NOT buy: `themeTokens()` resolves `.dark` and
+     `.corporate` over `:root` by inheritance, so a member deleted from one theme
+     block is NOT caught by the completeness gate — see the `brand` case in
+     `token-architecture.test.ts`, which pins the literal declarations per block
+     precisely because the inherited read cannot.
+
+     The values are Corporate's navy chrome — already measured against this fill —
+     and re-verified here by `token-contrast.test.ts`, which now sweeps `brand`
+     across all three themes rather than trusting the provenance.
+
+     Do not "fix" this to follow the theme. That would be undoing the decision. */
+  --brand: oklch(0.252 0.056 264);
+  --brand-foreground: oklch(0.985 0 0);
+  --brand-muted-foreground: oklch(0.78 0.02 264);
+  --brand-muted: oklch(0.32 0.05 264);
+  --brand-border: oklch(1 0 0 / 14%);
+  --brand-input: oklch(0.62 0.02 264);
+  --brand-accent: oklch(0.338 0.081 262);
+  --brand-accent-foreground: oklch(0.985 0 0);
+  --brand-primary: oklch(0.786 0.167 70);
+  --brand-primary-foreground: oklch(0.252 0.056 264);
+  --brand-field: oklch(1 0 0);
+  --brand-field-foreground: oklch(0.321 0 0);
+  --brand-field-muted-foreground: oklch(0.51 0 0);
+  --brand-destructive-text: oklch(0.74 0.15 25);
+  --brand-success-text: oklch(0.8 0.12 150);
+  --brand-warning-text: oklch(0.8 0.14 70);
+  --brand-info-text: oklch(0.8 0.09 245);
+  --brand-ring: oklch(0.786 0.167 70);
+
+  /* White fields on navy — the reference's date and filter inputs. Deliberately
+     per-theme: literal white would glare on Dark's near-black chrome. */
+  --field: oklch(1 0 0);
+  --field-foreground: oklch(0.321 0 0);
+  --field-muted-foreground: oklch(0.51 0 0);
+  --canvas: oklch(1 0 0);
+  --canvas-band: oklch(0.972 0.004 90);
+
+  /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
+     Theme-INVARIANT, like `brand` and for the same reason one step further out.
+     ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
+     theme — the boot script picked Dark from their operating system, or
+     Corporate because a colleague signed in on this machine last month. That
+     argument was only ever applied to half the screen: the panel was pinned and
+     the card beside it still followed the theme, so a Dark-mode visitor met a
+     fixed navy panel joined to a dark card. One identity, chosen by nobody.
+     These values are the old app's, sampled from `static/css/main.css`
+     (#14213D navy, #fca311 amber) so the match is exact rather than close —
+     with TWO exceptions, and the exceptions are the point of having a gate.
+     The old app's amber focus ring is 2.02:1 on white and its field outline
+     2.22:1 on the field fill; both are WCAG 1.4.11 failures at 3:1, and both
+     are invisible to a person looking at the screen because a focus ring you
+     cannot see looks exactly like a focus ring you have not triggered. So
+     `--auth-ring` and `--auth-input` are DERIVED rather than sampled: the same
+     hue and chroma walked down in lightness to the first value that clears
+     3:1. Ring 3.36:1 on the card and 3.01:1 on a field; outline 3.36:1 and
+     3.01:1. `styles/token-contrast.test.ts` recomputes all four. */
+  --auth: oklch(1 0 0);
+  --auth-foreground: oklch(0.252 0.056 264);
+  --auth-muted: oklch(0.965 0.004 250);
+  --auth-muted-foreground: oklch(0.53 0.017 258);
+  --auth-border: oklch(0.914 0.008 255);
+  --auth-input: oklch(0.64 0.014 256);
+  --auth-accent: oklch(0.958 0.006 250);
+  --auth-accent-foreground: oklch(0.252 0.056 264);
+  --auth-primary: oklch(0.252 0.056 264);
+  --auth-primary-foreground: oklch(0.985 0 0);
+  --auth-field: oklch(0.962 0.005 252);
+  --auth-field-foreground: oklch(0.252 0.056 264);
+  --auth-field-muted-foreground: oklch(0.53 0.017 258);
+  --auth-destructive-text: oklch(0.505 0.213 27);
+  --auth-success-text: oklch(0.403 0.105 147);
+  --auth-warning-text: oklch(0.52 0.13 70);
+  --auth-info-text: oklch(0.5 0.13 245);
+  --auth-ring: oklch(0.648 0.167 70);
+  /* The page the card floats on. A PAIR rather than a family member, the way
+     `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
+     17-name vocabulary has no word for "the second stop". Values are the old
+     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
+  --ground: oklch(0.977 0.003 248);
+  --ground-end: oklch(0.845 0.028 249);
+
+  /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
+     day vs month must be reliably distinguishable, not merely a hair off --border). */
+  --canvas-grid-day: oklch(0.965 0 0);
+  --canvas-grid-month: oklch(0.76 0 0);
+  --canvas-grid-year: oklch(0.58 0 0);
+
+  /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
+     Corporate's canvas tokens. */
+  --canvas-nonworking-hatch: oklch(0.83 0.004 90);
+}
