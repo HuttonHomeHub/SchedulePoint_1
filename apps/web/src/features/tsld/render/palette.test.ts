@@ -70,8 +70,8 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
 
   it('resolvePrintPalette carries LIGHT fallbacks for the same entries (total contract)', () => {
     const palette = resolvePrintPalette(document.documentElement);
-    expect(palette.barStroke).toBe('#e5e7eb');
-    expect(palette.hoverRing).toBe('#6b7280');
+    expect(palette.barStroke).toBe('#e0e0e0');
+    expect(palette.hoverRing).toBe('#666666');
   });
 });
 
@@ -92,9 +92,9 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
 
   it('resolvePrintPalette carries LIGHT fallbacks for the same three tiers (total contract)', () => {
     const palette = resolvePrintPalette(document.documentElement);
-    expect(palette.gridLineDay).toBe('#f5f6f8');
-    expect(palette.gridLineMonth).toBe('#bcc2ca');
-    expect(palette.gridLineYear).toBe('#8b93a1');
+    expect(palette.gridLineDay).toBe('#dee0e2');
+    expect(palette.gridLineMonth).toBe('#72777e');
+    expect(palette.gridLineYear).toBe('#595e66');
   });
 
   it('day vs month is reliably distinguishable by lightness alone, not a hair apart (WCAG 1.4.1 — a11y-review fix)', () => {
@@ -132,7 +132,7 @@ describe('non-working hatch stripe ink (nonWorkingHatch)', () => {
 
   it('resolvePrintPalette carries a LIGHT fallback for the same entry, also distinct from its wash', () => {
     const palette = resolvePrintPalette(document.documentElement);
-    expect(palette.nonWorkingHatch).toBe('#c7c7c7');
+    expect(palette.nonWorkingHatch).toBe('#e3e6ea');
     expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
   });
 });
@@ -171,7 +171,7 @@ describe('data-date marker pair (dataDate / dataDateInk)', () => {
 
   it('resolvePrintPalette carries LIGHT fallbacks for the pair, same distinctness (total contract)', () => {
     const palette = resolvePrintPalette(document.documentElement);
-    expect(palette.dataDate).toBe('#1a1a1a');
+    expect(palette.dataDate).toBe('#333333');
     expect(palette.dataDateInk).toBe('#ffffff');
     expect(palette.dataDate).not.toBe(palette.today);
     expect(palette.dataDate).not.toBe(palette.bar);

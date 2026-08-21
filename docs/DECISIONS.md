@@ -2518,3 +2518,39 @@ median chrome, **7 px at the worst**, negative from 1440 down. §3.1's strip est
 within a pixel; its trigger estimate was 47 px light; its identity estimate was 100 px light. Fourth
 consecutive epic whose width expectation its own measurement contradicted, and the fourth in the same
 direction — an estimate of what a row can hold, made without a browser, comes out optimistic.
+
+## 2026-08-21 — A debt register entry can prescribe a fix that has gone stale
+
+`docs/TECH_DEBT.md` #158 ("the printed and exported diagram is painted on a near-black ground")
+carried both a diagnosis and a remedy. The diagnosis was right and had been confirmed by capturing
+the downloaded PNG. The remedy — "a `PRINT_GROUND` the function does not read from the DOM at all"
+— was **measured before implementing and rejected**.
+
+The register row predates ADR-0102's criticality ladder. Freezing `resolvePrintPalette` to its
+existing literals would have shipped **two inverted label pairings**: white ink on the on-schedule
+fill at **3.56:1** — the commonest bar in any programme, a WCAG 1.4.3 failure — and near-black on
+the warning amber. The light theme had put dark ink on the lightest fill for exactly that reason.
+So the prescribed fix would have made the deliverable worse than the state the row was filed
+against, while reading as compliance with the register.
+
+**The rule this adds.** `CLAUDE.md` §19 already says to re-verify a spec's PROBLEM statement,
+because a problem goes stale when somebody fixes it and the document keeps complaining. This is the
+mirror: **a remedy goes stale when the world it was written against moves**, and it goes stale
+silently, because nothing re-reads a remedy until somebody implements it. Both halves of a filed
+item are claims. #158's diagnosis survived re-verification; its remedy did not.
+
+**What made the difference was one measurement**, twenty lines of throwaway probe resolving the
+canvas scope out of `globals.css` and printing live-vs-fallback for every field the print palette
+reads. Two of thirty rows came back with a luminance delta of ±0.99 — a complete inversion — and
+nothing short of running it would have shown that, because each literal is individually plausible.
+
+**A second, still-live drift was found on the way and the row had not spotted it.**
+`PrintSurface.css` pinned three hexes under a comment claiming they were "PINNED to
+`resolvePrintPalette()`'s own light fallbacks so the two can't drift". They had. The escape that
+comment missed is in its own last sentence: a `@media print` rule cannot read a runtime JS value,
+but it **can** read a custom property. Both sides now read one set of `--print-*` tokens.
+
+**And two register rows were stale in the other direction.** #161c and #161d were filed the same
+day the release that resolved them shipped — #161d explicitly labelled "the one item here that is a
+product-owner question rather than a defect", when the product owner had already been asked and had
+already answered. Left standing, it would have sent them a question they had settled that morning.

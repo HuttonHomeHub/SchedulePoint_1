@@ -2936,7 +2936,7 @@ be the ink's lightness than the ground's, because the ground carries the diagram
 much and 10.84:1 drew no complaint; that is two points, enough to know what to measure and not
 enough to set a number. Recorded in `m0-ceiling.md` and in the epic's ADR so it outlives this row.
 
-## 158. The printed and exported diagram is painted on a near-black ground
+## 158. The printed and exported diagram is painted on a near-black ground **(CLOSED 2026-08-21)**
 
 **Raised 2026-08-21** (found while specifying the light-corporate theme). **Size:** S. **This is a
 live defect on `main`, not a theme preference** — it is filed separately for exactly that reason.
@@ -2979,6 +2979,50 @@ at all, which also removes the drift `PrintSurface.css` was trying to pin agains
 turning the ground light, and a defect that vanishes as a side-effect of unrelated work is one that
 returns the moment anything reintroduces a dark surface — an export preview, a presentation mode, a
 dark theme brought back on ADR-0097's own stated terms. Fix it on its own or close it on its own.
+
+---
+
+**Closed on its own, as this row demanded — and the fix is NOT the one prescribed above.**
+
+**The prescription had gone stale, and the measurement is why.** "A `PRINT_GROUND` the function does
+not read from the DOM at all" was written before the light corporate theme landed. Measured against
+the shipped tokens before implementing (`compositeOver`/`relativeLuminance` over the canvas scope
+resolved from `globals.css`), freezing the palette to its existing literals would have shipped **two
+inverted label pairings**: white ink on the on-schedule fill at **3.56:1**, a WCAG 1.4.3 failure on
+the commonest bar in any programme, and near-black on the warning amber. Those literals predate
+ADR-0102's criticality ladder, which put dark ink on the lightest fill precisely because white
+measured 3.56:1 there. The diagnosis in this row was right; its remedy would have made the
+deliverable worse than the state it was filed against. ADR-0076 Class 3, in the debt register.
+
+**What shipped instead — two rules, split by what the field is.**
+
+- **Paper** (`ground`, `canvasGround`, `ink`, `mutedInk`, `dataDateInk`, `handleHalo`) reads three
+  new `--print-*` tokens declared light at `:root` and rebound by **no** surface. Paper is light
+  because it is declared light, not because the current theme agrees.
+- **The diagram** keeps resolving from the canvas surface scope, which is the property
+  `resolvePrintPalette`'s docblock has always promised — a printed diagram that cannot drift from
+  the one on screen — and the reason freezing it is the wrong shape of fix.
+
+**The CSS half was a second, still-live drift, and this row had not spotted it.**
+`PrintSurface.css` carried hex literals under a comment saying they were "PINNED to
+`resolvePrintPalette()`'s own light fallbacks so the two can't drift". They had: the CSS said
+`#ffffff`/`#1a1a1a`/`#6b7280` while the runtime resolved `oklch(0.958)`/`oklch(0.321)`/`oklch(0.51)`
+— so even after the light theme, the printed programme put white chrome around a near-white diagram
+panel with two different inks. The escape that comment missed is in its own last sentence: a
+`@media print` rule cannot read a runtime JS value, but it **can** read a custom property. Both
+sides now read the same three tokens, which is what actually pins them.
+
+**The guarantee is a gate, not a comment** — `print-palette.structural.test.ts`, verified red four
+ways (a paper field reading `--background`; a dark ground; the frozen-literal label pairing at its
+exact 3.56:1; a dark non-working wash). The unit suites could never have caught the original,
+because they run in jsdom where `getComputedStyle` yields nothing and the resolver takes its
+fallbacks — they exercise the branch that is correct and can never reach the branch that ships. The
+gate reads `globals.css` and replays the cascade instead. When it fires, the fix is a
+`[data-surface="print"]` scope with paper values of its own.
+
+**Out of scope, deliberately:** `GanttPrintSurface.css` is a self-consistent hard-coded greyscale
+sheet with no token reads and no dependence on the theme, so it has neither the defect nor the
+drift. It is not touched, and that is a decision rather than an oversight.
 
 ## 159. `--color-*` aliases are frozen at `:root` — CLOSED, with a gate still owed
 
@@ -3067,20 +3111,24 @@ pick one and apply it.
 **b. `clients-loading` is a bare spinner** where `docs/UX_STANDARDS.md` expects a skeleton. Also
 pre-existing, and only visible now because the loading state had never been captured.
 
-**c. The Project Explorer is a large flat navy block when the tree is short**, which is the common
-case: at 1646 and 1920 there is 800–900 px of content-free navy opposite an equally large light page.
-The rail's colour did not change in this epic and CQ-1(a) settles it in principle — but the
-consequence is new, because a navy rail beside a dark page read as continuous and a navy rail beside
-a light one is the most saturated object on the screen carrying no information. Worth putting to the
-product owner with the two screenshots rather than assumed settled. Consider whether the rail should
+**c. The Project Explorer is a large flat navy block when the tree is short** — **RESOLVED in
+`web-v0.97.0`, before anyone acted on this row.** It was raised as "worth putting to the product
+owner"; they were asked, chose to make the Explorer light, and it shipped in the same release that
+filed this. The Explorer sits in the context drawer at `tone="panel"`, and `--panel` is now
+`oklch(0.968 0.003 250)`. The navy that remains is the narrow icon rail (`tone="chrome"`), which is
+chrome and carries controls. **Left standing for a day, this row would have sent the product owner a
+question they had already answered** — the drift class ADR-0058 exists for, in the register rather
+than in a spec. The second half is untouched and still open: consider whether the rail should
 compress when sparse, independent of colour.
 
-**d. The sign-in → organisation-home transition is black-to-white**, and that is a decision nobody
-has made. The public screens sit on a near-black `--ground`/`--ground-end` gradient
-(`globals.css:449-450`), untouched by this epic; the card and its navy panel do share the
-application's identity, but the void around them does not. It was true before the flip and the flip
-makes it starker. Either lighten the gradient stops or accept it explicitly as a threshold moment —
-**this is the one item here that is a product-owner question rather than a defect.**
+**d. The sign-in → organisation-home transition is black-to-white** — **RESOLVED in `web-v0.97.0`,
+before anyone acted on this row.** Correctly identified as a product-owner question; they were asked
+and chose to lighten the surround, which shipped in the same release. `--ground` /`--ground-end` are
+now `oklch(0.975 0.005 263)` / `oklch(0.851 0.03 260)` — the old Flask app's own
+`linear-gradient(135deg, #f5f7fa, #c3cfe2)`, solved for in OKLCH to within 0.0013 in sRGB rather
+than matched by eye. The card, its navy panel, the photograph and the amber accents are untouched.
+The accepted cost is recorded at the declaration: a floating card gets much of its drama from a dark
+surround, so the login reads calmer.
 
 ## 162. The legend's slack chip does not match what the canvas paints
 

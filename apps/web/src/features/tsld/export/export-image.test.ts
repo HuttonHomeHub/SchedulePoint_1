@@ -165,11 +165,14 @@ describe('resolvePrintPalette', () => {
   it('is a LIGHT-forced palette (dark ink on white paper), distinct from the theme palette', () => {
     const print = resolvePrintPalette(document.documentElement);
     const themed = resolveTsldPalette(document.documentElement);
-    // Light fallbacks: white paper, near-black ink/labels (not the dark palette's near-white ink).
+    // Light fallbacks: white paper, dark ink/labels (not the dark palette's near-white ink).
+    // **The values moved with TECH_DEBT #158**: they used to be a pre-light-theme literal set that
+    // no longer matched any shipped token, and two of its label inks were INVERTED against the
+    // criticality ladder. They are now each token's own value, computed rather than eyeballed.
     expect(print.ground).toBe('#ffffff');
-    expect(print.ink).toBe('#1a1a1a');
-    expect(print.labelBeside).toBe('#1a1a1a');
-    expect(print.outline).toBe('#1a1a1a');
+    expect(print.ink).toBe('#333333');
+    expect(print.labelBeside).toBe('#333333');
+    expect(print.outline).toBe('#333333');
     // The theme palette's fallbacks are DARK (near-white beside-label ink) — the two must differ.
     expect(print.labelBeside).not.toBe(themed.labelBeside);
   });
@@ -177,8 +180,14 @@ describe('resolvePrintPalette', () => {
   it('reads the design tokens when present (token-derived) and forces light regardless of theme', () => {
     const root = document.createElement('div');
     root.classList.add('dark');
-    // Stub the token layer: `--background` resolves (token-derived), everything else is blank
+    // Stub the token layer: `--print-ground` resolves (token-derived), everything else is blank
     // (so the LIGHT fallbacks apply). Proves the palette reads the design tokens, not hard-coded hex.
+    //
+    // **It named `--background` until TECH_DEBT #158.** That is the defect in one line: the paper
+    // ground was the app's live background, so it followed the screen into Graphite's near-black.
+    // Paper now reads `--print-*`, which no surface scope rebinds — which is what makes the
+    // "forces light regardless of theme" in this test's name structurally true rather than a
+    // coincidence with whatever theme happens to ship.
     //
     // **Unprefixed, since `docs/TECH_DEBT.md` #159.** The resolvers named the `--color-*` aliases
     // until then, and an `@theme inline` alias is substituted on `:root` — so a surface-scope rebind
@@ -186,12 +195,12 @@ describe('resolvePrintPalette', () => {
     // alias too, so it went on passing throughout: it was asserting that the resolver reads whatever
     // name the resolver reads.
     const spy = vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      getPropertyValue: (name: string) => (name === '--background' ? 'oklch(1 0 0)' : ''),
+      getPropertyValue: (name: string) => (name === '--print-ground' ? 'oklch(1 0 0)' : ''),
     } as unknown as CSSStyleDeclaration);
     try {
       const print = resolvePrintPalette(root);
       expect(print.ground).toBe('oklch(1 0 0)'); // token-derived where the token is set…
-      expect(print.ink).toBe('#1a1a1a'); // …light fallback where it isn't.
+      expect(print.ink).toBe('#333333'); // …light fallback where it isn't.
       // It momentarily clears the theme class to read the light values, then restores it.
       expect(root.classList.contains('dark')).toBe(true);
     } finally {
