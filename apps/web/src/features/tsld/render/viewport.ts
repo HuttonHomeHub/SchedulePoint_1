@@ -84,6 +84,27 @@ export function pan(view: Viewport, dx: number, dy: number): Viewport {
 }
 
 /**
+ * Centre the viewport on a world point — day on the time axis, lane row on the vertical
+ * (ADR-0100 M3, the minimap's one navigation primitive). Either axis takes `null` to leave
+ * that origin untouched (Home/End move only the time axis). Scale is unchanged: this is the
+ * `centerOnDate` contract generalised to two axes and day-numbers — deliberately NOT a
+ * refactor of `centerOnDate` itself, which takes ISO, centres horizontally only, and has
+ * three callers with their own suite.
+ */
+export function centerOnWorld(
+  view: Viewport,
+  size: Size,
+  day: number | null,
+  lane: number | null,
+): Viewport {
+  return {
+    ...view,
+    originX: day === null ? view.originX : size.width / 2 - day * view.pxPerDay,
+    originY: lane === null ? view.originY : size.height / 2 - (lane + 0.5) * LANE_HEIGHT,
+  };
+}
+
+/**
  * Pan (no zoom) so the calendar day `iso` lands `inset` px from the left edge — the pure math behind
  * the "Go to date" view command (ADR-0033). The scale (`pxPerDay`) and vertical pan are unchanged, so
  * `screenXOfDay(daysBetween(dataDateIso, iso), result) === inset`. A pure view transform: it moves

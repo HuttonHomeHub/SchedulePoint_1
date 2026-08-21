@@ -39,6 +39,7 @@ import {
   DEFAULT_VIEWPORT,
   dependencyPolyline,
   dependencyPolylineTimeTrue,
+  centerOnWorld,
   fitToContent,
   worldExtent,
   hitTest,
@@ -829,6 +830,29 @@ describe('DEFAULT_VIEWPORT', () => {
   it('is a valid in-range viewport', () => {
     expect(DEFAULT_VIEWPORT.pxPerDay).toBeGreaterThanOrEqual(MIN_PX_PER_DAY);
     expect(DEFAULT_VIEWPORT.pxPerDay).toBeLessThanOrEqual(MAX_PX_PER_DAY);
+  });
+});
+
+describe('centerOnWorld', () => {
+  const SIZE = { width: 1000, height: 560 };
+  const VIEW_ = { pxPerDay: 10, originX: 0, originY: 0 };
+
+  it('centres a world day/lane in the surface', () => {
+    const v = centerOnWorld(VIEW_, SIZE, 100, 10);
+    // day 100 lands at x = 500 (the centre): originX + 100*10 = 500.
+    expect(v.originX).toBe(500 - 1000);
+    // lane 10's row centre lands at y = 280: originY + 10.5*28 = 280.
+    expect(v.originY).toBe(280 - 10.5 * 28);
+    expect(v.pxPerDay).toBe(10); // scale untouched — a pan, never a zoom
+  });
+
+  it('null leaves that axis untouched (Home/End move only the time axis)', () => {
+    const view = { pxPerDay: 10, originX: -123, originY: -456 };
+    const dayOnly = centerOnWorld(view, SIZE, 50, null);
+    expect(dayOnly.originY).toBe(-456);
+    expect(dayOnly.originX).toBe(500 - 500);
+    const laneOnly = centerOnWorld(view, SIZE, null, 3);
+    expect(laneOnly.originX).toBe(-123);
   });
 });
 

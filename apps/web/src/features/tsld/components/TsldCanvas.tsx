@@ -1,5 +1,12 @@
 import type { ActivityType, DependencyType } from '@repo/types';
-import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from 'react';
 
 import {
   IDLE,
@@ -54,6 +61,7 @@ import {
   withMinimumSpan,
   lagAnchorDay,
   makeWorkingDayWalk,
+  centerOnWorld,
   pan,
   isMilestone,
   panToDate,
@@ -91,7 +99,7 @@ import {
   type WbsBandGroup,
 } from '../render/wbs-band';
 
-import { MINIMAP_BOX, TsldMinimap } from './TsldMinimap';
+import { MINIMAP_BOX, TsldMinimap, type MinimapWindow } from './TsldMinimap';
 
 import {
   CANVAS_AUTHORING_ENABLED,
@@ -129,6 +137,16 @@ export interface TsldCanvasHandle {
    * has no computed dates (nothing to frame) or the canvas has not been measured yet.
    */
   zoomToActivity: (id: string) => boolean;
+  /**
+   * Centre the view on a world point — day number (about the data date) and lane row — or on
+   * one axis alone (`null` leaves the other untouched). The minimap's one navigation primitive
+   * (ADR-0100 M3): its drag, its click-to-jump and its keyboard all commit through this.
+   * Returns the committed visible window (for the announcement), or null when unmeasured.
+   */
+  centerOnWorld: (day: number | null, lane: number | null) => MinimapWindow | null;
+  /** Pan by whole pages of the current viewport (±1 per axis) — the minimap group's arrow
+   * keys. Same pure `pan()` the pointer path uses; same return contract as centerOnWorld. */
+  panPages: (dx: number, dy: number) => MinimapWindow | null;
   /** Read (never mutate) the current viewport transform + measured surface size — used by the
    * **Diagram — current view (PNG)** export (spec `docs/specs/export-print/`) to crop the off-screen
    * image to the live bounds. A pure read off the rAF-owned refs; it never repaints the live canvas. */
@@ -985,6 +1003,50 @@ export function TsldCanvas({
     }
   };
 
+  // The minimap's two navigation commits (ADR-0100 M3) — ONE implementation each, serving
+  // both the imperative handle and the panel's own gestures (drag, click-to-jump, keyboard),
+  // so the three entry routes structurally cannot disagree about what "centre here" means
+  // (the ADR-0065 `routeOrthogonal` rule; `minimap-one-commit.structural.test.ts` pins it).
+  // Plain function references reading refs — stable for the handle's `[]` memo.
+  const describeMinimapWindow = useCallback((): MinimapWindow => {
+    const v = viewRef.current;
+    const size = sizeRef.current;
+    const leftDay = Math.floor(-v.originX / v.pxPerDay);
+    const rightDay = Math.floor((-v.originX + size.width) / v.pxPerDay);
+    const laneFrom = Math.max(0, Math.floor(-v.originY / LANE_HEIGHT));
+    const laneTo = Math.max(laneFrom, Math.floor((-v.originY + size.height) / LANE_HEIGHT) - 1);
+    return {
+      startIso: addCalendarDays(sceneRef.current.dataDate, leftDay),
+      endIso: addCalendarDays(sceneRef.current.dataDate, rightDay),
+      laneFrom,
+      laneTo,
+    };
+  }, []);
+  const minimapCenterOnWorld = useCallback(
+    (day: number | null, lane: number | null): MinimapWindow | null => {
+      const size = sizeRef.current;
+      if (size.width <= 1) return null;
+      viewRef.current = centerOnWorld(viewRef.current, size, day, lane);
+      dirtyRef.current = true;
+      interactionDirtyRef.current = true;
+      return describeMinimapWindow();
+    },
+    [describeMinimapWindow],
+  );
+  const minimapPanPages = useCallback(
+    (dx: number, dy: number): MinimapWindow | null => {
+      const size = sizeRef.current;
+      if (size.width <= 1) return null;
+      // Moving the VIEW one page later/lower moves the origin the other way — the same pure
+      // `pan()` every pointer path uses (M3-T3's requirement is the identity, not the sign).
+      viewRef.current = pan(viewRef.current, -dx * size.width, -dy * size.height);
+      dirtyRef.current = true;
+      interactionDirtyRef.current = true;
+      return describeMinimapWindow();
+    },
+    [describeMinimapWindow],
+  );
+
   useImperativeHandle(
     controlRef,
     () => ({
@@ -1065,12 +1127,14 @@ export function TsldCanvas({
         reportZoomStop();
         return true;
       },
+      centerOnWorld: minimapCenterOnWorld,
+      panPages: minimapPanPages,
       // A pure read of the live viewport (transform + measured size) for the current-view PNG export.
       // Returns copies so a caller can't mutate the rAF-owned refs; never repaints the live canvas.
       getViewport: () => ({ view: { ...viewRef.current }, size: { ...sizeRef.current } }),
     }),
-    // Stable — reads live state through refs.
-    [],
+    // Stable — reads live state through refs (the two minimap commits are `[]` callbacks).
+    [minimapCenterOnWorld, minimapPanPages],
   );
 
   // Focus-follows-viewport (M5, WCAG 2.4.7/2.4.11): when the selection changes — e.g. keyboard
@@ -2143,6 +2207,8 @@ export function TsldCanvas({
           onClose={onMinimapClose ?? (() => {})}
           bitmapCanvasRef={minimapCanvasRef}
           rectRef={minimapRectRef}
+          onCenterWorld={minimapCenterOnWorld}
+          onPanPages={minimapPanPages}
           {...(minimapDismissFocusRef ? { dismissFocusRef: minimapDismissFocusRef } : {})}
         />
       ) : null}

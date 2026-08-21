@@ -53,6 +53,25 @@ const optionIds = (): string[] =>
     .getAllByRole('option')
     .map((o) => o.getAttribute('data-activity-id') ?? o.textContent ?? '');
 
+describe('TsldPanel — navigating is a read (M3-T5c)', () => {
+  it('a read-only reader (Viewer / External Guest shape) gets a working minimap', () => {
+    render(
+      <TsldPanel
+        activities={ACTIVITIES}
+        dependencies={[]}
+        dataDate="2026-01-01"
+        canEdit={false}
+        minimapActive
+        onMinimapClose={() => {}}
+      />,
+    );
+    // The panel mounts, and its primary gesture surface (the drag pad) is present — not
+    // pen-gated, no recalculation hold: the minimap writes nothing (ADR-0063 M4b/ADR-0080).
+    expect(screen.getByRole('group', { name: 'Diagram overview' })).toBeInTheDocument();
+    expect(screen.getByTestId('tsld-minimap-rect-pad')).toBeInTheDocument();
+  });
+});
+
 describe('TsldPanel — the minimap does not touch the a11y layer', () => {
   it('keeps the AT-reachable activity set identical across the minimap toggle (set equality)', () => {
     const { rerender } = render(<Harness minimap={false} />);
