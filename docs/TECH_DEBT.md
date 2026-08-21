@@ -2979,3 +2979,43 @@ at all, which also removes the drift `PrintSurface.css` was trying to pin agains
 turning the ground light, and a defect that vanishes as a side-effect of unrelated work is one that
 returns the moment anything reintroduces a dark surface — an export preview, a presentation mode, a
 dark theme brought back on ADR-0097's own stated terms. Fix it on its own or close it on its own.
+
+## 159. Three components read `--color-*` in JS or inline styles, and those are frozen at `:root`
+
+**Raised 2026-08-21** (light-corporate theme, M2). **Size:** S.
+
+An `@theme inline` alias is declared at `:root` as `--color-primary: var(--primary)`. A custom
+property's `var()` is substituted at computed-value time **on the element that declares it**, and the
+already-substituted value is what inherits — so a `[data-surface]` rebind of `--primary` can never
+reach `--color-primary`. Verified in Chromium on a four-line page rather than reasoned from the spec:
+
+```
+:root { --plot-primary: rgb(1,2,3); --primary: rgb(9,9,9); --color-primary: var(--primary); }
+[data-surface="canvas"] { --primary: var(--plot-primary); }
+→ --primary at the scope       rgb(1,2,3)   (follows the rebind)
+→ --color-primary at the scope rgb(9,9,9)   (frozen at :root)
+```
+
+**Tailwind utilities are unaffected**, and that is why this went unnoticed for so long: `inline` is
+precisely what makes `bg-primary` compile to `var(--primary)` instead of the alias, so every DOM
+surface has always been correct. Only readers that name the alias are affected.
+
+`resolveTsldPalette`'s 88 reads were fixed in the same commit that found this — the light theme made
+it visible by giving the page a navy `--primary` and the diagram a blue one, so every non-critical
+bar painted navy. **What remains is three inline `var(--color-*)` styles in `TsldMinimap.tsx`**
+(`:416-417`, `:427`, `:439-440`). Two name the minimap frame pair, which is not scope-rebound and is
+therefore correct either way. The third is `var(--color-destructive)` for the minimap's Today line,
+which now differs from the scene's Today marker — both reds, visually near-identical today, and a
+real inconsistency waiting for the two families to diverge further.
+
+**The fix is not simply `var(--destructive)`**: the minimap is a floating panel and which
+`[data-surface]` it sits inside has not been established, so that substitution could pick up the
+panel scope's red instead. The robust answer is to pass the resolved palette down as a prop the way
+the painter already receives it, rather than resolving colour in the component at all. Establish the
+scope first, then choose.
+
+**Also owed:** `token-contrast.test.ts` resolves a scope by reading the CSS text and following the
+rebind itself, so it asserts a mapping the browser does not perform for alias readers. It was right
+about what the values should be and silent about what the painter actually got. A gate that pins
+"every JS token read names an unprefixed token" would have caught the whole class, and is the
+cheapest thing here.

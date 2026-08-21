@@ -161,6 +161,40 @@ async function seedProgramme(page, slug) {
         successorId: made[i].id,
       });
     }
+    // **A PARALLEL BRANCH WITH FLOAT, and it is not decoration.** A pure chain makes every
+    // activity critical, so every diagram shot ever taken of this plan showed one colour — the
+    // on-schedule and near-critical fills, two thirds of the criticality ladder, had never been
+    // photographed at all, and neither had a float tail or a link-slack cue, because there is no
+    // float in the plan to draw. That is `seed`'s "photographs a lie" one level in: the picture
+    // was of a correct diagram that could not exercise the thing under review.
+    //
+    // Two short activities hanging off the first and merging into the last. Their path is much
+    // shorter than the spine, so they carry real total float — enough for one to land
+    // near-critical and the other comfortably on schedule.
+    // `laneIndex` is explicit: the branch runs CONCURRENTLY with the spine, so without a lane of
+    // its own the packer leaves it on lane 0 and it draws straight through the bars it is
+    // parallel to. The first version of this seed did exactly that and the shot was unreadable.
+    const branch = [];
+    for (const [code, name, durationDays, laneIndex] of [
+      ['A1100', 'Divert services', 4, 1],
+      ['A1110', 'Temporary hoarding', 3, 2],
+    ]) {
+      branch.push(
+        await post(`/plans/${plan.id}/activities`, { name, code, durationDays, laneIndex }),
+      );
+    }
+    await post(`/plans/${plan.id}/dependencies`, {
+      predecessorId: made[0].id,
+      successorId: branch[0].id,
+    });
+    await post(`/plans/${plan.id}/dependencies`, {
+      predecessorId: branch[0].id,
+      successorId: branch[1].id,
+    });
+    await post(`/plans/${plan.id}/dependencies`, {
+      predecessorId: branch[1].id,
+      successorId: made[made.length - 1].id,
+    });
     await post(`/plans/${plan.id}/schedule/recalculate`, {});
     return { planId: plan.id, projectId: project.id, clientId: client.id };
   }, slug);
@@ -297,6 +331,21 @@ const SHOTS = [
     takePen: true,
     go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
     after: (p) => toggleViewSwitch(p, /minimap/i),
+  },
+  // **The lenses on** (M2). Float & drift tails, link slack and the late-start overlay are all
+  // default-off, so every previous shot of this diagram photographed the plainest thing it can
+  // draw. They are ~20 of the palette's token reads and the matrix cannot say whether they READ —
+  // the float tails are hatched, the slack cue is a dashed rule, and neither is a pair it asserts.
+  {
+    name: 'plan-workspace-lenses',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+    after: async (p) => {
+      await toggleViewSwitch(p, /float & drift/i);
+      await toggleViewSwitch(p, /link slack/i);
+      await toggleViewSwitch(p, /late-start overlay/i);
+    },
   },
   // **The guest share view** — the only screen in the product a person outside the organisation
   // ever sees, and the only authenticated-adjacent surface with no session at all. Session-less by
