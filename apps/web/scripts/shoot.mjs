@@ -199,6 +199,12 @@ const SHOTS = [
   {
     name: 'plan-workspace-editor',
     programme: true,
+    // **`takePen`, because the shot before this one gives the pen away.** The lease is per PLAN and
+    // the shots share one, so `plan-workspace-readonly` leaves it released and every later shot of
+    // that plan inherits a shaded Edit. The shot passed alone under `--only` and failed in the full
+    // run — a shot list is ordered state, not three independent pictures, and the only thing that
+    // reports it is running the whole list.
+    takePen: true,
     go: (p, slug, planId) => p.goto(`${BASE}/orgs/${slug}/plans/${planId}`),
     after: openActivityEditor,
   },
@@ -308,6 +314,14 @@ for (const width of widths) {
         if (await stop.isVisible().catch(() => false)) {
           await stop.click();
           await page.getByRole('button', { name: 'Start editing' }).waitFor();
+          await page.waitForTimeout(400);
+        }
+      }
+      if (shot.takePen) {
+        const start = page.getByRole('button', { name: 'Start editing' });
+        if (await start.isVisible().catch(() => false)) {
+          await start.click();
+          await page.getByRole('button', { name: 'Stop editing' }).waitFor();
           await page.waitForTimeout(400);
         }
       }
