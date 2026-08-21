@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { TsldPanel } from '@/features/tsld';
+import { CanvasSurfaceProvider } from '@/features/tsld/render/canvas-surface';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** The uniform "gone" copy for ANY dead token (ADR-0051 §5) — no oracle for whether a token existed. */
@@ -186,55 +187,69 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
   return (
     // Give the read-only canvas its own polite live region (its selection/announcements), independent of
     // the app-shell announcer that this session-less view never mounts.
+    //
+    // **`CanvasSurfaceProvider` too, and it was missing.** Without it `useRegisterCanvasSurface`
+    // returns the detached no-op, nothing is published, and every palette resolver takes the
+    // documented fallback to `document.documentElement` — so this view painted the PAGE's family on
+    // the diagram's ground. `canvas-surface.tsx`'s own docblock names that fallback "the honest weak
+    // point of this design" and predicts the exact cause: "a future host mounts the canvas outside
+    // the provider". This view is that host, and it is the one screen a person outside the
+    // organisation ever sees.
+    //
+    // Invisible until the light theme, when the page's primary became navy and the diagram's stayed
+    // a mid blue: every non-critical bar here painted near-black. The seam test could not see it
+    // either — it mounts a synthetic host rather than a real one, which its own docblock says.
     <AnnouncerProvider>
-      {/*
-       * `h-dvh`, not `min-h-dvh` — and `min-h-0` on the main. Both are load-bearing, and getting
-       * them wrong is why this view shipped with a **one-pixel-tall canvas**: measured at 1886×1
-       * against the member workspace's 1597×736, so the plan loaded, the toolbar and legend
-       * rendered, and the diagram was an empty box.
-       *
-       * `TsldPanel fill` is `h-full` over a `flex-1` canvas container (TsldPanel.tsx:1662,1774).
-       * A percentage height needs a DEFINITE parent height: `min-h-dvh` leaves the column's height
-       * `auto`, so `h-full` resolves to `auto` and the canvas has no space to claim. The member
-       * workspace threads `min-h-0 flex-1` through every level from a definite-height app shell,
-       * which is why the same component fills there — the panel's contract is its container's, and
-       * this view was the only host that did not honour it.
-       *
-       * `min-h-0` is the other half: a flex item's default `min-height: auto` refuses to shrink
-       * below its content, so the canvas could not size down to the space actually available.
-       */}
-      <div className="flex h-dvh flex-col">
-        <header className="border-border bg-card flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-3">
-          <h1 className="text-base font-semibold">{plan.name}</h1>
-          <Badge variant="neutral">{STATUS_LABELS[plan.status]}</Badge>
-          <span className="text-muted-foreground text-sm">Read-only shared view</span>
-          <dl className="ml-auto flex flex-wrap gap-x-6 gap-y-1">
-            {plan.dataDate ? (
-              <Stat label="Data date" value={formatCalendarDate(plan.dataDate)} />
-            ) : null}
-            {projectFinish ? (
-              <Stat label="Project finish" value={formatCalendarDate(projectFinish)} />
-            ) : null}
-          </dl>
-        </header>
+      <CanvasSurfaceProvider>
+        {/*
+         * `h-dvh`, not `min-h-dvh` — and `min-h-0` on the main. Both are load-bearing, and getting
+         * them wrong is why this view shipped with a **one-pixel-tall canvas**: measured at 1886×1
+         * against the member workspace's 1597×736, so the plan loaded, the toolbar and legend
+         * rendered, and the diagram was an empty box.
+         *
+         * `TsldPanel fill` is `h-full` over a `flex-1` canvas container (TsldPanel.tsx:1662,1774).
+         * A percentage height needs a DEFINITE parent height: `min-h-dvh` leaves the column's height
+         * `auto`, so `h-full` resolves to `auto` and the canvas has no space to claim. The member
+         * workspace threads `min-h-0 flex-1` through every level from a definite-height app shell,
+         * which is why the same component fills there — the panel's contract is its container's, and
+         * this view was the only host that did not honour it.
+         *
+         * `min-h-0` is the other half: a flex item's default `min-height: auto` refuses to shrink
+         * below its content, so the canvas could not size down to the space actually available.
+         */}
+        <div className="flex h-dvh flex-col">
+          <header className="border-border bg-card flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-4 py-3">
+            <h1 className="text-base font-semibold">{plan.name}</h1>
+            <Badge variant="neutral">{STATUS_LABELS[plan.status]}</Badge>
+            <span className="text-muted-foreground text-sm">Read-only shared view</span>
+            <dl className="ml-auto flex flex-wrap gap-x-6 gap-y-1">
+              {plan.dataDate ? (
+                <Stat label="Data date" value={formatCalendarDate(plan.dataDate)} />
+              ) : null}
+              {projectFinish ? (
+                <Stat label="Project finish" value={formatCalendarDate(projectFinish)} />
+              ) : null}
+            </dl>
+          </header>
 
-        <main className="min-h-0 flex-1 p-4">
-          {activities.length === 0 ? (
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
-              This plan has no activities yet.
-            </div>
-          ) : (
-            <TsldPanel
-              activities={activities}
-              dependencies={dependencies}
-              dataDate={plan.dataDate}
-              calendar={calendar}
-              canEdit={false}
-              fill
-            />
-          )}
-        </main>
-      </div>
+          <main className="min-h-0 flex-1 p-4">
+            {activities.length === 0 ? (
+              <div className="border-border text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
+                This plan has no activities yet.
+              </div>
+            ) : (
+              <TsldPanel
+                activities={activities}
+                dependencies={dependencies}
+                dataDate={plan.dataDate}
+                calendar={calendar}
+                canEdit={false}
+                fill
+              />
+            )}
+          </main>
+        </div>
+      </CanvasSurfaceProvider>
     </AnnouncerProvider>
   );
 }

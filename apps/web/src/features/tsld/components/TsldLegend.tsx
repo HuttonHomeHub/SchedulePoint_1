@@ -40,25 +40,25 @@ const CRITICALITY_SWATCHES: ReadonlyArray<LegendItem> = [
   {
     label: 'Critical',
     swatch: {
-      backgroundColor: 'var(--color-destructive)',
-      border: '1.5px solid var(--color-foreground)',
+      backgroundColor: 'var(--destructive)',
+      border: '1.5px solid var(--foreground)',
     },
   },
   {
     label: 'Near-critical',
     swatch: {
-      backgroundColor: 'var(--color-warning)',
-      border: '1.5px dashed var(--color-foreground)',
+      backgroundColor: 'var(--warning)',
+      border: '1.5px dashed var(--foreground)',
     },
   },
-  { label: 'On schedule', swatch: { backgroundColor: 'var(--color-primary)' } },
+  { label: 'On schedule', swatch: { backgroundColor: 'var(--primary)' } },
 ];
 
 /** The criticality **outline** shape cues, kept in every non-Criticality Colour-by mode so criticality
  * is still readable when the fill encodes something else (WCAG 1.4.1). */
 const CRITICALITY_OUTLINES: ReadonlyArray<LegendItem> = [
-  { label: 'Critical (outline)', swatch: { border: '1.5px solid var(--color-foreground)' } },
-  { label: 'Near-critical (outline)', swatch: { border: '1.5px dashed var(--color-foreground)' } },
+  { label: 'Critical (outline)', swatch: { border: '1.5px solid var(--foreground)' } },
+  { label: 'Near-critical (outline)', swatch: { border: '1.5px dashed var(--foreground)' } },
 ];
 
 /** The shape/marker + link cues shared by every mode (independent of the bar fill). */
@@ -73,7 +73,7 @@ const SHARED_CUES: ReadonlyArray<LegendItem> = [
   // vertical in the destructive tone. Both toggleable in the view controls.
   {
     label: 'Non-working',
-    swatch: { backgroundColor: 'var(--color-muted)', border: '1px solid var(--color-border)' },
+    swatch: { backgroundColor: 'var(--muted)', border: '1px solid var(--border)' },
   },
   // The data-date status line (canvas status & feedback M1, `VITE_CANVAS_DATA_DATE`) — a SOLID
   // vertical beside the dashed Today one, listed first because it sits left of today on a statused
@@ -141,7 +141,7 @@ export interface LensLegendInfo {
  * ghost is compared against the current (late) view (ADR-0033), not the early dates. */
 const baselineGhostItem = (lateOverlay: boolean): LegendItem => ({
   label: lateOverlay ? 'Baseline (as captured, vs late view)' : 'Baseline (as captured)',
-  swatch: { border: '1px dashed var(--color-muted-foreground)' },
+  swatch: { border: '1px dashed var(--muted-foreground)' },
 });
 
 /** Build the legend item list for the active lenses (or today's default when no lens is provided). */
@@ -199,7 +199,7 @@ export function TsldLegend({
                   height: 0,
                   borderLeft: '4px solid transparent',
                   borderRight: '4px solid transparent',
-                  borderTop: '5px solid var(--color-muted-foreground)',
+                  borderTop: '5px solid var(--muted-foreground)',
                 }}
               />
             </span>
@@ -210,7 +210,7 @@ export function TsldLegend({
                 style={{
                   borderLeftWidth: 1.5,
                   borderLeftStyle: 'dashed',
-                  borderLeftColor: 'var(--color-destructive)',
+                  borderLeftColor: 'var(--destructive)',
                 }}
               />
             </span>
@@ -223,7 +223,7 @@ export function TsldLegend({
                 style={{
                   borderLeftWidth: 2,
                   borderLeftStyle: 'solid',
-                  borderLeftColor: 'var(--color-foreground)',
+                  borderLeftColor: 'var(--foreground)',
                 }}
               />
             </span>
@@ -235,8 +235,8 @@ export function TsldLegend({
                   height: 0,
                   borderLeft: '4px solid transparent',
                   borderRight: '4px solid transparent',
-                  borderBottom: '6px solid var(--color-warning)',
-                  outline: '0.5px solid var(--color-foreground)',
+                  borderBottom: '6px solid var(--warning)',
+                  outline: '0.5px solid var(--foreground)',
                 }}
               />
             </span>
@@ -250,8 +250,8 @@ export function TsldLegend({
                   height: 5,
                   top: 4,
                   left: 12,
-                  backgroundColor: 'var(--color-warning)',
-                  outline: '0.5px solid var(--color-foreground)',
+                  backgroundColor: 'var(--warning)',
+                  outline: '0.5px solid var(--foreground)',
                 }}
               />
               <span
@@ -261,8 +261,8 @@ export function TsldLegend({
                   height: 5,
                   top: 2,
                   left: 8,
-                  backgroundColor: 'var(--color-warning)',
-                  outline: '0.5px solid var(--color-foreground)',
+                  backgroundColor: 'var(--warning)',
+                  outline: '0.5px solid var(--foreground)',
                 }}
               />
             </span>
@@ -279,8 +279,8 @@ export function TsldLegend({
                   style={{
                     width: 2,
                     height: barHeight,
-                    backgroundColor: 'var(--color-warning)',
-                    outline: '0.5px solid var(--color-foreground)',
+                    backgroundColor: 'var(--warning)',
+                    outline: '0.5px solid var(--foreground)',
                   }}
                 />
               ))}
@@ -291,15 +291,15 @@ export function TsldLegend({
                   (drawn in the bar's own fill on the canvas — the primary fill by default). */}
               <span
                 className="absolute inset-x-0 top-1/2 -translate-y-1/2"
-                style={{ height: 4, backgroundColor: 'var(--color-primary)' }}
+                style={{ height: 4, backgroundColor: 'var(--primary)' }}
               />
               <span
                 className="absolute inset-y-0 left-0"
-                style={{ width: 2, backgroundColor: 'var(--color-primary)' }}
+                style={{ width: 2, backgroundColor: 'var(--primary)' }}
               />
               <span
                 className="absolute inset-y-0 right-0"
-                style={{ width: 2, backgroundColor: 'var(--color-primary)' }}
+                style={{ width: 2, backgroundColor: 'var(--primary)' }}
               />
             </span>
           ) : 'summary' in item ? (
@@ -308,22 +308,22 @@ export function TsldLegend({
                   WBS-summary glyph. */}
               <span
                 className="absolute inset-x-0 top-0"
-                style={{ height: 4, backgroundColor: 'var(--color-primary)' }}
+                style={{ height: 4, backgroundColor: 'var(--primary)' }}
               />
               <span
                 className="absolute left-0"
-                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--color-primary)' }}
+                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--primary)' }}
               />
               <span
                 className="absolute right-0"
-                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--color-primary)' }}
+                style={{ top: 2, width: 2, height: 8, backgroundColor: 'var(--primary)' }}
               />
             </span>
           ) : 'progress' in item ? (
             <span
               aria-hidden="true"
               className="relative inline-block h-3 w-5 rounded-sm"
-              style={{ backgroundColor: 'var(--color-primary)' }}
+              style={{ backgroundColor: 'var(--primary)' }}
             >
               {/* The in-bar progress band + front divider along the bar bottom, in the fill's
                   paired ink — matching the canvas progress depiction. */}
@@ -334,7 +334,7 @@ export function TsldLegend({
                   bottom: 1,
                   width: 9,
                   height: 3,
-                  backgroundColor: 'var(--color-primary-foreground)',
+                  backgroundColor: 'var(--primary-foreground)',
                 }}
               />
               <span
@@ -344,7 +344,7 @@ export function TsldLegend({
                   bottom: 1,
                   width: 1,
                   height: 3,
-                  backgroundColor: 'var(--color-primary-foreground)',
+                  backgroundColor: 'var(--primary-foreground)',
                 }}
               />
             </span>
@@ -354,7 +354,7 @@ export function TsldLegend({
                   lag-run depiction (a tighter dash than the non-driving link's). */}
               <span
                 className="absolute top-1/2 left-0 -translate-y-1/2"
-                style={{ width: 6, height: 8, backgroundColor: 'var(--color-primary)' }}
+                style={{ width: 6, height: 8, backgroundColor: 'var(--primary)' }}
               />
               <span
                 className="absolute top-1/2 -translate-y-1/2"
@@ -363,7 +363,7 @@ export function TsldLegend({
                   width: 13,
                   borderTopWidth: 1.5,
                   borderTopStyle: 'dotted',
-                  borderTopColor: 'var(--color-muted-foreground)',
+                  borderTopColor: 'var(--muted-foreground)',
                 }}
               />
             </span>
@@ -378,7 +378,7 @@ export function TsldLegend({
                   [item.tail === 'float' ? 'left' : 'right']: 0,
                   width: 8,
                   height: 8,
-                  backgroundColor: 'var(--color-primary)',
+                  backgroundColor: 'var(--primary)',
                 }}
               />
               <span
@@ -387,9 +387,9 @@ export function TsldLegend({
                   [item.tail === 'float' ? 'left' : 'right']: 9,
                   width: 11,
                   height: 5,
-                  border: '1px solid var(--color-muted-foreground)',
+                  border: '1px solid var(--muted-foreground)',
                   backgroundImage:
-                    'repeating-linear-gradient(45deg, transparent 0 2px, var(--color-muted-foreground) 2px 3px)',
+                    'repeating-linear-gradient(45deg, transparent 0 2px, var(--muted-foreground) 2px 3px)',
                 }}
               />
             </span>
@@ -401,8 +401,8 @@ export function TsldLegend({
                 style={{
                   width: 14,
                   height: 10,
-                  backgroundColor: 'var(--color-card)',
-                  border: '1px solid var(--color-border)',
+                  backgroundColor: 'var(--card)',
+                  border: '1px solid var(--border)',
                 }}
               />
             </span>
@@ -413,7 +413,7 @@ export function TsldLegend({
                 style={{
                   borderTopWidth: item.line === 'solid' ? 2 : 1.5,
                   borderTopStyle: item.line,
-                  borderTopColor: 'var(--color-muted-foreground)',
+                  borderTopColor: 'var(--muted-foreground)',
                 }}
               />
             </span>

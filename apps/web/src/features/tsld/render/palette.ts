@@ -313,28 +313,28 @@ export function resolveLensPalette(root: Element): LensPalette {
 export function lensLegendVarPalette(): LensPalette {
   const v = (name: string): string => `var(${name})`;
   return {
-    critical: v('--color-destructive'),
-    nearCritical: v('--color-warning'),
-    bar: v('--color-primary'),
-    neutral: v('--color-muted-foreground'),
-    floatCritical: v('--color-destructive'),
-    floatLow: v('--color-warning'),
-    floatMedium: v('--color-info'),
-    floatHigh: v('--color-success'),
-    wbsCycle: WBS_CYCLE_TOKENS.map(([name]) => v(`--color${name.slice(1)}`)),
+    critical: v('--destructive'),
+    nearCritical: v('--warning'),
+    bar: v('--primary'),
+    neutral: v('--muted-foreground'),
+    floatCritical: v('--destructive'),
+    floatLow: v('--warning'),
+    floatMedium: v('--info'),
+    floatHigh: v('--success'),
+    wbsCycle: WBS_CYCLE_TOKENS.map(([name]) => v(name)),
     // Inks are unused by the legend (it renders swatch fills + muted-foreground text), so mirror the
     // fill vars — never read.
-    neutralInk: v('--color-background'),
-    floatCriticalInk: v('--color-destructive-foreground'),
-    floatLowInk: v('--color-warning-foreground'),
-    floatMediumInk: v('--color-info-foreground'),
-    floatHighInk: v('--color-success-foreground'),
+    neutralInk: v('--background'),
+    floatCriticalInk: v('--destructive-foreground'),
+    floatLowInk: v('--warning-foreground'),
+    floatMediumInk: v('--info-foreground'),
+    floatHighInk: v('--success-foreground'),
     wbsInkCycle: [
-      v('--color-primary-foreground'),
-      v('--color-warning-foreground'),
-      v('--color-warning-foreground'),
-      v('--color-warning-foreground'),
-      v('--color-warning-foreground'),
+      v('--primary-foreground'),
+      v('--warning-foreground'),
+      v('--warning-foreground'),
+      v('--warning-foreground'),
+      v('--warning-foreground'),
     ],
   };
 }

@@ -2980,7 +2980,7 @@ turning the ground light, and a defect that vanishes as a side-effect of unrelat
 returns the moment anything reintroduces a dark surface — an export preview, a presentation mode, a
 dark theme brought back on ADR-0097's own stated terms. Fix it on its own or close it on its own.
 
-## 159. Three components read `--color-*` in JS or inline styles, and those are frozen at `:root`
+## 159. `--color-*` aliases are frozen at `:root` — CLOSED, with a gate still owed
 
 **Raised 2026-08-21** (light-corporate theme, M2). **Size:** S.
 
@@ -3014,17 +3014,21 @@ the minimap sits inside `[data-surface="canvas"]`, where `--color-destructive` g
 plain rename was correct after all, and it shipped. The two frame reads stay on the alias because
 that pair is not scope-rebound and the alias is the only name Tailwind emits for it.
 
-**What is left is the LEGEND, and it is a different fix.** `resolveLegendSwatches` returns
-`var(--color-*)` strings for DOM swatches, and `TsldPanel.tsx:2466` renders `<TsldLegend />`
-**outside** the `tone="canvas"` Surface at `:2636`. So neither name reaches the diagram's family
-there: the alias is frozen at `:root` and the unprefixed name resolves to whatever scope the legend
-happens to sit in. A legend describes the diagram, so its swatches must be the diagram's values —
-which means wrapping it in `<Surface tone="canvas">` (the sanctioned route; components may not name
-family tokens, per the seam test) and accepting that this also gives it the diagram's ground, or
-passing the resolved palette down as props the way the painter already receives it.
+**The LEGEND is closed too, and "visually marginal" was wrong.** It renders outside the
+`tone="canvas"` Surface, and its 38 swatch styles plus `resolveLegendSwatches`' 18 var strings all
+named the alias — so the legend painted the PAGE's family beside bars painting the diagram's. On the
+light theme the "On schedule" swatch was near-black navy next to blue bars: a legend misdescribing
+the thing it exists to explain, on the one screen a person outside the organisation sees. It is
+wrapped in `<Surface tone="canvas" className="contents">` — the `context-drawer.tsx` precedent, so
+the element supplies the scope and generates no box, making this a colour correction with no layout
+consequence — and every var re-pointed.
 
-Visually marginal today — the page and plot reds differ by 0.066 L — and a real correctness gap that
-widens the moment the two families diverge further.
+**A third instance was found the same way and is also fixed**: `GuestPlanView` mounted `TsldPanel`
+without `CanvasSurfaceProvider`, so `useRegisterCanvasSurface` returned its no-op, nothing was
+published, and every resolver took the documented fallback to `document.documentElement`.
+`canvas-surface.tsx`'s docblock names that fallback "the honest weak point of this design" and
+predicts the cause in as many words — _"a future host mounts the canvas outside the provider"_. That
+host existed already.
 
 **Also owed:** `token-contrast.test.ts` resolves a scope by reading the CSS text and following the
 rebind itself, so it asserts a mapping the browser does not perform for alias readers. It was right

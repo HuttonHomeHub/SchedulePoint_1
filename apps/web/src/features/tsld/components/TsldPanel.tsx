@@ -2463,7 +2463,22 @@ export function TsldPanel({
         />
       ) : null}
 
-      {!chromeless && showDiagram ? <TsldLegend /> : null}
+      {/* **`Surface tone="canvas"` with `className="contents"`** (light-theme M2, TECH_DEBT #159).
+          The legend describes the DIAGRAM, so its swatches have to be the diagram's values — and it
+          renders here, above the `tone="canvas"` Surface, so without a scope of its own it resolved
+          the page's family. On the light theme that showed: the "On schedule" swatch painted the
+          page's navy beside bars painted the diagram's blue, i.e. a legend misdescribing the thing
+          it exists to explain, on the one screen a person outside the organisation sees.
+
+          `contents` is the `context-drawer.tsx` precedent: the element provides the scope and
+          generates no box, so this is a colour correction with no layout consequence. Wrapping it
+          in a real box would also hand the legend the diagram's GROUND, which is a visual decision
+          nobody asked for. */}
+      {!chromeless && showDiagram ? (
+        <Surface tone="canvas" className="contents">
+          <TsldLegend />
+        </Surface>
+      ) : null}
 
       {/*
         **The dock** (workspace-chrome M3). Every transient strip the diagram shows — the
