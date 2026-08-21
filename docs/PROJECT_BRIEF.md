@@ -89,7 +89,11 @@ Planners who want the graphical experience currently have no browser-native opti
 - Resources: labor / equipment / materials library, assignments, cost roll-up. No auto-levelling in v1.
 - Sharable read-only plan links for external guests.
 - Activity search / filter / trace-chain in the graphical view.
-- Minimap for large diagrams.
+- Minimap for large diagrams. **Met** (ADR-0100, 2026-08-21): a 200×120 overview panel on
+  the TSLD — invariant plan picture with the critical path surviving decimation, live
+  viewport rectangle, drag/click/keyboard navigation — off by default under
+  `View ▾ ▸ Panels ▸ Minimap`. The honest scope: no hover date readout, no links in the
+  picture, and no shareable viewport position — each recorded in the ADR rather than implied.
 - Keyboard-first workflow (planners are power users).
 - Import from XER / MPP (read-only, best-effort) to lower switching cost.
 

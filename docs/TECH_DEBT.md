@@ -2814,3 +2814,32 @@ after the fit (re-run the reveal for the current selection — smallest, command
 `zoomToActivity` passes (touches the shared seam, needs the three call sites' suites as
 the oracle). The probe (`m0-t5-zoom-probe.mjs`, method recorded in
 `docs/specs/tsld-minimap/m0-measurement.md`) is kept with this row, not merged as a gate.
+
+## 153. Two close buttons, one corner, two target sizes
+
+**Raised 2026-08-21** (minimap M2/M4, beside #127). **Size:** S.
+
+The minimap's close is the new `icon-lg` (44 px) because `docs/UX_STANDARDS.md` sets that
+floor for a NEW close/toggle affordance and a one-off `className` is banned. The Legend —
+the other floating panel, sometimes parked in the same corner — closes with `icon-sm`
+(28 px, `TsldLegendPanel.tsx`). The inconsistency is **recorded rather than propagated**:
+mass-migrating existing 40 px/28 px icon buttons is #127's scope, and doing it as a
+side-effect of the minimap would have put a dozen unrelated screens on this diff. What is
+owed: when #127 is picked up, the Legend's close moves to `icon-lg` in the same pass.
+
+## 154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
+
+**Raised 2026-08-21** (minimap M4-T3). **Size:** S.
+
+The accessibility input report marked two claims as reasoned from specification, and the
+gate pass could observe only one of them in this environment:
+
+1. **Real-AT behaviour of `role="group"` + coalesced announcements (NVDA / VoiceOver)** —
+   NOT observed: no screen reader runs in the build container. What is owed is a listen —
+   does the group's name announce on focus, do the coalesced "Viewing …" messages arrive
+   once per burst, and does the drag-release announcement land? Record what was heard.
+2. **Low-vision visual feedback of a coalesced arrow-pan** — observed in a browser
+   (2026-08-21, screenshots): one ArrowRight moves the scene a full page (the ruler's
+   decade changes visibly), the minimap rectangle relocates in the same frame, and the
+   change is large-scale rather than subtle. The remaining owed half is a hands-on pass at
+   real magnification, which a screenshot cannot stand in for.
