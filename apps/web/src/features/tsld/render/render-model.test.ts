@@ -38,7 +38,9 @@ import {
   DEFAULT_VIEWPORT,
   dependencyPolyline,
   dependencyPolylineTimeTrue,
+  centerOnWorld,
   fitToContent,
+  worldExtent,
   hitTest,
   laneRowAt,
   isMilestone,
@@ -827,6 +829,74 @@ describe('DEFAULT_VIEWPORT', () => {
   it('is a valid in-range viewport', () => {
     expect(DEFAULT_VIEWPORT.pxPerDay).toBeGreaterThanOrEqual(MIN_PX_PER_DAY);
     expect(DEFAULT_VIEWPORT.pxPerDay).toBeLessThanOrEqual(MAX_PX_PER_DAY);
+  });
+});
+
+describe('centerOnWorld', () => {
+  const SIZE = { width: 1000, height: 560 };
+  const VIEW_ = { pxPerDay: 10, originX: 0, originY: 0 };
+
+  it('centres a world day/lane in the surface', () => {
+    const v = centerOnWorld(VIEW_, SIZE, 100, 10);
+    // day 100 lands at x = 500 (the centre): originX + 100*10 = 500.
+    expect(v.originX).toBe(500 - 1000);
+    // lane 10's row centre lands at y = 280: originY + 10.5*28 = 280.
+    expect(v.originY).toBe(280 - 10.5 * 28);
+    expect(v.pxPerDay).toBe(10); // scale untouched — a pan, never a zoom
+  });
+
+  it('null leaves that axis untouched (Home/End move only the time axis)', () => {
+    const view = { pxPerDay: 10, originX: -123, originY: -456 };
+    const dayOnly = centerOnWorld(view, SIZE, 50, null);
+    expect(dayOnly.originY).toBe(-456);
+    expect(dayOnly.originX).toBe(500 - 500);
+    const laneOnly = centerOnWorld(view, SIZE, null, 3);
+    expect(laneOnly.originX).toBe(-123);
+  });
+});
+
+describe('worldExtent', () => {
+  it('returns null when nothing is placeable (empty, and all-uncomputed)', () => {
+    expect(worldExtent([], DATA_DATE)).toBeNull();
+    expect(worldExtent([activity({ earlyStart: null, earlyFinish: null })], DATA_DATE)).toBeNull();
+  });
+
+  it('a single activity: inclusive minDay, exclusive maxDay (finish + 1), its own lane', () => {
+    const a = activity({ earlyStart: '2026-01-03', earlyFinish: '2026-01-05', laneIndex: 4 });
+    expect(worldExtent([a], DATA_DATE)).toEqual({ minDay: 2, maxDay: 5, maxLane: 4 });
+  });
+
+  it('folds min/max across activities and treats a null finish as a zero-span day', () => {
+    const early = activity({
+      id: 'a',
+      earlyStart: '2026-01-02',
+      earlyFinish: '2026-01-04',
+      laneIndex: 1,
+    });
+    const late = activity({ id: 'b', earlyStart: '2026-02-01', earlyFinish: null, laneIndex: 7 });
+    // b: start day 31, null finish => finish = start, maxDay = 32.
+    expect(worldExtent([early, late], DATA_DATE)).toEqual({ minDay: 1, maxDay: 32, maxLane: 7 });
+  });
+
+  it('a single-lane plan reports maxLane 0, and an uncomputed activity contributes no lane', () => {
+    const placed = activity({ id: 'a', laneIndex: 0 });
+    const unplaced = activity({ id: 'b', earlyStart: null, earlyFinish: null, laneIndex: 40 });
+    expect(worldExtent([placed, unplaced], DATA_DATE)?.maxLane).toBe(0);
+  });
+
+  it('fitToContent frames exactly the worldExtent span (one derivation, observed not asserted)', () => {
+    // M4 architecture gate S2: the previous version of this case NAMED fitToContent and
+    // asserted only `dayExtent` — a delegate with no production caller, since deleted (S1).
+    const acts = [
+      activity({ id: 'a', earlyStart: '2026-01-02', earlyFinish: '2026-01-10', laneIndex: 2 }),
+      activity({ id: 'b', earlyStart: '2026-01-06', earlyFinish: '2026-01-20', laneIndex: 5 }),
+    ];
+    const extent = worldExtent(acts, DATA_DATE)!;
+    const size = { width: 1000, height: 500 };
+    const view = fitToContent(acts, size, DATA_DATE, MAX_PX_PER_DAY);
+    // The left edge sits `padding` px before minDay and the span fills the usable width.
+    expect(view.originX + extent.minDay * view.pxPerDay).toBeCloseTo(32);
+    expect((extent.maxDay - extent.minDay) * view.pxPerDay).toBeCloseTo(size.width - 64);
   });
 });
 

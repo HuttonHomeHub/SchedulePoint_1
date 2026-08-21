@@ -33,6 +33,10 @@ const buttonVariants = cva(
         sm: 'h-(--control-h-sm) px-3',
         lg: 'h-11 px-6',
         icon: 'size-10',
+        // 44px icon button — the UX_STANDARDS floor for a NEW close/toggle affordance on a
+        // panel (minimap M2-T2; docs/UX_STANDARDS.md "Touch targets"). `icon` predates the
+        // floor at 40px; new panel chrome takes this one.
+        'icon-lg': 'size-11',
         // Row-height icon button for dense lists (e.g. the Project Explorer tree, whose
         // rows are 28px). Pair with a larger non-pointer target (long-press / keyboard).
         'icon-sm': 'size-7',

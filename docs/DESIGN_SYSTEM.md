@@ -439,8 +439,10 @@ one as though it were available; build it to the entry, then drop the marker.
 `ls apps/web/src/components/ui/` is the authoritative inventory.
 
 - **Buttons** — variants `primary | secondary | outline | ghost | destructive |
-link`; sizes `sm | md | lg | icon`; icon buttons require `aria-label`. One
-  primary action per view.
+link`; sizes `sm | md | lg | icon | icon-lg | icon-sm`; icon buttons require `aria-label`. One
+  primary action per view. **`icon-lg` (44px) is the size for a NEW close/toggle affordance
+  on a panel** — the UX_STANDARDS touch-target floor; `icon` (40px) predates it and existing
+  consumers are recorded rather than mass-migrated (minimap M2-T2, ADR-0100).
   **A control that blocks itself during its own mutation uses `aria-disabled`
   plus a submit/click guard — never the native `disabled` attribute.** A native
   disabled control is removed from the tab order the instant the request starts

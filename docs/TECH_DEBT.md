@@ -2787,3 +2787,84 @@ checks the chart's left edge equals the grid's right edge. `PanelResizer` is `ro
 **How this row came to exist** is worth one line: the structural test's own docblock said the
 browser-level proof "belongs to `e2e-gantt`", which reads as coverage held elsewhere. It was not
 checked when written.
+
+## 152. `zoomToSelection` frames the time axis and discards the lane axis
+
+**Raised 2026-08-20** (minimap epic, M0-T5 — filed rather than absorbed). **Size:** S.
+
+`zoomToActivity` is deliberately `fitToContent` handed a one-element array
+(`TsldCanvas.tsx:1015-1044` — its own comment says a parallel implementation would drift).
+But `fitToContent` computes `maxLane` and never uses it, pinning `originY` to the padding
+(`render/viewport.ts:161,168,178`) — right for whole-plan Fit at lane 0, wrong for one
+activity in lane 273. The selection-reveal effect pans vertically on **selection change**
+only, so nothing repairs the framing after the command resets it.
+
+**Proven live** (M0-T5 probe, 2026-08-20, seeded 2,160-activity plan packed to 274 lanes,
+target activity in lane 273, viewport read through the M0 probe's live-view mirror):
+
+- after selecting the bar: `topLane 242.8, visibleLanes 32, visible: true` — the reveal
+  effect works, the gap is narrower than "zoom to selection does not reveal";
+- after pressing **Zoom to selection**: `topLane −1.1, visible: false` — the command
+  announced "Zoomed to Activity A01928" while scrolling it **out** of view.
+
+**Two candidate fixes**, both outside the minimap epic because `fitToContent` is also
+_Fit to plan_ and the export framing: (a) `zoomToActivity` restores the vertical reveal
+after the fit (re-run the reveal for the current selection — smallest, command-local);
+(b) `fitToContent` gains an opt-in "centre the lane span" parameter that only
+`zoomToActivity` passes (touches the shared seam, needs the three call sites' suites as
+the oracle). The probe (`m0-t5-zoom-probe.mjs`, method recorded in
+`docs/specs/tsld-minimap/m0-measurement.md`) is kept with this row, not merged as a gate.
+
+## 153. Two close buttons, one corner, two target sizes
+
+**Raised 2026-08-21** (minimap M2/M4, beside #127). **Size:** S.
+
+The minimap's close is the new `icon-lg` (44 px) because `docs/UX_STANDARDS.md` sets that
+floor for a NEW close/toggle affordance and a one-off `className` is banned. The Legend —
+the other floating panel, sometimes parked in the same corner — closes with `icon-sm`
+(28 px, `TsldLegendPanel.tsx`). The inconsistency is **recorded rather than propagated**:
+mass-migrating existing 40 px/28 px icon buttons is #127's scope, and doing it as a
+side-effect of the minimap would have put a dozen unrelated screens on this diff. What is
+owed: when #127 is picked up, the Legend's close moves to `icon-lg` in the same pass.
+
+## 154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
+
+**Raised 2026-08-21** (minimap M4-T3). **Size:** S.
+
+The accessibility input report marked two claims as reasoned from specification, and the
+gate pass could observe only one of them in this environment:
+
+1. **Real-AT behaviour of `role="group"` + coalesced announcements (NVDA / VoiceOver)** —
+   NOT observed: no screen reader runs in the build container. What is owed is a listen —
+   does the group's name announce on focus, do the coalesced "Viewing …" messages arrive
+   once per burst, and does the drag-release announcement land? Record what was heard.
+2. **Low-vision visual feedback of a coalesced arrow-pan** — observed in a browser
+   (2026-08-21, screenshots): one ArrowRight moves the scene a full page (the ruler's
+   decade changes visibly), the minimap rectangle relocates in the same frame, and the
+   change is large-scale rather than subtle. The remaining owed half is a hands-on pass at
+   real magnification, which a screenshot cannot stand in for.
+
+## 155. The minimap M4 gate pass's non-blocking findings
+
+**Raised 2026-08-21** (minimap M4-T1; the blocking findings are folded with regression
+tests and recorded in ADR-0100's Consequences). **Size:** S each.
+
+1. **The rectangle's drag affordance is cursor-only** (ux): no static cue says the frame is
+   draggable — `cursor-grab` is invisible before hover and absent on touch. Click-to-jump
+   and the keyboard cover the function; the convention (IDE minimaps) covers most readers.
+   If first-contact feedback says otherwise, corner ticks or a faint fill are the shape.
+2. **Q2 (command-strip promotion) was decided against pre-Graphite arithmetic** (ux): the
+   "no room" conclusion cites `PINNED_FLOOR_WIDTH` measurements taken before ADR-0099
+   reshaped the strip. The default stands (product owner Q2); if it is ever revisited, the
+   measurement comes first (`e2e-toolbar-fit` with one extra pinned item at
+   1646/1440/1280/960).
+3. **The empty state explains and does not act** (ux): "Nothing to show yet…" meets the
+   copy bar but offers no route; reachable only when an open panel's plan loses its
+   computed dates, and the canvas beneath carries its own actionable prompt. One "add an
+   activity" line if it ever surfaces in use.
+4. **`handleClose`'s chain has no last resort** (accessibility): if both the captured
+   opener and `dismissFocusRef` are unusable, focus stays put. Unreachable today —
+   `TsldPanel` always wires the listbox ref — noted in the handler's comment.
+5. **The one-derivation gate matches the three original idioms only** (architecture S10):
+   a fourth extent derivation in a different idiom would pass it. Recorded in ADR-0100
+   decision 3 so the gate is not over-read.

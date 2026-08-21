@@ -226,6 +226,11 @@ export interface TsldToolbarContext {
   /** Show/hide the on-canvas floating Legend panel. */
   toggleLegend: () => void;
 
+  /** Whether the minimap panel is open (ADR-0100 — drives the Minimap toggle's checked state). */
+  minimapOpen: boolean;
+  /** Show/hide the minimap panel. */
+  toggleMinimap: () => void;
+
   // --- Summary popover + pinned Project-finish chip -----------------------------------------
   /** The schedule-summary body for the `Summary▾` popover (`ScheduleSummaryStrip`). */
   summaryContent: ReactNode;

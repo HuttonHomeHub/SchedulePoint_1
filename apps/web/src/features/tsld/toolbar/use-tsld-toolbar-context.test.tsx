@@ -130,6 +130,7 @@ function build(lateOverlay = false) {
       canvasUi: makeCanvasUi(lateOverlay),
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
+      minimap: { open: false, toggle: vi.fn() },
       revealComments: vi.fn(),
     }),
   );
@@ -169,6 +170,7 @@ describe('useTsldToolbarContext — quick-wins glue', () => {
         canvasUi,
         openDialog: vi.fn(),
         legend: { open: false, toggle: vi.fn() },
+        minimap: { open: false, toggle: vi.fn() },
         revealComments: vi.fn(),
       }),
     );

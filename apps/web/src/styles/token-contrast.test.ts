@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { compositeOver, fmtRatio, parseColour, relativeLuminance, type Srgb } from '@/test/colour';
-import { blockBody, declarations, THEME_SELECTORS, themeTokens } from '@/test/css-blocks';
+import {
+  blockBody,
+  declarations,
+  readGlobalsCss,
+  THEME_SELECTORS,
+  themeTokens,
+} from '@/test/css-blocks';
 
 /**
  * The computed contrast matrix (ADR-0055 §2).
@@ -256,6 +262,77 @@ const PLOT_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
   // of this gate would have missed by checking only the ground.
   ['a month band', '--canvas-band'],
 ];
+
+/**
+ * **The minimap rectangle's frame against the three grounds it actually crosses** (ADR-0100
+ * decision 9, minimap M2-T1 — the gate lands BEFORE the CSS value, verified red, because
+ * writing the value first is how `--canvas-grid-month` shipped at 2.08:1 behind a green suite).
+ *
+ * The frame is "the boundary of a UI component" — the case WCAG 1.4.11 names — so every pair
+ * asserts 3:1. The grounds are deliberately NOT `PLOT_GROUNDS`: a minimap has no month band,
+ * and at scale the rectangle crosses dense bar ink — so the sweep is the canvas ground plus
+ * the two bar fills (`--primary` non-critical, `--destructive` critical), which is what the
+ * rectangle actually sits on in a 200×120 picture of a 2,000-activity plan.
+ */
+const MINIMAP_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
+  ['the minimap ground', '--canvas'],
+  ['non-critical bar ink', '--primary'],
+  ['critical bar ink', '--destructive'],
+];
+
+describe('the minimap rectangle frame is perceivable on everything it crosses', () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+
+  // The frame is a two-tone stroke+halo pair, NOT one solid — measured first: the best any
+  // single value can do on the critical fill is white at 2.62:1, because the same edge must
+  // also clear the 0.177-L canvas ground. The `outline`/`handleHalo` precedent
+  // (`render/paint.ts`): whichever half loses contrast on a given ground, the other holds it.
+  it.each(MINIMAP_GROUNDS)('the stroke or its halo clears 3:1 on %s', (_name, ground) => {
+    const stroke = ratio(tokens, ground, '--canvas-minimap-frame');
+    const halo = ratio(tokens, ground, '--canvas-minimap-frame-halo');
+    expect(
+      Math.max(stroke, halo),
+      `minimap frame pair on ${ground}: stroke ${fmtRatio(stroke)}, halo ${fmtRatio(halo)}`,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('both halves are REACHABLE — the @theme inline block aliases them to --color-* names', () => {
+    // The M4 component review's finding: the pair was declared at :root and referenced from the
+    // component as var(--color-canvas-minimap-frame) — but only the `@theme inline` block turns a
+    // root token into a usable --color-* custom property, and neither half was in it. So the
+    // rectangle and the selection marker painted with NO colour in a real browser while this
+    // gate (which computes the pair's own contrast from the :root values) stayed green, jsdom
+    // asserted geometry, and the journey asserted visibility. Verified red against the
+    // alias-less CSS before the aliases were added.
+    const css = readGlobalsCss();
+    for (const name of ['canvas-minimap-frame', 'canvas-minimap-frame-halo']) {
+      expect(css, `@theme inline must alias --${name}`).toMatch(
+        new RegExp(String.raw`--color-${name}:\s*var\(--${name}\);`),
+      );
+    }
+  });
+
+  it('reports the sub-3px criticality degradation without asserting it (the DAY-tier precedent)', () => {
+    // WCAG 1.4.1 (M4 a11y gate): in the minimap bitmap a critical bar carries a foreground
+    // LIGHTNESS fringe wherever the lane row is ≥ 3px (`CRITICAL_FRINGE_MIN_H`,
+    // `render/minimap.ts`) — hue is not the only channel. Below 3px the fringe would BE the
+    // bar, so the picture degrades to hue plus the scene's own dash/outline cues one surface
+    // up, where the same information is fully available with non-colour channels. Reported
+    // here — deliberately unasserted, so a REGRESSION in the fringe's own contrast is still
+    // visible in the output — the same contract the day tier and the non-working hatch use.
+    const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+    const fringeOnCritical = ratio(tokens, '--destructive', '--foreground');
+    const fringeOnBar = ratio(tokens, '--primary', '--foreground');
+    expect(
+      `fringe on critical ${fmtRatio(fringeOnCritical)}, on non-critical ${fmtRatio(fringeOnBar)}`,
+    ).toBeTruthy();
+  });
+
+  it('the stroke and its halo clear 3:1 against each other, so the edge reads as one line', () => {
+    const value = ratio(tokens, '--canvas-minimap-frame-halo', '--canvas-minimap-frame');
+    expect(value, `stroke on halo is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+});
 
 describe('the diagram grid is readable on both of its grounds', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');

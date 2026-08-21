@@ -103,6 +103,10 @@ const NON_WORKING_MIN_PX = 3;
  * colour strings.
  */
 export interface TsldPalette {
+  /** The opaque canvas ground (`--color-canvas`) — read by the minimap bitmap (ADR-0100), which
+   * paints its own ground because a detached canvas has no CSS behind it; the scene itself gets
+   * this colour from the container's `bg-canvas` class and never reads the field. */
+  canvasGround: string;
   gridLine: string;
   edge: string;
   bar: string;
@@ -772,8 +776,12 @@ function drawRefreshedBar(
  * only when an endpoint is visible, so the cost is bounded by the viewport, not the
  * plan size. `dpr` scales the backing store; drawing is authored in CSS px.
  *
- * Returns the culled activity ids (the painter already computed them) so the caller can
- * reuse the set for hit-testing / the minimap without a second cull pass.
+ * Returns the culled activity ids (the painter already computed them) so a caller could
+ * reuse the set for hit-testing without a second cull pass — today the only production
+ * caller discards it (`TsldCanvas.tsx`) and only tests read it. The minimap deliberately
+ * does NOT use it: the culled set is what is ON screen, and the minimap's subject is the
+ * whole plan — measured, a whole-plan viewport culls to 255 of 2,160 bars
+ * (`docs/specs/tsld-minimap/input-performance.md` §5).
  */
 export function paintScene(
   ctx: Ctx2D,
@@ -2198,21 +2206,4 @@ export function paintWbsBand(
     ctx.fillStyle = palette.label;
     ctx.fillText(text, bar.x + LABEL_PAD_PX, bar.y + bar.h / 2);
   }
-}
-
-/** The inclusive [minDay, maxDay] world-day extent of the computed activities (for the ruler/minimap). */
-export function dayExtent(
-  activities: readonly RenderActivity[],
-  dataDate: string,
-): { minDay: number; maxDay: number } | null {
-  let minDay = Infinity;
-  let maxDay = -Infinity;
-  for (const a of activities) {
-    if (a.earlyStart === null) continue;
-    const start = daysBetween(dataDate, a.earlyStart);
-    const finish = a.earlyFinish === null ? start : daysBetween(dataDate, a.earlyFinish);
-    minDay = Math.min(minDay, start);
-    maxDay = Math.max(maxDay, finish + 1);
-  }
-  return Number.isFinite(minDay) ? { minDay, maxDay } : null;
 }

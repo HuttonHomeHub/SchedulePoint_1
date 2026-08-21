@@ -137,6 +137,7 @@ function build(navState: Partial<NavState> = {}, activities: ActivitySummary[] =
       canvasUi: makeCanvasUi(navState),
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
+      minimap: { open: false, toggle: vi.fn() },
       revealComments: vi.fn(),
     }),
   );

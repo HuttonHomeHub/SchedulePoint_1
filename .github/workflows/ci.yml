@@ -537,6 +537,17 @@ jobs:
       - name: Web end-to-end tests (workspace chrome — Visual placement)
         run: pnpm --filter @repo/web test:e2e:workspace-chrome
 
+      # The TSLD minimap journey (playwright.minimap.config.ts, ADR-0100 M2-T7 — lands with the
+      # first user-facing milestone, ADR-0081). No flags to pin: the epic ships without a VITE_
+      # flag, so this runs the default bundle, which IS the shipped surface. What only it can
+      # prove: the entry point (`View ▾` → Panels → Minimap) reaches a live panel in the shipped
+      # workspace — the unit suites mount the panel and the toolbar separately, and a capability
+      # whose halves are each fine while their seam is unreachable is the register's most repeated
+      # defect. Its axe scan opts in wcag22aa + target-size (every legacy scan requests WCAG 2.0
+      # tags, and axe ships target-size disabled). Runs after the prior suites tear down.
+      - name: Web end-to-end tests (minimap)
+        run: pnpm --filter @repo/web test:e2e:minimap
+
       # Flag-ON audit log journey (playwright.audit.config.ts) with VITE_AUDIT_LOG on (ADR-0072).
       # The audit log is a claim about writes that happened somewhere else, so a mocked fetch cannot
       # be wrong about a row it invented. Against a real API and database this proves the producers

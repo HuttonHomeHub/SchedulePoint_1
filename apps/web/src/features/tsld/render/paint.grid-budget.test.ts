@@ -11,6 +11,7 @@ import type { RenderActivity, Viewport } from './render-model';
  * of the cost, not a millisecond count (a CI runner's absolute timings are noise).
  */
 const PALETTE: TsldPalette = {
+  canvasGround: '#14161c',
   gridLine: '#111',
   gridLineDay: '#3a3a3a',
   gridLineMonth: '#111111',

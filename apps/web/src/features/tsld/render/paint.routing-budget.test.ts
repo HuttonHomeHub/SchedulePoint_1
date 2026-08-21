@@ -34,6 +34,7 @@ import {
  * The browser-measured number is reported at T21 beside its pre-change baseline.
  */
 const PALETTE: TsldPalette = {
+  canvasGround: '#14161c',
   gridLine: '#111',
   gridLineDay: '#3a3a3a',
   gridLineMonth: '#111111',

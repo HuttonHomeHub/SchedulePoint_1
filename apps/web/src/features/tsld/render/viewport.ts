@@ -6,6 +6,7 @@ import {
   MIN_PX_PER_DAY,
   screenXOfDay,
   screenYOfLane,
+  worldExtent,
   ZOOM_STOPS,
   type Rect,
   type RenderActivity,
@@ -83,6 +84,27 @@ export function pan(view: Viewport, dx: number, dy: number): Viewport {
 }
 
 /**
+ * Centre the viewport on a world point — day on the time axis, lane row on the vertical
+ * (ADR-0100 M3, the minimap's one navigation primitive). Either axis takes `null` to leave
+ * that origin untouched (Home/End move only the time axis). Scale is unchanged: this is the
+ * `centerOnDate` contract generalised to two axes and day-numbers — deliberately NOT a
+ * refactor of `centerOnDate` itself, which takes ISO, centres horizontally only, and has
+ * three callers with their own suite.
+ */
+export function centerOnWorld(
+  view: Viewport,
+  size: Size,
+  day: number | null,
+  lane: number | null,
+): Viewport {
+  return {
+    ...view,
+    originX: day === null ? view.originX : size.width / 2 - day * view.pxPerDay,
+    originY: lane === null ? view.originY : size.height / 2 - (lane + 0.5) * LANE_HEIGHT,
+  };
+}
+
+/**
  * Pan (no zoom) so the calendar day `iso` lands `inset` px from the left edge — the pure math behind
  * the "Go to date" view command (ADR-0033). The scale (`pxPerDay`) and vertical pan are unchanged, so
  * `screenXOfDay(daysBetween(dataDateIso, iso), result) === inset`. A pure view transform: it moves
@@ -156,18 +178,14 @@ export function fitToContent(
   maxPxPerDay: number,
   paddingPx = 32,
 ): Viewport {
-  let minDay = Infinity;
-  let maxDay = -Infinity;
-  let maxLane = 0;
-  for (const a of activities) {
-    if (a.earlyStart === null) continue;
-    const start = daysBetween(dataDateIso, a.earlyStart);
-    const finish = a.earlyFinish === null ? start : daysBetween(dataDateIso, a.earlyFinish);
-    minDay = Math.min(minDay, start);
-    maxDay = Math.max(maxDay, finish + 1);
-    maxLane = Math.max(maxLane, a.laneIndex);
-  }
-  if (!Number.isFinite(minDay)) return DEFAULT_VIEWPORT;
+  // `extent.maxLane` is deliberately ignored, exactly as this function has always ignored the
+  // lane axis: originY is pinned to the padding. That is right for whole-plan Fit from lane 0 and
+  // wrong for zoom-to-one-activity in a high lane — a PRE-EXISTING defect proven live and filed as
+  // `docs/TECH_DEBT.md` #152, not repaired inside this refactor (a behavioural change hiding in a
+  // "no behaviour change" diff is how it would never be reviewed as one).
+  const extent = worldExtent(activities, dataDateIso);
+  if (extent === null) return DEFAULT_VIEWPORT;
+  const { minDay, maxDay } = extent;
 
   const usableW = Math.max(1, size.width - paddingPx * 2);
   const spanDays = Math.max(1, maxDay - minDay);

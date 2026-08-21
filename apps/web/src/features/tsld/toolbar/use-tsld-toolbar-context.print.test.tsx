@@ -182,6 +182,7 @@ function build(planView: 'tsld' | 'gantt' = 'tsld', { canvas = true } = {}) {
       canvasUi,
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
+      minimap: { open: false, toggle: vi.fn() },
       revealComments: vi.fn(),
       planView,
     }),

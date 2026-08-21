@@ -1,5 +1,10 @@
-import { dayExtent } from '../render/paint';
-import { LANE_HEIGHT, type RenderActivity, type Size, type Viewport } from '../render/render-model';
+import {
+  LANE_HEIGHT,
+  worldExtent,
+  type RenderActivity,
+  type Size,
+  type Viewport,
+} from '../render/render-model';
 
 /**
  * The pure, DOM-free **export-viewport geometry** for the TSLD Diagram-PNG deliverable (spec
@@ -9,7 +14,7 @@ import { LANE_HEIGHT, type RenderActivity, type Size, type Viewport } from '../r
  * so the live-draw budget (ADR-0026) is untouched.
  *
  * Two extents (CQ-1, product sign-off 2026-07-20): **`whole`** re-frames the FULL activity extent at
- * the live zoom's `pxPerDay` (reusing the `dayExtent` / lane math the painter uses, so the
+ * the live zoom's `pxPerDay` (reusing the painter's `worldExtent` day/lane math, so the
  * inclusive-finish edge convention can't drift, ADR-0023); **`view`** crops to the live viewport's
  * current bounds. Both reserve a fixed top band for the title + legend, and both clamp the raster to a
  * hard `EXPORT_MAX_PX` per side and a `EXPORT_DPR_CAP` device-pixel-ratio, scaling the backing-store
@@ -81,7 +86,7 @@ export interface ExportViewport {
  * Compute the off-screen export viewport + size for the requested {@link ExportExtent}.
  *
  * - `whole`: bounds cover the full computed activity extent at the live `pxPerDay` (via the shipped
- *   {@link dayExtent}, so the inclusive-finish right edge matches the live canvas), padded, with the
+ *   {@link worldExtent}, so the inclusive-finish right edge matches the live canvas), padded, with the
  *   title band reserved above. Falls back to the `view` framing when nothing is placeable yet.
  * - `view`: the live viewport + size, shifted down by the reserved band so the crop is preserved.
  *
@@ -103,18 +108,13 @@ export function buildExportViewport(
   let viewport: Viewport;
   let size: Size;
 
-  const extent = options.extent === 'whole' ? dayExtent(activities, dataDate) : null;
+  const extent = options.extent === 'whole' ? worldExtent(activities, dataDate) : null;
   if (extent) {
-    // WHOLE: frame the full day span (inclusive finish already +1 in `dayExtent`) at the live zoom,
-    // and the full lane stack, padded, with the diagram pushed below the reserved band.
+    // WHOLE: frame the full day span (inclusive finish already +1 in `worldExtent`) at the live
+    // zoom, and the full lane stack, padded, with the diagram pushed below the reserved band.
     const pxPerDay = liveView.pxPerDay;
-    let maxLane = 0;
-    for (const a of activities) {
-      if (a.earlyStart === null) continue;
-      if (a.laneIndex > maxLane) maxLane = a.laneIndex;
-    }
     const contentW = (extent.maxDay - extent.minDay) * pxPerDay;
-    const contentH = (maxLane + 1) * LANE_HEIGHT;
+    const contentH = (extent.maxLane + 1) * LANE_HEIGHT;
     size = { width: contentW + padding * 2, height: reserved + contentH + padding * 2 };
     viewport = {
       pxPerDay,

@@ -21,6 +21,7 @@ import type {
 import { scaleScene } from './scale-scene';
 
 const PALETTE: TsldPalette = {
+  canvasGround: '#14161c',
   gridLine: '#e5e7eb',
   gridLineDay: '#eef0f3',
   gridLineMonth: '#d7dbe0',

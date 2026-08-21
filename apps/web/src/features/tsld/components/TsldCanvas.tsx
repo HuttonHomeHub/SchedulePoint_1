@@ -1,5 +1,13 @@
 import type { ActivityType, DependencyType } from '@repo/types';
-import { useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   IDLE,
@@ -16,6 +24,7 @@ import { useCanvasSurface } from '../render/canvas-surface';
 import { cursorReadout } from '../render/cursor-readout';
 import type { GhostBar } from '../render/lenses';
 import { linkLegality } from '../render/link-legality';
+import { buildMinimapBitmap, sceneWindowRect, type MinimapMapping } from '../render/minimap';
 import {
   paintInteractionLayer,
   paintResourceStrip,
@@ -53,6 +62,7 @@ import {
   withMinimumSpan,
   lagAnchorDay,
   makeWorkingDayWalk,
+  centerOnWorld,
   pan,
   isMilestone,
   panToDate,
@@ -90,6 +100,8 @@ import {
   type WbsBandGroup,
 } from '../render/wbs-band';
 
+import { MINIMAP_BOX, TsldMinimap, type MinimapWindow } from './TsldMinimap';
+
 import {
   CANVAS_AUTHORING_ENABLED,
   CANVAS_DATA_DATE_ENABLED,
@@ -126,6 +138,16 @@ export interface TsldCanvasHandle {
    * has no computed dates (nothing to frame) or the canvas has not been measured yet.
    */
   zoomToActivity: (id: string) => boolean;
+  /**
+   * Centre the view on a world point — day number (about the data date) and lane row — or on
+   * one axis alone (`null` leaves the other untouched). The minimap's one navigation primitive
+   * (ADR-0100 M3): its drag, its click-to-jump and its keyboard all commit through this.
+   * Returns the committed visible window (for the announcement), or null when unmeasured.
+   */
+  centerOnWorld: (day: number | null, lane: number | null) => MinimapWindow | null;
+  /** Pan by whole pages of the current viewport (±1 per axis) — the minimap group's arrow
+   * keys. Same pure `pan()` the pointer path uses; same return contract as centerOnWorld. */
+  panPages: (dx: number, dy: number) => MinimapWindow | null;
   /** Read (never mutate) the current viewport transform + measured surface size — used by the
    * **Diagram — current view (PNG)** export (spec `docs/specs/export-print/`) to crop the off-screen
    * image to the live bounds. A pure read off the rAF-owned refs; it never repaints the live canvas. */
@@ -337,6 +359,17 @@ export interface TsldCanvasProps {
    * never the main scene. `null` ⇒ the band draws just its axis rule (the DOM shows the empty/loading
    * state). Ignored unless {@link resourceStripActive}. */
   resourceStrip?: ResourceStripSnapshot | null;
+  // ── The minimap panel (ADR-0100, minimap M2) ─────────────────────────────────────────────
+  // Both default-absent ⇒ no panel mounts, the rAF loop does no minimap work, and the frame is
+  // byte-for-byte the pre-minimap paint (the rollback contract is this pair plus a commit boundary
+  // — no VITE_ flag, ADR-0088).
+  /** When true, mount the minimap panel in the container's bottom-right and keep its picture
+   * fresh from the frame loop (rebuilt on scene change only — never per frame). */
+  minimapActive?: boolean;
+  /** The panel's close button (×). The panel is host-toggled, so closing is the host's move. */
+  onMinimapClose?: () => void;
+  /** Fallback focus target for the panel's × when its captured opener is unusable (reload). */
+  minimapDismissFocusRef?: React.RefObject<HTMLElement | null>;
   /** Imperative handle so the toolbar can command zoom presets / steps (ADR-0026 D3 seam). */
   controlRef?: React.Ref<TsldCanvasHandle>;
   /** Fires only when the active zoom preset changes (a stop-boundary crossing) — never per frame —
@@ -654,6 +687,9 @@ export function TsldCanvas({
   baselineGhosts,
   flaggedIds,
   resourceStripActive = false,
+  minimapActive = false,
+  onMinimapClose,
+  minimapDismissFocusRef,
   resourceStrip = null,
   controlRef,
   onZoomStopChange,
@@ -694,6 +730,22 @@ export function TsldCanvas({
   const wbsBandDirtyRef = useRef(true);
   const wbsBandBarsRef = useRef<readonly WbsBandBar[]>([]);
   const wbsBandGroupsRef = useRef<readonly WbsBandGroup[] | null>(wbsBandGroups);
+  // The minimap layer (ADR-0100): the visible picture canvas (inside `TsldMinimap`), the DOM
+  // rectangle the loop transforms, the scene-change dirty flag, and the world→box mapping the
+  // last build produced. The bitmap's dirty rule is DATA + theme + dpr — deliberately not the
+  // scene effect below, which also runs on selection changes the picture must ignore (M2-T4's
+  // spy is the gate on exactly that).
+  const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
+  const minimapRectRef = useRef<HTMLDivElement>(null);
+  const minimapDirtyRef = useRef(true);
+  const minimapMappingRef = useRef<MinimapMapping | null>(null);
+  // Responsive withdrawal (M4 ux gate; the route M2-T6 named): below this measured canvas
+  // width the fixed 200×120 panel plus its clearances covers more than a third of the diagram
+  // it exists to summarise, and — unlike the Legend — it cannot be dragged out of the way, so
+  // it withdraws. Derived, not taste: 3 × MINIMAP_BOX.width. Defaults TRUE so an unmeasured
+  // surface (jsdom, first frame) never suppresses the panel; only a real measure (> 1px wide)
+  // may withdraw it.
+  const [minimapRoom, setMinimapRoom] = useState(true);
   const viewRef = useRef<Viewport>(DEFAULT_VIEWPORT);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
   const dirtyRef = useRef(true);
@@ -959,6 +1011,59 @@ export function TsldCanvas({
     }
   };
 
+  // The minimap's two navigation commits (ADR-0100 M3) — ONE implementation each, serving
+  // both the imperative handle and the panel's own gestures (drag, click-to-jump, keyboard),
+  // so the three entry routes structurally cannot disagree about what "centre here" means
+  // (the ADR-0065 `routeOrthogonal` rule; `minimap-one-commit.structural.test.ts` pins it).
+  // Plain function references reading refs — stable for the handle's `[]` memo.
+  const describeMinimapWindow = useCallback((): MinimapWindow => {
+    const v = viewRef.current;
+    const size = sizeRef.current;
+    const leftDay = Math.floor(-v.originX / v.pxPerDay);
+    const rightDay = Math.floor((-v.originX + size.width) / v.pxPerDay);
+    const laneFrom = Math.max(0, Math.floor(-v.originY / LANE_HEIGHT));
+    const laneTo = Math.max(laneFrom, Math.floor((-v.originY + size.height) / LANE_HEIGHT) - 1);
+    return {
+      startIso: addCalendarDays(sceneRef.current.dataDate, leftDay),
+      endIso: addCalendarDays(sceneRef.current.dataDate, rightDay),
+      laneFrom,
+      laneTo,
+    };
+  }, []);
+  const minimapCenterOnWorld = useCallback(
+    (day: number | null, lane: number | null): MinimapWindow | null => {
+      const size = sizeRef.current;
+      if (size.width <= 1) return null;
+      viewRef.current = centerOnWorld(viewRef.current, size, day, lane);
+      dirtyRef.current = true;
+      interactionDirtyRef.current = true;
+      return describeMinimapWindow();
+    },
+    [describeMinimapWindow],
+  );
+  // The TRUE viewport centre as a world point — the drag anchor (M4 B1). A pure read off
+  // the refs through the same extracted arithmetic the display rectangle uses, so the
+  // anchor and the picture cannot disagree.
+  const minimapViewportCentre = useCallback((): { day: number; lane: number } | null => {
+    const mapping = minimapMappingRef.current;
+    const size = sizeRef.current;
+    if (mapping === null || size.width <= 1) return null;
+    return sceneWindowRect(viewRef.current, size, LANE_HEIGHT, mapping).centre;
+  }, []);
+  const minimapPanPages = useCallback(
+    (dx: number, dy: number): MinimapWindow | null => {
+      const size = sizeRef.current;
+      if (size.width <= 1) return null;
+      // Moving the VIEW one page later/lower moves the origin the other way — the same pure
+      // `pan()` every pointer path uses (M3-T3's requirement is the identity, not the sign).
+      viewRef.current = pan(viewRef.current, -dx * size.width, -dy * size.height);
+      dirtyRef.current = true;
+      interactionDirtyRef.current = true;
+      return describeMinimapWindow();
+    },
+    [describeMinimapWindow],
+  );
+
   useImperativeHandle(
     controlRef,
     () => ({
@@ -1039,12 +1144,14 @@ export function TsldCanvas({
         reportZoomStop();
         return true;
       },
+      centerOnWorld: minimapCenterOnWorld,
+      panPages: minimapPanPages,
       // A pure read of the live viewport (transform + measured size) for the current-view PNG export.
       // Returns copies so a caller can't mutate the rAF-owned refs; never repaints the live canvas.
       getViewport: () => ({ view: { ...viewRef.current }, size: { ...sizeRef.current } }),
     }),
-    // Stable — reads live state through refs.
-    [],
+    // Stable — reads live state through refs (the two minimap commits are `[]` callbacks).
+    [minimapCenterOnWorld, minimapPanPages],
   );
 
   // Focus-follows-viewport (M5, WCAG 2.4.7/2.4.11): when the selection changes — e.g. keyboard
@@ -1118,6 +1225,13 @@ export function TsldCanvas({
     wbsBandGroupsRef.current = wbsBandGroups;
     wbsBandDirtyRef.current = true;
   }, [wbsBandGroups]);
+
+  // The minimap picture's dirty rule (ADR-0100 decision 1): activity DATA and the data date —
+  // never selection, never a clock tick, never a pan. Selection and Today are DOM overlays in
+  // `TsldMinimap` precisely so this effect can stay this narrow.
+  useEffect(() => {
+    minimapDirtyRef.current = true;
+  }, [activities, dataDate]);
 
   // Switching tools drops any in-progress gesture ghost — most importantly an unfinished link pick
   // (M5), so leaving the Link tool mid-pick never leaves a dangling highlight ring.
@@ -1227,6 +1341,7 @@ export function TsldCanvas({
       if (size.width !== applied.width || size.height !== applied.height) {
         applied = size;
         sizeRef.current = size;
+        if (size.width > 1) setMinimapRoom(size.width >= MINIMAP_BOX.width * 3);
         const dpr = getDpr();
         for (const c of [canvas, interactionCanvasRef.current]) {
           if (!c) continue;
@@ -1428,6 +1543,75 @@ export function TsldCanvas({
           wbsBandDirtyRef.current = false;
         }
       }
+      // Layer 5 — the minimap (ADR-0100). Two costs, strictly separated: the PICTURE is rebuilt
+      // only when `minimapDirtyRef` says the scene changed (data / theme / dpr — the loop's own
+      // backing-store check below covers mount-after-measure and a dpr change, which is why this
+      // does not join `measure()`: the panel can mount long after the last measure, exactly the
+      // interaction-canvas trap documented above), and the RECTANGLE is one `style.transform`
+      // write on the frames the viewport actually moved (plus the frame right after a rebuild,
+      // or the mapping under it would be stale). No React render on either path (ADR-0026 D3).
+      if (minimapActive) {
+        const mmCanvas = minimapCanvasRef.current;
+        if (mmCanvas) {
+          const backingW = Math.round(MINIMAP_BOX.width * dpr);
+          const backingH = Math.round(MINIMAP_BOX.height * dpr);
+          if (mmCanvas.width !== backingW || mmCanvas.height !== backingH) {
+            mmCanvas.width = backingW;
+            mmCanvas.height = backingH;
+            minimapDirtyRef.current = true;
+          }
+          let rebuilt = false;
+          if (minimapDirtyRef.current) {
+            const mctx = mmCanvas.getContext('2d');
+            if (mctx) {
+              // Built directly into the visible canvas: the picture never changes between
+              // rebuilds (the rectangle is DOM), so a detached intermediary would be copied
+              // exactly once per build and cached for nobody.
+              const palette = paletteRef.current!;
+              minimapMappingRef.current = buildMinimapBitmap(
+                mctx,
+                sceneRef.current.activities,
+                sceneRef.current.dataDate,
+                MINIMAP_BOX,
+                {
+                  ground: palette.canvasGround,
+                  bar: palette.bar,
+                  critical: palette.critical,
+                  outline: palette.outline,
+                  dataDate: palette.dataDate,
+                },
+                dpr,
+              );
+              minimapDirtyRef.current = false;
+              rebuilt = true;
+            }
+          }
+          const rect = minimapRectRef.current;
+          const mapping = minimapMappingRef.current;
+          if (rect && mapping && (movedThisFrame || rebuilt)) {
+            const v = viewRef.current;
+            // The scene viewport, expressed in minimap coordinates: x through the SHARED
+            // day→px transform, y through the scene's fixed 28px lane rows compressed onto
+            // the box's lane scale (the deliberate axis asymmetry — ADR-0100 decision 4).
+            const leftDay = -v.originX / v.pxPerDay;
+            const topLane = -v.originY / LANE_HEIGHT;
+            const w = (size.width / v.pxPerDay) * mapping.view.pxPerDay;
+            const h = (size.height / LANE_HEIGHT) * mapping.pxPerLane;
+            // Clamp to the box and keep the frame legible: below 8px a border-only rectangle
+            // reads as a smudge (spec AC-2.2).
+            const cw = Math.min(MINIMAP_BOX.width, Math.max(8, w));
+            const ch = Math.min(MINIMAP_BOX.height, Math.max(8, h));
+            const cx = Math.min(
+              MINIMAP_BOX.width - cw,
+              Math.max(0, screenXOfDay(leftDay, mapping.view)),
+            );
+            const cy = Math.min(MINIMAP_BOX.height - ch, Math.max(0, topLane * mapping.pxPerLane));
+            rect.style.transform = `translate(${cx}px, ${cy}px)`;
+            rect.style.width = `${cw}px`;
+            rect.style.height = `${ch}px`;
+          }
+        }
+      }
     };
 
     measure();
@@ -1552,7 +1736,9 @@ export function TsldCanvas({
     // marquee made the layer mount without the pen, and this effect's Escape handler still reads
     // `editing` to decide whether an authoring tool may be disarmed. Dropping it would have closed
     // over the value from the render that first mounted the layer.
-  }, [interactionLayerMounted, editing, resourceStripActive, wbsBandHeightPx]);
+    // `minimapActive` for the interaction-canvas reason above it: the panel mounts after the last
+    // measure, and the loop's own backing-store check needs the re-inited loop to run at all.
+  }, [interactionLayerMounted, editing, resourceStripActive, wbsBandHeightPx, minimapActive]);
 
   // Re-resolve the painter palette on a theme switch (`useThemeVersion` bumps) and repaint. Kept out of
   // the rAF loop's effect so the loop isn't torn down/rebuilt on a theme change (theme flips are rare).
@@ -1575,6 +1761,7 @@ export function TsldCanvas({
     interactionDirtyRef.current = true;
     stripDirtyRef.current = true;
     wbsBandDirtyRef.current = true;
+    minimapDirtyRef.current = true;
   }, [themeVersion, canvasSurface]);
 
   // The idle-hover affordance writes an INLINE cursor ('ew-resize'), which beats the class-based
@@ -2024,6 +2211,26 @@ export function TsldCanvas({
           data-testid="tsld-resource-strip"
           style={{ height: RESOURCE_STRIP_HEIGHT }}
           className="pointer-events-none absolute inset-x-0 bottom-0 block"
+        />
+      ) : null}
+      {/* Layer 5 — the minimap panel (ADR-0100): bottom-right, offset above the resource strip
+          when it is active (the minimap does NOT inherit the Legend's over-the-strip liberty —
+          M0-T3's recorded policy). The loop above owns the picture and the rectangle; the panel
+          owns the selection marker and Today (the marks that move without a scene change). */}
+      {minimapActive && minimapRoom ? (
+        <TsldMinimap
+          activities={activities}
+          dataDate={dataDate}
+          selectedId={selectedId}
+          bottomOffsetPx={resourceStripActive ? RESOURCE_STRIP_HEIGHT : 0}
+          onClose={onMinimapClose ?? (() => {})}
+          bitmapCanvasRef={minimapCanvasRef}
+          rectRef={minimapRectRef}
+          onCenterWorld={minimapCenterOnWorld}
+          onPanPages={minimapPanPages}
+          readCentre={minimapViewportCentre}
+          todayDay={todayOffset === null ? null : todayOffset + (todayFraction ?? 0)}
+          {...(minimapDismissFocusRef ? { dismissFocusRef: minimapDismissFocusRef } : {})}
         />
       ) : null}
     </div>

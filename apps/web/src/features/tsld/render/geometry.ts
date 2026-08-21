@@ -543,6 +543,39 @@ export function truncateToWidth(
 }
 
 /** Whether two screen-space rectangles overlap (used for viewport culling). */
+/**
+ * The plan's world extent — the inclusive `minDay`, the **exclusive** `maxDay`
+ * (inclusive finish + 1, matching every consumer's right-edge arithmetic) and the
+ * highest occupied `laneIndex` — over the activities that have computed dates.
+ * Returns `null` when nothing is placeable.
+ *
+ * **This is the one derivation** (minimap epic M1-T1;
+ * `one-world-extent.structural.test.ts`). It existed inline in three places —
+ * `dayExtent`, `fitToContent` and `buildExportViewport` — which agreed the day they
+ * were written and had no gate keeping them agreeing; the minimap would have been the
+ * fourth. All three now read this, and the structural test refuses a new inline copy.
+ * One O(n) pass; callers that do not need `maxLane` ignore it (`fitToContent` does so
+ * deliberately — repairing its lane framing is `docs/TECH_DEBT.md` #152, not a
+ * refactor side effect).
+ */
+export function worldExtent(
+  activities: readonly RenderActivity[],
+  dataDateIso: string,
+): { minDay: number; maxDay: number; maxLane: number } | null {
+  let minDay = Infinity;
+  let maxDay = -Infinity;
+  let maxLane = 0;
+  for (const a of activities) {
+    if (a.earlyStart === null) continue;
+    const start = daysBetween(dataDateIso, a.earlyStart);
+    const finish = a.earlyFinish === null ? start : daysBetween(dataDateIso, a.earlyFinish);
+    minDay = Math.min(minDay, start);
+    maxDay = Math.max(maxDay, finish + 1);
+    maxLane = Math.max(maxLane, a.laneIndex);
+  }
+  return Number.isFinite(minDay) ? { minDay, maxDay, maxLane } : null;
+}
+
 export function rectsIntersect(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }

@@ -82,6 +82,7 @@ import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-stri
 import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
+import { useMinimapPanelPrefs } from '@/features/tsld/toolbar/use-minimap-panel-prefs';
 import { useTsldCanvasUiState } from '@/features/tsld/toolbar/use-tsld-canvas-ui-state';
 import {
   useTsldToolbarContext,
@@ -144,6 +145,7 @@ export function ToolbarPlanWorkspace({
   // The on-canvas floating Legend panel (ADR-0031 amendment): open state + drag position persist here,
   // toggled from the toolbar's Legend control and rendered over the canvas below.
   const legend = useLegendPanelPrefs();
+  const minimap = useMinimapPanelPrefs();
   // Resource-view lens (Stage E, ADR-0049, VITE_CANVAS_RESOURCE_VIEW): the DOM `ResourceStripPanel`
   // publishes its strip snapshot here; the workspace forwards it (and the active flag) to the canvas,
   // which paints the demand bars on its sibling strip layer. `resourceViewActive` reserves the band +
@@ -280,6 +282,7 @@ export function ToolbarPlanWorkspace({
     canvasUi,
     openDialog: setDialog,
     legend: { open: legend.open, toggle: legend.toggle },
+    minimap: { open: minimap.open, toggle: minimap.toggle },
     revealComments,
     toggleFloatPaths,
     planView,
@@ -675,6 +678,8 @@ export function ToolbarPlanWorkspace({
       // snapshot the ResourceStripPanel below publishes. Inactive ⇒ no band, byte-for-byte today's.
       resourceStripActive={resourceViewActive}
       resourceStrip={stripSnapshot}
+      minimapActive={minimap.open}
+      onMinimapClose={minimap.close}
       // Over-allocation highlight (Stage E M2): flag the engine-flagged over-allocated bars. Its own
       // mode, independent of the demand strip being open. Flag-off ⇒ false ⇒ byte-for-byte today's.
       overAllocationHighlight={CANVAS_RESOURCE_VIEW_ENABLED && model.overAllocationHighlight}

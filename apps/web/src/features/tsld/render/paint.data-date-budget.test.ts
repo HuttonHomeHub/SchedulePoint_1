@@ -16,6 +16,7 @@ import type { RenderActivity, Viewport } from './render-model';
  * delta at 2,000 activities is the proof that it does not.
  */
 const PALETTE: TsldPalette = {
+  canvasGround: '#14161c',
   gridLine: '#111',
   gridLineDay: '#3a3a3a',
   gridLineMonth: '#111111',

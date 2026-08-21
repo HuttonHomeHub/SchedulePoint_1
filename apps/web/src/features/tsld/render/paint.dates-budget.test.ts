@@ -20,6 +20,7 @@ import { DATE_LABEL_MIN_PX_PER_DAY, type RenderActivity, type Viewport } from '.
  * takes the cost to exactly zero below it.
  */
 const PALETTE: TsldPalette = {
+  canvasGround: '#14161c',
   gridLine: '#111',
   gridLineDay: '#3a3a3a',
   gridLineMonth: '#111111',

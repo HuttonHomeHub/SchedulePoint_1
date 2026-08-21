@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1035 web
-> source files with 34 flag-scoped Playwright suites beside the base journey, and
-> 99 ADRs.
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1048 web
+> source files with 35 flag-scoped Playwright suites beside the base journey, and
+> 100 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2615,6 +2615,42 @@ progress` off the command surface because **an object action belongs on the obje
   findings are `docs/TECH_DEBT.md` #149.
   **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation parity
   gate is untouched by construction.
+
+- **ADR-0100** _(Accepted; M0–M4 landed 2026-08-21)_ — The canvas minimap: an invariant picture
+  and a DOM rectangle. The last unbuilt Should-have on the primary surface, built measure-first:
+  M0 wrote a falsification condition **before** the prototype (paired same-session runs, treatment
+  ≤ baseline + 2.0pp with the baseline spread stated in the verdict) and PASSED it on both
+  fixtures; M0-T2 re-derived the need from measured extents (the working presets frame 0.3–8.6%
+  of both plans' day spans at 1646 — the time axis carries the argument) and rewrote the spec's
+  problem statement from its numbers. The load-bearing split: the picture is a **cached bitmap
+  rebuilt on scene change only**, and everything that moves between scene changes — the viewport
+  rectangle, the selection marker, the Today vertical — is **DOM beside it** (the agreement round
+  caught selection and Today drafted into the bitmap: both would go stale against a dirty rule
+  that never fires for them, ADR-0056 F6a one layer down). The rectangle being DOM is ADR-0026
+  D7's expensive half, free from the platform. `worldExtent` is extracted to the geometry leaf and
+  derived **exactly once** (structural test, verified red against the three pre-existing inline
+  copies); x shares `screenXOfDay` while y deliberately does not share `screenYOfLane` — measured,
+  `cull()` returns 255 of 2,160 bars at a whole-plan viewport, so the obvious reuse is a
+  correctness bug, pinned. Paint order is the decimation policy (critical drawn last survives the
+  1px merge); the build is a counting-stub gate (zero text work, two fillStyle bar passes). M0-T5
+  proved the PRE-EXISTING `zoomToSelection` lane-framing defect live and **filed it** (#152)
+  rather than absorbing it. No `VITE_` flag (ADR-0088); entry point `View ▾ ▸ Panels ▸ Minimap`,
+  which the journey drives on its first user-facing milestone (ADR-0081) — and that journey
+  earned its place twice before M4: it caught the reload-opener focus drop no unit test could
+  see, and established by screenshot that a short plan's rectangle legitimately fills the box.
+  **The M4 gate pass found six defects that had passed a human read and every unit gate**, the
+  sharpest invisible to every non-browser instrument: the frame token pair was never aliased in
+  `@theme inline`, so the rectangle painted NO colour in a real browser while the contrast gate
+  stayed green (it resolves `:root` names — it now asserts reachability too); the drag anchor
+  was read off the INFLATED display rectangle (~8 days off at the Day preset, Escape restoring
+  the wrong viewport — fixed with a pure `sceneWindowRect` and a delta-from-true-centre drag);
+  and the minimap's Today was derived in UTC while the scene's is local-calendar (the ADR-0059
+  shared-axis rule applies to the clock). Also folded: a WCAG 1.4.1 lightness fringe for
+  critical bars, a 600 px responsive withdrawal, and the ADR's own decision 10 naming the
+  rejected persistence option as the decision. M4-T2 re-derived the M0 numbers against the
+  shipped code (+0.76 pp, PASS; the probe's compositing asymmetry did not reproduce).
+  Non-blocking findings are `docs/TECH_DEBT.md` #155; the AT observations still owed are #154.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down
