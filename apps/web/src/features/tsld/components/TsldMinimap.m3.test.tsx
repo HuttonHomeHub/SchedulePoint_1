@@ -155,7 +155,6 @@ describe('TsldMinimap — navigation (M3)', () => {
     const onCenterWorld = vi.fn(() => WINDOW);
     const sceneSaw = vi.fn();
     render(
-      // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- test scaffold standing in for the scene's own pointer handler
       <div onPointerDown={sceneSaw}>
         <TsldMinimap
           activities={[activity()]}

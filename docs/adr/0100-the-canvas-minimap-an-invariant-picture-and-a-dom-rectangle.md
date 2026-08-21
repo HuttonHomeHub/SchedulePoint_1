@@ -1,6 +1,6 @@
 # ADR-0100: The canvas minimap — an invariant picture and a DOM rectangle
 
-- **Status:** Proposed (filed with M1; moved to Accepted at the M4 gate pass)
+- **Status:** Accepted (filed Proposed with M1, 2026-08-21; Accepted at the M4 gate pass the same day, all findings folded)
 - **Date:** 2026-08-21
 - **Deciders:** product owner (defaults Q1–Q4), Claude (spec + build), with input reports
   from the ui-architect, performance and accessibility reviewers

@@ -147,19 +147,17 @@ describe('TsldCanvas minimap responsive withdrawal (M4 ux gate)', () => {
     />
   );
   const mockWidth = (width: number) =>
-    vi
-      .spyOn(HTMLDivElement.prototype, 'getBoundingClientRect')
-      .mockReturnValue({
-        width,
-        height: 800,
-        top: 0,
-        left: 0,
-        right: width,
-        bottom: 800,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      } as DOMRect);
+    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width,
+      height: 800,
+      top: 0,
+      left: 0,
+      right: width,
+      bottom: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
 
   it('withdraws below 3× its own width and stays below it, and mounts where there is room', () => {
     // Below the derived floor (600px) the fixed 200×120 panel plus clearances covers more

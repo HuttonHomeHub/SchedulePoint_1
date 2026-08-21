@@ -51,6 +51,7 @@
     "e2e-csp",
     "e2e-multi-select",
     "e2e-copy-paste",
-    "e2e-workspace-chrome"
+    "e2e-workspace-chrome",
+    "e2e-minimap"
   ]
 }

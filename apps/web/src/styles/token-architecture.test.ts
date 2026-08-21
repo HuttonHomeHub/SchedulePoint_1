@@ -121,6 +121,12 @@ const OUTSIDE_THE_CLOSURE = {
     '--canvas-grid-month',
     '--canvas-grid-year',
     '--canvas-nonworking-hatch',
+    // The minimap rectangle's two-tone frame (ADR-0100 decision 9): the same discriminator
+    // as the gridline tiers — a viewport frame has no meaning on a header and no semantic
+    // sibling in the base vocabulary, and its contrast is gated by its OWN pairs
+    // (MINIMAP_GROUNDS in token-contrast.test.ts), not by a scope's completeness.
+    '--canvas-minimap-frame',
+    '--canvas-minimap-frame-halo',
     '--ground',
     '--ground-end',
   ],
@@ -462,7 +468,9 @@ describe('weight is a governed axis', () => {
   // Legend's — the ux gate found the first draft had dodged this ratchet by shipping a
   // caption-weight title beside a full-weight sibling, which is the one-off the ratchet
   // exists to prevent, inverted.
-  const SCREEN_WEIGHT_CEILING = 163;
+  // ...and 163 -> 164: the shortcuts sheet's new Minimap section heading takes the
+  // `font-semibold` every other section heading in that sheet already carries.
+  const SCREEN_WEIGHT_CEILING = 164;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

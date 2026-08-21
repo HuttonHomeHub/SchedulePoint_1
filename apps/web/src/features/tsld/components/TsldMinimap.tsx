@@ -8,7 +8,6 @@ import {
   type MinimapMapping,
   type MinimapWindow,
 } from '../render/minimap';
-
 import { daysBetween } from '../render/working-time';
 
 import { useAnnounce } from '@/components/ui/announcer';

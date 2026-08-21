@@ -89,7 +89,7 @@ test.describe('The minimap', () => {
       const ctx = canvas.getContext('2d');
       if (!ctx || canvas.width === 0) return false;
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let distinct = new Set<number>();
+      const distinct = new Set<number>();
       for (let i = 0; i < data.length; i += 4) {
         distinct.add((data[i]! << 16) | (data[i + 1]! << 8) | data[i + 2]!);
         if (distinct.size > 1) return true;
