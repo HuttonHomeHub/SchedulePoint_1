@@ -21,7 +21,15 @@ test.describe('the chrome band', () => {
     await createProject(page, `Band Project ${stamp}`);
     await createPlan(page, `Band Plan ${stamp}`);
 
-    const band = page.locator('[data-surface="chrome"]').first();
+    // **Located by what it CONTAINS, not by document order.** `.first()` worked while the band was
+    // the only chrome surface; the light corporate theme moved the tool rail from `panel` to
+    // `chrome` (the rail stays navy, the Project Explorer went light), and the rail precedes the
+    // band in the DOM — so `.first()` silently started selecting the wrong element. The header is
+    // what makes this the band.
+    const band = page
+      .locator('[data-surface="chrome"]')
+      .filter({ has: page.locator('header') })
+      .first();
     await expect(band).toBeVisible();
     // The header is inside the band…
     await expect(band.locator('header')).toHaveCount(1);
@@ -40,7 +48,15 @@ test.describe('the chrome band', () => {
     await setTheme(page, 'corporate');
     const stamp = Date.now() + 1;
     await onboard(page, stamp);
-    const band = page.locator('[data-surface="chrome"]').first();
+    // **Located by what it CONTAINS, not by document order.** `.first()` worked while the band was
+    // the only chrome surface; the light corporate theme moved the tool rail from `panel` to
+    // `chrome` (the rail stays navy, the Project Explorer went light), and the rail precedes the
+    // band in the DOM — so `.first()` silently started selecting the wrong element. The header is
+    // what makes this the band.
+    const band = page
+      .locator('[data-surface="chrome"]')
+      .filter({ has: page.locator('header') })
+      .first();
     const bare = (await band.boundingBox())?.height ?? 0;
     expect(bare).toBeGreaterThan(0);
 

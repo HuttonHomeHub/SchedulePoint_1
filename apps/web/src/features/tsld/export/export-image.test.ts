@@ -177,10 +177,16 @@ describe('resolvePrintPalette', () => {
   it('reads the design tokens when present (token-derived) and forces light regardless of theme', () => {
     const root = document.createElement('div');
     root.classList.add('dark');
-    // Stub the token layer: `--color-background` resolves (token-derived), everything else is blank
+    // Stub the token layer: `--background` resolves (token-derived), everything else is blank
     // (so the LIGHT fallbacks apply). Proves the palette reads the design tokens, not hard-coded hex.
+    //
+    // **Unprefixed, since `docs/TECH_DEBT.md` #159.** The resolvers named the `--color-*` aliases
+    // until then, and an `@theme inline` alias is substituted on `:root` — so a surface-scope rebind
+    // could never reach it and the painter had never once used the canvas scope. This stub named the
+    // alias too, so it went on passing throughout: it was asserting that the resolver reads whatever
+    // name the resolver reads.
     const spy = vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      getPropertyValue: (name: string) => (name === '--color-background' ? 'oklch(1 0 0)' : ''),
+      getPropertyValue: (name: string) => (name === '--background' ? 'oklch(1 0 0)' : ''),
     } as unknown as CSSStyleDeclaration);
     try {
       const print = resolvePrintPalette(root);

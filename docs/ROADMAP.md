@@ -210,6 +210,13 @@ keep `main` releasable.
   conflict-flavoured twin would be ADR-0093's defect reproduced inside one surface. The flag-on
   journey caught the epic's purpose inverting on its first run — the count's own read-out cannot
   demote, so it pushed the command it labels off the row in the only state the epic exists for.
+- **An editor is a dialog, not a drawer** (ADR-0101). First contact with the shipped workspace
+  returned the activity editor to the `xl` dialog it was designed for — a section rail beside a
+  content pane, at 896 px — after a release in a 300–420 px context drawer where it ran its
+  narrow-viewport layout permanently, four tabs overflowing sideways inside a panel that was
+  itself scrolling. The drawer keeps the Project Explorer. The rule it settles is a general one:
+  an editing surface belongs in a dialog, and a drawer is for what you read beside your work.
+
 - **The diagram can say where you are** (ADR-0100, the TSLD minimap). The last unbuilt
   Should-have on the primary surface: a 200×120 overview panel in the canvas's bottom-right —
   an invariant cached picture of the whole programme (critical path surviving 1 px decimation)
@@ -501,6 +508,19 @@ discriminators. Each becomes a spec/plan before build:
 - **Export** (PDF/CSV) and **resources** (library + assignments) —
   Must/Should-have per the brief. (Resources have since shipped — M7. Export shipped as the TSLD
   CSV/PNG/PDF menu, the printed programme, and XER/MSPDI via `GET …/export/:format`.)
+
+- **The light corporate theme** — **shipped** (ADR-0102, 2026-08-21). The product owner called the
+  dark Graphite palette "awful in all respects"; it is replaced, chrome and canvas, keeping
+  ADR-0097's single-theme architecture exactly. The theme was largely **recovered** rather than
+  designed: the `.corporate` block ADR-0097 deleted is intact in git history with its reasoning
+  attached, and not one of its 117 names had since disappeared — which falsifies ADR-0097's own
+  "a week of design judgement" costing in the helpful direction, for everything except the diagram.
+  Its most useful finding is not a colour: the canvas painter had **never once used the canvas
+  surface scope**, because a `@theme inline` alias is substituted at `:root` and a per-surface
+  rebind cannot reach it — invisible until the page's primary went navy and the diagram's stayed
+  blue. The contrast ceiling `docs/TECH_DEBT.md` #157 asked for is **not built**, and that is an
+  answer rather than a deferral: the admissible window is under two points wide and the rule would
+  enforce halation, which does not occur on the ground it would guard.
 
 ## Guiding constraints
 

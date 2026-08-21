@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useState } from 'react';
  * The **canvas surface element**, published so every palette resolver reads the diagram's own scope
  * rather than the page's (ADR-0097 Landing E).
  *
- * `render/palette.ts` makes 86 token reads and every one of them defaulted to
+ * `render/palette.ts` makes 88 token reads and every one of them defaulted to
  * `document.documentElement` — so a bar's fill was the PAGE's `--primary`, painted on a ground that
  * is not the page, and the contrast matrix had no canvas pair at all. The painter does not change a
  * line; only the element handed to `getComputedStyle` does.

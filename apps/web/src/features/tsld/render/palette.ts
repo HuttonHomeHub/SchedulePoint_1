@@ -2,20 +2,76 @@ import type { LensPalette } from './lenses';
 import type { ResourceStripPalette, TsldPalette, WbsBandPalette } from './paint';
 
 /**
- * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006),
- * so the canvas is theme-aware (light/dark) without hardcoding colour — the tokens stay
- * the single source of truth and the canvas is just another consumer. Reads the computed
- * `--color-*` custom properties off the document root; call again on a theme change to
- * repaint with the new values. Falls back to sensible values when the DOM/tokens are
- * unavailable (e.g. jsdom in unit tests).
+ * The categorical WBS ramp, declared ONCE — the fill token, its jsdom fallback, and the ink token
+ * that is legible on it.
+ *
+ * It is one list because three call sites consume it (the painter's fills, the painter's inks and
+ * the legend's swatches) and they were three hand-written arrays that had to be kept the same
+ * length and the same order. Going 5 → 12 for the light theme is exactly the edit that would have
+ * left one of them behind — and a legend one swatch short of the diagram is a defect nobody
+ * notices until they are counting phases.
+ *
+ * **The ink alternates because the ramp does.** A twelve-member categorical ramp spans too much
+ * lightness for one label colour to clear 4.5:1 on all of it, so the ramp alternates two lightness
+ * bands and the ink alternates with it: white on the darker members, the diagram's dark ink on the
+ * lighter ones. Both tokens already exist and are already gated as a pair with their own fills.
+ */
+const WHITE_INK = '--destructive-foreground';
+const DARK_INK = '--primary-foreground';
+const WBS_CYCLE_TOKENS: ReadonlyArray<readonly [fill: string, fallback: string, ink: string]> = [
+  ['--chart-1', '#4d43a8', WHITE_INK],
+  ['--chart-2', '#5f9a3f', DARK_INK],
+  ['--chart-3', '#8e3a86', WHITE_INK],
+  ['--chart-4', '#3f9c6a', DARK_INK],
+  ['--chart-5', '#a83550', WHITE_INK],
+  ['--chart-6', '#3f9a95', DARK_INK],
+  ['--chart-7', '#6c3ea3', WHITE_INK],
+  ['--chart-8', '#529a45', DARK_INK],
+  ['--chart-9', '#a3376c', WHITE_INK],
+  ['--chart-10', '#3d9a83', DARK_INK],
+  ['--chart-11', '#20707f', WHITE_INK],
+  ['--chart-12', '#3f92ad', DARK_INK],
+];
+
+/**
+ * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006), so the canvas
+ * takes its colour from the design system rather than hardcoding it — the tokens stay the single
+ * source of truth and the canvas is just another consumer. Reads the computed `--color-*` custom
+ * properties off the element it is given; call again when those values change to repaint. Falls back
+ * to sensible values when the DOM/tokens are unavailable (e.g. jsdom in unit tests).
+ *
+ * This used to say "theme-aware (light/dark)". ADR-0097 collapsed the product to ONE theme, so
+ * there is no light/dark axis for this to be aware of; what the indirection buys now is that a
+ * re-valued token repaints the diagram with no change here at all, which is what the light-corporate
+ * epic is about to collect on.
  *
  * **`root` is REQUIRED, and that is the guard** (ADR-0097 Landing E). It defaulted to
  * `document.documentElement` and every one of the nine production call sites took the default — so
- * all 86 token reads below resolved against the PAGE, on a ground that is not the page. A default
+ * all 88 token reads below resolved against the PAGE, on a ground that is not the page. A default
  * makes that failure silent: the diagram paints plausible colours and nothing anywhere reports it.
  * Removing the default turns a missed call site into a compile error, which is the ADR-0070
  * `hoursPerDay` precedent adopted for the same class of bug — a value that is wrong rather than
  * absent, and therefore invisible.
+ *
+ * **That guard was necessary and was NOT sufficient, which is why these reads are unprefixed.**
+ * Landing E made the caller pass the canvas element and stopped there; the reads still named the
+ * `--color-*` aliases, and a `@theme inline` alias is declared at `:root` as `--color-primary:
+ * var(--primary)`, so its `var()` is substituted **on `:root`** and the already-substituted value is
+ * what inherits. A surface-scope rebind of `--primary` therefore cannot reach it — verified in
+ * Chromium on a four-line page, not reasoned from the spec. So passing the canvas element changed
+ * which element was asked and not one value that came back: the painter had never once used the
+ * canvas surface scope.
+ *
+ * It was invisible while the page and plot families held near-identical values, and it surfaced the
+ * moment they diverged — the light corporate theme made `--page-primary` navy while `--plot-primary`
+ * is a mid blue, and every non-critical bar painted navy. Reading the unprefixed names is the fix,
+ * because those DO follow the rebind. Tailwind utilities were never affected: `inline` is exactly
+ * what makes `bg-primary` compile to `var(--primary)` rather than to the frozen alias, which is why
+ * every DOM surface has been correct throughout and only the canvas was wrong.
+ *
+ * The contrast matrix could not report it either: `token-contrast.test.ts` resolves a scope by
+ * reading the CSS text and following the rebind itself, so it asserted the mapping the browser does
+ * not perform. It was right about what the values SHOULD be and silent about what the painter got.
  */
 export function resolveTsldPalette(root: Element): TsldPalette {
   const styles = getComputedStyle(root);
@@ -24,56 +80,56 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     return value || fallback;
   };
   return {
-    canvasGround: token('--color-canvas', '#14161c'),
-    gridLine: token('--color-border', '#2a2f3a'),
+    canvasGround: token('--canvas', '#14161c'),
+    gridLine: token('--border', '#2a2f3a'),
     // Time-axis gridline tiers (F5, `VITE_CANVAS_TIME_AXIS`) — `gridLine` above stays the
     // flag-off value; these three are read only when `TsldScene.gridTiers` is on.
-    gridLineDay: token('--color-canvas-grid-day', '#565c6a'),
-    gridLineMonth: token('--color-canvas-grid-month', '#2a2f3a'),
-    gridLineYear: token('--color-canvas-grid-year', '#9098ab'),
-    edge: token('--color-muted-foreground', '#7a8090'),
-    bar: token('--color-primary', '#3b6fbf'),
-    critical: token('--color-destructive', '#c83c3c'),
-    nearCritical: token('--color-warning', '#d29628'),
+    gridLineDay: token('--canvas-grid-day', '#565c6a'),
+    gridLineMonth: token('--canvas-grid-month', '#2a2f3a'),
+    gridLineYear: token('--canvas-grid-year', '#9098ab'),
+    edge: token('--muted-foreground', '#7a8090'),
+    bar: token('--primary', '#3b6fbf'),
+    critical: token('--destructive', '#c83c3c'),
+    nearCritical: token('--warning', '#d29628'),
     // A foreground-contrast stroke used to outline critical/near-critical bars, so
     // criticality is never conveyed by fill colour alone (WCAG 1.4.1).
-    outline: token('--color-foreground', '#e6e8ee'),
-    selection: token('--color-ring', '#6ea8fe'),
+    outline: token('--foreground', '#e6e8ee'),
+    selection: token('--ring', '#6ea8fe'),
     // A muted wash for non-working columns and the destructive hue for the today marker.
-    nonWorking: token('--color-muted', '#20242d'),
+    nonWorking: token('--muted', '#20242d'),
     // The non-working hatch stripe (F7a, `VITE_CANVAS_TIME_AXIS`) — a step stronger than the wash
     // it draws over, so a weekend/holiday differs by KIND, not just a darker shade of grey.
-    nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#454b58'),
-    today: token('--color-destructive', '#c83c3c'),
+    nonWorkingHatch: token('--canvas-nonworking-hatch', '#454b58'),
+    today: token('--destructive', '#c83c3c'),
     // Today pill ink (F6b, `VITE_CANVAS_TIME_AXIS`) — paired with `today` the same way every other
     // fill pairs with its `*-foreground` token.
-    todayInk: token('--color-destructive-foreground', '#ffffff'),
+    todayInk: token('--destructive-foreground', '#ffffff'),
     // The data-date status line + pill (`VITE_CANVAS_DATA_DATE`) — the FOREGROUND/BACKGROUND pair,
     // deliberately NOT `--color-info`: in all three themes info is a near neighbour of the
     // `--color-primary` bar fill, and a "distinct" line in the bar hue is not distinct (spec CQ-1,
     // measured). Foreground is the strongest neutral already in the palette and pairs 1:1 with
     // background for the pill ink — the `todayInk` guarantee, pinned in `palette.test.ts`.
-    dataDate: token('--color-foreground', '#e6e8ee'),
-    dataDateInk: token('--color-background', '#161a22'),
+    dataDate: token('--foreground', '#e6e8ee'),
+    dataDateInk: token('--background', '#161a22'),
     // Visual-Planning conflict cue — the warning hue, drawn as a distinct triangle shape so it never
     // relies on colour alone (WCAG 1.4.1); shares the token with near-critical but a different shape.
-    conflict: token('--color-warning', '#d29628'),
+    conflict: token('--warning', '#d29628'),
     // Same-lane time-overlap cue — the warning hue, drawn as a distinct stacked-squares shape (not the
     // conflict triangle), disambiguated by shape + legend, never colour alone (WCAG 1.4.1).
-    laneOverlap: token('--color-warning', '#d29628'),
+    laneOverlap: token('--warning', '#d29628'),
     // Label text: inside-bar text uses each fill's paired *-foreground token (so it contrasts on
     // that fill in both themes); beside-bar text uses the page foreground over the canvas ground.
-    labelInside: token('--color-primary-foreground', '#ffffff'),
-    labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
-    labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
-    labelBeside: token('--color-foreground', '#e6e8ee'),
+    labelInside: token('--primary-foreground', '#ffffff'),
+    labelInsideCritical: token('--destructive-foreground', '#ffffff'),
+    labelInsideNearCritical: token('--warning-foreground', '#1a1a1a'),
+    labelBeside: token('--foreground', '#e6e8ee'),
     // ── Bar visual refresh (ADR-0052 M4) ─────────────────────────────────────────────────
     // The calm hairline definition stroke on refreshed non-critical bars (the border token —
     // quiet, so the foreground emphasis outline pops) and the idle-hover ring (muted-foreground —
     // lighter than the `--color-ring` selection, so hover ≠ selection). The refresh adds no other
     // colour: progress draws in the bar's paired label ink, glyph caps in the bar's own fill.
-    barStroke: token('--color-border', '#2a2f3a'),
-    hoverRing: token('--color-muted-foreground', '#7a8090'),
+    barStroke: token('--border', '#2a2f3a'),
+    hoverRing: token('--muted-foreground', '#7a8090'),
     // The grab-handle halo (ADR-0052 M3 discoverability fix) — **the canvas ground**, which is the
     // theme-inverse of the `outline` foreground the handle's core draws in. That pairing is what
     // lets one handle read on every bar fill in every theme without a per-bar contrast decision
@@ -83,11 +139,11 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     // its own (ADR-0055 §4). `--canvas` is valued identically to `--card` in every theme block, so
     // this re-point is a no-op until the flagged cream value lands — and when it does, the halo
     // follows the ground it is meant to match instead of silently drifting from it.
-    handleHalo: token('--color-canvas', '#161a22'),
+    handleHalo: token('--canvas', '#161a22'),
     // The alternating month band (ADR-0055 §4) — the diagram's own ground, banded, so a planner
     // can count months without reading a single label. Opaque rather than an alpha wash: an alpha
     // band would tint whatever it overlaps and would have to be re-checked against every layer.
-    monthBand: token('--color-canvas-band', '#1b202a'),
+    monthBand: token('--canvas-band', '#1b202a'),
   };
 }
 
@@ -127,48 +183,48 @@ export function resolvePrintPalette(root: Element): PrintPalette {
   return {
     // Surface colours the export composites around the diagram (light fallbacks: white paper, near-
     // black ink, mid-grey muted) — token-derived so a themed token override still flows through.
-    ground: token('--color-background', '#ffffff'),
-    ink: token('--color-foreground', '#1a1a1a'),
-    mutedInk: token('--color-muted-foreground', '#6b7280'),
+    ground: token('--background', '#ffffff'),
+    ink: token('--foreground', '#1a1a1a'),
+    mutedInk: token('--muted-foreground', '#6b7280'),
     // The painter fields, mirroring `resolveTsldPalette` but with LIGHT fallbacks (grid a light grey,
     // ink near-black) so the diagram reads on white even when the tokens can't be read.
     // The print surface never draws the minimap, so the ground field just mirrors `ground`.
-    canvasGround: token('--color-background', '#ffffff'),
-    gridLine: token('--color-border', '#e5e7eb'),
+    canvasGround: token('--background', '#ffffff'),
+    gridLine: token('--border', '#e5e7eb'),
     // Time-axis gridline tiers, LIGHT-forced fallbacks (mirrors resolveTsldPalette's fields).
-    gridLineDay: token('--color-canvas-grid-day', '#f5f6f8'),
-    gridLineMonth: token('--color-canvas-grid-month', '#bcc2ca'),
-    gridLineYear: token('--color-canvas-grid-year', '#8b93a1'),
-    edge: token('--color-muted-foreground', '#6b7280'),
-    bar: token('--color-primary', '#2f62c4'),
-    critical: token('--color-destructive', '#c2331f'),
-    nearCritical: token('--color-warning', '#b58900'),
-    outline: token('--color-foreground', '#1a1a1a'),
-    selection: token('--color-ring', '#3b6fbf'),
-    nonWorking: token('--color-muted', '#f0f0f0'),
+    gridLineDay: token('--canvas-grid-day', '#f5f6f8'),
+    gridLineMonth: token('--canvas-grid-month', '#bcc2ca'),
+    gridLineYear: token('--canvas-grid-year', '#8b93a1'),
+    edge: token('--muted-foreground', '#6b7280'),
+    bar: token('--primary', '#2f62c4'),
+    critical: token('--destructive', '#c2331f'),
+    nearCritical: token('--warning', '#b58900'),
+    outline: token('--foreground', '#1a1a1a'),
+    selection: token('--ring', '#3b6fbf'),
+    nonWorking: token('--muted', '#f0f0f0'),
     // LIGHT fallback for the same F7a stripe (mirrors `resolveTsldPalette`).
-    nonWorkingHatch: token('--color-canvas-nonworking-hatch', '#c7c7c7'),
-    today: token('--color-destructive', '#c2331f'),
-    todayInk: token('--color-destructive-foreground', '#ffffff'),
+    nonWorkingHatch: token('--canvas-nonworking-hatch', '#c7c7c7'),
+    today: token('--destructive', '#c2331f'),
+    todayInk: token('--destructive-foreground', '#ffffff'),
     // The data-date pair with LIGHT fallbacks (mirrors `resolveTsldPalette`): near-black rule +
     // pill on paper, white ink on the pill — the export path draws the same line the screen does.
-    dataDate: token('--color-foreground', '#1a1a1a'),
-    dataDateInk: token('--color-background', '#ffffff'),
-    conflict: token('--color-warning', '#b58900'),
-    laneOverlap: token('--color-warning', '#b58900'),
-    labelInside: token('--color-primary-foreground', '#ffffff'),
-    labelInsideCritical: token('--color-destructive-foreground', '#ffffff'),
-    labelInsideNearCritical: token('--color-warning-foreground', '#1a1a1a'),
-    labelBeside: token('--color-foreground', '#1a1a1a'),
+    dataDate: token('--foreground', '#1a1a1a'),
+    dataDateInk: token('--background', '#ffffff'),
+    conflict: token('--warning', '#b58900'),
+    laneOverlap: token('--warning', '#b58900'),
+    labelInside: token('--primary-foreground', '#ffffff'),
+    labelInsideCritical: token('--destructive-foreground', '#ffffff'),
+    labelInsideNearCritical: token('--warning-foreground', '#1a1a1a'),
+    labelBeside: token('--foreground', '#1a1a1a'),
     // M4 refresh entries with LIGHT fallbacks (the export path builds a `visualRefresh`-less
     // scene today, but the palette contract stays total — every painter field resolves).
-    barStroke: token('--color-border', '#e5e7eb'),
-    hoverRing: token('--color-muted-foreground', '#6b7280'),
+    barStroke: token('--border', '#e5e7eb'),
+    hoverRing: token('--muted-foreground', '#6b7280'),
     // The export builds a handle-less scene (the handles are an editing affordance) and prints
     // on unbanded paper, but the palette contract stays TOTAL — every painter field resolves, so
     // a future export that does paint them cannot pick up an undefined colour.
-    handleHalo: token('--color-canvas', '#ffffff'),
-    monthBand: token('--color-canvas-band', '#f7f7f7'),
+    handleHalo: token('--canvas', '#ffffff'),
+    monthBand: token('--canvas-band', '#f7f7f7'),
   };
 }
 
@@ -188,9 +244,9 @@ export function resolveResourceStripPalette(root: Element): ResourceStripPalette
     return value || fallback;
   };
   return {
-    bar: token('--color-primary', '#3b6fbf'),
-    axis: token('--color-border', '#2a2f3a'),
-    tick: token('--color-muted-foreground', '#7a8090'),
+    bar: token('--primary', '#3b6fbf'),
+    axis: token('--border', '#2a2f3a'),
+    tick: token('--muted-foreground', '#7a8090'),
   };
 }
 
@@ -211,45 +267,37 @@ export function resolveLensPalette(root: Element): LensPalette {
   };
   return {
     // Mirror the painter (same tokens + fallbacks) so Criticality mode paints byte-for-byte today's fills.
-    critical: token('--color-destructive', '#c83c3c'),
-    nearCritical: token('--color-warning', '#d29628'),
-    bar: token('--color-primary', '#3b6fbf'),
+    critical: token('--destructive', '#c83c3c'),
+    nearCritical: token('--warning', '#d29628'),
+    bar: token('--primary', '#3b6fbf'),
     // The muted "uncomputed / ungrouped" fill — a null total float or a null WBS parent.
-    neutral: token('--color-muted-foreground', '#7a8090'),
+    neutral: token('--muted-foreground', '#7a8090'),
     // Total-float bands: less slack (red) → more slack (green), each a distinct semantic hue.
-    floatCritical: token('--color-destructive', '#c83c3c'),
-    floatLow: token('--color-warning', '#d29628'),
-    floatMedium: token('--color-info', '#3b6fbf'),
-    floatHigh: token('--color-success', '#2f9e44'),
+    floatCritical: token('--destructive', '#c83c3c'),
+    floatLow: token('--warning', '#d29628'),
+    floatMedium: token('--info', '#3b6fbf'),
+    floatHigh: token('--success', '#2f9e44'),
     // WBS groups cycle the five chart tokens (a deterministic, distinguishable categorical ramp).
-    wbsCycle: [
-      token('--color-chart-1', '#3b6fbf'),
-      token('--color-chart-2', '#2f9e44'),
-      token('--color-chart-3', '#d29628'),
-      token('--color-chart-4', '#9c5cc4'),
-      token('--color-chart-5', '#c83c3c'),
-    ],
-    // Contrast-safe inside-bar label inks paired 1:1 with the fills above (WCAG 1.4.3, ≥ 4.5:1). Each
-    // float band reuses its fill token's `*-foreground` (destructive/warning/info/success map 1:1); the
-    // neutral ink is the page `--color-background` (white-on-grey in light, dark-on-grey in dark); the
-    // WBS cycle pairs chart-1 with `primary-foreground` (theme-flipping, chart-1 mirrors `primary`) and
-    // chart-2…5 with the stable-dark `warning-foreground` (0.205 in both themes). Contrast ratios
-    // (computed from the oklch tokens in `styles/globals.css`, light / dark — see `lenses.test.ts`):
-    //   float critical 4.56 / 5.87 · low 8.48 / 10.12 · medium 5.51 / 6.82 · high 4.87 / 7.03
-    //   neutral 4.73 / 7.63 · wbs chart-1 4.72 / 5.50 · chart-2 5.01 / 7.21 · chart-3 4.82 / 7.03
-    //   chart-4 8.48 / 10.12 (the 2.02:1 white-on-yellow case, now fixed) · chart-5 4.58 / 6.14
-    neutralInk: token('--color-background', '#ffffff'),
-    floatCriticalInk: token('--color-destructive-foreground', '#ffffff'),
-    floatLowInk: token('--color-warning-foreground', '#1a1a1a'),
-    floatMediumInk: token('--color-info-foreground', '#ffffff'),
-    floatHighInk: token('--color-success-foreground', '#ffffff'),
-    wbsInkCycle: [
-      token('--color-primary-foreground', '#ffffff'),
-      token('--color-warning-foreground', '#1a1a1a'),
-      token('--color-warning-foreground', '#1a1a1a'),
-      token('--color-warning-foreground', '#1a1a1a'),
-      token('--color-warning-foreground', '#1a1a1a'),
-    ],
+    wbsCycle: WBS_CYCLE_TOKENS.map(([name, fallback]) => token(name, fallback)),
+    // Contrast-safe inside-bar label inks paired 1:1 with the fills above (WCAG 1.4.3, ≥ 4.5:1).
+    // Each float band reuses its fill token's `*-foreground` (destructive/warning/info/success map
+    // 1:1); the neutral ink is the page background; the WBS cycle's inks come from
+    // `WBS_CYCLE_TOKENS`, alternating with the ramp's two lightness bands.
+    //
+    // **The per-member ratios that used to be listed here are gone deliberately.** They were
+    // quoted "light / dark" for five members of a three-theme product, and both halves of that
+    // are now wrong: ADR-0097 left one theme, and the ramp is twelve. Re-listing twelve numbers
+    // in a comment recreates exactly the drift that made the old list wrong — the ramp's
+    // derivation and its worst-case figures live beside the values themselves in
+    // `styles/globals.css`, which is the one place they cannot fall out of step with what ships.
+    neutralInk: token('--background', '#ffffff'),
+    floatCriticalInk: token('--destructive-foreground', '#ffffff'),
+    floatLowInk: token('--warning-foreground', '#1a1a1a'),
+    floatMediumInk: token('--info-foreground', '#ffffff'),
+    floatHighInk: token('--success-foreground', '#ffffff'),
+    wbsInkCycle: WBS_CYCLE_TOKENS.map(([, , ink]) =>
+      token(ink, ink === WHITE_INK ? '#ffffff' : '#1a1a1a'),
+    ),
   };
 }
 
@@ -265,34 +313,38 @@ export function resolveLensPalette(root: Element): LensPalette {
 export function lensLegendVarPalette(): LensPalette {
   const v = (name: string): string => `var(${name})`;
   return {
-    critical: v('--color-destructive'),
-    nearCritical: v('--color-warning'),
-    bar: v('--color-primary'),
-    neutral: v('--color-muted-foreground'),
-    floatCritical: v('--color-destructive'),
-    floatLow: v('--color-warning'),
-    floatMedium: v('--color-info'),
-    floatHigh: v('--color-success'),
-    wbsCycle: [
-      v('--color-chart-1'),
-      v('--color-chart-2'),
-      v('--color-chart-3'),
-      v('--color-chart-4'),
-      v('--color-chart-5'),
-    ],
+    critical: v('--destructive'),
+    nearCritical: v('--warning'),
+    bar: v('--primary'),
+    neutral: v('--muted-foreground'),
+    floatCritical: v('--destructive'),
+    floatLow: v('--warning'),
+    floatMedium: v('--info'),
+    floatHigh: v('--success'),
+    wbsCycle: WBS_CYCLE_TOKENS.map(([name]) => v(name)),
     // Inks are unused by the legend (it renders swatch fills + muted-foreground text), so mirror the
     // fill vars — never read.
-    neutralInk: v('--color-background'),
-    floatCriticalInk: v('--color-destructive-foreground'),
-    floatLowInk: v('--color-warning-foreground'),
-    floatMediumInk: v('--color-info-foreground'),
-    floatHighInk: v('--color-success-foreground'),
+    neutralInk: v('--background'),
+    floatCriticalInk: v('--destructive-foreground'),
+    floatLowInk: v('--warning-foreground'),
+    floatMediumInk: v('--info-foreground'),
+    floatHighInk: v('--success-foreground'),
+    // **Deliberately NOT derived from `WBS_CYCLE_TOKENS`, and deliberately still five.** The legend
+    // renders swatch fills plus muted text and never reads an ink — `buildColourLegend` carries only
+    // `label` and `colour`, so nothing consumes this field. Deriving it would make a dead value look
+    // live and imply the legend paints labels on its swatches, which it does not.
+    //
+    // It is left at five rather than grown to twelve for the same reason: a reader who notices the
+    // mismatch should find this note and delete the field, not lengthen it. Named here because a
+    // reviewer flagged the inconsistency as a trap — three call sites kept in sync by hand is what
+    // `WBS_CYCLE_TOKENS` exists to kill, and an un-migrated sibling invites someone to "fix" it by
+    // wiring it up wrong.
     wbsInkCycle: [
-      v('--color-primary-foreground'),
-      v('--color-warning-foreground'),
-      v('--color-warning-foreground'),
-      v('--color-warning-foreground'),
-      v('--color-warning-foreground'),
+      v('--primary-foreground'),
+      v('--warning-foreground'),
+      v('--warning-foreground'),
+      v('--warning-foreground'),
+      v('--warning-foreground'),
     ],
   };
 }
@@ -314,11 +366,15 @@ export function resolveWbsBandPalette(root: Element): WbsBandPalette {
     return value || fallback;
   };
   return {
-    bar: token('--color-primary', '#3b6fbf'),
-    derived: token('--color-muted-foreground', '#7a8090'),
-    rule: token('--color-border', '#2a2f3a'),
-    label: token('--color-primary-foreground', '#ffffff'),
-    selection: token('--color-ring', '#8ab4f8'),
+    bar: token('--primary', '#3b6fbf'),
+    derived: token('--muted-foreground', '#7a8090'),
+    rule: token('--border', '#2a2f3a'),
+    label: token('--primary-foreground', '#ffffff'),
+    // Paired with `derived`, not with `bar` — see `WbsBandPalette.derivedLabel`. The canvas ground
+    // as ink on a muted fill is the same inversion `resolveLensPalette`'s `neutralInk` already uses.
+    derivedLabel: token('--background', '#ffffff'),
+    // The diagram's ink, not `--ring`: this stroke is painted INSET on the bar's own fill.
+    selection: token('--foreground', '#1a1a1a'),
   };
 }
 

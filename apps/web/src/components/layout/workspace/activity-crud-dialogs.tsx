@@ -1,17 +1,8 @@
-import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { flushSync } from 'react-dom';
 
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
-import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
-import { ContextDrawerEmpty } from '@/components/layout/drawer/context-drawer';
-import {
-  useDrawerSubject,
-  useDrawerSubjectCanShow,
-  useDrawerSubjectControls,
-  useDrawerSubjectShowing,
-} from '@/components/layout/drawer/drawer-subject';
 import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -23,7 +14,6 @@ import {
 import {
   ActivityCreateDialog,
   ActivityEditor,
-  type ActivityEditorShell,
   modalShell,
   deleteActivityDescription,
   dissolveSummaryDescription,
@@ -32,7 +22,6 @@ import {
 } from '@/features/activities';
 import { CrossPlanLinksSection } from '@/features/cross-plan-dependencies';
 import { ActivityNotesSection } from '@/features/notes';
-import { handleDrawerEscape } from '@/lib/escape-rungs';
 
 /**
  * The activity **edit / delete** dialogs opened from the floating {@link SelectionActionsBar} on the
@@ -49,142 +38,41 @@ import { handleDrawerEscape } from '@/lib/escape-rungs';
  * open.
  */
 /**
- * Hoisted to module scope so the registration's icon is one element rather than a new one per
- * render. `useDrawerSubject` holds it in a ref for the same reason, but a stable element at the
- * call site is the honest fix — the icon is a property of the subject, not of this render.
- */
-const ACTIVITY_SUBJECT_ICON = <Info aria-hidden="true" className="size-4" />;
-
-/**
- * The workspace's one activity editor, **in whichever chrome the shell is offering** (Graphite
- * M6-T2).
+ * The workspace's one activity editor, **as a modal dialog** (ADR-0101, reversing Graphite M6-T2).
  *
- * It renders exactly once. `ActivityEditor` takes a `shell` render prop (M6-T1), so the choice
- * between a modal dialog and the trailing context drawer is a choice of chrome around an unchanged
- * component — not two mounts. Mounting one of each would give a single activity two independent
- * sets of scope forms and two independent dirty states, and a planner could save one and lose the
- * other with both on screen.
+ * It renders exactly once, and it renders in the chrome ADR-0061 designed it for: an `xl`
+ * (`max-w-4xl`, 896 px) dialog with a vertical section rail beside the content pane.
  *
- * **The drawer's shell is a passthrough**, which is what makes "the drawer must not inherit focus
- * containment" structural rather than a rule someone has to remember: there is no `<Dialog>` in its
- * tree to trap focus, so there is nothing to opt out of.
+ * **Why this stopped being a drawer subject.** Graphite M6 docked it in the trailing context
+ * drawer, which is 300 px by default and caps at 420 px (`use-context-drawer-prefs.ts`). ADR-0061
+ * had widened this exact form to 896 px *because 448 px was already unusable* — Save fell below the
+ * fold — so docking it put a form into a third of a width that had been judged too narrow at half.
+ * The M10 gate pass then found the vertical rail left "about 92 px of content beside it" and
+ * switched the drawer to a horizontal tab strip, which fixed the symptom: on a 1920 px desktop the
+ * editor ran its sub-768 px narrow layout permanently, four tabs overflowing sideways inside a
+ * panel that was itself scrolling vertically, over a Successors table scrolling sideways of its own.
  *
- * The subject is registered for as long as this workspace is mounted, so the rail's button appears
- * with the plan and leaves with it. Its `title` is the activity's own name — and deliberately
- * absent when nothing is selected, because the drawer then says so rather than keeping the last
- * subject's heading over an empty body.
+ * The deeper reason is in the record rather than in anyone's taste. ADR-0097 D2 deferred the docked
+ * editor on 2026-08-19 with the words *"it wants its own epic and its own design pass"*; Graphite M6
+ * shipped it the next day as a sub-task of a shell epic, and that design pass never happened. This
+ * restores the chrome the editor was designed for and returns the docked editor to the backlog it
+ * was already on — where, if it is built, it is built as something drawer-shaped rather than as a
+ * dialog squeezed into a column.
+ *
+ * The drawer keeps the Project Explorer, which is what it is shaped for: a tree, narrow, a list.
  */
 function PlanActivityEditor({
   activity,
   ...props
 }: Omit<Parameters<typeof ActivityEditor>[0], 'shell'>): React.ReactElement {
-  const announce = useAnnounce();
-  const showingInDrawer = useDrawerSubjectShowing();
-  const canShowInDrawer = useDrawerSubjectCanShow();
-  const drawerControls = useDrawerSubjectControls();
-  useDrawerSubject({
-    // **"Activity details", not "Activity".** The shorter name collides with the Add split-button's
-    // caret ("Activity type: Task") under any substring match, which is how the browser probe found
-    // it — but the reason to change it is that a rail button should say what pressing it SHOWS, as
-    // "Project Explorer" beside it does. A bare noun names the subject and not the panel.
-    label: 'Activity details',
-    icon: ACTIVITY_SUBJECT_ICON,
-    ...(activity ? { title: activity.name } : {}),
-  });
-
-  /**
-   * **The drawer's chrome is a passthrough — and its empty state is not optional.**
-   *
-   * A modal hides itself when `open` is false; a drawer has no such state, so without this branch
-   * selecting nothing would paint the whole four-tab editor against `activity: undefined`. That is
-   * worse than it sounds: the tabs render, the Save bars render, and the fields read as an activity
-   * with no name — a screen that looks like data and is not. The M4 rule ("never the last subject's
-   * stale data") is the same rule; this is the case where there is no data at all.
-   *
-   * Found by looking at a screenshot rather than by a test, which is the standing instruction after
-   * `orientation` passed typecheck and 119 unit tests while rendering a row that overflowed a 48 px
-   * rail.
-   */
-  /**
-   * **No modal while a drawer could hold this instead** — derived, not a latch.
-   *
-   * The first version kept an `asking` flag and cleared it in the effect, which is a `setState`
-   * inside an effect and is the cascading-render pattern the lint rule rejects. Deriving says the
-   * same thing without any state: if the shell *could* show the registered subject and is not
-   * showing it, a modal is the wrong chrome — either because the request is still in flight, or
-   * because the planner has pointed the drawer at the Explorer, and popping a modal over their
-   * choice would be worse than waiting for the rail button they can see is lit.
-   *
-   * Below `lg` `canShowInDrawer` is false, so this is inert and the modal opens exactly as it always
-   * has (M6-T5: the modal is not a legacy path, it is the chrome for every narrow viewport).
-   */
-  const modalWouldBeWrong = canShowInDrawer && !showingInDrawer;
-
-  const drawerShell: ActivityEditorShell = ({ children, requestClose }) => (
-    <ChromePortal name="drawer">
-      {props.open ? (
-        /* **Escape closes the editor, and it is an INNER rung of ADR-0080's ladder** — the same
-           thing it has always meant here, restored rather than invented.
-
-           A modal got this from the platform: `<dialog>`'s `cancel` fires wherever focus is, so
-           Escape in a field closed the editor and `confirmBeforeClose` asked about unsaved work. A
-           drawer has no such reflex, and the shell's own Escape rung deliberately defers to text
-           entry (ADR-0079) — so with the caret in a field Escape did nothing at all, and there was
-           no keyboard way out of the editor. That is a real loss of operability, and its first
-           symptom was a journey going red that had asserted the correct behaviour all along.
-
-           `preventDefault()` is what makes it a rung rather than a competitor: the shell's handler
-           sees the press was answered and leaves the drawer open, so one press cannot both close the
-           editor and collapse the panel behind it. `defaultPrevented` on the way in defers to
-           anything inner still — an open combobox or select answers first.
-
-           The root is a DELEGATION root, not a control: no role, no tabIndex, never focusable. Same
-           case, and the same words, as the shell root and the workspace root one layer out. */
-        // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-        <div
-          className="flex min-h-0 flex-1 flex-col"
-          onKeyDown={(event) => handleDrawerEscape(event, requestClose)}
-        >
-          {children}
-        </div>
-      ) : (
-        <ContextDrawerEmpty>Select an activity to see its details here.</ContextDrawerEmpty>
-      )}
-    </ChromePortal>
-  );
-  /**
-   * **The drawer is 224–420 px wide and the tab rail is 208** (Graphite M10).
-   *
-   * `ActivityEditor` chose its tab orientation from a VIEWPORT query, which is the right question
-   * for a dialog sized by the window and the wrong one for a panel sized by a splitter: the drawer
-   * only exists at `lg`+, so the query was always true there and the vertical rail always rendered —
-   * leaving about 92 px of content beside it at the default width, and less than the rail itself at
-   * the minimum. `use-context-drawer-prefs.ts` says in its own words that "its tabs are a horizontal
-   * strip"; nothing had wired that up until the M10 gate pass found it.
-   *
-   * A boolean rather than a container query because orientation is a structural choice — two
-   * different DOM shapes — and because the answer does not depend on the drawer's current width:
-   * the rail does not fit at 420 either.
-   */
   return (
     <ActivityEditor
       {...props}
       {...(activity ? { activity } : { activity: undefined })}
-      onClose={() => {
-        props.onClose();
-        // **The inner rung speaks too.** Closing the drawer announces "… closed."; closing the
-        // EDITOR inside it announced nothing, so one ladder gave two different signals — silence on
-        // the first press, a sentence on the second. Only in the drawer: the modal's own dismissal
-        // is announced by the platform.
-        if (showingInDrawer) announce('Activity details closed.');
-        // The editor's own Close button is INSIDE the portalled subtree, so closing unmounts the
-        // element that has focus and the browser drops it to `<body>` — WCAG 2.4.3, the third
-        // instance of this class in this repository. The rail button survives and is about the panel
-        // whose contents just went away. Only in the drawer: the modal restores focus itself.
-        if (showingInDrawer) drawerControls.focusRailButton();
-      }}
-      tabRailAllowed={!showingInDrawer}
-      shell={showingInDrawer ? drawerShell : modalShell(props.open && !modalWouldBeWrong)}
+      // No `tabRailAllowed`: it defaults true, so the rail is chosen by the VIEWPORT query again —
+      // the right question for a dialog sized by the window, and the one this editor had before it
+      // was docked in a panel sized by a splitter.
+      shell={modalShell(props.open)}
     />
   );
 }

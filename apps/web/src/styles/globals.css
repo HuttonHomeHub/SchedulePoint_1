@@ -94,20 +94,34 @@
 /* in any published image in any case (ADR-0088: a `VITE_` constant is        */
 /* inlined at build time, so no operator could ever have turned one off).     */
 /*                                                                            */
-/* Navy chrome around a light working canvas, amber as the primary action     */
-/* colour. Two constraints shaped that mapping and both still hold:           */
+/* Navy chrome around a light working canvas, amber as the chrome's accent.   */
+/* Three constraints shape that mapping:                                      */
 /*                                                                            */
 /*  1. Amber is a FILL, never ink or a line on a light surface. #fca311 on    */
-/*     #f8f9fa is 1.9:1 — it fails as text (4.5:1) and as a focus indicator   */
+/*     #f8f9fa is 1.92:1 — it fails as text (4.5:1) and as a focus indicator  */
 /*     (3:1). It carries navy ink at 7.9:1, which is where it shines. So      */
-/*     amber is `--primary` (buttons, active states, activity bars), and the  */
-/*     focus ring on light surfaces is navy; amber rings appear only on the   */
-/*     navy chrome, where they reach 7.9:1.                                   */
-/*  2. `--warning` is the canvas's NEAR-CRITICAL fill. With amber promoted to */
-/*     primary, an ordinary bar and a near-critical bar would otherwise be    */
-/*     the same colour, so near-critical is a deeper bronze — three readable  */
-/*     states (normal / near-critical / critical) on top of the dashed-       */
-/*     outline shape cue that carries WCAG 1.4.1 regardless.                  */
+/*     amber is `--chrome-primary` and `--chrome-ring`, on the navy where it  */
+/*     is legible; the PAGE's primary is the brand navy at 12:1 and its focus */
+/*     ring is navy too.                                                      */
+/*                                                                            */
+/*     This paragraph said "amber is `--primary` (buttons, active states,     */
+/*     activity bars)" until the light theme actually landed, and that was    */
+/*     never true of the page or the diagram — it contradicted the detail two */
+/*     paragraphs below it, which had the placement right all along. Rewritten */
+/*     from the shipped values rather than reinstated on the assumption that  */
+/*     they matched, which is the rule that exists because the opposite       */
+/*     happened here twice.                                                   */
+/*                                                                            */
+/*  2. `--plot-warning` is the canvas's NEAR-CRITICAL fill, a deeper bronze — */
+/*     so it stays distinct from the chrome's amber and from the on-schedule  */
+/*     blue. Three readable states (on-schedule / near-critical / critical),  */
+/*     each ≥3:1 on the diagram ground and ≥1.5:1 from the others, on top of  */
+/*     the shape cue that carries WCAG 1.4.1 regardless. The ladder is solved */
+/*     rather than chosen; the working is beside `--plot-primary`.            */
+/*                                                                            */
+/*  3. The DIAGRAM has its own ground, one measured step below the page       */
+/*     (0.958 against 0.982). It used to hold the page's literal exactly, so  */
+/*     the canvas scope was a rebind with no value behind it.                 */
 /*                                                                            */
 /* ADDING A DARK THEME BACK is a block of values and one entry in             */
 /* `THEME_SELECTORS`; the mechanism is kept alive for exactly that. What it   */
@@ -117,10 +131,10 @@
 /* ------------------------------------------------------------------------- */
 :root {
   /* Surfaces — the working canvas stays light and quiet. */
-  --card: oklch(0.242 0.019 258.4);
-  --card-foreground: oklch(0.913 0.012 252.1);
-  --popover: oklch(0.242 0.019 258.4);
-  --popover-foreground: oklch(0.913 0.012 252.1);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.321 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.321 0 0);
 
   /* Brand — NAVY fills on the page, amber on the chrome. Amber is the accent that
      makes this theme recognisable, but a solid amber button on the off-white page
@@ -147,13 +161,44 @@
 
   /* Lines & focus — the ring is NAVY on light surfaces (note 1). */
 
-  /* Data visualisation — the brand pair first, then hues that stay apart from
-     both it and the status colours. */
-  --chart-1: oklch(0.786 0.167 70);
-  --chart-2: oklch(0.338 0.081 262);
-  --chart-3: oklch(0.6 0.13 200);
-  --chart-4: oklch(0.62 0.115 55);
-  --chart-5: oklch(0.55 0.14 300);
+  /* Data visualisation — the CATEGORICAL ramp (ADR-0097 light-theme CQ-3).
+     ---------------------------------------------------------------------------
+     Twelve, not five. P6 planners colour and group by WBS, and five swatches cycle on the
+     sixth phase — so two unrelated groups get the same fill on exactly the plans big enough
+     to need grouping. The values are derived here; the colour-by-WBS MODE and the surface for
+     assigning them are deliberately not built (`docs/specs/graphite/design.md` §5a's epic),
+     which is what "values only" means.
+
+     Three constraints, all measured against the light diagram ground:
+
+      1. **≥ 3:1 on both the ground AND the month band** (WCAG 1.4.11 — a bar's fill is what
+         identifies it). Worst member 3.10:1.
+      2. **A legible inside label.** Lightness alternates in two bands, so the odd members take
+         a white label and the even ones dark ink. Worst 4.93:1. One ink for all twelve is not
+         possible: a ramp wide enough to be categorical spans too much lightness.
+      3. **≥ 25° of hue from every RESERVED semantic** — critical (27), near-critical (62) and
+         on-schedule (249) — so a WBS fill is never mistaken for a criticality state. Worst gap
+         31°. That constraint is what shapes the odd-looking hue order: the ramp is walking
+         around three holes in the wheel.
+
+     Alternating lightness also means ADJACENT members differ on TWO channels rather than one;
+     worst adjacent pair 1.46:1. `--chart-1`'s old amber is gone deliberately — it was one of
+     the reserved hues.
+
+     NOT part of any surface scope's closure (ADR-0077): binding the login motif to these would
+     keep the page theme's values on a pinned panel. */
+  --chart-1: oklch(0.5 0.145 286);
+  --chart-2: oklch(0.615 0.115 104);
+  --chart-3: oklch(0.5 0.145 322);
+  --chart-4: oklch(0.615 0.115 140);
+  --chart-5: oklch(0.5 0.145 356);
+  --chart-6: oklch(0.615 0.115 176);
+  --chart-7: oklch(0.5 0.145 300);
+  --chart-8: oklch(0.615 0.115 122);
+  --chart-9: oklch(0.5 0.145 340);
+  --chart-10: oklch(0.615 0.115 158);
+  --chart-11: oklch(0.5 0.145 195);
+  --chart-12: oklch(0.615 0.115 212);
 
   /* ── Surface scopes (ADR-0055 §1) ──────────────────────────────────────────
      ONE semantic vocabulary, rebound per surface. `chrome` is the top band,
@@ -179,94 +224,70 @@
      a value change landing at S3. */
 
   /* chrome — the top band */
-  --chrome: oklch(0.154 0.009 264.3);
-  --chrome-foreground: oklch(0.913 0.012 252.1);
-  --chrome-muted-foreground: oklch(0.74 0.022 252.6);
-  --chrome-muted: oklch(0.212 0.016 256.8);
-  --chrome-border: oklch(0.29 0.023 256.4);
-  --chrome-input: oklch(0.558 0.071 238.2);
-  --chrome-accent: oklch(0.242 0.019 258.4);
-  --chrome-accent-foreground: oklch(0.913 0.012 252.1);
-  --chrome-primary: oklch(0.66 0.128 249.5);
-  --chrome-primary-foreground: oklch(0.181 0.031 247.1);
-  --chrome-field: oklch(0.189 0.015 253.2);
-  --chrome-field-foreground: oklch(0.913 0.012 252.1);
-  --chrome-field-muted-foreground: oklch(0.61 0.024 254.5);
-  --chrome-destructive-text: oklch(0.74 0.145 33);
-  --chrome-success-text: oklch(0.72 0.115 156.4);
-  --chrome-warning-text: oklch(0.79 0.135 75.1);
-  --chrome-info-text: oklch(0.76 0.105 247.6);
-  --chrome-ring: oklch(0.66 0.128 249.5);
-
-  /* The closure members (ADR-0097 §1.5). A status FILL a component can paint on this
-     surface, not an ink — `--chrome-destructive-text` above is the ink. Derived, not
-     chosen: each fill is the least-light value clearing 4:1 against the navy at the
-     highest chroma its hue allows, and each label is the near-black that clears 4.5:1
-     on it. The page's own values measured 2.47:1 (destructive) and 1.34:1 (secondary,
-     info) here — very nearly invisible, and `Button` ships variants painting exactly
-     those two fills. `--info` also gains a hue of its own: the page uses ONE value for
-     both secondary and info, which is why the two failed identically. */
-  --chrome-destructive: oklch(0.649 0.167 31.6); /* 4.00:1 on the surface */
-  --chrome-destructive-foreground: oklch(0.176 0.025 42.3); /* 4.92:1 on the fill */
-  --chrome-destructive-hover: oklch(0.7 0.16 31.6); /* 5.28:1, further from the surface */
-  --chrome-primary-hover: oklch(
-    0.722 0.109 247.6
-  ); /* 7.50:1 on the surface, 7.50:1 for its label */
-  --chrome-secondary-hover: oklch(
-    0.615 0.081 262
-  ); /* 4.29:1 on the surface, 5.28:1 for its label */
-  --chrome-secondary: oklch(0.51 0.026 256); /* 4.03:1 on the surface */
-  --chrome-secondary-foreground: oklch(0.985 0 0); /* 4.96:1 on the fill */
-  --chrome-success: oklch(0.72 0.115 156.4); /* 4.04:1 on the surface */
-  --chrome-success-foreground: oklch(0.15 0.02 156); /* 4.98:1 on the fill */
-  --chrome-warning: oklch(0.79 0.135 75.1); /* 4.00:1 on the surface */
-  --chrome-warning-foreground: oklch(0.15 0.02 77.5); /* 4.93:1 on the fill */
-  --chrome-info: oklch(0.66 0.128 249.5); /* 4.06:1 on the surface */
-  --chrome-info-foreground: oklch(0.181 0.031 247.1); /* 4.99:1 on the fill */
+  --chrome: oklch(0.252 0.056 264);
+  --chrome-foreground: oklch(0.985 0 0);
+  --chrome-muted-foreground: oklch(0.78 0.02 264);
+  --chrome-muted: oklch(0.32 0.05 264);
+  --chrome-border: oklch(1 0 0 / 14%);
+  --chrome-input: oklch(0.62 0.02 264);
+  --chrome-accent: oklch(0.338 0.081 262);
+  --chrome-accent-foreground: oklch(0.985 0 0);
+  --chrome-primary: oklch(0.786 0.167 70);
+  --chrome-primary-foreground: oklch(0.252 0.056 264);
+  --chrome-field: oklch(1 0 0);
+  --chrome-field-foreground: oklch(0.321 0 0);
+  --chrome-field-muted-foreground: oklch(0.51 0 0);
+  --chrome-destructive-text: oklch(0.74 0.15 25);
+  --chrome-success-text: oklch(0.8 0.12 150);
+  --chrome-warning-text: oklch(0.8 0.14 70);
+  --chrome-info-text: oklch(0.8 0.09 245);
+  --chrome-ring: oklch(0.786 0.167 70); /* 7.91:1 on the surface */
+  --chrome-destructive: oklch(0.649 0.167 31.6); /* 4.57:1 on the surface */
+  --chrome-destructive-foreground: oklch(0.176 0.025 42.3); /* 5.44:1 on the fill */
+  --chrome-destructive-hover: oklch(0.7 0.16 31.6); /* 5.59:1 on the surface */
+  --chrome-primary-hover: oklch(0.722 0.109 247.6); /* 6.54:1 on the surface */
+  --chrome-secondary-hover: oklch(0.59 0.045 262); /* 3.88:1 on the surface */
+  --chrome-secondary: oklch(0.54 0.045 262); /* 3.15:1 on the surface */
+  --chrome-secondary-foreground: oklch(0.985 0 0); /* 4.85:1 on the fill */
+  --chrome-success: oklch(0.72 0.115 156.4); /* 6.77:1 on the surface */
+  --chrome-success-foreground: oklch(0.15 0.02 156); /* 8.31:1 on the fill */
+  --chrome-warning: oklch(0.79 0.135 75.1); /* 8.12:1 on the surface */
+  --chrome-warning-foreground: oklch(0.15 0.02 77.5); /* 10.00:1 on the fill */
+  --chrome-info: oklch(0.66 0.128 249.5); /* 5.16:1 on the surface */
+  --chrome-info-foreground: oklch(0.181 0.031 247.1); /* 6.06:1 on the fill */
 
   /* panel — the navigator rail */
-  --panel: oklch(0.212 0.016 256.8);
-  --panel-foreground: oklch(0.913 0.012 252.1);
-  --panel-muted-foreground: oklch(0.74 0.022 252.6);
-  --panel-muted: oklch(0.242 0.019 258.4);
-  --panel-border: oklch(0.29 0.023 256.4);
-  --panel-input: oklch(0.558 0.071 238.2);
-  --panel-accent: oklch(0.242 0.019 258.4);
-  --panel-accent-foreground: oklch(0.913 0.012 252.1);
-  --panel-primary: oklch(0.66 0.128 249.5);
-  --panel-primary-foreground: oklch(0.181 0.031 247.1);
-  --panel-field: oklch(0.189 0.015 253.2);
-  --panel-field-foreground: oklch(0.913 0.012 252.1);
-  --panel-field-muted-foreground: oklch(0.61 0.024 254.5);
-  --panel-destructive-text: oklch(0.74 0.145 33);
-  --panel-success-text: oklch(0.72 0.115 156.4);
-  --panel-warning-text: oklch(0.79 0.135 75.1);
-  --panel-info-text: oklch(0.76 0.105 247.6);
-  --panel-ring: oklch(0.66 0.128 249.5);
-
-  /* The closure members (ADR-0097 §1.5). The panel is light, so every one of these
-     clears its bar at the page's own value and takes it — declared LITERALLY rather
-     than aliased, because a `var()` here resolves once at this block and a second theme
-     would silently inherit it. Declared at all, rather than left to inherit, because a
-     family that covers some of the closure is the "complete or it is a trap" failure
-     one level down. */
-  --panel-destructive: oklch(0.649 0.167 31.6); /* 5.69:1 */
-  --panel-destructive-foreground: oklch(0.176 0.025 42.3); /* the page pairing, unchanged */
-  --panel-destructive-hover: oklch(0.7 0.16 31.6); /* 6.96:1, further from the surface */
-  --panel-primary-hover: oklch(
-    0.722 0.109 247.6
-  ); /* 13.41:1 on the surface, 14.63:1 for its label */
-  --panel-secondary-hover: oklch(
-    0.353 0.081 262
-  ); /* 9.88:1 on the surface, 10.78:1 for its label */
-  --panel-secondary: oklch(0.51 0.026 256); /* 10.48:1 */
-  --panel-secondary-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
-  --panel-success: oklch(0.72 0.115 156.4); /* 4.54:1 */
-  --panel-success-foreground: oklch(0.15 0.02 156); /* the page pairing, unchanged */
-  --panel-warning: oklch(0.79 0.135 75.1); /* 4.24:1 */
-  --panel-warning-foreground: oklch(0.15 0.02 77.5); /* the page pairing, unchanged */
-  --panel-info: oklch(0.66 0.128 249.5); /* 10.48:1 */
-  --panel-info-foreground: oklch(0.181 0.031 247.1); /* the page pairing, unchanged */
+  --panel: oklch(0.968 0.003 250);
+  --panel-foreground: oklch(0.321 0 0);
+  --panel-muted-foreground: oklch(0.51 0 0);
+  --panel-muted: oklch(0.965 0.002 248);
+  --panel-border: oklch(0.885 0.004 252);
+  --panel-input: oklch(0.62 0.02 264);
+  --panel-accent: oklch(0.955 0.04 78);
+  --panel-accent-foreground: oklch(0.252 0.056 264);
+  --panel-primary: oklch(0.252 0.056 264);
+  --panel-primary-foreground: oklch(0.985 0 0);
+  --panel-field: oklch(1 0 0);
+  --panel-field-foreground: oklch(0.321 0 0);
+  --panel-field-muted-foreground: oklch(0.51 0 0);
+  --panel-destructive-text: oklch(0.505 0.19 27.5);
+  --panel-success-text: oklch(0.45 0.11 150);
+  --panel-warning-text: oklch(0.47 0.11 55);
+  --panel-info-text: oklch(0.3 0.075 262);
+  --panel-ring: oklch(0.35 0.09 262);
+  --panel-destructive: oklch(0.505 0.19 27.5);
+  --panel-destructive-foreground: oklch(0.985 0 0);
+  --panel-destructive-hover: oklch(0.455 0.19 27.5);
+  --panel-primary-hover: oklch(0.2 0.05 264);
+  --panel-secondary-hover: oklch(0.29 0.075 262);
+  --panel-secondary: oklch(0.338 0.081 262);
+  --panel-secondary-foreground: oklch(0.985 0 0);
+  --panel-success: oklch(0.52 0.15 143);
+  --panel-success-foreground: oklch(0.985 0 0);
+  --panel-warning: oklch(0.56 0.115 55);
+  --panel-warning-foreground: oklch(0.985 0 0);
+  --panel-info: oklch(0.338 0.081 262);
+  --panel-info-foreground: oklch(0.985 0 0);
 
   /* ── brand — the public screens' panel (ADR-0077 §1) ───────────────────────
      THE VALUES BELOW ARE IDENTICAL IN ALL THREE THEME BLOCKS, DELIBERATELY.
@@ -327,21 +348,44 @@
   --brand-info: oklch(0.595 0.123 235); /* 4.06:1 on the surface */
   --brand-info-foreground: oklch(0.15 0 0); /* 4.99:1 on the fill */
 
-  /* White fields on navy — the reference's date and filter inputs. Deliberately
-     per-theme: literal white would glare on Dark's near-black chrome. */
-  --canvas: oklch(0.177 0.011 260.6);
-  --canvas-band: oklch(0.196 0.013 258);
+  /* The diagram's own ground (CQ-2: a distinct working surface, not the page).
+     ---------------------------------------------------------------------------
+     0.958 sits **0.024 OKLCH below the page's 0.982** — above the ~0.02 perceptibility
+     threshold `token-architecture.test.ts` already uses, so the difference is a real one and
+     not the 1.00:1 seam this pair carried until now (the canvas and the page held the same
+     literal, so the canvas scope was a rebind with no value behind it).
+
+     **Darker than the page, not lighter.** The recovered `.corporate` block put the canvas at
+     paper-white and the page off-white — the diagram as the sheet on the desk — which is
+     coherent but collapses `--canvas` onto `--card`, recreating "no ground of its own" in a
+     different costume. Going the other way gives a stack that reads as elevation: diagram
+     ground, then page, then cards and dialogs floating above both.
+
+     This lands in M1 rather than M2 because it HAS to: the whole `--plot-*` family aliases
+     `--page-*`, so re-valuing the page's ink dark put dark ink on a still-dark diagram and
+     took twelve matrix assertions with it — every one of them in the canvas scope and none in
+     the page. The two milestones are separable in what they DERIVE and not in what they
+     BREAK. M2 still owns the bars, the links, the hatch and the bands. */
+  --canvas: oklch(0.958 0.004 250);
+  --canvas-band: oklch(0.976 0.003 250);
 
   /* The minimap rectangle's frame (ADR-0100 decision 9, M2-T1): a TWO-TONE pair, the
      `outline`/`handleHalo` precedent, because the measurement said one solid cannot exist —
-     the boundary must clear WCAG 1.4.11's 3:1 on the 0.177-L canvas ground AND on both
-     ~0.65-L bar fills, and white (the best any single value can do) measures 2.62:1 on the
-     critical fill. So the light stroke holds the ground and the dark halo holds the bars:
-     for every MINIMAP_GROUNDS member, at least one of the pair clears 3:1, and the pair
-     clears 3:1 against each other so the edge reads as one line. The gate recomputes all
-     of it. */
-  --canvas-minimap-frame: oklch(1 0 0);
-  --canvas-minimap-frame-halo: oklch(0.15 0.01 260);
+     the boundary must clear WCAG 1.4.11's 3:1 on the canvas ground AND on both bar fills, and
+     no single value does. For every MINIMAP_GROUNDS member at least one of the pair clears
+     3:1, and the pair clears 3:1 against each other so the edge reads as one line.
+
+     **The pair INVERTED for the light theme, and the gate could not have told us to.** Its rule
+     is `max(stroke, halo) >= 3`, which is polarity-agnostic by design and therefore stayed green
+     with a white stroke on a near-white ground — the dark halo was carrying every assertion
+     while the line a reader actually sees had vanished into the ground on three sides. The
+     screenshot showed it: a white rectangle visible only where it crossed the red bars. So the
+     two halves swap — dark stroke holds the ground, white halo holds the bars — which is the
+     same rule with the grounds the other way up. Nothing about the gate changes, and that is
+     the point worth remembering: this is a defect a green gate is structurally incapable of
+     reporting, and only a picture finds it. */
+  --canvas-minimap-frame: oklch(0.25 0.015 260);
+  --canvas-minimap-frame-halo: oklch(1 0 0);
 
   /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
      Theme-INVARIANT, like `brand` and for the same reason one step further out.
@@ -400,14 +444,25 @@
   --auth-info-foreground: oklch(0.985 0 0); /* the page pairing, unchanged */
   /* The page the card floats on. A PAIR rather than a family member, the way
      `--canvas`/`--canvas-band` already are: a gradient needs two stops and the
-     17-name vocabulary has no word for "the second stop". Values are the old
-     app's `linear-gradient(135deg, #f5f7fa, #c3cfe2)`. */
-  --ground: oklch(0.177 0.011 260.6);
-  --ground-end: oklch(0.154 0.009 264.3);
+     vocabulary has no word for "the second stop".
+
+     **Back to the old app's own gradient**, `linear-gradient(135deg, #f5f7fa, #c3cfe2)`, converted
+     to OKLCH by solving for the closest match (error < 0.0013 in sRGB) rather than eyeballed. This
+     comment already SAID these were the old app's values while holding Graphite's near-black —
+     re-valued for the dark theme with the prose left behind, which is the drift class this epic
+     keeps recording.
+
+     Restored because the flip made the discontinuity obvious: the card and its navy panel were
+     light corporate all along, and the void around them was not, so a visitor's first two screens
+     went black → white. The card, its panel, the photograph and the amber accents are untouched —
+     only the area around them moves. The accepted cost is that the login reads calmer: a floating
+     card gets much of its drama from a dark surround. */
+  --ground: oklch(0.975 0.005 263);
+  --ground-end: oklch(0.851 0.03 260);
 
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
-  --canvas-grid-day: oklch(0.245 0.018 256);
+  --canvas-grid-day: oklch(0.905 0.004 250);
   /* **A month boundary is the axis a planner reads, so it clears WCAG 1.4.11's 3:1** — 0.76 gave
      2.08:1 against the ground and **1.95:1 against the month band it is most often drawn over**,
      i.e. a required graphical object below the non-text floor, live. 0.64 gives 3.25 / 3.05.
@@ -416,12 +471,28 @@
      this pair. It did not: `token-contrast.test.ts` swept the criticality triple and the closure
      and had **no PLOT-pack pair at all**. It does now — which is the actual fix; this number is
      only how that gate passes. */
-  --canvas-grid-month: oklch(0.53 0.022 256);
-  --canvas-grid-year: oklch(0.64 0.024 256);
+  --canvas-grid-month: oklch(0.568 0.012 254);
+  --canvas-grid-year: oklch(0.48 0.014 256);
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */
-  --canvas-nonworking-hatch: oklch(0.3 0.018 256);
+  /* **The other stopgap** (ADR-0101). The product owner's report was of a canvas "hard on the eyes",
+     and the striping in it is this: diagonal hatch ink over every non-working column, i.e. two days
+     in seven across the whole width. A repeating high-frequency pattern is perceptually much louder
+     than its ratio suggests, so the step is deliberately small: a weekend reads as a distinct KIND
+     of surface rather than a dimmer one (ADR-0056 F7a's whole job) without shouting.
+
+     **Inverted for the light ground, and the first shot proved it had to be.** ADR-0101 softened
+     the dark value to 0.25 against a 0.212 wash — a 1.10:1 step. Carried onto a 0.965 wash that
+     same near-black ink is a 9:1 step, and the screenshot showed it: black diagonals over every
+     weekend, dominating a picture whose bars they are supposed to sit behind. The contrast matrix
+     was green throughout, because the hatch is reported rather than asserted and a FLOOR could
+     never have caught "too loud" anyway. 0.925 restores the dark theme's own step — 1.13:1 on the
+     wash, 1.10:1 on the ground — on the correct side.
+
+     (ADR-0101's comment quoted 1.18:1 for the dark pair; recomputed here it is 1.103:1. Corrected
+     rather than carried.) */
+  --canvas-nonworking-hatch: oklch(0.925 0.006 252);
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
@@ -452,37 +523,45 @@
   /* block must restate the page family literally, or the alias silently keeps */
   /* the light values.                                                         */
   /* ----------------------------------------------------------------------- */
-  --page-background: oklch(0.177 0.011 260.6);
-  --page-foreground: oklch(0.913 0.012 252.1);
-  --page-muted: oklch(0.212 0.016 256.8);
-  --page-muted-foreground: oklch(0.74 0.022 252.6);
-  --page-border: oklch(0.29 0.023 256.4);
-  --page-input: oklch(0.558 0.071 238.2);
-  --page-accent: oklch(0.242 0.019 258.4);
-  --page-accent-foreground: oklch(0.913 0.012 252.1);
-  --page-primary: oklch(0.66 0.128 249.5);
-  --page-primary-foreground: oklch(0.181 0.031 247.1);
-  --page-field: oklch(0.189 0.015 253.2);
-  --page-field-foreground: oklch(0.913 0.012 252.1);
-  --page-field-muted-foreground: oklch(0.61 0.024 254.5);
-  --page-destructive-text: oklch(0.74 0.145 33);
-  --page-success-text: oklch(0.72 0.115 156.4);
-  --page-warning-text: oklch(0.79 0.135 75.1);
-  --page-info-text: oklch(0.76 0.105 247.6);
-  --page-ring: oklch(0.66 0.128 249.5);
-  --page-destructive: oklch(0.649 0.167 31.6);
-  --page-destructive-foreground: oklch(0.176 0.025 42.3);
-  --page-destructive-hover: oklch(0.7 0.16 31.6);
-  --page-secondary: oklch(0.51 0.026 256);
+  --page-background: oklch(0.982 0.002 248);
+  /* The page's ink, and the end of ADR-0101's stopgap. That comment recorded a dark-ground value
+     softened from 14.61:1 to 10.84:1 and said the light theme would replace it wholesale; this is
+     that replacement, and it is a RECOVERED value rather than a softened one — 0.321 on the 0.982
+     ground measures **12.00:1**, which is about `#333` on off-white and is what a light UI reads
+     like. The halation that made 14.61:1 tiring is a property of light ink on a DARK ground and
+     does not occur here, which is why no contrast ceiling was built to guard it
+     (`docs/specs/light-corporate-theme/m0-ceiling.md`: the admissible window for such a gate is
+     under two points wide, and inside it the rule enforces the wrong quantity). */
+  --page-foreground: oklch(0.321 0 0);
+  --page-muted: oklch(0.965 0.002 248);
+  --page-muted-foreground: oklch(0.51 0 0);
+  --page-border: oklch(0.907 0 0);
+  --page-input: oklch(0.62 0.02 264);
+  --page-accent: oklch(0.955 0.04 78);
+  --page-accent-foreground: oklch(0.252 0.056 264);
+  --page-primary: oklch(0.252 0.056 264);
+  --page-primary-foreground: oklch(0.985 0 0);
+  --page-field: oklch(1 0 0);
+  --page-field-foreground: oklch(0.321 0 0);
+  --page-field-muted-foreground: oklch(0.51 0 0);
+  --page-destructive-text: oklch(0.505 0.19 27.5);
+  --page-success-text: oklch(0.45 0.11 150);
+  --page-warning-text: oklch(0.47 0.11 55);
+  --page-info-text: oklch(0.3 0.075 262);
+  --page-ring: oklch(0.35 0.09 262);
+  --page-destructive: oklch(0.505 0.19 27.5);
+  --page-destructive-foreground: oklch(0.985 0 0);
+  --page-destructive-hover: oklch(0.455 0.19 27.5);
+  --page-secondary: oklch(0.338 0.081 262);
   --page-secondary-foreground: oklch(0.985 0 0);
-  --page-success: oklch(0.72 0.115 156.4);
-  --page-success-foreground: oklch(0.15 0.02 156);
-  --page-warning: oklch(0.79 0.135 75.1);
-  --page-warning-foreground: oklch(0.15 0.02 77.5);
-  --page-info: oklch(0.66 0.128 249.5);
-  --page-info-foreground: oklch(0.181 0.031 247.1);
-  --page-primary-hover: oklch(0.722 0.109 247.6);
-  --page-secondary-hover: oklch(0.56 0.026 256);
+  --page-success: oklch(0.52 0.15 143);
+  --page-success-foreground: oklch(0.985 0 0);
+  --page-warning: oklch(0.56 0.115 55);
+  --page-warning-foreground: oklch(0.985 0 0);
+  --page-info: oklch(0.338 0.081 262);
+  --page-info-foreground: oklch(0.985 0 0);
+  --page-primary-hover: oklch(0.2 0.05 264);
+  --page-secondary-hover: oklch(0.29 0.075 262);
 
   /* ----------------------------------------------------------------------- */
   /* The DIAGRAM's own family (ADR-0097 Landing E, L4-1).                     */
@@ -504,8 +583,17 @@
   /* ----------------------------------------------------------------------- */
 
   /* The ground: the diagram's working surface, not the page's document       */
-  /* surface. 1.02:1 apart today — two greys nobody can tell apart, which is  */
-  /* exactly why the pre-scope trap never showed.                             */
+  /* surface — and, since the light corporate theme, an actual step rather    */
+  /* than a seam with nothing behind it. 1.073:1, ΔL 0.024, against the       */
+  /* ~0.02 OKLCH threshold `token-architecture.test.ts` uses for "a reader    */
+  /* can see this" (CQ-2).                                                    */
+  /*                                                                          */
+  /* This comment said "1.02:1 apart today — two greys nobody can tell apart" */
+  /* and was wrong in BOTH directions: the pair was byte-identical (1.00:1,   */
+  /* not 1.02), and it stopped being identical when this epic gave the        */
+  /* diagram a ground. Corrected rather than deleted, because a stale figure  */
+  /* inside the block an epic just rewrote is this register's own favourite   */
+  /* defect class, and it happened again here.                                */
   --plot-background: var(--canvas);
   --plot-foreground: var(--page-foreground);
   --plot-muted: var(--page-muted);
@@ -522,8 +610,34 @@
      colour, so `--warning` was moved to bronze to get out of the way — the
      diagram recoloured because the button was. Unchanged today, but it now
      HAS somewhere to change. */
-  --plot-primary: oklch(0.49 0.075 238);
-  --plot-primary-foreground: oklch(1 0 0);
+
+  /* THE CRITICALITY LADDER, solved rather than picked.
+     ---------------------------------------------------------------------------
+     Three fills, each ≥ 3:1 on the 0.958 diagram ground, each ≥ 1.5:1 from the others, each
+     carrying a label at ≥ 4.5:1. Those constraints do not leave much room, so the values were
+     searched rather than chosen: chain the three at 1.55:1 from a 3.15:1 base, then solve each
+     hue for the lightness that lands on its target. Measured result —
+
+       on-schedule   oklch(0.624 0.115 249)   ground 3.15:1   band 3.33:1
+       near-critical oklch(0.528 0.13  62)    ground 4.89:1   band 5.15:1
+       critical      oklch(0.439 0.175 27)    ground 7.57:1   band 7.98:1
+       pairwise: on-schedule↔near 1.55:1, near↔critical 1.55:1, on-schedule↔critical 2.40:1
+
+     **The lightest fill takes a DARK label and the other two take white**, and that is the
+     load-bearing part. The old light-theme reasoning (recovered from the block ADR-0097 deleted)
+     records 1.70:1 as the CEILING on criticality separation "subject to a white inside-label at
+     4.5:1" — and it is right: white on the on-schedule blue is 3.56:1, a real 1.4.3 failure. The
+     white-label requirement is the binding constraint rather than the ground, so relaxing it for
+     the one fill that cannot carry it is what buys the whole ladder. Dark ink on that fill is
+     4.86:1.
+
+     **Every fill is DARKER than its ground now**, where each was lighter before — and the labels
+     invert with them, which is why `--plot-primary-foreground` went white → dark while
+     `--plot-destructive-foreground` and `--plot-warning-foreground` went dark → white in the same
+     edit. That pairing flips as a unit or the picture breaks in a way that reads as a bug rather
+     than a colour. */
+  --plot-primary: oklch(0.624 0.115 249);
+  --plot-primary-foreground: oklch(0.22 0.02 260);
   --plot-field: var(--page-field);
   --plot-field-foreground: var(--page-field-foreground);
   --plot-field-muted-foreground: var(--page-field-muted-foreground);
@@ -531,7 +645,7 @@
   --plot-success-text: var(--page-success-text);
   --plot-warning-text: var(--page-warning-text);
   --plot-info-text: var(--page-info-text);
-  --plot-ring: oklch(0.66 0.128 249.5);
+  --plot-ring: oklch(0.5 0.13 249);
   /* **The one value that differs, and the whole reason L4-1 exists.**
      `--warning` (near-critical) against `--destructive` (critical) measured
      **1.34:1** — the two states a planner scans a wall of bars to tell apart,
@@ -557,15 +671,15 @@
      3:1 on a near-white ground. So a 1.5 floor is reachable and 3:1 is not,
      without changing the label ink or the hues. Recorded so nobody spends a
      day chasing it. */
-  --plot-destructive: oklch(0.721 0.148 37);
-  --plot-destructive-foreground: oklch(0.176 0.025 42.3);
+  --plot-destructive: oklch(0.439 0.175 27);
+  --plot-destructive-foreground: oklch(1 0 0);
   --plot-destructive-hover: var(--page-destructive-hover);
   --plot-secondary: var(--page-secondary);
   --plot-secondary-foreground: var(--page-secondary-foreground);
-  --plot-success: oklch(0.59 0.084 178);
+  --plot-success: oklch(0.475 0.084 178);
   --plot-success-foreground: var(--page-success-foreground);
-  --plot-warning: oklch(0.6 0.125 58);
-  --plot-warning-foreground: oklch(0.176 0.025 42.3);
+  --plot-warning: oklch(0.528 0.13 62);
+  --plot-warning-foreground: oklch(1 0 0);
   --plot-info: var(--page-info);
   --plot-info-foreground: var(--page-info-foreground);
   --plot-primary-hover: var(--page-primary-hover);
@@ -934,8 +1048,11 @@
   /* The ground. `--canvas` rather than `--page-background` — this is the one
      binding that is not a straight pass-through, and it is what makes the
      container's `bg-background` inside the scope identical to the `bg-canvas`
-     it replaces. Measured 1.02:1 against the page today, i.e. two greys nobody
-     can tell apart, which is exactly why the trap has never shown. */
+     it replaces. Measured 1.073:1 against the page (ΔL 0.024) since the light
+     corporate theme gave the diagram a ground of its own — where it used to be
+     byte-identical, which is exactly why the trap never showed. The "1.02:1,
+     two greys nobody can tell apart" this said before was wrong about the old
+     state as well as the new one. */
   --background: var(--plot-background);
   --foreground: var(--plot-foreground);
   --muted: var(--plot-muted);
@@ -1051,6 +1168,13 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
+  --color-chart-10: var(--chart-10);
+  --color-chart-11: var(--chart-11);
+  --color-chart-12: var(--chart-12);
   --color-field: var(--field);
   --color-field-foreground: var(--field-foreground);
   --color-field-muted-foreground: var(--field-muted-foreground);

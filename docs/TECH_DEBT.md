@@ -2868,3 +2868,232 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
 5. **The one-derivation gate matches the three original idioms only** (architecture S10):
    a fourth extent derivation in a different idiom would pass it. Recorded in ADR-0100
    decision 3 so the gate is not over-read.
+
+## 156. The drawer-subject mechanism has no registrant
+
+**Raised 2026-08-21** (ADR-0101). **Size:** M to delete, or it becomes ADR-0097 D2's foundation.
+
+The activity editor was the only caller of `useDrawerSubject`, and ADR-0101 moved it back to a
+modal dialog. So `drawer-subject.tsx` (273 lines), its rail button, its `show`/`focusRailButton`
+controls and `ContextDrawerEmpty` are now unreferenced by production code — the plan workspace
+runs the null-registration path every other route already ran. The drawer itself is very much
+alive: it holds the Project Explorer.
+
+**Kept rather than deleted, and this row is the reason it is not silent.** ADR-0097 D2 — a
+docked activity editor with its own epic and its own design pass — is still on `docs/BACKLOG.md`
+and this is precisely the foundation it would build on. The mechanism is self-contained and has
+its own tests, so the carrying cost is low.
+
+**Two exits, and one of them has to be taken.** Either D2 is built and this earns its place, or
+D2 is closed as "not wanted" and all of it is deleted — `CLAUDE.md` §5 is unambiguous that dead
+code goes and git remembers. What is not acceptable is the third thing, which is this row never
+being looked at again: an unused branch nobody maintains is the second product ADR-0088 was
+written about.
+
+**Related, and the sharper half:** `drawer-entry-point.test.tsx` mounts a synthetic `ProbeRoute`
+that registers a subject, so it stayed green through the removal of the only production
+registrant. It proves the shell _can_ show a subject; it never proved anything does. Its
+docblock now says so. That is ADR-0081's shape one level along, and worth remembering when
+reading any "the entry point works" test.
+
+## 157. Every colour gate is a floor; none is a ceiling — ANSWERED, no gate
+
+**Raised 2026-08-21** (ADR-0101, from first contact with the shipped dark theme). **Size:** S,
+inside the light-theme epic.
+
+`token-contrast.test.ts` asserts `>= 3:1` and `>= 4.5:1` across the matrix. Nothing anywhere
+asserts that a pair is not too FAR apart. The consequence is one-directional drift: every fix in
+this register's history moved a value toward a floor from below, and the pair a planner reads
+all day — page foreground on the canvas ground — sat unquestioned at **14.62:1**, more than
+triple AA and more than double AAA. On a near-black ground that is the halation profile, and it
+is what "hard on the eyes over a long period" was reporting.
+
+ADR-0101 softened it to 10.84:1 as a labelled stopgap. The gate is deliberately **not** added
+there: a contrast ceiling is a dark-ground instrument, because halation does not work the same
+way on light, and the product is moving to a light corporate theme. Building the gate for a
+theme being deleted is work thrown away.
+
+**ANSWERED 2026-08-21 at the light-theme epic's M0-T4, and the answer is that there is no gate
+to build.** Working in `docs/specs/light-corporate-theme/m0-ceiling.md`.
+
+A ratio ceiling must sit **below 14.61** to have caught the defect and **above 12.64** not to
+reject the recovered light palette's own card body text — an ordinary near-`#333`-on-white value.
+The whole admissible window is under two points, tuned to exactly two data points. And inside it
+the rule would be enforcing the wrong quantity: what made 14.61:1 uncomfortable is **halation**, a
+property of light ink on a dark ground rather than of the separation, which a ratio cannot see.
+
+The second candidate — a ground-luminance band, "off-white, never paper-white" — is **withdrawn**
+before writing: it fails on day one against the recovered palette's `--card` at L = 1.000, which
+is paper-white by construction and correct. A gate that fails on the values it protects gets
+deleted rather than fixed (ADR-0058).
+
+What removes the defect is the ground flip itself. The surviving risk on a light ground is the
+opposite one — washed-out values — and the floors already catch that.
+
+**The surviving requirement, if a dark theme ever returns:** it needs a _polarity-aware_ comfort
+check on light-ink-on-dark-ground separation, not a ratio ceiling, and the lever is more likely to
+be the ink's lightness than the ground's, because the ground carries the diagram. 14.61:1 was too
+much and 10.84:1 drew no complaint; that is two points, enough to know what to measure and not
+enough to set a number. Recorded in `m0-ceiling.md` and in the epic's ADR so it outlives this row.
+
+## 158. The printed and exported diagram is painted on a near-black ground
+
+**Raised 2026-08-21** (found while specifying the light-corporate theme). **Size:** S. **This is a
+live defect on `main`, not a theme preference** — it is filed separately for exactly that reason.
+
+`resolvePrintPalette` (`apps/web/src/features/tsld/render/palette.ts:120`) resolves the print
+ground from the live `--color-background` token and falls back to `#ffffff` only when the token
+cannot be read. `PrintSurface.css:29` pins the surrounding print chrome to `#ffffff` / `#1a1a1a`
+and its own comment says the hexes are "PINNED to `resolvePrintPalette()`'s own light fallbacks so
+the two can't drift". They have drifted: since Graphite the token resolves to Graphite's ground, so
+an exported PNG/PDF and the printed programme carry a near-black diagram panel inside white paper
+chrome.
+
+**Confirmed by capturing the artefact itself**, not inferred from the token chain: the harness now
+saves the real downloaded PNG (`export-diagram`, added at the light-theme epic's M0-T2), and it
+comes out with a near-black diagram ground under a title band whose ink was derived for white
+paper. The picture is the evidence; the token chain below is why.
+
+The same run measured, in Chromium against the running app:
+
+```
+--color-background  →  oklch(0.177 0.011 260.6)      (root and the canvas surface alike)
+--color-foreground  →  oklch(0.82 0.012 252.1)
+PrintSurface.css    →  #ffffff / #1a1a1a  (pinned)
+```
+
+**The escape hatch was written and then not taken.** `resolvePrintPalette`'s docblock records that
+the function used to force light by momentarily clearing a `.dark` class, says ADR-0097 removed the
+trick because the working surfaces were "already light", and ends: _"If a dark theme returns, this
+is one of the places that needs it back."_ ADR-0099 made the whole product dark two days later. The
+condition fired and nothing acted on it — a correct comment naming its own trigger is not a gate,
+which is ADR-0058's rule in the one form it keeps taking.
+
+**Why no test caught it.** The export suites run in jsdom, where `getComputedStyle` yields nothing
+and the function takes its light fallbacks — so the tests exercise the branch that is correct and
+can never reach the branch that ships. Paper wants light whatever the screen is doing, so the fix
+is to force it rather than to resolve it: a `PRINT_GROUND` the function does not read from the DOM
+at all, which also removes the drift `PrintSurface.css` was trying to pin against.
+
+**Do not let the light-theme epic absorb this.** That epic will make the symptom disappear by
+turning the ground light, and a defect that vanishes as a side-effect of unrelated work is one that
+returns the moment anything reintroduces a dark surface — an export preview, a presentation mode, a
+dark theme brought back on ADR-0097's own stated terms. Fix it on its own or close it on its own.
+
+## 159. `--color-*` aliases are frozen at `:root` — CLOSED, with a gate still owed
+
+**Raised 2026-08-21** (light-corporate theme, M2). **Size:** S.
+
+An `@theme inline` alias is declared at `:root` as `--color-primary: var(--primary)`. A custom
+property's `var()` is substituted at computed-value time **on the element that declares it**, and the
+already-substituted value is what inherits — so a `[data-surface]` rebind of `--primary` can never
+reach `--color-primary`. Verified in Chromium on a four-line page rather than reasoned from the spec:
+
+```
+:root { --plot-primary: rgb(1,2,3); --primary: rgb(9,9,9); --color-primary: var(--primary); }
+[data-surface="canvas"] { --primary: var(--plot-primary); }
+→ --primary at the scope       rgb(1,2,3)   (follows the rebind)
+→ --color-primary at the scope rgb(9,9,9)   (frozen at :root)
+```
+
+**Tailwind utilities are unaffected**, and that is why this went unnoticed for so long: `inline` is
+precisely what makes `bg-primary` compile to `var(--primary)` instead of the alias, so every DOM
+surface has always been correct. Only readers that name the alias are affected.
+
+`resolveTsldPalette`'s 88 reads were fixed in the same commit that found this — the light theme made
+it visible by giving the page a navy `--primary` and the diagram a blue one, so every non-critical
+bar painted navy. **What remains is three inline `var(--color-*)` styles in `TsldMinimap.tsx`**
+(`:416-417`, `:427`, `:439-440`). Two name the minimap frame pair, which is not scope-rebound and is
+therefore correct either way. The third is `var(--color-destructive)` for the minimap's Today line,
+which now differs from the scene's Today marker — both reds, visually near-identical today, and a
+real inconsistency waiting for the two families to diverge further.
+
+**The minimap half is now CLOSED.** The scope was established by probe rather than reasoned about:
+the minimap sits inside `[data-surface="canvas"]`, where `--color-destructive` gives the page's red
+(`oklch(0.505 0.19 27.5)`) and `--destructive` gives the diagram's (`oklch(0.439 0.175 27)`). So the
+plain rename was correct after all, and it shipped. The two frame reads stay on the alias because
+that pair is not scope-rebound and the alias is the only name Tailwind emits for it.
+
+**The LEGEND is closed too, and "visually marginal" was wrong.** It renders outside the
+`tone="canvas"` Surface, and its 38 swatch styles plus `lensLegendVarPalette`'s 18 var strings all
+named the alias — so the legend painted the PAGE's family beside bars painting the diagram's. On the
+light theme the "On schedule" swatch was near-black navy next to blue bars: a legend misdescribing
+the thing it exists to explain, on the one screen a person outside the organisation sees. It is
+wrapped in `<Surface tone="canvas" className="contents">` — the `context-drawer.tsx` precedent, so
+the element supplies the scope and generates no box, making this a colour correction with no layout
+consequence — and every var re-pointed.
+
+**A third instance was found the same way and is also fixed**: `GuestPlanView` mounted `TsldPanel`
+without `CanvasSurfaceProvider`, so `useRegisterCanvasSurface` returned its no-op, nothing was
+published, and every resolver took the documented fallback to `document.documentElement`.
+`canvas-surface.tsx`'s docblock names that fallback "the honest weak point of this design" and
+predicts the cause in as many words — _"a future host mounts the canvas outside the provider"_. That
+host existed already.
+
+**Also owed:** `token-contrast.test.ts` resolves a scope by reading the CSS text and following the
+rebind itself, so it asserts a mapping the browser does not perform for alias readers. It was right
+about what the values should be and silent about what the painter actually got. A gate that pins
+"every JS token read names an unprefixed token" would have caught the whole class, and is the
+cheapest thing here.
+
+## 160. `resolveLensPalette` is resolved twice per cycle
+
+**Raised 2026-08-21** (ADR-0102's performance gate). **Size:** XS.
+
+`TsldPanel.tsx` calls `resolveLensPalette(canvasSurface)` twice — once for the bar fills and once
+for the bar inks — so every `getComputedStyle` read in that resolver happens twice. Pre-existing
+duplication; ADR-0102 mildly compounds it by taking the WBS ramp from 5 members to 12, so the reads
+per resolve cycle go from 20 to 48.
+
+**Not blocking, and the reason is the call site rather than the count**: both calls sit inside
+`useMemo`s keyed on `[colourMode, activities, themeVersion, canvasSurface]`, so they fire on a
+user-triggered lens or data change and never per render or per frame. `resolveLensPalette` appears
+nowhere in `paint.ts` or the rAF loop.
+
+The fix is to pull one resolve into a single `useMemo` and derive both maps from it. Worth doing
+when that file is next open; not worth a commit of its own.
+
+## 161. Four screens the harness photographed for the first time, and one question for the product owner
+
+**Raised 2026-08-21** (ADR-0102's UX gate). **Size:** S each, none blocking, none introduced by the
+light theme — they became visible because the shot list went 12 → 25 and started covering states
+nothing had ever looked at.
+
+**a. The empty-state pattern is inconsistent.** `org-home-empty` uses icon + heading + explanation +
+action, which is the documented archetype. `resources`, `calendars` and `recently-deleted` render
+text-only inside a dashed box with no icon and the create action at the header instead. Pre-existing;
+pick one and apply it.
+
+**b. `clients-loading` is a bare spinner** where `docs/UX_STANDARDS.md` expects a skeleton. Also
+pre-existing, and only visible now because the loading state had never been captured.
+
+**c. The Project Explorer is a large flat navy block when the tree is short**, which is the common
+case: at 1646 and 1920 there is 800–900 px of content-free navy opposite an equally large light page.
+The rail's colour did not change in this epic and CQ-1(a) settles it in principle — but the
+consequence is new, because a navy rail beside a dark page read as continuous and a navy rail beside
+a light one is the most saturated object on the screen carrying no information. Worth putting to the
+product owner with the two screenshots rather than assumed settled. Consider whether the rail should
+compress when sparse, independent of colour.
+
+**d. The sign-in → organisation-home transition is black-to-white**, and that is a decision nobody
+has made. The public screens sit on a near-black `--ground`/`--ground-end` gradient
+(`globals.css:449-450`), untouched by this epic; the card and its navy panel do share the
+application's identity, but the void around them does not. It was true before the flip and the flip
+makes it starker. Either lighten the gradient stops or accept it explicitly as a threshold moment —
+**this is the one item here that is a product-owner question rather than a defect.**
+
+## 162. The legend's slack chip does not match what the canvas paints
+
+**Raised 2026-08-21** (ADR-0102's component gate). **Size:** XS. **Pre-existing** — the light theme
+only re-pointed its token names, it did not introduce the mismatch.
+
+`TsldLegend.tsx:399-407` draws the link-slack chip from `--card` and `--border`. The canvas draws the
+real one from `palette.bar` and `palette.barStroke` — `--primary` and `--border`
+(`render/paint.ts:1493-1499`). So the legend's swatch is a different colour from the thing it
+describes.
+
+**`--card` is the interesting half.** ADR-0097 made `Card` a **reset** rather than a scope member, so
+`--card` is deliberately absent from the canvas scope's rebind closure — which means that even inside
+`<Surface tone="canvas">` it resolves to the page's card colour. The legend is now correctly scoped
+(ADR-0102 D5) and this one swatch still cannot follow, because the token it names was never part of
+the family. Naming `--primary` is the fix; the wrapper is not.

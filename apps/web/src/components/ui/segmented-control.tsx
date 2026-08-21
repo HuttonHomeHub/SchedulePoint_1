@@ -124,7 +124,15 @@ export function SegmentedControl<T extends string>({
           onClick={() => onChange(option.value)}
           onKeyDown={onKeyDown}
           className={cn(
-            'focus-visible:ring-ring rounded-md px-3 py-1.5 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+            // `ring-offset-background` is not decoration: without it Tailwind's
+            // `--tw-ring-offset-color` falls back to its `@property` initial value, a hardcoded
+            // `#fff`, so a control focused on a navy surface would draw a white gap around its
+            // amber ring — 2.02:1, and invisible. Every sibling primitive (`Button`, `Input`,
+            // `TextLink`, `ToggleChip`) carries it and this one did not. Not currently reachable:
+            // all four live consumers render at page scope. Added before it becomes reachable,
+            // because the failure mode is a focus ring you cannot see, which looks exactly like a
+            // focus ring you have not triggered.
+            'focus-visible:ring-ring focus-visible:ring-offset-background rounded-md px-3 py-1.5 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
             value === option.value
               ? 'bg-accent text-accent-foreground'
               : 'text-muted-foreground hover:text-foreground',

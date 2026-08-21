@@ -115,6 +115,20 @@ beforeEach(() => {
   stubViewport(true);
 });
 
+/**
+ * **This mounts a synthetic `ProbeRoute`, not the product — and as of ADR-0101 no production
+ * route registers a subject at all.**
+ *
+ * It stayed green through the removal of the only real registrant (the activity editor, moved
+ * back to a modal dialog), which is the honest description of what it covers: the shell
+ * MECHANISM works — a registered subject reaches the drawer, announces, expands a closed panel,
+ * stays out of the way below `lg`, and returns focus to the rail button on close. It has never
+ * proved that anything in the product registers one, and it did not catch that nothing does.
+ *
+ * That is ADR-0081's shape one level along, and it is written here rather than in a postmortem
+ * because the next reader will otherwise take this file as coverage of a live entry point.
+ * `docs/TECH_DEBT.md` #156 carries the mechanism's two exits.
+ */
 describe('a route asking the shell to show its subject', () => {
   it('opens the drawer on the registered subject, so the entry point is not the rail button alone', () => {
     renderShell();

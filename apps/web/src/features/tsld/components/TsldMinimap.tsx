@@ -424,7 +424,7 @@ export function TsldMinimap({
               aria-hidden="true"
               data-testid="tsld-minimap-today"
               className="pointer-events-none absolute inset-y-0"
-              style={{ left: todayX, width: 1, background: 'var(--color-destructive)' }}
+              style={{ left: todayX, width: 1, background: 'var(--destructive)' }}
             />
           ) : null}
           {/* The viewport rectangle: moved by the HOST's frame loop via style.transform. The

@@ -89,7 +89,13 @@ export function ToolRail({
 }): React.ReactElement {
   return (
     <Surface
-      tone="panel"
+      // **`chrome`, not `panel`, since the light corporate theme split them.** The two used to share
+      // a scope and therefore a navy. When the working surfaces went light, the product owner kept
+      // the narrow rail navy — it is part of the frame around the work — and asked for the wide
+      // Project Explorer to become a light working surface, because it holds content rather than
+      // controls. One scope could not express both, so the rail joins the band it already sits
+      // flush against and `panel` is free to be light.
+      tone="chrome"
       // A test hook, in the established shape (`data-toolbar-item`, `data-plan-identity`). The rail
       // is a `Surface` div with no landmark of its own — it is chrome, not navigation — and the
       // below-`lg` top bar still renders the same brand link behind `display: none`, so a selector

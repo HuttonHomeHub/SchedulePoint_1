@@ -60,6 +60,7 @@ const BAND_PALETTE: WbsBandPalette = {
   derived: '#7a8090',
   rule: '#2a2f3a',
   label: '#111111',
+  derivedLabel: '#ffffff',
   selection: '#8ab4f8',
 };
 

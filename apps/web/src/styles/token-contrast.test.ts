@@ -101,30 +101,25 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
   // is light (validated against navy) and the field is white — 2:1, invisible. A placeholder
   // belongs to the field's colour system, so it gets its own token per surface.
   ['--field', '--field-muted-foreground', 'placeholder text inside an input'],
-  // The solid status fills. Nothing pairs them as a fill+label TODAY — `badge.tsx` uses an alpha
-  // wash plus the `-text` variant, and documents why. But `@theme inline` compiles
-  // `bg-warning text-warning-foreground`, so the pairing is one autocomplete away, and an
-  // unasserted-but-available token pair is exactly the trap this suite exists to remove.
   ['--muted', '--muted-foreground', 'secondary text on a muted block'],
   // The neutral `Badge`'s label. Added when ADR-0097's closure made `--secondary-foreground`
   // scope-derived and the pill — which had been painting it on `--muted` — dropped to 1.53:1 on
   // navy. The pairing was never asserted, so nothing failed here; `e2e-designed-chrome` caught
   // it in a browser. Asserting it is the fix; changing the class is only how it passes.
-  ['--muted', '--foreground', 'the label of a neutral status pill'],
-  // **A read-only grid cell, and the trap ADR-0083 found going the other way.** A gated field is
-  // read-only rather than `disabled`, so the reader can still read the value — which REMOVES the
-  // 1.4.3 exemption `disabled:opacity-50` currently relies on. The treatment therefore dims the
-  // CHROME and never the VALUE: the cell fill drops to `--muted` while the text stays
-  // `--foreground`. This pair is asserted BEFORE the CSS that needs it exists (M2-T4), because a
-  // pair added afterwards is a pair that shipped unchecked.
-  [
-    '--muted',
-    '--foreground',
-    'the value in a read-only field, whose chrome is dimmed and text is not',
-  ],
-  ['--success', '--success-foreground', 'the label of a solid success fill'],
-  ['--warning', '--warning-foreground', 'the label of a solid warning fill'],
-  ['--info', '--info-foreground', 'the label of a solid info fill'],
+  // **Two consumers, one pair — merged at M0-T4 rather than listed twice.** The reasons are both
+  // kept because they are different situations, and the pair was previously asserted once for each:
+  //
+  //  1. *The neutral `Badge`'s label.* Added when ADR-0097's closure made `--secondary-foreground`
+  //     scope-derived and the pill — which had been painting it on `--muted` — dropped to 1.53:1 on
+  //     navy. The pairing was never asserted, so nothing failed here; `e2e-designed-chrome` caught
+  //     it in a browser. Asserting it is the fix; changing the class is only how it passes.
+  //  2. *A read-only grid cell, and the trap ADR-0083 found going the other way.* A gated field is
+  //     read-only rather than `disabled`, so the reader can still read the value — which REMOVES
+  //     the 1.4.3 exemption `disabled:opacity-50` relies on. The treatment therefore dims the
+  //     CHROME and never the VALUE: the cell fill drops to `--muted` while the text stays
+  //     `--foreground`. Asserted BEFORE the CSS that needs it exists, because a pair added
+  //     afterwards is a pair that shipped unchecked.
+  ['--muted', '--foreground', 'a neutral status pill’s label, and a read-only field’s value'],
 ];
 
 /** Non-text pairs — WCAG 1.4.11 Non-text Contrast, 3:1. */
@@ -206,6 +201,40 @@ const CRITICALITY_PAIRS: ReadonlyArray<readonly [a: string, b: string, why: stri
   ['--warning', '--destructive', 'a near-critical bar against a critical one'],
   ['--primary', '--warning', 'an ordinary bar against a near-critical one'],
 ];
+
+/**
+ * **The WBS band (ADR-0063), which this matrix had no entry for at all.**
+ *
+ * Added by ADR-0102's accessibility gate, which found two live failures the 216 assertions above
+ * could not see. The reason they could not is worth keeping: the band paints its name on whichever
+ * of TWO fills applies, and reuses `--muted-foreground` — a token this matrix only ever validates
+ * as INK — as the derived bucket's FILL. There is no concept here of "a token normally used as ink,
+ * repurposed as a fill, then painted with a different ink than the one it was validated with", so
+ * the pairing was invisible by construction rather than by oversight.
+ *
+ * Both were measured before being fixed: the derived bucket's name at **3.01:1** against 4.5, and
+ * the selected summary's inset ring at **1.68:1** against 3. Both reached the exported and printed
+ * diagram too, since `resolvePrintWbsBandPalette` delegates to the same resolver.
+ *
+ * The ring is asserted against the BAR rather than the ground on purpose: `paintWbsBand` strokes it
+ * inset (`bar.x + 0.5`, `bar.w - 1`), unlike the scene's ring, which is offset 2px outward and
+ * never touches a fill. Assert the pair the painter actually draws.
+ */
+describe('the WBS band pairs the ink it paints with the fill it paints on', () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+
+  it.each([
+    ['--primary', '--primary-foreground', "a real summary's name on its bar", 4.5],
+    ['--muted-foreground', '--background', "the Unassigned bucket's name on its fill", 4.5],
+    ['--primary', '--foreground', "the selected summary's INSET ring on its bar", 3],
+  ] as const)('%s / %s — %s', (fill, ink, _why, floor) => {
+    const value = ratio(tokens, fill, ink);
+    expect(
+      value,
+      `${fill} vs ${ink} is ${fmtRatio(value)}, needs ${floor}:1`,
+    ).toBeGreaterThanOrEqual(floor);
+  });
+});
 
 describe('the diagram tells its three criticality states apart', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
