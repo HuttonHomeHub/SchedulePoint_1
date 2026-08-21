@@ -210,6 +210,15 @@ keep `main` releasable.
   conflict-flavoured twin would be ADR-0093's defect reproduced inside one surface. The flag-on
   journey caught the epic's purpose inverting on its first run — the count's own read-out cannot
   demote, so it pushed the command it labels off the row in the only state the epic exists for.
+- **The diagram can say where you are** (ADR-0100, the TSLD minimap). The last unbuilt
+  Should-have on the primary surface: a 200×120 overview panel in the canvas's bottom-right —
+  an invariant cached picture of the whole programme (critical path surviving 1 px decimation)
+  with the live viewport as a DOM rectangle — reached from `View ▾ ▸ Panels ▸ Minimap`, off by
+  default. Drag the rectangle, click to jump, or drive it from the keyboard: the canvas's first
+  **unanchored** pan that does not need a pointer. Built measure-first — the falsification
+  condition was committed before the prototype and passed on both fixtures and again against
+  the shipped code — and the need itself was re-derived rather than quoted: at 1646 the working
+  presets frame 0.3–8.6% of a real plan's span, which is the problem the panel answers.
 - **The plan workspace is a workstation, not a page** (ADR-0099, "Graphite"). A ground-up redesign
   of the surface the product exists to be. The shell becomes a CSS grid — a leading-edge tool rail,
   a stage, and a trailing context drawer — so the command band spans the drawer and opening it
