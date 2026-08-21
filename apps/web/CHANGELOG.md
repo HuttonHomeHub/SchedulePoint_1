@@ -1,5 +1,36 @@
 # @repo/web
 
+## 0.97.0
+
+### Minor Changes
+
+- [#341](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/341) [`fdb93d7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fdb93d778a6ab9cd9f6057416545afa343e318d2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The light corporate theme. The application is now navy chrome and amber accents around light
+  working surfaces — the same navy and amber the sign-in screen has always worn, so the front door
+  and the product are one identity for the first time.
+
+  The diagram gets a ground of its own, one measured step off the page, and a criticality ladder
+  derived against it. Twelve categorical colours replace five, so grouping by WBS no longer reuses a
+  fill on the sixth phase.
+
+  Also fixes a defect that had been live since surface scopes shipped: the canvas painter resolved
+  the page's colours rather than the diagram's, because a `@theme inline` alias is resolved once at
+  the document root and cannot follow a per-surface rebind. The guest share view was a second
+  instance, and its legend a third.
+
+### Patch Changes
+
+- [#341](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/341) [`fdb93d7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fdb93d778a6ab9cd9f6057416545afa343e318d2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activity editor opens as a dialog again (ADR-0101). It had been docked in the trailing
+  context drawer, which caps at 420px — a form that was deliberately widened to 896px with a
+  section rail _because 448px had already proved too narrow_. In the drawer it ran its
+  narrow-viewport layout permanently: tabs overflowing sideways inside a panel that was itself
+  scrolling, over a table scrolling sideways of its own. It now opens at the width and in the
+  layout it was designed for, and the drawer keeps the Project Explorer — which no longer
+  disappears when you edit something.
+
+  Two colour values are softened while a light theme is prepared: the page foreground, which
+  measured 14.62:1 against the canvas ground (more than double the AAA requirement, and the
+  reason long sessions felt tiring), and the non-working-day hatch that was striping the diagram.
+
 ## 0.96.0
 
 ### Minor Changes
