@@ -48,10 +48,13 @@ test.describe('The minimap', () => {
 
     // ── Seed a small network through the real API and recalculate, so the picture has bars
     // and a critical path to draw.
+    // Long durations on purpose: the M3 cases need a plan several viewport-pages wide, or the
+    // rectangle legitimately spans the whole box at every preset and the pad (correctly)
+    // swallows every click — which the first run of this journey established by screenshot.
     const seeded = await seedActivities(page, orgSlug, [
-      { name: 'Dig footings', laneIndex: 0, durationDays: 5 },
-      { name: 'Pour foundations', laneIndex: 1, durationDays: 8 },
-      { name: 'Steel frame', laneIndex: 2, durationDays: 13 },
+      { name: 'Dig footings', laneIndex: 0, durationDays: 40 },
+      { name: 'Pour foundations', laneIndex: 1, durationDays: 80 },
+      { name: 'Steel frame', laneIndex: 2, durationDays: 120 },
     ]);
     expect(seeded).toHaveLength(3);
     await recalculate(page, orgSlug);
@@ -108,6 +111,46 @@ test.describe('The minimap', () => {
     await expect(page.getByRole('group', { name: 'Diagram overview' })).toBeVisible({
       timeout: 20_000,
     });
+
+    // ── M3: navigation, with the CANVAS'S OWN RULER as the oracle — the viewport must
+    // actually move, and the ruler band is observable state that is not the element under
+    // test (a journey that asserts only the panel's DOM would pass with the camera welded).
+    const panelAfterReload = page.getByRole('group', { name: 'Diagram overview' });
+    const ruler = page.getByTestId('tsld-ruler');
+    const atFit = await ruler.innerText();
+
+    // Keyboard: focus the group and page-pan right — the ruler's visible window changes.
+    await panelAfterReload.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => ruler.innerText()).not.toBe(atFit);
+
+    // Home returns to the plan's first dated day (announced as a discrete jump).
+    await page.keyboard.press('Home');
+
+    // Zoom to the Day preset first: at Fit the rectangle IS nearly the whole box (the whole
+    // plan is visible), so a click near the edge lands on the pad — which correctly refuses
+    // to jump. The first run of this journey established that, which is exactly the kind of
+    // fact only a real browser reports.
+    await page.getByRole('button', { name: /^View/ }).click();
+    await page.getByRole('radio', { name: /^Day/ }).click();
+    await page.keyboard.press('Escape');
+    const atHome = await ruler.innerText();
+
+    // Click-to-jump: click near the surface's right edge — a discrete jump the ruler shows.
+    const surface = panelAfterReload.locator('[data-minimap-surface]');
+    const surfaceBox = (await surface.boundingBox())!;
+    await surface.click({ position: { x: surfaceBox.width - 6, y: surfaceBox.height / 2 } });
+    await expect.poll(async () => ruler.innerText()).not.toBe(atHome);
+
+    // Drag the rectangle's pad back toward the left edge — a continuous pan the ruler follows.
+    const pad = panelAfterReload.getByTestId('tsld-minimap-rect-pad');
+    const padBox = (await pad.boundingBox())!;
+    const beforeDrag = await ruler.innerText();
+    await page.mouse.move(padBox.x + padBox.width / 2, padBox.y + padBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(surfaceBox.x + 12, padBox.y + padBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => ruler.innerText()).not.toBe(beforeDrag);
 
     // ── Close via the panel's own button: the panel goes, and focus does NOT drop to <body>
     // (M2-T6 — the most repeated named a11y regression in this codebase).
