@@ -2,16 +2,20 @@ import type { LensPalette } from './lenses';
 import type { ResourceStripPalette, TsldPalette, WbsBandPalette } from './paint';
 
 /**
- * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006),
- * so the canvas is theme-aware (light/dark) without hardcoding colour — the tokens stay
- * the single source of truth and the canvas is just another consumer. Reads the computed
- * `--color-*` custom properties off the document root; call again on a theme change to
- * repaint with the new values. Falls back to sensible values when the DOM/tokens are
- * unavailable (e.g. jsdom in unit tests).
+ * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006), so the canvas
+ * takes its colour from the design system rather than hardcoding it — the tokens stay the single
+ * source of truth and the canvas is just another consumer. Reads the computed `--color-*` custom
+ * properties off the element it is given; call again when those values change to repaint. Falls back
+ * to sensible values when the DOM/tokens are unavailable (e.g. jsdom in unit tests).
+ *
+ * This used to say "theme-aware (light/dark)". ADR-0097 collapsed the product to ONE theme, so
+ * there is no light/dark axis for this to be aware of; what the indirection buys now is that a
+ * re-valued token repaints the diagram with no change here at all, which is what the light-corporate
+ * epic is about to collect on.
  *
  * **`root` is REQUIRED, and that is the guard** (ADR-0097 Landing E). It defaulted to
  * `document.documentElement` and every one of the nine production call sites took the default — so
- * all 86 token reads below resolved against the PAGE, on a ground that is not the page. A default
+ * all 88 token reads below resolved against the PAGE, on a ground that is not the page. A default
  * makes that failure silent: the diagram paints plausible colours and nothing anywhere reports it.
  * Removing the default turns a missed call site into a compile error, which is the ADR-0070
  * `hoursPerDay` precedent adopted for the same class of bug — a value that is wrong rather than
