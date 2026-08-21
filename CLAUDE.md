@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1048 web
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1049 web
 > source files with 35 flag-scoped Playwright suites beside the base journey, and
-> 101 ADRs.
+> 102 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2683,6 +2683,63 @@ progress` off the command surface because **an object action belongs on the obje
   ceiling**, so values could only ever be pushed apart. A ceiling is deliberately NOT gated now —
   halation is a dark-ground phenomenon and the product is going light, so gating it for a theme
   being replaced is work thrown away. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0102** _(Accepted; M0–M3 landed 2026-08-21)_ — The light corporate theme, and the scope that
+  never reached the painter. The product owner called the dark Graphite palette "awful in all
+  respects" and "very hard on the eyes over a long period"; it is replaced, chrome and canvas,
+  keeping ADR-0097's single-theme architecture exactly. `docs/specs/graphite/design.md:98-116` is
+  literally headed **"The palette is OPEN"**, so this closes an open question rather than reversing
+  a settled one.
+  **The theme was largely recovered rather than designed.** The `.corporate` block ADR-0097 deleted
+  is intact at `44f1c59^`, bounded **by content rather than by the quoted line range** — which the
+  plan's own risk note demanded and which earned its keep on the first command, since the brief's
+  range overruns by 290 lines and the overrun is **invisible to a name count**. Measured: not one of
+  its 117 names has since disappeared, **61 of 271 declarations do not move at all**, and the real
+  judgement is concentrated in ~30 diagram tokens. That **falsifies ADR-0097's own costing in the
+  helpful direction** — the declaration count was right, the "week of design judgement" was
+  substantially already spent, for everything except the one surface ADR-0099 re-derived afterwards.
+  **The M1/M2 boundary does not hold at the token level**: 23 of the plot family's 31 members alias
+  the page family, so re-valuing the page's ink broke twelve assertions, every one in the canvas
+  scope and none in the page. The milestones are separable in what they **derive** and not in what
+  they **break**. The criticality ladder is **solved rather than chosen**, and its binding constraint
+  is not the ground but the **label**: white on the on-schedule blue is 3.56:1, so the lightest fill
+  takes dark ink — which is exactly what the recovered reasoning meant by capping separation at
+  1.70:1 "subject to a white inside-label", and costs nothing because the recovered chrome already
+  puts navy on its amber primary. Every fill inverts to darker-than-ground and **its label inverts
+  with it, as one edit**.
+  **The contrast ceiling `docs/TECH_DEBT.md` #157 asked for is NOT built, and that is an answer.** A
+  ratio ceiling must sit below 14.61 to have caught the defect and above 12.64 not to reject the
+  recovered palette's own card text: a window under two points wide, tuned to two data points, in
+  which the rule would enforce **halation** — a property of light ink on a dark ground, which does
+  not occur on the ground it would guard. A second candidate (a ground-luminance band) is
+  **withdrawn before writing**: it fails on day one against `--card` at L = 1.000.
+  **The epic's most useful finding is not a colour.** `resolveTsldPalette`'s 88 token reads named
+  the `@theme inline` aliases — and an alias declared at `:root` as `--color-primary: var(--primary)`
+  is substituted **on the element that declares it**, so a surface rebind can never reach it
+  (verified in Chromium on a four-line page). ADR-0097 Landing E's guard was therefore **necessary
+  and not sufficient**: making `root` a required parameter changed which element was asked and not
+  one value that came back, so **the canvas painter had never once used the canvas surface scope**.
+  Tailwind was never affected — `inline` is exactly what compiles `bg-primary` to `var(--primary)`
+  rather than the frozen alias — which is why every DOM surface was always right and only the canvas
+  was wrong, and why it survived until the page's primary went navy while the diagram's stayed blue.
+  **The contrast matrix is structurally incapable of reporting it**, because it follows the rebind
+  itself when it resolves a scope. Two more instances were on the **guest share view**, the one
+  screen an outsider sees: it mounted `TsldPanel` outside `CanvasSurfaceProvider` — which
+  `canvas-surface.tsx`'s own docblock predicts in as many words, _"a future host mounts the canvas
+  outside the provider"_ — and the legend painted the page's family beside the diagram's bars.
+  **Two defects only photographs found**, both with every gate green: the weekend hatch, whose
+  1.10:1 dark step becomes **9:1** on a light wash (the hatch is reported rather than asserted, and
+  a floor cannot express "too loud"); and the minimap frame, whose gate is `max(stroke, halo) >= 3`
+  and therefore polarity-agnostic **by design**, so it stayed green with a white stroke on a
+  near-white ground while the halo carried every assertion. Nothing about that gate changes. The
+  instrument was widened first — **12 → 25 shots**, including the **exported PNG itself**, whose
+  absence is what let `docs/TECH_DEBT.md` #158 ship: twelve screens photographed and never once what
+  the product _produces_. **#158 stays open**, because the light theme hides its symptom and not its
+  cause. The `auth` scope was **re-measured** rather than assumed — 17 of 31 tokens differ, 14
+  perceptibly — and survives on its values, its original ADR-0077 §2 reason having lapsed at
+  ADR-0097. Seven claims are recorded as corrected in the ADR's own closing section, including two
+  inherited from the brief and one where a correct measurement produced a wrong inference.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a
   customer. The product owner asked for "a super god user"; the motivating example — email-down

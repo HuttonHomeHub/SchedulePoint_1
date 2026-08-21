@@ -509,6 +509,19 @@ discriminators. Each becomes a spec/plan before build:
   Must/Should-have per the brief. (Resources have since shipped — M7. Export shipped as the TSLD
   CSV/PNG/PDF menu, the printed programme, and XER/MSPDI via `GET …/export/:format`.)
 
+- **The light corporate theme** — **shipped** (ADR-0102, 2026-08-21). The product owner called the
+  dark Graphite palette "awful in all respects"; it is replaced, chrome and canvas, keeping
+  ADR-0097's single-theme architecture exactly. The theme was largely **recovered** rather than
+  designed: the `.corporate` block ADR-0097 deleted is intact in git history with its reasoning
+  attached, and not one of its 117 names had since disappeared — which falsifies ADR-0097's own
+  "a week of design judgement" costing in the helpful direction, for everything except the diagram.
+  Its most useful finding is not a colour: the canvas painter had **never once used the canvas
+  surface scope**, because a `@theme inline` alias is substituted at `:root` and a per-surface
+  rebind cannot reach it — invisible until the page's primary went navy and the diagram's stayed
+  blue. The contrast ceiling `docs/TECH_DEBT.md` #157 asked for is **not built**, and that is an
+  answer rather than a deferral: the admissible window is under two points wide and the rule would
+  enforce halation, which does not occur on the ground it would guard.
+
 ## Guiding constraints
 
 - Keep `main` releasable; ship thin vertical slices.
