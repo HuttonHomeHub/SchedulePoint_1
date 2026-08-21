@@ -1061,6 +1061,8 @@
   --color-ground-end: var(--ground-end);
   --color-canvas: var(--canvas);
   --color-canvas-band: var(--canvas-band);
+  --color-canvas-minimap-frame: var(--canvas-minimap-frame);
+  --color-canvas-minimap-frame-halo: var(--canvas-minimap-frame-halo);
   --color-canvas-grid-day: var(--canvas-grid-day);
   --color-canvas-grid-month: var(--canvas-grid-month);
   --color-canvas-grid-year: var(--canvas-grid-year);

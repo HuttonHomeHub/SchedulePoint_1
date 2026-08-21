@@ -69,8 +69,13 @@ D7 built a parallel a11y layer instead.
    policy.** Ground → non-critical bars → critical bars → data-date vertical; later
    strokes overwrite earlier ones, so the critical path survives the merge at 1 px
    (asserted). Links above all: 3,200 links in a 200 px box is a smear that hides the
-   bars. The draw budget is a counting-stub gate (`minimap-budget.test.ts`): zero
-   text work, zero per-bar strokes, `fillStyle` batched into exactly two bar passes.
+   bars. The draw budget is a counting-stub gate (`minimap-budget.test.ts`): zero text
+   work, zero per-bar strokes, `fillStyle` batched per pass. **Amended at the M4
+   accessibility gate (WCAG 1.4.1):** wherever a lane row is ≥ 3 px, a critical bar carries
+   a foreground-**lightness** fringe (a fillRect pair, still batched) so hue is never the
+   only channel where the row can carry more; below 3 px the picture degrades to hue plus
+   the scene's own dash/outline cues one surface up — REPORTED, not asserted, in
+   `token-contrast.test.ts` per the day-tier precedent.
 6. **The culled-id set is not the minimap's subject**, and `paintScene`'s docblock
    claiming the minimap as its consumer is corrected — the culled set is what is ON
    screen; the minimap's subject is the whole plan.
@@ -123,8 +128,23 @@ D7 built a parallel a11y layer instead.
   pre-existing shortfall at M4 rather than propagated.
 - A `canvas`-scope token with its own contrast grounds (decision 9).
 - The M0 measurement document is the **standing baseline** for the next canvas epic, and
-  M4-T2 re-derives its numbers against the shipped implementation before this ADR moves to
-  Accepted.
+  M4-T2 re-derived its numbers against the shipped implementation (Run 3: +0.76 pp, the
+  probe's compositing asymmetry gone) before this ADR moved to Accepted.
+- **The M4 gate pass earned its place for the eighth epic running** — five specialists over
+  the combined diff, and the four that blocked found six defects that had passed a human
+  read and every unit gate: the frame token pair was declared at `:root` and never aliased
+  in `@theme inline`, so the rectangle and marker painted NO colour in a real browser while
+  the contrast gate (which resolves `:root` names) stayed green; the drag anchor was read
+  back off the **inflated** display rectangle, so every drag's opening commit was ~8 days
+  off at the Day preset and Escape restored the wrong viewport (fixed by extracting
+  `sceneWindowRect` and switching the drag to a delta-from-true-centre model); the minimap's
+  Today was re-derived in **UTC** while the scene's is local-calendar — a whole day apart
+  west of UTC every evening (fixed by passing the host-resolved day down; the ADR-0059
+  shared-axis rule applies to the clock); the bitmap separated critical from non-critical by
+  hue alone (WCAG 1.4.1 — the lightness fringe above); the panel had no behaviour at all
+  below the widths the shell supports (the 600 px withdrawal); and this ADR's own decision
+  10 named the rejected persistence option as the decision. Each fix carries a regression
+  test; the reviews' non-blocking findings are `docs/TECH_DEBT.md` #155.
 - The register's stage-banner counts move (new files); `pnpm check:counts` re-derives them.
 
 ## References

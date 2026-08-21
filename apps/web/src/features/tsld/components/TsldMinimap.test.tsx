@@ -105,14 +105,24 @@ describe('TsldMinimap', () => {
     expect(screen.queryByTestId('tsld-minimap-selection')).not.toBeInTheDocument();
   });
 
-  it('renders the Today vertical only when today falls inside the drawn span', () => {
-    const today = new Date().toISOString().slice(0, 10);
-    // Span that surrounds today…
-    mount({
-      activities: [activity({ earlyStart: today, earlyFinish: today })],
-      dataDate: today,
-    });
+  it('renders the Today vertical from the HOST-resolved day, only when inside the span', () => {
+    // Today arrives resolved (M4 B2: the panel must never re-derive the clock — the first
+    // draft did, in UTC, a whole day out west of UTC every evening).
+    const { rerender, onClose } = mount({ todayDay: 20 }); // inside the ~59-day span
     expect(screen.getByTestId('tsld-minimap-today')).toBeInTheDocument();
+    rerender(
+      <TsldMinimap
+        activities={[activity()]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        bottomOffsetPx={0}
+        onClose={onClose}
+        bitmapCanvasRef={createRef<HTMLCanvasElement>()}
+        rectRef={createRef<HTMLDivElement>()}
+        todayDay={4000}
+      />,
+    );
+    expect(screen.queryByTestId('tsld-minimap-today')).not.toBeInTheDocument();
   });
 
   it('close returns focus to the control that opened it, never <body> (M2-T6)', () => {

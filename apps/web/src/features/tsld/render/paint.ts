@@ -14,7 +14,6 @@ import {
   barGlyphKind,
   computeEdgeFanOut,
   daysBetween,
-  worldExtent,
   dependencyPolyline,
   dependencyPolylineTimeTrue,
   edgeTouches,
@@ -2207,17 +2206,4 @@ export function paintWbsBand(
     ctx.fillStyle = palette.label;
     ctx.fillText(text, bar.x + LABEL_PAD_PX, bar.y + bar.h / 2);
   }
-}
-
-/**
- * The day-only view of {@link worldExtent} (which is the one derivation — M1-T1). Kept as an
- * export because the whole-plan export framing consumes exactly this shape; the minimap does NOT
- * read it — it reads `worldExtent` directly, since it needs the lane axis too.
- */
-export function dayExtent(
-  activities: readonly RenderActivity[],
-  dataDate: string,
-): { minDay: number; maxDay: number } | null {
-  const extent = worldExtent(activities, dataDate);
-  return extent === null ? null : { minDay: extent.minDay, maxDay: extent.maxDay };
 }

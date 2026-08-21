@@ -145,6 +145,12 @@ test.describe('The minimap', () => {
     // Drag the rectangle's pad back toward the left edge — a continuous pan the ruler follows.
     const pad = panelAfterReload.getByTestId('tsld-minimap-rect-pad');
     const padBox = (await pad.boundingBox())!;
+    // The 24×24 floor as RENDERED geometry (M4 a11y gate): the unit test asserts the inline
+    // min-width/min-height strings and jsdom does no layout; axe's target-size rule skips a
+    // role-less pad. Only this measures the real box — at the Day preset, where the true
+    // rectangle is at its narrowest.
+    expect(padBox.width, 'pad width ≥ 24 (WCAG 2.5.8)').toBeGreaterThanOrEqual(24);
+    expect(padBox.height, 'pad height ≥ 24 (WCAG 2.5.8)').toBeGreaterThanOrEqual(24);
     const beforeDrag = await ruler.innerText();
     await page.mouse.move(padBox.x + padBox.width / 2, padBox.y + padBox.height / 2);
     await page.mouse.down();

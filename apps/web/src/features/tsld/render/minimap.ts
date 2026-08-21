@@ -1,5 +1,11 @@
 import type { Ctx2D } from './ctx-2d';
-import { screenXOfDay, worldExtent, type RenderActivity, type Viewport } from './geometry';
+import {
+  screenXOfDay,
+  worldExtent,
+  type RenderActivity,
+  type Size,
+  type Viewport,
+} from './geometry';
 import { daysBetween } from './working-time';
 
 /**
@@ -70,9 +76,23 @@ export interface MinimapPalette {
   readonly bar: string;
   /** Critical bar ink — the scene's `critical`; drawn LAST so it survives the merge. */
   readonly critical: string;
+  /** The scene's foreground `outline` — the critical FRINGE (WCAG 1.4.1, M4 a11y gate):
+   * hue is not the only channel separating critical from non-critical wherever a lane row
+   * is tall enough to carry it (see {@link CRITICAL_FRINGE_MIN_H}). */
+  readonly outline: string;
   /** The data-date vertical — the scene's `dataDate`. */
   readonly dataDate: string;
 }
+
+/**
+ * Below this row height (px) the critical fringe is dropped: a 1px fringe on a 1–2px bar
+ * IS the bar. Above it, a critical bar is drawn as a foreground-luminance rect with the
+ * `critical` fill inset 1px vertically — a lightness edge that survives every colour-vision
+ * type, which is what the M4 accessibility gate asked for (the scene's own dash cue cannot
+ * shrink this far). The sub-threshold degradation to hue-plus-the-scene's-own-cues is
+ * REPORTED in `token-contrast.test.ts`, the DAY-tier precedent.
+ */
+export const CRITICAL_FRINGE_MIN_H = 3;
 
 /**
  * The world→minimap mapping. `view` is a real {@link Viewport} so every x lands via
@@ -108,6 +128,65 @@ export function minimapViewport(
   };
 }
 
+/**
+ * The visible window a navigation commit produced — what the host's `centerOnWorld`/`panPages`
+ * return and the panel's announcement reads out (M4 component review: pure data with no React
+ * dependency belongs beside `MinimapMapping`, not inside the panel component that consumes it).
+ */
+export interface MinimapWindow {
+  startIso: string;
+  endIso: string;
+  laneFrom: number;
+  laneTo: number;
+}
+
+/**
+ * The scene viewport expressed in minimap coordinates (M4 architecture gate, B1/S4): the
+ * TRUE rectangle (exact, unclamped), the DISPLAY rectangle (clamped to the box, floored at
+ * 8 px per axis so a border-only frame stays legible), and the true viewport CENTRE as a
+ * world point. Extracted from the host's rAF closure because twenty lines of pure
+ * arithmetic sealed inside a frame loop are reachable by no unit test — and because the
+ * drag anchor MUST come from the true rect: reading it back off the inflated display
+ * rectangle put every drag's first commit ~`(display−true)/2` px of world off target, and
+ * made Escape restore the inflated centre rather than the press viewport.
+ *
+ * `sceneLaneHeight` is a parameter, never `LANE_HEIGHT` imported here — the axis pin
+ * (`minimap-axes.structural.test.ts`) bans that name from this module so the LANE
+ * compression cannot be "simplified" back to the scene's fixed rows; the scene→box
+ * conversion legitimately needs the scene's row height, so the host passes it in.
+ */
+export function sceneWindowRect(
+  view: Viewport,
+  size: Size,
+  sceneLaneHeight: number,
+  mapping: MinimapMapping,
+): {
+  true: { x: number; y: number; w: number; h: number };
+  display: { x: number; y: number; w: number; h: number };
+  centre: { day: number; lane: number };
+} {
+  const leftDay = -view.originX / view.pxPerDay;
+  const topLane = -view.originY / sceneLaneHeight;
+  const visibleDays = size.width / view.pxPerDay;
+  const visibleLanes = size.height / sceneLaneHeight;
+  const x = screenXOfDay(leftDay, mapping.view);
+  const y = topLane * mapping.pxPerLane;
+  const w = visibleDays * mapping.view.pxPerDay;
+  const h = visibleLanes * mapping.pxPerLane;
+  const cw = Math.min(mapping.box.width, Math.max(8, w));
+  const ch = Math.min(mapping.box.height, Math.max(8, h));
+  return {
+    true: { x, y, w, h },
+    display: {
+      x: Math.min(mapping.box.width - cw, Math.max(0, x)),
+      y: Math.min(mapping.box.height - ch, Math.max(0, y)),
+      w: cw,
+      h: ch,
+    },
+    centre: { day: leftDay + visibleDays / 2, lane: topLane + visibleLanes / 2 - 0.5 },
+  };
+}
+
 /** One decimated bar. `w`/`h` are floored at 1 px so no placed activity vanishes entirely. */
 export interface MinimapRect {
   readonly x: number;
@@ -123,7 +202,10 @@ export interface MinimapRect {
  * the extent into this loop would be a fourth inline extent derivation, which
  * `one-world-extent.structural.test.ts` exists to refuse (the ~2 ms fold saving was
  * withdrawn as a premise in the spec's agreement round; the whole cost sits on the
- * scene-change path, measured at single-digit milliseconds — M0-T4).
+ * scene-change path, measured at single-digit milliseconds — M0-T4). The panel's own
+ * `worldExtent` memo means a data change pays the fold twice (~1.9 ms measured at 2,160
+ * activities in the M4 perf gate) — once per consumer, by the one-derivation design, on an
+ * event that already costs a recalculation and a scene repaint.
  */
 export function minimapRects(
   activities: readonly RenderActivity[],
@@ -178,9 +260,23 @@ export function buildMinimapBitmap(
   for (const r of rects) {
     if (!r.critical) ctx.fillRect(r.x, r.y, r.w, r.h);
   }
+  // The critical fringe (WCAG 1.4.1): where the row can carry it, a critical bar is a
+  // foreground-luminance rect with the critical fill inset — lightness, not hue alone.
+  // Still fillRect-only and still batched (one fillStyle write per pass), so the budget
+  // gate's shape holds.
+  const fringed = rects.some((r) => r.critical && r.h >= CRITICAL_FRINGE_MIN_H);
+  if (fringed) {
+    ctx.fillStyle = palette.outline;
+    for (const r of rects) {
+      if (r.critical && r.h >= CRITICAL_FRINGE_MIN_H) ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
+  }
   ctx.fillStyle = palette.critical;
   for (const r of rects) {
-    if (r.critical) ctx.fillRect(r.x, r.y, r.w, r.h);
+    if (r.critical) {
+      if (r.h >= CRITICAL_FRINGE_MIN_H) ctx.fillRect(r.x, r.y + 1, r.w, r.h - 2);
+      else ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
   }
 
   // The data-date vertical (day 0 by definition — dates are drawn about the data date).

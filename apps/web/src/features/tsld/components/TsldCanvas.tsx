@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 
 import {
@@ -23,7 +24,7 @@ import { useCanvasSurface } from '../render/canvas-surface';
 import { cursorReadout } from '../render/cursor-readout';
 import type { GhostBar } from '../render/lenses';
 import { linkLegality } from '../render/link-legality';
-import { buildMinimapBitmap, type MinimapMapping } from '../render/minimap';
+import { buildMinimapBitmap, sceneWindowRect, type MinimapMapping } from '../render/minimap';
 import {
   paintInteractionLayer,
   paintResourceStrip,
@@ -738,6 +739,13 @@ export function TsldCanvas({
   const minimapRectRef = useRef<HTMLDivElement>(null);
   const minimapDirtyRef = useRef(true);
   const minimapMappingRef = useRef<MinimapMapping | null>(null);
+  // Responsive withdrawal (M4 ux gate; the route M2-T6 named): below this measured canvas
+  // width the fixed 200×120 panel plus its clearances covers more than a third of the diagram
+  // it exists to summarise, and — unlike the Legend — it cannot be dragged out of the way, so
+  // it withdraws. Derived, not taste: 3 × MINIMAP_BOX.width. Defaults TRUE so an unmeasured
+  // surface (jsdom, first frame) never suppresses the panel; only a real measure (> 1px wide)
+  // may withdraw it.
+  const [minimapRoom, setMinimapRoom] = useState(true);
   const viewRef = useRef<Viewport>(DEFAULT_VIEWPORT);
   const sizeRef = useRef<Size>({ width: 0, height: 0 });
   const dirtyRef = useRef(true);
@@ -1033,6 +1041,15 @@ export function TsldCanvas({
     },
     [describeMinimapWindow],
   );
+  // The TRUE viewport centre as a world point — the drag anchor (M4 B1). A pure read off
+  // the refs through the same extracted arithmetic the display rectangle uses, so the
+  // anchor and the picture cannot disagree.
+  const minimapViewportCentre = useCallback((): { day: number; lane: number } | null => {
+    const mapping = minimapMappingRef.current;
+    const size = sizeRef.current;
+    if (mapping === null || size.width <= 1) return null;
+    return sceneWindowRect(viewRef.current, size, LANE_HEIGHT, mapping).centre;
+  }, []);
   const minimapPanPages = useCallback(
     (dx: number, dy: number): MinimapWindow | null => {
       const size = sizeRef.current;
@@ -1324,6 +1341,7 @@ export function TsldCanvas({
       if (size.width !== applied.width || size.height !== applied.height) {
         applied = size;
         sizeRef.current = size;
+        if (size.width > 1) setMinimapRoom(size.width >= MINIMAP_BOX.width * 3);
         const dpr = getDpr();
         for (const c of [canvas, interactionCanvasRef.current]) {
           if (!c) continue;
@@ -1559,6 +1577,7 @@ export function TsldCanvas({
                   ground: palette.canvasGround,
                   bar: palette.bar,
                   critical: palette.critical,
+                  outline: palette.outline,
                   dataDate: palette.dataDate,
                 },
                 dpr,
@@ -2198,7 +2217,7 @@ export function TsldCanvas({
           when it is active (the minimap does NOT inherit the Legend's over-the-strip liberty —
           M0-T3's recorded policy). The loop above owns the picture and the rectangle; the panel
           owns the selection marker and Today (the marks that move without a scene change). */}
-      {minimapActive ? (
+      {minimapActive && minimapRoom ? (
         <TsldMinimap
           activities={activities}
           dataDate={dataDate}
@@ -2209,6 +2228,8 @@ export function TsldCanvas({
           rectRef={minimapRectRef}
           onCenterWorld={minimapCenterOnWorld}
           onPanPages={minimapPanPages}
+          readCentre={minimapViewportCentre}
+          todayDay={todayOffset === null ? null : todayOffset + (todayFraction ?? 0)}
           {...(minimapDismissFocusRef ? { dismissFocusRef: minimapDismissFocusRef } : {})}
         />
       ) : null}

@@ -2,13 +2,20 @@ import { X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { dayAtScreenX, screenXOfDay, worldExtent, type RenderActivity } from '../render/geometry';
-import { minimapViewport, type MinimapBox, type MinimapMapping } from '../render/minimap';
-import { useNow } from '../render/use-now';
+import {
+  minimapViewport,
+  type MinimapBox,
+  type MinimapMapping,
+  type MinimapWindow,
+} from '../render/minimap';
+
 import { daysBetween } from '../render/working-time';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { formatCalendarDate } from '@/lib/format-date';
+
+export type { MinimapWindow } from '../render/minimap';
 
 /**
  * **The minimap panel** (ADR-0100, minimap M2-T2): a fixed 200×120 picture of the whole
@@ -25,8 +32,9 @@ import { formatCalendarDate } from '@/lib/format-date';
  * - The **selection marker** and the **Today vertical** are the two marks whose subjects
  *   move *without* the scene changing, so they are ordinary React-rendered DOM overlays
  *   here: the marker re-renders on the selection change that already re-renders the host,
- *   and Today re-renders on the existing `useNow(60_000)` tick — the ADR-0056 F6a
- *   instrument, so minimap-Today and canvas-Today go stale or stay fresh together.
+ *   and Today arrives RESOLVED from the host — the same local-calendar day + `useNow` tick
+ *   the scene's own marker draws from (ADR-0056 F6a), so the two lines cannot disagree
+ *   about which day it is and go stale or stay fresh together.
  *
  * `role="group"` with a name — deliberately NOT `scrollbar`/`slider` (single-axis,
  * single-value contracts; this viewport is 2-D plus zoom) and NOT `application` (appears
@@ -54,14 +62,17 @@ export interface TsldMinimapProps {
   onCenterWorld?: (day: number | null, lane: number | null) => MinimapWindow | null;
   /** Page-pan by viewport pages — the group's arrow keys. Same return contract. */
   onPanPages?: (dx: number, dy: number) => MinimapWindow | null;
-}
-
-/** The visible window a navigation commit produced — what the announcement reads out. */
-export interface MinimapWindow {
-  startIso: string;
-  endIso: string;
-  laneFrom: number;
-  laneTo: number;
+  /** The TRUE viewport centre as a world point — the drag anchor (M4 B1). Read from the
+   * host's refs through the same pure arithmetic that places the display rectangle; the
+   * first draft read the anchor back off the INFLATED display rect, which put every drag's
+   * opening commit ~8 days off target at the Day preset and made Escape restore the
+   * inflated centre. */
+  readCentre?: () => { day: number; lane: number } | null;
+  /** Today as a fractional day offset from the data date, or null when not placeable —
+   * RESOLVED BY THE HOST from the same local-calendar derivation the scene's Today marker
+   * uses (M4 B2: the first draft re-derived it here in UTC, a whole day out west of UTC
+   * every evening — the ADR-0059 shared-axis rule applies to the clock too). */
+  todayDay?: number | null;
 }
 
 export function TsldMinimap({
@@ -75,6 +86,8 @@ export function TsldMinimap({
   dismissFocusRef,
   onCenterWorld,
   onPanPages,
+  readCentre,
+  todayDay = null,
 }: TsldMinimapProps): React.ReactElement {
   // The control that opened the panel, captured so the panel's own Hide button returns focus
   // there instead of dropping it to <body> — the TsldLegendPanel pattern, adopted because focus
@@ -94,6 +107,9 @@ export function TsldMinimap({
     const opener = openerRef.current;
     onClose();
     if (opener && opener !== document.body && opener.isConnected) opener.focus();
+    // No further fallback by design (TECH_DEBT #155.4): TsldPanel always wires the listbox
+    // ref, so a doubly-unusable chain is unreachable in the shipped product; if a future
+    // host omits it, focus stays where it is rather than being flung somewhere surprising.
     else dismissFocusRef?.current?.focus();
   };
   // The mapping for the two React-rendered overlays. Deliberately derived here from the same
@@ -107,15 +123,11 @@ export function TsldMinimap({
   const selected =
     selectedId === null ? null : (activities.find((a) => a.id === selectedId) ?? null);
 
-  // Today, on the minute tick the canvas's own Today marker uses (ADR-0056 F6b). `useNow`
-  // returns a CADENCE counter, never a timestamp — its docblock says consumers re-derive the
-  // wall clock per bump (the first draft read the counter AS epoch ms, and the component test
-  // caught it: no Today line, ever). Derived at plain render scope like the workspace model's
-  // `todayIso`, not inside a memo — the arithmetic is four operations, and memoising it would
-  // mean calling the clock inside a memoised render, which the compiler lint refuses.
-  useNow(60_000);
-  const dayFloat = (new Date().getTime() - Date.parse(dataDate)) / 86_400_000;
-  const todayAt = mapping === null ? null : screenXOfDay(dayFloat, mapping.view);
+  // Today, resolved by the HOST from the same local-calendar day + fraction the scene's own
+  // Today marker draws at (M4 B2) — so the two lines cannot disagree about which day it is,
+  // and they go stale or stay fresh together on the same `useNow` tick one level up.
+  const todayAt =
+    mapping === null || todayDay === null ? null : screenXOfDay(todayDay, mapping.view);
   const todayX = todayAt !== null && todayAt >= 0 && todayAt <= MINIMAP_BOX.width ? todayAt : null;
 
   const marker = useMemo(() => {
@@ -127,11 +139,15 @@ export function TsldMinimap({
         : screenXOfDay(daysBetween(dataDate, selected.earlyFinish) + 1, mapping.view);
     // ≥3×3px (spec AC-2.3): a 1px echo of the bar is invisible at exactly the moment the
     // marker exists to answer "where is my selection in the whole plan?".
+    const w = Math.min(Math.max(3, x1 - x0), MINIMAP_BOX.width);
+    const h = Math.min(Math.max(3, mapping.pxPerLane), MINIMAP_BOX.height);
+    // Clamped to the box (M4 S9's other half): the surface no longer clips, so the marker
+    // must not paint outside the picture.
     return {
-      x: x0,
-      y: selected.laneIndex * mapping.pxPerLane,
-      w: Math.max(3, x1 - x0),
-      h: Math.max(3, mapping.pxPerLane),
+      x: Math.min(MINIMAP_BOX.width - w, Math.max(0, x0)),
+      y: Math.min(MINIMAP_BOX.height - h, Math.max(0, selected.laneIndex * mapping.pxPerLane)),
+      w,
+      h,
     };
   }, [mapping, selected, dataDate]);
 
@@ -176,19 +192,23 @@ export function TsldMinimap({
       if (mapping === null) return null;
       return {
         day: dayAtScreenX(boxX, mapping.view),
-        lane: boxY / mapping.pxPerLane - 0.5,
+        // Clamped to the stack (M4 S6): on a three-lane plan an unclamped mid-box click
+        // resolves to a lane that does not exist and centres the diagram on blank ground.
+        lane: Math.min(mapping.laneCount - 0.5, Math.max(-0.5, boxY / mapping.pxPerLane - 0.5)),
       };
     },
     [mapping],
   );
 
-  // The in-flight drag: the world point under the rectangle's centre at press (for Escape
-  // restore), the pointer→centre offset (so the rectangle doesn't jump into the cursor), and
-  // whether the pointer actually moved (a still press is not a drag).
+  // The in-flight drag (the DELTA model — M4 B1): the TRUE viewport centre at press (from
+  // the host's pure read, never the DOM's inflated display rect), the press point in box px,
+  // and whether the pointer actually moved (a still press is not a drag). Each move commits
+  // pressWorld + Δpointer-in-world, so the opening move cannot jump and Escape restores the
+  // exact press viewport.
   const dragRef = useRef<{
     pressWorld: { day: number; lane: number };
-    offsetX: number;
-    offsetY: number;
+    pressX: number;
+    pressY: number;
     moved: boolean;
   } | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -196,7 +216,11 @@ export function TsldMinimap({
   // The Escape rung, innermost and IN-FLIGHT ONLY (M3-T4): mounted for the drag's lifetime,
   // removed at rest — so the minimap adds nothing to the ladder while no drag is running,
   // which is the "verified red both ways" contract. `preventDefault()` first, so outer rungs
-  // (tool disarm, selection clear, drawer close) see the press was answered.
+  // (tool disarm, selection clear, drawer close) see the press was answered. A window CAPTURE
+  // listener rather than the `lib/escape-rungs` helper, and that outranking a native
+  // <dialog>'s own cancel is safe only because of the in-flight mounting: a pointer drag
+  // cannot begin under a modal, so the listener never exists while one is open (M4 S8 —
+  // the reason written down rather than relied on).
   useEffect(() => {
     if (!dragging) return;
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -211,31 +235,29 @@ export function TsldMinimap({
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [dragging, onCenterWorld]);
 
+  // The surface's box, read once per gesture rather than per pointermove (M4 perf gate):
+  // nothing resizes or scrolls the panel mid-drag, so the drag-start rect stays valid for
+  // the gesture's whole life and the per-move forced layout read is pure waste.
+  const surfaceRectRef = useRef<DOMRect | null>(null);
   const boxPoint = (event: React.PointerEvent | React.MouseEvent): { x: number; y: number } => {
-    const host = (event.currentTarget as HTMLElement).closest('[data-minimap-surface]');
-    const rect = (host as HTMLElement).getBoundingClientRect();
+    const rect =
+      surfaceRectRef.current ??
+      (event.currentTarget as HTMLElement)
+        .closest('[data-minimap-surface]')!
+        .getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
 
   const onPadPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0 || mapping === null) return;
-    const rectEl = rectRef.current;
-    if (!rectEl) return;
+    surfaceRectRef.current =
+      (event.currentTarget as HTMLElement)
+        .closest('[data-minimap-surface]')
+        ?.getBoundingClientRect() ?? null;
     const p = boxPoint(event);
-    // The rectangle's current centre, read from the transform the host wrote last frame.
-    const host = rectEl.parentElement?.getBoundingClientRect();
-    const r = rectEl.getBoundingClientRect();
-    if (!host) return;
-    const centreX = r.left - host.left + r.width / 2;
-    const centreY = r.top - host.top + r.height / 2;
-    const pressWorld = worldAt(centreX, centreY);
+    const pressWorld = readCentre?.() ?? null;
     if (!pressWorld) return;
-    dragRef.current = {
-      pressWorld,
-      offsetX: p.x - centreX,
-      offsetY: p.y - centreY,
-      moved: false,
-    };
+    dragRef.current = { pressWorld, pressX: p.x, pressY: p.y, moved: false };
     setDragging(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
     event.stopPropagation();
@@ -243,16 +265,19 @@ export function TsldMinimap({
 
   const onPadPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag || mapping === null) return;
     const p = boxPoint(event);
     drag.moved = true;
-    const world = worldAt(p.x - drag.offsetX, p.y - drag.offsetY);
-    // Continuous gesture: commit, never announce (the house rule — drags are silent,
-    // discrete jumps speak once).
-    if (world) onCenterWorld?.(world.day, world.lane);
+    // Continuous gesture: commit pressWorld + the pointer's world delta, never announce
+    // (the house rule — drags are silent, discrete jumps speak once).
+    onCenterWorld?.(
+      drag.pressWorld.day + (p.x - drag.pressX) / mapping.view.pxPerDay,
+      drag.pressWorld.lane + (p.y - drag.pressY) / mapping.pxPerLane,
+    );
   };
 
   const endPadDrag = (): void => {
+    surfaceRectRef.current = null;
     if (dragRef.current === null) return;
     const wasDrag = dragRef.current.moved;
     dragRef.current = null;
@@ -271,6 +296,9 @@ export function TsldMinimap({
   };
 
   const onGroupKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    // Only when the GROUP itself is focused (M4 S7): the close button lives inside it, and
+    // Home/End pressed on a button should do button things, not pan the diagram.
+    if (event.target !== event.currentTarget) return;
     if (mapping === null) return;
     let window: MinimapWindow | null = null;
     switch (event.key) {
@@ -326,11 +354,23 @@ export function TsldMinimap({
       // selection cursor — nothing global is claimed.
       tabIndex={0}
       onKeyDown={onGroupKeyDown}
+      aria-describedby="tsld-minimap-keys"
       className="border-border bg-canvas focus-visible:ring-ring absolute right-3 z-10 rounded-md border shadow-md focus-visible:ring-2 focus-visible:outline-none"
       style={{ bottom: 12 + bottomOffsetPx }}
     >
+      {/* The keyboard contract, spoken once on focus (M4 a11y gate): role="group" carries no
+          implied interaction model, so a keyboard user tabbing onto the widget is otherwise
+          told nothing. The sr-only + aria-describedby sibling pattern, per BulkSelectionBar. */}
+      <span id="tsld-minimap-keys" className="sr-only">
+        Arrow keys pan the diagram a page at a time. Home and End jump to the start and end of the
+        plan.
+      </span>
       <div className="flex items-center justify-between pl-2">
-        <span className="text-muted-foreground text-xs">Overview</span>
+        {/* Full-weight title, matching the Legend's — the two floating canvas panels can be
+            open side by side, and one reading as a caption while its sibling reads as a title
+            was the M4 ux gate's one-off-style finding. The weight ratchet moved 162 → 163 for
+            this, with this sentence as the reason. */}
+        <span className="text-sm font-medium">Overview</span>
         <Button
           variant="ghost"
           size="icon-lg"
@@ -350,7 +390,10 @@ export function TsldMinimap({
         <div
           data-minimap-surface
           onClick={onSurfaceClick}
-          className="relative cursor-pointer overflow-hidden"
+          // No overflow-hidden (M4 S9): every child is clamped to the box, and clipping
+          // would halve the 24px drag pad exactly when the rectangle is dragged to an edge -
+          // the positions WCAG 2.5.8's floor exists for.
+          className="relative cursor-pointer"
           style={{ width: MINIMAP_BOX.width, height: MINIMAP_BOX.height }}
         >
           <canvas

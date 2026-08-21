@@ -458,7 +458,11 @@ describe('weight is a governed axis', () => {
    * primitive rather than to raise the number. Re-measured after the scan stopped counting
    * occurrences inside comments (see `weightSites`), which moved both buckets down by one.
    */
-  const SCREEN_WEIGHT_CEILING = 162;
+  // 162 → 163 (minimap M4): the minimap panel's title takes `font-medium` to MATCH the
+  // Legend's — the ux gate found the first draft had dodged this ratchet by shipping a
+  // caption-weight title beside a full-weight sibling, which is the one-off the ratchet
+  // exists to prevent, inverted.
+  const SCREEN_WEIGHT_CEILING = 163;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

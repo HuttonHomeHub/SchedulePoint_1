@@ -38,8 +38,9 @@ function activity(overrides: Partial<RenderActivity> = {}): RenderActivity {
 }
 
 function mount(over: Partial<React.ComponentProps<typeof TsldMinimap>> = {}) {
-  const onCenterWorld = vi.fn(() => WINDOW);
-  const onPanPages = vi.fn(() => WINDOW);
+  const onCenterWorld = vi.fn((_day: number | null, _lane: number | null) => WINDOW);
+  const onPanPages = vi.fn((_dx: number, _dy: number) => WINDOW);
+  const readCentre = vi.fn(() => ({ day: 50, lane: 5 }));
   const utils = render(
     <TsldMinimap
       activities={[activity(), activity({ id: 'a2', laneIndex: 9 })]}
@@ -51,6 +52,7 @@ function mount(over: Partial<React.ComponentProps<typeof TsldMinimap>> = {}) {
       rectRef={createRef<HTMLDivElement>()}
       onCenterWorld={onCenterWorld}
       onPanPages={onPanPages}
+      readCentre={readCentre}
       {...over}
     />,
   );
@@ -94,7 +96,7 @@ describe('TsldMinimap — navigation (M3)', () => {
     expect(onCenterWorld).toHaveBeenCalledTimes(2);
     const [homeDay] = onCenterWorld.mock.calls[0]!;
     const [endDay] = onCenterWorld.mock.calls[1]!;
-    expect(endDay as number).toBeGreaterThan(homeDay as number);
+    expect(endDay).toBeGreaterThan(homeDay ?? Number.NaN);
     expect(announce).toHaveBeenCalledTimes(2); // discrete jumps speak immediately
   });
 
@@ -165,6 +167,7 @@ describe('TsldMinimap — navigation (M3)', () => {
           rectRef={createRef<HTMLDivElement>()}
           onCenterWorld={onCenterWorld}
           onPanPages={vi.fn(() => WINDOW)}
+          readCentre={() => ({ day: 50, lane: 5 })}
         />
       </div>,
     );

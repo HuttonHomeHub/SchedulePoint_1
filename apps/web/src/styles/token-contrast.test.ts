@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { compositeOver, fmtRatio, parseColour, relativeLuminance, type Srgb } from '@/test/colour';
-import { blockBody, declarations, THEME_SELECTORS, themeTokens } from '@/test/css-blocks';
+import {
+  blockBody,
+  declarations,
+  readGlobalsCss,
+  THEME_SELECTORS,
+  themeTokens,
+} from '@/test/css-blocks';
 
 /**
  * The computed contrast matrix (ADR-0055 §2).
@@ -288,6 +294,38 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
       Math.max(stroke, halo),
       `minimap frame pair on ${ground}: stroke ${fmtRatio(stroke)}, halo ${fmtRatio(halo)}`,
     ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('both halves are REACHABLE — the @theme inline block aliases them to --color-* names', () => {
+    // The M4 component review's finding: the pair was declared at :root and referenced from the
+    // component as var(--color-canvas-minimap-frame) — but only the `@theme inline` block turns a
+    // root token into a usable --color-* custom property, and neither half was in it. So the
+    // rectangle and the selection marker painted with NO colour in a real browser while this
+    // gate (which computes the pair's own contrast from the :root values) stayed green, jsdom
+    // asserted geometry, and the journey asserted visibility. Verified red against the
+    // alias-less CSS before the aliases were added.
+    const css = readGlobalsCss();
+    for (const name of ['canvas-minimap-frame', 'canvas-minimap-frame-halo']) {
+      expect(css, `@theme inline must alias --${name}`).toMatch(
+        new RegExp(String.raw`--color-${name}:\s*var\(--${name}\);`),
+      );
+    }
+  });
+
+  it('reports the sub-3px criticality degradation without asserting it (the DAY-tier precedent)', () => {
+    // WCAG 1.4.1 (M4 a11y gate): in the minimap bitmap a critical bar carries a foreground
+    // LIGHTNESS fringe wherever the lane row is ≥ 3px (`CRITICAL_FRINGE_MIN_H`,
+    // `render/minimap.ts`) — hue is not the only channel. Below 3px the fringe would BE the
+    // bar, so the picture degrades to hue plus the scene's own dash/outline cues one surface
+    // up, where the same information is fully available with non-colour channels. Reported
+    // here — deliberately unasserted, so a REGRESSION in the fringe's own contrast is still
+    // visible in the output — the same contract the day tier and the non-working hatch use.
+    const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+    const fringeOnCritical = ratio(tokens, '--destructive', '--foreground');
+    const fringeOnBar = ratio(tokens, '--primary', '--foreground');
+    expect(
+      `fringe on critical ${fmtRatio(fringeOnCritical)}, on non-critical ${fmtRatio(fringeOnBar)}`,
+    ).toBeTruthy();
   });
 
   it('the stroke and its halo clear 3:1 against each other, so the edge reads as one line', () => {

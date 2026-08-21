@@ -133,6 +133,62 @@ describe('TsldCanvas hidden-pane pause', () => {
   });
 });
 
+describe('TsldCanvas minimap responsive withdrawal (M4 ux gate)', () => {
+  const withMinimap = (): React.ReactElement => (
+    <TsldCanvas
+      activities={ACTIVITIES}
+      edges={[]}
+      dataDate="2026-01-01"
+      selectedId={null}
+      onSelect={vi.fn()}
+      fitSignal={0}
+      minimapActive
+      onMinimapClose={vi.fn()}
+    />
+  );
+  const mockWidth = (width: number) =>
+    vi
+      .spyOn(HTMLDivElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({
+        width,
+        height: 800,
+        top: 0,
+        left: 0,
+        right: width,
+        bottom: 800,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+
+  it('withdraws below 3× its own width and stays below it, and mounts where there is room', () => {
+    // Below the derived floor (600px) the fixed 200×120 panel plus clearances covers more
+    // than a third of the diagram and cannot be dragged aside, so it withdraws — the
+    // M2-T6 "responsive withdrawal" route, built when the M4 ux gate found it missing.
+    const narrow = mockWidth(500);
+    const first = render(withMinimap());
+    tick();
+    expect(first.container.querySelector('[data-testid="tsld-minimap"]')).toBeNull();
+    first.unmount();
+    narrow.mockRestore();
+
+    const wide = mockWidth(900);
+    const second = render(withMinimap());
+    tick();
+    expect(second.container.querySelector('[data-testid="tsld-minimap"]')).not.toBeNull();
+    second.unmount();
+    wide.mockRestore();
+  });
+
+  it('an UNMEASURED surface never withdraws the panel (jsdom default zero-size)', () => {
+    // The default-true guard: only a real measurement may suppress the panel, or every
+    // jsdom suite (and the first pre-measure frame in a browser) would lose it.
+    const { container } = render(withMinimap());
+    tick();
+    expect(container.querySelector('[data-testid="tsld-minimap"]')).not.toBeNull();
+  });
+});
+
 describe('TsldCanvas minimap build discipline (ADR-0100, M2-T4)', () => {
   const canvas = (props: {
     activities?: RenderActivity[];
@@ -196,6 +252,33 @@ describe('TsldCanvas minimap build discipline (ADR-0100, M2-T4)', () => {
     // The marker rendered (the selected activity has computed dates)…
     expect(container.querySelector('[data-testid="tsld-minimap-selection"]')).not.toBeNull();
     // …and the picture was NOT rebuilt for it.
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
+  });
+
+  it('the clock never rebuilds the picture — a todayOffset change costs zero builds', () => {
+    // The other half of the dirty-rule pair (M4 architecture gate S5): selection was pinned
+    // red-first at M2; this pins the clock. Today reaches the panel as a HOST-RESOLVED prop,
+    // so a minute tick re-renders overlays and must never touch minimapDirtyRef.
+    const withToday = (todayOffset: number): React.ReactElement => (
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-01-01"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+        minimapActive
+        onMinimapClose={vi.fn()}
+        todayOffset={todayOffset}
+        todayFraction={0.25}
+      />
+    );
+    const { rerender } = render(withToday(5));
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
+    rerender(withToday(6)); // midnight passed
+    tick();
+    tick();
     expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
   });
 

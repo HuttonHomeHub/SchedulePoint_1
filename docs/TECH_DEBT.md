@@ -2843,3 +2843,28 @@ gate pass could observe only one of them in this environment:
    decade changes visibly), the minimap rectangle relocates in the same frame, and the
    change is large-scale rather than subtle. The remaining owed half is a hands-on pass at
    real magnification, which a screenshot cannot stand in for.
+
+## 155. The minimap M4 gate pass's non-blocking findings
+
+**Raised 2026-08-21** (minimap M4-T1; the blocking findings are folded with regression
+tests and recorded in ADR-0100's Consequences). **Size:** S each.
+
+1. **The rectangle's drag affordance is cursor-only** (ux): no static cue says the frame is
+   draggable — `cursor-grab` is invisible before hover and absent on touch. Click-to-jump
+   and the keyboard cover the function; the convention (IDE minimaps) covers most readers.
+   If first-contact feedback says otherwise, corner ticks or a faint fill are the shape.
+2. **Q2 (command-strip promotion) was decided against pre-Graphite arithmetic** (ux): the
+   "no room" conclusion cites `PINNED_FLOOR_WIDTH` measurements taken before ADR-0099
+   reshaped the strip. The default stands (product owner Q2); if it is ever revisited, the
+   measurement comes first (`e2e-toolbar-fit` with one extra pinned item at
+   1646/1440/1280/960).
+3. **The empty state explains and does not act** (ux): "Nothing to show yet…" meets the
+   copy bar but offers no route; reachable only when an open panel's plan loses its
+   computed dates, and the canvas beneath carries its own actionable prompt. One "add an
+   activity" line if it ever surfaces in use.
+4. **`handleClose`'s chain has no last resort** (accessibility): if both the captured
+   opener and `dismissFocusRef` are unusable, focus stays put. Unreachable today —
+   `TsldPanel` always wires the listbox ref — noted in the handler's comment.
+5. **The one-derivation gate matches the three original idioms only** (architecture S10):
+   a fourth extent derivation in a different idiom would pass it. Recorded in ADR-0100
+   decision 3 so the gate is not over-read.

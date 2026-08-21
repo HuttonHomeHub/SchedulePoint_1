@@ -24,6 +24,7 @@ import { buildMinimapBitmap, type MinimapPalette } from './minimap';
  */
 const PALETTE: MinimapPalette = {
   ground: '#0f1218',
+  outline: '#f2f4f8', // distinct from dataDate so the fringe assertions can tell them apart
   bar: '#3b6fbf',
   critical: '#e05d44',
   dataDate: '#e6e8ee',
@@ -101,6 +102,31 @@ describe('minimap draw budget', () => {
     const { calls, ctx } = countingCtx();
     buildMinimapBitmap(ctx, plan(2000), DATA_DATE, BOX, PALETTE);
     expect(calls.styleWrites).toBe(4);
+  });
+
+  it('a fringed plan stays fillRect-only and batched: 6 style writes, no strokes, no text', () => {
+    // 8 lanes → 15px rows → every critical bar carries its 1.4.1 fringe. The shape holds:
+    // ground + bar-pass + fringe-pass + critical-pass + data-date = 5 batched styles… plus
+    // the critical INSET fill after the fringe = 6 writes total, still O(n) fills, still
+    // zero strokeRect/fillText.
+    const { calls, ctx } = countingCtx();
+    const acts = Array.from({ length: 100 }, (_, i) => ({
+      id: `a${i}`,
+      type: 'TASK' as const,
+      laneIndex: i % 8,
+      label: `a${i}`,
+      earlyStart: i === 0 ? '2026-01-01' : '2026-01-05',
+      earlyFinish: '2026-03-01',
+      isCritical: i % 3 === 0,
+      isNearCritical: false,
+    }));
+    buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
+    const critical = acts.filter((a) => a.isCritical).length;
+    // ground + non-critical + fringe-per-critical + inset-per-critical + data-date
+    expect(calls.fillRect).toBe(1 + (100 - critical) + critical * 2 + 1);
+    expect(calls.styleWrites).toBe(5);
+    expect(calls.strokeRect).toBe(0);
+    expect(calls.fillText).toBe(0);
   });
 
   it('the empty plan costs one ground fill and nothing else', () => {

@@ -93,6 +93,19 @@ const UNDO_REDO_SHORTCUTS: readonly Shortcut[] = [
  * opens the logic editor on the canvas and commits a cell edit here — so a combined sheet would
  * have to qualify half its rows with "(in the diagram)", which is a sheet nobody finishes reading.
  */
+/**
+ * The minimap group's own contract (ADR-0100 M3; M4 ux gate — arrows/Home/End take a THIRD
+ * meaning here, distinct from the listbox's "first/last activity" and the Gantt's "first/last
+ * row", which is exactly what this sheet exists to keep straight). Shown whenever the diagram
+ * sections show: the panel itself is toggleable, but a sheet that appears and disappears with a
+ * panel teaches nobody.
+ */
+const MINIMAP_SHORTCUTS: readonly Shortcut[] = [
+  { keys: '← / → · ↑ / ↓', action: 'Pan the diagram one page (with the minimap focused)' },
+  { keys: 'Home / End', action: 'Jump to the start / end of the plan' },
+  { keys: 'Esc', action: 'Cancel a minimap drag, restoring where you were' },
+];
+
 const GANTT_READ_SHORTCUTS: readonly Shortcut[] = [
   { keys: '↑ / ↓', action: 'Previous / next row' },
   { keys: 'Home / End', action: 'First / last row' },
@@ -183,6 +196,10 @@ export function PlanShortcutsHelp({
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Navigate</h3>
           <ShortcutList items={READ_SHORTCUTS} />
+        </section>
+        <section className="flex flex-col gap-2">
+          <h3 className="text-sm font-semibold">Minimap (View ▾ ▸ Panels ▸ Minimap)</h3>
+          <ShortcutList items={MINIMAP_SHORTCUTS} />
         </section>
         {CANVAS_MULTI_SELECT_ENABLED ? (
           <section className="flex flex-col gap-2">

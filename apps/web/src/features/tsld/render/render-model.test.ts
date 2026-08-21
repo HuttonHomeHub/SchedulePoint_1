@@ -1,7 +1,6 @@
 import type { ActivityType, DependencyType } from '@repo/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { dayExtent } from './paint';
 import {
   activityRect,
   arrowhead,
@@ -885,13 +884,19 @@ describe('worldExtent', () => {
     expect(worldExtent([placed, unplaced], DATA_DATE)?.maxLane).toBe(0);
   });
 
-  it('dayExtent and fitToContent agree with it by construction (one derivation)', () => {
+  it('fitToContent frames exactly the worldExtent span (one derivation, observed not asserted)', () => {
+    // M4 architecture gate S2: the previous version of this case NAMED fitToContent and
+    // asserted only `dayExtent` — a delegate with no production caller, since deleted (S1).
     const acts = [
       activity({ id: 'a', earlyStart: '2026-01-02', earlyFinish: '2026-01-10', laneIndex: 2 }),
       activity({ id: 'b', earlyStart: '2026-01-06', earlyFinish: '2026-01-20', laneIndex: 5 }),
     ];
-    const extent = worldExtent(acts, DATA_DATE);
-    expect(dayExtent(acts, DATA_DATE)).toEqual({ minDay: extent!.minDay, maxDay: extent!.maxDay });
+    const extent = worldExtent(acts, DATA_DATE)!;
+    const size = { width: 1000, height: 500 };
+    const view = fitToContent(acts, size, DATA_DATE, MAX_PX_PER_DAY);
+    // The left edge sits `padding` px before minDay and the span fills the usable width.
+    expect(view.originX + extent.minDay * view.pxPerDay).toBeCloseTo(32);
+    expect((extent.maxDay - extent.minDay) * view.pxPerDay).toBeCloseTo(size.width - 64);
   });
 });
 

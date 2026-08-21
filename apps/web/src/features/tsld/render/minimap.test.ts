@@ -7,6 +7,7 @@ const DATA_DATE = '2026-01-01';
 const BOX = { width: 200, height: 120 };
 const PALETTE: MinimapPalette = {
   ground: '#0f1218',
+  outline: '#f2f4f8', // distinct from dataDate so the fringe assertions can tell them apart
   bar: '#3b6fbf',
   critical: '#e05d44',
   dataDate: '#e6e8ee',
@@ -140,6 +141,10 @@ describe('buildMinimapBitmap', () => {
       PALETTE.ground,
       PALETTE.bar, // anchor + norm share the non-critical pass
       PALETTE.bar,
+      // Rows are 60px tall here, so the critical bar carries its WCAG 1.4.1 lightness
+      // fringe (M4 a11y gate): a foreground rect under an inset critical fill — hue is
+      // never the only channel where the row can carry more.
+      PALETTE.outline,
       PALETTE.critical,
       PALETTE.dataDate,
     ]);
@@ -157,6 +162,19 @@ describe('buildMinimapBitmap', () => {
     expect(bar.h).toBe(BOX.height); // one lane fills the box
     const dd = fills.find((f) => f.style === PALETTE.dataDate)!;
     expect(dd).toEqual({ style: PALETTE.dataDate, x: 0, y: 0, w: 1, h: BOX.height });
+  });
+
+  it('drops the critical fringe below CRITICAL_FRINGE_MIN_H — a 1px fringe on a 1px bar IS the bar', () => {
+    const { ctx, fills } = recordingCtx();
+    // 200 lanes in a 120px box: rows are 0.6px, floored to 1px — far below the fringe floor.
+    const acts = [
+      activity({ id: 'c', isCritical: true, laneIndex: 150 }),
+      activity({ id: 'n', laneIndex: 199 }),
+    ];
+    buildMinimapBitmap(ctx, acts, DATA_DATE, BOX, PALETTE);
+    expect(fills.some((f) => f.style === PALETTE.outline)).toBe(false);
+    // The degradation to hue-plus-the-scene's-own-cues below the floor is REPORTED in
+    // token-contrast.test.ts (the DAY-tier precedent), not silently accepted.
   });
 
   it('omits the data-date vertical when the data date falls outside the drawn extent', () => {
