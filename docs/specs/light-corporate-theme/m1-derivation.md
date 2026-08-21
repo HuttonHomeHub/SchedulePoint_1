@@ -56,6 +56,28 @@ Every fill inverts to darker-than-ground and **its label inverts with it, as one
 `--plot-warning-foreground` went dark → white. That pairing flips as a unit or the picture breaks in
 a way that reads as a bug rather than a colour.
 
+## CQ-2's step, reported as a number
+
+The answer to CQ-2 required the step between the diagram's ground and the page to be **reported as a
+number, not eyeballed** (feature-spec.md §2.6). Measured with the repository's own
+`parseColour`/`relativeLuminance` — the same functions `token-contrast.test.ts` uses:
+
+| Pair                                                                                | Ratio       | ΔL (OKLCH) |
+| ----------------------------------------------------------------------------------- | ----------- | ---------- |
+| `--canvas` `oklch(0.958 0.004 250)` vs `--page-background` `oklch(0.982 0.002 248)` | **1.073:1** | **0.024**  |
+| `--canvas` vs `--canvas-band` `oklch(0.976 0.003 250)`                              | 1.054:1     | 0.018      |
+| `--canvas-band` vs `--page-background`                                              | 1.018:1     | 0.006      |
+
+The threshold CQ-2 named is the ~0.02 OKLCH step `token-architecture.test.ts` already uses for "a
+reader can see this", so **0.024 clears it** — deliberately not by much, because the diagram's ground
+is meant to read as a working surface the page sits behind, not as a panel.
+
+**What it replaces is the more useful figure.** Before this epic `--canvas` and `--page-background`
+held the _same literal_, so the pair was **1.00:1** — the canvas surface scope was a rebind with no
+value difference behind it at all. Two comments in `globals.css` described that state as "1.02:1
+apart, two greys nobody can tell apart", which was wrong about the old state as well as the new one;
+both are corrected in place.
+
 ## Two defects the green matrix was structurally incapable of reporting
 
 Both were found by looking at a photograph, with all 216 assertions passing throughout.

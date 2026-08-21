@@ -329,6 +329,16 @@ export function lensLegendVarPalette(): LensPalette {
     floatLowInk: v('--warning-foreground'),
     floatMediumInk: v('--info-foreground'),
     floatHighInk: v('--success-foreground'),
+    // **Deliberately NOT derived from `WBS_CYCLE_TOKENS`, and deliberately still five.** The legend
+    // renders swatch fills plus muted text and never reads an ink — `buildColourLegend` carries only
+    // `label` and `colour`, so nothing consumes this field. Deriving it would make a dead value look
+    // live and imply the legend paints labels on its swatches, which it does not.
+    //
+    // It is left at five rather than grown to twelve for the same reason: a reader who notices the
+    // mismatch should find this note and delete the field, not lengthen it. Named here because a
+    // reviewer flagged the inconsistency as a trap — three call sites kept in sync by hand is what
+    // `WBS_CYCLE_TOKENS` exists to kill, and an un-migrated sibling invites someone to "fix" it by
+    // wiring it up wrong.
     wbsInkCycle: [
       v('--primary-foreground'),
       v('--warning-foreground'),
@@ -360,7 +370,11 @@ export function resolveWbsBandPalette(root: Element): WbsBandPalette {
     derived: token('--muted-foreground', '#7a8090'),
     rule: token('--border', '#2a2f3a'),
     label: token('--primary-foreground', '#ffffff'),
-    selection: token('--ring', '#8ab4f8'),
+    // Paired with `derived`, not with `bar` — see `WbsBandPalette.derivedLabel`. The canvas ground
+    // as ink on a muted fill is the same inversion `resolveLensPalette`'s `neutralInk` already uses.
+    derivedLabel: token('--background', '#ffffff'),
+    // The diagram's ink, not `--ring`: this stroke is painted INSET on the bar's own fill.
+    selection: token('--foreground', '#1a1a1a'),
   };
 }
 

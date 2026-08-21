@@ -202,6 +202,40 @@ const CRITICALITY_PAIRS: ReadonlyArray<readonly [a: string, b: string, why: stri
   ['--primary', '--warning', 'an ordinary bar against a near-critical one'],
 ];
 
+/**
+ * **The WBS band (ADR-0063), which this matrix had no entry for at all.**
+ *
+ * Added by ADR-0102's accessibility gate, which found two live failures the 216 assertions above
+ * could not see. The reason they could not is worth keeping: the band paints its name on whichever
+ * of TWO fills applies, and reuses `--muted-foreground` — a token this matrix only ever validates
+ * as INK — as the derived bucket's FILL. There is no concept here of "a token normally used as ink,
+ * repurposed as a fill, then painted with a different ink than the one it was validated with", so
+ * the pairing was invisible by construction rather than by oversight.
+ *
+ * Both were measured before being fixed: the derived bucket's name at **3.01:1** against 4.5, and
+ * the selected summary's inset ring at **1.68:1** against 3. Both reached the exported and printed
+ * diagram too, since `resolvePrintWbsBandPalette` delegates to the same resolver.
+ *
+ * The ring is asserted against the BAR rather than the ground on purpose: `paintWbsBand` strokes it
+ * inset (`bar.x + 0.5`, `bar.w - 1`), unlike the scene's ring, which is offset 2px outward and
+ * never touches a fill. Assert the pair the painter actually draws.
+ */
+describe('the WBS band pairs the ink it paints with the fill it paints on', () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+
+  it.each([
+    ['--primary', '--primary-foreground', "a real summary's name on its bar", 4.5],
+    ['--muted-foreground', '--background', "the Unassigned bucket's name on its fill", 4.5],
+    ['--primary', '--foreground', "the selected summary's INSET ring on its bar", 3],
+  ] as const)('%s / %s — %s', (fill, ink, _why, floor) => {
+    const value = ratio(tokens, fill, ink);
+    expect(
+      value,
+      `${fill} vs ${ink} is ${fmtRatio(value)}, needs ${floor}:1`,
+    ).toBeGreaterThanOrEqual(floor);
+  });
+});
+
 describe('the diagram tells its three criticality states apart', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 

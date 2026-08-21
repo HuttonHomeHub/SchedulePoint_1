@@ -103,7 +103,7 @@ const NON_WORKING_MIN_PX = 3;
  * colour strings.
  */
 export interface TsldPalette {
-  /** The opaque canvas ground (`--color-canvas`) — read by the minimap bitmap (ADR-0100), which
+  /** The opaque canvas ground (`--canvas`) — read by the minimap bitmap (ADR-0100), which
    * paints its own ground because a detached canvas has no CSS behind it; the scene itself gets
    * this colour from the container's `bg-canvas` class and never reads the field. */
   canvasGround: string;
@@ -161,14 +161,14 @@ export interface TsldPalette {
   monthBand: string;
   // ── Data-date status marker (`VITE_CANVAS_DATA_DATE`, canvas status & feedback M1) ─────────
   /** The **data-date** status vertical + its pill fill — the strongest neutral in the palette
-   * (`--color-foreground`), NOT `--color-info`: in all three shipped themes info is a near
-   * neighbour of `--color-primary`, the on-schedule bar fill, and a "distinct" line in the bar
+   * (`--foreground`), NOT `--info`: in all three shipped themes info is a near
+   * neighbour of `--primary`, the on-schedule bar fill, and a "distinct" line in the bar
    * hue on a diagram made of bars is not distinct (measured, spec CQ-1). Its one collision is the
    * 1.5px critical-bar outline — a bar-shaped stroke, not a full-height rule — noted and
    * accepted. The line is solid 2px vs Today's dashed 1.5px, so the two differ by shape and
    * weight, never hue alone (WCAG 1.4.1). */
   dataDate: string;
-  /** Data-date pill ink — `dataDate`'s 1:1 partner (`--color-background`), the same guarantee
+  /** Data-date pill ink — `dataDate`'s 1:1 partner (`--background`), the same guarantee
    * `todayInk` gives the Today pill: the pair inverts together per theme, so the label always
    * reads on its own fill without a per-theme contrast decision. */
   dataDateInk: string;
@@ -178,7 +178,7 @@ export interface TsldPalette {
   // lens; the LOE bracket caps + WBS-summary tabs draw in the bar's own resolved fill, so the
   // Colour-by lenses recolour the whole glyph as one shape (the lens owns colour, M4 owns shape).
   // ── Time-axis gridline tiers (`VITE_CANVAS_TIME_AXIS`, tsld-toolbar-canvas-refinements F5) ──
-  // `gridLine` above is kept and still resolves `--color-border` — it is the value the flag-off
+  // `gridLine` above is kept and still resolves `--border` — it is the value the flag-off
   // path strokes, which is what makes the parity claim structural. Read only when
   // `TsldScene.gridTiers` is on.
   /** The finest tier (day boundaries) — a step lighter than `gridLine`. */
@@ -2138,7 +2138,35 @@ export interface WbsBandPalette {
   bar: string;
   derived: string;
   rule: string;
+  /** Ink for a real summary's name, painted on `bar`. */
   label: string;
+  /**
+   * Ink for the derived "Unassigned" bucket's name, painted on `derived`.
+   *
+   * **A separate field because `derived` is a separate fill, and one ink cannot serve both.** The
+   * band paints its name on whichever fill applies, and reused `label` for both until an
+   * accessibility gate measured it: `label` pairs with `bar` at 4.86:1 and landed on `derived` at
+   * **3.01:1**, a live 1.4.3 failure on any plan with an ungrouped activity — which is most of
+   * them — and in the exported and printed diagram too.
+   *
+   * It was masked before ADR-0102 by the very bug that ADR fixes: the resolver read the frozen
+   * `--color-*` aliases, so the band painted the PAGE's primary/muted/primary-foreground triple,
+   * which happened to be internally coherent at 8.15:1. Making the resolver read the canvas scope
+   * for the first time exposed a pairing nobody had ever checked, because the criticality ladder
+   * had inverted `--plot-primary-foreground` to dark for its own fill and this second, unrelated
+   * consumer went with it.
+   */
+  derivedLabel: string;
+  /**
+   * The selected summary's ring.
+   *
+   * **Painted INSET, on the bar's own fill** (unlike the scene's ring, which is offset 2px outward
+   * onto the ground and therefore never touches a fill). So it needs contrast against `bar`, not
+   * against the canvas — which is why it is the diagram's ink rather than `--ring`: `--plot-ring`
+   * measures **1.68:1** on the summary fill against 1.4.11's 3:1, while `--foreground` measures
+   * 3.55:1 on the fill and 11.19:1 on the ground. Same principle as `outline`, which is a stroke
+   * on a bar for the same reason.
+   */
   selection: string;
 }
 
@@ -2203,7 +2231,9 @@ export function paintWbsBand(
     if (maxPx <= 0) continue;
     const text = truncateToWidth(bar.label, maxPx, measure);
     if (text.length === 0) continue;
-    ctx.fillStyle = palette.label;
+    // The ink follows the FILL, the way every inside label in this painter does. Using one ink for
+    // both fills is what put the derived bucket's name at 3.01:1.
+    ctx.fillStyle = bar.id === null ? palette.derivedLabel : palette.label;
     ctx.fillText(text, bar.x + LABEL_PAD_PX, bar.y + bar.h / 2);
   }
 }

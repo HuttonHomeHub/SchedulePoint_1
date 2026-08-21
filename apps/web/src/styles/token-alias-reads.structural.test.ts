@@ -36,7 +36,14 @@ import { describe, expect, it } from 'vitest';
  * silent about what the painter got. This gate is the missing half.
  *
  * Verified RED against the pre-fix tree: 88 reads in `render/palette.ts`, 38 inline styles in
- * `components/TsldLegend.tsx`, 18 var strings in the legend resolver and 3 in `TsldMinimap.tsx`.
+ * `components/TsldLegend.tsx`, 18 var strings in `lensLegendVarPalette` and 3 in `TsldMinimap.tsx`.
+ *
+ * **Blind spot, recorded rather than left to be discovered: it scans `.ts`/`.tsx` and not `.css`.**
+ * No stylesheet under `src/` references `var(--color-*)` today (checked `globals.css`,
+ * `PrintSurface.css`, `GanttPrintSurface.css`, `print-document.css`), so there is no live hole — but
+ * a co-located stylesheet could reintroduce exactly this bug outside the sweep. Widening it needs
+ * care rather than a wider glob: `globals.css` DECLARES the aliases, so a naive scan would report
+ * the one file that is supposed to name them.
  */
 
 const SRC = resolve(__dirname, '..');

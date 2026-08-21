@@ -70,7 +70,7 @@ export interface MinimapBox {
  * minimap resolves no palette of its own; the host passes fields of `paletteRef.current`).
  */
 export interface MinimapPalette {
-  /** The canvas ground (`--color-canvas`), opaque, painted first. */
+  /** The canvas ground (`--canvas`), opaque, painted first. */
   readonly ground: string;
   /** Non-critical bar ink — the scene's `bar`. */
   readonly bar: string;

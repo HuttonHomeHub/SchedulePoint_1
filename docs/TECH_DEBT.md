@@ -3015,7 +3015,7 @@ plain rename was correct after all, and it shipped. The two frame reads stay on 
 that pair is not scope-rebound and the alias is the only name Tailwind emits for it.
 
 **The LEGEND is closed too, and "visually marginal" was wrong.** It renders outside the
-`tone="canvas"` Surface, and its 38 swatch styles plus `resolveLegendSwatches`' 18 var strings all
+`tone="canvas"` Surface, and its 38 swatch styles plus `lensLegendVarPalette`'s 18 var strings all
 named the alias — so the legend painted the PAGE's family beside bars painting the diagram's. On the
 light theme the "On schedule" swatch was near-black navy next to blue bars: a legend misdescribing
 the thing it exists to explain, on the one screen a person outside the organisation sees. It is
@@ -3052,3 +3052,48 @@ nowhere in `paint.ts` or the rAF loop.
 
 The fix is to pull one resolve into a single `useMemo` and derive both maps from it. Worth doing
 when that file is next open; not worth a commit of its own.
+
+## 161. Four screens the harness photographed for the first time, and one question for the product owner
+
+**Raised 2026-08-21** (ADR-0102's UX gate). **Size:** S each, none blocking, none introduced by the
+light theme — they became visible because the shot list went 12 → 25 and started covering states
+nothing had ever looked at.
+
+**a. The empty-state pattern is inconsistent.** `org-home-empty` uses icon + heading + explanation +
+action, which is the documented archetype. `resources`, `calendars` and `recently-deleted` render
+text-only inside a dashed box with no icon and the create action at the header instead. Pre-existing;
+pick one and apply it.
+
+**b. `clients-loading` is a bare spinner** where `docs/UX_STANDARDS.md` expects a skeleton. Also
+pre-existing, and only visible now because the loading state had never been captured.
+
+**c. The Project Explorer is a large flat navy block when the tree is short**, which is the common
+case: at 1646 and 1920 there is 800–900 px of content-free navy opposite an equally large light page.
+The rail's colour did not change in this epic and CQ-1(a) settles it in principle — but the
+consequence is new, because a navy rail beside a dark page read as continuous and a navy rail beside
+a light one is the most saturated object on the screen carrying no information. Worth putting to the
+product owner with the two screenshots rather than assumed settled. Consider whether the rail should
+compress when sparse, independent of colour.
+
+**d. The sign-in → organisation-home transition is black-to-white**, and that is a decision nobody
+has made. The public screens sit on a near-black `--ground`/`--ground-end` gradient
+(`globals.css:449-450`), untouched by this epic; the card and its navy panel do share the
+application's identity, but the void around them does not. It was true before the flip and the flip
+makes it starker. Either lighten the gradient stops or accept it explicitly as a threshold moment —
+**this is the one item here that is a product-owner question rather than a defect.**
+
+## 162. The legend's slack chip does not match what the canvas paints
+
+**Raised 2026-08-21** (ADR-0102's component gate). **Size:** XS. **Pre-existing** — the light theme
+only re-pointed its token names, it did not introduce the mismatch.
+
+`TsldLegend.tsx:399-407` draws the link-slack chip from `--card` and `--border`. The canvas draws the
+real one from `palette.bar` and `palette.barStroke` — `--primary` and `--border`
+(`render/paint.ts:1493-1499`). So the legend's swatch is a different colour from the thing it
+describes.
+
+**`--card` is the interesting half.** ADR-0097 made `Card` a **reset** rather than a scope member, so
+`--card` is deliberately absent from the canvas scope's rebind closure — which means that even inside
+`<Surface tone="canvas">` it resolves to the page's card colour. The legend is now correctly scoped
+(ADR-0102 D5) and this one swatch still cannot follow, because the token it names was never part of
+the family. Naming `--primary` is the fix; the wrapper is not.

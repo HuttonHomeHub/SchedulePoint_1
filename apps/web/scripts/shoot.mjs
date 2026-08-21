@@ -169,8 +169,14 @@ async function seedProgramme(page, slug) {
     // was of a correct diagram that could not exercise the thing under review.
     //
     // Two short activities hanging off the first and merging into the last. Their path is much
-    // shorter than the spine, so they carry real total float — enough for one to land
-    // near-critical and the other comfortably on schedule.
+    // shorter than the spine, so they carry real total float and paint the ON-SCHEDULE fill.
+    //
+    // **They land at 18 working days of float, both of them, and that is structural** — an
+    // unbranched FS(0) sub-chain has uniform total float, so no arrangement of these two could
+    // ever put one in the near-critical band and the other outside it. This docblock claimed
+    // exactly that for about an hour before a reviewer ran the real engine over the graph this
+    // function POSTs and reported the actual figures. The near-critical fill comes from the third
+    // path below, which is sized for it.
     // `laneIndex` is explicit: the branch runs CONCURRENTLY with the spine, so without a lane of
     // its own the packer leaves it on lane 0 and it draws straight through the bars it is
     // parallel to. The first version of this seed did exactly that and the shot was unreadable.
@@ -193,6 +199,35 @@ async function seedProgramme(page, slug) {
     });
     await post(`/plans/${plan.id}/dependencies`, {
       predecessorId: branch[1].id,
+      successorId: made[made.length - 1].id,
+    });
+    // **A THIRD path, sized to land NEAR-CRITICAL** — total float > 0 but ≤ 5 days
+    // (`NEAR_CRITICAL_THRESHOLD_MINUTES`). Without it the fixture has only two of the three
+    // criticality states, so the tightest pair in the whole ladder — near-critical against
+    // on-schedule at 1.55:1 — was verified by the contrast matrix and by NOTHING that renders.
+    // The legend printed a swatch with no bar anywhere in the evidence set to point at.
+    //
+    // The spine between the first and last activity is 25 working days; 21 days of branch leaves
+    // 4 days of float, which is inside the threshold.
+    const nearBranch = [];
+    for (const [code, name, durationDays, laneIndex] of [
+      ['A1200', 'Piling mat & access', 11, 3],
+      ['A1210', 'Attenuation crate install', 10, 4],
+    ]) {
+      nearBranch.push(
+        await post(`/plans/${plan.id}/activities`, { name, code, durationDays, laneIndex }),
+      );
+    }
+    await post(`/plans/${plan.id}/dependencies`, {
+      predecessorId: made[0].id,
+      successorId: nearBranch[0].id,
+    });
+    await post(`/plans/${plan.id}/dependencies`, {
+      predecessorId: nearBranch[0].id,
+      successorId: nearBranch[1].id,
+    });
+    await post(`/plans/${plan.id}/dependencies`, {
+      predecessorId: nearBranch[1].id,
       successorId: made[made.length - 1].id,
     });
     await post(`/plans/${plan.id}/schedule/recalculate`, {});

@@ -19,6 +19,7 @@ const PALETTE: WbsBandPalette = {
   derived: '#7a8090',
   rule: '#2a2f3a',
   label: '#ffffff',
+  derivedLabel: '#ffffff',
   selection: '#8ab4f8',
 };
 
