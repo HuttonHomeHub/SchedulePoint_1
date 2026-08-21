@@ -185,6 +185,38 @@ itself**. Its absence is what let `docs/TECH_DEBT.md` #158 ship: twelve screens 
 never once what the product _produces_. That row stays **open**, because the light theme hides its
 symptom and not its cause.
 
+## What the performance gate established, and what it could not
+
+Stated as a number rather than implied, because the plan asked for one and the honest answer is not
+a millisecond figure.
+
+**The draw cost is unchanged by construction: `render/paint.ts` has a zero-line diff in this epic**,
+and every `paint.*-budget.test.ts` counting-stub gate passes untouched. `docs/TECH_DEBT.md` #75's
+known 16.7–23.1 ms p95 overage is therefore not attributable here — there is nothing in this diff for
+it to touch.
+
+The palette resolvers are **not** on the frame path either, which is what bounds the 88 re-pointed
+reads to irrelevance: `resolveTsldPalette` is called once at canvas mount behind a ref guard, and
+re-resolved only when `useThemeVersion` bumps — which, since ADR-0097 collapsed the product to one
+theme, **nothing in production does**, because no code mutates the root's `class` or `data-theme`
+any more.
+
+Built CSS was measured rather than assumed: **75.38 kB → 75.33 kB raw, 13.81 → 13.83 kB gzipped** —
+noise. The token-set diff is exactly **14 new declarations**, the seven `--chart-6..12` plus their
+seven aliases, with none removed and no new selector, media query or block. No dependency changed.
+
+**What is NOT measured, and is not claimed:** the absolute cost of `getComputedStyle` on a
+`var()`-chained custom property versus a literal, on real hardware. The sandbox cannot fetch a
+Chromium to run the repo's own `measure:draw` harness differentially. The mechanism above bounds the
+risk — a one-time cost at mount, against a per-frame budget — but the millisecond figure remains
+unmeasured, exactly as CLAUDE.md §17 already records for ADR-0026's budget generally.
+
+One non-blocking finding is recorded rather than fixed: `resolveLensPalette` is called **twice** per
+resolve cycle in `TsldPanel.tsx` (once for fills, once for inks), pre-existing duplication that this
+epic mildly compounds by taking the WBS ramp from 5 members to 12 — 20 `getComputedStyle` reads per
+cycle becoming 48. It fires only on a user-triggered lens or data change, and the fix is to share one
+resolve between the two `useMemo`s.
+
 ## Consequences
 
 - One theme, light, corporate. The application and its front door are one identity.

@@ -3035,3 +3035,20 @@ rebind itself, so it asserts a mapping the browser does not perform for alias re
 about what the values should be and silent about what the painter actually got. A gate that pins
 "every JS token read names an unprefixed token" would have caught the whole class, and is the
 cheapest thing here.
+
+## 160. `resolveLensPalette` is resolved twice per cycle
+
+**Raised 2026-08-21** (ADR-0102's performance gate). **Size:** XS.
+
+`TsldPanel.tsx` calls `resolveLensPalette(canvasSurface)` twice — once for the bar fills and once
+for the bar inks — so every `getComputedStyle` read in that resolver happens twice. Pre-existing
+duplication; ADR-0102 mildly compounds it by taking the WBS ramp from 5 members to 12, so the reads
+per resolve cycle go from 20 to 48.
+
+**Not blocking, and the reason is the call site rather than the count**: both calls sit inside
+`useMemo`s keyed on `[colourMode, activities, themeVersion, canvasSurface]`, so they fire on a
+user-triggered lens or data change and never per render or per frame. `resolveLensPalette` appears
+nowhere in `paint.ts` or the rAF loop.
+
+The fix is to pull one resolve into a single `useMemo` and derive both maps from it. Worth doing
+when that file is next open; not worth a commit of its own.
