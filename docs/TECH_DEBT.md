@@ -2787,3 +2787,30 @@ checks the chart's left edge equals the grid's right edge. `PanelResizer` is `ro
 **How this row came to exist** is worth one line: the structural test's own docblock said the
 browser-level proof "belongs to `e2e-gantt`", which reads as coverage held elsewhere. It was not
 checked when written.
+
+## 152. `zoomToSelection` frames the time axis and discards the lane axis
+
+**Raised 2026-08-20** (minimap epic, M0-T5 — filed rather than absorbed). **Size:** S.
+
+`zoomToActivity` is deliberately `fitToContent` handed a one-element array
+(`TsldCanvas.tsx:1015-1044` — its own comment says a parallel implementation would drift).
+But `fitToContent` computes `maxLane` and never uses it, pinning `originY` to the padding
+(`render/viewport.ts:161,168,178`) — right for whole-plan Fit at lane 0, wrong for one
+activity in lane 273. The selection-reveal effect pans vertically on **selection change**
+only, so nothing repairs the framing after the command resets it.
+
+**Proven live** (M0-T5 probe, 2026-08-20, seeded 2,160-activity plan packed to 274 lanes,
+target activity in lane 273, viewport read through the M0 probe's live-view mirror):
+
+- after selecting the bar: `topLane 242.8, visibleLanes 32, visible: true` — the reveal
+  effect works, the gap is narrower than "zoom to selection does not reveal";
+- after pressing **Zoom to selection**: `topLane −1.1, visible: false` — the command
+  announced "Zoomed to Activity A01928" while scrolling it **out** of view.
+
+**Two candidate fixes**, both outside the minimap epic because `fitToContent` is also
+_Fit to plan_ and the export framing: (a) `zoomToActivity` restores the vertical reveal
+after the fit (re-run the reveal for the current selection — smallest, command-local);
+(b) `fitToContent` gains an opt-in "centre the lane span" parameter that only
+`zoomToActivity` passes (touches the shared seam, needs the three call sites' suites as
+the oracle). The probe (`m0-t5-zoom-probe.mjs`, method recorded in
+`docs/specs/tsld-minimap/m0-measurement.md`) is kept with this row, not merged as a gate.

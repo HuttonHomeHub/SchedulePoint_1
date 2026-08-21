@@ -142,3 +142,66 @@ fixtures; the compositing asymmetry is flagged for **M4-T2's re-derivation on re
 hardware**, and the operator's named-machine run remains the better final word. If M4-T2
 reproduces a frame-rate cost of this order on hardware, the M0-T1 ladder applies to it
 (rungs 3–4: demote the rectangle to pan-end updates; withdraw to a static picture).
+
+---
+
+## M0-T2 — the need, re-derived (2026-08-20)
+
+Measured via the API's persisted computed dates plus a browser at 1646×1097 (scene canvas
+**1297×896** with the context drawer open — the state a planner lands in). Catalogue plans
+stand proxy for the operator's real plans, stated; lanes packed with the product's own
+`packLanes` (`@repo/layout`) since the seeder authors none. Full numbers are in the spec's
+rewritten Problem section; the one-sentence answer: **the time axis carries the need
+(0.3–8.6% of the plan visible at the working presets on both plans), and the lane axis
+compounds it on programmes that pack past ~32 lanes** (2,160-activity plan: 274 lanes,
+11.7% visible; 540-activity plan: 41 lanes, 78% visible). S1's withdrawal condition is not
+met.
+
+## M0-T3 — collision check, in a browser (2026-08-20)
+
+At 1646 with the WBS band on, the resource view open and the Legend open (540-activity
+plan — the one with a resource; screenshots `m0-t3-default.png` / `m0-t3-dragged.png`,
+kept with the session): the **Legend's default corner is the bottom-LEFT** (panel ~234×428
+at x71), the WBS band is top-pinned, and the resource machinery takes a full-width block
+below the canvas plus the in-canvas 72 px histogram strip — the canvas shrank 896 → 782 px
+with both open. **The canvas's bottom-right corner is free of persistent occupants in the
+default state.** Dragging the Legend by its grab header parks it bottom-right (header at
+x1391) and it persists there — confirming the spec's policy as written: **no
+auto-avoidance; the minimap offsets by `RESOURCE_STRIP_HEIGHT` when the strip is active;
+the Legend is the movable one.**
+
+## M0-T4 — the bitmap-build probe, re-run (2026-08-20)
+
+Same environment deviation as T1 (headless container, not the named machine — stated, not
+hidden). 50 forced rebuilds of the probe bitmap on the 2,160-activity plan, timed inside
+the frame loop: **p50 3.4 ms, p95 5.1 ms, max 9.2 ms**. This confirms the input report's
+headless order-of-magnitude figures (single-digit milliseconds). The probe folds extent
+and bar geometry into one pass; M1's shape is **two passes** (`worldExtent()` then the bar
+pass — the fold was withdrawn in the agreement round because it would be a fourth inline
+extent derivation), whose extra cost is one O(n) arithmetic loop with no canvas calls —
+inside the same order. The whole cost sits on the scene-change path, where single-digit
+milliseconds are noise; nothing here is per-frame.
+
+## M0-T5 — the `zoomToSelection` vertical-framing gap, proven live and filed
+
+Probe result (2,160-activity plan, target in lane 273): select → visible (`topLane
+242.8`); press Zoom to selection → **not visible** (`topLane −1.1`) while the command
+announces success. Filed as `docs/TECH_DEBT.md` **#152** with both candidate fixes; **not
+absorbed here** — `fitToContent` is also Fit to plan and the export framing, and this
+epic's argument is that it changes nothing about the scene.
+
+## M0-T6 — the two scope decisions, recorded
+
+1. **The minimap drag inherits ADR-0026 §9's `<100 ms` interaction-feedback clause: YES.**
+   It is interactive; the clause is about interactive feedback; the DOM-rectangle design
+   meets it trivially (a `style.transform` write per frame, measured at T1 as
+   indistinguishable from noise on the dropped-frame metric). Recorded so it is scoped,
+   not discovered.
+2. **Q2 arithmetic: not taken.** The product owner's governing default is "no command-strip
+   promotion", so the one-extra-pinned-item measurement is moot; if that decision is ever
+   reversed, the measurement is owed first (`e2e-toolbar-fit` with one extra pinned item at
+   1646/1440/1280/960, against `PINNED_FLOOR_WIDTH` 960 and TECH_DEBT #147's squeeze).
+
+**M0 verdict: the falsification condition did not fail (both fixtures), the need supports
+the control on both axes, the corner is free, the build cost is scene-change noise, and
+the one pre-existing defect found is filed as #152. M1 may start.**
