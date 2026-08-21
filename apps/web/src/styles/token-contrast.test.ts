@@ -101,30 +101,25 @@ const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string
   // is light (validated against navy) and the field is white — 2:1, invisible. A placeholder
   // belongs to the field's colour system, so it gets its own token per surface.
   ['--field', '--field-muted-foreground', 'placeholder text inside an input'],
-  // The solid status fills. Nothing pairs them as a fill+label TODAY — `badge.tsx` uses an alpha
-  // wash plus the `-text` variant, and documents why. But `@theme inline` compiles
-  // `bg-warning text-warning-foreground`, so the pairing is one autocomplete away, and an
-  // unasserted-but-available token pair is exactly the trap this suite exists to remove.
   ['--muted', '--muted-foreground', 'secondary text on a muted block'],
   // The neutral `Badge`'s label. Added when ADR-0097's closure made `--secondary-foreground`
   // scope-derived and the pill — which had been painting it on `--muted` — dropped to 1.53:1 on
   // navy. The pairing was never asserted, so nothing failed here; `e2e-designed-chrome` caught
   // it in a browser. Asserting it is the fix; changing the class is only how it passes.
-  ['--muted', '--foreground', 'the label of a neutral status pill'],
-  // **A read-only grid cell, and the trap ADR-0083 found going the other way.** A gated field is
-  // read-only rather than `disabled`, so the reader can still read the value — which REMOVES the
-  // 1.4.3 exemption `disabled:opacity-50` currently relies on. The treatment therefore dims the
-  // CHROME and never the VALUE: the cell fill drops to `--muted` while the text stays
-  // `--foreground`. This pair is asserted BEFORE the CSS that needs it exists (M2-T4), because a
-  // pair added afterwards is a pair that shipped unchecked.
-  [
-    '--muted',
-    '--foreground',
-    'the value in a read-only field, whose chrome is dimmed and text is not',
-  ],
-  ['--success', '--success-foreground', 'the label of a solid success fill'],
-  ['--warning', '--warning-foreground', 'the label of a solid warning fill'],
-  ['--info', '--info-foreground', 'the label of a solid info fill'],
+  // **Two consumers, one pair — merged at M0-T4 rather than listed twice.** The reasons are both
+  // kept because they are different situations, and the pair was previously asserted once for each:
+  //
+  //  1. *The neutral `Badge`'s label.* Added when ADR-0097's closure made `--secondary-foreground`
+  //     scope-derived and the pill — which had been painting it on `--muted` — dropped to 1.53:1 on
+  //     navy. The pairing was never asserted, so nothing failed here; `e2e-designed-chrome` caught
+  //     it in a browser. Asserting it is the fix; changing the class is only how it passes.
+  //  2. *A read-only grid cell, and the trap ADR-0083 found going the other way.* A gated field is
+  //     read-only rather than `disabled`, so the reader can still read the value — which REMOVES
+  //     the 1.4.3 exemption `disabled:opacity-50` relies on. The treatment therefore dims the
+  //     CHROME and never the VALUE: the cell fill drops to `--muted` while the text stays
+  //     `--foreground`. Asserted BEFORE the CSS that needs it exists, because a pair added
+  //     afterwards is a pair that shipped unchecked.
+  ['--muted', '--foreground', 'a neutral status pill’s label, and a read-only field’s value'],
 ];
 
 /** Non-text pairs — WCAG 1.4.11 Non-text Contrast, 3:1. */

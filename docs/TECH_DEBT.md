@@ -2896,7 +2896,7 @@ registrant. It proves the shell _can_ show a subject; it never proved anything d
 docblock now says so. That is ADR-0081's shape one level along, and worth remembering when
 reading any "the entry point works" test.
 
-## 157. Every colour gate is a floor; none is a ceiling
+## 157. Every colour gate is a floor; none is a ceiling — ANSWERED, no gate
 
 **Raised 2026-08-21** (ADR-0101, from first contact with the shipped dark theme). **Size:** S,
 inside the light-theme epic.
@@ -2913,10 +2913,28 @@ there: a contrast ceiling is a dark-ground instrument, because halation does not
 way on light, and the product is moving to a light corporate theme. Building the gate for a
 theme being deleted is work thrown away.
 
-**What is owed:** the light-theme epic decides whether a ceiling applies to its own grounds, and
-if it does, the gate lands with the values rather than after them (the ADR-0097 §9 rule, which
-the minimap's frame token proved again — a gate written after the CSS passes for the wrong
-reason). If a dark theme ever returns, this row is its first requirement.
+**ANSWERED 2026-08-21 at the light-theme epic's M0-T4, and the answer is that there is no gate
+to build.** Working in `docs/specs/light-corporate-theme/m0-ceiling.md`.
+
+A ratio ceiling must sit **below 14.61** to have caught the defect and **above 12.64** not to
+reject the recovered light palette's own card body text — an ordinary near-`#333`-on-white value.
+The whole admissible window is under two points, tuned to exactly two data points. And inside it
+the rule would be enforcing the wrong quantity: what made 14.61:1 uncomfortable is **halation**, a
+property of light ink on a dark ground rather than of the separation, which a ratio cannot see.
+
+The second candidate — a ground-luminance band, "off-white, never paper-white" — is **withdrawn**
+before writing: it fails on day one against the recovered palette's `--card` at L = 1.000, which
+is paper-white by construction and correct. A gate that fails on the values it protects gets
+deleted rather than fixed (ADR-0058).
+
+What removes the defect is the ground flip itself. The surviving risk on a light ground is the
+opposite one — washed-out values — and the floors already catch that.
+
+**The surviving requirement, if a dark theme ever returns:** it needs a _polarity-aware_ comfort
+check on light-ink-on-dark-ground separation, not a ratio ceiling, and the lever is more likely to
+be the ink's lightness than the ground's, because the ground carries the diagram. 14.61:1 was too
+much and 10.84:1 drew no complaint; that is two points, enough to know what to measure and not
+enough to set a number. Recorded in `m0-ceiling.md` and in the epic's ADR so it outlives this row.
 
 ## 158. The printed and exported diagram is painted on a near-black ground
 
