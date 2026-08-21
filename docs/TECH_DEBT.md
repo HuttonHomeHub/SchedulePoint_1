@@ -2949,7 +2949,12 @@ the two can't drift". They have drifted: since Graphite the token resolves to Gr
 an exported PNG/PDF and the printed programme carry a near-black diagram panel inside white paper
 chrome.
 
-**Measured in Chromium against the running app**, not inferred from the token chain:
+**Confirmed by capturing the artefact itself**, not inferred from the token chain: the harness now
+saves the real downloaded PNG (`export-diagram`, added at the light-theme epic's M0-T2), and it
+comes out with a near-black diagram ground under a title band whose ink was derived for white
+paper. The picture is the evidence; the token chain below is why.
+
+The same run measured, in Chromium against the running app:
 
 ```
 --color-background  →  oklch(0.177 0.011 260.6)      (root and the canvas surface alike)

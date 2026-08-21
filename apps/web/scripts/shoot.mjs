@@ -109,7 +109,12 @@ async function seed(page, slug) {
 
 /**
  * Seed ONE plan with a real programme — six linked activities of differing durations, recalculated
- * — and return its id.
+ * — and return `{ planId, projectId, clientId }`.
+ *
+ * It returns the whole triple rather than just the plan because the project-detail screen is a shot
+ * too (M0-T2) and there is no route to it that does not know its id. Navigating there through the
+ * Explorer would work and is the wrong trade for a harness: it would make a photograph fail for a
+ * navigation reason, which is exactly what {@link seed}'s docblock says not to do.
  *
  * **Separate from {@link seed} because that one photographs a lie.** It gives each plan a single
  * five-day activity called "Pour slab", which is ample for a table screen and useless for the
@@ -157,13 +162,46 @@ async function seedProgramme(page, slug) {
       });
     }
     await post(`/plans/${plan.id}/schedule/recalculate`, {});
-    return plan.id;
+    return { planId: plan.id, projectId: project.id, clientId: client.id };
   }, slug);
+}
+
+/**
+ * Mint a guest share link for the seeded plan and return the URL a recipient would be sent.
+ *
+ * The token is returned **once**, at creation, and lives in the URL *fragment* (ADR-0051) so it
+ * never reaches a referrer or a server log. That is why this exists at all: there is no way to
+ * recover the link afterwards, so the harness has to be the thing that creates it.
+ */
+async function mintShareLink(page, slug, planId) {
+  return page.evaluate(
+    async ({ org, plan }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${plan}/shares`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label: 'Client review' }),
+      });
+      if (!response.ok) throw new Error(`shares: ${response.status} ${await response.text()}`);
+      const { data } = await response.json();
+      return data.url ?? null;
+    },
+    { org: slug, plan: planId },
+  );
 }
 
 const SHOTS = [
   { name: 'sign-in', signedOut: true, go: (p) => p.goto(`${BASE}/sign-in`) },
   { name: 'sign-up', signedOut: true, go: (p) => p.goto(`${BASE}/sign-up`) },
+  // **The four remaining public screens** (M0-T2). The pre-authentication surface is six routes and
+  // the harness had two of them — so `auth`, the one scope this epic may retire, was two-thirds
+  // unphotographed. `reset-password`, `verify-email` and `accept-invite` are shot WITHOUT a token
+  // on purpose: that is the invalid-link state, which is a real screen a real person reaches (an
+  // expired email, a truncated link) and the one most likely to be forgotten in a re-derivation.
+  { name: 'forgot-password', signedOut: true, go: (p) => p.goto(`${BASE}/forgot-password`) },
+  { name: 'reset-password', signedOut: true, go: (p) => p.goto(`${BASE}/reset-password`) },
+  { name: 'verify-email', signedOut: true, go: (p) => p.goto(`${BASE}/verify-email`) },
+  { name: 'accept-invite', signedOut: true, go: (p) => p.goto(`${BASE}/accept-invite`) },
   // Both states of the landing, because a freshly-onboarded organisation renders the
   // new-organisation empty state — so shooting `org-home` straight after `onboard` photographed
   // the least interesting of the screen's states and called it the screen.
@@ -174,6 +212,27 @@ const SHOTS = [
   { name: 'resources', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/resources`) },
   { name: 'members', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/members`) },
   { name: 'recently-deleted', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/recently-deleted`) },
+  { name: 'audit-log', go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/audit-log`) },
+  {
+    name: 'project-detail',
+    programme: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/projects/${ids.projectId}`),
+  },
+  // **One error state and one loading state**, both produced by intercepting the request rather
+  // than by contriving data — which is what makes them deterministic. Every screen in this product
+  // has three states and the harness had only ever photographed the third, so a re-derivation could
+  // land a destructive-token or a skeleton value that nobody looks at until it is in front of a
+  // customer.
+  {
+    name: 'clients-error',
+    intercept: { url: '**/api/v1/organizations/*/clients*', fulfil: 500 },
+    go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/clients`),
+  },
+  {
+    name: 'clients-loading',
+    intercept: { url: '**/api/v1/organizations/*/clients*', hang: true },
+    go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/clients`),
+  },
   // **The plan workspace, which this harness omitted for its whole existence.** Nine screens were
   // shot and the TSLD canvas — the product's reason to exist, and the subject of four consecutive
   // epics of command-surface work — was not one of them. The design-system work had this camera and
@@ -183,13 +242,13 @@ const SHOTS = [
   {
     name: 'plan-workspace',
     programme: true,
-    go: (p, slug, planId) => p.goto(`${BASE}/orgs/${slug}/plans/${planId}`),
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
   },
   {
     name: 'plan-workspace-readonly',
     programme: true,
     releasePen: true,
-    go: (p, slug, planId) => p.goto(`${BASE}/orgs/${slug}/plans/${planId}`),
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
   },
   // **The activity editor, which nothing had ever photographed** (ADR-0101). The harness gained
   // the plan workspace after the register found it had never been shot; the editor sitting ON that
@@ -205,10 +264,75 @@ const SHOTS = [
     // run — a shot list is ordered state, not three independent pictures, and the only thing that
     // reports it is running the whole list.
     takePen: true,
-    go: (p, slug, planId) => p.goto(`${BASE}/orgs/${slug}/plans/${planId}`),
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
     after: openActivityEditor,
   },
+  // **The Gantt, in both arrow states** (M0-T2). It is a peer view of the same plan (ADR-0059) and
+  // the harness had never seen it — so half the product's schedule surface was outside the one
+  // instrument this epic is judged by. Arrows ship default-off (ADR-0095), so the default is shot
+  // first and the toggled state second; a re-derivation that only ever looks at the default would
+  // land an arrow colour nobody checks.
+  {
+    name: 'gantt',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}?view=gantt`),
+  },
+  {
+    name: 'gantt-arrows',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}?view=gantt`),
+    // **"Logic links", not "Dependencies".** Probed, after the obvious guess timed out against a
+    // correct control — and the name is Gantt-only: the TSLD's View panel has no such entry,
+    // because on a time-scaled logic diagram the links are the picture rather than an option.
+    after: (p) => toggleViewSwitch(p, /logic links/i),
+  },
+  // **The minimap** (ADR-0100, landed 2026-08-21). Its two-tone frame is the token pair with no
+  // ancestor in the recovered palette and no resolver behind it — a white stroke derived against a
+  // near-black ground. If anything in the diagram is visibly wrong on paper, it is this.
+  {
+    name: 'plan-workspace-minimap',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+    after: (p) => toggleViewSwitch(p, /minimap/i),
+  },
+  // **The guest share view** — the only screen in the product a person outside the organisation
+  // ever sees, and the only authenticated-adjacent surface with no session at all. Session-less by
+  // construction (ADR-0051), so it takes its own anonymous context like the public screens, but it
+  // needs a token minted from the signed-in one first.
+  { name: 'share-guest', programme: true, shareGuest: true },
+  // **The exported diagram, saved as the artefact the planner actually hands over** (M0-T2).
+  // This is the shot whose ABSENCE produced `docs/TECH_DEBT.md` #158: the whole shot list stopped
+  // at what a screen looks like and never once looked at what the product PRODUCES, so a printed
+  // programme with a near-black diagram inside white paper chrome shipped and stayed shipped. It
+  // captures the download rather than screenshotting the page, because the file is the deliverable
+  // and a picture of the menu that made it proves nothing.
+  { name: 'export-diagram', programme: true, takePen: true, exportPng: true },
 ];
+
+/**
+ * Flip one switch in the `View ▾` menu and close it again, so the shot photographs the diagram
+ * rather than an open menu over it.
+ *
+ * Named by pattern rather than by exact string on purpose: three epics have renamed these items
+ * (ADR-0091 M7 shortened three labels outright), and a harness that fails on a label change reports
+ * a design problem it does not have.
+ */
+async function toggleViewSwitch(page, pattern) {
+  await page.getByRole('button', { name: /^View/ }).first().click();
+  // **A `checkbox` inside a `dialog`, not a `menuitemcheckbox` inside a `menu`.** `View` is
+  // `aria-haspopup="dialog"` and the panel is a popover of radio groups and checkboxes — probed,
+  // because the first version of this helper assumed the ADR-0031 menu taxonomy from the toolbar's
+  // other triggers and timed out against a perfectly correct control.
+  const panel = page.getByRole('dialog').last();
+  const item = panel.getByRole('checkbox', { name: pattern }).first();
+  await item.waitFor({ timeout: 5000 });
+  await item.click();
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(700);
+}
 
 /**
  * Select the first activity from the canvas's parallel listbox and open its editor — the keyboard
@@ -270,10 +394,41 @@ for (const width of widths) {
   const page = await context.newPage();
   const slug = wanted.some((s) => !s.signedOut) ? await onboard(page, width) : null;
   let seeded = false;
-  let planId = null;
+  let ids = null;
 
   for (const shot of wanted) {
-    if (shot.signedOut) {
+    if (shot.exportPng) {
+      if (!ids) ids = await seedProgramme(page, slug);
+      await page.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`);
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(1200);
+      const start = page.getByRole('button', { name: 'Start editing' });
+      if (await start.isVisible().catch(() => false)) await start.click();
+      await page
+        .getByRole('button', { name: /share.*export/i })
+        .first()
+        .click();
+      const download = page.waitForEvent('download', { timeout: 20_000 });
+      await page.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }).click();
+      const file = await download;
+      await file.saveAs(join(dir, `${shot.name}.png`));
+    } else if (shot.shareGuest) {
+      // Needs BOTH contexts: the signed-in one to mint the link, and an anonymous one to view it
+      // as a recipient would. Minting first also means `programme` seeding has already run.
+      if (!ids) ids = await seedProgramme(page, slug);
+      const url = await mintShareLink(page, slug, ids.planId).catch(() => null);
+      if (!url) {
+        console.log(`${width}  ${shot.name}  SKIPPED — no share URL returned`);
+        continue;
+      }
+      const anon = await browser.newContext({ viewport: { width, height: 1000 } });
+      const anonPage = await anon.newPage();
+      await anonPage.goto(url.startsWith('http') ? url : `${BASE}${url}`);
+      await anonPage.waitForLoadState('networkidle');
+      await anonPage.waitForTimeout(1200);
+      await anonPage.screenshot({ path: join(dir, `${shot.name}.png`) });
+      await anon.close();
+    } else if (shot.signedOut) {
       // A signed-out shot needs its own context — the session cookie would redirect it away.
       const anon = await browser.newContext({ viewport: { width, height: 1000 } });
       const anonPage = await anon.newPage();
@@ -286,8 +441,21 @@ for (const width of widths) {
         await seed(page, slug);
         seeded = true;
       }
-      if (shot.programme && !planId) planId = await seedProgramme(page, slug);
-      await shot.go(page, slug, planId);
+      if (shot.programme && !ids) ids = await seedProgramme(page, slug);
+      // **Intercepts arm BEFORE the navigation and disarm after the shot**, so a hung route cannot
+      // leak into the next picture. `hang` never resolves — Playwright abandons it when the context
+      // closes — which is the only way to hold a loading state still enough to photograph.
+      if (shot.intercept) {
+        await page.route(shot.intercept.url, async (route) => {
+          if (shot.intercept.hang) return; // deliberately never fulfilled
+          await route.fulfill({
+            status: shot.intercept.fulfil,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: { code: 'INTERNAL', message: 'Something went wrong.' } }),
+          });
+        });
+      }
+      await shot.go(page, slug, ids);
       // **A shot that photographed a 404 reported success.** The first run of `plan-workspace`
       // used the wrong route, wrote a picture of "Not Found", and printed the shot's name as
       // though it had worked — a green result about nothing, which is the failure class this
@@ -301,7 +469,12 @@ for (const width of widths) {
       ) {
         throw new Error(`${shot.name}: the page is a 404 — the route is wrong, not the screen.`);
       }
-      await page.waitForLoadState('networkidle');
+      // **`networkidle` can never settle behind a hung intercept** — that is the whole point of the
+      // loading shot, and waiting for it would hang the harness rather than photograph the state.
+      // A fixed settle is the right instrument for exactly this one case and the wrong one for
+      // every other, so it is branched rather than applied everywhere.
+      if (shot.intercept?.hang) await page.waitForTimeout(1500);
+      else await page.waitForLoadState('networkidle');
       // The canvas paints from a ResizeObserver and an animation frame, neither of which
       // `networkidle` waits for — a shot taken on the idle event alone catches an empty canvas and
       // is indistinguishable from a canvas that IS empty, which is the confusion this whole shot
@@ -327,6 +500,9 @@ for (const width of widths) {
       }
       if (shot.after) await shot.after(page);
       await page.screenshot({ path: join(dir, `${shot.name}.png`) });
+      // Disarm, or the next shot inherits this one's failure — the harness reuses one page per
+      // width, so a route left armed is a defect that shows up several pictures later.
+      if (shot.intercept) await page.unroute(shot.intercept.url);
     }
     console.log(`${width}  ${shot.name}`);
   }
