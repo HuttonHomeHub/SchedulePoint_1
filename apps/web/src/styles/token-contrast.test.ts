@@ -257,6 +257,45 @@ const PLOT_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
   ['a month band', '--canvas-band'],
 ];
 
+/**
+ * **The minimap rectangle's frame against the three grounds it actually crosses** (ADR-0100
+ * decision 9, minimap M2-T1 — the gate lands BEFORE the CSS value, verified red, because
+ * writing the value first is how `--canvas-grid-month` shipped at 2.08:1 behind a green suite).
+ *
+ * The frame is "the boundary of a UI component" — the case WCAG 1.4.11 names — so every pair
+ * asserts 3:1. The grounds are deliberately NOT `PLOT_GROUNDS`: a minimap has no month band,
+ * and at scale the rectangle crosses dense bar ink — so the sweep is the canvas ground plus
+ * the two bar fills (`--primary` non-critical, `--destructive` critical), which is what the
+ * rectangle actually sits on in a 200×120 picture of a 2,000-activity plan.
+ */
+const MINIMAP_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
+  ['the minimap ground', '--canvas'],
+  ['non-critical bar ink', '--primary'],
+  ['critical bar ink', '--destructive'],
+];
+
+describe('the minimap rectangle frame is perceivable on everything it crosses', () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+
+  // The frame is a two-tone stroke+halo pair, NOT one solid — measured first: the best any
+  // single value can do on the critical fill is white at 2.62:1, because the same edge must
+  // also clear the 0.177-L canvas ground. The `outline`/`handleHalo` precedent
+  // (`render/paint.ts`): whichever half loses contrast on a given ground, the other holds it.
+  it.each(MINIMAP_GROUNDS)('the stroke or its halo clears 3:1 on %s', (_name, ground) => {
+    const stroke = ratio(tokens, ground, '--canvas-minimap-frame');
+    const halo = ratio(tokens, ground, '--canvas-minimap-frame-halo');
+    expect(
+      Math.max(stroke, halo),
+      `minimap frame pair on ${ground}: stroke ${fmtRatio(stroke)}, halo ${fmtRatio(halo)}`,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('the stroke and its halo clear 3:1 against each other, so the edge reads as one line', () => {
+    const value = ratio(tokens, '--canvas-minimap-frame-halo', '--canvas-minimap-frame');
+    expect(value, `stroke on halo is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('the diagram grid is readable on both of its grounds', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 

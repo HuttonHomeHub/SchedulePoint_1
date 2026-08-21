@@ -82,11 +82,16 @@ D7 built a parallel a11y layer instead.
    (viewport restored to the press value) and nothing else; every other press defers to
    the existing ladder (ADR-0080, ADR-0099 M4's `defaultPrevented` convention).
 9. **One deliberate token deviation, named so it reads as a decision:** the rectangle's
-   frame token `--canvas-minimap-frame` is contrast-gated against
-   `MINIMAP_GROUNDS = [--canvas, --primary, --destructive]` — not the existing
-   `PLOT_GROUNDS` — because the minimap has no month band and DOES have dense bar ink
-   under the rectangle at scale. The gate lands in `token-contrast.test.ts` **before**
-   the CSS value.
+   frame is contrast-gated against `MINIMAP_GROUNDS = [--canvas, --primary,
+--destructive]` — not the existing `PLOT_GROUNDS` — because the minimap has no month
+   band and DOES have dense bar ink under the rectangle at scale. The gate landed in
+   `token-contrast.test.ts` **before** the CSS value (verified red), and the measurement
+   it forced **changed the design**: no single solid can clear 3:1 on a 0.177-L ground
+   and two ~0.65-L fills at once (white, the best case, measures 2.62:1 on the critical
+   fill), so the frame is a **two-tone stroke + halo pair**
+   (`--canvas-minimap-frame` / `--canvas-minimap-frame-halo`) — the palette's existing
+   `outline`/`handleHalo` mechanism, with the gate asserting that on every ground at
+   least one half clears 3:1 and the pair clears 3:1 against each other.
 10. **No feature flag** (ADR-0088: a `VITE_` constant is inlined at build time and is not
     an operator rollback). The rollback is a commit boundary; the entry point is
     `View ▾ ▸ Panels ▸ Minimap`, default off per plan (product owner Q1), panel size

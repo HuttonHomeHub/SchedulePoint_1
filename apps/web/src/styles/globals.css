@@ -332,6 +332,17 @@
   --canvas: oklch(0.177 0.011 260.6);
   --canvas-band: oklch(0.196 0.013 258);
 
+  /* The minimap rectangle's frame (ADR-0100 decision 9, M2-T1): a TWO-TONE pair, the
+     `outline`/`handleHalo` precedent, because the measurement said one solid cannot exist —
+     the boundary must clear WCAG 1.4.11's 3:1 on the 0.177-L canvas ground AND on both
+     ~0.65-L bar fills, and white (the best any single value can do) measures 2.62:1 on the
+     critical fill. So the light stroke holds the ground and the dark halo holds the bars:
+     for every MINIMAP_GROUNDS member, at least one of the pair clears 3:1, and the pair
+     clears 3:1 against each other so the edge reads as one line. The gate recomputes all
+     of it. */
+  --canvas-minimap-frame: oklch(1 0 0);
+  --canvas-minimap-frame-halo: oklch(0.15 0.01 260);
+
   /* --- the `auth` surface: the public screens' card (ADR-0077 M7) -----------
      Theme-INVARIANT, like `brand` and for the same reason one step further out.
      ADR-0077 §2 fixed the navy panel because a signed-out visitor never chose a
