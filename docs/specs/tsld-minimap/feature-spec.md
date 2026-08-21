@@ -497,7 +497,7 @@ sequenceDiagram
 
   Note over H,M: scene change only
   H->>M: buildMinimapBitmap(activities, dataDate, box, palette)
-  M-->>H: detached canvas (one O(n) pass: extent + rects)
+  M-->>H: detached canvas (worldExtent, then the bar pass)
   H->>P: blit (drawImage), minimapDirtyRef cleared
 
   Note over U,H: every pan frame
