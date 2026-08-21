@@ -450,6 +450,9 @@ export interface TsldPanelProps {
    * sibling `flaggedIds` / `baselineGhosts` lenses that derive a single optional field: the band's
    * height must be reserved (`active`) during the loading state — before any snapshot exists (`data` is
    * still `null`) — so the two can't collapse into one. Don't "fix" the inconsistency. */
+  /** Minimap panel (ADR-0100): mounted by the canvas when true; closing is host-owned. */
+  minimapActive?: boolean;
+  onMinimapClose?: () => void;
   resourceStripActive?: boolean;
   /** The resource-strip snapshot the workspace's `ResourceStripPanel` publishes (selected series +
    * pre-projected bucket day-offsets + whole-series max). Forwarded to `TsldCanvas`, which paints ONLY
@@ -550,6 +553,8 @@ export function TsldPanel({
   varianceRows,
   resourceStripActive = false,
   resourceStrip = null,
+  minimapActive = false,
+  onMinimapClose,
   overAllocationHighlight = false,
   floatPathIds,
   selectionCanvas,
@@ -2682,6 +2687,8 @@ export function TsldPanel({
               flaggedIds={flaggedIds}
               resourceStripActive={resourceStripActive}
               resourceStrip={resourceStrip}
+              minimapActive={minimapActive}
+              {...(onMinimapClose ? { onMinimapClose } : {})}
               controlRef={canvasControlRef}
               onZoomStopChange={setZoomPreset}
               wbsBandGroups={wbsBandGroupRows}

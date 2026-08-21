@@ -23,6 +23,7 @@ import { recordingCtx } from './test-support/recording-ctx';
  *    temporarily forcing the field true in case 1 during development: the suite went red.)
  */
 const PALETTE: TsldPalette = {
+  canvasGround: '#14161c',
   gridLine: '#111',
   gridLineDay: '#3a3a3a',
   gridLineMonth: '#111111',

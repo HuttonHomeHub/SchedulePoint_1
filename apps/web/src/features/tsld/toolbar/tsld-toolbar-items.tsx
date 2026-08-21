@@ -303,6 +303,22 @@ const LENS_TOGGLES: readonly LensToggle[] = [
     reason: () => undefined,
     promotion: { icon: <BookOpen className="size-4" />, order: 22 },
   },
+  {
+    // The minimap panel (ADR-0100, minimap M2-T3). `panels` for the legend's reason — a surface
+    // read BESIDE the diagram — and deliberately NOT promoted in v1 (product owner Q2): the row
+    // lives in `View ▾`, which re-creates the Panels fieldset as its sole occupant (the legend,
+    // its only other member, is promoted out). No `TsldViewToggles` key — that type means "which
+    // optional canvas layers the PAINTER draws", is read by the pure painter and the Gantt, and
+    // both existing panels sit outside it. Shade-with-a-reason when there is no diagram
+    // (ADR-0082), exactly as the lenses above do.
+    id: 'minimap',
+    group: 'panels',
+    label: 'Minimap',
+    enabled: true,
+    checked: (ctx) => ctx.minimapOpen,
+    toggle: (ctx) => ctx.toggleMinimap(),
+    reason: (ctx) => (ctx.hasDiagram ? undefined : LENS_NO_DIAGRAM_REASON),
+  },
 ];
 
 function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {

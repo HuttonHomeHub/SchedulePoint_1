@@ -13,6 +13,7 @@ import { mockCtx } from './test-support/recording-ctx';
  * which is the epic's rollback contract.
  */
 const PALETTE: TsldPalette = {
+  canvasGround: '#14161c',
   gridLine: '#111',
   gridLineDay: '#3a3a3a',
   gridLineMonth: '#111111',

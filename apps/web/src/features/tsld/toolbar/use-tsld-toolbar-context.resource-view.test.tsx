@@ -134,6 +134,7 @@ function build(activities: ActivitySummary[]) {
       canvasUi: makeCanvasUi(),
       openDialog: vi.fn(),
       legend: { open: false, toggle: vi.fn() },
+      minimap: { open: false, toggle: vi.fn() },
       revealComments: vi.fn(),
     }),
   );

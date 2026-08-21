@@ -17,6 +17,7 @@ import { useViewportCommands } from './commands/use-viewport-commands';
 import { PlanSummaryPanel } from './plan-summary-panel';
 import type { ExportNotice, TsldToolbarContext } from './tsld-toolbar-context';
 import type { UseLegendPanelPrefs } from './use-legend-panel-prefs';
+import type { UseMinimapPanelPrefs } from './use-minimap-panel-prefs';
 import type { TsldCanvasUiState } from './use-tsld-canvas-ui-state';
 
 import type {
@@ -65,6 +66,7 @@ export function useTsldToolbarContext({
   canvasUi,
   openDialog,
   legend,
+  minimap,
   revealComments,
   toggleFloatPaths = () => {},
   planView = DEFAULT_PLAN_VIEW_MODE,
@@ -80,6 +82,8 @@ export function useTsldToolbarContext({
   /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
    * Legend control shows/hides it rather than rendering the key in a popover. */
   legend: Pick<UseLegendPanelPrefs, 'open' | 'toggle'>;
+  /** The minimap panel's open/toggle pair (ADR-0100) — passed in for the `legend` reason. */
+  minimap: Pick<UseMinimapPanelPrefs, 'open' | 'toggle'>;
   /** Reveal + focus the plan-level notes thread (toolbar quick-wins F2). The workspace owns the target
    * ref and passes a stable, guarded callback (no-op when the section isn't in the DOM). */
   revealComments: () => void;
@@ -214,6 +218,7 @@ export function useTsldToolbarContext({
   );
 
   const { open: legendOpen, toggle: toggleLegend } = legend;
+  const { open: minimapOpen, toggle: toggleMinimap } = minimap;
 
   const {
     zoomPreset,
@@ -505,6 +510,8 @@ export function useTsldToolbarContext({
       // The legend lives on the canvas now (ADR-0031 amendment) — this toggles the floating panel.
       legendOpen,
       toggleLegend,
+      minimapOpen,
+      toggleMinimap,
 
       // Summary popover + pinned finish chip
       summaryContent,
@@ -832,6 +839,8 @@ export function useTsldToolbarContext({
     openDialog,
     legendOpen,
     toggleLegend,
+    minimapOpen,
+    toggleMinimap,
     // Resource-view lens (VITE_CANVAS_RESOURCE_VIEW) — re-identify only when the open flag flips (the
     // toggle is a stable model callback).
     model.resourceViewOpen,

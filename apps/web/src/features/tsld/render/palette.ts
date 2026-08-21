@@ -24,6 +24,7 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     return value || fallback;
   };
   return {
+    canvasGround: token('--color-canvas', '#14161c'),
     gridLine: token('--color-border', '#2a2f3a'),
     // Time-axis gridline tiers (F5, `VITE_CANVAS_TIME_AXIS`) — `gridLine` above stays the
     // flag-off value; these three are read only when `TsldScene.gridTiers` is on.
@@ -131,6 +132,8 @@ export function resolvePrintPalette(root: Element): PrintPalette {
     mutedInk: token('--color-muted-foreground', '#6b7280'),
     // The painter fields, mirroring `resolveTsldPalette` but with LIGHT fallbacks (grid a light grey,
     // ink near-black) so the diagram reads on white even when the tokens can't be read.
+    // The print surface never draws the minimap, so the ground field just mirrors `ground`.
+    canvasGround: token('--color-background', '#ffffff'),
     gridLine: token('--color-border', '#e5e7eb'),
     // Time-axis gridline tiers, LIGHT-forced fallbacks (mirrors resolveTsldPalette's fields).
     gridLineDay: token('--color-canvas-grid-day', '#f5f6f8'),

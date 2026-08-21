@@ -104,6 +104,10 @@ const NON_WORKING_MIN_PX = 3;
  * colour strings.
  */
 export interface TsldPalette {
+  /** The opaque canvas ground (`--color-canvas`) — read by the minimap bitmap (ADR-0100), which
+   * paints its own ground because a detached canvas has no CSS behind it; the scene itself gets
+   * this colour from the container's `bg-canvas` class and never reads the field. */
+  canvasGround: string;
   gridLine: string;
   edge: string;
   bar: string;

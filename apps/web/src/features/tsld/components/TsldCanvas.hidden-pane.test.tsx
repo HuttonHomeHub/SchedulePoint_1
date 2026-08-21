@@ -22,6 +22,18 @@ vi.mock('@/features/tsld/render/paint', async (importOriginal) => ({
   paintScene,
 }));
 
+// The minimap bitmap build (ADR-0100, M2-T4). Spied for the same reason `paintScene` is: it is
+// the minimap's expensive half and jsdom's canvas is a stub. THE load-bearing assertions here —
+// the counting-stub budget gate structurally cannot see a per-frame-rebuild regression (its own
+// docblock says so), and this spy is the one thing that can. Verified RED first against a naive
+// implementation (the dirty-flag check replaced with `true`): the pan-only case failed, then the
+// correct code was restored.
+const buildMinimapBitmap = vi.hoisted(() => vi.fn());
+vi.mock('@/features/tsld/render/minimap', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  buildMinimapBitmap,
+}));
+
 const ACTIVITIES: RenderActivity[] = [
   {
     id: 'a1',
@@ -60,6 +72,7 @@ beforeEach(() => {
   observerCallbacks = [];
   rafCallbacks = [];
   paintScene.mockClear();
+  buildMinimapBitmap.mockClear();
 
   vi.stubGlobal(
     'IntersectionObserver',
@@ -106,6 +119,7 @@ describe('TsldCanvas hidden-pane pause', () => {
     // would be asserting "nothing changed", not "the loop stood down".
     setVisible(false);
     paintScene.mockClear();
+    buildMinimapBitmap.mockClear();
     rerender(canvas('a1'));
     tick();
     tick();
@@ -116,5 +130,108 @@ describe('TsldCanvas hidden-pane pause', () => {
     setVisible(true);
     tick();
     expect(paintScene).toHaveBeenCalled();
+  });
+});
+
+describe('TsldCanvas minimap build discipline (ADR-0100, M2-T4)', () => {
+  const canvas = (props: {
+    activities?: RenderActivity[];
+    selectedId?: string | null;
+  }): React.ReactElement => (
+    <TsldCanvas
+      activities={props.activities ?? ACTIVITIES}
+      edges={[]}
+      dataDate="2026-01-01"
+      selectedId={props.selectedId ?? null}
+      onSelect={vi.fn()}
+      fitSignal={0}
+      minimapActive
+      onMinimapClose={vi.fn()}
+    />
+  );
+
+  it('builds once on mount, then never on idle or pan-only frames', () => {
+    const { container } = render(canvas({}));
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
+
+    // Idle frames: nothing.
+    tick();
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
+
+    // A pan-only frame: the wheel handler moves the viewport and marks the SCENE dirty; the
+    // minimap picture is invariant under pan, so the build must not run.
+    const surface = container.querySelector('canvas.touch-none');
+    expect(surface).not.toBeNull();
+    act(() => {
+      surface!.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: 3, bubbles: true, cancelable: true }),
+      );
+    });
+    tick();
+    expect(paintScene.mock.calls.length).toBeGreaterThan(0); // the scene DID repaint
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1); // the picture did not
+
+    // A ZOOM-only frame too — zoom changes what the scene shows, not what the plan is.
+    act(() => {
+      surface!.dispatchEvent(
+        new WheelEvent('wheel', { deltaY: -3, ctrlKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
+  });
+
+  it('a selection change moves the marker while the build spy records zero calls', () => {
+    // The agreement round's blocking finding 2, as a regression test (verified red against a
+    // bitmap-resident selection — wiring `selectedId` into the dirty effect made this fail).
+    const { container, rerender } = render(canvas({ selectedId: null }));
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-testid="tsld-minimap-selection"]')).toBeNull();
+
+    rerender(canvas({ selectedId: 'a1' }));
+    tick();
+    // The marker rendered (the selected activity has computed dates)…
+    expect(container.querySelector('[data-testid="tsld-minimap-selection"]')).not.toBeNull();
+    // …and the picture was NOT rebuilt for it.
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
+  });
+
+  it('rebuilds exactly once on an activity-data change, and not at all while hidden', () => {
+    const { rerender } = render(canvas({}));
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(1);
+
+    const changed: RenderActivity[] = [
+      { ...ACTIVITIES[0]!, earlyFinish: '2026-01-08' },
+      {
+        id: 'a2',
+        type: 'TASK',
+        laneIndex: 1,
+        label: 'a2',
+        earlyStart: '2026-01-03',
+        earlyFinish: '2026-01-06',
+        isCritical: true,
+        isNearCritical: false,
+      },
+    ];
+    rerender(canvas({ activities: changed }));
+    tick();
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(2);
+
+    // Hidden pane: a data change while hidden must not build (the loop stands down wholesale).
+    setVisible(false);
+    rerender(canvas({ activities: ACTIVITIES }));
+    tick();
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(2);
+
+    // Back on-screen: the dirty flag survived, so the next frame builds.
+    setVisible(true);
+    tick();
+    expect(buildMinimapBitmap).toHaveBeenCalledTimes(3);
   });
 });

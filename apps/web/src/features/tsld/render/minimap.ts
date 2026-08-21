@@ -163,9 +163,11 @@ export function buildMinimapBitmap(
   dataDate: string,
   box: MinimapBox,
   palette: MinimapPalette,
+  dpr = 1,
 ): MinimapMapping | null {
   const extent = worldExtent(activities, dataDate);
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // Author in CSS px on a dpr-scaled backing store — the `paintResourceStrip` convention.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = palette.ground;
   ctx.fillRect(0, 0, box.width, box.height);
   if (extent === null) return null;
