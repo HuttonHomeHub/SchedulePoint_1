@@ -2917,3 +2917,42 @@ theme being deleted is work thrown away.
 if it does, the gate lands with the values rather than after them (the ADR-0097 §9 rule, which
 the minimap's frame token proved again — a gate written after the CSS passes for the wrong
 reason). If a dark theme ever returns, this row is its first requirement.
+
+## 158. The printed and exported diagram is painted on a near-black ground
+
+**Raised 2026-08-21** (found while specifying the light-corporate theme). **Size:** S. **This is a
+live defect on `main`, not a theme preference** — it is filed separately for exactly that reason.
+
+`resolvePrintPalette` (`apps/web/src/features/tsld/render/palette.ts:120`) resolves the print
+ground from the live `--color-background` token and falls back to `#ffffff` only when the token
+cannot be read. `PrintSurface.css:29` pins the surrounding print chrome to `#ffffff` / `#1a1a1a`
+and its own comment says the hexes are "PINNED to `resolvePrintPalette()`'s own light fallbacks so
+the two can't drift". They have drifted: since Graphite the token resolves to Graphite's ground, so
+an exported PNG/PDF and the printed programme carry a near-black diagram panel inside white paper
+chrome.
+
+**Measured in Chromium against the running app**, not inferred from the token chain:
+
+```
+--color-background  →  oklch(0.177 0.011 260.6)      (root and the canvas surface alike)
+--color-foreground  →  oklch(0.82 0.012 252.1)
+PrintSurface.css    →  #ffffff / #1a1a1a  (pinned)
+```
+
+**The escape hatch was written and then not taken.** `resolvePrintPalette`'s docblock records that
+the function used to force light by momentarily clearing a `.dark` class, says ADR-0097 removed the
+trick because the working surfaces were "already light", and ends: _"If a dark theme returns, this
+is one of the places that needs it back."_ ADR-0099 made the whole product dark two days later. The
+condition fired and nothing acted on it — a correct comment naming its own trigger is not a gate,
+which is ADR-0058's rule in the one form it keeps taking.
+
+**Why no test caught it.** The export suites run in jsdom, where `getComputedStyle` yields nothing
+and the function takes its light fallbacks — so the tests exercise the branch that is correct and
+can never reach the branch that ships. Paper wants light whatever the screen is doing, so the fix
+is to force it rather than to resolve it: a `PRINT_GROUND` the function does not read from the DOM
+at all, which also removes the drift `PrintSurface.css` was trying to pin against.
+
+**Do not let the light-theme epic absorb this.** That epic will make the symptom disappear by
+turning the ground light, and a defect that vanishes as a side-effect of unrelated work is one that
+returns the moment anything reintroduces a dark surface — an export preview, a presentation mode, a
+dark theme brought back on ADR-0097's own stated terms. Fix it on its own or close it on its own.
