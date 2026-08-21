@@ -205,3 +205,31 @@ epic's argument is that it changes nothing about the scene.
 **M0 verdict: the falsification condition did not fail (both fixtures), the need supports
 the control on both axes, the corner is free, the build cost is scene-change noise, and
 the one pre-existing defect found is filed as #152. M1 may start.**
+
+### Run 3 — 2026-08-21, M4-T2: the SHIPPED implementation
+
+**Setup.** Same environment, same plan (the packed-lane `scale-2000` fixture Run 2 used),
+same interleaved pairing — but **no probe**: the treatment arm opens the real panel through
+its own entry point (`View ▾` → Panels → Minimap), so what is measured is the code that
+ships — the dirty-gated bitmap build, the live DOM rectangle, the selection/Today overlays
+and the real panel chrome.
+
+**Runs (dropped-frame %):**
+
+| Arm       | Run 1 | Run 2 | Run 3 | Median    |
+| --------- | ----- | ----- | ----- | --------- |
+| Baseline  | 44.78 | 46.46 | 45.32 | **45.32** |
+| Treatment | 45.61 | 46.08 | 46.88 | **46.08** |
+
+**Verdict: PASS.** Delta **+0.76 pp**, inside the +2.0 pp band; **baseline spread 1.68 pp,
+inside the band**. Interval p95 was 66.7 ms in all six runs and heaviest-callback p95
+15.3–17.2 ms with the two arms interleaved across that range — the distributions overlap
+completely.
+
+**Run 2's compositing asymmetry did not reproduce against the shipped code.** The
+throwaway probe's treatment arms recorded ~33% fewer frames; here the treatment arms
+recorded 321–343 frames against the baseline's 326–336, i.e. no frame-rate cost at all.
+Whatever the probe's extra visible-canvas + `will-change` layer cost the software
+compositor, the shipped panel does not pay it in this environment. The M0-T1 ladder was
+never entered; the named-machine confirmation remains available to the operator, and the
+reference hardware figure (10.2%) remains never-compared, per the condition.
