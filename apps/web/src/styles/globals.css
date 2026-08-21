@@ -117,10 +117,10 @@
 /* ------------------------------------------------------------------------- */
 :root {
   /* Surfaces — the working canvas stays light and quiet. */
-  --card: oklch(0.242 0.019 258.4);
-  --card-foreground: oklch(0.913 0.012 252.1);
-  --popover: oklch(0.242 0.019 258.4);
-  --popover-foreground: oklch(0.913 0.012 252.1);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.321 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.321 0 0);
 
   /* Brand — NAVY fills on the page, amber on the chrome. Amber is the accent that
      makes this theme recognisable, but a solid amber button on the off-white page
@@ -327,10 +327,26 @@
   --brand-info: oklch(0.595 0.123 235); /* 4.06:1 on the surface */
   --brand-info-foreground: oklch(0.15 0 0); /* 4.99:1 on the fill */
 
-  /* White fields on navy — the reference's date and filter inputs. Deliberately
-     per-theme: literal white would glare on Dark's near-black chrome. */
-  --canvas: oklch(0.177 0.011 260.6);
-  --canvas-band: oklch(0.196 0.013 258);
+  /* The diagram's own ground (CQ-2: a distinct working surface, not the page).
+     ---------------------------------------------------------------------------
+     0.958 sits **0.024 OKLCH below the page's 0.982** — above the ~0.02 perceptibility
+     threshold `token-architecture.test.ts` already uses, so the difference is a real one and
+     not the 1.00:1 seam this pair carried until now (the canvas and the page held the same
+     literal, so the canvas scope was a rebind with no value behind it).
+
+     **Darker than the page, not lighter.** The recovered `.corporate` block put the canvas at
+     paper-white and the page off-white — the diagram as the sheet on the desk — which is
+     coherent but collapses `--canvas` onto `--card`, recreating "no ground of its own" in a
+     different costume. Going the other way gives a stack that reads as elevation: diagram
+     ground, then page, then cards and dialogs floating above both.
+
+     This lands in M1 rather than M2 because it HAS to: the whole `--plot-*` family aliases
+     `--page-*`, so re-valuing the page's ink dark put dark ink on a still-dark diagram and
+     took twelve matrix assertions with it — every one of them in the canvas scope and none in
+     the page. The two milestones are separable in what they DERIVE and not in what they
+     BREAK. M2 still owns the bars, the links, the hatch and the bands. */
+  --canvas: oklch(0.958 0.004 250);
+  --canvas-band: oklch(0.976 0.003 250);
 
   /* The minimap rectangle's frame (ADR-0100 decision 9, M2-T1): a TWO-TONE pair, the
      `outline`/`handleHalo` precedent, because the measurement said one solid cannot exist —
@@ -407,7 +423,7 @@
 
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
-  --canvas-grid-day: oklch(0.245 0.018 256);
+  --canvas-grid-day: oklch(0.905 0.004 250);
   /* **A month boundary is the axis a planner reads, so it clears WCAG 1.4.11's 3:1** — 0.76 gave
      2.08:1 against the ground and **1.95:1 against the month band it is most often drawn over**,
      i.e. a required graphical object below the non-text floor, live. 0.64 gives 3.25 / 3.05.
@@ -416,21 +432,28 @@
      this pair. It did not: `token-contrast.test.ts` swept the criticality triple and the closure
      and had **no PLOT-pack pair at all**. It does now — which is the actual fix; this number is
      only how that gate passes. */
-  --canvas-grid-month: oklch(0.53 0.022 256);
-  --canvas-grid-year: oklch(0.64 0.024 256);
+  --canvas-grid-month: oklch(0.568 0.012 254);
+  --canvas-grid-year: oklch(0.48 0.014 256);
 
   /* Non-working hatch stripe (F7a) — a step stronger than --muted, tuned warm like the rest of
      Corporate's canvas tokens. */
   /* **The other stopgap** (ADR-0101). The product owner's report was of a canvas "hard on the eyes",
      and the striping in it is this: diagonal hatch ink over every non-working column, i.e. two days
-     in seven across the whole width, at a lightness step of 0.177 → 0.300 (1.39:1). A repeating
-     high-frequency pattern is perceptually much louder than its ratio suggests. 0.25 (1.18:1) still
-     sits clearly above the 0.212 wash, so a weekend still reads as a distinct KIND of surface
-     rather than a dimmer one — which is the whole job ADR-0056 F7a gave it — at about half the
-     shout. Measured before changing: turning canvas LAYERS off by default was the obvious move and
-     would have bought nothing, because `dayGrid` is already LOD-gated out at the zooms where the
-     striping was reported. */
-  --canvas-nonworking-hatch: oklch(0.25 0.018 256);
+     in seven across the whole width. A repeating high-frequency pattern is perceptually much louder
+     than its ratio suggests, so the step is deliberately small: a weekend reads as a distinct KIND
+     of surface rather than a dimmer one (ADR-0056 F7a's whole job) without shouting.
+
+     **Inverted for the light ground, and the first shot proved it had to be.** ADR-0101 softened
+     the dark value to 0.25 against a 0.212 wash — a 1.10:1 step. Carried onto a 0.965 wash that
+     same near-black ink is a 9:1 step, and the screenshot showed it: black diagonals over every
+     weekend, dominating a picture whose bars they are supposed to sit behind. The contrast matrix
+     was green throughout, because the hatch is reported rather than asserted and a FLOOR could
+     never have caught "too loud" anyway. 0.925 restores the dark theme's own step — 1.13:1 on the
+     wash, 1.10:1 on the ground — on the correct side.
+
+     (ADR-0101's comment quoted 1.18:1 for the dark pair; recomputed here it is 1.103:1. Corrected
+     rather than carried.) */
+  --canvas-nonworking-hatch: oklch(0.925 0.006 252);
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
@@ -461,46 +484,45 @@
   /* block must restate the page family literally, or the alias silently keeps */
   /* the light values.                                                         */
   /* ----------------------------------------------------------------------- */
-  --page-background: oklch(0.177 0.011 260.6);
-  /* **A STOPGAP, and labelled as one** (ADR-0101). 0.913 measured **14.62:1** on the 0.177 ground
-     — more than triple WCAG AA's 4.5 and more than double AAA's 7. On a near-black ground that is
-     the halation profile: light text appears to bleed at its edges, which is what makes a long
-     session tiring and is worse for astigmatic readers. Nothing in this repository could have
-     caught it: every colour gate here asserts a FLOOR (`>= 3:1`, `>= 4.5:1`) and not one asserts a
-     ceiling, so values could only ever be pushed apart. 0.82 gives 10.84:1 — still well clear of
-     AAA. The light corporate theme replaces this value wholesale; a proper ceiling is deliberately
-     NOT gated here, because halation is a dark-ground phenomenon and a blanket ceiling would be
-     wrong on the light theme this is making way for. */
-  --page-foreground: oklch(0.82 0.012 252.1);
-  --page-muted: oklch(0.212 0.016 256.8);
-  --page-muted-foreground: oklch(0.74 0.022 252.6);
-  --page-border: oklch(0.29 0.023 256.4);
-  --page-input: oklch(0.558 0.071 238.2);
-  --page-accent: oklch(0.242 0.019 258.4);
-  --page-accent-foreground: oklch(0.913 0.012 252.1);
-  --page-primary: oklch(0.66 0.128 249.5);
-  --page-primary-foreground: oklch(0.181 0.031 247.1);
-  --page-field: oklch(0.189 0.015 253.2);
-  --page-field-foreground: oklch(0.913 0.012 252.1);
-  --page-field-muted-foreground: oklch(0.61 0.024 254.5);
-  --page-destructive-text: oklch(0.74 0.145 33);
-  --page-success-text: oklch(0.72 0.115 156.4);
-  --page-warning-text: oklch(0.79 0.135 75.1);
-  --page-info-text: oklch(0.76 0.105 247.6);
-  --page-ring: oklch(0.66 0.128 249.5);
-  --page-destructive: oklch(0.649 0.167 31.6);
-  --page-destructive-foreground: oklch(0.176 0.025 42.3);
-  --page-destructive-hover: oklch(0.7 0.16 31.6);
-  --page-secondary: oklch(0.51 0.026 256);
+  --page-background: oklch(0.982 0.002 248);
+  /* The page's ink, and the end of ADR-0101's stopgap. That comment recorded a dark-ground value
+     softened from 14.61:1 to 10.84:1 and said the light theme would replace it wholesale; this is
+     that replacement, and it is a RECOVERED value rather than a softened one — 0.321 on the 0.982
+     ground measures **12.00:1**, which is about `#333` on off-white and is what a light UI reads
+     like. The halation that made 14.61:1 tiring is a property of light ink on a DARK ground and
+     does not occur here, which is why no contrast ceiling was built to guard it
+     (`docs/specs/light-corporate-theme/m0-ceiling.md`: the admissible window for such a gate is
+     under two points wide, and inside it the rule enforces the wrong quantity). */
+  --page-foreground: oklch(0.321 0 0);
+  --page-muted: oklch(0.965 0.002 248);
+  --page-muted-foreground: oklch(0.51 0 0);
+  --page-border: oklch(0.907 0 0);
+  --page-input: oklch(0.62 0.02 264);
+  --page-accent: oklch(0.955 0.04 78);
+  --page-accent-foreground: oklch(0.252 0.056 264);
+  --page-primary: oklch(0.252 0.056 264);
+  --page-primary-foreground: oklch(0.985 0 0);
+  --page-field: oklch(1 0 0);
+  --page-field-foreground: oklch(0.321 0 0);
+  --page-field-muted-foreground: oklch(0.51 0 0);
+  --page-destructive-text: oklch(0.505 0.19 27.5);
+  --page-success-text: oklch(0.45 0.11 150);
+  --page-warning-text: oklch(0.47 0.11 55);
+  --page-info-text: oklch(0.3 0.075 262);
+  --page-ring: oklch(0.35 0.09 262);
+  --page-destructive: oklch(0.505 0.19 27.5);
+  --page-destructive-foreground: oklch(0.985 0 0);
+  --page-destructive-hover: oklch(0.455 0.19 27.5);
+  --page-secondary: oklch(0.338 0.081 262);
   --page-secondary-foreground: oklch(0.985 0 0);
-  --page-success: oklch(0.72 0.115 156.4);
-  --page-success-foreground: oklch(0.15 0.02 156);
-  --page-warning: oklch(0.79 0.135 75.1);
-  --page-warning-foreground: oklch(0.15 0.02 77.5);
-  --page-info: oklch(0.66 0.128 249.5);
-  --page-info-foreground: oklch(0.181 0.031 247.1);
-  --page-primary-hover: oklch(0.722 0.109 247.6);
-  --page-secondary-hover: oklch(0.56 0.026 256);
+  --page-success: oklch(0.52 0.15 143);
+  --page-success-foreground: oklch(0.985 0 0);
+  --page-warning: oklch(0.56 0.115 55);
+  --page-warning-foreground: oklch(0.985 0 0);
+  --page-info: oklch(0.338 0.081 262);
+  --page-info-foreground: oklch(0.985 0 0);
+  --page-primary-hover: oklch(0.2 0.05 264);
+  --page-secondary-hover: oklch(0.29 0.075 262);
 
   /* ----------------------------------------------------------------------- */
   /* The DIAGRAM's own family (ADR-0097 Landing E, L4-1).                     */
@@ -540,8 +562,34 @@
      colour, so `--warning` was moved to bronze to get out of the way — the
      diagram recoloured because the button was. Unchanged today, but it now
      HAS somewhere to change. */
-  --plot-primary: oklch(0.49 0.075 238);
-  --plot-primary-foreground: oklch(1 0 0);
+
+  /* THE CRITICALITY LADDER, solved rather than picked.
+     ---------------------------------------------------------------------------
+     Three fills, each ≥ 3:1 on the 0.958 diagram ground, each ≥ 1.5:1 from the others, each
+     carrying a label at ≥ 4.5:1. Those constraints do not leave much room, so the values were
+     searched rather than chosen: chain the three at 1.55:1 from a 3.15:1 base, then solve each
+     hue for the lightness that lands on its target. Measured result —
+
+       on-schedule   oklch(0.624 0.115 249)   ground 3.15:1   band 3.33:1
+       near-critical oklch(0.528 0.13  62)    ground 4.89:1   band 5.15:1
+       critical      oklch(0.439 0.175 27)    ground 7.57:1   band 7.98:1
+       pairwise: on-schedule↔near 1.55:1, near↔critical 1.55:1, on-schedule↔critical 2.40:1
+
+     **The lightest fill takes a DARK label and the other two take white**, and that is the
+     load-bearing part. The old light-theme reasoning (recovered from the block ADR-0097 deleted)
+     records 1.70:1 as the CEILING on criticality separation "subject to a white inside-label at
+     4.5:1" — and it is right: white on the on-schedule blue is 3.56:1, a real 1.4.3 failure. The
+     white-label requirement is the binding constraint rather than the ground, so relaxing it for
+     the one fill that cannot carry it is what buys the whole ladder. Dark ink on that fill is
+     4.86:1.
+
+     **Every fill is DARKER than its ground now**, where each was lighter before — and the labels
+     invert with them, which is why `--plot-primary-foreground` went white → dark while
+     `--plot-destructive-foreground` and `--plot-warning-foreground` went dark → white in the same
+     edit. That pairing flips as a unit or the picture breaks in a way that reads as a bug rather
+     than a colour. */
+  --plot-primary: oklch(0.624 0.115 249);
+  --plot-primary-foreground: oklch(0.22 0.02 260);
   --plot-field: var(--page-field);
   --plot-field-foreground: var(--page-field-foreground);
   --plot-field-muted-foreground: var(--page-field-muted-foreground);
@@ -549,7 +597,7 @@
   --plot-success-text: var(--page-success-text);
   --plot-warning-text: var(--page-warning-text);
   --plot-info-text: var(--page-info-text);
-  --plot-ring: oklch(0.66 0.128 249.5);
+  --plot-ring: oklch(0.5 0.13 249);
   /* **The one value that differs, and the whole reason L4-1 exists.**
      `--warning` (near-critical) against `--destructive` (critical) measured
      **1.34:1** — the two states a planner scans a wall of bars to tell apart,
@@ -575,15 +623,15 @@
      3:1 on a near-white ground. So a 1.5 floor is reachable and 3:1 is not,
      without changing the label ink or the hues. Recorded so nobody spends a
      day chasing it. */
-  --plot-destructive: oklch(0.721 0.148 37);
-  --plot-destructive-foreground: oklch(0.176 0.025 42.3);
+  --plot-destructive: oklch(0.439 0.175 27);
+  --plot-destructive-foreground: oklch(1 0 0);
   --plot-destructive-hover: var(--page-destructive-hover);
   --plot-secondary: var(--page-secondary);
   --plot-secondary-foreground: var(--page-secondary-foreground);
-  --plot-success: oklch(0.59 0.084 178);
+  --plot-success: oklch(0.475 0.084 178);
   --plot-success-foreground: var(--page-success-foreground);
-  --plot-warning: oklch(0.6 0.125 58);
-  --plot-warning-foreground: oklch(0.176 0.025 42.3);
+  --plot-warning: oklch(0.528 0.13 62);
+  --plot-warning-foreground: oklch(1 0 0);
   --plot-info: var(--page-info);
   --plot-info-foreground: var(--page-info-foreground);
   --plot-primary-hover: var(--page-primary-hover);
