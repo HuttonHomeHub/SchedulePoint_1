@@ -14,6 +14,7 @@ import {
   barGlyphKind,
   computeEdgeFanOut,
   daysBetween,
+  worldExtent,
   dependencyPolyline,
   dependencyPolylineTimeTrue,
   edgeTouches,
@@ -772,8 +773,12 @@ function drawRefreshedBar(
  * only when an endpoint is visible, so the cost is bounded by the viewport, not the
  * plan size. `dpr` scales the backing store; drawing is authored in CSS px.
  *
- * Returns the culled activity ids (the painter already computed them) so the caller can
- * reuse the set for hit-testing / the minimap without a second cull pass.
+ * Returns the culled activity ids (the painter already computed them) so a caller could
+ * reuse the set for hit-testing without a second cull pass — today the only production
+ * caller discards it (`TsldCanvas.tsx`) and only tests read it. The minimap deliberately
+ * does NOT use it: the culled set is what is ON screen, and the minimap's subject is the
+ * whole plan — measured, a whole-plan viewport culls to 255 of 2,160 bars
+ * (`docs/specs/tsld-minimap/input-performance.md` §5).
  */
 export function paintScene(
   ctx: Ctx2D,
@@ -2200,19 +2205,15 @@ export function paintWbsBand(
   }
 }
 
-/** The inclusive [minDay, maxDay] world-day extent of the computed activities (for the ruler/minimap). */
+/**
+ * The day-only view of {@link worldExtent} (which is the one derivation — M1-T1). Kept as an
+ * export because the whole-plan export framing consumes exactly this shape; the minimap does NOT
+ * read it — it reads `worldExtent` directly, since it needs the lane axis too.
+ */
 export function dayExtent(
   activities: readonly RenderActivity[],
   dataDate: string,
 ): { minDay: number; maxDay: number } | null {
-  let minDay = Infinity;
-  let maxDay = -Infinity;
-  for (const a of activities) {
-    if (a.earlyStart === null) continue;
-    const start = daysBetween(dataDate, a.earlyStart);
-    const finish = a.earlyFinish === null ? start : daysBetween(dataDate, a.earlyFinish);
-    minDay = Math.min(minDay, start);
-    maxDay = Math.max(maxDay, finish + 1);
-  }
-  return Number.isFinite(minDay) ? { minDay, maxDay } : null;
+  const extent = worldExtent(activities, dataDate);
+  return extent === null ? null : { minDay: extent.minDay, maxDay: extent.maxDay };
 }

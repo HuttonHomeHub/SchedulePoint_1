@@ -6,6 +6,7 @@ import {
   MIN_PX_PER_DAY,
   screenXOfDay,
   screenYOfLane,
+  worldExtent,
   ZOOM_STOPS,
   type Rect,
   type RenderActivity,
@@ -156,18 +157,14 @@ export function fitToContent(
   maxPxPerDay: number,
   paddingPx = 32,
 ): Viewport {
-  let minDay = Infinity;
-  let maxDay = -Infinity;
-  let maxLane = 0;
-  for (const a of activities) {
-    if (a.earlyStart === null) continue;
-    const start = daysBetween(dataDateIso, a.earlyStart);
-    const finish = a.earlyFinish === null ? start : daysBetween(dataDateIso, a.earlyFinish);
-    minDay = Math.min(minDay, start);
-    maxDay = Math.max(maxDay, finish + 1);
-    maxLane = Math.max(maxLane, a.laneIndex);
-  }
-  if (!Number.isFinite(minDay)) return DEFAULT_VIEWPORT;
+  // `extent.maxLane` is deliberately ignored, exactly as this function has always ignored the
+  // lane axis: originY is pinned to the padding. That is right for whole-plan Fit from lane 0 and
+  // wrong for zoom-to-one-activity in a high lane — a PRE-EXISTING defect proven live and filed as
+  // `docs/TECH_DEBT.md` #152, not repaired inside this refactor (a behavioural change hiding in a
+  // "no behaviour change" diff is how it would never be reviewed as one).
+  const extent = worldExtent(activities, dataDateIso);
+  if (extent === null) return DEFAULT_VIEWPORT;
+  const { minDay, maxDay } = extent;
 
   const usableW = Math.max(1, size.width - paddingPx * 2);
   const spanDays = Math.max(1, maxDay - minDay);
