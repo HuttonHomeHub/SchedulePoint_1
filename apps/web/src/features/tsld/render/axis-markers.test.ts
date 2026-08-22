@@ -163,3 +163,28 @@ describe('the model is a function of (viewport, scene) alone', () => {
     ).toEqual(['today']);
   });
 });
+
+describe('the two marks are distinguishable without colour', () => {
+  /**
+   * This is the assertion that actually protects the reader, and it lives here rather than in
+   * `token-contrast.test.ts` because it is not a ratio. The two marker fills measure **1.48:1**
+   * against each other — close in lightness, differing mainly in hue — so a reader with a
+   * red-green deficiency cannot rely on the fills alone. WCAG 1.4.1 is satisfied because each mark
+   * carries its own word, which is a property of this model rather than of the palette, and is
+   * therefore checkable here.
+   */
+  it('never renders the same word for both', () => {
+    // 10 px/day × 10.5 days = 105 px apart, so both marks survive the overlap rule.
+    const model = axisMarkers(view(10, 100), size(800), on);
+    expect(model.marks).toHaveLength(2);
+    const labels = model.marks.map((m) => m.label);
+    expect(new Set(labels).size).toBe(2);
+    expect(labels).toEqual(['Data date', 'Today']);
+  });
+
+  it('states both facts in one word when there is one mark', () => {
+    const scene: AxisMarkerScene = { ...on, todayOffset: 0, todayFraction: 0.001 };
+    const model = axisMarkers(view(24, 100), size(800), scene);
+    expect(model.marks.map((m) => m.label)).toEqual(['Data date · today']);
+  });
+});

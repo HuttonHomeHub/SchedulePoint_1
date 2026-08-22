@@ -1333,9 +1333,6 @@ export function paintScene(
   });
   const dataDateX = markers.lines.find((l) => l.kind === 'dataDate')?.x ?? null;
   const todayLine = markers.lines.find((l) => l.kind === 'today') ?? null;
-  // Whether Today rounded onto the drawn data-date rule this frame — ONE comparison, read by both
-  // the suppressed second line and the merged label below.
-  const todayMerged = markers.merged;
   if (dataDateX !== null) {
     ctx.strokeStyle = palette.dataDate;
     ctx.lineWidth = 2;
@@ -1346,67 +1343,26 @@ export function paintScene(
     ctx.stroke();
   }
 
-  // The TODAY marker — a dashed vertical in the destructive hue. Drawn only when the toggle is
-  // on, today maps to a day offset, that column is on-screen, AND it does not round onto the
-  // data-date rule (the coincidence rule above).
+  // The TODAY marker — a dashed vertical in the destructive hue. `todayFraction` (F6a,
+  // `VITE_CANVAS_TIME_AXIS`) interpolates the line to the actual time-of-day rather than the
+  // midnight boundary; absent/null keeps the plain integer offset, which is what makes the flag-off
+  // parity claim structural. Culling, the toggle and the coincidence rule are all decided in
+  // `axis-markers.ts`: a line is here iff the model returned one.
   //
-  // `todayFraction` (F6a, `VITE_CANVAS_TIME_AXIS`) interpolates the line to the actual
-  // time-of-day rather than the midnight boundary; absent/null keeps the plain integer offset,
-  // which is what makes the flag-off parity claim structural. The `Today` pill (F6b) mirrors the
-  // cursor date chip's geometry in the Today hue — TODAY_CHIP_TOP sits 4px below the cursor
-  // chip's own footprint (CURSOR_CHIP_TOP + CURSOR_CHIP_H), so a drag's cursor chip and the Today
-  // pill can never overlap even though they live on separate canvases. It only draws alongside
-  // the fractional line (both gated on `todayFraction` being present), not the flag-off line.
+  // **The LABELS are no longer drawn here** (#148 M2). They were pills at fixed screen y — chrome
+  // painted onto a scrolling surface — so they printed over whichever lane the planner had panned
+  // to the top. They are DOM in the ruler band now (`TsldCanvas.tsx`'s axis-marker rows), which
+  // costs the diagram no height and puts a date mark where the x axis is. What stays is the rule:
+  // a full-height vertical IS a scene mark, meaning something at every lane.
   if (todayLine !== null) {
-    const x = todayLine.x;
-    {
-      ctx.strokeStyle = palette.today;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, size.height);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      if (
-        scene.todayFraction != null &&
-        typeof ctx.fillText === 'function' &&
-        typeof ctx.measureText === 'function'
-      ) {
-        ctx.font = LABEL_FONT;
-        const label = 'Today';
-        const w = ctx.measureText(label).width + LABEL_PAD_PX * 2;
-        const cx = Math.max(0, Math.min(x - w / 2, size.width - w));
-        ctx.fillStyle = palette.today;
-        ctx.fillRect(cx, TODAY_CHIP_TOP, w, TODAY_CHIP_H);
-        ctx.fillStyle = palette.todayInk;
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'left';
-        ctx.fillText(label, cx + LABEL_PAD_PX, TODAY_CHIP_TOP + TODAY_CHIP_H / 2);
-      }
-    }
-  }
-
-  // The `Data date` pill — the Today pill's geometry on its OWN derived row (DATA_DATE_CHIP_TOP),
-  // so the two can never overlap after clamping. It draws under the same text-capability guard
-  // the Today pill uses (at most one measureText per frame), but is NOT gated on `todayFraction`:
-  // that gate is Today's own flag composition, and the data-date pill is this flag's to gate.
-  if (
-    dataDateX !== null &&
-    typeof ctx.fillText === 'function' &&
-    typeof ctx.measureText === 'function'
-  ) {
-    ctx.font = LABEL_FONT;
-    const label = todayMerged ? 'Data date · today' : 'Data date';
-    const w = ctx.measureText(label).width + LABEL_PAD_PX * 2;
-    const cx = Math.max(0, Math.min(dataDateX - w / 2, size.width - w));
-    ctx.fillStyle = palette.dataDate;
-    ctx.fillRect(cx, DATA_DATE_CHIP_TOP, w, TODAY_CHIP_H);
-    ctx.fillStyle = palette.dataDateInk;
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
-    ctx.fillText(label, cx + LABEL_PAD_PX, DATA_DATE_CHIP_TOP + TODAY_CHIP_H / 2);
+    ctx.strokeStyle = palette.today;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(todayLine.x, 0);
+    ctx.lineTo(todayLine.x, size.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 
   // Layer 3.55: GPM **float / drift tails** (ADR-0054 §4) — a hollow tail right of the bar for
@@ -1791,26 +1747,23 @@ export const CURSOR_CHIP_H = 16;
 /** Gap (px) between the canvas top edge and the chip. */
 export const CURSOR_CHIP_TOP = 4;
 
-/** Height (px) of the Today pill (F6b) — matches the cursor chip's. */
-export const TODAY_CHIP_H = 16;
-/**
- * Gap (px) between the canvas top edge and the Today pill — deliberately `CURSOR_CHIP_TOP +
- * CURSOR_CHIP_H + 4` (a 4px gap below the cursor chip's own footprint), not an independent
- * number: the two chips live on separate canvases (interaction vs base), so nothing else stops
- * them overlapping during a drag. Expressing this one as a function of the other is what keeps a
- * future edit to either from silently reintroducing the collision (asserted in `paint.test.ts`).
+/*
+ * `TODAY_CHIP_H`, `TODAY_CHIP_TOP` and `DATA_DATE_CHIP_TOP` were here, and #148 deleted them with
+ * the pills they positioned. The shape of what they got wrong is worth keeping, because it is not
+ * carelessness and a reader who assumes it was will repeat it.
+ *
+ * Each was **derived** rather than written as a literal — `TODAY_CHIP_TOP` from the cursor chip's
+ * own footprint, `DATA_DATE_CHIP_TOP` from Today's — and each carried a docblock explaining that a
+ * literal would let a future edit "silently reintroduce the collision". `paint.test.ts` asserted
+ * both derivations. All of that was correct, careful, and about the wrong subject: **both guards
+ * asked whether the pills collided with EACH OTHER. Nothing ever asked what was underneath them**,
+ * and a bar occupies y 5–23 of a lane that starts wherever the planner last panned to.
+ *
+ * The two replacement guards therefore look outward rather than inward: a unit case pinning each
+ * marker row wholly inside `RULER_HEIGHT`, and a browser case asserting that no marker's rect
+ * intersects the scene canvas's at all. The second is the one that could not have been written
+ * here, because it is a question about two elements rather than about two constants.
  */
-export const TODAY_CHIP_TOP = CURSOR_CHIP_TOP + CURSOR_CHIP_H + 4;
-
-/**
- * Gap (px) between the canvas top edge and the **Data date** pill (`VITE_CANVAS_DATA_DATE`) —
- * derived as the next row below the Today pill's footprint for the same reason `TODAY_CHIP_TOP`
- * is derived from the cursor chip's: both pills clamp inside the canvas width, so at a narrow
- * viewport they would converge on the same x, and only a derived row (never a literal offset)
- * guarantees a future edit to either sibling cannot silently reintroduce a collision (asserted
- * in `paint.test.ts`; height reuses TODAY_CHIP_H — the pills share one geometry).
- */
-export const DATA_DATE_CHIP_TOP = TODAY_CHIP_TOP + TODAY_CHIP_H + 4;
 
 /**
  * Paint the interaction (top) canvas layer for an in-progress edit (ADR-0026 D1/D4, M2):

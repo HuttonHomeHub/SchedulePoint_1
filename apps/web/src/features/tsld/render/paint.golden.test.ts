@@ -252,7 +252,11 @@ describe('paintScene — whole-scene golden (ADR-0078 S1)', () => {
     const gridDay = firstIndexOf(log, `strokeStyle=${PALETTE.gridLineDay}`);
     const edges = firstIndexOf(log, `strokeStyle=${PALETTE.edge}`);
     const bars = firstIndexOf(log, `fillStyle=${PALETTE.bar}`);
-    const dataDate = firstIndexOf(log, `fillStyle=${PALETTE.dataDate}`);
+    // `strokeStyle`, not `fillStyle`, since #148 M2: the data-date PILL was the only thing that
+    // ever set `fillStyle` to this value, and it left the painter for the ruler's DOM marker layer.
+    // The rule remains, and `palette.dataDate` is written in exactly one place in the whole painter
+    // (`paint.ts:1337`) — verified by grep, not assumed — so the probe is still unique to its layer.
+    const dataDate = firstIndexOf(log, `strokeStyle=${PALETTE.dataDate}`);
     // `palette.selection` is NOT a unique probe: the edge layer writes it too, for the ADR-0052 M5
     // incident-link highlight on the selected/hovered bar (`paint.ts:1272,1297`), ~200 entries
     // before the selection ring at `paint.ts:1823`. Writing this suite is what established that —

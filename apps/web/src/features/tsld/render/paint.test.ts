@@ -2,14 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   activityIndexFor,
-  CURSOR_CHIP_H,
-  CURSOR_CHIP_TOP,
-  DATA_DATE_CHIP_TOP,
   edgeFanOutFor,
   paintInteractionLayer,
   paintScene,
-  TODAY_CHIP_H,
-  TODAY_CHIP_TOP,
   type TsldPalette,
   type TsldScene,
 } from './paint';
@@ -502,42 +497,47 @@ describe('paintScene', () => {
     expect(halfX - integerX).toBeCloseTo(6, 0);
   });
 
-  it('draws the Today pill only when todayFraction is present (F6b) — flag-off keeps the plain line', () => {
+  it('draws the Today RULE with or without todayFraction — only its x moves (#148)', () => {
+    // This case used to be about the Today PILL, which was gated on `todayFraction` because that
+    // was ADR-0056 F6b's own flag composition. The pill is gone (#148 M2) and the label is DOM in
+    // the ruler now, so what remains here is the rule — which was never gated on the fraction, only
+    // positioned by it.
     const base: TsldScene = { activities: [], edges: [], dataDate: DATA_DATE, view: TODAY_ONLY };
-    // Flag-off: todayFraction absent → no pill fillRect/fillText, just the dashed line.
-    const flagOff = mockCtx();
-    paintScene(flagOff, { ...base, todayOffset: 5 }, VIEW, SIZE, PALETTE);
-    expect(flagOff.fillRect).not.toHaveBeenCalled();
-    expect(flagOff.fillText).not.toHaveBeenCalled();
+    const withoutFraction = mockCtx();
+    paintScene(withoutFraction, { ...base, todayOffset: 5 }, VIEW, SIZE, PALETTE);
+    const withFraction = mockCtx();
+    paintScene(withFraction, { ...base, todayOffset: 5, todayFraction: 0.25 }, VIEW, SIZE, PALETTE);
 
-    // Flag-on: todayFraction present → the pill draws in the today hue, ink text on top.
-    const flagOn = mockCtx();
-    paintScene(flagOn, { ...base, todayOffset: 5, todayFraction: 0.25 }, VIEW, SIZE, PALETTE);
-    expect(flagOn.fillRect).toHaveBeenCalledWith(
-      expect.any(Number),
-      TODAY_CHIP_TOP,
-      expect.any(Number),
-      TODAY_CHIP_H,
-    );
-    expect(flagOn.fillText).toHaveBeenCalledWith('Today', expect.any(Number), expect.any(Number));
+    for (const ctx of [withoutFraction, withFraction]) {
+      expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
+      // The layer draws no label of any kind any more, on either path.
+      expect(ctx.fillText).not.toHaveBeenCalled();
+      expect(ctx.fillRect).not.toHaveBeenCalled();
+    }
+    const plainX = (withoutFraction.moveTo as ReturnType<typeof vi.fn>).mock.calls[0]![0] as number;
+    const fracX = (withFraction.moveTo as ReturnType<typeof vi.fn>).mock.calls[0]![0] as number;
+    expect(fracX - plainX).toBeCloseTo(3, 0); // 0.25 day at 12 px/day
   });
 
-  it('skips the pill when the ctx has no fillText/measureText (still draws the line)', () => {
+  it('needs no text support at all — the status layer is rules only (#148)', () => {
+    // The pills used to be guarded by `typeof ctx.fillText === 'function'` so a text-less context
+    // never threw. With the labels in the DOM the guard has nothing to guard, and this asserts the
+    // stronger property that replaces it: the layer never reaches for a text API in the first place.
     const base: TsldScene = { activities: [], edges: [], dataDate: DATA_DATE, view: TODAY_ONLY };
     const ctx = mockCtx();
     // @ts-expect-error — simulate an environment without text support.
     ctx.fillText = undefined;
     // @ts-expect-error — simulate an environment without text support.
     ctx.measureText = undefined;
-    paintScene(ctx, { ...base, todayOffset: 5, todayFraction: 0.25 }, VIEW, SIZE, PALETTE);
+    paintScene(
+      ctx,
+      { ...base, dataDateLine: true, todayOffset: 5, todayFraction: 0.25 },
+      VIEW,
+      SIZE,
+      PALETTE,
+    );
     expect(ctx.stroke).toHaveBeenCalled();
     expect(ctx.fillRect).not.toHaveBeenCalled();
-  });
-
-  it('keeps the Today pill and cursor chip geometrically disjoint (no future overlap)', () => {
-    // A future edit to either constant cannot silently reintroduce the collision this asserts.
-    expect(TODAY_CHIP_TOP).toBeGreaterThanOrEqual(CURSOR_CHIP_TOP + CURSOR_CHIP_H);
-    expect(TODAY_CHIP_TOP + TODAY_CHIP_H).toBeLessThanOrEqual(1000);
   });
 
   // ── The DATA-DATE line + the coincidence rule (`VITE_CANVAS_DATA_DATE`, status & feedback M1).
@@ -561,18 +561,10 @@ describe('paintScene', () => {
       expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]); // no dashed line anywhere
       expect(ctx.lineWidth).toBe(2);
       expect(ctx.strokeStyle).toBe(PALETTE.dataDate);
-      // The pill sits on its OWN derived row, at the Today pill's height.
-      expect(ctx.fillRect).toHaveBeenCalledWith(
-        expect.any(Number),
-        DATA_DATE_CHIP_TOP,
-        expect.any(Number),
-        TODAY_CHIP_H,
-      );
-      expect(ctx.fillText).toHaveBeenCalledWith(
-        'Data date',
-        expect.any(Number),
-        expect.any(Number),
-      );
+      // No label: it is DOM in the ruler now (#148 M2). What it SAYS is `axis-markers.test.ts`'s;
+      // where it SITS relative to a bar is the browser gate's, because it is a question about two
+      // elements rather than about two constants.
+      expect(ctx.fillText).not.toHaveBeenCalled();
     });
 
     it('draws BOTH lines when they round to different pixels (the merge test, direction 1)', () => {
@@ -585,12 +577,11 @@ describe('paintScene', () => {
         SIZE,
         PALETTE,
       );
-      // Both verticals: the solid data-date rule AND the dashed Today rule…
+      // Both verticals: the solid data-date rule AND the dashed Today rule.
       expect(ctx.moveTo).toHaveBeenCalledWith(60.5, 0);
       expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]);
-      // …and both pills, each with its own label (no merged label).
-      expect(ctx.fillText).toHaveBeenCalledWith('Data date', expect.any(Number), expect.any(Number)); // prettier-ignore
-      expect(ctx.fillText).toHaveBeenCalledWith('Today', expect.any(Number), expect.any(Number));
+      // That the two carry SEPARATE labels here is asserted in `axis-markers.test.ts`
+      // ('never renders the same word for both'), verified red before this pair was deleted.
     });
 
     it('coincident ⇒ ONE line in the data-date treatment and ONE merged pill (the merge test, direction 2)', () => {
@@ -607,13 +598,7 @@ describe('paintScene', () => {
       // pass's always-present empty-path stroke (two would be the un-merged case's three).
       expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]);
       expect(ctx.stroke).toHaveBeenCalledTimes(2);
-      // One merged pill, and never a second 'Today' one.
-      expect(ctx.fillText).toHaveBeenCalledTimes(1);
-      expect(ctx.fillText).toHaveBeenCalledWith(
-        'Data date · today',
-        expect.any(Number),
-        expect.any(Number),
-      );
+      // The merged LABEL is `axis-markers.test.ts`'s ('states both facts in one word').
     });
 
     it('merges a sub-pixel difference too — they merge exactly when they would overdraw', () => {
@@ -628,11 +613,8 @@ describe('paintScene', () => {
         PALETTE,
       );
       expect(ctx.setLineDash).not.toHaveBeenCalledWith([4, 3]);
-      expect(ctx.fillText).toHaveBeenCalledWith(
-        'Data date · today',
-        expect.any(Number),
-        expect.any(Number),
-      );
+      // One stroke for the grid pass's always-empty path, one for the single merged rule.
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
     });
 
     it('draws nothing of its own when the scene field is absent or false (the toggle-off path)', () => {
@@ -640,9 +622,8 @@ describe('paintScene', () => {
         const ctx = mockCtx();
         paintScene(ctx, scene, VIEW, SIZE, PALETTE);
         // No todayOffset either, so the whole status layer is silent: only the grid pass's
-        // always-present empty-path stroke remains, and not one pill.
+        // always-present empty-path stroke remains.
         expect(ctx.stroke).toHaveBeenCalledTimes(1);
-        expect(ctx.fillText).not.toHaveBeenCalled();
       }
     });
 
@@ -656,31 +637,30 @@ describe('paintScene', () => {
         SIZE,
         PALETTE,
       );
-      expect(ctx.fillText).not.toHaveBeenCalledWith(
-        'Data date',
-        expect.any(Number),
-        expect.any(Number),
-      );
+      // Exactly one marker rule strokes (plus the grid pass's empty path): the data-date rule is
+      // culled and Today's is not. That the culled mark produces no LABEL either is
+      // `axis-markers.test.ts`'s ('drops Today alone …', 'runs cull BEFORE clamp …').
+      expect(ctx.stroke).toHaveBeenCalledTimes(2);
       expect(ctx.setLineDash).toHaveBeenCalledWith([4, 3]); // the Today rule is unaffected
     });
 
-    it('skips the pill (never the line) when the ctx cannot measure/fill text', () => {
-      const ctx = mockCtx();
-      // @ts-expect-error — simulate an environment without text support.
-      ctx.fillText = undefined;
-      // @ts-expect-error — simulate an environment without text support.
-      ctx.measureText = undefined;
-      paintScene(ctx, { ...base, dataDateLine: true }, VIEW, SIZE, PALETTE);
-      // The rule still strokes (grid pass + marker); the pill is skipped without text support.
-      expect(ctx.stroke).toHaveBeenCalledTimes(2);
-      expect(ctx.fillRect).not.toHaveBeenCalled();
-    });
-
-    it('keeps the Data date pill row disjoint from the Today pill row (derived, never a literal)', () => {
-      // Both pills clamp inside the canvas width, so at a narrow viewport they converge on the
-      // same x — only the derived row keeps them apart. A future edit to either sibling constant
-      // cannot silently reintroduce the collision this asserts.
-      expect(DATA_DATE_CHIP_TOP).toBeGreaterThanOrEqual(TODAY_CHIP_TOP + TODAY_CHIP_H);
+    it('never draws a label of its own, at any scene (#148 M2)', () => {
+      // The replacement for the two derived-row guards this block used to end with. **Both of those
+      // asked whether the pills collided with EACH OTHER** — carefully, correctly, and about the
+      // wrong subject; nothing asked what was underneath them, and a bar occupies y 5–23 of a lane
+      // starting wherever the planner last panned to. The guards that replace them look outward:
+      // this one (the layer emits no text at all), the row-inside-`RULER_HEIGHT` unit case, and the
+      // browser assertion that no marker rect intersects the scene canvas's.
+      for (const scene of [
+        { ...base, dataDateLine: true },
+        { ...base, dataDateLine: true, todayOffset: 5, todayFraction: 0.25 },
+        { ...base, dataDateLine: true, todayOffset: 0, todayFraction: 0.03 },
+      ]) {
+        const ctx = mockCtx();
+        paintScene(ctx, scene, VIEW, SIZE, PALETTE);
+        expect(ctx.fillText).not.toHaveBeenCalled();
+        expect(ctx.measureText).not.toHaveBeenCalled();
+      }
     });
   });
 
