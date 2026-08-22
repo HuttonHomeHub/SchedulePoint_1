@@ -276,21 +276,33 @@ pnpm --filter @repo/web test:watch   # web unit tests in watch mode
 cheaper than the one after it and than the CI round-trip it replaces, so a
 failure should surface at the earliest step that can see it.
 
-| #   | Run                                                         | When                                                                                              |
-| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| 1   | `pnpm lint && pnpm typecheck`                               | always                                                                                            |
-| 2   | `pnpm test`                                                 | always                                                                                            |
-| 3   | `scripts/e2e-local.sh api`                                  | you touched `apps/api` — service, controller, DTO, schema or migration                            |
-| 4   | `scripts/e2e-local.sh web:<suite>`                          | you **added or changed** a flag-on Playwright suite, or changed a surface one drives              |
-| 4a  | `scripts/e2e-local.sh web`                                  | you changed a **screen** — its markup, its copy, or an accessible name                            |
-| 4b  | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite))              |
-| 4c  | `scripts/e2e-sweep.sh`                                      | you replaced a **screen every journey signs in through**, or moved a control every journey clicks |
-| 5   | `pnpm check:playbook`                                       | you added, renamed or removed a seed-catalogue plan (ADR-0066)                                    |
-| 6   | `pnpm check:build-contract`                                 | you added a shared `packages/*` workspace package, or changed a Dockerfile                        |
-| 7   | `pnpm check:counts`                                         | you added an ADR, module, model, migration, Playwright suite or web source file                   |
-| 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call`           |
-| 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                          |
-| 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**                    |
+| #                                                                                                  | Run | When |
+| -------------------------------------------------------------------------------------------------- | --- | ---- |
+| **Run it as one command: `pnpm prepush`** (or `scripts/prepush.sh --checks` for the gates alone).  |
+| The table below is the reference for _what_ each step is and _when_ it applies; the script is how  |
+| you run them, and it exists because assembling this list by hand at the call site is what actually |
+| fails. Three times in one session a correct gate reported a real failure that nobody read: a       |
+| pipeline whose exit status came from `tail`, an `&&` satisfied by an `echo`, and the loop run from |
+| `apps/web` where these scripts do not exist — ten identical "command not found" lines that look    |
+| exactly like ten real failures. The script fixes its own working directory, runs every step rather |
+| than stopping at the first, and exits non-zero if any failed.                                      |
+
+It deliberately excludes the e2e half, which needs a database and a browser and belongs to
+`scripts/e2e-local.sh` — the rows below still say when that is required.
+
+| 1 | `pnpm lint && pnpm typecheck` | always |
+| 2 | `pnpm test` | always |
+| 3 | `scripts/e2e-local.sh api` | you touched `apps/api` — service, controller, DTO, schema or migration |
+| 4 | `scripts/e2e-local.sh web:<suite>` | you **added or changed** a flag-on Playwright suite, or changed a surface one drives |
+| 4a | `scripts/e2e-local.sh web` | you changed a **screen** — its markup, its copy, or an accessible name |
+| 4b | the **base** suite + every suite that does not pin the flag | you **flipped a flag default** ([below](#flipping-a-default-changes-the-base-suite)) |
+| 4c | `scripts/e2e-sweep.sh` | you replaced a **screen every journey signs in through**, or moved a control every journey clicks |
+| 5 | `pnpm check:playbook` | you added, renamed or removed a seed-catalogue plan (ADR-0066) |
+| 6 | `pnpm check:build-contract` | you added a shared `packages/*` workspace package, or changed a Dockerfile |
+| 7 | `pnpm check:counts` | you added an ADR, module, model, migration, Playwright suite or web source file |
+| 8 | `pnpm check:claims` | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call` |
+| 9 | `pnpm check:nginx` | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file |
+| 10 | `git fetch origin main && pnpm check:frontend-only` | always, and it is the one gate whose answer depends on **where the branch is** |
 
 **Step 4a is not covered by step 4**, and the difference cost a CI round on 2026-08-18. Every `web:`
 target maps to `test:e2e:<suite>`; the base journey is `test:e2e` with no suffix, so until that day
