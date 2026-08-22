@@ -131,8 +131,32 @@ test('the org-less screens have no accessibility violations', async ({ page }) =
     ['/me/activity', async () => openFromAccountMenu(page, 'My activity')],
   ] as const) {
     await open();
+    /**
+     * **One `options()` call carrying both, and NOT `withTags().options()`.**
+     *
+     * ADR-0090 M5 established that `target-size` is tagged `wcag22aa` and ships `enabled: false`,
+     * so requesting the tag alone scans for nothing. Opting it in is what makes 2.5.8 real here —
+     * and these three screens have never been scanned by anything at all, so this is their one
+     * pass.
+     *
+     * The builder API makes the obvious spelling wrong: `@axe-core/playwright`'s
+     * `dist/index.js:170-172` is `options(options) { this.option = options; return this; }` — a
+     * wholesale REPLACEMENT — while `withTags()` (`:195-202`) works by setting
+     * `this.option.runOnly`. So `.withTags(...).options({rules})` discards `runOnly`
+     * entirely and axe runs every rule it has, including `best-practice` ones nobody asked for.
+     * Found by writing exactly that and getting a `region` violation whose rule is in none of the
+     * six tags; confirmed by reading `@axe-core/playwright`'s source rather than inferring it from
+     * the symptom. Three shipped suites have the same shape and pass only because they
+     * `.include()` a narrow subtree — `docs/TECH_DEBT.md` #170.
+     */
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+      .options({
+        runOnly: {
+          type: 'tag',
+          values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'],
+        },
+        rules: { 'target-size': { enabled: true } },
+      })
       .analyze();
     expect(results.violations, `${name}: ${JSON.stringify(results.violations, null, 2)}`).toEqual(
       [],

@@ -46,7 +46,6 @@ export type DrawerSubject = 'explorer' | 'context';
  */
 export function ToolRail({
   orgSlug,
-  explorerAvailable,
   railSlotRef,
   subject,
   drawerOpen,
@@ -54,20 +53,23 @@ export function ToolRail({
   contextSubject,
   buttonRef,
 }: {
-  orgSlug?: string | undefined;
   /**
-   * Whether the Project Explorer has a root to show (`docs/TECH_DEBT.md` #165a).
+   * The organisation the rail is showing, or `undefined` on the three `_authed` routes that have
+   * none. **Everything organisation-shaped in this rail is withheld without it** — the Project
+   * Explorer button, the six destinations — because a control that opens a panel with no root is
+   * navigation that cannot navigate (`docs/TECH_DEBT.md` #165a).
    *
-   * **`false` renders no button at all**, which is the contract `contextSubject` below already
-   * states — and the reason this prop exists rather than a second `orgSlug ?` test is that the rail
-   * had the rule and applied it to one cluster: the six organisation destinations are withheld
-   * without a slug, forty lines below a Project Explorer button that was not. The shell derives the
-   * fact once and both consumers read it.
+   * The Explorer button was the one cluster here that did NOT read this, forty lines above a
+   * destinations block that did, under a test titled "renders no destinations outside an
+   * organisation — there are none to show".
    *
-   * Not defaulted. A default would make the org-less case the one a caller gets by forgetting,
-   * which is how the sibling guard came to be missing in the first place.
+   * **Derived here rather than passed in**, which reverses this change's own first attempt: the
+   * shell computed `explorerAvailable` and handed it over beside the `orgSlug` it came from, so
+   * `<ToolRail orgSlug="acme" explorerAvailable={false} />` typechecked. Two guards for one fact
+   * that can silently stop agreeing is exactly the defect #165a is about, moved one level down into
+   * this component's prop list. One source, and divergence is unrepresentable.
    */
-  explorerAvailable: boolean;
+  orgSlug?: string | undefined;
   /**
    * Where a plan portals its **mode cluster** (Graphite M5). Empty on the twelve screens that are
    * not a plan, so `empty:hidden` costs them nothing — the same contract the command band's slot
@@ -101,6 +103,8 @@ export function ToolRail({
    */
   buttonRef?: ((subject: DrawerSubject, node: HTMLButtonElement | null) => void) | undefined;
 }): React.ReactElement {
+  const explorerAvailable = orgSlug !== undefined;
+
   return (
     <Surface
       // **`chrome`, not `panel`, since the light corporate theme split them.** The two used to share

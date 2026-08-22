@@ -53,7 +53,6 @@ function renderRail(ui: React.ReactElement) {
 
 const props = {
   orgSlug: 'acme',
-  explorerAvailable: true,
   subject: 'explorer' as const,
   drawerOpen: true,
   onSelectSubject: vi.fn(),
@@ -92,7 +91,7 @@ describe('ToolRail', () => {
    * Verified red first: the button resolved against the pre-fix rail.
    */
   it('renders no organisation navigation outside an organisation — there is none to show', () => {
-    renderRail(<ToolRail {...props} orgSlug={undefined} explorerAvailable={false} />);
+    renderRail(<ToolRail {...props} orgSlug={undefined} />);
     expect(screen.queryByRole('navigation', { name: 'Organisation' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Project Explorer' })).not.toBeInTheDocument();
   });
@@ -103,7 +102,7 @@ describe('ToolRail', () => {
    * are the reader's only route off a screen that now offers no navigation at all.
    */
   it('keeps the brand and the account chip when the Explorer is unavailable', () => {
-    renderRail(<ToolRail {...props} orgSlug={undefined} explorerAvailable={false} />);
+    renderRail(<ToolRail {...props} orgSlug={undefined} />);
     expect(screen.getByRole('link', { name: /SchedulePoint/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Account:/ })).toBeInTheDocument();
   });

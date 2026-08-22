@@ -70,15 +70,27 @@ function renderRail(ui: React.ReactElement) {
 }
 
 describe('NavigatorRail', () => {
-  it('renders the Project Explorer landmark, hinting to pick an org when none is active', () => {
-    renderRail(<NavigatorRail />);
+  /**
+   * **This asserted the org-less hint until 2026-08-22, and that hint was the defect.**
+   *
+   * `docs/TECH_DEBT.md` #165a: the paragraph this used to pin — "Select an organisation to
+   * browse." — was what a reader met on `/onboarding`, `/account` and `/me/activity`, where there
+   * is no organisation to select. `orgSlug` is now required and the branch is gone, so what is
+   * left to assert is the landmark and the tree it exists to hold.
+   *
+   * It is the **third** suite in this area found pinning a state the product can no longer
+   * produce, after `app-shell.test.tsx` and `drawer-entry-point.test.tsx` — which is most of the
+   * answer to why three live routes sat in that state without anyone noticing.
+   */
+  it('renders the Project Explorer landmark around the organisation tree', () => {
+    renderRail(<NavigatorRail orgSlug="acme" />);
     expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
-    expect(screen.getByText(/select an organisation/i)).toBeInTheDocument();
+    expect(screen.getByTestId('tree-stub')).toBeInTheDocument();
   });
 
   it('shows a close control (drawer) that fires onClose', () => {
     const onClose = vi.fn();
-    renderRail(<NavigatorRail onClose={onClose} />);
+    renderRail(<NavigatorRail orgSlug="acme" onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close Project Explorer' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });

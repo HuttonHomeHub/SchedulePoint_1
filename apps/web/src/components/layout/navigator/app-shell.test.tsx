@@ -247,8 +247,12 @@ describe('AppShell', () => {
       const grid = screen.getByRole('main').parentElement!;
       fireEvent.keyDown(grid, { key: 'Escape' });
 
+      // Asserted tightly rather than with a `stored === null` alternative: `useResizablePanelPrefs`
+      // writes its preference in an effect on mount, which `render()`'s `act()` flushes, so storage
+      // is never null by the time this runs and the permissive arm was vestigial.
       const stored = localStorage.getItem('schedulepoint-context-drawer');
-      expect(stored === null || JSON.parse(stored).collapsed === false).toBe(true);
+      expect(stored).not.toBeNull();
+      expect(JSON.parse(stored!).collapsed).toBe(false);
       expect(within(container).queryByText(/Project Explorer closed/)).not.toBeInTheDocument();
     });
   });

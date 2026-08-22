@@ -3482,3 +3482,70 @@ to remove, on the same clause as "a menu whose every item would be shaded render
 Note the shape before fixing: the row is rendered twice, once in the below-`lg` `SheetHeader`
 branch and once in the drawer branch, with the same gate duplicated. Whatever the fix, it wants to
 be one derivation rather than two — the neighbouring copy is exactly how #165a happened.
+
+## 170. Three axe scans run every rule, because `.options()` replaces `.withTags()`
+
+**Raised 2026-08-22** (found while closing #165a). **Size:** S.
+
+`@axe-core/playwright`'s builder is not a merge. `dist/index.js:170-172` is
+`options(options) { this.option = options; return this; }` — a **wholesale replacement** — while
+`withTags()` (`:195-202`) works by assigning `this.option.runOnly`. So the natural-looking spelling
+
+```ts
+new AxeBuilder({ page })
+  .withTags(['wcag2a', 'wcag2aa', …])
+  .options({ rules: { 'target-size': { enabled: true } } })
+```
+
+**discards `runOnly` entirely** and axe runs every rule it has, `best-practice` and `RGAA` ones
+included. Three shipped suites have exactly that shape:
+
+- `apps/web/e2e-gantt-editing/object-actions.spec.ts:153-154`
+- `apps/web/e2e-minimap/minimap.spec.ts:103-104`
+- `apps/web/e2e-toolbar-fit/fit.spec.ts:742-743`
+
+All three pass, and only because each `.include()`s a narrow subtree where the extra rules happen
+not to fire. Nothing is currently broken — the defect is that **their `withTags` line does not
+describe what they scan**, so a reader (or a future edit that widens the `include`) is working from
+a false statement about the suite's own scope. Found by writing that spelling in `e2e-shell` without
+an `.include()` and getting a `region` violation, a rule in none of the six requested tags;
+confirmed by reading the package rather than inferring it from the symptom, and the claim is
+registered in `scripts/dependency-claims.json`.
+
+The fix is one `options()` call carrying both, which `e2e-shell/org-less-screens.spec.ts` now uses:
+
+```ts
+.options({
+  runOnly: { type: 'tag', values: [/* … */] },
+  rules: { 'target-size': { enabled: true } },
+})
+```
+
+Verified by probe that this evaluates `target-size` and does **not** evaluate `region` — asserted
+against `results.passes ∪ violations ∪ incomplete ∪ inapplicable`, because a rule that is disabled
+and a rule that passes are indistinguishable from `violations` alone, which is how the no-op
+inclusion survived in the first place.
+
+**Not fixed in the three siblings here**, deliberately: correcting them NARROWS what they scan (from
+every rule to six tags), which is a coverage change on three suites in a PR about the app shell. Each
+is a one-line edit and none should change colour.
+
+**Two gate findings came out of the same thread and ARE fixed**, both in `scripts/check-claims.mjs`'s
+neighbourhood:
+
+1. The citation walk covered `apps/web/src` and **none of the 39 journey directories**, so a claim
+   about a dependency's internals made in a Playwright suite was invisible in both directions — it
+   could not be registered, and it could not be noticed going stale on a bump. That is the ADR-0077
+   M0 blind spot one directory along, and the file's own reasoning for including `scripts/` ("a
+   harness is one of the likeliest things in the tree to rest on a dependency's internals") applies
+   verbatim to a journey. Measured before adding, the way `packages/` was: the 39 directories turn up
+   exactly two refs, both already registered — so it was free. One of them had been citing from an
+   unscanned directory the whole time.
+2. `installed()` resolves a package by scanning pnpm's content-addressed store, so an **orphaned**
+   copy left in `node_modules/.pnpm` by an earlier install shadows the one the workspace actually
+   links. Locally this reported `@axe-core/playwright@4.12.1` while `apps/web/node_modules` linked
+   4.13.0 and `pnpm-lock.yaml` pinned only 4.13.0 — a version nothing in the tree referenced. It is
+   benign on CI, which installs fresh, and it is **not fixed**: the resolution is shared by all 51
+   claims and changing it to follow the link graph is a change to a gate this register depends on.
+   The consequence to know is that on a developer's machine this gate can watch the wrong copy, so a
+   local green is weaker evidence than a CI green.

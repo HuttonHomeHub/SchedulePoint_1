@@ -251,13 +251,27 @@ function ShellFrame(): React.ReactElement {
       return;
     }
     /**
-     * **A last rung that always exists**, because #165a made the fallback above reachable-but-dead.
-     * A callback ref fires with `null` on unmount, so a rail whose Explorer button is withheld
-     * leaves `'explorer' → null` in the map and `button?.focus()` becomes a silent no-op — focus
-     * stays wherever it was, or sits on `<body>` if the element that had it is the one that went.
-     * That is the WCAG 2.4.3 failure this function exists to prevent, arriving through the door
-     * this change opened. `<main>` is already `tabIndex={-1}` for the skip link, so it costs
-     * nothing and cannot itself disappear.
+     * **A last rung that always exists — and it is UNREACHABLE today, which was established rather
+     * than assumed.**
+     *
+     * The concern it answers is real in shape: a callback ref fires with `null` on unmount, so a
+     * rail whose Explorer button is withheld leaves `'explorer' → null` in the map and
+     * `button?.focus()` becomes a silent no-op, dropping focus to `<body>` — the WCAG 2.4.3 class
+     * this register has recorded three times (ADR-0080 M2, ADR-0099 M10, TECH_DEBT #64/#67).
+     *
+     * But it cannot happen. `ToolRail` is mounted on every `_authed` route, its Explorer button
+     * renders whenever `orgSlug` is defined, and its context button renders whenever a subject is
+     * registered — while `closeDrawerPanel`, the only caller, requires `drawerOnScreen`, which is
+     * `showingContext || explorerAvailable`. Both disjuncts imply a mounted button. A test written
+     * for this rung was tried and withdrawn: detaching the button with `.remove()` leaves a
+     * TRUTHY, detached element in the map, so `focus()` silently does nothing and the rung is still
+     * not reached — which incidentally proves the map is only ever correct because React fires the
+     * ref with `null`, not because anything here checks.
+     *
+     * It stays because it is one line, it cannot itself disappear (`<main>` is `tabIndex={-1}` for
+     * the skip link), and the day the `'context'` subject regains a registrant (TECH_DEBT #156)
+     * the reasoning above has to be redone. Named as an invariant guard rather than left to read
+     * as live code somebody should be able to reach.
      */
     document.getElementById('main')?.focus();
   }, [subject]);
@@ -433,7 +447,6 @@ function ShellFrame(): React.ReactElement {
                 <div className="col-start-1 row-span-3 row-start-1 hidden shrink-0 lg:block">
                   <ToolRail
                     orgSlug={orgSlug}
-                    explorerAvailable={explorerAvailable}
                     railSlotRef={railSlotRef}
                     subject={subject}
                     drawerOpen={!drawer.collapsed}
@@ -525,29 +538,47 @@ function ShellFrame(): React.ReactElement {
                         // tree and keeps reading the plan's model and gating (ADR-0029). The shell
                         // hosts a `<div>` and learns nothing.
                         <ChromeSlot slotRef={drawerSlotRef} name="drawer" />
-                      ) : (
+                      ) : explorerAvailable ? (
+                        // The `null` arm is unreachable: `drawerOnScreen` above is
+                        // `showingContext || explorerAvailable`, so arriving here with neither is
+                        // impossible. It is written as a condition rather than an `orgSlug!`
+                        // assertion because the condition keeps the compiler checking and an
+                        // assertion stops it — and `NavigatorRail` requires a slug since #165a.
                         <NavigatorRail orgSlug={orgSlug} expansion={expansion} />
-                      )}
+                      ) : null}
                     </ContextDrawer>
                   </div>
                 ) : null}
               </div>
 
-              {/* Below lg: the rail as an off-canvas drawer. Gated on the same fact as the
-                  pinned column — not because it is reachable without one today (its only trigger,
+              {/* Below lg: the rail as an off-canvas drawer. Gated on the same fact as the pinned
+                  column — not because it is reachable without one today (its only trigger,
                   `app-header.tsx`'s hamburger, has always been guarded) but because gating it here
                   makes an Explorer with no organisation UNREPRESENTABLE rather than something two
-                  guards in two files agree about. #165a is what happens when they stop agreeing. */}
-              {explorerAvailable ? (
-                <Sheet open={drawerOpen} onClose={closeDrawer} title="Project Explorer">
+                  guards in two files agree about. #165a is what happens when they stop agreeing.
+
+                  **The gate is on `open`, not on the element**, and that is the component review's
+                  finding rather than a style choice. Below `lg` the account chip sits outside this
+                  sheet and stays live, so a reader can open the Explorer on an organisation route
+                  and then navigate to `/account` from behind it. Unmounting a native `showModal()`
+                  `<dialog>` while it is open drops focus to `<body>` — the WCAG 2.4.3 class this
+                  register has recorded three times (ADR-0099 M10, ADR-0080 M2). `Sheet` keeps its
+                  `<dialog>` mounted and drives it from `open`, so closing it runs `dialog.close()`
+                  and the browser restores focus to whatever opened it. */}
+              <Sheet
+                open={drawerOpen && explorerAvailable}
+                onClose={closeDrawer}
+                title="Project Explorer"
+              >
+                {explorerAvailable ? (
                   <NavigatorRail
                     orgSlug={orgSlug}
                     expansion={expansion}
                     onClose={closeDrawer}
                     onNavigate={closeDrawer}
                   />
-                </Sheet>
-              ) : null}
+                ) : null}
+              </Sheet>
             </>
           )}
         </ChromeSlotHost>

@@ -186,6 +186,21 @@ const found = new Map();
 // adding them, so the widening is free rather than hopeful. Root-level markdown is deliberately
 // still out: it would demand two more refs, one of which is CLAUDE.md's own worked example of this
 // notation, and that is a judgement call rather than a free win. #101 stays open for it.
+//
+// **`apps/web/e2e-*` joins it, and that was a fourth hole rather than a widening.** The walk covered
+// `apps/web/src` and none of the 39 journey directories — so a claim about a dependency's internals
+// made in a Playwright suite was invisible to this gate in BOTH directions: it could not be
+// registered, and it could not be noticed going stale on a bump. The docblock above already gives
+// the reason it should have been in from the start ("a harness is one of the likeliest things in
+// the tree to rest on a dependency's internals"), which is exactly why `scripts/` was added; a
+// journey is a harness. Found by writing the first journey-side claim
+// (`@axe-core/playwright`'s `dist/index.js:170-172`) and having the gate report it as registered
+// but uncited.
+//
+// **Measured before adding, the way `packages/` was**: the 39 directories turn up exactly two
+// refs, both already registered and zero unregistered — so this is free rather than hopeful. One
+// of the two (`index.js:733-739`, cited by `e2e-public/public-screens.spec.ts`) had been a
+// registered claim citing from an unscanned directory the whole time.
 for (const dir of [
   'docs',
   'scripts',
@@ -194,6 +209,11 @@ for (const dir of [
   'apps/api/test',
   'apps/web/src',
   'apps/seed-cli',
+  // Derived, not listed: a suite added later is scanned without anyone remembering to add it —
+  // the same argument `apps/web/tsconfig.json` records for its own e2e glob.
+  ...readdirSync(join(root, 'apps/web'), { withFileTypes: true })
+    .filter((e) => e.isDirectory() && e.name.startsWith('e2e'))
+    .map((e) => join('apps/web', e.name)),
 ]) {
   (function walk(d) {
     for (const entry of readdirSync(join(root, d), { withFileTypes: true })) {

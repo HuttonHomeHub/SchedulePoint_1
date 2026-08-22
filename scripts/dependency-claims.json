@@ -8,7 +8,8 @@
     "@nestjs/throttler": "6.5.0",
     "react-hook-form": "7.84.0",
     "lucide-react": "1.29.0",
-    "axe-core": "4.12.1"
+    "axe-core": "4.12.1",
+    "@axe-core/playwright": "4.13.0"
   },
   "claims": [
     {
@@ -526,6 +527,14 @@
       "lines": "19178-19183",
       "anchor": "throw new Error('No elements found for include in ' + env + ' Context');",
       "citedBy": ["docs/specs/graphite/m5-command-strip.md", "CLAUDE.md"]
+    },
+    {
+      "ref": "index.js:170-172",
+      "package": "@axe-core/playwright",
+      "path": "dist/index.js",
+      "lines": "170-172",
+      "anchor": "options(options) {",
+      "citedBy": ["apps/web/e2e-shell/org-less-screens.spec.ts", "docs/TECH_DEBT.md"]
     }
   ]
 }
