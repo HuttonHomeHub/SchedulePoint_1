@@ -2591,3 +2591,73 @@ roots and these three. A narrow gap, which is why closing it generally was four 
 project. `token-architecture.test.ts` now sweeps `:root` and requires every colour token to be in a
 family or named outside the closure with a reason. There is no third option, which was the point of
 computing the closure in the first place.
+
+---
+
+## 2026-08-22 — A shell control whose subject is an organisation is withheld where there is none
+
+`docs/TECH_DEBT.md` **#165a**. Three of the thirteen authenticated routes are not
+organisation-scoped, and the app shell rendered the Project Explorer on all three: ~298 px of
+drawer at 1646 saying _"Select an organisation to browse"_ — on `/onboarding`, beside a card asking
+the reader to create their first organisation, where there is nothing to select by definition.
+
+**The rule was never missing.** `app-header.tsx`'s below-`lg` Explorer trigger is already
+`{shell && orgSlug ? … : null}`. `tool-rail.tsx` already withholds the six organisation
+destinations without a slug — and its test is titled _"renders no destinations outside an
+organisation — there are none to show"_, forty lines below a Project Explorer button that was
+exempt from it. `BrandLink` branches on `orgSlug === undefined` and points at `/`. `OrgSwitcher`
+returns `null` with no organisations. **Four correct answers to one question and one wrong one, in
+one 48 px rail** — the ADR-0064 §7 / ADR-0093 shape, at the instance where the register's own rule
+says extract rather than repeat.
+
+So the shell derives **one fact** — the Explorer has a root — and a second derived from it — a
+drawer is on screen — and routes the rail button, the drawer column, the Escape rung and the
+below-`lg` `Sheet` through them. The rail's prop is **not defaulted**, deliberately: a default
+makes the org-less case the one a caller gets by forgetting, which is how the sibling guard came to
+be missing. The compiler found all five fixtures.
+
+**Omit, not shade** (ADR-0082). Its third omit clause is this case verbatim — nothing to show at
+all, rather than an action shut by a state the reader can change. The objection worth answering is
+that a reader on `/account` with three organisations _can_ change the state: they cannot change it
+**here**, because picking one in the switcher navigates elsewhere, and that switcher is two rows up
+the same rail, unshaded, already being that affordance. A reason sentence would have been the
+sentence #165a reports as useless, moved somewhere quieter. The answer is the same on all three
+routes, because the discriminator is the **route**, not the reader's account.
+
+**Two rejected shapes, and why.** A fourth `orgSlug ?` at the call site is not an option — it _is_
+the defect, and after this fix the same term is needed in four places. Route `staticData` was
+rejected on three counts: it encodes an author's intent beside a data requirement and the two can
+diverge; it fails silently in both directions on the next route added, whichever way it defaults;
+and `staticData` appears nowhere in `apps/web/src`, so it would be a first. `orgSlug`'s presence is
+not an inference about intent — every organisation-scoped route carries `$orgSlug` in its path
+**and** `ensureOrgMembership` in `beforeLoad`, so the param is the route tree's own statement of
+the fact.
+
+**One formulation trap, avoided because it was named before it was written.** The symmetric-looking
+derivation `subject === 'explorer' && available` silently deletes an unrelated behaviour: the
+drawer falls back to the Explorer when a context registration goes away while `subject` is still
+`'context'`, which is a case the shell's own comment exists for. Keying on the active subject would
+leave an empty drawer on an organisation route. The term is **availability, not selection**.
+
+**The sharp finding is the Escape rung, and it was proven rather than reasoned.** That rung guarded
+on `drawer.collapsed` alone. With the preference set to open and nothing available to show, an
+Escape on `/account` called `drawer.collapse()` — which `use-resizable-panel-prefs.ts` persists to
+`localStorage` through an effect — and announced _"Project Explorer closed."_ when nothing was
+open. The reader's panel preference died on a trip through their account settings, and the evidence
+arrived later, on a plan, with nothing saying why. A fix that suppressed the Explorer by collapsing
+the drawer rather than by not rendering it would have passed every other assertion and shipped
+exactly this. The test asserts `localStorage`, not the screen, because on that route there is
+nothing on screen either way: **the write is the whole defect.**
+
+**And the area's own suites used the broken state as their default fixture**, which is most of the
+answer to why nobody saw it. `app-shell.test.tsx` mocked `useParams: () => ({})` and then asserted
+the Project Explorer navigation IS present — so five of its six cases described the org-less shell,
+and every reviewer read them as describing the product. `drawer-entry-point.test.tsx` had the same
+default. This is one layer past ADR-0081's finding: not a capability with no entry point, but a
+**defect with a suite that pins it**, where the fixture and the defect are the same thing and
+nothing can tell them apart from inside.
+
+Two adjacent findings are **filed rather than absorbed** (#168 below-`lg` Escape closing an
+invisible drawer; #169 the actions row rendering empty for non-writers), the first because fixing
+it would change behaviour on a viewport the new journey does not drive, and both because #165a's
+own wording would otherwise read as more closed than it is.

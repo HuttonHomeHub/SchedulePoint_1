@@ -60,7 +60,7 @@ test('the shell withholds the Project Explorer on the three routes that have no 
 test('an organisation-scoped route still gets the whole navigator', async ({ page }) => {
   const stamp = Date.now();
   await signUpAndStop(page, stamp);
-  const slug = await createOrganisation(page, stamp);
+  await createOrganisation(page, stamp);
 
   // The positive case is asserted for the reason ADR-0093's duplication gate needed its second
   // assertion: a suite that only proves the absence passes equally well against a shell that

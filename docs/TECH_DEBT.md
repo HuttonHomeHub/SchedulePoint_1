@@ -3281,8 +3281,9 @@ print but is a deliberate divergence rather than parity.
 
 ## 165. Five screens photographed for the first time, and what they showed
 
-**Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **Catalogue only** — the
-product owner's decision was to shoot, report and choose, so nothing here is fixed.
+**Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **(a) is CLOSED
+2026-08-22; (b)–(e) remain open.** The product owner's decision was to shoot, report and choose;
+they chose (a).
 
 `apps/web/scripts/shoot.mjs` carried 26 shots and five routes had none: `/account`, `/me/activity`,
 `/onboarding`, `/orgs/:slug/clients/:clientId`, `/staff`. The list was derived by matching shot names
@@ -3295,7 +3296,7 @@ Precedent for expecting something: widening the list 12 → 25 during ADR-0102 f
 polarity-agnostic gate — both with every gate green), plus the four rows in #161.
 
 **a. The app shell renders on screens that have no organisation — and offers navigation that cannot
-navigate.** On `/account` and `/onboarding` the Project Explorer drawer is open, ~300 px wide, saying
+navigate. (CLOSED 2026-08-22.)** On `/account` and `/onboarding` the Project Explorer drawer is open, ~300 px wide, saying
 _"Select an organisation to browse."_ On `/onboarding` that is beside a card asking the reader to
 create their first organisation: there is nothing to select, by definition, on the first screen a new
 member ever sees. `account.tsx`'s own docblock says _"No org in the path and no permission check,
@@ -3303,6 +3304,56 @@ because there is nothing to check"_ — the screen knows it is not org-scoped an
 `/me/activity` is the third instance; ADR-0073 C2.5 already recorded that it "sits outside any
 organisation" and that a journey clicked a nav link not rendered there. Same root cause, three
 screens, and it is a shell decision rather than three screen bugs.
+
+**Closed by deriving the fact once.** `ShellFrame` derives _the Explorer has a root to show_
+(`orgSlug !== undefined`) and _a drawer is on screen_, and routes the rail button, the drawer
+column, the Escape rung and the below-`lg` `Sheet` through them — rather than adding a third copy of
+a condition two of its neighbours already carried. **Omitted, not shaded**: ADR-0082's third omit
+clause is this case verbatim, and picking an organisation in the switcher does not make the Explorer
+available _here_ — it navigates elsewhere, and that switcher two rows up the same rail is already
+the affordance, unshaded. A reason sentence would have been the very sentence this row reports as
+useless, moved somewhere quieter.
+
+**Three things the fix found that the row did not name.**
+
+1. **The Escape rung would have destroyed the reader's persisted preference**, and this is the half
+   worth carrying. The rung guarded on `drawer.collapsed` alone, so with the preference set to open
+   and nothing available to show, an Escape on `/account` called `drawer.collapse()` — which
+   `use-resizable-panel-prefs.ts` writes to `localStorage` through an effect — and announced
+   "Project Explorer closed." when nothing was open. The panel would then be shut on the reader's
+   next plan with nothing saying why. **Proven by a test verified red, not reasoned about**; a fix
+   that suppressed the Explorer by collapsing the drawer rather than by not rendering it would have
+   passed every other assertion and shipped this.
+2. **`focusRailButton`'s fallback goes dead the moment the button is withheld.** A callback ref
+   fires with `null` on unmount, so the map holds `'explorer' → null` and `button?.focus()` becomes
+   a silent no-op — the WCAG 2.4.3 failure that function exists to prevent, arriving through the
+   door this change opened. It is not reachable today (#156: the `'context'` subject has no
+   production registrant), but the change is what creates the possibility, so a last rung that
+   always exists (`#main`, already `tabIndex={-1}` for the skip link) lands with it.
+3. **The area's own suites used the broken state as their default fixture**, which is most of why
+   nobody saw it. `app-shell.test.tsx` mocked `useParams: () => ({})` — no organisation — and then
+   asserted the Project Explorer navigation IS present, so five of its six cases described the
+   org-less shell and every reviewer read them as describing the product.
+   `drawer-entry-point.test.tsx` had the same default. Both now carry an organisation, and the
+   org-less shell is a case of its own.
+
+The **derived** half of the journey's absence check (`a[href*="/orgs/"]`) passed against the pre-fix
+code, which is the row's own finding restated as evidence: the rule existed and was applied to one
+cluster. `tool-rail.test.tsx`'s case for the other cluster is titled _"renders no destinations
+outside an organisation — there are none to show"_, forty lines below the button that was exempt
+from it.
+
+Gated by `apps/web/e2e-shell/` (`pnpm --filter @repo/web test:e2e:shell`, its own CI step), which
+signs up and stops on the real `/onboarding` — the one moment in an account's life with no
+organisation at all, and a state no seeded fixture can reach. Re-shot at 1646 before and after.
+
+**One thing this deliberately did NOT fix, and one it exposed.** Below `lg` the Escape rung still
+closes and announces a drawer the reader cannot see, because that column is `hidden lg:flex` — a
+guard disagreeing with a CSS class, pre-existing, filed as **#168** rather than absorbed into a
+change whose journey does not drive that viewport. And this row's own wording ("above an EMPTY 40 px
+actions row") reads as fully closed and is not: that row is moot on org-less routes now, and still
+renders as an empty bordered strip on **every organisation route** for a Contributor or Viewer —
+**#169**.
 
 **b. `My activity`'s filter row wraps ragged.** Five `Show` chips, then `Outcome` and `From` on the
 same line, then `To` and `Clear filters` wrapping below — four group labels at three different
@@ -3382,3 +3433,52 @@ planner performs in order to show something, so the honest default may differ pe
 `varianceRows` threaded and re-derived against the export viewport, the way `wbsBandBars` already
 is. That is why it is deferred rather than done — but deferred with the enumeration attached, which
 is the part CQ-5 called durable and did not deliver.
+
+## 168. Below `lg`, Escape closes and announces a drawer the reader cannot see
+
+**Raised 2026-08-22** (found while fixing #165a, deliberately excluded from it). **Size:** S.
+
+The context drawer's column is `hidden lg:flex` (`app-shell.tsx`), so below 1024 px it is in the
+DOM and invisible. The shell's Escape rung does not carry the viewport term — `showingContext` does
+(and that term was added for exactly this class of defect, when a planner who narrowed the window
+portalled the editor into a `display: none` slot) but the Explorer half does not. So on a narrow
+viewport, with an organisation and the drawer preference set to open, Escape:
+
+- writes `{collapsed: true}` to `localStorage` through `use-resizable-panel-prefs.ts`'s effect, and
+- announces **"Project Explorer closed."** into the live region,
+
+for a panel the reader cannot see and did not open. Below `lg` the Explorer's actual surface is the
+`Sheet`, which is separate state (`drawerOpen`) and is a native modal the browser closes on Escape
+by itself.
+
+**Why it was excluded from #165a rather than folded in.** #165a rewrites that exact guard, so the
+term is one `&&` away — but adding it changes behaviour on a viewport that epic's journey does not
+drive (`playwright.shell.config.ts` runs at 1646, deliberately, because below `lg` every absence
+assertion would pass for the wrong reason). It is a different defect: a guard disagreeing with a
+CSS class, not navigation that cannot navigate. `app-shell.tsx`'s `drawerOnScreen` docblock records
+the exclusion and points here.
+
+The fix is the term plus a unit case, and the unit case needs `useMediaQuery` mocked: jsdom has no
+`matchMedia`, so `isDesktop` takes its `true` fallback and a test written without the mock would
+assert the fix while exercising the desktop path.
+
+## 169. The Project Explorer's actions row is an empty bordered strip for non-writers
+
+**Raised 2026-08-22** (found while fixing #165a). **Size:** S.
+
+`navigator-rail.tsx` gives the Explorer a 40 px actions row below the drawer's header, whose only
+child — the **New client** button — is gated on `orgSlug && crud.canWrite`. For a Contributor or a
+Viewer the gate is false, and the row renders anyway: 40 px of bordered nothing above the tree, on
+every organisation route, for every reader who cannot create a client.
+
+#165a removed it from the three org-less routes by removing the whole rail there, and that row's
+own wording ("above an EMPTY 40 px actions row") will otherwise read as closed when it is half
+closed. The remaining case is the role one, which is the commoner of the two.
+
+ADR-0082's rule points at omission rather than shading: there is no action to shade — the row is a
+container whose contents are absent, not a control that is shut. The empty container is the thing
+to remove, on the same clause as "a menu whose every item would be shaded renders no trigger".
+
+Note the shape before fixing: the row is rendered twice, once in the below-`lg` `SheetHeader`
+branch and once in the drawer branch, with the same gate duplicated. Whatever the fix, it wants to
+be one derivation rather than two — the neighbouring copy is exactly how #165a happened.
