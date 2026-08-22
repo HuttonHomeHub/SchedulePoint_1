@@ -2739,7 +2739,18 @@ tree does, and the same objection applies. And the brand tile's `/` on `/onboard
 to `/onboarding` (Q-5) is a correct self-link: the home resolver sends a reader with no organisation
 there, which is where they already are.
 
-**One is left open on purpose**: the check recommends a short **ADR** rather than this entry, on the
-ADR-0093 precedent. That is the product owner's call, not the author's — an ADR is permanent and
+**One of its proposed tasks is deliberately NOT built, and the reason is in the fix's favour.** The
+plan carries an `M0-T3` structural gate to catch a fourth org-less route arriving later without the
+rule. That gate is unnecessary here, because the rule is **derived from the route param rather than
+from a list**: `explorerAvailable` is `orgSlug !== undefined`, so any route added under `_authed`
+without an `$orgSlug` is covered the day it is written, with nobody remembering anything. Checked
+rather than assumed — of the 14 routes under `_authed`, exactly four lack the param (`/`, which only
+ever redirects, plus the three this row is about), and a future one would inherit the behaviour by
+construction. The failure direction is also the safe one: a route whose param were named differently
+would withhold the Explorer rather than wrongly show it. Recorded so the gate is not built later on
+the strength of a plan written without sight of the shape.
+
+**One question is left open on purpose**: the check recommends a short **ADR** rather than this
+entry, on the ADR-0093 precedent. That is the product owner's call, not the author's — an ADR is permanent and
 this establishes a rule without adding a gate. Recorded as a disagreement rather than resolved
 quietly.
