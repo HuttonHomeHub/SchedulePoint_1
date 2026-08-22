@@ -3188,10 +3188,14 @@ When operating in this repo, Claude Code should:
 7. **Never commit secrets**, disable TLS verification, or weaken security/a11y
    gates to make CI pass.
 8. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
-   push" — `pnpm lint && pnpm typecheck && pnpm test` (plus `pnpm check:playbook`
-   when you add or rename a seed plan, and `pnpm check:build-contract` when you
-   add a shared `packages/*` workspace package — a local checkout has its
-   `dist/` already and cannot see a missing build line), **plus
+   push". **It is one command — `pnpm prepush`** — and running its parts by hand
+   is how a gate gets missed: this bullet used to name
+   `pnpm lint && pnpm typecheck && pnpm test` plus two `check:*` scripts, and
+   `scripts/prepush.sh` derives **ten** of them from `package.json` precisely so
+   nobody has to keep a list in their head. Following the old wording on
+   2026-08-22 sent an ADR to CI that `check:adr-coverage` refused, in a change
+   whose whole subject was filing one — a documented gate that could not fail
+   locally because the instruction did not name it. **plus
    `scripts/e2e-local.sh api` when you touched `apps/api`, plus
    `scripts/e2e-local.sh web:<suite>` when you added or changed a flag-on
    Playwright suite** — before declaring work done, and report failures
