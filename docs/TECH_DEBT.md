@@ -3173,10 +3173,29 @@ describes.
 (ADR-0102 D5) and this one swatch still cannot follow, because the token it names was never part of
 the family. Naming `--primary` is the fix; the wrapper is not.
 
-## 163. The print palette is a surface family truncated to three members
+## 163. The print palette is a surface family truncated to three members **(CLOSED 2026-08-22)**
 
 **Raised 2026-08-21** (the TECH_DEBT #158 deferred review, reached independently by the
 architecture and component gates). **Size:** M — mostly design judgement, not code.
+
+**Closed by `[data-surface="print"]`.** The family is all 31 members: three literal (paper is light
+because it is _declared_ light), nine aliasing `--plot-*` — exactly the members
+`PRINT_TOKEN_SOURCES` reads, so a printed diagram still cannot drift from the one on screen — and
+nineteen aliasing `--page-*`. That last split is the architecture review's, and it matters because
+the scope governs the **shared print container** (`lib/print-document.ts`), whose subtree includes
+the Gantt programme's `<table>`: `--border`, `--muted` and `--accent` resolving to diagram values
+there would be wrong, and "cannot drift from the screen" only ever applied to the painter's own
+members.
+
+Proven inert on landing, both halves: every pre-existing suite passed unchanged, and two real
+exported PNGs captured minutes apart in one session differ by **zero pixels across 246,430** in the
+diagram region, with the title band masked because it carries a generated date and a per-run tenant.
+
+Applying it found a hole in `surface-seams.structural.test.ts`: the first version wrote
+`container.dataset.surface = 'print'` and the suite stayed green, because the DOM property is
+camelCase and the regex tested for the hyphenated attribute — so a file applied a surface scope
+outside the allowlist and the gate built to forbid exactly that saw nothing. The call site uses
+`setAttribute` now, the gate matches both spellings, and the widening is verified red.
 
 `--print-ground` / `--print-ink` / `--print-muted-ink` were introduced as a "pack", on the
 `--ground`/`--ground-end` precedent (ADR-0077 M7: "a PAIR rather than a family member"). **The
@@ -3204,7 +3223,7 @@ rebinds a `--print-*` token, or if any mark drawn on paper falls under its contr
 previous arrangement was a correct comment naming its own trigger, and the trigger fired past it
 two days later.
 
-## 164. The exported diagram silently drops two default-on view layers
+## 164. The exported diagram silently drops SEVEN default-on view layers **(CLOSED 2026-08-22, with one half open as #166)**
 
 **Raised 2026-08-21** (the #158 deferred ux gate). **Size:** S. **Pre-existing** — not introduced
 by the print-palette work, and found while reviewing it.
@@ -3213,6 +3232,35 @@ by the print-palette work, and found while reviewing it.
 `if (toggles.nonWorking && scene.isWorkingDay && …)`. `TsldCanvas` composes both. The export's
 scene (`use-diagram-image.ts:85-95`) sets **neither key** — it sets `dataDateLine` explicitly,
 under a comment saying it mirrors `TsldCanvas`'s composition, and stops there.
+
+---
+
+**Two corrections to this row, both found by the deferred plan review rather than by acting on it.**
+
+**It was SEVEN layers, not two, and the count needed enumerating both compositions rather than
+reading one.** `TsldCanvas` builds **25** scene keys; the export built six. Missing:
+`isWorkingDay`, `monthBands`, `gridTiers`, `timeTrueLinks`, `visualRefresh`, `linkRouting` and
+`todayFraction`. That last was named in no document at all until the review — the screen draws a
+fractional Today line **with a pill**, the deliverable drew a whole-day line with none, because
+`paint.ts` gates the pill on the key being non-null. Nobody decided any of this: nine features each
+added correctly to the screen and nobody re-read the export.
+
+**"The printed programme" names the wrong artefact.** Three were affected — the exported PNG, the
+PDF and the printed _diagram_, all via `buildDiagramImage`. The printed **programme** is the Gantt,
+which has no month-band or non-working concept at all and lost nothing.
+
+**Closed by W3-M2.** All seven compose from one shared derivation, and the recurrence gate is
+**derived rather than a list**: `scene-parity.structural.test.ts` parses both scene literals,
+computes the difference and asserts it against a `SCREEN_ONLY` record carrying a reason per entry,
+so a key added to the canvas tomorrow fails until somebody classifies it. It refuses rather than
+answers when it cannot see its input — its first version assumed both files spelled the composition
+alike and would have reported an empty canvas roster, i.e. green.
+
+Measured in the artefact: pure white fell from ~100% of the non-bar area to 30%, with the band, the
+wash and its hatch present. `apps/web/e2e-export/` decodes the real download and asserts pixel
+properties, verified red against the pre-fix export.
+
+**What remains is filed as #166** — it is a different defect from the one this row describes.
 
 **Established by sampling the artefact, not by reading the code:** every pixel in the exported
 PNG outside a gridline or a bar is pure white. So the exported and printed diagram has never shown
@@ -3277,3 +3325,26 @@ indistinguishable from coverage, which is the failure W1 exists to correct. What
 (`Ops@SchedulePoint.test`), so the harness must also sign up as that address rather than its
 generated per-run one. That is a second onboarding path, not a shot entry, which is why it is filed
 rather than done inside a catalogue-only slice.
+
+## 166. A whole-plan export of a long programme loses weekends entirely
+
+**Raised 2026-08-22** (TECH_DEBT #164's remaining half, identified by the accessibility review of
+the W3 plan). **Size:** S–M. Filed separately because it is a different defect from #164: that row
+was about layers the export never composed, and this is about a layer it composes and then culls.
+
+`paint.ts` paints the non-working wash and its hatch as **one `fillStyle`**, and culls both below
+`NON_WORKING_MIN_PX = 3`. An export can frame the **entire plan** rather than a viewport, so on a
+long programme the per-day width falls under that floor and weekends disappear — not degraded,
+absent.
+
+**Why it matters more on paper than on screen**, which is the whole reason it is a row rather than
+a note: on screen a planner who cannot see the weekends zooms in. A sheet of paper has no zoom.
+And on paper the wash carries no colour signal of its own (~1.11:1 against the ground), so the
+hatch is the **sole** channel for weekend indication — culling it removes the only one.
+`token-contrast.test.ts`'s existing WCAG 1.4.1 exemption for the wash was written for the screen,
+where the wash carries some signal and the hatch is a second channel; that premise does not hold
+here, and `print-palette.structural.test.ts`'s docblock now says so.
+
+The plan's CQ-2 deferred this as "exactly as on screen at the same scale". The artefact is not the
+screen, and this is the one place that distinction bites. Not addressed in W3-M2, which restored
+the layer rather than changing how it culls.

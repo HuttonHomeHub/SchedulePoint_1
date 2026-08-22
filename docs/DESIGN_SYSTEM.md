@@ -12,7 +12,10 @@
 2. **Consistency.** One way to do a thing; reuse primitives, never reinvent.
 3. **Accessible by default** — WCAG 2.2 AA is a merge requirement.
 4. **Mobile-first & responsive.** Design for small screens, enhance upward.
-5. **Themeable.** Light and dark are first-class, driven by tokens.
+5. **One theme, driven by tokens.** ADR-0097 withdrew light, dark and system: the product's
+   only theme is declared at `:root`, no class is stamped on `<html>`, and there is no picker. The
+   mechanism that would carry a future variant is kept live rather than deleted, so "never branch
+   on theme in JS" still holds — see §"Themes" for what adding one back would cost.
 6. **Token-driven.** No magic values; if it's visual, it's a token.
 
 ## Foundations
@@ -36,9 +39,10 @@
 
 ### Colour
 
-Authored in **OKLCH** for perceptual uniformity and reliable light/dark pairs.
-Every colour is **semantic** (named by role, not hue) so themes flip
-automatically. Full values (light + dark) are in `globals.css`.
+Authored in **OKLCH** for perceptual uniformity and for predictable lightness
+arithmetic — which is what the contrast gates compute over. Every colour is
+**semantic** (named by role, not hue). Full values are in `globals.css`, which
+is the single source of truth for all of them.
 
 | Token (role)                 | Purpose                                               |
 | ---------------------------- | ----------------------------------------------------- |
@@ -226,7 +230,12 @@ wrong about all of them.
 > `--chrome` as navy `#14213D` and the page as off-white `#f8f9fa`, and closed with four verified
 > ratios computed against those grounds. The live tokens are `--chrome: oklch(0.154 0.009 264.3)`
 > and `--page-background: oklch(0.177 0.011 260.6)` — a dark graphite chrome around a dark graphite
-> page. This is the governing document for colour: the one a next author opens before choosing one.
+> page. **Both of those figures are themselves now historical**: ADR-0102 replaced Graphite with the
+> light corporate theme on 2026-08-21, so the live page ground is near-white. They are left as the
+> record of what this section was wrong about at the 2026-08-20 pass, not as current values — and
+> the fact that a note written to correct staleness went stale in a day is the argument for
+> `globals.css` being the only place a value lives. This is the governing document for colour: the
+> one a next author opens before choosing one.
 > Kept as a note rather than deleted, because the rules below survived the repalette and the reason
 > they exist is the interesting part.
 
