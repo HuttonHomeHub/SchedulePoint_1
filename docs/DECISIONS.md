@@ -2672,3 +2672,74 @@ Two adjacent findings are **filed rather than absorbed** (#168 below-`lg` Escape
 invisible drawer; #169 the actions row rendering empty for non-writers), the first because fixing
 it would change behaviour on a viewport the new journey does not drive, and both because #165a's
 own wording would otherwise read as more closed than it is.
+
+---
+
+## 2026-08-22 — The #165a spec was written after the build, as a check, and it found four things
+
+`docs/TECH_DEBT.md` #165a shipped with a `ui-architect` design pass and three specialist reviews
+and **no Feature Spec and no Implementation Plan**. The product owner caught that and ruled one be
+produced as a check before merge.
+
+**The sharpest part is not that PROCESS.md was skipped in general.** The parent epic
+(`docs/specs/post-theme-consolidation/`) has an approved spec whose own scope table says of W1 —
+the milestone that produced #165 — that its output is register rows _"and the work it may generate
+is **specified after it runs**"_. #165a is exactly the work W1 generated. The approved document
+commits in writing to specifying it, and that step was skipped.
+
+**How it was made a check rather than a rubber stamp.** `feature-analyst` ran in an isolated git
+worktree pinned to `52b6003`, the commit before any of this work — so it could read the problem, the
+register row and the original code, and could not read the solution. A spec written with the
+solution in view rationalises it; that is the whole reason for the worktree.
+
+**It reached the same core design independently**, which is what makes the exercise worth anything:
+omit rather than shade, the same rule on all three routes, reject rooting the Explorer at the
+last-active organisation, and no `VITE_` flag. It also independently found **both** of the
+implementation's two sharpest discoveries — that `drawer.collapse()` would persist a collapse the
+reader never asked for, and that `app-shell.test.tsx` mocks `useParams: () => ({})` and then asserts
+the Explorer **is** present, so the suite pinned the defect.
+
+**Three of its arguments are better than the ones that were shipped, and are adopted:**
+
+1. **Why the same rule on all three routes** — not "the route is the discriminator" as a principle,
+   but a mechanical fact: memberships come from `useOrganizations()`, a **query**, so a
+   membership-keyed rule is a _deferred_ rule. The shell would paint without the panel and add it a
+   beat later, moving ~298 px on every `/account` load.
+2. **Why omit rather than shade** survives ADR-0083, which drew the **opposite** conclusion for form
+   fields. The generalisation that settles both: _shade what the reader came to read and cannot act
+   on; omit what has no content at all._
+3. **Why rooting the Explorer at the last-active organisation is wrong** — it breaks ADR-0029's
+   stated invariant that selection is a pure projection of the URL, so the tree and the switcher
+   40 px away would disagree about which organisation you are in. And it cannot help `/onboarding`
+   at all, so the withholding rule is needed regardless, leaving two rules discriminated by a fact
+   the reader cannot see.
+
+**Four things it found that the implementation had missed. Two are fixed here.**
+
+- **The cause was still in place under a fixed symptom.** `app-shell.tsx` called
+  `useExpansionState(orgSlug ?? '')`, so every org-less route wrote a
+  `schedulepoint-nav-expanded:` key — expansion state for **an organisation named empty string**.
+  The shell did not model the absence; it modelled a blank presence, and each consumer then degraded
+  on its own. That is #165a's actual cause, and withholding the Explorer without it would have fixed
+  what a reader sees and left what the shell believes. `orgSlug` is now `string | undefined` through
+  the hook, with no read and no write when it is absent. Regression test verified red.
+- **The persistence assertion was too weak.** It checked the resting value, and a rule that
+  collapsed and then restored would leave `collapsed: false` on disk having written `true`. It now
+  spies `Storage.prototype.setItem` and asserts no write names a collapse at all.
+- **`#165(b)`'s photograph is now stale** and must be re-shot rather than designed from — widening
+  `<main>` on `/me/activity` changes the layout that row describes. Recorded on the row.
+- **`schedulepoint-active-org` is never cleared and carries no user id** — found while costing the
+  rejected option. Filed as **#171**; it is the rule ADR-0098 set deliberately for its sibling,
+  decided the other way by accident rather than by argument.
+
+**Two of its open questions are answered here rather than left.** The six organisation destinations
+stay withheld on `/account` and `/me/activity` (CQ-4) — that is **entailed** by rejecting the
+last-active-organisation rooting, since the destinations need a slug for exactly the same reason the
+tree does, and the same objection applies. And the brand tile's `/` on `/onboarding` resolving back
+to `/onboarding` (Q-5) is a correct self-link: the home resolver sends a reader with no organisation
+there, which is where they already are.
+
+**One is left open on purpose**: the check recommends a short **ADR** rather than this entry, on the
+ADR-0093 precedent. That is the product owner's call, not the author's — an ADR is permanent and
+this establishes a rule without adding a gate. Recorded as a disagreement rather than resolved
+quietly.

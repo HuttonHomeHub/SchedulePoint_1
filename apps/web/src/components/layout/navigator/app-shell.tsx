@@ -179,7 +179,7 @@ function ShellFrame(): React.ReactElement {
 
   // Shared, per-org expansion (ADR-0029 Phase 2): both rails and the CRUD coordinator
   // read one set, so revealing a freshly-created node works and pinned/drawer agree.
-  const expansion = useExpansionState(orgSlug ?? '');
+  const expansion = useExpansionState(orgSlug);
   // In-tree CRUD is write-RBAC only now that `VITE_NAV_TREE_CRUD` has retired (ADR-0084 batch 1):
   // Contributors/Viewers keep a read-only tree. The API re-checks; this is UX only.
   const role = useOrgRole(orgSlug ?? '');

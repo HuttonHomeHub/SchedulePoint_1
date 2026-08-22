@@ -69,8 +69,33 @@ vi.mock('@/components/layout/app-header', async () => {
   return { AppHeaderRow: DrawerTrigger };
 });
 
+/**
+ * Record every `setItem` while still really writing.
+ *
+ * The resting value is not enough on its own: a rule that collapsed the drawer and then restored it
+ * would leave `collapsed: false` on disk and still have written `true`. The independent spec check
+ * asked for the write, so this watches it. `Storage.prototype.setItem` is captured before any spy
+ * replaces it so the real persistence still happens underneath.
+ */
+const originalSetItem = Storage.prototype.setItem;
+
+function spyOnStorageWrites(): [string, string][] {
+  const writes: [string, string][] = [];
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+    this: Storage,
+    key: string,
+    value: string,
+  ) {
+    writes.push([key, value]);
+    originalSetItem.call(this, key, value);
+  });
+  return writes;
+}
+
 beforeEach(() => {
+  vi.restoreAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
   params = { orgSlug: 'acme' };
 });
 
@@ -242,7 +267,27 @@ describe('AppShell', () => {
      * Asserted against `localStorage` rather than against the screen, because on this route there
      * is nothing on screen either way: the write is the whole defect.
      */
+    /**
+     * **No organisation is not an organisation named empty string** (`docs/TECH_DEBT.md` #165a).
+     *
+     * The shell called `useExpansionState(orgSlug ?? '')`, so every org-less route wrote a
+     * `schedulepoint-nav-expanded:` entry — expansion state for a blank slug. Found by the
+     * independent spec check written against the pre-change tree, and it is the cause rather than a
+     * symptom: the shell did not model the absence, it modelled a blank presence, and each consumer
+     * then degraded on its own. Withholding the Explorer without this would have fixed what a
+     * reader sees and left what the shell believes.
+     */
+    it('persists no navigator expansion state for an organisation that does not exist', () => {
+      const writes = spyOnStorageWrites();
+      renderShell();
+      expect(writes.filter(([key]) => key.startsWith('schedulepoint-nav-expanded:'))).toEqual([]);
+      expect(
+        Object.keys(sessionStorage).filter((k) => k.startsWith('schedulepoint-nav-expanded:')),
+      ).toEqual([]);
+    });
+
     it('does not write a collapse to storage when Escape is pressed with nothing to close', () => {
+      const writes = spyOnStorageWrites();
       const { container } = renderShell();
       const grid = screen.getByRole('main').parentElement!;
       fireEvent.keyDown(grid, { key: 'Escape' });
@@ -253,6 +298,15 @@ describe('AppShell', () => {
       const stored = localStorage.getItem('schedulepoint-context-drawer');
       expect(stored).not.toBeNull();
       expect(JSON.parse(stored!).collapsed).toBe(false);
+      // The independent spec check asked for the WRITE and not only the resting value: a rule that
+      // collapsed and then restored would leave `collapsed: false` on disk and still have written
+      // `true`, which the assertion above cannot see. No write may name a collapse at all.
+      expect(
+        writes.filter(
+          ([key, value]) =>
+            key === 'schedulepoint-context-drawer' && value.includes('"collapsed":true'),
+        ),
+      ).toEqual([]);
       expect(within(container).queryByText(/Project Explorer closed/)).not.toBeInTheDocument();
     });
   });

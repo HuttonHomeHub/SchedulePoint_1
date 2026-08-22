@@ -3357,7 +3357,9 @@ actions row") reads as fully closed and is not: that row is moot on org-less rou
 renders as an empty bordered strip on **every organisation route** for a Contributor or Viewer —
 **#169**.
 
-**b. `My activity`'s filter row wraps ragged.** Five `Show` chips, then `Outcome` and `From` on the
+**b. `My activity`'s filter row wraps ragged.** _(Re-shoot before designing: closing (a) widened
+`<main>` on this screen by ~298 px, so the W1 photograph this describes no longer shows the layout
+that will be worked on. Found by the #165a spec check.)_ Five `Show` chips, then `Outcome` and `From` on the
 same line, then `To` and `Clear filters` wrapping below — four group labels at three different
 vertical positions. Adjacent groups are also styled differently for no stated reason: `Show` is
 chips, `Outcome` is plain text.
@@ -3551,3 +3553,28 @@ neighbourhood:
    claims and changing it to follow the link graph is a change to a gate this register depends on.
    The consequence to know is that on a developer's machine this gate can watch the wrong copy, so a
    local green is weaker evidence than a CI green.
+
+## 171. `schedulepoint-active-org` is never cleared, and carries no user id
+
+**Raised 2026-08-22** (found by the #165a spec check while costing a rejected option). **Size:** S.
+
+`apps/web/src/lib/active-org.ts` writes and reads `schedulepoint-active-org` in `localStorage` and
+**nothing ever removes it**. Sign-out sweeps its sibling — `forgetAllForUser` clears the
+`recent-plans` entries (`features/auth/api/use-session.ts`) — and does not touch this one. The key
+also carries no user id, where `recent-plans` deliberately does.
+
+**That is ADR-0098's own rule, decided the other way by accident rather than by argument.** That
+milestone keyed its store by user id and swept it on sign-out for stated reasons: a rename should
+correct itself, a plan the reader has lost access to should disappear rather than 404, and one
+person's history must not become another's on a shared browser. Every one of those reasons applies
+to the active organisation.
+
+**It is not a data leak, and the row should not be read as one.** The slug is a name, not a
+credential; the home resolver validates membership through `ensureOrgMembership` and the API 404s a
+non-member, so the next signed-in reader is bounced to their own organisation. What survives
+sign-out is a previous account's organisation **name**, briefly, on a shared machine — and a
+resolver round-trip nobody needs.
+
+The fix is the shape `recent-plans` already has: key by user id, and sweep on sign-out beside it.
+Both halves in one change, since keying without sweeping leaves orphans and sweeping without keying
+still shows the wrong slug to a second reader in the same session.
