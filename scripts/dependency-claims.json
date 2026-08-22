@@ -1,6 +1,6 @@
 {
   "verifiedAgainst": {
-    "better-auth": "1.6.27",
+    "better-auth": "1.6.28",
     "better-call": "1.4.0",
     "@better-fetch/fetch": "1.3.1",
     "nodemailer": "9.0.5",
@@ -13,42 +13,40 @@
   },
   "claims": [
     {
-      "ref": "create-context.mjs:169-175",
-      "package": "better-auth",
-      "path": "dist/context/create-context.mjs",
-      "lines": "169-175",
-      "anchor": "storage: options.rateLimit?.storage || (options.secondaryStorage ? \"secondary-storage\" : \"",
-      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+      "ref": "index.js:170-172",
+      "package": "@axe-core/playwright",
+      "path": "dist/index.js",
+      "lines": "170-172",
+      "anchor": "options(options) {",
+      "citedBy": ["apps/web/e2e-shell/org-less-screens.spec.ts", "docs/TECH_DEBT.md"]
     },
     {
-      "ref": "create-context.mjs:210",
-      "package": "better-auth",
-      "path": "dist/context/create-context.mjs",
-      "lines": "210",
-      "anchor": "skipOriginCheck: options.advanced?.disableOriginCheck !== void 0 ? options.advanced.disabl",
-      "citedBy": ["apps/api/src/common/auth/better-auth.ts"]
-    },
-    {
-      "ref": "create-context.mjs:214-224",
-      "package": "better-auth",
-      "path": "dist/context/create-context.mjs",
-      "lines": "214-224",
-      "anchor": "if (promise instanceof Promise) options.advanced.backgroundTasks.handler(promise.catch((e)",
+      "ref": "index.js:733-739",
+      "package": "@better-fetch/fetch",
+      "path": "dist/index.js",
+      "lines": "733-739",
+      "anchor": "statusText: response.statusText",
       "citedBy": [
-        "docs/adr/0075-mail-delivery-is-best-effort.md",
-        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/feature-spec.md",
+        "docs/specs/public-screens-brand/implementation-plan.md"
       ]
     },
     {
-      "ref": "create-context.mjs:220",
-      "package": "better-auth",
-      "path": "dist/context/create-context.mjs",
-      "lines": "220",
-      "anchor": "} else await promise;",
-      "citedBy": [
-        "docs/TECH_DEBT.md",
-        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
-      ]
+      "ref": "throttler.guard.js:148-150",
+      "package": "@nestjs/throttler",
+      "path": "dist/throttler.guard.js",
+      "lines": "148-150",
+      "anchor": "const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;",
+      "citedBy": ["scripts/measure-band-copy.mjs"]
+    },
+    {
+      "ref": "axe.js:19178-19183",
+      "package": "axe-core",
+      "path": "axe.js",
+      "lines": "19178-19183",
+      "anchor": "throw new Error('No elements found for include in ' + env + ' Context');",
+      "citedBy": ["docs/specs/graphite/m5-command-strip.md", "CLAUDE.md"]
     },
     {
       "ref": "dispatch.mjs:117-126",
@@ -67,73 +65,6 @@
       "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
     },
     {
-      "ref": "email-verification.mjs:104-117",
-      "package": "better-auth",
-      "path": "dist/api/routes/email-verification.mjs",
-      "lines": "104-117",
-      "anchor": "if (!user || user.user.emailVerified) await createEmailVerificationToken(ctx.context.secre",
-      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts", "docs/TECH_DEBT.md"]
-    },
-    {
-      "ref": "email-verification.mjs:119-121",
-      "package": "better-auth",
-      "path": "dist/api/routes/email-verification.mjs",
-      "lines": "119-121",
-      "anchor": "if (session?.user.email.toLowerCase() !== email.toLowerCase()) throw APIError.from(\"BAD_RE",
-      "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
-    },
-    {
-      "ref": "email-verification.mjs:13-19",
-      "package": "better-auth",
-      "path": "dist/api/routes/email-verification.mjs",
-      "lines": "13-19",
-      "anchor": "async function createEmailVerificationToken(secret, email, updateTo, expiresIn = 3600, ext",
-      "citedBy": [
-        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
-        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "email-verification.mjs:285-286",
-      "package": "better-auth",
-      "path": "dist/api/routes/email-verification.mjs",
-      "lines": "285-286",
-      "anchor": "if (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
-      "citedBy": ["apps/web/src/routes/verify-email.tsx"]
-    },
-    {
-      "ref": "email-verification.mjs:98-117",
-      "package": "better-auth",
-      "path": "dist/api/routes/email-verification.mjs",
-      "lines": "98-117",
-      "anchor": "if (!user || user.user.emailVerified) await createEmailVerificationToken(ctx.context.secre",
-      "citedBy": [
-        "apps/web/src/features/auth/api/use-session.ts",
-        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
-        "docs/specs/account-security/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "index.js:733-739",
-      "package": "@better-fetch/fetch",
-      "path": "dist/index.js",
-      "lines": "733-739",
-      "anchor": "statusText: response.statusText",
-      "citedBy": [
-        "docs/adr/0077-public-screens-brand-surface.md",
-        "docs/specs/public-screens-brand/feature-spec.md",
-        "docs/specs/public-screens-brand/implementation-plan.md"
-      ]
-    },
-    {
-      "ref": "index.js:932-957",
-      "package": "nodemailer",
-      "path": "lib/smtp-connection/index.js",
-      "lines": "932-957",
-      "anchor": "_formatError(message, type, response, command) {",
-      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.spec.ts"]
-    },
-    {
       "ref": "index.mjs:168",
       "package": "better-auth",
       "path": "dist/api/index.mjs",
@@ -142,6 +73,18 @@
       "citedBy": [
         "docs/adr/0075-mail-delivery-is-best-effort.md",
         "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "index.mjs:64-70",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "64-70",
+      "anchor": "function rateLimitResponse(retryAfter) {",
+      "citedBy": [
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/feature-spec.md",
+        "docs/specs/public-screens-brand/implementation-plan.md"
       ]
     },
     {
@@ -165,57 +108,51 @@
       "citedBy": ["docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"]
     },
     {
-      "ref": "index.mjs:64-70",
+      "ref": "email-verification.mjs:13-19",
       "package": "better-auth",
-      "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "64-70",
-      "anchor": "function rateLimitResponse(retryAfter) {",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "13-19",
+      "anchor": "async function createEmailVerificationToken(secret, email, updateTo, expiresIn = 3600, ext",
       "citedBy": [
-        "docs/adr/0077-public-screens-brand-surface.md",
-        "docs/specs/public-screens-brand/feature-spec.md",
-        "docs/specs/public-screens-brand/implementation-plan.md"
-      ]
-    },
-    {
-      "ref": "internal-adapter.mjs:650-660",
-      "package": "better-auth",
-      "path": "dist/db/internal-adapter.mjs",
-      "lines": "650-660",
-      "anchor": "* return it. The first concurrent caller receives the latest row for the",
-      "citedBy": ["docs/specs/account-security/feature-spec.md"]
-    },
-    {
-      "ref": "password.mjs:168-171",
-      "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "168-171",
-      "anchor": "if (user) await ctx.context.options.emailAndPassword.onPasswordReset({ user }, ctx.request",
-      "citedBy": [
-        "docs/specs/account-security/feature-spec.md",
-        "docs/specs/account-security/implementation-plan.md"
-      ]
-    },
-    {
-      "ref": "password.mjs:172",
-      "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "172",
-      "anchor": "if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context",
-      "citedBy": [
-        "apps/api/src/common/auth/better-auth.ts",
         "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
-        "docs/adr/0077-public-screens-brand-surface.md",
-        "docs/specs/account-security/feature-spec.md",
-        "docs/specs/public-screens-brand/feature-spec.md"
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
       ]
     },
     {
-      "ref": "password.mjs:173",
+      "ref": "email-verification.mjs:98-117",
       "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "173",
-      "anchor": "return ctx.json({ status: true });",
-      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "98-117",
+      "anchor": "if (!user || user.user.emailVerified) await createEmailVerificationToken(ctx.context.secre",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "email-verification.mjs:104-117",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "104-117",
+      "anchor": "if (!user || user.user.emailVerified) await createEmailVerificationToken(ctx.context.secre",
+      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts", "docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "email-verification.mjs:119-121",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "119-121",
+      "anchor": "if (session?.user.email.toLowerCase() !== email.toLowerCase()) throw APIError.from(\"BAD_RE",
+      "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
+    },
+    {
+      "ref": "email-verification.mjs:285-286",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "285-286",
+      "anchor": "if (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
+      "citedBy": ["apps/web/src/routes/verify-email.tsx"]
     },
     {
       "ref": "password.mjs:49",
@@ -281,6 +218,39 @@
       "path": "dist/api/routes/password.mjs",
       "lines": "92-128",
       "anchor": "if (!verification || verification.expiresAt < /* @__PURE__ */ new Date()) throw ctx.redire",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:168-171",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "168-171",
+      "anchor": "if (user) await ctx.context.options.emailAndPassword.onPasswordReset({ user }, ctx.request",
+      "citedBy": [
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/account-security/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:172",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "172",
+      "anchor": "if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) await ctx.context",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/public-screens-brand/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:173",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "173",
+      "anchor": "return ctx.json({ status: true });",
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
     {
@@ -353,6 +323,21 @@
       ]
     },
     {
+      "ref": "sign-up.mjs:169-207",
+      "package": "better-auth",
+      "path": "dist/api/routes/sign-up.mjs",
+      "lines": "169-207",
+      "anchor": "if (shouldReturnGenericDuplicateResponse) {",
+      "citedBy": [
+        "docs/adr/0075-mail-delivery-is-best-effort.md",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/account-security/implementation-plan.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md",
+        "docs/specs/mail-delivery-failure-visibility/implementation-plan.md",
+        "apps/api/test/mail-failure.e2e-spec.ts"
+      ]
+    },
+    {
       "ref": "sign-up.mjs:244",
       "package": "better-auth",
       "path": "dist/api/routes/sign-up.mjs",
@@ -391,28 +376,50 @@
       ]
     },
     {
-      "ref": "to-response.mjs:125-129",
-      "package": "better-call",
-      "path": "dist/to-response.mjs",
-      "lines": "125-129",
-      "anchor": "if (isAPIError(data)) return toResponse(data.body, {",
-      "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
-    },
-    {
-      "ref": "util.js:145-163",
-      "package": "zod",
-      "path": "v4/core/util.js",
-      "lines": "145-163",
-      "anchor": "export const allowsEval = /* @__PURE__*/ cached(() => {",
-      "citedBy": ["apps/web/src/config/zod-jitless.ts"]
-    },
-    {
-      "ref": "verification-token-storage.mjs:10-12",
+      "ref": "create-context.mjs:169-175",
       "package": "better-auth",
-      "path": "dist/db/verification-token-storage.mjs",
-      "lines": "10-12",
-      "anchor": "if (typeof option === \"object\" && \"hash\" in option) return option.hash(identifier);",
-      "citedBy": ["docs/specs/account-security/implementation-plan.md"]
+      "path": "dist/context/create-context.mjs",
+      "lines": "169-175",
+      "anchor": "storage: options.rateLimit?.storage || (options.secondaryStorage ? \"secondary-storage\" : \"",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+    },
+    {
+      "ref": "create-context.mjs:210",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "210",
+      "anchor": "skipOriginCheck: options.advanced?.disableOriginCheck !== void 0 ? options.advanced.disabl",
+      "citedBy": ["apps/api/src/common/auth/better-auth.ts"]
+    },
+    {
+      "ref": "create-context.mjs:214-224",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "214-224",
+      "anchor": "if (promise instanceof Promise) options.advanced.backgroundTasks.handler(promise.catch((e)",
+      "citedBy": [
+        "docs/adr/0075-mail-delivery-is-best-effort.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "create-context.mjs:220",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "220",
+      "anchor": "} else await promise;",
+      "citedBy": [
+        "docs/TECH_DEBT.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "internal-adapter.mjs:650-660",
+      "package": "better-auth",
+      "path": "dist/db/internal-adapter.mjs",
+      "lines": "650-660",
+      "anchor": "* return it. The first concurrent caller receives the latest row for the",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
     {
       "ref": "verification-token-storage.mjs:8-13",
@@ -427,12 +434,83 @@
       ]
     },
     {
-      "ref": "throttler.guard.js:148-150",
-      "package": "@nestjs/throttler",
-      "path": "dist/throttler.guard.js",
-      "lines": "148-150",
-      "anchor": "const prefix = `${context.getClass().name}-${context.getHandler().name}-${name}`;",
-      "citedBy": ["scripts/measure-band-copy.mjs"]
+      "ref": "verification-token-storage.mjs:10-12",
+      "package": "better-auth",
+      "path": "dist/db/verification-token-storage.mjs",
+      "lines": "10-12",
+      "anchor": "if (typeof option === \"object\" && \"hash\" in option) return option.hash(identifier);",
+      "citedBy": ["docs/specs/account-security/implementation-plan.md"]
+    },
+    {
+      "ref": "to-response.mjs:125-129",
+      "package": "better-call",
+      "path": "dist/to-response.mjs",
+      "lines": "125-129",
+      "anchor": "if (isAPIError(data)) return toResponse(data.body, {",
+      "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
+    },
+    {
+      "ref": "arrow-left-to-line.mjs:15",
+      "package": "lucide-react",
+      "path": "dist/esm/icons/arrow-left-to-line.mjs",
+      "lines": "15",
+      "anchor": "const ArrowLeftToLine = createLucideIcon(\"arrow-left-to-line\", __iconNode);",
+      "citedBy": [
+        "docs/adr/0091-modes-density-and-the-command-band.md",
+        "docs/specs/workspace-modes/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "chart-gantt.mjs:16",
+      "package": "lucide-react",
+      "path": "dist/esm/icons/chart-gantt.mjs",
+      "lines": "16",
+      "anchor": "const ChartGantt = createLucideIcon(\"chart-gantt\", __iconNode);",
+      "citedBy": [
+        "docs/adr/0091-modes-density-and-the-command-band.md",
+        "docs/specs/workspace-modes/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "hand.mjs:22",
+      "package": "lucide-react",
+      "path": "dist/esm/icons/hand.mjs",
+      "lines": "22",
+      "anchor": "const Hand = createLucideIcon(\"hand\", __iconNode);",
+      "citedBy": [
+        "docs/adr/0091-modes-density-and-the-command-band.md",
+        "docs/specs/workspace-modes/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "waypoints.mjs:19",
+      "package": "lucide-react",
+      "path": "dist/esm/icons/waypoints.mjs",
+      "lines": "19",
+      "anchor": "const Waypoints = createLucideIcon(\"waypoints\", __iconNode);",
+      "citedBy": [
+        "docs/adr/0091-modes-density-and-the-command-band.md",
+        "docs/specs/workspace-modes/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "index.js:932-957",
+      "package": "nodemailer",
+      "path": "lib/smtp-connection/index.js",
+      "lines": "932-957",
+      "anchor": "_formatError(message, type, response, command) {",
+      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.spec.ts"]
+    },
+    {
+      "ref": "index.esm.mjs:2608",
+      "package": "react-hook-form",
+      "path": "dist/index.esm.mjs",
+      "lines": "2608",
+      "anchor": "_formState.isSubmitted, _validationModeAfterSubmit",
+      "citedBy": [
+        "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
+        "apps/web/src/features/activities/components/ActivityFormDialog.test.tsx"
+      ]
     },
     {
       "ref": "index.esm.mjs:2751-2753",
@@ -466,75 +544,12 @@
       ]
     },
     {
-      "ref": "index.esm.mjs:2608",
-      "package": "react-hook-form",
-      "path": "dist/index.esm.mjs",
-      "lines": "2608",
-      "anchor": "_formState.isSubmitted, _validationModeAfterSubmit",
-      "citedBy": [
-        "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
-        "apps/web/src/features/activities/components/ActivityFormDialog.test.tsx"
-      ]
-    },
-    {
-      "ref": "arrow-left-to-line.mjs:15",
-      "package": "lucide-react",
-      "path": "dist/esm/icons/arrow-left-to-line.mjs",
-      "lines": "15",
-      "anchor": "const ArrowLeftToLine = createLucideIcon(\"arrow-left-to-line\", __iconNode);",
-      "citedBy": [
-        "docs/adr/0091-modes-density-and-the-command-band.md",
-        "docs/specs/workspace-modes/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "hand.mjs:22",
-      "package": "lucide-react",
-      "path": "dist/esm/icons/hand.mjs",
-      "lines": "22",
-      "anchor": "const Hand = createLucideIcon(\"hand\", __iconNode);",
-      "citedBy": [
-        "docs/adr/0091-modes-density-and-the-command-band.md",
-        "docs/specs/workspace-modes/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "waypoints.mjs:19",
-      "package": "lucide-react",
-      "path": "dist/esm/icons/waypoints.mjs",
-      "lines": "19",
-      "anchor": "const Waypoints = createLucideIcon(\"waypoints\", __iconNode);",
-      "citedBy": [
-        "docs/adr/0091-modes-density-and-the-command-band.md",
-        "docs/specs/workspace-modes/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "chart-gantt.mjs:16",
-      "package": "lucide-react",
-      "path": "dist/esm/icons/chart-gantt.mjs",
-      "lines": "16",
-      "anchor": "const ChartGantt = createLucideIcon(\"chart-gantt\", __iconNode);",
-      "citedBy": [
-        "docs/adr/0091-modes-density-and-the-command-band.md",
-        "docs/specs/workspace-modes/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "axe.js:19178-19183",
-      "package": "axe-core",
-      "path": "axe.js",
-      "lines": "19178-19183",
-      "anchor": "throw new Error('No elements found for include in ' + env + ' Context');",
-      "citedBy": ["docs/specs/graphite/m5-command-strip.md", "CLAUDE.md"]
-    },
-    {
-      "ref": "index.js:170-172",
-      "package": "@axe-core/playwright",
-      "path": "dist/index.js",
-      "lines": "170-172",
-      "anchor": "options(options) {",
-      "citedBy": ["apps/web/e2e-shell/org-less-screens.spec.ts", "docs/TECH_DEBT.md"]
+      "ref": "util.js:145-163",
+      "package": "zod",
+      "path": "v4/core/util.js",
+      "lines": "145-163",
+      "anchor": "export const allowsEval = /* @__PURE__*/ cached(() => {",
+      "citedBy": ["apps/web/src/config/zod-jitless.ts"]
     }
   ]
 }

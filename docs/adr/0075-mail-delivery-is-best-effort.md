@@ -82,7 +82,7 @@ decided" is about exactly that failure. It is the second time in one milestone.
 the finding that decided the ADR — the spec was commissioned believing the opposite.
 
 Under `requireEmailVerification`, a sign-up for an address that **already exists** returns a
-synthetic `200` with a fabricated user id and **sends nothing** (`sign-up.mjs:162,169-207`); Better
+synthetic `200` with a fabricated user id and **sends nothing** (`sign-up.mjs:162` + `sign-up.mjs:169-207`); Better
 Auth hashes the submitted password regardless, purely to equalise timing. It is a deliberate
 anti-enumeration control. So surface a delivery failure and, during an outage:
 

@@ -42,7 +42,7 @@ import { clearDomainData } from './audit-reset';
  * the address, there is no enumeration concern." That is **false under enforcement**, and the error
  * is preserved here rather than quietly overwritten because it is the reason ADR-0075 exists.
  *
- * `sign-up.mjs:162,169-207`: with `requireEmailVerification`, an address that **already exists**
+ * `sign-up.mjs:162` + `sign-up.mjs:169-207`: with `requireEmailVerification`, an address that **already exists**
  * gets a synthetic `200` carrying a fabricated user id and **no send at all** — and Better Auth
  * hashes the submitted password anyway, purely to equalise the timing. That is a deliberate
  * anti-enumeration control, and it inverts the argument: surface a delivery failure and, during an
@@ -198,7 +198,7 @@ describe.skipIf(!hasDatabase)('A broken mail transport (e2e)', () => {
      * must never change, and it reads as unrelated to a broken relay until you see what it forbids.
      *
      * Under enforcement, Better Auth answers a sign-up for an address that ALREADY EXISTS with a
-     * synthetic 200 carrying a fabricated user id, and sends nothing (`sign-up.mjs:162,169-207`). It
+     * synthetic 200 carrying a fabricated user id, and sends nothing (`sign-up.mjs:162` + `sign-up.mjs:169-207`). It
      * hashes the submitted password regardless, purely so the timing matches. That is what makes
      * "abort the sign-up when the send fails" inadmissible: during an outage the error would mean
      * "that address was free" and the 200 would mean "that address is taken" — an enumeration oracle
