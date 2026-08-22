@@ -2596,6 +2596,13 @@ computing the closure in the first place.
 
 ## 2026-08-22 — A shell control whose subject is an organisation is withheld where there is none
 
+> **This decision is now [ADR-0104](adr/0104-a-shell-control-whose-subject-is-an-organisation.md).**
+> Promoted on the independent spec check's recommendation and the product owner's ruling: it
+> establishes a rule that governs future shell controls, and it carries a Feature Spec, an
+> Implementation Plan and three specialist reviews — more than this file is for. The entry stays
+> because the ADR is the decision and this is the account of how it was reached, including where
+> the author was corrected.
+
 `docs/TECH_DEBT.md` **#165a**. Three of the thirteen authenticated routes are not
 organisation-scoped, and the app shell rendered the Project Explorer on all three: ~298 px of
 drawer at 1646 saying _"Select an organisation to browse"_ — on `/onboarding`, beside a card asking

@@ -17,6 +17,32 @@ and the acceptance criteria, you are not ready to design; if you can't describe
 the design, you are not ready to plan; if the plan isn't approved, you don't
 implement.
 
+## What a tech-debt row does and does not substitute for
+
+**A row in [`TECH_DEBT.md`](TECH_DEBT.md) may stand in for stages 1–2 — but only while the change
+stays inside the behaviour that row describes and adds no new surface.** The row already carries a
+problem statement and a diagnosis, which is what stages 1–2 produce; that is why the substitution is
+reasonable at all, and why it stops being reasonable the moment the work grows.
+
+**The full Feature Spec and Implementation Plan are mandatory — regardless of size, and regardless
+of the work having started — the moment the change does any of these:**
+
+- adds or changes a **user-facing entry point**;
+- adds or changes a **Playwright config or a CI step**;
+- changes a **component's public contract** (a prop's type or optionality) or a **shared gate**;
+- touches the **schema** (which additionally requires `database-architect`, without exception).
+
+**Crossing a trigger mid-flight is not a reason to carry on.** It is the point at which the work
+stops and the spec is written. The change that produced this rule did not look like spec-work when
+it started and did by the time it finished.
+
+**The triggers are what a change ADDS, never how big it is**, and that is measured rather than
+chosen: across 181 non-release commits on `main`, file count is a poor discriminator — at its best
+threshold a size rule still misclassifies 23% of them. The full derivation is in
+[ADR-0105](adr/0105-a-register-row-is-not-a-spec.md).
+
+---
+
 ## The pipeline
 
 ```mermaid

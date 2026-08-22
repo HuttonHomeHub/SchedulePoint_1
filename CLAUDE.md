@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1052 web
 > source files with 37 Playwright suites beside the base journey, and
-> 103 ADRs.
+> 105 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2920,6 +2920,57 @@ progress` off the command surface because **an object action belongs on the obje
   boundary). "Must copy the template" becomes "must match the standard"; divergence
   still needs an ADR.
 
+- **ADR-0104** _(Accepted)_ — A shell control whose subject is an organisation is withheld where
+  there is none. Three of the thirteen `_authed` routes are not organisation-scoped —
+  `/onboarding`, `/account`, `/me/activity` — and the shell rendered the Project Explorer on all
+  three: ~298 px of drawer at 1646 saying _"Select an organisation to browse"_, on `/onboarding`
+  beside a card asking the reader to create their first organisation. **The rule was never missing;
+  it was applied to four controls in the same 48 px rail and not their fifth** — the below-`lg`
+  trigger, the six destinations, `BrandLink` and `OrgSwitcher` all withheld correctly, and the
+  Explorer's button sat forty lines from the destinations block, ungated. So the shell derives the
+  fact **once** and every consumer reads it. **Omitted, not shaded** (ADR-0082's third omit clause);
+  the objection worth answering is that a reader on `/account` with three organisations _can_ change
+  the state, and they cannot change it **here** — choosing one navigates elsewhere, and the switcher
+  two rows up is already that affordance. The same rule on all three routes, keyed on the **route**
+  and never on memberships, because memberships come from a query and a membership-keyed rule would
+  paint and then shift ~298 px a beat later.
+  **The cause sat one layer below the symptom**: `useExpansionState(orgSlug ?? '')` persisted
+  expansion state for **an organisation named empty string**, so the shell did not model the
+  absence, it modelled a blank presence. **The Escape rung is the sharp consequence** — guarding on
+  `drawer.collapsed` alone would have called `drawer.collapse()` on `/account`, persisted it, and
+  announced a panel closing that was never open; a fix that suppressed the Explorer by _collapsing_
+  the drawer would have passed every other assertion and shipped exactly that. Proven by a test
+  verified red, asserted against a `setItem` spy rather than the resting value.
+  **Three unit suites had used the broken state as their fixture** (`app-shell.test.tsx` mocked
+  `useParams: () => ({})` and asserted the Explorer **is** present), which is one layer past
+  ADR-0081: not a capability with no entry point, but **a defect with a suite that pins it**.
+  Built without a spec — see ADR-0105 — with the spec produced afterwards as a **check**, written
+  blind to the implementation; it reached the same design independently and found four things that
+  had been missed. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0105** _(Accepted)_ — A register row is not a spec, and the trigger is capability-shaped.
+  `docs/PROCESS.md` says "**any** new requirement or feature" and has no defect exemption, but an
+  unwritten one had been operating: a `docs/TECH_DEBT.md` row treated as standing in for the spec.
+  That is sound for a contained fix and wrong the moment the work grows a surface — and the person
+  deciding which case they are in is the person about to skip the step. It failed twice in one
+  session; the second time the parent epic's **own approved spec** said of the milestone that
+  produced the row that its output is register rows _"and the work it may generate is specified
+  after it runs"_. **The trigger is capability-shaped, and that is measured rather than chosen**:
+  across 181 non-release commits, 43% carry a spec, and **file count is a poor discriminator — at
+  its best threshold a size rule still misclassifies 23%**, so a size trigger would have been
+  instinct wearing evidence's clothes. The strongest predictor is adding a Playwright config, at
+  **at least 26 of 28**. A register row therefore covers stages 1–2 only while the change stays
+  inside the behaviour it describes and adds **no new surface**; the full spec and plan become
+  mandatory on a new user-facing entry point, a Playwright config or CI step, a component's public
+  contract, a shared gate, or the schema — and crossing a trigger **mid-flight stops the work**.
+  **It is a review-time prompt in the PR template, not a computed gate**, and the reason is
+  arithmetic: the obvious diff-based check ("adding a journey must touch `docs/specs/`") would fail
+  **26 of the 28 historical cases**, because a milestone commit of an already-spec'd epic touches no
+  spec file. An earlier draft declined the gate for a _different and false_ reason — that the
+  history holds two legitimate exceptions — which collapsed when those two commits were opened
+  (one changes product code, one changes backend authorisation). Same decision, different reasoning,
+  and the ADR records the correction rather than the tidy version. **No product code changes.**
+
 A lighter-weight running log of smaller decisions is in
 [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
@@ -3038,6 +3089,18 @@ When operating in this repo, Claude Code should:
    follow the delivery process (§21, [`docs/PROCESS.md`](docs/PROCESS.md)):
    understand → design → plan → **get approval** → build. Use the
    **feature-analyst** agent to produce the spec + plan.
+
+   **A `docs/TECH_DEBT.md` row is not a spec** (ADR-0105). It covers stages 1–2
+   only while the change stays inside the behaviour that row describes and adds
+   **no new surface**. The full spec and plan become mandatory — whatever the
+   size, and **even once the work has started** — the moment it adds a
+   user-facing entry point, a Playwright config or CI step, a component's public
+   contract, a shared gate, or a schema change. Crossing a trigger mid-flight
+   means the work **stops** and the spec is written. This rule exists because
+   "it's only a defect fix" was decided twice in one session by the person about
+   to skip the step, the second time against an epic whose own approved spec
+   promised the follow-on work would be specified.
+
 2. **Build features to the implementation standard.** Match the layering
    (controller → service → repository), deny-by-default auth with permission and
    org-scope checks, standard envelopes, DB standards and tests described in
@@ -3196,7 +3259,10 @@ and report blocking vs. suggested findings with file/line references.
 
 Every new requirement follows [`docs/PROCESS.md`](docs/PROCESS.md) — **understand
 → design → plan → get approval → build.** Do not write application code before
-the spec and plan are approved.
+the spec and plan are approved. **A tech-debt row substitutes for stages 1–2 only
+while the change adds no new surface** — see that file's "What a tech-debt row
+does and does not substitute for" and ADR-0105 for the triggers, which are about
+what a change **adds** rather than how large it is.
 
 Pipeline: **1** business understanding → **2** functional requirements → **3**
 technical analysis → **4** solution design (with Mermaid diagrams; ADR if

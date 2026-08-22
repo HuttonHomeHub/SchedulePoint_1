@@ -13,6 +13,21 @@ Closes #
 
 Spec / plan:
 
+<!--
+A tech-debt row covers stages 1-2 only while the change stays inside the behaviour it describes
+and adds no new surface. Name the docs/specs/ path this change belongs to, or say which of the
+triggers below it does not fire (ADR-0105):
+
+  - a new user-facing entry point
+  - a Playwright config or a CI step
+  - a component's public contract, or a shared gate
+  - the schema (also requires database-architect, without exception)
+
+Crossing one of these mid-flight means the work stops and the spec is written.
+-->
+
+Spec path, or triggers not fired:
+
 ## Type of change
 
 - [ ] ✨ Feature (`feat`)

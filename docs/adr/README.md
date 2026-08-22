@@ -127,3 +127,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0101](0101-an-editor-is-a-dialog-not-a-drawer.md)                          | An editor is a dialog, not a drawer                                     | Accepted           |
 | [0102](0102-the-light-corporate-theme.md)                                   | The light corporate theme, and the scope that never reached the painter | Accepted           |
 | [0103](0103-paper-is-a-surface.md)                                          | Paper is a surface, and the exported diagram is the diagram             | Accepted           |
+| [0104](0104-a-shell-control-whose-subject-is-an-organisation.md)            | A shell control whose subject is an organisation                        | Accepted           |
+| [0105](0105-a-register-row-is-not-a-spec.md)                                | A register row is not a spec                                            | Accepted           |

@@ -529,6 +529,21 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **The shell no longer offers navigation that cannot navigate** — **shipped** (ADR-0104,
+  2026-08-22). Three of the thirteen authenticated routes are not organisation-scoped —
+  `/onboarding`, `/account`, `/me/activity` — and the app shell rendered the Project Explorer on all
+  three: ~298 px of drawer at 1646 saying _"Select an organisation to browse"_, on `/onboarding`
+  beside a card asking the reader to create their first organisation, where there is nothing to
+  select by definition. The rule was never missing: four other controls in the same 48 px rail
+  already withheld correctly, and the Explorer's button sat forty lines from one of them, ungated.
+  The shell now derives the fact once and every consumer reads it, including the cause below the
+  symptom — expansion state was being persisted for **an organisation named empty string**.
+  Its process story is the more useful half: it was built **without a spec**, the product owner
+  caught that, and the spec was written afterwards **as a check** — blind to the implementation, in
+  a worktree pinned to the pre-change commit. It reached the same design independently and found
+  four things that had been missed. The rule that came out of it — when a tech-debt row stops
+  standing in for a Feature Spec — is recorded with the delivery process rather than here.
+
 - **Paper is a surface** — **shipped** (ADR-0103, 2026-08-22). The exported PNG/PDF and the printed
   diagram had no identity of their own: the ground resolved from the app's live theme, so under
   Graphite the deliverable carried a near-black diagram panel inside white paper chrome. Fixing that
