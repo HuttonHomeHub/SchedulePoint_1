@@ -3938,3 +3938,35 @@ ADR-0105's trigger and wants its own change rather than riding along inside a de
 
 **Not the same bug as #177.** That one is the completeness scan's regex halving a compound
 citation; this is the version resolver picking the wrong directory. They share only a file.
+
+### A second flavour, found the same day: a package legitimately resolved TWICE
+
+`axe-core` is not an orphan case. Two resolutions coexist **by design** in `pnpm-lock.yaml`:
+
+| copy       | pulled by                              | used at                                     |
+| ---------- | -------------------------------------- | ------------------------------------------- |
+| **4.13.0** | `@axe-core/playwright`                 | **journey** time — the Playwright axe scans |
+| 4.12.1     | `eslint-plugin-jsx-a11y`, `vitest-axe` | lint and unit-test time                     |
+
+The register pins **4.12.1**, because `installed()` returns the first directory and `4.12.1` sorts
+before `4.13.0`. But the claim it holds — that `validateContext` **throws** on an empty `include`,
+so a scan whose `.include()` names a deleted row goes red rather than green-for-having-tested-
+nothing (ADR-0099 M5, cited from `CLAUDE.md`) — **is a statement about the journey path**, which
+loads 4.13.0.
+
+**The claim is true in both** and was checked in both rather than assumed: the same
+`No elements found for include` throw is present in 4.13.0's `axe.js`, roughly four hundred lines
+further down than in 4.12.1. So nothing is currently wrong, and the entry is left as it is.
+
+_(No line number for the 4.13.0 copy, deliberately, and the reason is this row's own subject: the
+register can only pin the copy `installed()` resolves, which is 4.12.1 — so a `file:line` citation
+into 4.13.0 is one the gate would demand an entry for and then refuse, because the anchor is not at
+that line in the copy it checks. Writing it that way failed `check:claims` on the first attempt,
+which is a fair demonstration that the hole is real.)_
+
+What is wrong is that **the register cannot say which copy a claim is about**, and the gate silently
+picks one. If the two copies ever diverge on this behaviour, the register would go on asserting a
+verification against the copy that does not run — and, unlike the orphan case above, there is
+nothing to delete that would fix it, because both resolutions are correct. The register format
+needs a way to name the consumer (`axe-core` _via_ `@axe-core/playwright`), not just the package.
+That is the same shared-gate change as the resolver fix and belongs with it.
