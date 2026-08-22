@@ -3226,3 +3226,54 @@ Worth noting when it is fixed: on screen the wash sits ΔL 0.007 from the canvas
 nearly invisible; on the now-true-white paper the same token sits ΔL 0.035, five times the
 separation. Paper will show it more strongly than the screen ever has, which is probably right for
 print but is a deliberate divergence rather than parity.
+
+## 165. Five screens photographed for the first time, and what they showed
+
+**Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **Catalogue only** — the
+product owner's decision was to shoot, report and choose, so nothing here is fixed.
+
+`apps/web/scripts/shoot.mjs` carried 26 shots and five routes had none: `/account`, `/me/activity`,
+`/onboarding`, `/orgs/:slug/clients/:clientId`, `/staff`. The list was derived by matching shot names
+against `src/routes/*.tsx` and then **checked** rather than trusted — `plan-detail` looked unshot and
+is covered by the five `plan-workspace*` shots. ADR-0102 repainted all five and nobody had looked at
+any of them.
+
+Precedent for expecting something: widening the list 12 → 25 during ADR-0102 found two defects
+**only a photograph could find** (the weekend hatch's dark-to-light step, the minimap frame's
+polarity-agnostic gate — both with every gate green), plus the four rows in #161.
+
+**a. The app shell renders on screens that have no organisation — and offers navigation that cannot
+navigate.** On `/account` and `/onboarding` the Project Explorer drawer is open, ~300 px wide, saying
+_"Select an organisation to browse."_ On `/onboarding` that is beside a card asking the reader to
+create their first organisation: there is nothing to select, by definition, on the first screen a new
+member ever sees. `account.tsx`'s own docblock says _"No org in the path and no permission check,
+because there is nothing to check"_ — the screen knows it is not org-scoped and the shell does not.
+`/me/activity` is the third instance; ADR-0073 C2.5 already recorded that it "sits outside any
+organisation" and that a journey clicked a nav link not rendered there. Same root cause, three
+screens, and it is a shell decision rather than three screen bugs.
+
+**b. `My activity`'s filter row wraps ragged.** Five `Show` chips, then `Outcome` and `From` on the
+same line, then `To` and `Clear filters` wrapping below — four group labels at three different
+vertical positions. Adjacent groups are also styled differently for no stated reason: `Show` is
+chips, `Outcome` is plain text.
+
+**c. `All events shown` is a filled dark button that is not an action.** It is a status, rendered in
+the same treatment as `Change password` and `New project`. ADR-0099's status bar exists because
+_"`Recalculate` stops being a button pretending to be a status"_; this is that, one screen along.
+
+**d. `client-detail`'s row actions are bare text links.** `Edit` and `Delete` sit at the right of each
+row as unadorned text, with **`Delete` visually identical to `Edit`** — a destructive action carrying
+no destructive treatment. `docs/UX_STANDARDS.md` "Row / node actions" specifies the APG `Menu`
+primitive. Check this against ADR-0097 Landing F before acting: that milestone re-counted row-action
+crowding **by subject-labelled actions** rather than by `size="sm"` occurrences and found exactly one
+crowded table, so this may be a knowing exclusion rather than an oversight.
+
+**e. `/staff` is still unphotographed, and the mechanism is recorded rather than left to be
+rediscovered.** The console is five panels (ADR-0086) that nobody has ever looked at in any theme.
+`shoot.mjs` boots no servers, and `/staff` is gated on the API's `STAFF_EMAILS`. The shot now exists
+and **skips loudly**, naming what would make it run — a silent skip in a shot list is
+indistinguishable from coverage, which is the failure W1 exists to correct. What it needs:
+`playwright.staff.config.ts:75` boots an API with a **fixed** `STAFF_EMAILS`
+(`Ops@SchedulePoint.test`), so the harness must also sign up as that address rather than its
+generated per-run one. That is a second onboarding path, not a shot entry, which is why it is filed
+rather than done inside a catalogue-only slice.
