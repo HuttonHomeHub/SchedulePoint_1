@@ -1,5 +1,17 @@
 # @repo/web
 
+## 0.98.2
+
+### Patch Changes
+
+- [#349](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/349) [`9beef18`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/9beef18352af700d6362e7ccd188b006f4cd580c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Documentation only: records the org-less shell rule as ADR-0104 and, as ADR-0105, when a tech-debt
+  row stops standing in for a Feature Spec. No product behaviour changes.
+
+- [#351](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/351) [`fa3b14c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/fa3b14c76aafab334b4c725b81351a8f8af6af6e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Below the `lg` breakpoint, pressing Escape no longer closes and announces the Project Explorer
+  drawer. That drawer is not visible under 1024px — its column is hidden by CSS and the Explorer's
+  real surface there is the off-canvas sheet — so the keypress was writing a collapse to the reader's
+  stored panel preference and announcing a panel closing that was never open.
+
 ## 0.98.1
 
 ### Patch Changes
