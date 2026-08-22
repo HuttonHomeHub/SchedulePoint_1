@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.99.1
+
+### Patch Changes
+
+- [#356](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/356) [`592ef63`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/592ef63289273a9d34738263f13c13495456149c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update Better Auth to 1.6.28 and pin it to patch releases until the 1.7 account-issuer migration is designed.
+
 ## 0.99.0
 
 ### Minor Changes
