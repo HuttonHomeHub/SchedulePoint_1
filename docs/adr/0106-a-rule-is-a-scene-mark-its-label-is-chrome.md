@@ -44,7 +44,16 @@ Checked rather than inherited (ADR-0076; the brief is not evidence).
   (`export-image.ts:42`), and the pills sat at y 24–60. The Today and Data date pills have never
   appeared in an exported PNG or PDF; the export names both in its legend instead. That converts
   into a strong parity claim rather than a second site to change, and the question it raises — what
-  should a deliverable carry? — is filed with the ADR-0103 family (#164/#166/#167).
+  should a deliverable carry? — is `docs/TECH_DEBT.md` **#175**, beside the ADR-0103 family
+  (#164/#166/#167).
+
+  **This line read "is filed with the ADR-0103 family" while no such row existed.** I wrote down
+  where the finding belonged and did not put it there — the ADR-0071 failure (noticing drift and
+  stepping over it leaves the register as wrong as not noticing) inside the ADR that cites
+  ADR-0071, and an ADR-0076 Class 3 claim inside the one that cites that too. Corrected in place
+  rather than quietly, because the wrong version is the instructive artefact, and no gate could
+  have caught it: `check:doc-links` proves that a link resolves, not that a claim about filing is
+  true.
 
 ## Decision
 

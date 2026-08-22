@@ -214,6 +214,24 @@ different canvases, so nothing but this derivation stops them overlapping during
 `paint-interaction.ts`. If that import ever looks like an oddity to be tidied away, the docblock
 must say why it exists — it already does.
 
+> **WITHDRAWN 2026-08-22 by ADR-0106 (`docs/TECH_DEBT.md` #148).** All five of those constants are
+> deleted: the three date labels are DOM in the ruler band now, and the painter draws only the
+> rules. So there is no cross-canvas derivation left to preserve, `layers/today.ts` has no
+> `CURSOR_CHIP_*` to import, and `paint.test.ts:555` is not that assertion any more.
+>
+> Kept rather than cut, because this paragraph is the clearest statement of _why_ it mattered, and
+> its own reasoning is what the replacement rests on: the relationship was cross-canvas and
+> therefore invisible to either file alone. The successor is `render/axis-markers.ts`, which holds
+> the whole cull → clamp → coincidence → overlap decision in **one** module for exactly the reason
+> given here — and whose guards ask what a marker sits over rather than what it sits beside, which
+> is the question this one never asked. The layer table above is stale in the same place
+> (`today.ts … + TODAY_CHIP_H/TOP`) and for the same reason.
+>
+> This is the standing rule in `CLAUDE.md` §19 — _re-verify a spec's PROBLEM statement, not only its
+> design_ — landing on an unbuilt plan: a milestone that fixes something does not go back and edit
+> the plans that depended on it, so the next reader would have carefully preserved an import of
+> symbols that no longer exist.
+
 ### 3.2 `render/render-model.ts` → the four modules it already contains
 
 The test file has drawn one of these boundaries already. The rest fall out of reading the exports:
