@@ -2637,7 +2637,32 @@ demotable budget is zero however cheap a demotable command becomes. #147 has bee
 width problem since it was raised; it is a _labelled_-width problem, and 1646 — the one screen this
 work is judged on — is where both conditions meet.
 
-## 148. The canvas date pills are painted on top of the first two lanes
+## 148. The canvas date pills are painted on top of the first two lanes **(IN PROGRESS — `docs/specs/canvas-axis-markers/`)**
+
+> **Three claims below were checked in August 2026 and two of them are wrong.** They are corrected
+> here in place rather than rewritten, because the wrong version is the more instructive artefact
+> (`docs/RECONCILE.md`: verify the claim; do not trust the document).
+>
+> 1. **The table is ONE pan position, and so is the title.** It reads `view.originY = 0`, which is
+>    the value at no viewport a planner arrives at: `fitToContent` pins `originY = 32`
+>    (`render/viewport.ts:180`, `:196`), `DEFAULT_VIEWPORT` is 40 (`:124`), and `pan()` is unclamped
+>    (`:82-84`). At the arrival viewport it is **Today and Data date** that strike lane 0, not the
+>    cursor chip, and at other pan positions it is other lanes. "The first two lanes" names one
+>    frame of a continuum; the defect is that a **screen-fixed** label is painted on a **scrolling**
+>    surface at all.
+> 2. **The pills are already chrome, so this is not a geometry change.** Their y is a constant, not
+>    a function of `view` — so `screenYOfLane` and everything reading it (hit-testing, dragging,
+>    link routing, the a11y layer) is **not** in the blast radius the deferral paragraph feared.
+>    That paragraph is why this sat for two days.
+> 3. **The export does not carry the defect.** `EXPORT_TOP_BAND = 96` and `drawTitleBand` fills
+>    `palette.ground` opaquely over y 0–96 (`export/render-export-image.ts:153`), painted _after_
+>    `paint()` at `:127` — so the Today and Data date pills have never reached a PNG or a PDF at
+>    all, only the legend. That converts into a strong parity claim for the fix rather than a second
+>    site to change, and the question it raises — should the deliverable carry these marks? — is
+>    filed with the ADR-0103 family (#164/#166/#167), not here.
+>
+> What survives unchanged is the finding itself, which is the third paragraph below: the pills are
+> meticulous about each other and blind to what is underneath.
 
 **Raised 2026-08-20 (Graphite M9), pre-existing since 2026-08-07.** The TSLD paints three date
 pills at the top of the scene — the cursor date chip, the Today pill and the Data date pill — and
@@ -3640,3 +3665,48 @@ immediately found Row 2 losing all nine labels.
 
 Do not read this row as "narrow viewports are broken". Nothing here says they are; it says **nobody
 knows**, which is the point.
+
+## 173. The canvas painter draws every glyph in a typeface the product does not use
+
+**Raised 2026-08-22**, found while measuring for #148 rather than reported.
+
+`LABEL_FONT` (`apps/web/src/features/tsld/render/geometry.ts:254`) is
+
+```
+11px system-ui, -apple-system, 'Segoe UI', sans-serif
+```
+
+and names **Space Grotesk nowhere**. Measured in Chromium, the ruler one pixel above the canvas
+resolves `normal 400 12px/12px "Space Grotesk", ui-sans-serif, system-ui, …`, and
+`apps/web/src/styles/globals.css` carries two real `@font-face` blocks for it (`:55`, `:66`) with
+the stack declared at `:893`.
+
+So every activity name, every date label, every lag chip and every pill on the primary surface — the
+one this product exists to be — is set in whatever `system-ui` resolves to on the reader's machine,
+while the entire rest of the application is set in the face somebody chose. On this container that
+is a difference of about 4 px of width per short label; on a reader's machine it is a different
+typeface, silently.
+
+**It is not a regression and nobody has done anything wrong.** `LABEL_FONT` predates the typeface
+decision; ADR-0097 recorded that the product had never chosen one (`globals.css:278` opened with
+`'Inter'` and there was no `@font-face` anywhere), and when that was fixed the canvas was not in the
+diff, because the canvas resolves nothing from the cascade — it is the same seam ADR-0102 found when
+`resolveTsldPalette` turned out never to have reached the canvas surface scope. **One layer of the
+product opts out of the cascade, so every cascade-level decision has to be applied to it by hand,
+and nothing says so.**
+
+**What actioning it costs, honestly.** `LABEL_FONT` is a fixed string on purpose
+(`render/measure.ts:4`: "a given string always has one width"), and `paint.golden.test.ts` records
+every `ctx.font` write, so changing it re-baselines the golden oracle — the one gate whose docblock
+names thoughtless re-baselining as the ADR-0034 failure. It also changes every label width on the
+canvas, which the ADR-0054 date-label level-of-detail rule and the ADR-0052 lag anchoring both
+consume. That is a measurable, contained epic, not a constant edit.
+
+**A web font also introduces a failure mode the canvas does not have today.** `system-ui` is
+available at the first frame; a `@font-face` may not be, and a canvas does not re-paint when a font
+finishes loading the way DOM text re-flows. Whoever picks this up needs `document.fonts.ready` in
+the paint path, or the first draw of every session is in the fallback face.
+
+**Not scheduled.** The three marks #148 moves to DOM pick up Space Grotesk incidentally, which
+narrows the inconsistency without addressing it; that is a side effect, not a fix, and it is
+recorded so the next reader does not mistake it for one.

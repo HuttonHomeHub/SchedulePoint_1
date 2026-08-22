@@ -29,7 +29,9 @@
     // over less.
     "e2e",
     "e2e-*/**/*",
-    "measure-toolbar",
-    "measure-gantt"
+    // Same rule, same reason: the measurement harnesses were two hand-maintained entries and
+    // a third would have made it a roster again. Verified with `tsc --listFiles` that all
+    // three `measure-*` directories are read.
+    "measure-*/**/*"
   ]
 }
