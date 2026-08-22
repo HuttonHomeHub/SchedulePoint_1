@@ -20,6 +20,7 @@ import {
   type LoeSpanStep,
   type Modifiers,
 } from '../interaction/gesture-machine';
+import { axisMarkers, clampMarkLeft } from '../render/axis-markers';
 import { useCanvasSurface } from '../render/canvas-surface';
 import { cursorReadout } from '../render/cursor-readout';
 import type { GhostBar } from '../render/lenses';
@@ -94,6 +95,7 @@ import {
   zoomToPreset,
 } from '../render/time-scale';
 import { useThemeVersion } from '../render/use-theme-version';
+import { DEFAULT_VIEW_TOGGLES } from '../render/view-toggles';
 import {
   wbsBandBars,
   wbsBandHitTest,
@@ -637,6 +639,65 @@ function syncRulerRow(
 }
 
 /**
+ * The axis-marker width cache's cap. Reached only by the transient row, whose labels are unbounded;
+ * past it the map clears wholesale rather than evicting, because an LRU would cost more code than
+ * the 0.041 ms it saves (M0-T7) and the three persistent labels are re-measured on the next frame
+ * either way.
+ */
+const AXIS_MARKER_WIDTH_CACHE_MAX = 256;
+
+function rememberWidth(cache: Map<string, number>, label: string, width: number): void {
+  if (cache.size >= AXIS_MARKER_WIDTH_CACHE_MAX) cache.clear();
+  cache.set(label, width);
+}
+
+/**
+ * The axis markers' shared shape, and their two treatments.
+ *
+ * Written as literal class strings so Tailwind's scanner sees them — these nodes are created with
+ * `document.createElement` from the rAF loop, so there is no JSX for the scanner to read.
+ *
+ * The hues come from the tokens the painter's own pills used (`render/palette.ts:103`, `:112`), so
+ * the marks keep the marker-channel vocabulary they have always had; because the ruler sits inside
+ * `<Surface tone="canvas">` (`TsldPanel.tsx:2478`) these resolve the DIAGRAM's family rather than
+ * the page's, with no work — the seam ADR-0102 found the painter had never crossed. Both pairs are
+ * gated by `token-contrast.test.ts`: each fill at 3:1 against the ruler ground (1.4.11) and each
+ * word at 4.5:1 on its own fill (1.4.3).
+ *
+ * `h-3.5` matches the ruler's own rows — the proven height for 12 px text in this band, rather than
+ * a number chosen to fit — and `inline-flex items-center` centres the word in it. Deliberately no
+ * arbitrary values: the first version used `leading-[14px]` and `px-[3px]`, which pushed
+ * `token-architecture.test.ts`'s sizing ratchet from 18 to 20 and tripped its "no arbitrary TYPE
+ * sizes at all" assertion. The ratchet is right and the class was lazy; `items-center` and `px-1`
+ * say the same thing in the ramp's own vocabulary.
+ */
+const AXIS_MARKER_CLASS = 'inline-flex h-3.5 items-center rounded-sm px-1 text-xs';
+const AXIS_MARKER_DATA_DATE_CLASS = `${AXIS_MARKER_CLASS} bg-foreground text-background`;
+const AXIS_MARKER_TODAY_CLASS = `${AXIS_MARKER_CLASS} bg-destructive text-destructive-foreground`;
+/**
+ * The transient cursor readout's treatment: the canvas chip's own colours — the bar fill with a
+ * ring-hued outline — because it is a **live, temporary** mark and must not read as one of the two
+ * standing facts beside it. The ring is what said so on the canvas (`docs/DESIGN_SYSTEM.md`'s
+ * marker-channel table gives the ring hue to the cursor guideline for exactly this reason) and is
+ * what says so here.
+ *
+ * **`bg-primary`, and this shipped once as `bg-card`, which three independent reviews blocked.**
+ * `--card` and `--card-foreground` are ADR-0097 **resets**: deliberately absent from the
+ * `[data-surface='canvas']` rebind, so inside `<Surface tone="canvas">` they resolve the PAGE's
+ * white card rather than anything the diagram's family says — measured **1.13:1** against the ruler
+ * ground, a mark whose fill is invisible and whose whole legibility rides on a 1 px ring. The old
+ * canvas chip used `palette.bar` (= `--primary`, `render/palette.ts`), which IS rebound here, so
+ * this is what the docblock above always claimed and what the code now does.
+ *
+ * It is also the second recorded instance of one defect: `docs/TECH_DEBT.md` **#162** logs the same
+ * mistake in `TsldLegend.tsx`, one file over, raised the day before this epic began. The two
+ * persistent treatments picked rebound tokens correctly and the third did not — the "one correct
+ * pattern applied to a control and not its neighbour" shape this register has now recorded six
+ * times, occurring inside the epic whose own ADR quotes it.
+ */
+const AXIS_MARKER_CURSOR_CLASS = `${AXIS_MARKER_CLASS} bg-primary text-primary-foreground ring-ring ring-1`;
+
+/**
  * The Canvas 2D TSLD painter (ADR-0026). Draws the plan's computed schedule from the pure
  * render model, with cursor-anchored wheel zoom and drag-to-pan; the canvas is
  * **`aria-hidden`** (assistive tech uses the parallel representation in {@link TsldPanel}).
@@ -939,6 +1000,37 @@ export function TsldCanvas({
     days: HTMLSpanElement[];
   }>({ years: [], months: [], days: [] });
   const rulerSyncRef = useRef({ pxPerDay: 0, originX: 0, width: 0 });
+  // The AXIS-MARKER band (#148): two rows inside the same 40 px ruler element, so the marks that
+  // name the x axis stop being painted over the bars and cost the diagram nothing. Row B is
+  // persistent (`Data date`, `Today`) and Row A transient (the cursor readout, M3).
+  //
+  // **Its dirty rule is its own, deliberately, and not `rulerSyncRef`'s.** That one compares
+  // `pxPerDay` / `originX` / `width`, which is exactly right for ticks and wrong for markers: a
+  // marker's CONTENT changes on a `useNow` tick (ADR-0056's `todayFraction` moves Today through the
+  // day with the viewport perfectly still) and on a toggle, neither of which touches the viewport.
+  // Inheriting the ticks' early-return would starve the markers on precisely the frames they exist
+  // for.
+  const axisMarkerRowRef = useRef<HTMLDivElement>(null);
+  const axisMarkerTransientRowRef = useRef<HTMLDivElement>(null);
+  const axisMarkerPoolRef = useRef<HTMLSpanElement[]>([]);
+  const axisMarkerSyncRef = useRef('');
+  // Label → rendered width. `getBoundingClientRect` on a ruler-resident span is a forced synchronous
+  // layout; measured at 0.041 ms cold against 0.0015 ms warm (M0-T7), i.e. 27× — so it is cached by
+  // label string and read ONLY inside the rAF frame, never in a pointer handler (ADR-0026 D3). The
+  // persistent row has exactly three possible labels, so it is cold three times per session.
+  //
+  // **Bounded, unlike the precedent it is modelled on.** `render/measure.ts`'s `createMeasureCache`
+  // documents itself as "bounded by the plan's label count", which is a finite set; this cache is
+  // shared with the TRANSIENT row, whose labels are not — a create drag mints a fresh
+  // `12 Sep – 30 Sep · 19d` per day the drag crosses, so it could only ever grow for the life of the
+  // mounted canvas. The cost is measured in kilobytes rather than megabytes, which is why this is a
+  // cap and not a strategy: past the limit it clears wholesale and the next three persistent labels
+  // pay 0.041 ms each to come back. A frontend-performance review found this and recommended
+  // filing it; capping it is cheaper than the register row.
+  const axisMarkerWidthsRef = useRef(new Map<string, number>());
+  const axisMarkerCursorNodeRef = useRef<HTMLSpanElement | null>(null);
+  const axisMarkerCursorLabelRef = useRef<string | null>(null);
+  const cursorAnchorRef = useRef(0);
   // Coarse active-preset feedback: report only when the zoom STOP changes, never per frame.
   const lastStopRef = useRef<ZoomLevel | null>(null);
   const onZoomStopChangeRef = useRef(onZoomStopChange);
@@ -1420,6 +1512,127 @@ export function TsldCanvas({
       syncRulerRow(days, pools.days, model.days, false);
     };
 
+    const syncAxisMarkers = (): void => {
+      const row = axisMarkerRowRef.current;
+      if (!row) return;
+      // ONE viewport snapshot per frame, the same one the painter used — two reads a few statements
+      // apart during a pan give two viewports and the mark drifts a pixel from its own rule.
+      const v = viewRef.current;
+      const size = sizeRef.current;
+      const scene = sceneRef.current;
+      const todayToggle = scene.view?.today ?? DEFAULT_VIEW_TOGGLES.today;
+      const key = [
+        v.pxPerDay,
+        v.originX,
+        size.width,
+        scene.todayOffset,
+        scene.todayFraction,
+        scene.dataDateLine,
+        todayToggle,
+      ].join('|');
+      if (key === axisMarkerSyncRef.current) return;
+      axisMarkerSyncRef.current = key;
+
+      const widths = axisMarkerWidthsRef.current;
+      const model = axisMarkers(
+        v,
+        size,
+        {
+          dataDateLine: scene.dataDateLine,
+          todayOffset: scene.todayOffset,
+          todayFraction: scene.todayFraction,
+          todayToggle,
+        },
+        (label) => {
+          const cached = widths.get(label);
+          if (cached !== undefined) return cached;
+          const probe = document.createElement('span');
+          probe.className = AXIS_MARKER_CLASS;
+          probe.style.position = 'absolute';
+          probe.style.visibility = 'hidden';
+          probe.textContent = label;
+          row.appendChild(probe);
+          const measured = probe.getBoundingClientRect().width;
+          probe.remove();
+          rememberWidth(widths, label, measured);
+          return measured;
+        },
+      );
+
+      const pool = axisMarkerPoolRef.current;
+      for (let i = 0; i < model.marks.length; i += 1) {
+        const mark = model.marks[i]!;
+        let node = pool[i];
+        if (!node) {
+          node = document.createElement('span');
+          node.style.position = 'absolute';
+          node.style.left = '0';
+          node.style.top = '0';
+          node.style.whiteSpace = 'nowrap';
+          row.appendChild(node);
+          pool[i] = node;
+        }
+        // A stable hook for the browser gate, which locates markers by attribute rather than by
+        // their copy (the ADR-0091 M7 rule, after three journeys broke on a label change).
+        node.dataset.axisMarker = mark.kind;
+        node.className =
+          mark.kind === 'today' ? AXIS_MARKER_TODAY_CLASS : AXIS_MARKER_DATA_DATE_CLASS;
+        node.textContent = mark.label;
+        node.style.transform = `translateX(${String(mark.left ?? mark.x)}px)`;
+        node.style.display = '';
+      }
+      for (let i = model.marks.length; i < pool.length; i += 1) pool[i]!.style.display = 'none';
+    };
+
+    /**
+     * The TRANSIENT marker row: the cursor date readout (ADR-0054 §2), one node, above the
+     * persistent row.
+     *
+     * **The calm-band invariant is what the two rows are for.** The persistent row is a function of
+     * `(viewport, plan)` and this one is a function of the pointer; the input sets are disjoint, so
+     * a persistent label cannot move because the mouse did. `axisMarkers()` takes no pointer
+     * argument and `cursorReadout()` takes no marker argument, which is that invariant expressed as
+     * two signatures rather than as a paragraph (`axis-markers.structural.test.ts`).
+     *
+     * Its own early-return is on the LABEL, not the viewport: the readout's whole job is to change
+     * while the viewport stands still.
+     */
+    const syncCursorMarker = (label: string | null): void => {
+      if (label === axisMarkerCursorLabelRef.current) return;
+      axisMarkerCursorLabelRef.current = label;
+      const row = axisMarkerTransientRowRef.current;
+      if (!row) return;
+      let node = axisMarkerCursorNodeRef.current;
+      if (label === null) {
+        if (node) node.style.display = 'none';
+        return;
+      }
+      if (!node) {
+        node = document.createElement('span');
+        node.style.position = 'absolute';
+        node.style.left = '0';
+        node.style.top = '0';
+        node.style.whiteSpace = 'nowrap';
+        node.dataset.axisMarker = 'cursor';
+        row.appendChild(node);
+        axisMarkerCursorNodeRef.current = node;
+      }
+      node.className = AXIS_MARKER_CURSOR_CLASS;
+      node.textContent = label;
+      node.style.display = '';
+      // Measured and clamped by the SAME rule the persistent marks use, so the two rows cannot
+      // disagree about where the surface ends. The width memo is shared for the same reason — and
+      // the cursor's labels are unbounded (a create drag mints `12 Sep – 30 Sep · 19d`), so this is
+      // where the cache actually earns its 0.041 ms → 0.0015 ms (M0-T7).
+      const widths = axisMarkerWidthsRef.current;
+      let width = widths.get(label);
+      if (width === undefined) {
+        width = node.getBoundingClientRect().width;
+        rememberWidth(widths, label, width);
+      }
+      node.style.transform = `translateX(${String(clampMarkLeft(cursorAnchorRef.current, width, sizeRef.current.width))}px)`;
+    };
+
     const frame = (): void => {
       raf = requestAnimationFrame(frame);
       // Skip all paint/measure work while the surface is hidden (e.g. the below-`md` Activities pane
@@ -1457,6 +1670,7 @@ export function TsldCanvas({
       // Keep the date ruler pixel-synced to the same viewport snapshot the painter just used, so the
       // labels and the bars can never disagree. Early-returns unless the viewport actually moved.
       syncRuler();
+      syncAxisMarkers();
       const ictx = interactionLayerMounted ? interactionCanvasRef.current?.getContext('2d') : null;
       if (ictx && interactionDirtyRef.current) {
         const p = pendingRef.current;
@@ -1517,6 +1731,8 @@ export function TsldCanvas({
               : null,
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
+        cursorAnchorRef.current = overlay.cursor?.x ?? 0;
+        syncCursorMarker(overlay.cursor?.label ?? null);
         interactionDirtyRef.current = false;
       }
       // Layer 3 — the resource strip (Stage E, ADR-0049). Painted from the SAME `viewRef` snapshot the
@@ -1881,6 +2097,33 @@ export function TsldCanvas({
           className="text-foreground/90 absolute inset-x-0 top-3 h-3.5 font-medium"
         />
         <div ref={rulerDaysRef} className="absolute inset-x-0 bottom-0 h-3.5" />
+        {/* The AXIS-MARKER rows (#148). Two 14 px rows INSIDE the ruler, so a marker costs the
+            diagram nothing and inherits the band's `aria-hidden` — the canvas already carries the
+            parallel a11y listbox, and a marker that announced itself would be a second voice for a
+            fact the listbox already states.
+
+            Their y is an M0-T3 output, not a spec constant. The band's three rows measure y 0–12
+            (years), 12–26 (months) and 26–40 (days); the year and month labels are pinned at x = 0
+            and are the one ruler content NOT inferable from a neighbour, while a day number is a
+            repeating scale either neighbour gives you. And a left-clamped marker is the common case
+            rather than the edge case — `fitToContent` frames from the plan start, so the data date's
+            mark sits at the left edge on arrival, on every plan. So the rows sit at 12–26 and 26–40:
+            the YEAR row is never occluded, and the month row only by the transient cursor row, at
+            the pointer's x, for as long as the pointer is there. The alternative considered and
+            rejected was suppressing a sticky label a marker would overprint (extending
+            `dropOverprintedSticky`), which trades the harder problem for the easier one.
+
+            Later siblings, so they paint over the tick rows without a z-index. */}
+        <div
+          ref={axisMarkerTransientRowRef}
+          data-testid="tsld-axis-markers-transient"
+          className="absolute inset-x-0 top-3 h-3.5"
+        />
+        <div
+          ref={axisMarkerRowRef}
+          data-testid="tsld-axis-markers"
+          className="absolute inset-x-0 bottom-0 h-3.5"
+        />
       </div>
       {/* Layer 4 — the pinned WBS band (ADR-0063): an aria-hidden sibling canvas between the ruler
           and the scene. Unlike the resource strip it DOES take pointer events, because it is
@@ -2013,11 +2256,19 @@ export function TsldCanvas({
           // guideline must follow every move. It is the CHEAP layer — a clear plus a rule, a chip
           // and (when a gesture runs) one ghost — never the bar/link scene. Flag-off this whole
           // block is dead, so the idle repaint cadence is byte-for-byte today's.
-          // Gated on `editing` as well as the flag: the interaction canvas only exists while
-          // editing (`ictx` is null otherwise), so on a read-only surface — a Viewer, or the
-          // ADR-0051 guest share view — this would force a `getBoundingClientRect()` on every
-          // raw pointer move for a chip that can never be painted. Per-EVENT layout reads are
-          // exactly what ADR-0026 D3 avoids.
+          // Gated on `editing` as well as the flag, so on a read-only surface — a Viewer, or the
+          // ADR-0051 guest share view — this does not force a `getBoundingClientRect()` on every
+          // raw pointer move for a readout that is never shown. Per-EVENT layout reads are exactly
+          // what ADR-0026 D3 avoids.
+          //
+          // **The reason this comment used to give was false, and had been for a while.** It said
+          // "the interaction canvas only exists while editing (`ictx` is null otherwise)" —
+          // ADR-0080 changed that at `:836`, where `interactionLayerMounted` became
+          // `editing || CANVAS_MULTI_SELECT_ENABLED` so a Viewer could see a marquee sweep. The
+          // gate's EFFECT was right throughout (a reader without the pen has never seen the cursor
+          // readout, because THIS line is what withholds it); only its stated cause was stale, and
+          // a stale cause is what a later edit reasons from. Found while moving the readout into
+          // the ruler for #148, and repaired rather than stepped over.
           if (CANVAS_LIVE_FEEDBACK_ENABLED && editing) {
             cursorPointRef.current = localPoint(e);
             interactionDirtyRef.current = true;

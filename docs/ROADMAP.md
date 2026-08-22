@@ -529,6 +529,22 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **No date label covers a bar** — **shipped** (ADR-0106, 2026-08-22). The TSLD painted its three
+  date marks — `Data date`, `Today` and the cursor readout — as pills at a **fixed screen y** on the
+  scene canvas, which is chrome drawn onto a surface that scrolls: a label printed over whichever
+  lane the planner had panned to the top, and at 1646 on the flagship plan the words `Data date`
+  print across the first activity's name. All three are now in the ruler band, on two rows, where a
+  date mark belongs — the ruler is what the x axis means. The vertical rules stay on the diagram,
+  because a full-height line means something at every lane and a date label means nothing at any of
+  them. The band was already 40 px, so the diagram gained no chrome and lost none.
+  What the register row asked for was a design pass on height; what it needed was a design pass on
+  the ruler's own content. The rows sit where they do because the year label is pinned at x = 0 and
+  is the one thing in that band a reader cannot reconstruct from a neighbour — and a left-clamped
+  marker is the common case rather than the edge case, since every plan opens framed from its start.
+  When the data date and today are too close for both words, `Data date` keeps its label and `Today`
+  keeps its dashed rule, on a measurement rather than a preference: the two collide only within half
+  a day at the Day preset.
+
 - **The shell no longer offers navigation that cannot navigate** — **shipped** (ADR-0104,
   2026-08-22). Three of the thirteen authenticated routes are not organisation-scoped —
   `/onboarding`, `/account`, `/me/activity` — and the app shell rendered the Project Explorer on all

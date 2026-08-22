@@ -120,3 +120,58 @@ describe('cursorReadout — the day reported is the day committed', () => {
     expect(read(linking, { x: 200, y: 60 })?.label).toBeTruthy();
   });
 });
+
+describe('every readout names its own month (#148 M4)', () => {
+  /**
+   * **This is load-bearing for where the transient marker row sits**, which is why it is a test and
+   * not a paragraph.
+   *
+   * The row occupies y 12–26 of the ruler, i.e. the month row, so a readout clamped near x = 0 can
+   * cover the sticky month-in-view label pinned there (`render/time-scale.ts:213`). A UX review
+   * called that a gap by the epic's own reasoning: the year label gets absolute protection because
+   * it is "not inferable from a neighbour", and the sticky month label has the same property.
+   *
+   * The answer is that the covering label carries the covered fact. `formatCanvasDate` renders
+   * `D MMM` (`render/geometry.ts:202-214`), so **every** shape the readout can take — the point
+   * form, both qualified forms, and the create range — names its month. The mark that occludes the
+   * month label is itself a month label, for the one column the reader is pointing at.
+   *
+   * The alternative the review proposed — biasing the transient clamp to start after the sticky
+   * label — was rejected on a stronger ground than cost: it would move the readout away from the
+   * guideline it names, so a planner reading a date at the left edge would be reading it off the
+   * wrong column.
+   *
+   * If a future edit shortens the format to a bare day number, this fails, and it should.
+   */
+  const MONTHS = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b/;
+
+  it.each([
+    ['idle hover', { kind: 'idle' } satisfies GestureState, { x: 300, y: 100 }],
+    [
+      'repositioning',
+      {
+        kind: 'repositioning',
+        activityId: 'a',
+        grabDay: 3,
+        grabX: 0,
+        grabY: 0,
+        movedPastThreshold: true,
+        originStartDay: 3,
+        spanDays: 4,
+        laneIndex: 0,
+        currentStartDay: 9,
+        currentLaneIndex: 0,
+      } satisfies GestureState,
+      null,
+    ],
+    [
+      'creating',
+      { kind: 'creating', originDay: 2, currentDay: 9, laneIndex: 0 } satisfies GestureState,
+      null,
+    ],
+  ])('%s', (_name, state, point) => {
+    const readout = cursorReadout({ state, point, view: VIEW, dataDate: DATA_DATE });
+    expect(readout, 'this gesture should produce a readout').not.toBeNull();
+    expect(readout?.label).toMatch(MONTHS);
+  });
+});

@@ -55,7 +55,21 @@ function sitesUsingRawResetFills(): string[] {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
       else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
-        if (/\bbg-(card|popover)\b/.test(readFileSync(full, 'utf8'))) {
+        // **Comments are stripped, and this list was re-derived after adding it** (it did not
+        // change: no ALLOWED entry was on the list only because of prose). The raw-text version
+        // counted a docblock EXPLAINING a fill choice as making one — so writing down *why* a
+        // component must not use `bg-card` pushed this gate towards failing, which is a gate that
+        // penalises its own documentation and eventually gets worked around. Found the day it
+        // happened: #148's cursor-marker docblock records that treatment shipping as `bg-card` and
+        // why it was changed, and that sentence turned this suite red.
+        //
+        // Fourth occurrence of a scan matching prose here. `token-architecture.test.ts:452-457`
+        // records the other three and fixed itself the same way; this file is the one that had not
+        // been told.
+        const text = readFileSync(full, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/^\s*\/\/.*$/gm, '');
+        if (/\bbg-(card|popover)\b/.test(text)) {
           found.add(full.slice(root.length + 1));
         }
       }

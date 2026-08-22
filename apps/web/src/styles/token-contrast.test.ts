@@ -363,6 +363,111 @@ describe('the minimap rectangle frame is perceivable on everything it crosses', 
   });
 });
 
+/**
+ * **The two axis markers against the ruler band they now sit in** (`docs/TECH_DEBT.md` #148,
+ * `docs/specs/canvas-axis-markers/`).
+ *
+ * The `Data date` and `Today` labels moved out of the scene and into the ruler, which changes the
+ * ground under them and therefore which pairs have to hold. **M0-T6 established, by reading this
+ * file rather than assuming, that none of them was asserted anywhere:**
+ *
+ * - the canvas sweep at `:250-257` measures `--primary` / `--warning` / `--destructive` against
+ *   **`--background`**, and the ruler's ground is `bg-canvas`, i.e. **`--canvas`** — a different
+ *   token;
+ * - `PLOT_GROUNDS` above, the list that does name `--canvas`, contains the plot pack and not the
+ *   marker fills;
+ * - the two **ink-on-fill** pairs a marker needs are text, so they answer to 1.4.3's 4.5:1 rather
+ *   than 1.4.11's 3:1, and neither appears in this file at all. The word `ruler` did not either.
+ *
+ * The pairs land **before** the markup and are verified red — the `--canvas-grid-month` precedent
+ * directly below, which shipped at 2.08:1 behind a green suite *and* a paragraph saying that could
+ * not happen. Writing the value first and the gate after is the recorded cause.
+ *
+ * A marker is a solid fill carrying a word, so it is judged as text on its own fill and as a
+ * component boundary against the band. It is **not** a case where colour is the only channel: each
+ * marker names itself in words and stands beside a rule whose weight and dash pattern already
+ * distinguish it (ADR-0056), so 1.4.1 is satisfied independently.
+ */
+describe('the axis markers are legible in the ruler band', () => {
+  const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+
+  const MARKERS: ReadonlyArray<readonly [name: string, fill: string, ink: string]> = [
+    ['Data date', '--foreground', '--background'],
+    ['Today', '--destructive', '--destructive-foreground'],
+    // **The transient cursor readout, named here because leaving it out was the epic's own defect.**
+    // The first version of this block covered the two persistent marks and stopped, on the reasoning
+    // that they were the ones the register row was about — and the third mark, added by the same
+    // diff, shipped painted with `--card`/`--card-foreground`. Those are ADR-0097 RESETS, absent
+    // from the canvas rebind, so they resolved the page's white card at **1.13:1** against the ruler
+    // ground while every gate stayed green. Three independent reviews caught it; this pair is what
+    // stops the fourth marker doing it again, since a treatment nobody asserts is a treatment
+    // nobody can be wrong about.
+    ['the cursor readout', '--primary', '--primary-foreground'],
+  ];
+
+  // `--canvas` and not `--background`: inside this scope they resolve to the same value
+  // (`--plot-background: var(--canvas)`), and naming the one the ruler element actually carries
+  // (`bg-canvas`, `TsldCanvas.tsx:1870`) is what keeps this pair readable if that ever stops being
+  // true — which is precisely the equivalence ADR-0102 found had quietly stopped holding once the
+  // light theme gave the diagram a ground of its own.
+  it.each(MARKERS)('%s: its fill is a perceivable shape on the ruler ground', (_name, fill) => {
+    // WCAG 1.4.11: the marker is a UI component whose boundary against the band it sits in has to
+    // be findable, which is what makes it read as a marker rather than as a word floating in the
+    // ruler.
+    const value = ratio(tokens, '--canvas', fill);
+    expect(value, `${fill} on --canvas is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(MARKERS)('%s: its word is legible on its own fill', (_name, fill, ink) => {
+    // WCAG 1.4.3 — this is text, and small text, so 4.5:1 rather than 3:1.
+    const value = ratio(tokens, fill, ink);
+    expect(value, `${ink} on ${fill} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  /**
+   * **The two fills against each other are REPORTED, not asserted — measured at 1.48:1** (`--foreground`
+   * oklch(0.321 0 0) against `--destructive` oklch(0.439 0.175 27)), and the reason is written down so
+   * the next reader does not read the missing assertion as an oversight and "fix" it. That is this
+   * file's own established pattern for a pair where a ratio is the wrong instrument (the day gridline
+   * tier and the non-working hatch above).
+   *
+   * A 1.5:1 floor was drafted here first, by analogy with `CRITICALITY_PAIRS`, and measuring showed
+   * the analogy is false. Criticality is carried by fill **alone** — nothing is written on a bar to
+   * say it is critical — so on those pairs the ratio *is* the channel and 1.5:1 is the whole
+   * protection. A marker carries its own word (`Data date`, `Today`, `Data date · today`) and stands
+   * beside a rule whose weight and dash pattern already distinguish it (ADR-0056), so WCAG 1.4.1 is
+   * satisfied by two channels that are not colour. No success criterion requires two adjacent
+   * components to differ in luminance from **each other**; the criteria that apply are each fill
+   * against the band (1.4.11, asserted above) and each word on its own fill (1.4.3, asserted above),
+   * and both hold.
+   *
+   * The honest residual: at 1.48:1 the two fills are close in **lightness** and differ mainly in
+   * **hue**, so a reader with a red-green deficiency distinguishes them by the word rather than at a
+   * glance. Raising it would mean re-valuing `--foreground` or `--destructive`, two of the most
+   * widely-consumed tokens in the product, to separate one pair in one band — which is a worse trade
+   * than the one being made here. `axis-markers.test.ts` carries the assertion that actually protects
+   * the reader: the two marks never render the same word.
+   */
+  it("the cursor readout's RING is what bounds it, and clears 3:1 on the ruler ground", () => {
+    // Its outline is load-bearing in a way the two persistent marks' are not: they are solid fills
+    // on a light band, while this one is deliberately the canvas chip's own treatment — a fill plus
+    // a ring-hued 1 px outline — because it is a live, temporary mark that must not read as one of
+    // the two standing facts beside it. `--ring` is the marker-channel table's transient hue
+    // (`docs/DESIGN_SYSTEM.md`), the same channel the cursor GUIDELINE on the canvas uses, so a
+    // planner meets one vocabulary rather than two.
+    const value = ratio(tokens, '--canvas', '--ring');
+    expect(
+      value,
+      `the cursor readout's ring is ${fmtRatio(value)} on the ruler ground`,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it('reports the two fills against each other, which is not a criterion but is worth knowing', () => {
+    const value = ratio(tokens, '--foreground', '--destructive');
+    expect(value, `the two marker fills differ by ${fmtRatio(value)}`).toBeGreaterThan(1);
+  });
+});
+
 describe('the diagram grid is readable on both of its grounds', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 

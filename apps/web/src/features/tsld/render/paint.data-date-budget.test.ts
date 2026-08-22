@@ -162,15 +162,23 @@ describe('data-date line — draw-budget gate at 2,000 activities (spec S6)', ()
     expect(deltaAt2000).toBeGreaterThan(0);
     expect(deltaAt2000).toBe(deltaAt200);
     expect(deltaAt2000).toBe(deltaAt1);
-    // …and the constant is small: one rule (setLineDash + beginPath + moveTo + lineTo + stroke)
-    // plus one pill (measureText + fillRect + fillText) — single digits, not "small-ish".
+    // …and the constant is small: one rule — setLineDash + beginPath + moveTo + lineTo + stroke.
+    // It got SMALLER at #148 M2, when the pill (measureText + fillRect + fillText) left the painter
+    // for the ruler's DOM. The purpose of this gate is unchanged and is the sentence above: the
+    // layer's cost is constant in the plan size. Only the constant moved.
     expect(deltaAt2000).toBeLessThanOrEqual(10);
   });
 
-  it('costs at most ONE measureText per frame (the pill), never one per bar', () => {
+  it('costs NO text work at all on the canvas any more (#148 M2)', () => {
+    // This case used to allow exactly one `measureText` and require exactly one `fillText` — the
+    // pill. Both are now zero, which is a stronger claim than the one it replaces: the status layer
+    // reaches for no text API at all, so it cannot acquire a per-bar text cost by accident. What
+    // the DOM markers cost instead is measured rather than assumed — 0.041 ms per COLD width read
+    // and 0.0015 ms warm, cached by label, three labels per session
+    // (`docs/specs/canvas-axis-markers/m0-measurements.md` M0-T7).
     const off = paint(false, COUNT).calls;
     const on = paint(true, COUNT).calls;
-    expect(on.measureText - off.measureText).toBeLessThanOrEqual(1);
-    expect(on.fillText - off.fillText).toBe(1);
+    expect(on.measureText - off.measureText).toBe(0);
+    expect(on.fillText - off.fillText).toBe(0);
   });
 });

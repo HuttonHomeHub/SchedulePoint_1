@@ -548,6 +548,24 @@ jobs:
       - name: Web end-to-end tests (minimap)
         run: pnpm --filter @repo/web test:e2e:minimap
 
+      # The axis-markers journey (playwright.axis-markers.config.ts, TECH_DEBT #148 — lands with
+      # the first user-facing milestone, ADR-0081). No flags to pin: the epic ships without a VITE_
+      # flag, so this runs the default bundle, which IS the shipped surface.
+      #
+      # It carries the guard that replaces two the epic deletes, and the replacement is the point.
+      # For a year `paint.test.ts` asserted that the Today pill's row cleared the cursor chip's and
+      # that the Data date pill's cleared Today's — carefully, correctly, and about the wrong
+      # subject. BOTH asked whether the pills collided with EACH OTHER; nothing asked what was
+      # underneath them, and a bar occupies y 5–23 of a lane starting wherever the planner last
+      # panned to. No unit test here could have asked: it is a question about two elements in a real
+      # layout, and jsdom has none. So this asserts that no visible marker's rect intersects the
+      # scene canvas's — at two pan positions, at two zoom presets, and with and without the pen —
+      # alongside "at least one marker is visible", so a green run can never mean there are no
+      # markers. Its script omits --pass-with-no-tests: with no flag to skip on, "no tests ran"
+      # could only mean a broken testDir. Runs after the prior suites tear down.
+      - name: Web end-to-end tests (axis markers)
+        run: pnpm --filter @repo/web test:e2e:axis-markers
+
       # The exported-diagram journey (playwright.export.config.ts, TECH_DEBT #164 W3-M2). It
       # decodes the REAL downloaded PNG and asserts computed pixel properties, and it is the only
       # instrument here that can: every export unit suite runs in jsdom, where getComputedStyle

@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1052 web
-> source files with 37 Playwright suites beside the base journey, and
-> 105 ADRs.
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1056 web
+> source files with 38 Playwright suites beside the base journey, and
+> 106 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2909,6 +2909,69 @@ progress` off the command surface because **an object action belongs on the obje
   or a real subject request — because an unconditioned `M` stays exactly one priority below whatever
   is being done.
 
+- **ADR-0106** _(Accepted; M0–M4 landed 2026-08-22)_ — A rule is a scene mark; its label is
+  chrome. The TSLD painted three date marks — the cursor readout, `Today` and `Data date` — as pills
+  at a **fixed screen y** on the scene canvas, so a label printed over whichever lane the planner had
+  panned to the top; at 1646 on the flagship plan the words `Data date` print across the first
+  activity's name. What makes it an ADR rather than a constant is what the code was careful about:
+  each row constant was **derived** from the row above with a docblock about not "silently
+  reintroducing the collision", and `paint.test.ts` asserted both derivations — **and both guards
+  asked whether the pills collided with EACH OTHER. Nothing ever asked what was underneath them.**
+  The labels move into the existing 40 px ruler as DOM, on two rows (transient y 12–26, persistent
+  26–40); the rules stay on the canvas, because a full-height vertical means something at every lane
+  and a date label means nothing at any of them. `RULER_HEIGHT` and `sceneTopOffset` are untouched,
+  so the diagram gains no chrome and loses none.
+  **Checking the register row changed the work three times.** Its table and its title describe ONE
+  pan position (`fitToContent` pins `originY = 32`, `pan()` is unclamped), so "the first two lanes"
+  is one frame of a continuum and any criterion has to hold for an arbitrary `originY`; the pills
+  were **already chrome** by behaviour, so `screenYOfLane`'s many consumers were never in the blast
+  radius the row's deferral paragraph feared — which is why it sat for two days; and the **export
+  never carried the defect at all** (`drawTitleBand` fills the top 96 px opaquely, so these pills
+  have never reached a PNG), which turns parity into a structural claim and files the real question
+  with #164/#166/#167.
+  **The row geometry is an output of measurement, not a spec constant.** The design pass proposed y
+  4–20 / 22–38; photographed occupancy put the band's rows at 0–12 / 12–26 / 25–39, so those would
+  have covered the year label — pinned at x = 0, one per view, the only ruler content a reader
+  cannot reconstruct from a neighbour — and a left-clamped marker is the **common** case, since
+  `fitToContent` frames from the plan start. The rejected fallback (extend `dropOverprintedSticky`
+  to suppress a sticky label a marker overprints) trades the harder problem for the easier one.
+  **On overlap `Data date` keeps its word and `Today` loses its**, on numbers rather than taste: the
+  two collide within 0.5 days at Day, 1.1 at Week, 3.4 at Month, 13.5 at Quarter and 40.5 at Year, so
+  the escalation trigger written before the measurement does not fire — and the accepted cost is
+  stated, that at the two overview presets the word is often withheld, where the marks are one
+  position anyway and Today keeps a dashed rule that is a channel in its own right.
+  **The two guards are replaced by two that look outward**: a unit case pinning both rows inside the
+  band and clear of the year row, and a browser case asserting no visible marker's rect intersects
+  the scene canvas's — at two pan positions, two presets, and with and without the pen, alongside "at
+  least one marker is visible" so a green run cannot mean there are none. The second **could not have
+  been written before**: it is a question about two elements in a real layout and jsdom has none, so
+  the old guards were the strongest thing a unit test could say and were about the wrong subject for
+  a year. The golden oracle's first re-baseline since ADR-0078 S1 was audited line by line against a
+  written list rather than taken with `-u` — exactly the 16 pill lines and two totals, nothing added,
+  re-verified red. **The CPM engine is not imported and no migration runs.** Six things were
+  corrected on the way, each by running something rather than reading: a stale typeface risk note
+  inherited from ADR-0097 (the product HAS decided one — Space Grotesk — which also exposes
+  TECH_DEBT #173, that the canvas painter alone does not use it); a measurement harness that measured
+  the **bars**, caught by its own control; the same harness then finding **nothing at all** because
+  it scanned each pill's text baseline row; a journey label that was wrong about which audience it
+  covered (`recalculate()` ends in a reload, which drops the pen); a 1.5:1 contrast floor between the
+  two fills drafted and withdrawn on measurement at 1.48:1, with the reason written down; and a
+  `leading-[14px]` that tripped the sizing ratchet.
+  **The M4 gate pass found a seventh, and all three blocking reviews reached it separately.** The
+  transient readout shipped painted with `bg-card`/`text-card-foreground` — ADR-0097 **resets**,
+  absent from the canvas rebind, so they resolve the page's white card at **1.13:1** against the
+  ruler ground, under a docblock claiming it used the bar colour (which the old chip did). That is
+  `docs/TECH_DEBT.md` #162 repeated one file over four days later, in the one treatment of three
+  the epic's own new contrast block did not cover — the shape the ADR quotes about the guards it
+  deletes, occurring inside it. A second finding was **answered rather than fixed**, and the answer
+  is better than the proposed remedy: the transient row can cover the ruler's sticky month label,
+  and biasing its clamp would move the readout off the guideline it names, whereas
+  `formatCanvasDate` renders `D MMM` so **the covering label carries the covered fact** — now a
+  test rather than a paragraph. The pass also found a defect in a **gate**:
+  `reset-fills.structural.test.ts` scanned raw text, so the docblock explaining why this treatment
+  must not use `bg-card` counted as using it — the fourth scan-matching-prose in this repository,
+  whose sibling had already fixed itself the same way. Five non-blocking findings are #174.
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -3125,10 +3188,14 @@ When operating in this repo, Claude Code should:
 7. **Never commit secrets**, disable TLS verification, or weaken security/a11y
    gates to make CI pass.
 8. **Run the pre-push gate** in [`docs/TESTING.md`](docs/TESTING.md) "Before you
-   push" — `pnpm lint && pnpm typecheck && pnpm test` (plus `pnpm check:playbook`
-   when you add or rename a seed plan, and `pnpm check:build-contract` when you
-   add a shared `packages/*` workspace package — a local checkout has its
-   `dist/` already and cannot see a missing build line), **plus
+   push". **It is one command — `pnpm prepush`** — and running its parts by hand
+   is how a gate gets missed: this bullet used to name
+   `pnpm lint && pnpm typecheck && pnpm test` plus two `check:*` scripts, and
+   `scripts/prepush.sh` derives **ten** of them from `package.json` precisely so
+   nobody has to keep a list in their head. Following the old wording on
+   2026-08-22 sent an ADR to CI that `check:adr-coverage` refused, in a change
+   whose whole subject was filing one — a documented gate that could not fail
+   locally because the instruction did not name it. **plus
    `scripts/e2e-local.sh api` when you touched `apps/api`, plus
    `scripts/e2e-local.sh web:<suite>` when you added or changed a flag-on
    Playwright suite** — before declaring work done, and report failures
