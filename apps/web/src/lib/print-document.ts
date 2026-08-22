@@ -63,6 +63,15 @@ export function mountPrintDocument(node: React.ReactNode, deps: PrintDocumentDep
 
   const container = document.createElement('div');
   container.className = PRINT_CONTAINER_CLASS;
+  // **The print surface scope** (TECH_DEBT #163). One container is shared by the TSLD print
+  // surface and the Gantt programme, so this is the single place where the paper family can
+  // govern a SUBTREE rather than decorate a throwaway element. Without it a 31-member family
+  // would be consumed as a three-member pack by the two DOM artefacts and as a scope by a canvas
+  // that has no DOM — #163's own rebind-vs-pack diagnosis re-created one level up, and both at
+  // once. Set here rather than through `<Surface>` because this node is created imperatively,
+  // outside React, before any of it renders — and via `setAttribute` rather than
+  // `dataset.surface`, so `surface-seams.structural.test.ts` can actually see it.
+  container.setAttribute('data-surface', 'print');
   document.body.appendChild(container);
   const root = (deps.createRootImpl ?? createRoot)(container);
 

@@ -65,6 +65,27 @@ async function onboard(page, width) {
 }
 
 /**
+ * Sign up and STOP on the create-organisation step, so `/onboarding` can be photographed.
+ *
+ * It is the one authenticated screen no existing shot could reach: the `signedOut` branch has no
+ * session and is redirected away, and every signed-in shot has already passed through this step to
+ * get its organisation. So the screen every new member meets first was the one the harness
+ * structurally could not see.
+ *
+ * The waited-for heading is the same one `onboard` waits for — deliberately, so a copy change
+ * breaks both together rather than leaving this one photographing a blank page.
+ */
+async function signUpOnly(page, width) {
+  const id = `onb-${stamp}-${width}`;
+  await page.goto(`${BASE}/sign-up`);
+  await page.getByLabel('Full name').fill('Grace Hopper');
+  await page.getByLabel('Email').fill(`shoot-${id}@example.com`);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: /create an account/i }).click();
+  await page.getByRole('heading', { name: /create your organisation/i }).waitFor();
+}
+
+/**
  * Give the organisation something to be an overview OF.
  *
  * Added when the landing page stopped being a welcome card (ADR-0098): a freshly-onboarded
@@ -401,6 +422,24 @@ const SHOTS = [
   // captures the download rather than screenshotting the page, because the file is the deliverable
   // and a picture of the menu that made it proves nothing.
   { name: 'export-diagram', programme: true, takePen: true, exportPng: true },
+  // **The five screens the harness had never photographed** (TECH_DEBT W1). Derived by matching
+  // shot names against `src/routes/*.tsx`, then checking each candidate rather than trusting the
+  // match — `plan-detail` looked unshot and is covered by the five `plan-workspace*` shots.
+  // The light corporate theme (ADR-0102) repainted all five and nobody had looked at any of them.
+  { name: 'account', go: (p) => p.goto(`${BASE}/account`) },
+  { name: 'my-activity', go: (p) => p.goto(`${BASE}/me/activity`) },
+  {
+    name: 'client-detail',
+    programme: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/clients/${ids.clientId}`),
+  },
+  // Its own context and its own account: a signed-in shot has already left this screen behind.
+  { name: 'onboarding', onboarding: true },
+  // **Opt-in, and it skips LOUDLY.** `/staff` is gated on the API's `STAFF_EMAILS` (ADR-0086) and
+  // this harness boots no servers, so it can only be reached against an API started with that
+  // variable set — see `playwright.staff.config.ts`, which already does exactly that. Silent
+  // skipping is how a shot list grows a hole that reads as coverage.
+  { name: 'staff', staff: true, go: (p) => p.goto(`${BASE}/staff`) },
 ];
 
 /**
@@ -519,6 +558,38 @@ for (const width of widths) {
       await anonPage.waitForTimeout(1200);
       await anonPage.screenshot({ path: join(dir, `${shot.name}.png`) });
       await anon.close();
+    } else if (shot.onboarding) {
+      // Its own context and its own account, because this screen exists only between signing up
+      // and having an organisation — a state the shared signed-in context left behind minutes ago.
+      const fresh = await browser.newContext({ viewport: { width, height: 1000 } });
+      const freshPage = await fresh.newPage();
+      await signUpOnly(freshPage, width);
+      await freshPage.waitForLoadState('networkidle');
+      await freshPage.screenshot({ path: join(dir, `${shot.name}.png`) });
+      await fresh.close();
+    } else if (shot.staff) {
+      // **Skips loudly, and says what would make it run.** A silent skip in a shot list is
+      // indistinguishable from coverage — which is the whole failure W1 exists to correct.
+      if (process.env.SHOOT_STAFF !== '1') {
+        console.log(
+          `${width}  ${shot.name}  SKIPPED — set SHOOT_STAFF=1 and run the API with STAFF_EMAILS ` +
+            `containing this run's address (see playwright.staff.config.ts, which already does)`,
+        );
+        continue;
+      }
+      await shot.go(page);
+      await page.waitForLoadState('networkidle');
+      await page.waitForTimeout(800);
+      // A staff-gated route renders nothing recognisable to a non-staff caller, and photographing
+      // that would be a picture of the guard rather than of the console. Fail rather than file it.
+      const heading = await page
+        .getByRole('heading', { level: 1 })
+        .first()
+        .textContent()
+        .catch(() => null);
+      if (heading === null)
+        throw new Error('staff console rendered no heading — is the caller staff?');
+      await page.screenshot({ path: join(dir, `${shot.name}.png`) });
     } else if (shot.signedOut) {
       // A signed-out shot needs its own context — the session cookie would redirect it away.
       const anon = await browser.newContext({ viewport: { width, height: 1000 } });

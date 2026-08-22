@@ -276,6 +276,33 @@ pnpm --filter @repo/web test:watch   # web unit tests in watch mode
 cheaper than the one after it and than the CI round-trip it replaces, so a
 failure should surface at the earliest step that can see it.
 
+**Run it as one command: `pnpm prepush`** (or `scripts/prepush.sh --checks` for the gates alone).
+This table is the reference for _what_ each step is and _when_ it applies; the script is how you run
+them, and it exists because assembling this list by hand at the call site is what actually fails.
+Three times in one session a correct gate reported a real failure that nobody read: a pipeline whose
+exit status came from `tail`, an `&&` satisfied by an `echo`, and the loop run from `apps/web` where
+these scripts do not exist — ten identical "command not found" lines that look exactly like ten real
+failures. The script fixes its own working directory, derives the `check:*` roster from
+`package.json` rather than restating it, runs every step rather than stopping at the first, and
+exits non-zero if any failed.
+
+It deliberately excludes the e2e half, which needs a database and a browser and belongs to
+`scripts/e2e-local.sh` — the rows below still say when that is required.
+
+**And the e2e half is where a reused server quietly invalidates the result.** `scripts/e2e-local.sh`
+refuses to run while anything answers on 3000 or 5173, because `reuseExistingServer` is true outside
+CI: Playwright adopts whatever is already there instead of starting one with the suite's own
+environment, so the config's flag pins never apply and the run means nothing whichever way it goes.
+That refusal fired twice in one session — a `pnpm --filter @repo/api start` left over from a
+screenshot run held the port, and `pkill` did not reach it because the task supervisor restarted it.
+Stop the background task, not just the process. The tell is the clock: the export journey takes ~20s
+against its own API with the pen enforced and ~6s against a reused one without it.
+
+**The first version of this note was written INTO the table**, after the header row, so Prettier
+reflowed it into cells and the ten steps below it lost their header and rendered as literal
+pipe-separated text. `check:doc-links` only checks links, so nothing caught it; a review reading the
+file did. Worth keeping as the reason the note sits above the table rather than inside it.
+
 | #   | Run                                                         | When                                                                                              |
 | --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | 1   | `pnpm lint && pnpm typecheck`                               | always                                                                                            |

@@ -460,35 +460,59 @@
   --ground: oklch(0.975 0.005 263);
   --ground-end: oklch(0.851 0.03 260);
 
-  /* ── Paper (TECH_DEBT #158) ───────────────────────────────────────────────────────────────
+  /* ── Paper — the print surface family (TECH_DEBT #158, #163) ─────────────────────────────
      The exported PNG/PDF and the printed programme. **Light by declaration, not by agreeing with
-     the current theme** — paper wants light whatever the screen is doing, and the previous
-     arrangement resolved the print ground from the live `--background`, so Graphite silently
-     printed a near-black diagram panel inside white paper chrome.
+     the current theme** — paper wants light whatever the screen is doing, and the arrangement this
+     replaces resolved the print ground from the live `--background`, so Graphite silently printed
+     a near-black diagram panel inside white paper chrome.
 
-     **A surface family truncated to three members, NOT a pack** — the honest description, and the
-     flattering one was in this comment until the deferred review. It leaned on the
-     `--ground`/`--ground-end` precedent, and this repo's own discriminator refuses it: "if the
-     thing has a semantic sibling in the base vocabulary, rebind it; if it does not, pack it". A
-     gradient's second stop has no sibling; these three ARE the siblings of `--background`,
-     `--foreground` and `--muted-foreground`. The full answer is a `[data-surface="print"]` scope,
-     deferred on the design judgement it needs and filed as TECH_DEBT #163, with the trigger held
-     by `print-palette.structural.test.ts` rather than by this paragraph.
+     **A complete 31-member family, not the three-member pack it started as.** #163 recorded why:
+     `--print-background`/`-foreground`/`-muted-foreground` have exact siblings in the base
+     vocabulary, and this repository's own discriminator is "if the thing has a semantic sibling,
+     rebind it; if it does not, pack it". A trio of background / foreground / muted-foreground is
+     also, precisely, ADR-0055 §1's founding three-token header stub one medium along — latent only
+     while the print document rendered no Badge and no secondary text.
 
-     `PrintSurface.css`, `GanttPrintSurface.css` and `resolvePrintPalette()` read these SAME three
-     names, which is what actually stops the three print artefacts drifting. That file's own
-     comment claimed its hexes were "PINNED to `resolvePrintPalette()`'s own light fallbacks so the
-     two can't drift" — measured 2026-08-21, they had: the CSS said #ffffff/#1a1a1a/#6b7280 while
-     the runtime resolved oklch(0.958)/oklch(0.321)/oklch(0.51). A comment is not a pin. The
-     escape it missed is that a `@media print` rule cannot read a runtime JS value but CAN read a
-     custom property, so one source serves both.
-
-     Ground is TRUE white because that is what paper is, and what the print chrome already claimed
-     to be; the diagram is baked onto it rather than onto a panel one step off it. Ink and muted
-     ink are the page's own values, which clear 4.5:1 on white with room to spare. */
-  --print-ground: oklch(1 0 0);
-  --print-ink: oklch(0.321 0 0);
-  --print-muted-ink: oklch(0.51 0 0);
+     Three members are LITERAL, and they are the whole point: paper is light because it is declared
+     light. Nine alias `--plot-*` — exactly the members `PRINT_TOKEN_SOURCES` reads — so a printed
+     diagram still cannot drift from the one on screen. The remaining nineteen alias `--page-*`
+     rather than `--plot-*`, because once the scope covers the print container its consumers include
+     the Gantt programme's table: `--border`, `--muted` and `--accent` resolving to diagram values
+     on a table would be wrong, and "cannot drift from the screen" only ever applied to the painter's
+     own members. */
+  --print-accent: var(--page-accent);
+  --print-accent-foreground: var(--page-accent-foreground);
+  /* The family root IS the background, the convention every other family follows
+     (`--background: var(--panel)`). True white, because that is what paper is. */
+  --print: oklch(1 0 0);
+  --print-border: var(--plot-border);
+  --print-destructive: var(--plot-destructive);
+  --print-destructive-foreground: var(--plot-destructive-foreground);
+  --print-destructive-hover: var(--page-destructive-hover);
+  --print-destructive-text: var(--page-destructive-text);
+  --print-field: var(--page-field);
+  --print-field-foreground: var(--page-field-foreground);
+  --print-field-muted-foreground: var(--page-field-muted-foreground);
+  --print-foreground: oklch(0.321 0 0);
+  --print-info: var(--page-info);
+  --print-info-foreground: var(--page-info-foreground);
+  --print-info-text: var(--page-info-text);
+  --print-input: var(--page-input);
+  --print-muted: var(--plot-muted);
+  --print-muted-foreground: oklch(0.51 0 0);
+  --print-primary: var(--plot-primary);
+  --print-primary-foreground: var(--plot-primary-foreground);
+  --print-primary-hover: var(--page-primary-hover);
+  --print-ring: var(--plot-ring);
+  --print-secondary: var(--page-secondary);
+  --print-secondary-foreground: var(--page-secondary-foreground);
+  --print-secondary-hover: var(--page-secondary-hover);
+  --print-success: var(--page-success);
+  --print-success-foreground: var(--page-success-foreground);
+  --print-success-text: var(--page-success-text);
+  --print-warning: var(--plot-warning);
+  --print-warning-foreground: var(--plot-warning-foreground);
+  --print-warning-text: var(--page-warning-text);
 
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
@@ -1074,6 +1098,46 @@
 /* button. `token-architecture.test.ts` asserts the set, so a missing member  */
 /* fails rather than lurking.                                                  */
 /* ------------------------------------------------------------------------- */
+/* The print surface (TECH_DEBT #163). Applied to the ONE container
+   `lib/print-document.ts` mounts — shared by the TSLD print surface and the Gantt
+   programme — so the scope governs a subtree rather than decorating a throwaway
+   element. Without that it would be a family consumed as a pack by the two DOM
+   artefacts and as a scope by a canvas that has no DOM: #163's own rebind-vs-pack
+   diagnosis re-created one level up, and both at once. */
+[data-surface='print'] {
+  --accent: var(--print-accent);
+  --accent-foreground: var(--print-accent-foreground);
+  --background: var(--print);
+  --border: var(--print-border);
+  --destructive: var(--print-destructive);
+  --destructive-foreground: var(--print-destructive-foreground);
+  --destructive-hover: var(--print-destructive-hover);
+  --destructive-text: var(--print-destructive-text);
+  --field: var(--print-field);
+  --field-foreground: var(--print-field-foreground);
+  --field-muted-foreground: var(--print-field-muted-foreground);
+  --foreground: var(--print-foreground);
+  --info: var(--print-info);
+  --info-foreground: var(--print-info-foreground);
+  --info-text: var(--print-info-text);
+  --input: var(--print-input);
+  --muted: var(--print-muted);
+  --muted-foreground: var(--print-muted-foreground);
+  --primary: var(--print-primary);
+  --primary-foreground: var(--print-primary-foreground);
+  --primary-hover: var(--print-primary-hover);
+  --ring: var(--print-ring);
+  --secondary: var(--print-secondary);
+  --secondary-foreground: var(--print-secondary-foreground);
+  --secondary-hover: var(--print-secondary-hover);
+  --success: var(--print-success);
+  --success-foreground: var(--print-success-foreground);
+  --success-text: var(--print-success-text);
+  --warning: var(--print-warning);
+  --warning-foreground: var(--print-warning-foreground);
+  --warning-text: var(--print-warning-text);
+}
+
 [data-surface='canvas'] {
   /* The ground. `--canvas` rather than `--page-background` — this is the one
      binding that is not a straight pass-through, and it is what makes the

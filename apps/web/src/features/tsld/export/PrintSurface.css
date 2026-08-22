@@ -8,8 +8,8 @@
  * The printed page is deliberately forced LIGHT (white paper, dark ink) — reports and paper want light
  * regardless of what the screen is doing.
  *
- * **These read the SAME three tokens `resolvePrintPalette()` reads** (`--print-ground`, `--print-ink`,
- * `--print-muted-ink`, declared at `:root` and rebound by no surface). That is what actually stops the
+ * **These read the SAME three tokens `resolvePrintPalette()` reads** (`--print`, `--print-foreground`,
+ * `--print-muted-foreground`, declared at `:root` and rebound by no surface). That is what actually stops the
  * chrome around the image and the image itself from drifting.
  *
  * This block used to hold hex literals under a comment saying they were "PINNED to
@@ -29,8 +29,8 @@
     display: block !important;
     margin: 0;
     padding: 16px;
-    background: var(--print-ground);
-    color: var(--print-ink);
+    background: var(--background);
+    color: var(--foreground);
     color-scheme: light;
     font-family:
       'Inter',
@@ -54,7 +54,7 @@
   .tsld-print-subtitle {
     margin: 0 0 12px;
     font-size: 12px;
-    color: var(--print-muted-ink);
+    color: var(--muted-foreground);
     line-height: 1.2;
   }
 

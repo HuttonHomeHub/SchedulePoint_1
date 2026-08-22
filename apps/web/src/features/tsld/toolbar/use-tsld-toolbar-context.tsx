@@ -362,7 +362,11 @@ export function useTsldToolbarContext({
     activities,
     dependencies,
     viewToggles,
+    // Off the workspace model, which is where the live canvas reads it too — so the exported
+    // picture shades the same days the screen does rather than from a second resolution.
+    tsldCalendar: model.tsldCalendar,
     todayIso,
+    todayFraction: model.todayFraction,
     lateOverlayActive,
     canvasControlRef,
   });

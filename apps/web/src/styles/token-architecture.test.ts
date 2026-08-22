@@ -58,7 +58,7 @@ const FAMILY_TOKENS = [
   '-ring',
 ] as const;
 
-const FAMILIES = ['chrome', 'panel', 'brand', 'auth'] as const;
+const FAMILIES = ['chrome', 'panel', 'brand', 'auth', 'print'] as const;
 
 /**
  * `brand` is the only family whose defining property is a **value** one: identical in Light, Dark
@@ -111,16 +111,6 @@ describe('the brand family is declared, not inherited', () => {
  * - **Data vocabulary.** `--chart-*` is deliberately outside — ADR-0077 records that binding the
  *   login motif to chart tokens keeps the PAGE theme's values on a pinned panel, which is the
  *   failure being avoided rather than an oversight.
- * - **Deferred scopes** (TECH_DEBT #158/#163). `--print-*` is the honest odd one out, and it is
- *   filed under its own key rather than smuggled in beside the packs because **the packs
- *   discriminator excludes it**: `--print-ground`/`--print-ink`/`--print-muted-ink` have exact
- *   siblings in the base vocabulary (`--background`, `--foreground`, `--muted-foreground`), and
- *   the rule two bullets up says a thing with a sibling gets REBOUND, not packed. It is a surface
- *   family truncated to three members, pending the design decision about which of the 31 differ on
- *   paper — not a pack, and calling it one would be the flattering description rather than the
- *   true one. Note the shape: background / foreground / muted-foreground is exactly ADR-0055 §1's
- *   founding three-token header stub, one medium along, so the trap is latent rather than absent.
- *   `print-palette.structural.test.ts` holds the trigger.
  */
 const OUTSIDE_THE_CLOSURE = {
   resets: ['--card', '--card-foreground', '--popover', '--popover-foreground'],
@@ -141,14 +131,13 @@ const OUTSIDE_THE_CLOSURE = {
     '--ground-end',
   ],
   data: Array.from({ length: 12 }, (_, i) => `--chart-${i + 1}`),
-  deferredScopes: ['--print-ground', '--print-ink', '--print-muted-ink'],
 } as const;
 
 /**
  * The four surface families' ROOT values — `--chrome: …` and friends, which each family's members
  * alias from. Roots rather than members, so they are outside the closure by construction.
  */
-const FAMILY_ROOTS = ['--chrome', '--panel', '--brand', '--auth'];
+const FAMILY_ROOTS = ['--chrome', '--panel', '--brand', '--auth', '--print'];
 
 /**
  * **The rebound family, COMPUTED rather than authored** (ADR-0097 §1.5).
@@ -279,13 +268,13 @@ describe('the rebound family is a closure, not a list', () => {
       ...OUTSIDE_THE_CLOSURE.resets,
       ...OUTSIDE_THE_CLOSURE.packs,
       ...OUTSIDE_THE_CLOSURE.data,
-      ...OUTSIDE_THE_CLOSURE.deferredScopes,
     ]);
     const unaccounted = [...declarations(blockBody(':root')).entries()]
       .filter(([, value]) => /^(oklch|rgb|hsl|#)/.test(value.trim()))
       .map(([name]) => name)
       .filter(
-        (name) => !accounted.has(name) && !/^--(page|chrome|panel|brand|auth|plot)-/.test(name),
+        (name) =>
+          !accounted.has(name) && !/^--(page|chrome|panel|brand|auth|plot|print)-/.test(name),
       );
     expect(
       unaccounted,

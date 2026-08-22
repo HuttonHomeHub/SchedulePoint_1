@@ -25,7 +25,7 @@ const TEST_DIR = join(SRC, 'test');
  * that asserts the invariant has to be able to say its name, and failing a seam test because a
  * comment mentions `--chrome` teaches people to widen allowlists rather than respect them.
  */
-const ALLOWED = ['components/ui/surface.tsx', 'styles/globals.css'];
+const ALLOWED = ['components/ui/surface.tsx', 'lib/print-document.ts', 'styles/globals.css'];
 
 /**
  * The narrower list for the token-naming assertions, and the split is a finding rather than a
@@ -37,7 +37,17 @@ const ALLOWED = ['components/ui/surface.tsx', 'styles/globals.css'];
  * the gate strictly tighter: a component that started naming `--chrome-primary` would now fail
  * even though `surface.tsx` used to provide cover for it.
  */
-const ALLOWED_TO_NAME_A_FAMILY = ['styles/globals.css'];
+const ALLOWED_TO_NAME_A_FAMILY = ['features/tsld/render/palette.ts', 'styles/globals.css'];
+
+/**
+ * **`palette.ts` is the one non-stylesheet allowed to name a family, and the reason is that it is
+ * not a DOM consumer.** `PRINT_TOKEN_SOURCES` is the resolver that turns the paper family into
+ * painter values for a Canvas 2D raster, which has no elements and therefore no scope to inherit
+ * from — it reads the names through `getComputedStyle` on a host element. Every OTHER consumer
+ * goes through the scope, which is what the two print stylesheets were corrected to do: naming
+ * `--print-*` in CSS made the scope inert, 31 rebinds with no consumer, and left both artefacts
+ * consuming the family as a pack.
+ */
 
 function sourceFiles(dir = SRC, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -79,7 +89,13 @@ describe('surface scope seams (structural)', () => {
     // The protection is HERE, in the regex — not in `ALLOWED`. Adding a family without adding it
     // to these three patterns leaves it entirely unguarded: any component could write
     // `var(--brand-primary)` and no test would notice (ADR-0077 §1).
-    expect(filesMatching(/--(chrome|panel|brand|auth)\b/)).toEqual(
+    //
+    // **That warning was ignored once, by the commit that added `print`.** The family went into
+    // `FAMILIES` and `FAMILY_ROOTS` and into neither pattern here, so all 31 of its rebinds sat
+    // unguarded — and two stylesheets were already breaching it, which is how the scope came to be
+    // inert. Found by a deferred review, not by this gate, which is the argument for the docblock
+    // above being followed rather than admired.
+    expect(filesMatching(/--(chrome|panel|brand|auth|print)\b/)).toEqual(
       [...ALLOWED_TO_NAME_A_FAMILY].sort(),
     );
   });
@@ -87,11 +103,17 @@ describe('surface scope seams (structural)', () => {
   it('only the allowlisted files write a data-surface attribute', () => {
     // `Surface` renders it; everything else must go through `Surface`. A hand-written
     // `data-surface` would paint correctly today and drift the moment the rebind list changes.
-    expect(filesMatching(/data-surface/)).toEqual([...ALLOWED].sort());
+    // **`dataset.surface` is the same act spelled differently, and this gate could not see it.**
+    // Found by tripping over it: `lib/print-document.ts` applied a scope with
+    // `container.dataset.surface = 'print'` and the suite stayed green, because the DOM property
+    // is camelCase and the regex tested for the hyphenated attribute. A gate that only catches
+    // one spelling of the thing it forbids is the shape #124 records. That file now uses
+    // `setAttribute` so it is visible, and both spellings are matched so the next one is too.
+    expect(filesMatching(/data-surface|dataset\.surface/)).toEqual([...ALLOWED].sort());
   });
 
   it('no component reaches for a surface family through var()', () => {
-    const offenders = filesMatching(/var\(--(chrome|panel|brand|auth)-/).filter(
+    const offenders = filesMatching(/var\(--(chrome|panel|brand|auth|print)-/).filter(
       (file) => !ALLOWED_TO_NAME_A_FAMILY.includes(file),
     );
     expect(offenders).toEqual([]);

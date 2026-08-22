@@ -8,10 +8,21 @@
  * other body-level node (portalled menus and dialogs) are hidden, so the browser print dialog shows
  * only the injected document.
  *
- * Printed pages are deliberately forced LIGHT (white paper, dark ink) regardless of the app's
- * light/dark/system theme: reports and paper want light. That forcing, and the small set of hex
- * constants the surfaces use for it, is the documented exception to the "no hard-coded colours"
- * rule — a `@media print` stylesheet cannot read a runtime token value.
+ * Printed pages are deliberately forced LIGHT (white paper, dark ink) regardless of what the
+ * screen is doing: reports and paper want light.
+ *
+ * **They are forced by a surface scope, not by hex constants, and this comment said otherwise.**
+ * It read: "the small set of hex constants the surfaces use for it is the documented exception to
+ * the 'no hard-coded colours' rule — a `@media print` stylesheet cannot read a runtime token
+ * value." The second half is false: a `@media print` rule cannot read a runtime *JS* value, but a
+ * custom property is CSS and resolves normally. That mistaken belief was the reason both print
+ * stylesheets pinned literals to each other by comment, and they drifted (TECH_DEBT #158).
+ *
+ * `lib/print-document.ts` now stamps `data-surface="print"` on the one container both surfaces
+ * mount into, so the paper family governs the subtree and the sheets read ordinary semantic names.
+ * This was the THIRD copy of the false claim: the other two were corrected when their own files
+ * moved to the scope, and this one — in the shared file both of them point at — was left standing.
+ * Found by a deferred review.
  */
 
 .tsld-print-container {

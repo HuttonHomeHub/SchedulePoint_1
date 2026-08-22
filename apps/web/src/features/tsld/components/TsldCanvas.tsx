@@ -84,6 +84,7 @@ import {
   type ZoomLevel,
 } from '../render/render-model';
 import type { ResourceStripSnapshot } from '../render/resource-strip';
+import { sceneLayers } from '../render/scene-layers';
 import { drawnSpanPlacement } from '../render/snap';
 import {
   presetOf,
@@ -104,14 +105,12 @@ import { MINIMAP_BOX, TsldMinimap, type MinimapWindow } from './TsldMinimap';
 
 import {
   CANVAS_AUTHORING_ENABLED,
-  CANVAS_DATA_DATE_ENABLED,
   CANVAS_DIRECT_MANIPULATION_ENABLED,
   CANVAS_LINK_ROUTING_ENABLED,
   CANVAS_LIVE_FEEDBACK_ENABLED,
   CANVAS_MULTI_SELECT_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
   CANVAS_TIME_AXIS_ENABLED,
-  CANVAS_VISUAL_LANGUAGE_ENABLED,
 } from '@/config/env';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -841,12 +840,27 @@ export function TsldCanvas({
   // never widens flag-off, which is what keeps the parity claim structural. Hoisted to one
   // expression (component-review finding) so the initial scene ref and the resync effect below
   // can't drift out of step.
-  const monthBandsEnabled = CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands ?? true);
-  // Same shape for the data-date line (canvas status & feedback M1): the flag decides whether the
-  // status layer exists at all — flag-off the scene carries no `dataDateLine` and the frame is
-  // byte-for-byte today's — while the user's `View▾` preference only narrows the flag-on case.
-  // The painter stays flag-free, as every other layer does.
-  const dataDateLineEnabled = CANVAS_DATA_DATE_ENABLED && (view?.dataDate ?? true);
+  // **From `sceneLayers`, the one derivation the EXPORT also uses** — so the screen and the
+  // deliverable cannot disagree about which layers exist. Two hand-written compositions is how
+  // seven of them went missing from the export (TECH_DEBT #164); a shared derivation that only
+  // one caller used would have been the worst of both, and was the state this file shipped in
+  // for exactly one commit before a review caught it.
+  //
+  // **Memoised on `[view]`, which is load-bearing rather than tidy.** `sceneLayers` returns a
+  // fresh object; the scene effect below keys on these values, so an unmemoised object would be
+  // a new reference every render, marking the scene dirty and repainting every render. Nothing
+  // would fail — ADR-0026 D3's render-count invariant has never been asserted (ADR-0078) — the
+  // frame budget would simply double. Destructured to primitives so the dep arrays stay stable
+  // whatever the memo does.
+  const layers = useMemo(() => sceneLayers(view), [view]);
+  const {
+    monthBands: monthBandsEnabled,
+    dataDateLine: dataDateLineEnabled,
+    gridTiers,
+    timeTrueLinks,
+    visualRefresh,
+    linkRouting,
+  } = layers;
   const sceneRef = useRef<TsldScene>({
     activities,
     edges,
@@ -862,7 +876,7 @@ export function TsldCanvas({
     dataDateLine: dataDateLineEnabled,
     // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
     // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
-    gridTiers: CANVAS_TIME_AXIS_ENABLED,
+    gridTiers,
     dimmedIds,
     barFill,
     barInk,
@@ -953,15 +967,15 @@ export function TsldCanvas({
       dataDateLine: dataDateLineEnabled,
       // Flag decides whether the three-tier grid paints at all: flag-off the scene carries no
       // `gridTiers` and the frame is byte-for-byte today's single `gridLine` pass (F5).
-      gridTiers: CANVAS_TIME_AXIS_ENABLED,
+      gridTiers,
       dimmedIds,
       barFill,
       barInk,
       baselineGhosts,
       flaggedIds,
-      timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
-      visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
-      linkRouting: CANVAS_LINK_ROUTING_ENABLED,
+      timeTrueLinks,
+      visualRefresh,
+      linkRouting,
       // Preserve the live hover highlight across a data/selection rebuild (M5) — the pointer
       // hasn't moved, so the hovered bar's ties should not flicker off. Flag-off this is
       // always null (the branch that writes it never runs), keeping the scene byte-identical.
@@ -980,6 +994,14 @@ export function TsldCanvas({
     activities,
     edges,
     dataDate,
+    // The four flag-derived layers, now that they come from `sceneLayers` rather than being read
+    // inline as build-time constants. They are booleans off a `useMemo` keyed on `view`, so they
+    // are referentially stable and adding them cannot make this effect run more often — which is
+    // the whole reason `layers` is destructured rather than listed as an object.
+    gridTiers,
+    timeTrueLinks,
+    visualRefresh,
+    linkRouting,
     selectedId,
     selectedIds,
     showEdgeHandles,

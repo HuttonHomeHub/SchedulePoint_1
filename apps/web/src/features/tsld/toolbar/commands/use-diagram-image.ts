@@ -7,11 +7,14 @@ import { useCanvasSurface } from '../../render/canvas-surface';
 import type { TsldViewToggles } from '../../render/paint';
 import { resolvePrintPalette, resolvePrintWbsBandPalette } from '../../render/palette';
 import { daysBetween } from '../../render/render-model';
+import { sceneLayers } from '../../render/scene-layers';
+import { makeWorkingDayPredicate } from '../../render/time-scale';
+import type { WorkingDayCalendar } from '../../render/time-scale';
 import { barDateSourceFor, toRenderActivities, toRenderEdges } from '../../render/to-render-model';
 import { wbsBandBars } from '../../render/wbs-band';
 
 import type { LoadedPlan } from '@/components/layout/workspace/use-plan-workspace-model';
-import { CANVAS_DATA_DATE_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
+import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { TsldCanvasHandle } from '@/features/tsld/components/TsldCanvas';
 import { deriveWbsBandSource } from '@/features/wbs';
 
@@ -34,7 +37,27 @@ export function useDiagramImage(args: {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
   viewToggles: TsldViewToggles;
+  /**
+   * The plan's working-day calendar. Taken as an argument rather than resolved here so it is the
+   * SAME object the live canvas shades from — and the predicate is built below from it and from
+   * this scene's own `dataDate`, so the two can never be a mismatched pair. `makeWorkingDayPredicate`
+   * is day-OFFSET based: hand it a different data date from the one the scene is framed on and the
+   * shading slides by that many days, silently and only in the deliverable.
+   */
+  tsldCalendar: WorkingDayCalendar | null;
   todayIso: string;
+  /**
+   * The viewer-local time-of-day fraction for the Today marker, **from the workspace model** —
+   * never re-derived here, for two reasons the first draft of this file got wrong both of.
+   *
+   * The model derives it from the SAME `new Date()` as `todayIso` (`use-plan-workspace-model.ts`),
+   * so the integer offset and the fraction cannot disagree; deriving it from a fresh `Date.now()`
+   * against a `useNow`-ticked `todayIso` puts the line a full day out across local midnight. And
+   * the model gates it on `CANVAS_TIME_AXIS_ENABLED`, so a hand-rolled call draws a fractional
+   * line and a Today pill in the deliverable while the screen draws a plain integer marker —
+   * which is this milestone's own defect, inverted.
+   */
+  todayFraction: number | undefined;
   lateOverlayActive: boolean;
   canvasControlRef: React.RefObject<TsldCanvasHandle | null>;
 }): (extent: ExportExtent) => {
@@ -47,7 +70,9 @@ export function useDiagramImage(args: {
     activities,
     dependencies,
     viewToggles,
+    tsldCalendar,
     todayIso,
+    todayFraction,
     lateOverlayActive,
     canvasControlRef,
   } = args;
@@ -82,18 +107,38 @@ export function useDiagramImage(args: {
         source,
       });
       const renderActivities = toRenderActivities(band.sceneActivities, source);
+      const layers = sceneLayers(viewToggles);
       const scene = {
         activities: renderActivities,
         edges: toRenderEdges(dependencies),
         dataDate,
         view: viewToggles,
         todayOffset: daysBetween(dataDate, todayIso),
-        // The data-date line (canvas status & feedback M1) — the SAME composition `TsldCanvas`
-        // makes, because the export builds its own scene rather than reusing the live one: without
-        // this line the exported picture would silently disagree with the screen about the one
-        // status mark the epic exists to draw. Flag-off the field is false ⇒ the layer never runs
-        // ⇒ the export is byte-for-byte the prior picture.
-        dataDateLine: CANVAS_DATA_DATE_ENABLED && (viewToggles.dataDate ?? true),
+        // **The fractional Today marker and its pill** (ADR-0056 M4, default-on since
+        // 2026-07-27). The export drew a whole-day line and no pill at all, because `paint.ts`
+        // gates the pill on this key being non-null — so the deliverable disagreed with the
+        // screen about the one mark that says "you are here", unreported. `todayIso` is the
+        // generation instant the title band already prints, so the picture and its caption
+        // cannot name two different moments.
+        todayFraction,
+        // **Weekend and non-working shading** (ADR-0056 F7a). Absent, the deliverable showed a
+        // programme with no weekends — established by sampling the exported PNG, where every
+        // pixel outside a gridline or a bar came out pure white.
+        isWorkingDay: tsldCalendar ? makeWorkingDayPredicate(dataDate, tsldCalendar) : undefined,
+        // **The flag-derived layers, from the one derivation `TsldCanvas` uses.** Two
+        // hand-written compositions is how six of these went missing; `scene-parity.structural`
+        // asserts the two rosters against each other so a seventh cannot.
+        //
+        // Written as explicit keys rather than a spread of `layers`, and not for style: the parity
+        // gate reads these files as text, so a spread would contribute keys it cannot see and the
+        // gate would go quietly blind on exactly the composition it exists to watch. It refuses on
+        // an unresolvable spread for that reason, and this shape keeps it honest.
+        monthBands: layers.monthBands,
+        gridTiers: layers.gridTiers,
+        timeTrueLinks: layers.timeTrueLinks,
+        visualRefresh: layers.visualRefresh,
+        linkRouting: layers.linkRouting,
+        dataDateLine: layers.dataDateLine,
       };
       const { viewport, size, dpr, scaledToFit } = buildExportViewport(renderActivities, dataDate, {
         extent,
@@ -137,6 +182,11 @@ export function useDiagramImage(args: {
       plan.plannedStart,
       plan.schedulingMode,
       plan.name,
+      // The calendar the shading is built from. Omitting it would close over a stale one, so a
+      // planner who changed the plan's calendar and exported without a remount would get a
+      // picture shaded to the previous week — silently, and only in the deliverable.
+      tsldCalendar,
+      todayFraction,
       activities,
       dependencies,
       viewToggles,

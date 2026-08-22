@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1050 web
-> source files with 35 flag-scoped Playwright suites beside the base journey, and
-> 102 ADRs.
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1052 web
+> source files with 36 flag-scoped Playwright suites beside the base journey, and
+> 103 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2739,6 +2739,38 @@ progress` off the command surface because **an object action belongs on the obje
   perceptibly — and survives on its values, its original ADR-0077 §2 reason having lapsed at
   ADR-0097. Seven claims are recorded as corrected in the ADR's own closing section, including two
   inherited from the brief and one where a correct measurement produced a wrong inference.
+  **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0103** _(Accepted; W3-M1 and W3-M2 landed 2026-08-22)_ — Paper is a surface, and the
+  exported diagram is the diagram. Two rows filed a day apart turned out to be one defect seen from
+  two ends: the exported PNG/PDF and the printed diagram resolved their ground from the app's live
+  theme (so Graphite printed a near-black panel inside white paper chrome), and the export composed
+  **six** scene keys against the canvas's **25**. #164 was filed as two missing layers; enumerating
+  both compositions showed **seven**, including `todayFraction`, which no document named until a
+  review — the screen draws a fractional Today line with a pill, the deliverable drew a whole-day
+  line with none. Nobody decided any of it: nine features each added correctly to the screen and
+  nobody re-read the export. The sharpest instance is **link routing**, since ADR-0065 exists
+  because a line through an unrelated bar makes the reader disprove a relationship the picture
+  appears to assert — live, in the file a planner sends to someone who was not in the room.
+  `[data-surface="print"]` becomes a fifth `FAMILIES` entry and a seventh contrast scope (amending
+  ADR-0055 §1 and ADR-0097 D1): 31 members, three **literal** because paper is light by
+  declaration, nine aliasing `--plot-*` — the members the painter reads — and nineteen aliasing
+  `--page-*`, because the scope's subtree includes the Gantt programme's table where diagram values
+  would be wrong. **A scope must govern a subtree or it is a pack wearing a scope's name**, and that
+  is a decision rather than a description because it shipped inert for one commit: 31 rebinds with
+  no consumer while both stylesheets still read the family by raw name.
+  **Four of the epic's defects were in the GATES, not the product**, which is its transferable
+  finding. The parity gate could be silenced by a comment containing an unbalanced brace; the
+  pre-push script hard-coded the roster it was written to check; an assertion counted ground tones,
+  so a restored layer could go missing behind a green test; and the paper scope's own seam gate had
+  never been told the family existed. The spec's headline claim was also wrong — the month band's
+  polarity inversion is **not** an argument for paper-derived values, because `--print` is maximum
+  lightness so nothing can be lighter than paper, and the same document had accepted the inversion
+  250 lines earlier. Every export unit suite runs in jsdom, where the resolver takes its fallbacks,
+  so they exercise the branch that is correct and **can never reach the branch that ships**;
+  `apps/web/e2e-export/` decodes the real download instead. Leaves `docs/TECH_DEBT.md` #166 (a
+  whole-plan export culls weekends entirely — worse on paper, which has no zoom) and #167 (five
+  scene keys are lens state, so the export is the default picture rather than the planner's).
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0086** _(Accepted; M1–M6 landed 2026-08-09)_ — A staff identity that cannot reach a

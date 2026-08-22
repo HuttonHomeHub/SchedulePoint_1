@@ -126,3 +126,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0100](0100-the-canvas-minimap-an-invariant-picture-and-a-dom-rectangle.md) | The canvas minimap — an invariant picture and a DOM rectangle           | Accepted           |
 | [0101](0101-an-editor-is-a-dialog-not-a-drawer.md)                          | An editor is a dialog, not a drawer                                     | Accepted           |
 | [0102](0102-the-light-corporate-theme.md)                                   | The light corporate theme, and the scope that never reached the painter | Accepted           |
+| [0103](0103-paper-is-a-surface.md)                                          | Paper is a surface, and the exported diagram is the diagram             | Accepted           |

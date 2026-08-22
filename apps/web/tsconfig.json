@@ -52,6 +52,7 @@
     "e2e-multi-select",
     "e2e-copy-paste",
     "e2e-workspace-chrome",
-    "e2e-minimap"
+    "e2e-minimap",
+    "e2e-export"
   ]
 }

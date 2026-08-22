@@ -3173,10 +3173,29 @@ describes.
 (ADR-0102 D5) and this one swatch still cannot follow, because the token it names was never part of
 the family. Naming `--primary` is the fix; the wrapper is not.
 
-## 163. The print palette is a surface family truncated to three members
+## 163. The print palette is a surface family truncated to three members **(CLOSED 2026-08-22)**
 
 **Raised 2026-08-21** (the TECH_DEBT #158 deferred review, reached independently by the
 architecture and component gates). **Size:** M — mostly design judgement, not code.
+
+**Closed by `[data-surface="print"]`.** The family is all 31 members: three literal (paper is light
+because it is _declared_ light), nine aliasing `--plot-*` — exactly the members
+`PRINT_TOKEN_SOURCES` reads, so a printed diagram still cannot drift from the one on screen — and
+nineteen aliasing `--page-*`. That last split is the architecture review's, and it matters because
+the scope governs the **shared print container** (`lib/print-document.ts`), whose subtree includes
+the Gantt programme's `<table>`: `--border`, `--muted` and `--accent` resolving to diagram values
+there would be wrong, and "cannot drift from the screen" only ever applied to the painter's own
+members.
+
+Proven inert on landing, both halves: every pre-existing suite passed unchanged, and two real
+exported PNGs captured minutes apart in one session differ by **zero pixels across 246,430** in the
+diagram region, with the title band masked because it carries a generated date and a per-run tenant.
+
+Applying it found a hole in `surface-seams.structural.test.ts`: the first version wrote
+`container.dataset.surface = 'print'` and the suite stayed green, because the DOM property is
+camelCase and the regex tested for the hyphenated attribute — so a file applied a surface scope
+outside the allowlist and the gate built to forbid exactly that saw nothing. The call site uses
+`setAttribute` now, the gate matches both spellings, and the widening is verified red.
 
 `--print-ground` / `--print-ink` / `--print-muted-ink` were introduced as a "pack", on the
 `--ground`/`--ground-end` precedent (ADR-0077 M7: "a PAIR rather than a family member"). **The
@@ -3204,7 +3223,7 @@ rebinds a `--print-*` token, or if any mark drawn on paper falls under its contr
 previous arrangement was a correct comment naming its own trigger, and the trigger fired past it
 two days later.
 
-## 164. The exported diagram silently drops two default-on view layers
+## 164. The exported diagram silently drops SEVEN default-on view layers **(CLOSED 2026-08-22, with one half open as #166)**
 
 **Raised 2026-08-21** (the #158 deferred ux gate). **Size:** S. **Pre-existing** — not introduced
 by the print-palette work, and found while reviewing it.
@@ -3213,6 +3232,35 @@ by the print-palette work, and found while reviewing it.
 `if (toggles.nonWorking && scene.isWorkingDay && …)`. `TsldCanvas` composes both. The export's
 scene (`use-diagram-image.ts:85-95`) sets **neither key** — it sets `dataDateLine` explicitly,
 under a comment saying it mirrors `TsldCanvas`'s composition, and stops there.
+
+---
+
+**Two corrections to this row, both found by the deferred plan review rather than by acting on it.**
+
+**It was SEVEN layers, not two, and the count needed enumerating both compositions rather than
+reading one.** `TsldCanvas` builds **25** scene keys; the export built six. Missing:
+`isWorkingDay`, `monthBands`, `gridTiers`, `timeTrueLinks`, `visualRefresh`, `linkRouting` and
+`todayFraction`. That last was named in no document at all until the review — the screen draws a
+fractional Today line **with a pill**, the deliverable drew a whole-day line with none, because
+`paint.ts` gates the pill on the key being non-null. Nobody decided any of this: nine features each
+added correctly to the screen and nobody re-read the export.
+
+**"The printed programme" names the wrong artefact.** Three were affected — the exported PNG, the
+PDF and the printed _diagram_, all via `buildDiagramImage`. The printed **programme** is the Gantt,
+which has no month-band or non-working concept at all and lost nothing.
+
+**Closed by W3-M2.** All seven compose from one shared derivation, and the recurrence gate is
+**derived rather than a list**: `scene-parity.structural.test.ts` parses both scene literals,
+computes the difference and asserts it against a `SCREEN_ONLY` record carrying a reason per entry,
+so a key added to the canvas tomorrow fails until somebody classifies it. It refuses rather than
+answers when it cannot see its input — its first version assumed both files spelled the composition
+alike and would have reported an empty canvas roster, i.e. green.
+
+Measured in the artefact: pure white fell from ~100% of the non-bar area to 30%, with the band, the
+wash and its hatch present. `apps/web/e2e-export/` decodes the real download and asserts pixel
+properties, verified red against the pre-fix export.
+
+**What remains is filed as #166** — it is a different defect from the one this row describes.
 
 **Established by sampling the artefact, not by reading the code:** every pixel in the exported
 PNG outside a gridline or a bar is pure white. So the exported and printed diagram has never shown
@@ -3226,3 +3274,107 @@ Worth noting when it is fixed: on screen the wash sits ΔL 0.007 from the canvas
 nearly invisible; on the now-true-white paper the same token sits ΔL 0.035, five times the
 separation. Paper will show it more strongly than the screen ever has, which is probably right for
 print but is a deliberate divergence rather than parity.
+
+## 165. Five screens photographed for the first time, and what they showed
+
+**Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **Catalogue only** — the
+product owner's decision was to shoot, report and choose, so nothing here is fixed.
+
+`apps/web/scripts/shoot.mjs` carried 26 shots and five routes had none: `/account`, `/me/activity`,
+`/onboarding`, `/orgs/:slug/clients/:clientId`, `/staff`. The list was derived by matching shot names
+against `src/routes/*.tsx` and then **checked** rather than trusted — `plan-detail` looked unshot and
+is covered by the five `plan-workspace*` shots. ADR-0102 repainted all five and nobody had looked at
+any of them.
+
+Precedent for expecting something: widening the list 12 → 25 during ADR-0102 found two defects
+**only a photograph could find** (the weekend hatch's dark-to-light step, the minimap frame's
+polarity-agnostic gate — both with every gate green), plus the four rows in #161.
+
+**a. The app shell renders on screens that have no organisation — and offers navigation that cannot
+navigate.** On `/account` and `/onboarding` the Project Explorer drawer is open, ~300 px wide, saying
+_"Select an organisation to browse."_ On `/onboarding` that is beside a card asking the reader to
+create their first organisation: there is nothing to select, by definition, on the first screen a new
+member ever sees. `account.tsx`'s own docblock says _"No org in the path and no permission check,
+because there is nothing to check"_ — the screen knows it is not org-scoped and the shell does not.
+`/me/activity` is the third instance; ADR-0073 C2.5 already recorded that it "sits outside any
+organisation" and that a journey clicked a nav link not rendered there. Same root cause, three
+screens, and it is a shell decision rather than three screen bugs.
+
+**b. `My activity`'s filter row wraps ragged.** Five `Show` chips, then `Outcome` and `From` on the
+same line, then `To` and `Clear filters` wrapping below — four group labels at three different
+vertical positions. Adjacent groups are also styled differently for no stated reason: `Show` is
+chips, `Outcome` is plain text.
+
+**c. `All events shown` is a filled dark button that is not an action.** It is a status, rendered in
+the same treatment as `Change password` and `New project`. ADR-0099's status bar exists because
+_"`Recalculate` stops being a button pretending to be a status"_; this is that, one screen along.
+
+**d. `client-detail`'s row actions are bare text links.** `Edit` and `Delete` sit at the right of each
+row as unadorned text, with **`Delete` visually identical to `Edit`** — a destructive action carrying
+no destructive treatment. `docs/UX_STANDARDS.md` "Row / node actions" specifies the APG `Menu`
+primitive. Check this against ADR-0097 Landing F before acting: that milestone re-counted row-action
+crowding **by subject-labelled actions** rather than by `size="sm"` occurrences and found exactly one
+crowded table, so this may be a knowing exclusion rather than an oversight.
+
+**e. `/staff` is still unphotographed, and the mechanism is recorded rather than left to be
+rediscovered.** The console is five panels (ADR-0086) that nobody has ever looked at in any theme.
+`shoot.mjs` boots no servers, and `/staff` is gated on the API's `STAFF_EMAILS`. The shot now exists
+and **skips loudly**, naming what would make it run — a silent skip in a shot list is
+indistinguishable from coverage, which is the failure W1 exists to correct. What it needs:
+`playwright.staff.config.ts:75` boots an API with a **fixed** `STAFF_EMAILS`
+(`Ops@SchedulePoint.test`), so the harness must also sign up as that address rather than its
+generated per-run one. That is a second onboarding path, not a shot entry, which is why it is filed
+rather than done inside a catalogue-only slice.
+
+## 166. A whole-plan export of a long programme loses weekends entirely
+
+**Raised 2026-08-22** (TECH_DEBT #164's remaining half, identified by the accessibility review of
+the W3 plan). **Size:** S–M. Filed separately because it is a different defect from #164: that row
+was about layers the export never composed, and this is about a layer it composes and then culls.
+
+`paint.ts` paints the non-working wash and its hatch as **one `fillStyle`**, and culls both below
+`NON_WORKING_MIN_PX = 3`. An export can frame the **entire plan** rather than a viewport, so on a
+long programme the per-day width falls under that floor and weekends disappear — not degraded,
+absent.
+
+**Why it matters more on paper than on screen**, which is the whole reason it is a row rather than
+a note: on screen a planner who cannot see the weekends zooms in. A sheet of paper has no zoom.
+And on paper the wash carries no colour signal of its own (~1.11:1 against the ground), so the
+hatch is the **sole** channel for weekend indication — culling it removes the only one.
+`token-contrast.test.ts`'s existing WCAG 1.4.1 exemption for the wash was written for the screen,
+where the wash carries some signal and the hatch is a second channel; that premise does not hold
+here, and `print-palette.structural.test.ts`'s docblock now says so.
+
+The plan's CQ-2 deferred this as "exactly as on screen at the same scale". The artefact is not the
+screen, and this is the one place that distinction bites. Not addressed in W3-M2, which restored
+the layer rather than changing how it culls.
+
+## 167. The exported diagram is the default picture, not the planner's picture
+
+**Raised 2026-08-22** (the W3-M2 component review). **Size:** M. The spec's CQ-5 promised this row
+and it was never filed — the enumeration lived only in a `SCREEN_ONLY` record whose reasons were
+partly wrong, which is the opposite of a durable record.
+
+#164 restored the seven layers the export never composed. **Five more keys it does not compose are
+lens state**, and they are a different question: not "a layer nobody wired up" but "whose picture is
+the export". `feature-spec.md` US-2 words it as _the export is my picture rather than a fixed one_.
+
+| key                  | what it actually is                                        | consequence today                                                      |
+| -------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `barFill` / `barInk` | the **Colour-by** lens (`TsldPanel.tsx:1091-1100`)         | a planner colouring by resource exports a criticality-coloured picture |
+| `flaggedIds`         | the **over-allocation** highlight, ADR-0041 (`:1143-1146`) | over-allocated bars carry no badge in the deliverable                  |
+| `baselineGhosts`     | the baseline variance ghosts                               | a plan with a baseline set exports without its variance                |
+| `dimmedIds`          | filter **∪ isolate ∪ float-path** dimming (`:1076-1085`)   | an isolated subnetwork exports as the whole plan                       |
+
+**Three of those descriptions replace wrong ones.** `barFill`/`barInk` were recorded as a live drag
+preview and `flaggedIds` as the conflict cycle; neither is gesture-scoped, both are persistent view
+modes. A wrong reason is worse than a bare absence, because it closes the question — which is
+exactly what happened for as long as the record said "drag preview".
+
+**Not simply a matter of adding four keys.** `dimmedIds` unions three sources with different
+intents — a _filter_ is a search, but _isolate_ and _float-path_ are deliberate framing acts a
+planner performs in order to show something, so the honest default may differ per source.
+`baselineGhosts` is the one a planner is most likely to expect and the most work: it needs
+`varianceRows` threaded and re-derived against the export viewport, the way `wbsBandBars` already
+is. That is why it is deferred rather than done — but deferred with the enumeration attached, which
+is the part CQ-5 called durable and did not deliver.
