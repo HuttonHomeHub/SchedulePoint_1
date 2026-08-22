@@ -130,16 +130,16 @@ const NO_SCOPE_FOCUS = { shouldFocusError: false } as const;
  * **`handleSubmit`, not `trigger`, and that is a behaviour fix rather than a style choice.**
  * `trigger()` runs the resolver and writes the errors, but it never sets `isSubmitted`: RHF sets
  * that flag only in `handleSubmit`'s own state emission (`react-hook-form@7.84.0`,
- * `dist/index.esm.mjs:3075`). And `isSubmitted` is exactly what turns `reValidateMode: 'onChange'`
+ * `dist/index.esm.mjs:3216`). And `isSubmitted` is exactly what turns `reValidateMode: 'onChange'`
  * on — the change handler passes it to `skipValidation`, which returns `true` (skip) while the
  * form's mode is the default `onSubmit` and nothing has been submitted
- * (`dist/index.esm.mjs:2608`). So a `trigger()`-validated submit leaves a corrected field showing
+ * (`dist/index.esm.mjs:2739`). So a `trigger()`-validated submit leaves a corrected field showing
  * its old error until the planner submits again. Validating through `handleSubmit` restores
  * error-clears-as-you-fix, which is the behaviour this form has always had.
  *
  * Focus is suppressed at the FORM (`shouldFocusError: false`, {@link NO_SCOPE_FOCUS}) rather than
  * per call, so `handleSubmit`'s two `_focusError()` calls are both no-ops
- * (`dist/index.esm.mjs:3007-3009`) and {@link ActivityCreateDialog}'s `focusFirstProblem` stays the
+ * (`dist/index.esm.mjs:3148-3150`) and {@link ActivityCreateDialog}'s `focusFirstProblem` stays the
  * single ordered decision.
  *
  * The `onValid` callback deliberately does no work: the submit's real work needs all four scopes'

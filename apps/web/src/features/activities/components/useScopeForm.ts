@@ -35,7 +35,7 @@ export interface ScopeForm<TValues extends FieldValues> {
 export interface ScopeFormOptions {
   /**
    * Whether **this form's** `handleSubmit` focuses its own first invalid control on a failed
-   * submit. RHF's default is `true` (`react-hook-form@7.84.0`, `dist/index.esm.mjs:3007-3009` —
+   * submit. RHF's default is `true` (`react-hook-form@7.84.0`, `dist/index.esm.mjs:3148-3150` —
    * `_focusError` is gated on it), and that is right for a host with ONE form.
    *
    * A host that validates several scope forms in one submit passes `false` on all of them: four

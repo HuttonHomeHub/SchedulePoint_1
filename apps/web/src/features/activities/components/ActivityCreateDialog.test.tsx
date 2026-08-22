@@ -333,9 +333,9 @@ describe('ActivityCreateDialog — how problems are reported', () => {
  * **Pinned because M1 lost it silently.** The four-form submit first validated with
  * `trigger(undefined, { shouldFocus: false })`. `trigger()` runs the resolver and writes the
  * errors, but it never sets `isSubmitted` — RHF sets that flag only in `handleSubmit`'s own state
- * emission (`react-hook-form@7.84.0`, `dist/index.esm.mjs:3075`) — and `isSubmitted` is exactly
+ * emission (`react-hook-form@7.84.0`, `dist/index.esm.mjs:3216`) — and `isSubmitted` is exactly
  * what the change handler passes to `skipValidation` to decide whether re-validation is on
- * (`dist/index.esm.mjs:2608`). With the form's mode at the default `onSubmit` and the flag never
+ * (`dist/index.esm.mjs:2739`). With the form's mode at the default `onSubmit` and the flag never
  * set, every keystroke was skipped: a corrected field kept showing its old error until the planner
  * submitted again. Nothing failed, because nothing covered it.
  *

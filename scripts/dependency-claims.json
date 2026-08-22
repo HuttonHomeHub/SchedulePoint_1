@@ -6,8 +6,8 @@
     "nodemailer": "9.0.5",
     "zod": "4.4.3",
     "@nestjs/throttler": "6.5.0",
-    "react-hook-form": "7.84.0",
-    "lucide-react": "1.29.0",
+    "react-hook-form": "7.86.0",
+    "lucide-react": "1.33.0",
     "axe-core": "4.12.1",
     "@axe-core/playwright": "4.13.0"
   },
@@ -502,10 +502,10 @@
       "citedBy": ["apps/api/src/common/mail/smtp-mail.service.spec.ts"]
     },
     {
-      "ref": "index.esm.mjs:2608",
+      "ref": "index.esm.mjs:2739",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "2608",
+      "lines": "2739",
       "anchor": "_formState.isSubmitted, _validationModeAfterSubmit",
       "citedBy": [
         "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
@@ -513,18 +513,18 @@
       ]
     },
     {
-      "ref": "index.esm.mjs:2751-2753",
+      "ref": "index.esm.mjs:2882-2884",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "2751-2753",
+      "lines": "2882-2884",
       "anchor": "options.shouldFocus &&",
       "citedBy": ["docs/specs/activity-dialog-unification/feature-spec.md"]
     },
     {
-      "ref": "index.esm.mjs:3007-3009",
+      "ref": "index.esm.mjs:3148-3150",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "3007-3009",
+      "lines": "3148-3150",
       "anchor": "const _focusError = () => _options.shouldFocusError &&",
       "citedBy": [
         "docs/specs/activity-dialog-unification/feature-spec.md",
@@ -533,10 +533,10 @@
       ]
     },
     {
-      "ref": "index.esm.mjs:3075",
+      "ref": "index.esm.mjs:3216",
       "package": "react-hook-form",
       "path": "dist/index.esm.mjs",
-      "lines": "3075",
+      "lines": "3216",
       "anchor": "isSubmitted: true,",
       "citedBy": [
         "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
