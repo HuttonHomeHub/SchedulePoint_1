@@ -62,6 +62,10 @@ function srgb(value: string): Srgb {
   return compositeOver(parseColour(value), [1, 1, 1]);
 }
 
+function L(value: string): number {
+  return relativeLuminance(srgb(value));
+}
+
 function ratio(a: string, b: string): number {
   const la = relativeLuminance(srgb(a));
   const lb = relativeLuminance(srgb(b));
@@ -204,6 +208,68 @@ describe('the print palette resolves light (structural)', () => {
         Math.abs(live - stated),
         `${field}: fallback ${fallback} no longer matches ${resolved(field)}`,
       ).toBeLessThan(0.005);
+    }
+  });
+
+  it('the three grounds keep their order, so a polarity flip fails rather than passing', () => {
+    // **A lightness FLOOR cannot detect a polarity inversion**, which is why this exists beside
+    // the floor above rather than instead of it: the band's luminance is 0.930 whether it sits
+    // above or below its ground, so `> 0.5` is satisfied either way. #158's own fix moved the
+    // paper ground to true white and inverted the band and the wash from lighter-than-ground to
+    // darker — invisible to every assertion in this file at the time.
+    //
+    // The inversion is ACCEPTED (spec CQ-4): an alternating band carries no polarity meaning, and
+    // light-grey bands on white is the printed convention. `--print` is `oklch(1 0 0)`, maximum
+    // lightness, so nothing can be lighter than paper and no value could restore the screen's
+    // order anyway. What is asserted is therefore the chain in its accepted direction, so a later
+    // edit that flips one of them fails here instead of shipping.
+    const ground = L(resolved('canvasGround'));
+    const band = L(resolved('monthBand'));
+    const wash = L(resolved('nonWorking'));
+    const hatch = L(resolved('nonWorkingHatch'));
+    expect(hatch, `hatch ${hatch} is not darker than the wash ${wash}`).toBeLessThan(wash);
+    expect(wash, `wash ${wash} is not darker than the band ${band}`).toBeLessThan(band);
+    expect(band, `band ${band} is not darker than paper ${ground}`).toBeLessThan(ground);
+  });
+
+  it('every mark clears its floor on ALL THREE grounds, not just paper', () => {
+    // **There are three grounds, not two, and the wash is the one that was missed.** It paints
+    // OPAQUELY over the band (`paint.ts:839` — `fillStyle` then `fillRect`, no `globalAlpha`), so
+    // a mark inside a weekend column sits on 0.965 rather than on the band or on paper. Sweeping
+    // paper alone asserted the easiest of the three and called it covered.
+    //
+    // `bar` is included deliberately: the criticality ladder was solved for "≥ 3:1 on the 0.958
+    // diagram ground" and nothing had ever checked it against a paper ground. It is the narrowest
+    // margin in the picture — 3.220:1 on the wash — so it is the one most likely to be broken by
+    // an unrelated re-value, and it was the one nothing watched.
+    //
+    // **Measured, not reasoned:** moving `--plot-primary` to `oklch(0.665)` gives 3.03:1 on paper
+    // and 2.83:1 on the band. A paper-only sweep passes that value; this one fails it. That is the
+    // whole reason the sweep is three grounds rather than one.
+    const grounds = [
+      ['paper', resolved('canvasGround')],
+      ['month band', resolved('monthBand')],
+      ['non-working wash', resolved('nonWorking')],
+    ] as const;
+    const text = ['labelBeside', 'dataDate'] as const; // WCAG 1.4.3
+    const marks = [
+      'edge',
+      'outline',
+      'today',
+      'selection',
+      'bar',
+      'critical',
+      'nearCritical',
+    ] as const; // 1.4.11
+    for (const [label, ground] of grounds) {
+      for (const field of text) {
+        const r = ratio(ground, resolved(field));
+        expect(r, `${field} on the ${label} is ${fmtRatio(r)}`).toBeGreaterThanOrEqual(4.5);
+      }
+      for (const field of marks) {
+        const r = ratio(ground, resolved(field));
+        expect(r, `${field} on the ${label} is ${fmtRatio(r)}`).toBeGreaterThanOrEqual(3);
+      }
     }
   });
 
