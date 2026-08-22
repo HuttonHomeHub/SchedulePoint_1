@@ -557,9 +557,9 @@ the design, and both are now **registered** in `scripts/dependency-claims.json` 
 `react-hook-form@7.84.0`, so a Dependabot bump fails CI and someone re-reads them — which is the
 point, because a bump is exactly when a behavioural claim needs re-checking (ADR-0076 Class 2):
 
-- `dist/index.esm.mjs`, lines **2751-2753** — `trigger`'s focus is guarded by `options.shouldFocus`,
+- `dist/index.esm.mjs`, lines **2882-2884** — `trigger`'s focus is guarded by `options.shouldFocus`,
   so it is **opt-in** and does nothing at its default.
-- `dist/index.esm.mjs`, lines **3007-3009** — `handleSubmit`'s `_focusError` is guarded by
+- `dist/index.esm.mjs`, lines **3148-3150** — `handleSubmit`'s `_focusError` is guarded by
   `_options.shouldFocusError`, which **defaults to `true`**, so today's create submit already focuses
   the first invalid control.
 

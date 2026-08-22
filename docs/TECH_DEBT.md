@@ -3903,3 +3903,38 @@ ADR-0105's trigger, which is not something to smuggle into a dependency bump.
 claim and the eighth in `shoot.mjs`, which the gate excludes anyway as this repository's own file.
 So the convention "one citation, one range" now holds everywhere, and the regex change buys
 enforcement rather than coverage. That is worth doing and worth doing on its own.
+
+## 178. `check:claims` resolves a package by the first store entry it finds
+
+**Raised 2026-08-22** while bumping `react-hook-form`, and it produced a **wrong answer**, not a
+missing one — which is the reason it is worth a row.
+
+`installed()` in `scripts/check-claims.mjs` resolves a package by scanning `node_modules/.pnpm` and
+taking the **first** directory whose name starts with `<name>@`:
+
+```js
+const dir = readdirSync(store).find((entry) => entry.startsWith(stored) && …);
+```
+
+pnpm does not eagerly unlink a superseded version, so immediately after a bump the store holds
+**both** — `react-hook-form@7.84.0_react@19.2.8` and `react-hook-form@7.86.0_react@19.2.8` — and
+`readdirSync` returned the older one. The gate reported _"claims were verified against 7.86.0,
+7.84.0 is installed"_ with the register freshly and correctly updated against 7.86.0, which is the
+message inverted: it names the stale directory as the truth and the verified register as the drift.
+The lockfile referenced only 7.86.0 throughout.
+
+**Both directions are possible and the dangerous one is the quiet one.** Here it failed loudly and
+cost a few minutes. Had the orphan been the _newer_ directory — which happens when a bump is
+reverted, exactly what happened on this branch an hour earlier going from 1.7.1 back to 1.6.28 —
+the gate would have compared the register against a version the application does not load and
+**passed or failed on the wrong evidence**, silently. A gate whose subject is "we verified this
+against what is installed" must not guess which of two things is installed.
+
+**Worked around, not fixed:** the orphan was deleted by hand (`rm -rf` the stale store directory)
+and the gate then read 7.86.0 correctly. The fix is to resolve the version the way the application
+does — read `node_modules/<name>/package.json` through the consuming workspace, or the resolution
+in `pnpm-lock.yaml` — rather than by directory-name prefix. That is a **shared gate**, so it fires
+ADR-0105's trigger and wants its own change rather than riding along inside a dependency bump.
+
+**Not the same bug as #177.** That one is the completeness scan's regex halving a compound
+citation; this is the version resolver picking the wrong directory. They share only a file.
