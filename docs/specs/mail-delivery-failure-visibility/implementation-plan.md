@@ -159,7 +159,7 @@ not get done.
   1. Sign up address X successfully; sign up X again with the port failing.
   2. Assert equal status and body shape between the two responses, and that
      `verificationAttempts` did not increase on the second.
-  3. Docblock: cite `sign-up.mjs:162,169-207` and explain the inverted oracle.
+  3. Docblock: cite `sign-up.mjs:162` + `sign-up.mjs:169-207` and explain the inverted oracle.
 
 ---
 

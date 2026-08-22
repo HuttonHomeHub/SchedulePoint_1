@@ -129,7 +129,7 @@ analysis.
 
 The task framing (and it is the natural reading) is that sign-up differs from reset
 because the caller owns the address. That holds for the address the caller _types_. It
-does not hold for the response, because `sign-up.mjs:162,169-207` derives
+does not hold for the response, because `sign-up.mjs:162` + `sign-up.mjs:169-207` derives
 `shouldReturnGenericDuplicateResponse` from `requireEmailVerification` and, for an address
 that **already exists**, returns a **synthetic 200** with a fabricated user and no
 session — deliberately, so sign-up is not an enumeration oracle. That branch **sends

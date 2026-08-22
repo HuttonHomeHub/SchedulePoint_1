@@ -265,7 +265,7 @@ Three critical (§6). Everything else has a stated default and proceeds.
 >   `/sign-in`.
 > - **Given** enforcement is on and the address is **already registered** **then** I see the
 >   **same** "account created — check your email" copy, because Better Auth deliberately
->   returns a generic duplicate response in this mode (`sign-up.mjs:162,169`). Adding an
+>   returns a generic duplicate response in this mode (`sign-up.mjs:162` + `sign-up.mjs:169-207`). Adding an
 >   "email already in use" message would reintroduce the enumeration oracle the library just
 >   closed. **This is a requirement, not an omission.**
 > - **Given** enforcement is on **when** I sign in with an unverified address **then** the

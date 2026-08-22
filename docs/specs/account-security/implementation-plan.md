@@ -410,7 +410,7 @@ first**, asserting **both** enforcement branches.
   `SignUpScreen` navigates to `/`, the `_authed` guard finds `session === null` and bounces to
   `/sign-in` **with no explanation whatsoever**.
 - **Risks:** **copy.** With enforcement on, a **duplicate** address also returns a generic
-  success (`sign-up.mjs:162,169`). "Account created — check your email" is therefore the
+  success (`sign-up.mjs:162` + `sign-up.mjs:169-207`). "Account created — check your email" is therefore the
   correct and **required** copy for that case too. **Do not add an "email already in use"
   message** — it would reintroduce the enumeration oracle the library just closed.
 - **Testing:** a regression test **verified to fail first**, asserting **both** branches:

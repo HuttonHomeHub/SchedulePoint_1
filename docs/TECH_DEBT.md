@@ -3839,3 +3839,67 @@ exactly (noticing drift and stepping over it leaves the register as wrong as not
 epic that quotes ADR-0071, and an ADR-0076 Class 3 claim (asserted, never checked) in the epic that
 quotes that too. Caught by re-reading my own check-in notes against the register rather than by any
 gate: **`check:doc-links` verifies that a link resolves, not that a claim about filing is true.**
+
+## 176. Better Auth 1.7 needs a schema migration, and a minor bump is how we found out
+
+**Raised 2026-08-22** while working the dependency backlog. The version pin is now `~1.6.28`
+(patch-only) in both `apps/api/package.json` and `apps/web/package.json` **specifically so 1.7
+cannot arrive unattended**; that tilde is a deviation from this repo's `^` convention and it is
+deliberate.
+
+**What happens if you just bump it.** Better Auth 1.7 scopes account identity by a new
+`account.issuer` column and ships an upgrade guide for it: `dist/db/get-migration.mjs` holds a
+`columnBackfillGuideUrl` pointing at `…/1-7-upgrade-guide#account-identity-is-scoped-by-issuer`,
+and `dist/db/internal-adapter.mjs` gains a `findAccountOwnerByKey({ issuer, accountId })`.
+**Deliberately no line numbers**: those were read in 1.7.1, which this branch does not install, and
+a pinned citation into an uninstalled version is precisely the rot ADR-0076 exists to stop — the
+register can only pin what is on disk. Whoever does the upgrade re-reads them at the version they
+land on. Our Prisma `Account` model has no such column,
+so `prisma.account.create()` throws `Unknown argument 'issuer'` on **every sign-up**. Measured on
+this branch at 1.7.1: **522 of 559 API e2e tests fail**, across 37 of 42 spec files.
+
+**The measurement that matters is which gate caught it.** `pnpm lint`, `pnpm typecheck` and all
+**5,004** unit tests passed at 1.7.1, and so did all ten `check:*` gates including
+`check:claims` — because the unit suites mock Better Auth and the claims gate reads its source
+rather than running it. Only `scripts/e2e-local.sh api`, which drives the real library against a
+real Postgres, failed. That is CLAUDE.md §19.8's "the e2e half is not optional and not CI's job"
+stated as a number rather than as advice, and it is the strongest evidence for that rule the
+register has.
+
+**Why it is not a dependency bump.** It adds a column and needs a backfill for existing rows, so it
+fires two mandatory rules at once: **ADR-0105**'s schema trigger (a full spec and plan before code,
+whatever the size) and **CLAUDE.md §19.3** (every schema change goes through the
+**database-architect** agent — no exceptions, and deciding a change is too small to need it is the
+judgement the agent exists to make). It also wants a real read of what "identity scoped by issuer"
+means for a single-provider `credential` install like this one before anybody writes a migration:
+the answer may be a constant, which would make the backfill trivial, but that is a thing to
+establish rather than assume.
+
+**What was verified along the way, so it is not re-derived.** All 36 citations into
+`better-auth`'s internals were re-read at 1.7.1: every cited behaviour is intact, 19 anchors were
+still exact, 15 moved by line only, and 2 had their code rewritten without changing what they do
+(`onPasswordReset`'s guard became "is a handler configured" rather than "is there a user"; the
+403 `EMAIL_NOT_VERIFIED` path is unchanged bar `user.user.email` → `user.email`). Both
+version-stamped citations still hold: the rate limiter is 3-per-10s on
+`/sign-in*`/`/sign-up*`/`/change-password`/`/change-email` and 3-per-60s on the two email routes,
+and `rememberMe` still defaults to `true`. **So the citation work is done and only the schema is
+outstanding** — whoever picks this up inherits a verified register, not a cold start.
+
+## 177. A compound citation is invisible to `check:claims`
+
+**Raised 2026-08-22.** The completeness scan's regex is
+`\b([a-z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b`, which matches `sign-up.mjs:162` inside
+`sign-up.mjs:162,169-207` and stops. The second range was therefore **never registered**, never
+version-pinned and never re-verified — while sitting inside a citation that looks complete and
+carries a real claim: ADR-0075's synthetic-200 anti-enumeration control, which is the reason that
+ADR rejects an abort-on-send-failure design.
+
+**Worked around rather than fixed, deliberately.** All seven occurrences were split into two
+register-visible citations, so the hidden half is now watched and the immediate hole is closed
+without touching the gate. Extending the regex would be a **shared-gate** change and fires
+ADR-0105's trigger, which is not something to smuggle into a dependency bump.
+
+**Sized before deciding:** a repo-wide sweep found **8** compound citations, 7 of them this one
+claim and the eighth in `shoot.mjs`, which the gate excludes anyway as this repository's own file.
+So the convention "one citation, one range" now holds everywhere, and the regex change buys
+enforcement rather than coverage. That is worth doing and worth doing on its own.
