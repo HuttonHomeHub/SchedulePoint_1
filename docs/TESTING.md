@@ -289,6 +289,15 @@ exits non-zero if any failed.
 It deliberately excludes the e2e half, which needs a database and a browser and belongs to
 `scripts/e2e-local.sh` — the rows below still say when that is required.
 
+**And the e2e half is where a reused server quietly invalidates the result.** `scripts/e2e-local.sh`
+refuses to run while anything answers on 3000 or 5173, because `reuseExistingServer` is true outside
+CI: Playwright adopts whatever is already there instead of starting one with the suite's own
+environment, so the config's flag pins never apply and the run means nothing whichever way it goes.
+That refusal fired twice in one session — a `pnpm --filter @repo/api start` left over from a
+screenshot run held the port, and `pkill` did not reach it because the task supervisor restarted it.
+Stop the background task, not just the process. The tell is the clock: the export journey takes ~20s
+against its own API with the pen enforced and ~6s against a reused one without it.
+
 **The first version of this note was written INTO the table**, after the header row, so Prettier
 reflowed it into cells and the ten steps below it lost their header and rendered as literal
 pipe-separated text. `check:doc-links` only checks links, so nothing caught it; a review reading the
