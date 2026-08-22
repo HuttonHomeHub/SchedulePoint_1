@@ -160,22 +160,39 @@ function ShellFrame(): React.ReactElement {
    * case the comment on `contextSubject` above exists for). Keying on the active subject would
    * leave an empty drawer on an organisation route. The term is availability, not selection.
    *
-   * `drawerOnScreen` gates the Escape rung as well as the render, and that is the sharp half rather
-   * than tidiness. The rung guards on `drawer.collapsed` alone, so with the preference set to open
+   * `drawerVisible` gates the Escape rung and `drawerHasContent` the render, and that split is the
+   * sharp half rather than tidiness. The rung guards on `drawer.collapsed` alone, so with the preference set to open
    * and nothing available to show, an Escape on `/account` would have called `drawer.collapse()` —
    * which `use-resizable-panel-prefs.ts` persists to `localStorage` through an effect — and
    * announced "Project Explorer closed." when nothing was open. A reader's panel preference would
    * die on a trip through their account settings, and the only evidence would arrive later, on a
    * plan, with nothing saying why.
    *
-   * **No `isDesktop` term, and that is deliberate rather than overlooked.** Below `lg` the drawer's
-   * column is `hidden lg:flex`, so it is in the DOM and invisible, and Escape there already closes
-   * and announces a panel the reader cannot see — a guard disagreeing with a CSS class. That is a
-   * live pre-existing defect (`docs/TECH_DEBT.md` #168), it is not what #165a is about, and fixing
-   * it would change behaviour on a viewport this epic's journey does not drive. Excluded on
-   * purpose, filed rather than absorbed.
+   * **The `isDesktop` term now lives on `drawerVisible` below, and this paragraph is the history of
+   * why it did not.** ADR-0104 deliberately excluded it: the defect was real but it was not what
+   * #165a was about, and including it would have changed behaviour on a viewport that epic's journey
+   * did not drive. It was filed as `docs/TECH_DEBT.md` #168 rather than absorbed, and closed
+   * separately — which is the point of filing rather than fixing in passing.
    */
-  const drawerOnScreen = !drawer.collapsed && (showingContext || explorerAvailable);
+  const drawerHasContent = !drawer.collapsed && (showingContext || explorerAvailable);
+
+  /**
+   * **Whether a drawer is actually on screen** (`docs/TECH_DEBT.md` #168).
+   *
+   * Below `lg` the drawer's column is `hidden lg:flex`: it is in the DOM and invisible, and the
+   * Explorer's real surface there is the `Sheet`, which is separate state. So a rung that fires on
+   * `drawerHasContent` alone was **a guard disagreeing with a CSS class** — on every viewport under
+   * 1024 px, Escape closed and announced a panel the reader could not see, writing a silent
+   * collapse to `localStorage` and speaking a false sentence into a live region.
+   *
+   * `LG_QUERY` is `(min-width: 64rem)` and the class's breakpoint is the same `64rem`, so the two
+   * track by construction rather than by anyone keeping them in step.
+   *
+   * The **render** keeps `drawerHasContent` deliberately: the column must still mount below `lg` and
+   * be hidden by CSS. Not rendering it would change remount behaviour on a resize across the
+   * breakpoint, which is a different question from the one #168 asks.
+   */
+  const drawerVisible = drawerHasContent && isDesktop;
 
   // Shared, per-org expansion (ADR-0029 Phase 2): both rails and the CRUD coordinator
   // read one set, so revealing a freshly-created node works and pinned/drawer agree.
@@ -216,7 +233,7 @@ function ShellFrame(): React.ReactElement {
 
   const selectSubject = useCallback(
     (next: DrawerSubject) => {
-      const showing = drawerOnScreen;
+      const showing = drawerVisible;
       if (showing && next === subject) {
         drawer.collapse();
         announce(`${subjectName(next)} closed.`);
@@ -226,7 +243,7 @@ function ShellFrame(): React.ReactElement {
       if (!showing) drawer.expand();
       announce(`${subjectName(next)} opened.`);
     },
-    [drawer, drawerOnScreen, subject, announce, subjectName],
+    [drawer, drawerVisible, subject, announce, subjectName],
   );
 
   /**
@@ -261,8 +278,8 @@ function ShellFrame(): React.ReactElement {
      *
      * But it cannot happen. `ToolRail` is mounted on every `_authed` route, its Explorer button
      * renders whenever `orgSlug` is defined, and its context button renders whenever a subject is
-     * registered — while `closeDrawerPanel`, the only caller, requires `drawerOnScreen`, which is
-     * `showingContext || explorerAvailable`. Both disjuncts imply a mounted button. A test written
+     * registered — while `closeDrawerPanel`, the only caller, requires `drawerVisible`, whose
+     * content term is `showingContext || explorerAvailable`. Both disjuncts imply a mounted button. A test written
      * for this rung was tried and withdrawn: detaching the button with `.remove()` leaves a
      * TRUTHY, detached element in the map, so `focus()` silently does nothing and the rung is still
      * not reached — which incidentally proves the map is only ever correct because React fires the
@@ -348,7 +365,7 @@ function ShellFrame(): React.ReactElement {
    */
   const onShellKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || !drawerOnScreen) return;
+      if (event.key !== 'Escape' || event.defaultPrevented || !drawerVisible) return;
       const target = event.target;
       if (
         target instanceof HTMLElement &&
@@ -360,7 +377,7 @@ function ShellFrame(): React.ReactElement {
       event.preventDefault();
       closeDrawerPanel();
     },
-    [drawerOnScreen, closeDrawerPanel],
+    [drawerVisible, closeDrawerPanel],
   );
 
   // Close the drawer once the viewport reaches `lg`+, where the pinned rail is shown — otherwise a
@@ -516,7 +533,7 @@ function ShellFrame(): React.ReactElement {
                   className="border-border col-span-2 col-start-2 row-start-3 border-t"
                 />
 
-                {drawerOnScreen ? (
+                {drawerHasContent ? (
                   <div className="col-start-3 row-start-2 hidden min-h-0 shrink-0 lg:flex">
                     <ContextDrawer
                       // The registered subject names ITSELF ("Excavate"), and says so explicitly
@@ -539,7 +556,7 @@ function ShellFrame(): React.ReactElement {
                         // hosts a `<div>` and learns nothing.
                         <ChromeSlot slotRef={drawerSlotRef} name="drawer" />
                       ) : explorerAvailable ? (
-                        // The `null` arm is unreachable: `drawerOnScreen` above is
+                        // The `null` arm is unreachable: `drawerHasContent` above is
                         // `showingContext || explorerAvailable`, so arriving here with neither is
                         // impossible. It is written as a condition rather than an `orgSlug!`
                         // assertion because the condition keeps the compiler checking and an

@@ -56,6 +56,20 @@ vi.mock('@tanstack/react-router', async (importOriginal) => ({
 
 // The real header pulls in session/org queries; the shell wiring is what we test, so stub it
 // down to the drawer toggle it exposes via shell context.
+/**
+ * **The viewport, mocked — and it has to be** (`docs/TECH_DEBT.md` #168).
+ *
+ * jsdom implements no `matchMedia`, so `useMediaQuery(LG_QUERY, true)` takes its `true` fallback and
+ * every test in this file has always run as a desktop. A #168 case written without this mock would
+ * exercise the branch that was never broken, pass, and prove nothing — which is the same shape as
+ * the `useParams: () => ({})` default that let #165a hide in this very suite.
+ */
+let isDesktop = true;
+
+vi.mock('@/components/ui/use-media-query', () => ({
+  useMediaQuery: () => isDesktop,
+}));
+
 vi.mock('@/components/layout/app-header', async () => {
   const { useShell } = await import('./shell-context');
   const DrawerTrigger = (): React.ReactElement => {
@@ -97,6 +111,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   params = { orgSlug: 'acme' };
+  isDesktop = true;
 });
 
 describe('AppShell', () => {
@@ -309,6 +324,49 @@ describe('AppShell', () => {
       ).toEqual([]);
       expect(within(container).queryByText(/Project Explorer closed/)).not.toBeInTheDocument();
     });
+  });
+
+  /**
+   * **Below `lg`, Escape must not close a drawer the reader cannot see** (`docs/TECH_DEBT.md` #168).
+   *
+   * The drawer's column is `hidden lg:flex`, so under 1024 px it is in the DOM and invisible — the
+   * Explorer's real surface there is the `Sheet`, which is separate state and which the browser
+   * closes on Escape by itself. The rung guarded on content alone, so on every narrow viewport
+   * Escape wrote a silent collapse to `localStorage` and announced "Project Explorer closed." for a
+   * panel that was never on screen: **a guard disagreeing with a CSS class.**
+   *
+   * Both directions are asserted. A test that only pins the narrow case passes equally against a
+   * rung that never fires at all, which would break the behaviour ADR-0104 shipped.
+   */
+  describe('below the lg breakpoint', () => {
+    beforeEach(() => {
+      isDesktop = false;
+    });
+
+    it('does not close, persist or announce anything when Escape is pressed', () => {
+      const writes = spyOnStorageWrites();
+      const { container } = renderShell();
+      const grid = screen.getByRole('main').parentElement!;
+
+      fireEvent.keyDown(grid, { key: 'Escape' });
+
+      expect(
+        writes.filter(
+          ([key, value]) =>
+            key === 'schedulepoint-context-drawer' && value.includes('"collapsed":true'),
+        ),
+      ).toEqual([]);
+      expect(within(container).queryByText(/Project Explorer closed/)).not.toBeInTheDocument();
+    });
+  });
+
+  it('still closes the drawer on Escape at lg and above', () => {
+    renderShell();
+    const grid = screen.getByRole('main').parentElement!;
+    expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
+
+    fireEvent.keyDown(grid, { key: 'Escape' });
+    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
   });
 
   it('puts a skip link first in the document, pointing at a focusable main', () => {
