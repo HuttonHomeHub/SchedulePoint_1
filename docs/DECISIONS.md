@@ -2518,3 +2518,76 @@ median chrome, **7 px at the worst**, negative from 1440 down. §3.1's strip est
 within a pixel; its trigger estimate was 47 px light; its identity estimate was 100 px light. Fourth
 consecutive epic whose width expectation its own measurement contradicted, and the fourth in the same
 direction — an estimate of what a row can hold, made without a browser, comes out optimistic.
+
+## 2026-08-21 — A debt register entry can prescribe a fix that has gone stale
+
+`docs/TECH_DEBT.md` #158 ("the printed and exported diagram is painted on a near-black ground")
+carried both a diagnosis and a remedy. The diagnosis was right and had been confirmed by capturing
+the downloaded PNG. The remedy — "a `PRINT_GROUND` the function does not read from the DOM at all"
+— was **measured before implementing and rejected**.
+
+The register row predates ADR-0102's criticality ladder. Freezing `resolvePrintPalette` to its
+existing literals would have shipped **two inverted label pairings**: white ink on the on-schedule
+fill at **3.56:1** — the commonest bar in any programme, a WCAG 1.4.3 failure — and near-black on
+the warning amber. The light theme had put dark ink on the lightest fill for exactly that reason.
+So the prescribed fix would have made the deliverable worse than the state the row was filed
+against, while reading as compliance with the register.
+
+**The rule this adds.** `CLAUDE.md` §19 already says to re-verify a spec's PROBLEM statement,
+because a problem goes stale when somebody fixes it and the document keeps complaining. This is the
+mirror: **a remedy goes stale when the world it was written against moves**, and it goes stale
+silently, because nothing re-reads a remedy until somebody implements it. Both halves of a filed
+item are claims. #158's diagnosis survived re-verification; its remedy did not.
+
+**What made the difference was one measurement**, twenty lines of throwaway probe resolving the
+canvas scope out of `globals.css` and printing live-vs-fallback for every field the print palette
+reads. Two of thirty rows came back with a luminance delta of ±0.99 — a complete inversion — and
+nothing short of running it would have shown that, because each literal is individually plausible.
+
+**A second, still-live drift was found on the way and the row had not spotted it.**
+`PrintSurface.css` pinned three hexes under a comment claiming they were "PINNED to
+`resolvePrintPalette()`'s own light fallbacks so the two can't drift". They had. The escape that
+comment missed is in its own last sentence: a `@media print` rule cannot read a runtime JS value,
+but it **can** read a custom property. Both sides now read one set of `--print-*` tokens.
+
+**And two register rows were stale in the other direction.** #161c and #161d were filed the same
+day the release that resolved them shipped — #161d explicitly labelled "the one item here that is a
+product-owner question rather than a defect", when the product owner had already been asked and had
+already answered. Left standing, it would have sent them a question they had settled that morning.
+
+## 2026-08-21 — The architecture decision inside a debt fix, recorded where it belongs
+
+The entry above this one records a **process** lesson from closing `docs/TECH_DEBT.md` #158 — that
+a filed remedy goes stale as readily as a filed problem. That was the transferable finding, and it
+is not the architectural call the same commit made. The deferred review pointed out that the call
+was living in two docblocks and nowhere a reader would look, which is that commit's own headline
+finding — a comment naming its own trigger is not a record — one level up.
+
+So, plainly: **a fourth non-rebound colour token group was introduced.** `--print-ground`,
+`--print-ink` and `--print-muted-ink` are declared at `:root`, rebound by no surface scope, and
+read by both `resolvePrintPalette()` and the two print stylesheets.
+
+**The alternative was a `[docs]`-worthy sixth surface scope** — `[data-surface="print"]` with a
+complete 31-member family, governed by ADR-0097's closure rules like every other scope. It was
+costed and deferred, for one reason only: choosing which of the 31 members genuinely differ on
+paper is design judgement nobody had done. A second stated blocker — that the image export has no
+DOM node to carry the attribute — was **checked and is false**, and is recorded as false in #163 so
+it cannot be cited later as evidence the scope is expensive.
+
+**The precedent leaned on was the wrong one, and two reviewers found that independently.** The
+justification given was ADR-0077's `--ground`/`--ground-end` pair. But this repo's own written
+discriminator is _"if the thing has a semantic sibling in the base vocabulary, rebind it; if it
+does not, pack it"_ — and these three have exact siblings. Invoking the _shape_ of a precedent
+while skipping the test that authorises it is how an exception becomes a category. The trio is now
+enrolled in `OUTSIDE_THE_CLOSURE` under its own `deferredScopes` key, described as what it is: a
+surface family truncated to three members, not a pack.
+
+**The accounting gap it walked through is closed.** The closure gate derived its subject from
+`@theme inline`, so its real scope was "every colour token exposed as a utility" rather than "every
+colour token" — and a `:root` declaration that is never exposed was invisible to it in all four
+directions (not rebound, not orphan, not pack, not reset). Measured: 246 colour-ish `:root`
+declarations, 182 family-prefixed, 57 exposed, leaving **seven** unaccounted — the four family
+roots and these three. A narrow gap, which is why closing it generally was four lines rather than a
+project. `token-architecture.test.ts` now sweeps `:root` and requires every colour token to be in a
+family or named outside the closure with a reason. There is no third option, which was the point of
+computing the closure in the first place.

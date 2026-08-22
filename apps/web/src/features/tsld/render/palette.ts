@@ -154,78 +154,102 @@ export function resolveTsldPalette(root: Element): TsldPalette {
  * the diagram — the paper `ground`, the title `ink`, and the muted subtitle `mutedInk`.
  */
 export interface PrintPalette extends TsldPalette {
-  /** The white paper ground the export lays behind the diagram (token `--color-background`, light). */
+  /** The paper ground the export lays behind the diagram (token `--print-ground`, light by declaration). */
   ground: string;
-  /** Title-band foreground ink (token `--color-foreground`, light) — dark, legible on the paper. */
+  /** Title-band foreground ink (token `--print-ink`) — dark, legible on the paper. */
   ink: string;
-  /** Muted subtitle / generated-at ink (token `--color-muted-foreground`, light). */
+  /** Muted subtitle / generated-at ink (token `--print-muted-ink`). */
   mutedInk: string;
 }
 
 /**
- * Resolve the print palette from the SAME design tokens (ADR-0006) `resolveTsldPalette` reads, so a
- * printed or exported diagram cannot drift from the one on screen. Falls back to sensible LIGHT
- * values when the DOM or the tokens are unavailable (jsdom in unit tests), which is what makes the
- * palette light there too.
+ * **Every token `resolvePrintPalette` reads, and the light value it falls back to.** Exported so
+ * `print-palette.structural.test.ts` can sweep the SAME list rather than restating it — a gate
+ * built from its own hand-written copy of the roster is the ADR-0073 C4 defect in miniature, and it
+ * would go green the day a field is added and not mirrored.
  *
- * **It used to force light by momentarily clearing a `.dark` class**, synchronously so no paint
- * happened in between. ADR-0097 collapsed the product to one theme whose working surfaces are
- * already light, so there is nothing to force and nothing to restore. **If a dark theme returns,
- * this is one of the places that needs it back** — paper wants light whatever the screen is doing,
- * and the trick is recorded here rather than left to be rediscovered.
+ * The three `--print-*` names are the paper trio (TECH_DEBT #158): light **by declaration**, read
+ * by `PrintSurface.css` too, so the chrome around the image and the image itself have one source.
+ * Everything else resolves from the CANVAS surface scope, which is what keeps a printed diagram
+ * from drifting from the one on screen — the property this function's docblock has always promised
+ * and the reason freezing these to literals would be wrong. See the gate for what guards it.
+ */
+export const PRINT_TOKEN_SOURCES = {
+  ground: ['--print-ground', '#ffffff'],
+  ink: ['--print-ink', '#333333'],
+  mutedInk: ['--print-muted-ink', '#666666'],
+  canvasGround: ['--print-ground', '#ffffff'],
+  gridLine: ['--border', '#e0e0e0'],
+  gridLineDay: ['--canvas-grid-day', '#dee0e2'],
+  gridLineMonth: ['--canvas-grid-month', '#72777e'],
+  gridLineYear: ['--canvas-grid-year', '#595e66'],
+  edge: ['--muted-foreground', '#666666'],
+  bar: ['--primary', '#4b8cca'],
+  critical: ['--destructive', '#9c0711'],
+  nearCritical: ['--warning', '#9f5600'],
+  outline: ['--foreground', '#333333'],
+  labelBeside: ['--foreground', '#333333'],
+  selection: ['--ring', '#1266a9'],
+  nonWorking: ['--muted', '#f2f3f5'],
+  nonWorkingHatch: ['--canvas-nonworking-hatch', '#e3e6ea'],
+  today: ['--destructive', '#9c0711'],
+  todayInk: ['--destructive-foreground', '#ffffff'],
+  dataDate: ['--foreground', '#333333'],
+  dataDateInk: ['--print-ground', '#ffffff'],
+  conflict: ['--warning', '#9f5600'],
+  laneOverlap: ['--warning', '#9f5600'],
+  labelInside: ['--primary-foreground', '#151b24'],
+  labelInsideCritical: ['--destructive-foreground', '#ffffff'],
+  labelInsideNearCritical: ['--warning-foreground', '#ffffff'],
+  barStroke: ['--border', '#e0e0e0'],
+  hoverRing: ['--muted-foreground', '#666666'],
+  handleHalo: ['--print-ground', '#ffffff'],
+  monthBand: ['--canvas-band', '#f6f7f9'],
+} as const satisfies Record<keyof PrintPalette, readonly [token: string, fallback: string]>;
+
+/**
+ * Resolve the print palette for the **export & print** deliverables.
+ *
+ * Two different rules, and the split is the whole point (TECH_DEBT #158):
+ *
+ * - **The paper trio** (`ground`, `canvasGround`, `ink`, `mutedInk`, `dataDateInk`, `handleHalo`)
+ *   reads `--print-*`, which is declared light at `:root` and is **not rebound by any surface**.
+ *   Paper is light because it is declared light, not because the current theme happens to be.
+ * - **The diagram fields** read the CANVAS surface scope, so a printed diagram cannot drift from
+ *   the one on screen — the property this function has always promised, and the reason freezing
+ *   them to literals is the wrong SHAPE of fix even though it would also produce a light picture.
+ *
+ * **What "cannot drift" does and does not cover.** It holds for hue and ink — bars, labels, edges,
+ * criticality — which are the same tokens the screen paints from. It does NOT hold for anything
+ * measured *against the ground*, because the ground was deliberately decoupled: the non-working
+ * wash sits ΔL 0.007 from the canvas ground on screen and ΔL 0.035 from paper. That is a chosen
+ * divergence (paper wants more separation than a lit screen), not parity, and saying so here is
+ * cheaper than someone rediscovering it from an artefact.
+ *
+ * **What this replaced, and why the obvious fix was rejected.** The paper trio used to read
+ * `--background`/`--foreground`, so Graphite printed a near-black diagram panel inside white paper
+ * chrome. TECH_DEBT #158 prescribed freezing the whole palette to literals the function never reads
+ * from the DOM. Measured against the shipped light theme before implementing, that would have
+ * shipped two INVERTED label pairings — the frozen literals pair white ink with the on-schedule
+ * fill (3.56:1, WCAG 1.4.3 fail on the commonest bar in any programme) and near-black with the
+ * warning amber, because they predate the criticality ladder that derived those pairings. The
+ * diagnosis was right and the prescribed mechanism had gone stale; the fallbacks below are now the
+ * shipped tokens' own values, computed rather than eyeballed.
+ *
+ * **It used to force light by momentarily clearing a `.dark` class.** ADR-0097 collapsed the
+ * product to one light theme and the trick was removed as unnecessary; ADR-0099 made the whole
+ * product dark two days later and nothing acted on the comment that named its own trigger. That is
+ * why the guarantee is now a gate — `print-palette.structural.test.ts` fails the build if the
+ * canvas scope stops resolving light, so the defect cannot return silently. When it fires, the fix
+ * is a `[data-surface="print"]` scope with paper values of its own, not another comment.
  */
 export function resolvePrintPalette(root: Element): PrintPalette {
   const styles = getComputedStyle(root);
-  const token = (name: string, fallback: string): string => {
-    const value = styles.getPropertyValue(name).trim();
-    return value || fallback;
-  };
-  return {
-    // Surface colours the export composites around the diagram (light fallbacks: white paper, near-
-    // black ink, mid-grey muted) — token-derived so a themed token override still flows through.
-    ground: token('--background', '#ffffff'),
-    ink: token('--foreground', '#1a1a1a'),
-    mutedInk: token('--muted-foreground', '#6b7280'),
-    // The painter fields, mirroring `resolveTsldPalette` but with LIGHT fallbacks (grid a light grey,
-    // ink near-black) so the diagram reads on white even when the tokens can't be read.
-    // The print surface never draws the minimap, so the ground field just mirrors `ground`.
-    canvasGround: token('--background', '#ffffff'),
-    gridLine: token('--border', '#e5e7eb'),
-    // Time-axis gridline tiers, LIGHT-forced fallbacks (mirrors resolveTsldPalette's fields).
-    gridLineDay: token('--canvas-grid-day', '#f5f6f8'),
-    gridLineMonth: token('--canvas-grid-month', '#bcc2ca'),
-    gridLineYear: token('--canvas-grid-year', '#8b93a1'),
-    edge: token('--muted-foreground', '#6b7280'),
-    bar: token('--primary', '#2f62c4'),
-    critical: token('--destructive', '#c2331f'),
-    nearCritical: token('--warning', '#b58900'),
-    outline: token('--foreground', '#1a1a1a'),
-    selection: token('--ring', '#3b6fbf'),
-    nonWorking: token('--muted', '#f0f0f0'),
-    // LIGHT fallback for the same F7a stripe (mirrors `resolveTsldPalette`).
-    nonWorkingHatch: token('--canvas-nonworking-hatch', '#c7c7c7'),
-    today: token('--destructive', '#c2331f'),
-    todayInk: token('--destructive-foreground', '#ffffff'),
-    // The data-date pair with LIGHT fallbacks (mirrors `resolveTsldPalette`): near-black rule +
-    // pill on paper, white ink on the pill — the export path draws the same line the screen does.
-    dataDate: token('--foreground', '#1a1a1a'),
-    dataDateInk: token('--background', '#ffffff'),
-    conflict: token('--warning', '#b58900'),
-    laneOverlap: token('--warning', '#b58900'),
-    labelInside: token('--primary-foreground', '#ffffff'),
-    labelInsideCritical: token('--destructive-foreground', '#ffffff'),
-    labelInsideNearCritical: token('--warning-foreground', '#1a1a1a'),
-    labelBeside: token('--foreground', '#1a1a1a'),
-    // M4 refresh entries with LIGHT fallbacks (the export path builds a `visualRefresh`-less
-    // scene today, but the palette contract stays total — every painter field resolves).
-    barStroke: token('--border', '#e5e7eb'),
-    hoverRing: token('--muted-foreground', '#6b7280'),
-    // The export builds a handle-less scene (the handles are an editing affordance) and prints
-    // on unbanded paper, but the palette contract stays TOTAL — every painter field resolves, so
-    // a future export that does paint them cannot pick up an undefined colour.
-    handleHalo: token('--canvas', '#ffffff'),
-    monthBand: token('--canvas-band', '#f7f7f7'),
-  };
+  const entries = Object.entries(PRINT_TOKEN_SOURCES).map(([field, [name, fallback]]) => [
+    field,
+    styles.getPropertyValue(name).trim() || fallback,
+  ]);
+  return Object.fromEntries(entries) as PrintPalette;
 }
 
 /**

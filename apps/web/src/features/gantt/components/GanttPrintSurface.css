@@ -4,11 +4,20 @@
  * The container/reveal mechanics are shared — see `src/styles/print-document.css`. This file styles
  * only this surface's own markup.
  *
- * Colours are hard-coded and forced LIGHT: this is the documented print exception to the "no
- * hard-coded colours" rule (a `@media print` sheet cannot read a runtime token, and the app may be
- * in dark theme while the paper is white). The greys are pinned to the same light-token fallbacks
- * `PrintSurface.css` uses — ink #1a1a1a (light --color-foreground), muted #6b7280 (light
- * --color-muted-foreground) — so the two printed artefacts look like one product.
+ * Paper, ink and muted ink read the `--print-*` tokens — the SAME three `PrintSurface.css` and
+ * `resolvePrintPalette()` read — so the exported diagram and the printed programme are one product
+ * rather than two that agree by hand. The remaining greys are this sheet's own greyscale chart
+ * vocabulary (rules, baseline outlines, float dashes) and are deliberately literal: they have no
+ * sibling in the token vocabulary and nothing else draws them.
+ *
+ * **This block used to hard-code all three under a comment giving the reason as "a `@media print`
+ * sheet cannot read a runtime token".** That is false — a `@media print` rule cannot read a runtime
+ * *JS value*, but a custom property is CSS and resolves normally. The same mistaken belief was in
+ * `PrintSurface.css`, and the two sheets pinned the same literals to each other on the strength of
+ * it. TECH_DEBT #158 moved that file to the tokens and left this one, which silently made this
+ * docblock's "look like one product" claim false: ink went var(--print-ink) there and stayed var(--print-ink) here.
+ * Caught by the deferred ux gate, and it is the defect class #158 exists to close, committed while
+ * closing it.
  *
  * Every mark is distinguishable WITHOUT colour: critical is a darker fill AND a solid outline,
  * baseline is a dashed outline with no fill, float is a dashed line. A greyscale photocopy of a
@@ -30,8 +39,8 @@
   .gantt-print-root {
     display: block !important;
     margin: 0;
-    background: #ffffff;
-    color: #1a1a1a;
+    background: var(--print-ground);
+    color: var(--print-ink);
     color-scheme: light;
     font-family:
       'Inter',
@@ -55,14 +64,14 @@
   .gantt-print-subtitle {
     margin: 0 0 10px;
     font-size: 11px;
-    color: #6b7280;
+    color: var(--print-muted-ink);
     line-height: 1.2;
   }
 
   .gantt-print-empty {
     margin: 0;
     font-size: 11px;
-    color: #6b7280;
+    color: var(--print-muted-ink);
   }
 
   .gantt-print-table {
@@ -73,7 +82,7 @@
 
   .gantt-print-table th {
     padding: 0 4px 3px;
-    border-bottom: 1px solid #1a1a1a;
+    border-bottom: 1px solid var(--print-ink);
     font-weight: 600;
     text-align: left;
     vertical-align: bottom;
@@ -129,7 +138,7 @@
     font-size: 8px;
     font-weight: 400;
     white-space: nowrap;
-    color: #6b7280;
+    color: var(--print-muted-ink);
   }
 
   /* ----- the bars ----- */
@@ -146,19 +155,19 @@
     height: 8px;
     margin-top: -4px;
     background: #d1d5db;
-    border: 1px solid #6b7280;
+    border: 1px solid var(--print-muted-ink);
     overflow: hidden;
   }
 
   /* Criticality is carried by BOTH a darker fill and a heavier outline, so it survives greyscale. */
   .gantt-print-critical {
     background: #9ca3af;
-    border: 1.5px solid #1a1a1a;
+    border: 1.5px solid var(--print-ink);
   }
 
   .gantt-print-summary-bar {
-    background: #6b7280;
-    border-color: #1a1a1a;
+    background: var(--print-muted-ink);
+    border-color: var(--print-ink);
   }
 
   .gantt-print-progress {
@@ -181,7 +190,7 @@
     position: absolute;
     bottom: 1px;
     height: 4px;
-    border: 1px dashed #6b7280;
+    border: 1px dashed var(--print-muted-ink);
   }
 
   .gantt-print-diamond {
@@ -191,7 +200,7 @@
     height: 7px;
     margin-top: -3.5px;
     margin-left: -3.5px;
-    background: #1a1a1a;
+    background: var(--print-ink);
     transform: rotate(45deg);
   }
 
@@ -200,7 +209,7 @@
   .gantt-print-legend {
     margin: 8px 0 0;
     font-size: 9px;
-    color: #6b7280;
+    color: var(--print-muted-ink);
   }
 
   .gantt-print-swatch {

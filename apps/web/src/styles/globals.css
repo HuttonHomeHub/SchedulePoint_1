@@ -460,6 +460,36 @@
   --ground: oklch(0.975 0.005 263);
   --ground-end: oklch(0.851 0.03 260);
 
+  /* ── Paper (TECH_DEBT #158) ───────────────────────────────────────────────────────────────
+     The exported PNG/PDF and the printed programme. **Light by declaration, not by agreeing with
+     the current theme** — paper wants light whatever the screen is doing, and the previous
+     arrangement resolved the print ground from the live `--background`, so Graphite silently
+     printed a near-black diagram panel inside white paper chrome.
+
+     **A surface family truncated to three members, NOT a pack** — the honest description, and the
+     flattering one was in this comment until the deferred review. It leaned on the
+     `--ground`/`--ground-end` precedent, and this repo's own discriminator refuses it: "if the
+     thing has a semantic sibling in the base vocabulary, rebind it; if it does not, pack it". A
+     gradient's second stop has no sibling; these three ARE the siblings of `--background`,
+     `--foreground` and `--muted-foreground`. The full answer is a `[data-surface="print"]` scope,
+     deferred on the design judgement it needs and filed as TECH_DEBT #163, with the trigger held
+     by `print-palette.structural.test.ts` rather than by this paragraph.
+
+     `PrintSurface.css`, `GanttPrintSurface.css` and `resolvePrintPalette()` read these SAME three
+     names, which is what actually stops the three print artefacts drifting. That file's own
+     comment claimed its hexes were "PINNED to `resolvePrintPalette()`'s own light fallbacks so the
+     two can't drift" — measured 2026-08-21, they had: the CSS said #ffffff/#1a1a1a/#6b7280 while
+     the runtime resolved oklch(0.958)/oklch(0.321)/oklch(0.51). A comment is not a pin. The
+     escape it missed is that a `@media print` rule cannot read a runtime JS value but CAN read a
+     custom property, so one source serves both.
+
+     Ground is TRUE white because that is what paper is, and what the print chrome already claimed
+     to be; the diagram is baked onto it rather than onto a panel one step off it. Ink and muted
+     ink are the page's own values, which clear 4.5:1 on white with room to spare. */
+  --print-ground: oklch(1 0 0);
+  --print-ink: oklch(0.321 0 0);
+  --print-muted-ink: oklch(0.51 0 0);
+
   /* Time-axis gridline tiers — same widely-spaced day/month/year ladder as Light (WCAG 1.4.1:
      day vs month must be reliably distinguishable, not merely a hair off --border). */
   --canvas-grid-day: oklch(0.905 0.004 250);
