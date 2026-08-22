@@ -127,6 +127,8 @@ function sceneKeys(file: string, anchor: string): string[] {
 
 describe('the exported diagram composes the same scene as the screen (structural)', () => {
   const canvasKeys = sceneKeys(CANVAS, 'useRef<TsldScene>({');
+  // The canvas composes the SAME object twice — the ref initialiser and the resync effect.
+  const canvasResyncKeys = sceneKeys(CANVAS, 'sceneRef.current = {\n');
   const exportKeys = sceneKeys(EXPORT, 'const scene = {');
 
   it('both rosters are plausibly sized, so a truncated parse cannot read as parity', () => {
@@ -151,6 +153,23 @@ describe('the exported diagram composes the same scene as the screen (structural
       `these scene keys are on the screen and absent from the export, and nobody has said why: ` +
         `${missing.join(', ')}.\nCompose them in the export, or name them in SCREEN_ONLY with a reason.`,
     ).toEqual([]);
+  });
+
+  it("the canvas's two compositions agree with each other", () => {
+    // **`TsldCanvas` builds the scene object twice** — once to seed the ref and once in the resync
+    // effect — and this gate read only the first. The pair agreeing is not an assumption worth
+    // making: `TsldCanvas.tsx:841-843` records that it has already drifted once, which is why the
+    // two flag expressions were hoisted to a shared const in the first place.
+    //
+    // Without this, a key added to the initialiser and forgotten in the effect passes every other
+    // assertion here — the export would compose it, the difference would be empty, and the screen
+    // would simply stop painting it after the first data change. Found by a deferred review.
+    const missingFromResync = canvasKeys.filter((k) => !canvasResyncKeys.includes(k));
+    const missingFromInit = canvasResyncKeys.filter((k) => !canvasKeys.includes(k));
+    expect(
+      { missingFromResync, missingFromInit },
+      "the canvas's ref initialiser and its resync effect compose different scene keys",
+    ).toEqual({ missingFromResync: [], missingFromInit: [] });
   });
 
   it('SCREEN_ONLY names nothing the canvas has stopped composing', () => {
