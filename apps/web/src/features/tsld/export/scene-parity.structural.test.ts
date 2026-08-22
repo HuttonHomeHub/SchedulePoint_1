@@ -34,21 +34,35 @@ const EXPORT = join(SRC, 'features/tsld/toolbar/commands/use-diagram-image.ts');
  * The keys the export deliberately does not compose, each with the reason. **A reason per entry,
  * not a bare list** — the previous state of this boundary was a bare absence, and an absence a
  * reader cannot distinguish from an oversight is what let seven layers go missing.
+ *
+ * **Three of these reasons were wrong when first written, and a wrong reason is worse than a bare
+ * absence because it closes the question.** `barFill`/`barInk` were described as "a per-bar
+ * override the canvas threads for live preview during a drag"; they are the **Colour-by lens**, a
+ * persistent view mode gated on `colourMode !== 'criticality'` (`TsldPanel.tsx:1091-1100`), with
+ * nothing gesture-scoped about them. `flaggedIds` was described as the ADR-0094 conflict cycle;
+ * it is the **over-allocation highlight** (ADR-0041), driven by its own toggle (`:1143-1146`) and
+ * painted as a persistent badge on every flagged bar. Both were caught by a deferred review
+ * reading the code, not by anything automatic.
+ *
+ * **Five entries are marked LENS, and that is a live question rather than a settled exclusion.**
+ * A planner who colours by resource and exports gets a criticality-coloured picture; one who has
+ * isolated a subnetwork exports the whole plan. That is the same screen-vs-deliverable divergence
+ * this gate exists for, one category along — so it is filed as `docs/TECH_DEBT.md` #167 with the
+ * enumeration attached, rather than resolved by a sentence here.
  */
 const SCREEN_ONLY: Record<string, string> = {
   selectedId: 'a selection is a live interaction; a delivered picture has no selected bar',
   selectedIds: 'as selectedId — the plural selection (ADR-0080) is interaction state',
   showEdgeHandles: 'edge handles are grab targets, and paper has no pointer',
-  dimmedIds: 'the search/filter lens dims what does not match; an export is not a search result',
+  dimmedIds: 'LENS — filter, isolate and float-path dimming, unioned; see TECH_DEBT #167',
   hoverId: 'hover cannot exist in a raster',
   lagHandles: 'a lag handle is a drag target (ADR-0052 M3)',
   activeLagId: 'the lag drag in progress',
   gestureSourceId: 'the bar a gesture started on',
-  barFill: 'a per-bar override the canvas threads for live preview during a drag',
-  barInk: 'as barFill — the paired ink for that preview',
-  baselineGhosts:
-    'a lens toggle whose export behaviour is TECH_DEBT #164 follow-up, not settled here',
-  flaggedIds: 'the conflict cycle highlights one bar at a time; a picture has no cursor',
+  barFill: "LENS — the Colour-by mode's per-bar fill map; see TECH_DEBT #167",
+  barInk: "LENS — the Colour-by mode's paired ink map; see TECH_DEBT #167",
+  baselineGhosts: 'LENS — the baseline variance ghosts; see TECH_DEBT #167',
+  flaggedIds: 'LENS — the over-allocation highlight (ADR-0041); see TECH_DEBT #167',
 };
 
 /**
@@ -62,9 +76,22 @@ const SCREEN_ONLY: Record<string, string> = {
  * and would have reported an empty canvas roster, i.e. no missing keys, i.e. green.
  */
 function sceneKeys(file: string, anchor: string): string[] {
-  const text = readFileSync(file, 'utf8');
+  // **Comments are stripped BEFORE brace matching, and that ordering is the whole correctness of
+  // this function.** The first version matched braces over raw text and stripped comments after,
+  // so an unbalanced brace inside a comment truncated the object's extent — and a scene key after
+  // that point vanished from the roster. Reproduced: a comment reading "mirrors the } that closes
+  // the band block" placed above a brand-new unexported key made all three assertions pass. The
+  // gate could be silenced, on the exact defect it exists to catch, by a comment.
+  const text = readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*\/\/.*$/gm, '');
   const start = text.indexOf(anchor);
-  if (start === -1) throw new Error(`no \`${anchor}\` in ${file}`);
+  if (start === -1) {
+    throw new Error(
+      `no \`${anchor}\` in ${file}. A gate that cannot see its own input must refuse rather than ` +
+        `answer — a default here reads as "no missing keys", which is indistinguishable from parity.`,
+    );
+  }
   let depth = 0;
   let end = start;
   for (let i = text.indexOf('{', start); i < text.length; i += 1) {
@@ -77,19 +104,14 @@ function sceneKeys(file: string, anchor: string): string[] {
       }
     }
   }
-  const body = text
-    .slice(text.indexOf('{', start) + 1, end)
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/^\s*\/\/.*$/gm, '');
-  // Top-level keys only: a nested object's keys are at depth > 0.
+  const body = text.slice(text.indexOf('{', start) + 1, end);
   const keys: string[] = [];
   let nest = 0;
   for (const line of body.split('\n')) {
     const trimmed = line.trim();
     // **Refuse rather than under-report.** A spread contributes keys this parser cannot see, so a
     // composition using one would look smaller than it is and the difference check would pass on
-    // keys that are present. Silence would be indistinguishable from parity — the exact shape this
-    // gate exists to catch — so it throws and the author writes the keys out.
+    // keys that are present. Silence would be indistinguishable from parity.
     if (nest === 0 && trimmed.startsWith('...')) {
       throw new Error(
         `${file} composes its scene with a spread (${trimmed.slice(0, 40)}…), which this gate ` +
@@ -106,6 +128,14 @@ function sceneKeys(file: string, anchor: string): string[] {
 describe('the exported diagram composes the same scene as the screen (structural)', () => {
   const canvasKeys = sceneKeys(CANVAS, 'useRef<TsldScene>({');
   const exportKeys = sceneKeys(EXPORT, 'const scene = {');
+
+  it('both rosters are plausibly sized, so a truncated parse cannot read as parity', () => {
+    // ADR-0093's second assertion, applied to BOTH sides. The difference check is satisfied
+    // equally by an export that composes nothing and by a canvas roster the parser truncated —
+    // and a green suite could not tell either from "the gap is closed". The canvas floor is the
+    // one the comment-brace defect would have tripped.
+    expect(canvasKeys.length, 'the canvas roster looks truncated').toBeGreaterThan(20);
+  });
 
   it('the export roster is non-empty', () => {
     // ADR-0093's second assertion. The difference check below is satisfied equally by an export

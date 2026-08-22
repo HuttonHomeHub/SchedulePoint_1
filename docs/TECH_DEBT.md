@@ -3348,3 +3348,33 @@ here, and `print-palette.structural.test.ts`'s docblock now says so.
 The plan's CQ-2 deferred this as "exactly as on screen at the same scale". The artefact is not the
 screen, and this is the one place that distinction bites. Not addressed in W3-M2, which restored
 the layer rather than changing how it culls.
+
+## 167. The exported diagram is the default picture, not the planner's picture
+
+**Raised 2026-08-22** (the W3-M2 component review). **Size:** M. The spec's CQ-5 promised this row
+and it was never filed — the enumeration lived only in a `SCREEN_ONLY` record whose reasons were
+partly wrong, which is the opposite of a durable record.
+
+#164 restored the seven layers the export never composed. **Five more keys it does not compose are
+lens state**, and they are a different question: not "a layer nobody wired up" but "whose picture is
+the export". `feature-spec.md` US-2 words it as _the export is my picture rather than a fixed one_.
+
+| key                  | what it actually is                                        | consequence today                                                      |
+| -------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `barFill` / `barInk` | the **Colour-by** lens (`TsldPanel.tsx:1091-1100`)         | a planner colouring by resource exports a criticality-coloured picture |
+| `flaggedIds`         | the **over-allocation** highlight, ADR-0041 (`:1143-1146`) | over-allocated bars carry no badge in the deliverable                  |
+| `baselineGhosts`     | the baseline variance ghosts                               | a plan with a baseline set exports without its variance                |
+| `dimmedIds`          | filter **∪ isolate ∪ float-path** dimming (`:1076-1085`)   | an isolated subnetwork exports as the whole plan                       |
+
+**Three of those descriptions replace wrong ones.** `barFill`/`barInk` were recorded as a live drag
+preview and `flaggedIds` as the conflict cycle; neither is gesture-scoped, both are persistent view
+modes. A wrong reason is worse than a bare absence, because it closes the question — which is
+exactly what happened for as long as the record said "drag preview".
+
+**Not simply a matter of adding four keys.** `dimmedIds` unions three sources with different
+intents — a _filter_ is a search, but _isolate_ and _float-path_ are deliberate framing acts a
+planner performs in order to show something, so the honest default may differ per source.
+`baselineGhosts` is the one a planner is most likely to expect and the most work: it needs
+`varianceRows` threaded and re-derived against the export viewport, the way `wbsBandBars` already
+is. That is why it is deferred rather than done — but deferred with the enumeration attached, which
+is the part CQ-5 called durable and did not deliver.

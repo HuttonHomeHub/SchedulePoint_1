@@ -8,6 +8,7 @@ import {
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
+import { EXPORT_TOP_BAND } from '../src/features/tsld/export/export-image';
 
 /**
  * **The exported diagram, decoded and measured** (TECH_DEBT #164, W3-M2).
@@ -39,8 +40,16 @@ test.describe.configure({ mode: 'serial' });
 
 const STAMP = Date.now() + 7300;
 
-/** The reserved title strip, which carries a generated date and the plan's name. Never sampled. */
-const TITLE_BAND_PX = 110;
+/**
+ * The reserved title strip, which carries a generated date and the plan's name. Never sampled.
+ *
+ * **Imported rather than restated**, and scaled by the device pixel ratio the export rasterises
+ * at. It was a literal 110 against a real `EXPORT_TOP_BAND` of 96 — safe only because this
+ * config runs at `deviceScaleFactor: 1`, and at dpr 2 the band is 192 raster rows while 110 would
+ * have sampled title text into the colour counts. A second copy of a constant, wrong by 14 and
+ * silently right for one reason.
+ */
+const TITLE_BAND_PX = EXPORT_TOP_BAND;
 
 test.describe('The exported diagram', () => {
   test('is painted on light paper and carries the ground layers the screen shows', async ({

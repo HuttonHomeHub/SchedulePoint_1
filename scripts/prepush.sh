@@ -52,9 +52,21 @@ if [ "$CHECKS_ONLY" -eq 0 ]; then
   run "typecheck" pnpm typecheck
   run "test" pnpm test
 fi
-for gate in counts doc-links playbook build-contract claims nginx flags adr-coverage \
-            surface-contract frontend-only; do
-  run "check:$gate" pnpm "check:$gate"
+# **Derived from package.json, never listed here.** A hard-coded roster beside a set that grows is
+# the ADR-0073 C4 defect: an eleventh `check:*` script lands and this gate silently stops covering
+# the estate, with nothing failing. That is the same shape the scene-parity gate was rebuilt to
+# avoid two commits earlier, so writing it into the tool that checks everything else would have
+# been careless. Caught by review before it could bite.
+mapfile -t gates < <(node -e '
+  const s = require("./package.json").scripts ?? {};
+  for (const k of Object.keys(s)) if (k.startsWith("check:")) console.log(k);
+')
+if [ ${#gates[@]} -eq 0 ]; then
+  echo "No check:* scripts found in package.json — refusing to report success on nothing." >&2
+  exit 1
+fi
+for gate in "${gates[@]}"; do
+  run "$gate" pnpm "$gate"
 done
 
 echo
