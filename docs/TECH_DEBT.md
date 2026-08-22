@@ -108,6 +108,17 @@ of its peers.
 > ADR-0056's canvas Today pill (`render/paint.ts:1339-1364`, `TODAY_CHIP_TOP`), not as the DOM chip
 > this row describes. Only the **tiered ruler** remains (`TsldCanvas.tsx:1714-1722` is still three
 > plain rows, year pinned left, no month tint). The row read as though neither half existed.
+>
+> **And the note above inverted on 2026-08-22, which is why it is corrected rather than replaced.**
+> ADR-0106 (#148) deleted that canvas pill and shipped **the DOM chip this row originally asked
+> for** — `Today` is now a DOM marker in the ruler band, on a row of its own, beside `Data date`.
+> So the half this note called "a different shape than specified" has since become the specified
+> shape, by a route nobody planned: an epic about a label covering a bar, not about this row. Both
+> line citations are stale too — `TODAY_CHIP_TOP` no longer exists, and `TsldCanvas.tsx:1714-1722`
+> is now the cursor-readout block. **What genuinely remains is the tiered ruler alone** (year
+> centred / month names / day numbers, month tint), and it is worth noting that the band is no
+> longer three rows but five: three tick rows plus two marker rows, whose y a redesign must respect
+> (ADR-0106 D3 — the year label may never be occluded).
 
 S4 landed the canvas month bands — the diagram on its own banded ground — but deliberately stopped
 short of the tiered ruler redesign (year centred / month names / day numbers) and the TODAY chip.
@@ -2659,7 +2670,9 @@ work is judged on — is where both conditions meet.
 >    `paint()` at `:127` — so the Today and Data date pills have never reached a PNG or a PDF at
 >    all, only the legend. That converts into a strong parity claim for the fix rather than a second
 >    site to change, and the question it raises — should the deliverable carry these marks? — is
->    filed with the ADR-0103 family (#164/#166/#167), not here.
+>    **#175**, beside the ADR-0103 family (#164/#166/#167), not here. That line said "filed with the
+>    ADR-0103 family" for several hours while no such row existed: the ADR-0071 failure inside the
+>    epic that quotes it.
 >
 > What survives unchanged is the finding itself, which is the third paragraph below: the pills are
 > meticulous about each other and blind to what is underneath.
@@ -3289,6 +3302,14 @@ fractional Today line **with a pill**, the deliverable drew a whole-day line wit
 `paint.ts` gates the pill on the key being non-null. Nobody decided any of this: nine features each
 added correctly to the screen and nobody re-read the export.
 
+**That sentence went stale within a day, and the correction matters for anyone reading this row as
+a description of the export.** ADR-0106 (#148, 2026-08-22) moved all three date labels off the
+canvas into the ruler band, so **the screen no longer draws a Today pill at all** and `paint.ts`
+gates nothing on `todayFraction` but the line's x. What this row fixed — the export drawing the
+**fractional** line rather than the whole-day one — still holds and is what the shared derivation
+carries. The pill half of the sentence describes code that no longer exists, and the deeper point
+it was reaching for is now its own row: see **#175**.
+
 **"The printed programme" names the wrong artefact.** Three were affected — the exported PNG, the
 PDF and the printed _diagram_, all via `buildDiagramImage`. The printed **programme** is the Gantt,
 which has no month-band or non-working concept at all and lost nothing.
@@ -3781,3 +3802,40 @@ file in the working tree, and a `git add -A` in the middle of the gate pass swep
 commit. It is removed, but the lesson is the general one: `git add -A` is not safe while anything
 else is writing to the tree, and a review pass is exactly when something else is. Stage by path
 during a gate pass.
+
+## 175. The exported diagram has never carried the date marks, and nobody decided that
+
+**Raised 2026-08-22**, established while fixing #148 rather than reported.
+
+`export/render-export-image.ts:127` calls `paint(...)`, and `:153` `drawTitleBand` then fills
+`palette.ground` **opaquely** over `(0, 0, width, EXPORT_TOP_BAND)` with `EXPORT_TOP_BAND = 96`
+(`export/export-image.ts:42`). The `Data date` and `Today` labels sat at y 24–60. **So they have
+never appeared in an exported PNG or PDF** — not since either shipped. The export names both marks
+in its legend instead (`render-export-image.ts:97`, `:103`), which is a different thing from
+marking the column.
+
+**It is not a regression and #148 did not cause it.** After ADR-0106 the labels are DOM in the
+ruler, which no canvas export composes at all, so the same fact now has a second and more
+structural cause. That is what makes it worth a row: the _reason_ changed and the _outcome_ did
+not, so a future reader tracing either cause would find it already handled by the other.
+
+**The question is a product one and is deliberately not answered here.** Should a deliverable carry
+the data date and today as marks on its own axis, or is naming them in the legend the right answer
+for a picture somebody prints and hands over? Both are defensible: a printed programme has no
+"today" by the time it is read, and a data date is arguably a fact about the file rather than about
+the diagram. What is _not_ defensible is that neither was ever chosen — the vertical rules do reach
+the export, so today it draws two unlabelled verticals and explains them in a legend a reader has to
+cross-reference.
+
+**Belongs with the ADR-0103 family** (#164 the export composition, #166 the whole-plan weekend cull,
+#167 the export being the default picture rather than the planner's) — all four are the same
+question in different costumes: nobody has re-read the export against the screen since the features
+that diverged them shipped.
+
+**This row exists because two shipped documents said it already did.** ADR-0106's Context section
+and #148's own amendment both state that the finding "is filed with the ADR-0103 family", and it
+was not — I wrote down where it belonged and did not put it there. That is the ADR-0071 failure
+exactly (noticing drift and stepping over it leaves the register as wrong as not noticing) in the
+epic that quotes ADR-0071, and an ADR-0076 Class 3 claim (asserted, never checked) in the epic that
+quotes that too. Caught by re-reading my own check-in notes against the register rather than by any
+gate: **`check:doc-links` verifies that a link resolves, not that a claim about filing is true.**
