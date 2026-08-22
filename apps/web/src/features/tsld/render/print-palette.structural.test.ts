@@ -105,6 +105,9 @@ describe('the print palette resolves light (structural)', () => {
     const css = readGlobalsCss().replace(/\/\*[\s\S]*?\*\//g, '');
     const offenders: string[] = [];
     for (const m of css.matchAll(/\[data-surface=['"]([a-z]+)['"]\]\s*\{([^}]*)\}/g)) {
+      // The print block declares only generic names (`--foreground: var(--print-foreground)`), so
+      // this never fires today. Kept because the assertion's subject is "no OTHER scope rebinds
+      // paper", and a print block that ever did declare one would be correct rather than a breach.
       if (m[1] === 'print') continue;
       for (const name of declarations(m[2] ?? '').keys()) {
         if (name.startsWith('--print-')) offenders.push(`${m[1]}: ${name}`);
@@ -151,11 +154,15 @@ describe('the print palette resolves light (structural)', () => {
     // gridline are AREAS chosen against a light ground and still resolved from the canvas scope. A
     // dark surface returning would paint them as near-black blocks on white paper.
     //
-    // **What this cannot claim, established by sampling the exported PNG rather than reasoning:**
-    // the export's scene sets neither `monthBands` nor `isWorkingDay`, so `paintScene` skips both
-    // layers and every pixel outside a gridline or a bar comes out pure white today. These four
-    // fields are gated but not currently reachable in the deliverable — a guard against the day
-    // that gap is closed, not a description of what the artefact contains (TECH_DEBT #164).
+    // **These fields WERE unreachable, and this comment said so after they stopped being.** It
+    // read: "the export's scene sets neither `monthBands` nor `isWorkingDay` … these four fields
+    // are gated but not currently reachable in the deliverable". W3-M2 set both, in the same epic,
+    // and the sentence stood — a decision-bearing claim marked "established by sampling the
+    // exported PNG" that had become false, inside the gate carrying the paper contract. ADR-0076
+    // Class 1, caught by a deferred review rather than by anything automatic.
+    //
+    // What is true now: all four paint in the deliverable, measured — pure white fell from ~100%
+    // of the non-bar area to 30%, with the band at 27.2% and the wash at 19.5%.
     //
     // Deliberately NOT applied to `gridLineMonth`/`gridLineYear`: those are RULES, and are meant
     // to be mid-dark. Applying a lightness floor to them would gate the wrong property.

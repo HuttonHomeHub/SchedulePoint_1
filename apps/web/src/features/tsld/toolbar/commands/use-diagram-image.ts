@@ -8,7 +8,7 @@ import type { TsldViewToggles } from '../../render/paint';
 import { resolvePrintPalette, resolvePrintWbsBandPalette } from '../../render/palette';
 import { daysBetween } from '../../render/render-model';
 import { sceneLayers } from '../../render/scene-layers';
-import { makeWorkingDayPredicate, todayDayFraction } from '../../render/time-scale';
+import { makeWorkingDayPredicate } from '../../render/time-scale';
 import type { WorkingDayCalendar } from '../../render/time-scale';
 import { barDateSourceFor, toRenderActivities, toRenderEdges } from '../../render/to-render-model';
 import { wbsBandBars } from '../../render/wbs-band';
@@ -46,6 +46,18 @@ export function useDiagramImage(args: {
    */
   tsldCalendar: WorkingDayCalendar | null;
   todayIso: string;
+  /**
+   * The viewer-local time-of-day fraction for the Today marker, **from the workspace model** —
+   * never re-derived here, for two reasons the first draft of this file got wrong both of.
+   *
+   * The model derives it from the SAME `new Date()` as `todayIso` (`use-plan-workspace-model.ts`),
+   * so the integer offset and the fraction cannot disagree; deriving it from a fresh `Date.now()`
+   * against a `useNow`-ticked `todayIso` puts the line a full day out across local midnight. And
+   * the model gates it on `CANVAS_TIME_AXIS_ENABLED`, so a hand-rolled call draws a fractional
+   * line and a Today pill in the deliverable while the screen draws a plain integer marker —
+   * which is this milestone's own defect, inverted.
+   */
+  todayFraction: number | undefined;
   lateOverlayActive: boolean;
   canvasControlRef: React.RefObject<TsldCanvasHandle | null>;
 }): (extent: ExportExtent) => {
@@ -60,6 +72,7 @@ export function useDiagramImage(args: {
     viewToggles,
     tsldCalendar,
     todayIso,
+    todayFraction,
     lateOverlayActive,
     canvasControlRef,
   } = args;
@@ -107,7 +120,7 @@ export function useDiagramImage(args: {
         // screen about the one mark that says "you are here", unreported. `todayIso` is the
         // generation instant the title band already prints, so the picture and its caption
         // cannot name two different moments.
-        todayFraction: todayDayFraction(Date.now(), new Date().getTimezoneOffset()) ?? null,
+        todayFraction,
         // **Weekend and non-working shading** (ADR-0056 F7a). Absent, the deliverable showed a
         // programme with no weekends — established by sampling the exported PNG, where every
         // pixel outside a gridline or a bar came out pure white.
@@ -173,6 +186,7 @@ export function useDiagramImage(args: {
       // planner who changed the plan's calendar and exported without a remount would get a
       // picture shaded to the previous week — silently, and only in the deliverable.
       tsldCalendar,
+      todayFraction,
       activities,
       dependencies,
       viewToggles,

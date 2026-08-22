@@ -29,8 +29,8 @@
     display: block !important;
     margin: 0;
     padding: 16px;
-    background: var(--print);
-    color: var(--print-foreground);
+    background: var(--background);
+    color: var(--foreground);
     color-scheme: light;
     font-family:
       'Inter',
@@ -54,7 +54,7 @@
   .tsld-print-subtitle {
     margin: 0 0 12px;
     font-size: 12px;
-    color: var(--print-muted-foreground);
+    color: var(--muted-foreground);
     line-height: 1.2;
   }
 

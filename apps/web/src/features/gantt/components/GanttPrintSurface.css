@@ -4,8 +4,8 @@
  * The container/reveal mechanics are shared — see `src/styles/print-document.css`. This file styles
  * only this surface's own markup.
  *
- * Paper, ink and muted ink read the `--print-*` tokens — the SAME three `PrintSurface.css` and
- * `resolvePrintPalette()` read — so the exported diagram and the printed programme are one product
+ * Paper, ink and muted ink read the SEMANTIC names, resolved by the `[data-surface="print"]` scope
+ * on the shared print container — the same mechanism `PrintSurface.css` uses — so the exported diagram and the printed programme are one product
  * rather than two that agree by hand. The remaining greys are this sheet's own greyscale chart
  * vocabulary (rules, baseline outlines, float dashes) and are deliberately literal: they have no
  * sibling in the token vocabulary and nothing else draws them.
@@ -15,7 +15,7 @@
  * *JS value*, but a custom property is CSS and resolves normally. The same mistaken belief was in
  * `PrintSurface.css`, and the two sheets pinned the same literals to each other on the strength of
  * it. TECH_DEBT #158 moved that file to the tokens and left this one, which silently made this
- * docblock's "look like one product" claim false: ink went var(--print-foreground) there and stayed var(--print-foreground) here.
+ * docblock's "look like one product" claim false: ink went var(--foreground) there and stayed var(--foreground) here.
  * Caught by the deferred ux gate, and it is the defect class #158 exists to close, committed while
  * closing it.
  *
@@ -39,8 +39,8 @@
   .gantt-print-root {
     display: block !important;
     margin: 0;
-    background: var(--print);
-    color: var(--print-foreground);
+    background: var(--background);
+    color: var(--foreground);
     color-scheme: light;
     font-family:
       'Inter',
@@ -64,14 +64,14 @@
   .gantt-print-subtitle {
     margin: 0 0 10px;
     font-size: 11px;
-    color: var(--print-muted-foreground);
+    color: var(--muted-foreground);
     line-height: 1.2;
   }
 
   .gantt-print-empty {
     margin: 0;
     font-size: 11px;
-    color: var(--print-muted-foreground);
+    color: var(--muted-foreground);
   }
 
   .gantt-print-table {
@@ -82,7 +82,7 @@
 
   .gantt-print-table th {
     padding: 0 4px 3px;
-    border-bottom: 1px solid var(--print-foreground);
+    border-bottom: 1px solid var(--foreground);
     font-weight: 600;
     text-align: left;
     vertical-align: bottom;
@@ -138,7 +138,7 @@
     font-size: 8px;
     font-weight: 400;
     white-space: nowrap;
-    color: var(--print-muted-foreground);
+    color: var(--muted-foreground);
   }
 
   /* ----- the bars ----- */
@@ -155,19 +155,19 @@
     height: 8px;
     margin-top: -4px;
     background: #d1d5db;
-    border: 1px solid var(--print-muted-foreground);
+    border: 1px solid var(--muted-foreground);
     overflow: hidden;
   }
 
   /* Criticality is carried by BOTH a darker fill and a heavier outline, so it survives greyscale. */
   .gantt-print-critical {
     background: #9ca3af;
-    border: 1.5px solid var(--print-foreground);
+    border: 1.5px solid var(--foreground);
   }
 
   .gantt-print-summary-bar {
-    background: var(--print-muted-foreground);
-    border-color: var(--print-foreground);
+    background: var(--muted-foreground);
+    border-color: var(--foreground);
   }
 
   .gantt-print-progress {
@@ -190,7 +190,7 @@
     position: absolute;
     bottom: 1px;
     height: 4px;
-    border: 1px dashed var(--print-muted-foreground);
+    border: 1px dashed var(--muted-foreground);
   }
 
   .gantt-print-diamond {
@@ -200,7 +200,7 @@
     height: 7px;
     margin-top: -3.5px;
     margin-left: -3.5px;
-    background: var(--print-foreground);
+    background: var(--foreground);
     transform: rotate(45deg);
   }
 
@@ -209,7 +209,7 @@
   .gantt-print-legend {
     margin: 8px 0 0;
     font-size: 9px;
-    color: var(--print-muted-foreground);
+    color: var(--muted-foreground);
   }
 
   .gantt-print-swatch {
