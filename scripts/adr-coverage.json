@@ -38,6 +38,7 @@
     "0061": "SHIPPED PRODUCT CAPABILITY THAT THE ROADMAP NEVER PICKED UP \u2014 exempt at the measured floor, not because it belongs out. These predate the discipline this gate enforces, and the ratchet is deliberate: ADR-0058 records that a gate failing on day one gets deleted rather than fixed. Write the roadmap entry and delete the exemption whenever one of these is next touched.",
     "0062": "SHIPPED PRODUCT CAPABILITY THAT THE ROADMAP NEVER PICKED UP \u2014 exempt at the measured floor, not because it belongs out. These predate the discipline this gate enforces, and the ratchet is deliberate: ADR-0058 records that a gate failing on day one gets deleted rather than fixed. Write the roadmap entry and delete the exemption whenever one of these is next touched.",
     "0076": "Process or tooling decision about how this repository works on itself. It has no user-facing capability to put on a roadmap, and forcing one in is how a roadmap stops being read.",
-    "0081": "Process or tooling decision about how this repository works on itself. It has no user-facing capability to put on a roadmap, and forcing one in is how a roadmap stops being read."
+    "0081": "Process or tooling decision about how this repository works on itself. It has no user-facing capability to put on a roadmap, and forcing one in is how a roadmap stops being read.",
+    "0105": "Process or tooling decision about how this repository works on itself. It has no user-facing capability to put on a roadmap, and forcing one in is how a roadmap stops being read. (It governs when a Feature Spec is required; its product-side sibling ADR-0104 IS on the roadmap.)"
   }
 }
