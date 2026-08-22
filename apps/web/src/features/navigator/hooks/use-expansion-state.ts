@@ -13,7 +13,8 @@ function keyFor(orgSlug: string): string {
   return `${KEY_PREFIX}${orgSlug}`;
 }
 
-function readExpanded(orgSlug: string): Set<string> {
+function readExpanded(orgSlug: string | undefined): Set<string> {
+  if (orgSlug === undefined) return new Set();
   try {
     const raw = sessionStorage.getItem(keyFor(orgSlug));
     if (raw) {
@@ -38,7 +39,21 @@ export interface UseExpansionState {
   expandPath: (ids: string[]) => void;
 }
 
-export function useExpansionState(orgSlug: string): UseExpansionState {
+/**
+ * `orgSlug` is **`string | undefined`, and `undefined` persists nothing** (`docs/TECH_DEBT.md`
+ * #165a).
+ *
+ * The shell called this as `useExpansionState(orgSlug ?? '')`, so on the three routes that carry no
+ * organisation it wrote `schedulepoint-nav-expanded:` — an entry for **an organisation named empty
+ * string**. That is the whole of #165a in one line: the shell did not model "no organisation", it
+ * modelled "an organisation whose slug is blank", and every consumer then degraded on its own.
+ * Withholding the Explorer without also fixing this would leave the cause in place under a fixed
+ * symptom, which is why it is here rather than in a follow-up row.
+ *
+ * A hook cannot be called conditionally, so the absence is expressed in the parameter instead: no
+ * slug, no read, no write, and an empty set to work with.
+ */
+export function useExpansionState(orgSlug: string | undefined): UseExpansionState {
   const [state, setState] = useState(() => ({ org: orgSlug, expanded: readExpanded(orgSlug) }));
 
   // Each org has its own expansion. The persistent shell keeps this hook mounted across
@@ -55,6 +70,7 @@ export function useExpansionState(orgSlug: string): UseExpansionState {
   );
 
   useEffect(() => {
+    if (orgSlug === undefined) return;
     try {
       sessionStorage.setItem(keyFor(orgSlug), JSON.stringify([...expanded]));
     } catch {

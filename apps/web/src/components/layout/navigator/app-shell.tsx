@@ -126,9 +126,60 @@ function ShellFrame(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
 
+  /**
+   * **Whether the Project Explorer has a root to show at all** (`docs/TECH_DEBT.md` #165a).
+   *
+   * Three of the thirteen `_authed` routes are not organisation-scoped — `/onboarding`, `/account`
+   * and `/me/activity` (`app/router.tsx`) — and on all three the shell rendered the Explorer
+   * anyway: ~298 px of drawer at 1646 saying "Select an organisation to browse", beside a card on
+   * `/onboarding` asking the reader to create their first organisation. There is nothing to select,
+   * by definition, on the first screen a new member ever sees.
+   *
+   * **The rule was never missing; it was applied to two controls and not their third neighbour.**
+   * `app-header.tsx`'s below-`lg` Explorer trigger is already `{shell && orgSlug ? …}`, and
+   * `tool-rail.tsx` already withholds the six organisation destinations without a slug — whose own
+   * test is titled "renders no destinations outside an organisation — there are none to show". The
+   * Explorer button sat forty lines from that, ungated. So this is one derived fact rather than a
+   * third copy of the same condition, which is the ADR-0064 §7 / ADR-0093 shape: at the third
+   * instance, extract.
+   *
+   * **Omitted, not shaded** (ADR-0082). Its third omit clause is this case verbatim — there is
+   * nothing to show at all, rather than an action shut by a state the reader can change. Picking an
+   * organisation in the switcher does not make the Explorer available *here*; it navigates
+   * elsewhere, and the switcher two rows up the same rail is already that affordance unshaded. A
+   * reason sentence would be the very sentence #165a reports as useless, moved somewhere quieter.
+   */
+  const explorerAvailable = orgSlug !== undefined;
+
+  /**
+   * **Whether the drawer has anything to put in it**, and then whether one is on screen.
+   *
+   * Deliberately NOT `subject === 'explorer' && explorerAvailable`, which is the symmetric-looking
+   * derivation and would silently delete an unrelated behaviour: the content below falls back to
+   * the Explorer when a context registration goes away while `subject` is still `'context'` (the
+   * case the comment on `contextSubject` above exists for). Keying on the active subject would
+   * leave an empty drawer on an organisation route. The term is availability, not selection.
+   *
+   * `drawerOnScreen` gates the Escape rung as well as the render, and that is the sharp half rather
+   * than tidiness. The rung guards on `drawer.collapsed` alone, so with the preference set to open
+   * and nothing available to show, an Escape on `/account` would have called `drawer.collapse()` —
+   * which `use-resizable-panel-prefs.ts` persists to `localStorage` through an effect — and
+   * announced "Project Explorer closed." when nothing was open. A reader's panel preference would
+   * die on a trip through their account settings, and the only evidence would arrive later, on a
+   * plan, with nothing saying why.
+   *
+   * **No `isDesktop` term, and that is deliberate rather than overlooked.** Below `lg` the drawer's
+   * column is `hidden lg:flex`, so it is in the DOM and invisible, and Escape there already closes
+   * and announces a panel the reader cannot see — a guard disagreeing with a CSS class. That is a
+   * live pre-existing defect (`docs/TECH_DEBT.md` #168), it is not what #165a is about, and fixing
+   * it would change behaviour on a viewport this epic's journey does not drive. Excluded on
+   * purpose, filed rather than absorbed.
+   */
+  const drawerOnScreen = !drawer.collapsed && (showingContext || explorerAvailable);
+
   // Shared, per-org expansion (ADR-0029 Phase 2): both rails and the CRUD coordinator
   // read one set, so revealing a freshly-created node works and pinned/drawer agree.
-  const expansion = useExpansionState(orgSlug ?? '');
+  const expansion = useExpansionState(orgSlug);
   // In-tree CRUD is write-RBAC only now that `VITE_NAV_TREE_CRUD` has retired (ADR-0084 batch 1):
   // Contributors/Viewers keep a read-only tree. The API re-checks; this is UX only.
   const role = useOrgRole(orgSlug ?? '');
@@ -165,7 +216,7 @@ function ShellFrame(): React.ReactElement {
 
   const selectSubject = useCallback(
     (next: DrawerSubject) => {
-      const showing = !drawer.collapsed;
+      const showing = drawerOnScreen;
       if (showing && next === subject) {
         drawer.collapse();
         announce(`${subjectName(next)} closed.`);
@@ -175,7 +226,7 @@ function ShellFrame(): React.ReactElement {
       if (!showing) drawer.expand();
       announce(`${subjectName(next)} opened.`);
     },
-    [drawer, subject, announce, subjectName],
+    [drawer, drawerOnScreen, subject, announce, subjectName],
   );
 
   /**
@@ -195,7 +246,34 @@ function ShellFrame(): React.ReactElement {
   const railButtons = useRef(new Map<DrawerSubject, HTMLButtonElement | null>());
   const focusRailButton = useCallback(() => {
     const button = railButtons.current.get(subject) ?? railButtons.current.get('explorer');
-    button?.focus();
+    if (button) {
+      button.focus();
+      return;
+    }
+    /**
+     * **A last rung that always exists — and it is UNREACHABLE today, which was established rather
+     * than assumed.**
+     *
+     * The concern it answers is real in shape: a callback ref fires with `null` on unmount, so a
+     * rail whose Explorer button is withheld leaves `'explorer' → null` in the map and
+     * `button?.focus()` becomes a silent no-op, dropping focus to `<body>` — the WCAG 2.4.3 class
+     * this register has recorded three times (ADR-0080 M2, ADR-0099 M10, TECH_DEBT #64/#67).
+     *
+     * But it cannot happen. `ToolRail` is mounted on every `_authed` route, its Explorer button
+     * renders whenever `orgSlug` is defined, and its context button renders whenever a subject is
+     * registered — while `closeDrawerPanel`, the only caller, requires `drawerOnScreen`, which is
+     * `showingContext || explorerAvailable`. Both disjuncts imply a mounted button. A test written
+     * for this rung was tried and withdrawn: detaching the button with `.remove()` leaves a
+     * TRUTHY, detached element in the map, so `focus()` silently does nothing and the rung is still
+     * not reached — which incidentally proves the map is only ever correct because React fires the
+     * ref with `null`, not because anything here checks.
+     *
+     * It stays because it is one line, it cannot itself disappear (`<main>` is `tabIndex={-1}` for
+     * the skip link), and the day the `'context'` subject regains a registrant (TECH_DEBT #156)
+     * the reasoning above has to be redone. Named as an invariant guard rather than left to read
+     * as live code somebody should be able to reach.
+     */
+    document.getElementById('main')?.focus();
   }, [subject]);
 
   const closeDrawerPanel = useCallback(() => {
@@ -270,7 +348,7 @@ function ShellFrame(): React.ReactElement {
    */
   const onShellKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || drawer.collapsed) return;
+      if (event.key !== 'Escape' || event.defaultPrevented || !drawerOnScreen) return;
       const target = event.target;
       if (
         target instanceof HTMLElement &&
@@ -282,7 +360,7 @@ function ShellFrame(): React.ReactElement {
       event.preventDefault();
       closeDrawerPanel();
     },
-    [drawer.collapsed, closeDrawerPanel],
+    [drawerOnScreen, closeDrawerPanel],
   );
 
   // Close the drawer once the viewport reaches `lg`+, where the pinned rail is shown — otherwise a
@@ -438,7 +516,7 @@ function ShellFrame(): React.ReactElement {
                   className="border-border col-span-2 col-start-2 row-start-3 border-t"
                 />
 
-                {drawer.collapsed ? null : (
+                {drawerOnScreen ? (
                   <div className="col-start-3 row-start-2 hidden min-h-0 shrink-0 lg:flex">
                     <ContextDrawer
                       // The registered subject names ITSELF ("Excavate"), and says so explicitly
@@ -460,22 +538,53 @@ function ShellFrame(): React.ReactElement {
                         // tree and keeps reading the plan's model and gating (ADR-0029). The shell
                         // hosts a `<div>` and learns nothing.
                         <ChromeSlot slotRef={drawerSlotRef} name="drawer" />
-                      ) : (
+                      ) : explorerAvailable ? (
+                        // The `null` arm is unreachable: `drawerOnScreen` above is
+                        // `showingContext || explorerAvailable`, so arriving here with neither is
+                        // impossible. It is written as a condition rather than an `orgSlug!`
+                        // assertion because the condition keeps the compiler checking and an
+                        // assertion stops it — and `NavigatorRail` requires a slug since #165a.
                         <NavigatorRail orgSlug={orgSlug} expansion={expansion} />
-                      )}
+                      ) : null}
                     </ContextDrawer>
                   </div>
-                )}
+                ) : null}
               </div>
 
-              {/* Below lg: the rail as an off-canvas drawer. */}
-              <Sheet open={drawerOpen} onClose={closeDrawer} title="Project Explorer">
-                <NavigatorRail
-                  orgSlug={orgSlug}
-                  expansion={expansion}
-                  onClose={closeDrawer}
-                  onNavigate={closeDrawer}
-                />
+              {/* Below lg: the rail as an off-canvas drawer. Gated on the same fact as the pinned
+                  column — not because it is reachable without one today (its only trigger,
+                  `app-header.tsx`'s hamburger, has always been guarded) but because gating it here
+                  makes an Explorer with no organisation UNREPRESENTABLE rather than something two
+                  guards in two files agree about. #165a is what happens when they stop agreeing.
+
+                  **The gate is on `open`, not on the element.** Unmounting a native `showModal()`
+                  `<dialog>` while it is open drops focus to `<body>` — the WCAG 2.4.3 class this
+                  register has recorded three times (ADR-0099 M10, ADR-0080 M2). `Sheet` keeps its
+                  `<dialog>` mounted and drives it from `open`, so closing it runs `dialog.close()`
+                  and the browser restores focus to whatever opened it.
+
+                  **The route to it is narrower than the review that found it said, and narrower
+                  than this comment first claimed.** The reasoning offered was that the account chip
+                  sits outside the sheet and stays live, so a reader could navigate to `/account`
+                  from behind an open Explorer — but `Sheet` is `showModal()`, so everything outside
+                  it is INERT and that chip cannot be reached (`sheet.tsx` says so in its own
+                  docblock: "an inert backdrop for free"). What is left is browser history: Back out
+                  of an organisation route with the sheet open. Exotic, and the guard is a line, so
+                  it stays — recorded at its real reachability rather than at the one that would
+                  make it sound more necessary. */}
+              <Sheet
+                open={drawerOpen && explorerAvailable}
+                onClose={closeDrawer}
+                title="Project Explorer"
+              >
+                {explorerAvailable ? (
+                  <NavigatorRail
+                    orgSlug={orgSlug}
+                    expansion={expansion}
+                    onClose={closeDrawer}
+                    onNavigate={closeDrawer}
+                  />
+                ) : null}
               </Sheet>
             </>
           )}

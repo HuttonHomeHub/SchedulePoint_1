@@ -31,10 +31,17 @@ import {
  * plan's whole query surface, and what is under test is the shell's contract with **any** route.
  */
 
+/**
+ * An organisation, because this suite drives the drawer's Explorer subject as well as the
+ * registered one — and since `docs/TECH_DEBT.md` #165a the shell withholds the Explorer without a
+ * slug. It was `{}` here for the same reason it was `{}` in `app-shell.test.tsx`: the org-less
+ * shell was the whole area's default fixture, which is most of why nobody saw that three real
+ * routes were living in it.
+ */
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   Outlet: () => <ProbeRoute />,
-  useParams: () => ({}),
+  useParams: () => ({ orgSlug: 'acme' }),
   useRouterState: () => '/',
   useNavigate: () => vi.fn(),
   Link: ({

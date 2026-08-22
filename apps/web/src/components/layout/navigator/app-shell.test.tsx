@@ -14,12 +14,26 @@ function renderShell(): ReturnType<typeof render> {
   );
 }
 
-// The workspace Outlet + route params are external routing — stub them (no active
-// org here, so the rail shows its fallback; the tree itself is tested separately).
+/**
+ * **The route params, and this suite's own part in `docs/TECH_DEBT.md` #165a.**
+ *
+ * This was `useParams: () => ({})` — *no* organisation — for the whole life of the shell, and the
+ * suite's first assertion was that the Project Explorer navigation IS present. So the suite that
+ * would have caught #165a was the suite that pinned it as correct behaviour: five of its six cases
+ * described the org-less shell, every reviewer read them as describing the product, and the state
+ * they exercised is the one a planner only ever meets on three routes where it is wrong.
+ *
+ * It is now a mutable fixture with an organisation by default, so the existing cases keep testing
+ * what they were written to test, and the org-less shell is a case of its own rather than the
+ * silent default.
+ */
+let params: { orgSlug?: string } = { orgSlug: 'acme' };
+
+// The workspace Outlet + route params are external routing — stub them.
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   Outlet: () => <div data-testid="workspace">workspace</div>,
-  useParams: () => ({}),
+  useParams: () => params,
   // The rail renders the brand link since Graphite M3, and it reads the pathname to decide
   // whether it is the current page. This suite mounts the shell without a router.
   useRouterState: () => '/',
@@ -55,7 +69,35 @@ vi.mock('@/components/layout/app-header', async () => {
   return { AppHeaderRow: DrawerTrigger };
 });
 
-beforeEach(() => localStorage.clear());
+/**
+ * Record every `setItem` while still really writing.
+ *
+ * The resting value is not enough on its own: a rule that collapsed the drawer and then restored it
+ * would leave `collapsed: false` on disk and still have written `true`. The independent spec check
+ * asked for the write, so this watches it. `Storage.prototype.setItem` is captured before any spy
+ * replaces it so the real persistence still happens underneath.
+ */
+const originalSetItem = Storage.prototype.setItem;
+
+function spyOnStorageWrites(): [string, string][] {
+  const writes: [string, string][] = [];
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+    this: Storage,
+    key: string,
+    value: string,
+  ) {
+    writes.push([key, value]);
+    originalSetItem.call(this, key, value);
+  });
+  return writes;
+}
+
+beforeEach(() => {
+  vi.restoreAllMocks();
+  localStorage.clear();
+  sessionStorage.clear();
+  params = { orgSlug: 'acme' };
+});
 
 describe('AppShell', () => {
   it('mounts the workspace outlet and the pinned Project Explorer rail', () => {
@@ -171,6 +213,104 @@ describe('AppShell', () => {
    * without moving focus, so the next Tab resumes inside the rail — the link appears to work and
    * changes nothing.
    */
+  /**
+   * **The shell offers no organisation navigation on a route that has no organisation**
+   * (`docs/TECH_DEBT.md` #165a).
+   *
+   * `/onboarding`, `/account` and `/me/activity` are the three `_authed` routes with no `orgSlug`,
+   * and the shell rendered the Project Explorer on all of them — on `/onboarding` beside a card
+   * asking the reader to create their first organisation.
+   *
+   * Verified red first, all four assertions.
+   */
+  describe('on a route with no organisation', () => {
+    beforeEach(() => {
+      params = {};
+    });
+
+    it('withholds the Explorer trigger, the panel and the below-lg Sheet', () => {
+      renderShell();
+      expect(screen.queryByRole('button', { name: 'Project Explorer' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('navigation', { name: 'Project Explorer' }),
+      ).not.toBeInTheDocument();
+      // The trigger and the panel are separately rendered — the drawer opens from a persisted
+      // preference, not only from the button — so withholding one and not the other is a live
+      // possibility rather than a hypothetical.
+      expect(
+        screen.queryByRole('complementary', { name: 'Project Explorer' }),
+      ).not.toBeInTheDocument();
+
+      // The Sheet has always been unreachable without an org (its trigger is guarded in
+      // `app-header.tsx`); this asserts it is now unREPRESENTABLE, which is a different claim.
+      fireEvent.click(screen.getByRole('button', { name: 'Open Explorer Drawer' }));
+      expect(screen.queryByRole('dialog', { name: 'Project Explorer' })).not.toBeInTheDocument();
+    });
+
+    it('still mounts the route and the skip link', () => {
+      renderShell();
+      // The removal is from the shell, not from the route. A test that only proves an absence
+      // would pass equally against a shell that rendered nothing at all.
+      expect(screen.getByTestId('workspace')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Skip to main content' })).toBeInTheDocument();
+    });
+
+    /**
+     * **The silent half, and the one the naive fix ships.**
+     *
+     * The Escape rung guarded on `drawer.collapsed` alone. With the preference set to open and
+     * nothing available to show, an Escape on `/account` called `drawer.collapse()` — which
+     * `use-resizable-panel-prefs.ts` persists through an effect — and announced "Project Explorer
+     * closed." when nothing was open. The reader's panel preference died on a trip through their
+     * account settings and the evidence arrived later, on a plan, with nothing saying why.
+     *
+     * Asserted against `localStorage` rather than against the screen, because on this route there
+     * is nothing on screen either way: the write is the whole defect.
+     */
+    /**
+     * **No organisation is not an organisation named empty string** (`docs/TECH_DEBT.md` #165a).
+     *
+     * The shell called `useExpansionState(orgSlug ?? '')`, so every org-less route wrote a
+     * `schedulepoint-nav-expanded:` entry — expansion state for a blank slug. Found by the
+     * independent spec check written against the pre-change tree, and it is the cause rather than a
+     * symptom: the shell did not model the absence, it modelled a blank presence, and each consumer
+     * then degraded on its own. Withholding the Explorer without this would have fixed what a
+     * reader sees and left what the shell believes.
+     */
+    it('persists no navigator expansion state for an organisation that does not exist', () => {
+      const writes = spyOnStorageWrites();
+      renderShell();
+      expect(writes.filter(([key]) => key.startsWith('schedulepoint-nav-expanded:'))).toEqual([]);
+      expect(
+        Object.keys(sessionStorage).filter((k) => k.startsWith('schedulepoint-nav-expanded:')),
+      ).toEqual([]);
+    });
+
+    it('does not write a collapse to storage when Escape is pressed with nothing to close', () => {
+      const writes = spyOnStorageWrites();
+      const { container } = renderShell();
+      const grid = screen.getByRole('main').parentElement!;
+      fireEvent.keyDown(grid, { key: 'Escape' });
+
+      // Asserted tightly rather than with a `stored === null` alternative: `useResizablePanelPrefs`
+      // writes its preference in an effect on mount, which `render()`'s `act()` flushes, so storage
+      // is never null by the time this runs and the permissive arm was vestigial.
+      const stored = localStorage.getItem('schedulepoint-context-drawer');
+      expect(stored).not.toBeNull();
+      expect(JSON.parse(stored!).collapsed).toBe(false);
+      // The independent spec check asked for the WRITE and not only the resting value: a rule that
+      // collapsed and then restored would leave `collapsed: false` on disk and still have written
+      // `true`, which the assertion above cannot see. No write may name a collapse at all.
+      expect(
+        writes.filter(
+          ([key, value]) =>
+            key === 'schedulepoint-context-drawer' && value.includes('"collapsed":true'),
+        ),
+      ).toEqual([]);
+      expect(within(container).queryByText(/Project Explorer closed/)).not.toBeInTheDocument();
+    });
+  });
+
   it('puts a skip link first in the document, pointing at a focusable main', () => {
     const { container } = renderShell();
     const link = screen.getByRole('link', { name: 'Skip to main content' });

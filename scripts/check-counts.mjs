@@ -58,7 +58,22 @@ const actual = {
    * reader cannot check, on the line that tells them the counts are checked. Requiring a spec is
    * derived rather than an exclusion list, so the next helper directory needs no edit here.
    */
-  'flag-scoped Playwright suites': readdirSync(join(root, 'apps/web'))
+  /**
+   * **"Playwright suites", not "flag-scoped Playwright suites"** — corrected 2026-08-22.
+   *
+   * This counts every `e2e-*` directory holding a spec, and called them flag-scoped. **Measured:
+   * 8 of the 37 pin no `VITE_` flag at all** (`e2e-shell`, `e2e-export`, `e2e-minimap`,
+   * `e2e-staff`, `e2e-recently-deleted`, `e2e-calendar-shifts`, `e2e-designed-chrome`,
+   * `e2e-workspace-chrome`), and several that do pin one are pinning a flag they walk THROUGH
+   * rather than the flag they exist for — `e2e-overview`'s own config opens "**There is no flag**".
+   * Since ADR-0088 D1 established that a `VITE_` constant is not an operator rollback at all, the
+   * proportion only moves one way.
+   *
+   * A count with a wrong label is the same defect this script exists for wearing different
+   * clothes: the number was right and what it claimed to be counting was not, so the gate was
+   * green while the sentence was false.
+   */
+  'Playwright suites': readdirSync(join(root, 'apps/web'))
     .filter((n) => n.startsWith('e2e-'))
     .filter((n) =>
       readdirSync(join(root, 'apps/web', n), { recursive: true }).some((f) =>
@@ -110,7 +125,7 @@ const claimed = {
   'Prisma models': [phrase('(\\d+) Prisma models'), phrase('(\\d+) (?:[a-z]+ )?models')],
   migrations: [phrase('(\\d+) (?:[a-z]+ )?migrations')],
   'web source files': [phrase('(\\d+) web source files')],
-  'flag-scoped Playwright suites': [phrase('(\\d+) flag-scoped Playwright suites')],
+  'Playwright suites': [phrase('(\\d+) Playwright suites')],
   ADRs: [phrase('(\\d+) ADRs')],
 };
 

@@ -617,6 +617,18 @@ jobs:
       - name: Web end-to-end tests (organisation overview)
         run: pnpm --filter @repo/web test:e2e:overview
 
+      # The app shell on the three authenticated routes that have NO organisation
+      # (`docs/TECH_DEBT.md` #165a). Only a browser can see this: `app-shell.test.tsx` mocked
+      # `useParams` as `{}`, so the shell's own suite ran entirely in the org-less state and its
+      # first assertion was that the Project Explorer IS present — the suite that would have caught
+      # the defect pinned it as correct behaviour. This signs up, stops on the real `/onboarding`
+      # with no organisation at all, and walks the account menu's own two destinations, so the
+      # param comes from the router rather than from a mock that agrees with whatever it is handed.
+      # It also pins the silent half: a trip through an org-less screen must not rewrite the
+      # reader's persisted drawer preference.
+      - name: Web end-to-end tests (app shell, org-less routes)
+        run: pnpm --filter @repo/web test:e2e:shell
+
       # The public screens, **measured** rather than reasoned about (ADR-0077 M6-T1): ten
       # URL-reachable states × six viewports × three themes, plus a real invitation carrying a
       # 100-character organisation name and a fulfilled 429. It earned its place before it was ever

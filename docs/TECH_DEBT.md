@@ -3051,7 +3051,7 @@ programme share one source rather than agreeing by hand. The sheet's remaining g
 baseline outlines, float dashes — stay literal: they are its own greyscale chart vocabulary, have
 no sibling in the token vocabulary, and nothing else draws them.
 
-## 159. `--color-*` aliases are frozen at `:root` — CLOSED, with a gate still owed
+## 159. `--color-*` aliases are frozen at `:root` — CLOSED
 
 **Raised 2026-08-21** (light-corporate theme, M2). **Size:** S.
 
@@ -3101,11 +3101,15 @@ published, and every resolver took the documented fallback to `document.document
 predicts the cause in as many words — _"a future host mounts the canvas outside the provider"_. That
 host existed already.
 
-**Also owed:** `token-contrast.test.ts` resolves a scope by reading the CSS text and following the
-rebind itself, so it asserts a mapping the browser does not perform for alias readers. It was right
-about what the values should be and silent about what the painter actually got. A gate that pins
-"every JS token read names an unprefixed token" would have caught the whole class, and is the
-cheapest thing here.
+**The gate is built, and this paragraph said it was owed until 2026-08-22.**
+`token-contrast.test.ts` resolves a scope by reading the CSS text and following the rebind itself,
+so it asserts a mapping the browser does not perform for alias readers: right about what the values
+should be, silent about what the painter actually got. The missing half is
+`apps/web/src/styles/token-alias-reads.structural.test.ts` — every `.ts`/`.tsx` read must name the
+unprefixed token, with one narrow exemption for the un-rebound minimap frame pair — and it shipped
+in the SAME commit as the fixes above (`fdb93d7`), so this row asked for something that was already
+beside it. Its own docblock records its blind spot (it scans `.ts`/`.tsx`, not `.css`) and why
+widening the glob is not the fix (`globals.css` declares the aliases).
 
 ## 160. `resolveLensPalette` is resolved twice per cycle
 
@@ -3277,8 +3281,9 @@ print but is a deliberate divergence rather than parity.
 
 ## 165. Five screens photographed for the first time, and what they showed
 
-**Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **Catalogue only** — the
-product owner's decision was to shoot, report and choose, so nothing here is fixed.
+**Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **(a) is CLOSED
+2026-08-22; (b)–(e) remain open.** The product owner's decision was to shoot, report and choose;
+they chose (a).
 
 `apps/web/scripts/shoot.mjs` carried 26 shots and five routes had none: `/account`, `/me/activity`,
 `/onboarding`, `/orgs/:slug/clients/:clientId`, `/staff`. The list was derived by matching shot names
@@ -3291,7 +3296,7 @@ Precedent for expecting something: widening the list 12 → 25 during ADR-0102 f
 polarity-agnostic gate — both with every gate green), plus the four rows in #161.
 
 **a. The app shell renders on screens that have no organisation — and offers navigation that cannot
-navigate.** On `/account` and `/onboarding` the Project Explorer drawer is open, ~300 px wide, saying
+navigate. (CLOSED 2026-08-22.)** On `/account` and `/onboarding` the Project Explorer drawer is open, ~300 px wide, saying
 _"Select an organisation to browse."_ On `/onboarding` that is beside a card asking the reader to
 create their first organisation: there is nothing to select, by definition, on the first screen a new
 member ever sees. `account.tsx`'s own docblock says _"No org in the path and no permission check,
@@ -3300,7 +3305,61 @@ because there is nothing to check"_ — the screen knows it is not org-scoped an
 organisation" and that a journey clicked a nav link not rendered there. Same root cause, three
 screens, and it is a shell decision rather than three screen bugs.
 
-**b. `My activity`'s filter row wraps ragged.** Five `Show` chips, then `Outcome` and `From` on the
+**Closed by deriving the fact once.** `ShellFrame` derives _the Explorer has a root to show_
+(`orgSlug !== undefined`) and _a drawer is on screen_, and routes the drawer column, the Escape rung
+and the below-`lg` `Sheet` through them, while the rail derives the same fact from the `orgSlug` it
+already holds (the component gate's correction: a derived boolean passed beside its own source is
+two guards that can stop agreeing, which is this row's defect one level down) — rather than a third copy of
+a condition two of its neighbours already carried. **Omitted, not shaded**: ADR-0082's third omit
+clause is this case verbatim, and picking an organisation in the switcher does not make the Explorer
+available _here_ — it navigates elsewhere, and that switcher two rows up the same rail is already
+the affordance, unshaded. A reason sentence would have been the very sentence this row reports as
+useless, moved somewhere quieter.
+
+**Three things the fix found that the row did not name.**
+
+1. **The Escape rung would have destroyed the reader's persisted preference**, and this is the half
+   worth carrying. The rung guarded on `drawer.collapsed` alone, so with the preference set to open
+   and nothing available to show, an Escape on `/account` called `drawer.collapse()` — which
+   `use-resizable-panel-prefs.ts` writes to `localStorage` through an effect — and announced
+   "Project Explorer closed." when nothing was open. The panel would then be shut on the reader's
+   next plan with nothing saying why. **Proven by a test verified red, not reasoned about**; a fix
+   that suppressed the Explorer by collapsing the drawer rather than by not rendering it would have
+   passed every other assertion and shipped this.
+2. **`focusRailButton`'s fallback goes dead the moment the button is withheld.** A callback ref
+   fires with `null` on unmount, so the map holds `'explorer' → null` and `button?.focus()` becomes
+   a silent no-op — the WCAG 2.4.3 failure that function exists to prevent, arriving through the
+   door this change opened. It is not reachable today (#156: the `'context'` subject has no
+   production registrant), but the change is what creates the possibility, so a last rung that
+   always exists (`#main`, already `tabIndex={-1}` for the skip link) lands with it.
+3. **The area's own suites used the broken state as their default fixture**, which is most of why
+   nobody saw it. `app-shell.test.tsx` mocked `useParams: () => ({})` — no organisation — and then
+   asserted the Project Explorer navigation IS present, so five of its six cases described the
+   org-less shell and every reviewer read them as describing the product.
+   `drawer-entry-point.test.tsx` had the same default. Both now carry an organisation, and the
+   org-less shell is a case of its own.
+
+The **derived** half of the journey's absence check (`a[href*="/orgs/"]`) passed against the pre-fix
+code, which is the row's own finding restated as evidence: the rule existed and was applied to one
+cluster. `tool-rail.test.tsx`'s case for the other cluster is titled _"renders no destinations
+outside an organisation — there are none to show"_, forty lines below the button that was exempt
+from it.
+
+Gated by `apps/web/e2e-shell/` (`pnpm --filter @repo/web test:e2e:shell`, its own CI step), which
+signs up and stops on the real `/onboarding` — the one moment in an account's life with no
+organisation at all, and a state no seeded fixture can reach. Re-shot at 1646 before and after.
+
+**One thing this deliberately did NOT fix, and one it exposed.** Below `lg` the Escape rung still
+closes and announces a drawer the reader cannot see, because that column is `hidden lg:flex` — a
+guard disagreeing with a CSS class, pre-existing, filed as **#168** rather than absorbed into a
+change whose journey does not drive that viewport. And this row's own wording ("above an EMPTY 40 px
+actions row") reads as fully closed and is not: that row is moot on org-less routes now, and still
+renders as an empty bordered strip on **every organisation route** for a Contributor or Viewer —
+**#169**.
+
+**b. `My activity`'s filter row wraps ragged.** _(Re-shoot before designing: closing (a) widened
+`<main>` on this screen by ~298 px, so the W1 photograph this describes no longer shows the layout
+that will be worked on. Found by the #165a spec check.)_ Five `Show` chips, then `Outcome` and `From` on the
 same line, then `To` and `Clear filters` wrapping below — four group labels at three different
 vertical positions. Adjacent groups are also styled differently for no stated reason: `Show` is
 chips, `Outcome` is plain text.
@@ -3378,3 +3437,144 @@ planner performs in order to show something, so the honest default may differ pe
 `varianceRows` threaded and re-derived against the export viewport, the way `wbsBandBars` already
 is. That is why it is deferred rather than done — but deferred with the enumeration attached, which
 is the part CQ-5 called durable and did not deliver.
+
+## 168. Below `lg`, Escape closes and announces a drawer the reader cannot see
+
+**Raised 2026-08-22** (found while fixing #165a, deliberately excluded from it). **Size:** S.
+
+The context drawer's column is `hidden lg:flex` (`app-shell.tsx`), so below 1024 px it is in the
+DOM and invisible. The shell's Escape rung does not carry the viewport term — `showingContext` does
+(and that term was added for exactly this class of defect, when a planner who narrowed the window
+portalled the editor into a `display: none` slot) but the Explorer half does not. So on a narrow
+viewport, with an organisation and the drawer preference set to open, Escape:
+
+- writes `{collapsed: true}` to `localStorage` through `use-resizable-panel-prefs.ts`'s effect, and
+- announces **"Project Explorer closed."** into the live region,
+
+for a panel the reader cannot see and did not open. Below `lg` the Explorer's actual surface is the
+`Sheet`, which is separate state (`drawerOpen`) and is a native modal the browser closes on Escape
+by itself.
+
+**Why it was excluded from #165a rather than folded in.** #165a rewrites that exact guard, so the
+term is one `&&` away — but adding it changes behaviour on a viewport that epic's journey does not
+drive (`playwright.shell.config.ts` runs at 1646, deliberately, because below `lg` every absence
+assertion would pass for the wrong reason). It is a different defect: a guard disagreeing with a
+CSS class, not navigation that cannot navigate. `app-shell.tsx`'s `drawerOnScreen` docblock records
+the exclusion and points here.
+
+The fix is the term plus a unit case, and the unit case needs `useMediaQuery` mocked: jsdom has no
+`matchMedia`, so `isDesktop` takes its `true` fallback and a test written without the mock would
+assert the fix while exercising the desktop path.
+
+## 169. The Project Explorer's actions row is an empty bordered strip for non-writers
+
+**Raised 2026-08-22** (found while fixing #165a). **Size:** S.
+
+`navigator-rail.tsx` gives the Explorer a 40 px actions row below the drawer's header, whose only
+child — the **New client** button — is gated on `orgSlug && crud.canWrite`. For a Contributor or a
+Viewer the gate is false, and the row renders anyway: 40 px of bordered nothing above the tree, on
+every organisation route, for every reader who cannot create a client.
+
+#165a removed it from the three org-less routes by removing the whole rail there, and that row's
+own wording ("above an EMPTY 40 px actions row") will otherwise read as closed when it is half
+closed. The remaining case is the role one, which is the commoner of the two.
+
+ADR-0082's rule points at omission rather than shading: there is no action to shade — the row is a
+container whose contents are absent, not a control that is shut. The empty container is the thing
+to remove, on the same clause as "a menu whose every item would be shaded renders no trigger".
+
+Note the shape before fixing: the row is rendered twice, once in the below-`lg` `SheetHeader`
+branch and once in the drawer branch, with the same gate duplicated. Whatever the fix, it wants to
+be one derivation rather than two — the neighbouring copy is exactly how #165a happened.
+
+## 170. Three axe scans run every rule, because `.options()` replaces `.withTags()`
+
+**Raised 2026-08-22** (found while closing #165a). **Size:** S.
+
+`@axe-core/playwright`'s builder is not a merge. `dist/index.js:170-172` is
+`options(options) { this.option = options; return this; }` — a **wholesale replacement** — while
+`withTags()` (`:195-202`) works by assigning `this.option.runOnly`. So the natural-looking spelling
+
+```ts
+new AxeBuilder({ page })
+  .withTags(['wcag2a', 'wcag2aa', …])
+  .options({ rules: { 'target-size': { enabled: true } } })
+```
+
+**discards `runOnly` entirely** and axe runs every rule it has, `best-practice` and `RGAA` ones
+included. Three shipped suites have exactly that shape:
+
+- `apps/web/e2e-gantt-editing/object-actions.spec.ts:153-154`
+- `apps/web/e2e-minimap/minimap.spec.ts:103-104`
+- `apps/web/e2e-toolbar-fit/fit.spec.ts:742-743`
+
+All three pass, and only because each `.include()`s a narrow subtree where the extra rules happen
+not to fire. Nothing is currently broken — the defect is that **their `withTags` line does not
+describe what they scan**, so a reader (or a future edit that widens the `include`) is working from
+a false statement about the suite's own scope. Found by writing that spelling in `e2e-shell` without
+an `.include()` and getting a `region` violation, a rule in none of the six requested tags;
+confirmed by reading the package rather than inferring it from the symptom, and the claim is
+registered in `scripts/dependency-claims.json`.
+
+The fix is one `options()` call carrying both, which `e2e-shell/org-less-screens.spec.ts` now uses:
+
+```ts
+.options({
+  runOnly: { type: 'tag', values: [/* … */] },
+  rules: { 'target-size': { enabled: true } },
+})
+```
+
+Verified by probe that this evaluates `target-size` and does **not** evaluate `region` — asserted
+against `results.passes ∪ violations ∪ incomplete ∪ inapplicable`, because a rule that is disabled
+and a rule that passes are indistinguishable from `violations` alone, which is how the no-op
+inclusion survived in the first place.
+
+**Not fixed in the three siblings here**, deliberately: correcting them NARROWS what they scan (from
+every rule to six tags), which is a coverage change on three suites in a PR about the app shell. Each
+is a one-line edit and none should change colour.
+
+**Two gate findings came out of the same thread and ARE fixed**, both in `scripts/check-claims.mjs`'s
+neighbourhood:
+
+1. The citation walk covered `apps/web/src` and **none of the 39 journey directories**, so a claim
+   about a dependency's internals made in a Playwright suite was invisible in both directions — it
+   could not be registered, and it could not be noticed going stale on a bump. That is the ADR-0077
+   M0 blind spot one directory along, and the file's own reasoning for including `scripts/` ("a
+   harness is one of the likeliest things in the tree to rest on a dependency's internals") applies
+   verbatim to a journey. Measured before adding, the way `packages/` was: the 39 directories turn up
+   exactly two refs, both already registered — so it was free. One of them had been citing from an
+   unscanned directory the whole time.
+2. `installed()` resolves a package by scanning pnpm's content-addressed store, so an **orphaned**
+   copy left in `node_modules/.pnpm` by an earlier install shadows the one the workspace actually
+   links. Locally this reported `@axe-core/playwright@4.12.1` while `apps/web/node_modules` linked
+   4.13.0 and `pnpm-lock.yaml` pinned only 4.13.0 — a version nothing in the tree referenced. It is
+   benign on CI, which installs fresh, and it is **not fixed**: the resolution is shared by all 51
+   claims and changing it to follow the link graph is a change to a gate this register depends on.
+   The consequence to know is that on a developer's machine this gate can watch the wrong copy, so a
+   local green is weaker evidence than a CI green.
+
+## 171. `schedulepoint-active-org` is never cleared, and carries no user id
+
+**Raised 2026-08-22** (found by the #165a spec check while costing a rejected option). **Size:** S.
+
+`apps/web/src/lib/active-org.ts` writes and reads `schedulepoint-active-org` in `localStorage` and
+**nothing ever removes it**. Sign-out sweeps its sibling — `forgetAllForUser` clears the
+`recent-plans` entries (`features/auth/api/use-session.ts`) — and does not touch this one. The key
+also carries no user id, where `recent-plans` deliberately does.
+
+**That is ADR-0098's own rule, decided the other way by accident rather than by argument.** That
+milestone keyed its store by user id and swept it on sign-out for stated reasons: a rename should
+correct itself, a plan the reader has lost access to should disappear rather than 404, and one
+person's history must not become another's on a shared browser. Every one of those reasons applies
+to the active organisation.
+
+**It is not a data leak, and the row should not be read as one.** The slug is a name, not a
+credential; the home resolver validates membership through `ensureOrgMembership` and the API 404s a
+non-member, so the next signed-in reader is bounced to their own organisation. What survives
+sign-out is a previous account's organisation **name**, briefly, on a shared machine — and a
+resolver round-trip nobody needs.
+
+The fix is the shape `recent-plans` already has: key by user id, and sweep on sign-out beside it.
+Both halves in one change, since keying without sweeping leaves orphans and sweeping without keying
+still shows the wrong slug to a second reader in the same session.

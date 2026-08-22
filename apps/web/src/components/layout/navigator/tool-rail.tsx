@@ -53,6 +53,22 @@ export function ToolRail({
   contextSubject,
   buttonRef,
 }: {
+  /**
+   * The organisation the rail is showing, or `undefined` on the three `_authed` routes that have
+   * none. **Everything organisation-shaped in this rail is withheld without it** — the Project
+   * Explorer button, the six destinations — because a control that opens a panel with no root is
+   * navigation that cannot navigate (`docs/TECH_DEBT.md` #165a).
+   *
+   * The Explorer button was the one cluster here that did NOT read this, forty lines above a
+   * destinations block that did, under a test titled "renders no destinations outside an
+   * organisation — there are none to show".
+   *
+   * **Derived here rather than passed in**, which reverses this change's own first attempt: the
+   * shell computed `explorerAvailable` and handed it over beside the `orgSlug` it came from, so
+   * `<ToolRail orgSlug="acme" explorerAvailable={false} />` typechecked. Two guards for one fact
+   * that can silently stop agreeing is exactly the defect #165a is about, moved one level down into
+   * this component's prop list. One source, and divergence is unrepresentable.
+   */
   orgSlug?: string | undefined;
   /**
    * Where a plan portals its **mode cluster** (Graphite M5). Empty on the twelve screens that are
@@ -87,6 +103,8 @@ export function ToolRail({
    */
   buttonRef?: ((subject: DrawerSubject, node: HTMLButtonElement | null) => void) | undefined;
 }): React.ReactElement {
+  const explorerAvailable = orgSlug !== undefined;
+
   return (
     <Surface
       // **`chrome`, not `panel`, since the light corporate theme split them.** The two used to share
@@ -117,16 +135,18 @@ export function ToolRail({
           actually open on that subject — a lit button beside a closed panel is a control claiming
           something the screen contradicts. */}
       <div className="mt-1 flex flex-col items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Project Explorer"
-          aria-pressed={drawerOpen && subject === 'explorer'}
-          ref={(node) => buttonRef?.('explorer', node)}
-          onClick={() => onSelectSubject('explorer')}
-        >
-          <PanelLeft aria-hidden="true" className="size-4" />
-        </Button>
+        {explorerAvailable ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Project Explorer"
+            aria-pressed={drawerOpen && subject === 'explorer'}
+            ref={(node) => buttonRef?.('explorer', node)}
+            onClick={() => onSelectSubject('explorer')}
+          >
+            <PanelLeft aria-hidden="true" className="size-4" />
+          </Button>
+        ) : null}
         {contextSubject ? (
           <Button
             variant="ghost"

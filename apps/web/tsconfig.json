@@ -15,44 +15,21 @@
     // The hand-run browser measurement (ADR-0065 T21). Included so it typechecks and lints
     // against the same painter it measures — a bench that drifts from the code is a fiction.
     "scripts",
+    // **A glob, not a list.** This was 37 hand-maintained entries, and a suite left out of
+    // it is silently NOT typechecked: `tsc --noEmit` simply never sees the files, and the
+    // only thing that reports the omission is ESLint's parser refusing to resolve them —
+    // an incidental catch by a gate aimed at something else. Adding `e2e-shell` produced
+    // exactly that (2026-08-22): a clean typecheck over a journey the compiler had never
+    // read. Derived is the repo's own rule for a roster (ADR-0093, ADR-0073 C4).
+    //
+    // `e2e-*/**/*` and NOT `e2e-*`: a wildcard SEGMENT makes TypeScript treat the pattern as a
+    // file matcher rather than a directory to recurse into, so the bare form silently matched
+    // nothing and the compiler read three suites instead of thirty-seven. Established with
+    // `tsc --listFiles`, because the bare form typechecks perfectly happily — it just does it
+    // over less.
     "e2e",
-    "e2e-edit",
-    "e2e-toolbar",
-    "e2e-toolbar-fit",
+    "e2e-*/**/*",
     "measure-toolbar",
-    "measure-gantt",
-    "e2e-authoring",
-    "e2e-authoring-flow",
-    "e2e-programme",
-    "e2e-notes",
-    "e2e-undo",
-    "e2e-loe",
-    "e2e-resource-view",
-    "e2e-interchange",
-    "e2e-share",
-    "e2e-library",
-    "e2e-designed-ui",
-    "e2e-designed-chrome",
-    "e2e-gantt",
-    "e2e-gantt-editing",
-    "e2e-activity-editor",
-    "e2e-wbs",
-    "e2e-recently-deleted",
-    "e2e-calendar-shifts",
-    "e2e-sub-day",
-    "e2e-assignment-lag",
-    "e2e-float-paths",
-    "e2e-search-nav",
-    "e2e-audit",
-    "e2e-account",
-    "e2e-staff",
-    "e2e-public",
-    "e2e-overview",
-    "e2e-csp",
-    "e2e-multi-select",
-    "e2e-copy-paste",
-    "e2e-workspace-chrome",
-    "e2e-minimap",
-    "e2e-export"
+    "measure-gantt"
   ]
 }
