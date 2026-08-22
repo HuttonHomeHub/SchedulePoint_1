@@ -129,3 +129,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0103](0103-paper-is-a-surface.md)                                          | Paper is a surface, and the exported diagram is the diagram             | Accepted           |
 | [0104](0104-a-shell-control-whose-subject-is-an-organisation.md)            | A shell control whose subject is an organisation                        | Accepted           |
 | [0105](0105-a-register-row-is-not-a-spec.md)                                | A register row is not a spec                                            | Accepted           |
+| [0106](0106-a-rule-is-a-scene-mark-its-label-is-chrome.md)                  | A rule is a scene mark; its label is chrome                             | Accepted           |

@@ -2637,7 +2637,7 @@ demotable budget is zero however cheap a demotable command becomes. #147 has bee
 width problem since it was raised; it is a _labelled_-width problem, and 1646 — the one screen this
 work is judged on — is where both conditions meet.
 
-## 148. The canvas date pills are painted on top of the first two lanes **(IN PROGRESS — `docs/specs/canvas-axis-markers/`)**
+## 148. The canvas date pills are painted on top of the first two lanes **(CLOSED 2026-08-22 — ADR-0106)**
 
 > **Three claims below were checked in August 2026 and two of them are wrong.** They are corrected
 > here in place rather than rewritten, because the wrong version is the more instructive artefact
@@ -2705,6 +2705,21 @@ export path. Two shapes are plausible and they are not equivalent:
 
 (1) is cheap and wrong for this product; (2) is right and is not a one-line change. Choosing between
 them at the end of another epic is how the wrong one gets picked, so it is written down instead.
+
+**Closed by ADR-0106** (`docs/specs/canvas-axis-markers/`), which took option (2) — and the design
+pass it needed turned out to be about the ruler's _own_ content rather than about height. All three
+labels are DOM on two rows inside the existing 40 px band (transient y 12–26, persistent 26–40);
+`RULER_HEIGHT` and `sceneTopOffset` are unchanged, so option (1)'s 60 px cost was never paid. The
+rules stay on the canvas, because a full-height vertical means something at every lane and a date
+label means nothing at any of them.
+
+The row y is an output of measurement, not of arithmetic: the band's rows measure y 0–12 (years),
+12–26 (months) and 25–39 (days), and the **year** label is pinned at x = 0 and is the one thing in
+the band a reader cannot reconstruct from a neighbour — so no marker row reaches it. The two derived
+row constants this row calls "meticulous about each other and blind to what is underneath" are
+deleted, and replaced by a unit guard (both rows inside the band, clear of the year row) and a
+browser guard (no visible marker's rect intersects the scene canvas's, at two pan positions, two
+presets, with and without the pen). The second is the one that could not have existed before.
 
 ## 149. The Graphite M10 gate pass's non-blocking findings
 

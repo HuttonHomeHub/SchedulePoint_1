@@ -732,10 +732,38 @@ link`; sizes `sm | md | lg | icon | icon-lg | icon-sm`; icon buttons require `ar
   bars is not distinct. The foreground token's one collision is the 1.5 px critical-bar outline —
   a bar-shaped stroke, not a full-height rule — noted and accepted. **The coincidence rule:** when
   the data-date and Today rules round to the same screen pixel, exactly one line draws (the
-  data-date treatment) with one merged `Data date · today` pill — two coincident lines are a
-  rendering artefact, not two facts. Each pill has its own **derived** row constant
-  (`DATA_DATE_CHIP_TOP = TODAY_CHIP_TOP + TODAY_CHIP_H + 4`), never a literal, so the clamped
-  pills can never overlap.
+  data-date treatment) with one merged `Data date · today` marker — two coincident lines are a
+  rendering artefact, not two facts.
+
+  **A rule is a scene mark; its LABEL is chrome** (ADR-0106, `docs/TECH_DEBT.md` #148). The three
+  labels above are DOM in the ruler band, on two rows: **transient** (the cursor readout) at y
+  12–26 and **persistent** (`Data date`, `Today`) at y 26–40. They were pills painted on the scene
+  canvas at a fixed screen y until 2026-08-22, which meant chrome drawn onto a surface that
+  scrolls — so a label printed over whichever lane the planner had panned to the top. The rules
+  themselves stay on the canvas: a full-height vertical means something at every lane, and a date
+  label means nothing at any of them.
+
+  Three constraints on the next mark that wants a label follow, and each is a gate rather than a
+  convention:
+
+  - **It goes in the ruler, not on the scene**, and inside the ruler ELEMENT so it inherits that
+    band's `aria-hidden` — the canvas already carries the parallel a11y layer (ADR-0026 D7) and a
+    second voice for the same fact is a defect, not redundancy.
+  - **It may occlude the day numbers and, transiently, the month label. It may never occlude the
+    YEAR label**, which is pinned at x = 0 and is the one thing in the band a reader cannot
+    reconstruct from a neighbour. A left-clamped marker is the common case, not the edge case:
+    `fitToContent` frames from the plan start, so the data date's mark is at the left edge on
+    arrival on every plan.
+  - **Its fill is gated at 3:1 against `--canvas` and its word at 4.5:1 on that fill**
+    (`token-contrast.test.ts`). Note the ground: the ruler is `bg-canvas`, NOT `--background`,
+    which is what the canvas sweep in that file uses.
+
+  When two marks are too close for both labels, **`Data date` keeps its word and `Today` loses
+  its** — measured, they collide only within 0.5 days at the Day preset and 1.1 at Week
+  (`docs/specs/canvas-axis-markers/m0-measurements.md`), which is effectively the coincident case
+  the merge already covers; the window widens to 40 days at the Year preset, where the two are one
+  position anyway. Today keeps its dashed rule, which is a channel in its own right and is in both
+  legends; the data date has no second channel, which is why it is the one that keeps its word.
 
 ---
 
