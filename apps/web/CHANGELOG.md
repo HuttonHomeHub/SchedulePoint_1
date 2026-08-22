@@ -1,5 +1,16 @@
 # @repo/web
 
+## 0.98.1
+
+### Patch Changes
+
+- [#347](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/347) [`2c45e38`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2c45e38960adccd3c60b2c9359ab26bd3941aac5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The app shell no longer offers the Project Explorer on the three authenticated screens that have
+  no organisation. `/onboarding`, `/account` and `/me/activity` each rendered a ~300 px panel reading
+  "Select an organisation to browse" — on `/onboarding` beside the card asking the reader to create
+  their first organisation, where there is nothing to select by definition. The panel, its rail
+  button and its below-`lg` sheet are withheld together, and the reader's persisted panel width and
+  open/closed preference are left untouched by the trip.
+
 ## 0.98.0
 
 ### Minor Changes
