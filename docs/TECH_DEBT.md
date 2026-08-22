@@ -3051,7 +3051,7 @@ programme share one source rather than agreeing by hand. The sheet's remaining g
 baseline outlines, float dashes — stay literal: they are its own greyscale chart vocabulary, have
 no sibling in the token vocabulary, and nothing else draws them.
 
-## 159. `--color-*` aliases are frozen at `:root` — CLOSED, with a gate still owed
+## 159. `--color-*` aliases are frozen at `:root` — CLOSED
 
 **Raised 2026-08-21** (light-corporate theme, M2). **Size:** S.
 
@@ -3101,11 +3101,15 @@ published, and every resolver took the documented fallback to `document.document
 predicts the cause in as many words — _"a future host mounts the canvas outside the provider"_. That
 host existed already.
 
-**Also owed:** `token-contrast.test.ts` resolves a scope by reading the CSS text and following the
-rebind itself, so it asserts a mapping the browser does not perform for alias readers. It was right
-about what the values should be and silent about what the painter actually got. A gate that pins
-"every JS token read names an unprefixed token" would have caught the whole class, and is the
-cheapest thing here.
+**The gate is built, and this paragraph said it was owed until 2026-08-22.**
+`token-contrast.test.ts` resolves a scope by reading the CSS text and following the rebind itself,
+so it asserts a mapping the browser does not perform for alias readers: right about what the values
+should be, silent about what the painter actually got. The missing half is
+`apps/web/src/styles/token-alias-reads.structural.test.ts` — every `.ts`/`.tsx` read must name the
+unprefixed token, with one narrow exemption for the un-rebound minimap frame pair — and it shipped
+in the SAME commit as the fixes above (`fdb93d7`), so this row asked for something that was already
+beside it. Its own docblock records its blind spot (it scans `.ts`/`.tsx`, not `.css`) and why
+widening the glob is not the fix (`globals.css` declares the aliases).
 
 ## 160. `resolveLensPalette` is resolved twice per cycle
 
