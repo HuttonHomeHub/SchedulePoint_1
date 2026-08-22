@@ -1,4 +1,5 @@
 import { activityIndexFor } from './activity-index';
+import { axisMarkers } from './axis-markers';
 import type { Ctx2D } from './ctx-2d';
 import {
   beginRoundedRect,
@@ -1319,15 +1320,22 @@ export function paintScene(
   // rather than two facts — so exactly ONE line draws, in the data-date treatment, and its pill
   // merges the labels (`Data date · today`). The test is `Math.round(x)` on the already-computed
   // screen x values, asserted both ways in `paint.test.ts`.
-  const dataDateX = ((): number | null => {
-    if (scene.dataDateLine !== true) return null;
-    const x = Math.round(screenXOfDay(0, view)) + 0.5;
-    return x >= 0 && x <= size.width ? x : null;
-  })();
-  // Whether Today rounded onto the drawn data-date rule this frame — set in the Today branch,
-  // read by the data-date pill below so the merged label and the suppressed second line come
-  // from ONE comparison, not two that could disagree.
-  let todayMerged = false;
+  //
+  // **The decision itself now lives in `render/axis-markers.ts`** (#148 M1): cull, then clamp, then
+  // coincidence, then overlap, once — because the labels are moving to the ruler's DOM layer and a
+  // second implementation of "do these coincide?" would drift invisibly from this one. This block
+  // draws the rules from that model; nothing about what it draws has changed.
+  const markers = axisMarkers(view, size, {
+    dataDateLine: scene.dataDateLine,
+    todayOffset: scene.todayOffset,
+    todayFraction: scene.todayFraction,
+    todayToggle: toggles.today,
+  });
+  const dataDateX = markers.lines.find((l) => l.kind === 'dataDate')?.x ?? null;
+  const todayLine = markers.lines.find((l) => l.kind === 'today') ?? null;
+  // Whether Today rounded onto the drawn data-date rule this frame — ONE comparison, read by both
+  // the suppressed second line and the merged label below.
+  const todayMerged = markers.merged;
   if (dataDateX !== null) {
     ctx.strokeStyle = palette.dataDate;
     ctx.lineWidth = 2;
@@ -1349,11 +1357,9 @@ export function paintScene(
   // chip's own footprint (CURSOR_CHIP_TOP + CURSOR_CHIP_H), so a drag's cursor chip and the Today
   // pill can never overlap even though they live on separate canvases. It only draws alongside
   // the fractional line (both gated on `todayFraction` being present), not the flag-off line.
-  if (toggles.today && scene.todayOffset != null) {
-    const dayOffset = scene.todayOffset + (scene.todayFraction ?? 0);
-    const x = Math.round(screenXOfDay(dayOffset, view)) + 0.5;
-    todayMerged = dataDateX !== null && Math.round(x) === Math.round(dataDateX);
-    if (!todayMerged && x >= 0 && x <= size.width) {
+  if (todayLine !== null) {
+    const x = todayLine.x;
+    {
       ctx.strokeStyle = palette.today;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 3]);

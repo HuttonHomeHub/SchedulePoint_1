@@ -44,7 +44,7 @@ describe('the geometry core is a leaf', () => {
     // The rule generalises past the core: `render-model.ts` re-exports all four, so ANY import back
     // through it rebuilds the cycle. Extending this as the modules land is cheaper than discovering
     // which one reached back — and each of these was written to import `./geometry` directly.
-    for (const module of ['link-routing.ts', 'hit-test.ts', 'viewport.ts']) {
+    for (const module of ['link-routing.ts', 'hit-test.ts', 'viewport.ts', 'axis-markers.ts']) {
       const source = readFileSync(join(RENDER, module), 'utf8');
       expect(source, module).not.toMatch(/from\s+['"][^'"]*render-model(\.js|\.ts)?['"]/);
     }
