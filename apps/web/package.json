@@ -54,6 +54,7 @@
     "test:e2e:csp": "playwright test --config playwright.csp.config.ts --pass-with-no-tests",
     "test:e2e:public": "playwright test --config playwright.public.config.ts --pass-with-no-tests",
     "test:e2e:overview": "playwright test --config playwright.overview.config.ts --pass-with-no-tests",
+    "test:e2e:shell": "playwright test --config playwright.shell.config.ts",
     "clean": "rimraf dist .turbo *.tsbuildinfo",
     "test:e2e:gantt-editing": "playwright test --config playwright.gantt-editing.config.ts"
   },
