@@ -548,6 +548,21 @@ jobs:
       - name: Web end-to-end tests (minimap)
         run: pnpm --filter @repo/web test:e2e:minimap
 
+      # The exported-diagram journey (playwright.export.config.ts, TECH_DEBT #164 W3-M2). It
+      # decodes the REAL downloaded PNG and asserts computed pixel properties, and it is the only
+      # instrument here that can: every export unit suite runs in jsdom, where getComputedStyle
+      # yields nothing and the palette resolver takes its fallbacks, so those suites exercise the
+      # branch that is correct and can never reach the branch that ships. That is how the export
+      # dropped seven default-on layers — weekends, month bands, gridline tiers, arrowheads, the
+      # bar refresh, link routing and the fractional Today marker — behind a green suite, in the
+      # file a planner sends to someone who was not in the room. No stored golden: the title band
+      # carries a generation date, and ADR-0058 records that a gate failing daily gets deleted
+      # rather than fixed, so it asserts properties of the picture instead of an image identity.
+      # Its script omits --pass-with-no-tests on purpose — it has no flag to skip on, so "no tests
+      # ran" could only mean a broken testDir.
+      - name: Web end-to-end tests (exported diagram)
+        run: pnpm --filter @repo/web test:e2e:export
+
       # Flag-ON audit log journey (playwright.audit.config.ts) with VITE_AUDIT_LOG on (ADR-0072).
       # The audit log is a claim about writes that happened somewhere else, so a mocked fetch cannot
       # be wrong about a row it invented. Against a real API and database this proves the producers
