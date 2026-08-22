@@ -1,5 +1,11 @@
 # @repo/web
 
+## 0.99.2
+
+### Patch Changes
+
+- [#358](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/358) [`6135db4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6135db4d38db99d086151936cd5f35b96d46a503) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update react-hook-form to 7.86.0 and lucide-react to 1.33.0.
+
 ## 0.99.1
 
 ### Patch Changes
