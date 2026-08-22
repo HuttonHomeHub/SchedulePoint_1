@@ -3139,9 +3139,31 @@ When operating in this repo, Claude Code should:
    rather than the product, every one visible in the first local run. **A local
    database is available and always has been** — that gap was a process gap, not
    a tooling one.
-9. **Use Conventional Commits** and add a changeset for user-visible change.
-   Meet the Feature Completion Criteria (§21) before calling work done.
-10. **A claim that decides something must carry its evidence** (ADR-0076). When a
+9. **A GitHub `check_suite` event is not proof that CI passed.** Before merging,
+   read the check runs for the PR's **current head** (`get_check_runs`) and
+   confirm every one is `completed` with `conclusion: success`. A relayed
+   "no check in this suite failed" event is a weaker claim than it reads as, in
+   three distinct ways, **all three of which occurred on one afternoon**
+   (2026-08-22, six times across PRs #347, #349 and #351):
+
+   - **one app can own several suites**, so a suite completing says nothing
+     about the run whose jobs you care about;
+   - the event can name a **superseded** suite, cancelled by a newer push;
+   - the event can name an **older head**, because a push while CI is running
+     leaves earlier events queued behind it.
+
+   In the sharpest instance the relay reported success for an app while **two
+   jobs inside that same run** — the end-to-end suite and lint/typecheck/unit —
+   were both still `in_progress`. Acting on any of the six would have merged a
+   PR whose tests had not finished. The event is a good reason to **look**; it is
+   not the answer.
+
+   This is not a defect to fix; it is what the signal means. `get_check_runs` on
+   the PR is the cheap check, and it caught all six.
+
+10. **Use Conventional Commits** and add a changeset for user-visible change.
+    Meet the Feature Completion Criteria (§21) before calling work done.
+11. **A claim that decides something must carry its evidence** (ADR-0076). When a
     spec, ADR, plan, risk table or docblock asserts a fact about behaviour — a
     cost, a guarantee, a failure mode, "there is no oracle here", "this is not on
     the request path" — say what was **run or read** to establish it: the command,
@@ -3180,7 +3202,7 @@ When operating in this repo, Claude Code should:
   that applies everywhere is followed nowhere, and both failures were in the
   small set of statements that changed what got built.
 
-11. **Approved work runs to completion. A status report is not a stopping point.**
+12. **Approved work runs to completion. A status report is not a stopping point.**
     When the product owner has approved a plan or said "drive this to completion",
     the only two reasons to stop are: **every milestone is done**, or **an answer is
     needed that only they can give**. Nothing else qualifies — not a finished
