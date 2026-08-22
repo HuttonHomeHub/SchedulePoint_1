@@ -1742,11 +1742,6 @@ export interface CursorChip {
   label: string;
 }
 
-/** Height (px) of the cursor date chip. */
-export const CURSOR_CHIP_H = 16;
-/** Gap (px) between the canvas top edge and the chip. */
-export const CURSOR_CHIP_TOP = 4;
-
 /*
  * `TODAY_CHIP_H`, `TODAY_CHIP_TOP` and `DATA_DATE_CHIP_TOP` were here, and #148 deleted them with
  * the pills they positioned. The shape of what they got wrong is worth keeping, because it is not
@@ -1804,11 +1799,18 @@ export function paintInteractionLayer(
     ctx.setLineDash([]);
   }
 
-  // The cursor date readout (ADR-0054 §2), drawn FIRST so every ghost, ring and chip paints over
-  // it — it is a reference line, not a foreground object. A full-height dashed rule marks the day
-  // boundary being chosen; the chip above it states the date. Absent ⇒ not one call ⇒ parity.
+  // The cursor date readout's GUIDELINE (ADR-0054 §2), drawn FIRST so every ghost and ring paints
+  // over it — it is a reference line, not a foreground object. A full-height dashed rule marks the
+  // day boundary being chosen. Absent ⇒ not one call ⇒ parity.
+  //
+  // **The chip that used to sit above it is DOM in the ruler now** (#148 M3), on the transient
+  // marker row above the persistent `Data date` / `Today` row. The rule stays on the canvas for the
+  // same reason the other two rules did: a full-height vertical IS a scene mark, meaning something
+  // at every lane, while a date label is chrome and was only ever painted here by accident of
+  // history. `overlay.cursor.label` is still carried — the DOM layer reads it — and this function
+  // no longer touches it, which is why the interaction layer now emits no text at all.
   if (overlay.cursor) {
-    const { x, label } = overlay.cursor;
+    const { x } = overlay.cursor;
     ctx.strokeStyle = palette.selection;
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
@@ -1817,22 +1819,6 @@ export function paintInteractionLayer(
     ctx.lineTo(x + 0.5, size.height);
     ctx.stroke();
     ctx.setLineDash([]);
-    // Guarded like every other label pass so a text-less test context never throws; `measureText`
-    // sizes the chip, and the x is clamped so the chip never leaves the surface at either edge.
-    if (typeof ctx.fillText === 'function' && typeof ctx.measureText === 'function') {
-      ctx.font = LABEL_FONT;
-      const w = ctx.measureText(label).width + LABEL_PAD_PX * 2;
-      const cx = Math.max(0, Math.min(x - w / 2, size.width - w));
-      ctx.fillStyle = palette.bar;
-      ctx.fillRect(cx, CURSOR_CHIP_TOP, w, CURSOR_CHIP_H);
-      ctx.strokeStyle = palette.selection;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(cx + 0.5, CURSOR_CHIP_TOP + 0.5, w - 1, CURSOR_CHIP_H - 1);
-      ctx.fillStyle = palette.labelInside;
-      ctx.textBaseline = 'middle';
-      ctx.textAlign = 'left';
-      ctx.fillText(label, cx + LABEL_PAD_PX, CURSOR_CHIP_TOP + CURSOR_CHIP_H / 2);
-    }
   }
 
   if (refresh && overlay.hover) {

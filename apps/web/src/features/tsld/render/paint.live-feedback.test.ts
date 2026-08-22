@@ -214,25 +214,35 @@ describe('ghost fidelity (ADR-0054 §1)', () => {
 });
 
 describe('cursor date readout (ADR-0054 §2)', () => {
-  it('draws a full-height guideline at the chosen day plus a chip stating its date', () => {
+  it('draws a full-height guideline at the chosen day, and NO chip (#148 M3)', () => {
     const ctx = mockCtx();
     paintInteractionLayer(ctx, { cursor: { x: 240, label: 'Fri 2 Jan' } }, SIZE, PALETTE);
-    // The guideline spans the surface at the day boundary…
+    // The guideline spans the surface at the day boundary — a full-height vertical IS a scene mark,
+    // meaning something at every lane, so it stays on the canvas.
     expect(ctx.moveTo).toHaveBeenCalledWith(240.5, 0);
     expect(ctx.lineTo).toHaveBeenCalledWith(240.5, SIZE.height);
-    // …and the chip states the date.
-    expect(ctx.fillText).toHaveBeenCalledWith('Fri 2 Jan', expect.any(Number), expect.any(Number));
+    // The chip that used to state the date is DOM in the ruler's transient marker row now. That it
+    // states the label lives in `TsldCanvas.axis-markers.test.tsx`; that it never covers a bar is
+    // `e2e-axis-markers`, which is the assertion no test here could ever make.
+    expect(ctx.fillText).not.toHaveBeenCalled();
+    expect(ctx.measureText).not.toHaveBeenCalled();
   });
 
-  it('keeps the chip on-surface at either edge rather than letting it run off', () => {
-    const left = mockCtx();
-    paintInteractionLayer(left, { cursor: { x: 0, label: 'Thu 1 Jan' } }, SIZE, PALETTE);
-    const right = mockCtx();
-    paintInteractionLayer(right, { cursor: { x: SIZE.width, label: 'Thu 1 Jan' } }, SIZE, PALETTE);
-    const chipX = (ctx: ReturnType<typeof mockCtx>): number => ctx.fillRect.mock.calls[0]![0]!;
-    const chipW = (ctx: ReturnType<typeof mockCtx>): number => ctx.fillRect.mock.calls[0]![2]!;
-    expect(chipX(left)).toBeGreaterThanOrEqual(0);
-    expect(chipX(right) + chipW(right)).toBeLessThanOrEqual(SIZE.width);
+  it('needs no text support at all, so the whole overlay is shapes (#148 M3)', () => {
+    // What replaces the old edge-clamping case. Clamping did not disappear — it moved to
+    // `clampMarkLeft` in `render/axis-markers.ts`, where ONE rule now serves the canvas rules, the
+    // persistent marks and this readout, and `axis-markers.test.ts` asserts it at both edges. What
+    // this asserts instead is the property that made the move safe: the interaction layer reaches
+    // for no text API, so a context without one cannot throw and a per-move `measureText` cannot
+    // creep back in.
+    const ctx = mockCtx();
+    // @ts-expect-error — simulate an environment without text support.
+    ctx.fillText = undefined;
+    // @ts-expect-error — simulate an environment without text support.
+    ctx.measureText = undefined;
+    paintInteractionLayer(ctx, { cursor: { x: 0, label: 'Thu 1 Jan' } }, SIZE, PALETTE);
+    paintInteractionLayer(ctx, { cursor: { x: SIZE.width, label: 'Thu 1 Jan' } }, SIZE, PALETTE);
+    expect(ctx.stroke).toHaveBeenCalled();
   });
 
   it('is a no-op without a cursor — the flag-off parity contract', () => {

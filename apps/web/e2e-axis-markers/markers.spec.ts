@@ -164,4 +164,48 @@ test.describe('The axis markers', () => {
     await page.keyboard.press('Escape');
     await expectNoMarkerOverTheScene(page, 'at the Month preset');
   });
+
+  test('the cursor readout appears in the transient row during a gesture, still clear of the diagram', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await onboard(page, STAMP + 1);
+    await createHierarchy(page);
+    await newPlan(page, 'Cursor readout journey');
+    await ensurePen(page);
+    const seeded = await seedActivities(page, orgSlug, [
+      { name: 'Site setup', laneIndex: 0, durationDays: 30 },
+      { name: 'Dig footings', laneIndex: 1, durationDays: 45 },
+    ]);
+    expect(seeded).toHaveLength(2);
+    await recalculate(page, orgSlug);
+    await ensurePen(page); // the reload above drops the ADR-0028 lease
+
+    const canvas = page.locator('canvas.touch-none').first();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error('the scene canvas has no box');
+
+    // **This is the one state M2's journey structurally cannot reach.** The readout is written only
+    // while the pointer is over the surface WITH the pen (`TsldCanvas.tsx`'s `onPointerMove` gate),
+    // and it is the mark that moves — the persistent pair is a function of the viewport, this one
+    // of the pointer. If the two rows were ever going to collide with each other or with a bar,
+    // this is when.
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 6 });
+    await expect
+      .poll(
+        async () => (await readMarkers(page)).markers.filter((m) => m.kind === 'cursor').length,
+        { timeout: 15_000 },
+      )
+      .toBe(1);
+
+    await expectNoMarkerOverTheScene(page, 'while the cursor readout is showing');
+
+    // …and during an actual drag, where the readout states the day that will be COMMITTED rather
+    // than the pixel under the pointer, so it is at its widest and most likely to reach a bar.
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 200, box.y + box.height / 2, { steps: 10 });
+    await expectNoMarkerOverTheScene(page, 'mid-drag');
+    await page.mouse.up();
+  });
 });

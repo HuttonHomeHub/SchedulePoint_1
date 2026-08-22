@@ -20,7 +20,7 @@ import {
   type LoeSpanStep,
   type Modifiers,
 } from '../interaction/gesture-machine';
-import { axisMarkers } from '../render/axis-markers';
+import { axisMarkers, clampMarkLeft } from '../render/axis-markers';
 import { useCanvasSurface } from '../render/canvas-surface';
 import { cursorReadout } from '../render/cursor-readout';
 import type { GhostBar } from '../render/lenses';
@@ -661,6 +661,13 @@ function syncRulerRow(
 const AXIS_MARKER_CLASS = 'inline-flex h-3.5 items-center rounded-sm px-1 text-xs';
 const AXIS_MARKER_DATA_DATE_CLASS = `${AXIS_MARKER_CLASS} bg-foreground text-background`;
 const AXIS_MARKER_TODAY_CLASS = `${AXIS_MARKER_CLASS} bg-destructive text-destructive-foreground`;
+/**
+ * The transient cursor readout's treatment. It keeps the canvas chip's own colours — a bar fill
+ * with a selection-coloured outline — because it is a **live, temporary** mark and must not read as
+ * one of the two standing facts beside it; the outline is what said so on the canvas and is what
+ * says so here.
+ */
+const AXIS_MARKER_CURSOR_CLASS = `${AXIS_MARKER_CLASS} bg-card text-card-foreground ring-ring ring-1`;
 
 /**
  * The Canvas 2D TSLD painter (ADR-0026). Draws the plan's computed schedule from the pure
@@ -984,6 +991,9 @@ export function TsldCanvas({
   // label string and read ONLY inside the rAF frame, never in a pointer handler (ADR-0026 D3). The
   // persistent row has exactly three possible labels, so the cache is cold three times per session.
   const axisMarkerWidthsRef = useRef(new Map<string, number>());
+  const axisMarkerCursorNodeRef = useRef<HTMLSpanElement | null>(null);
+  const axisMarkerCursorLabelRef = useRef<string | null>(null);
+  const cursorAnchorRef = useRef(0);
   // Coarse active-preset feedback: report only when the zoom STOP changes, never per frame.
   const lastStopRef = useRef<ZoomLevel | null>(null);
   const onZoomStopChangeRef = useRef(onZoomStopChange);
@@ -1537,6 +1547,55 @@ export function TsldCanvas({
       for (let i = model.marks.length; i < pool.length; i += 1) pool[i]!.style.display = 'none';
     };
 
+    /**
+     * The TRANSIENT marker row: the cursor date readout (ADR-0054 §2), one node, above the
+     * persistent row.
+     *
+     * **The calm-band invariant is what the two rows are for.** The persistent row is a function of
+     * `(viewport, plan)` and this one is a function of the pointer; the input sets are disjoint, so
+     * a persistent label cannot move because the mouse did. `axisMarkers()` takes no pointer
+     * argument and `cursorReadout()` takes no marker argument, which is that invariant expressed as
+     * two signatures rather than as a paragraph (`axis-markers.structural.test.ts`).
+     *
+     * Its own early-return is on the LABEL, not the viewport: the readout's whole job is to change
+     * while the viewport stands still.
+     */
+    const syncCursorMarker = (label: string | null): void => {
+      if (label === axisMarkerCursorLabelRef.current) return;
+      axisMarkerCursorLabelRef.current = label;
+      const row = axisMarkerTransientRowRef.current;
+      if (!row) return;
+      let node = axisMarkerCursorNodeRef.current;
+      if (label === null) {
+        if (node) node.style.display = 'none';
+        return;
+      }
+      if (!node) {
+        node = document.createElement('span');
+        node.style.position = 'absolute';
+        node.style.left = '0';
+        node.style.top = '0';
+        node.style.whiteSpace = 'nowrap';
+        node.dataset.axisMarker = 'cursor';
+        row.appendChild(node);
+        axisMarkerCursorNodeRef.current = node;
+      }
+      node.className = AXIS_MARKER_CURSOR_CLASS;
+      node.textContent = label;
+      node.style.display = '';
+      // Measured and clamped by the SAME rule the persistent marks use, so the two rows cannot
+      // disagree about where the surface ends. The width memo is shared for the same reason — and
+      // the cursor's labels are unbounded (a create drag mints `12 Sep – 30 Sep · 19d`), so this is
+      // where the cache actually earns its 0.041 ms → 0.0015 ms (M0-T7).
+      const widths = axisMarkerWidthsRef.current;
+      let width = widths.get(label);
+      if (width === undefined) {
+        width = node.getBoundingClientRect().width;
+        widths.set(label, width);
+      }
+      node.style.transform = `translateX(${String(clampMarkLeft(cursorAnchorRef.current, width, sizeRef.current.width))}px)`;
+    };
+
     const frame = (): void => {
       raf = requestAnimationFrame(frame);
       // Skip all paint/measure work while the surface is hidden (e.g. the below-`md` Activities pane
@@ -1635,6 +1694,8 @@ export function TsldCanvas({
               : null,
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
+        cursorAnchorRef.current = overlay.cursor?.x ?? 0;
+        syncCursorMarker(overlay.cursor?.label ?? null);
         interactionDirtyRef.current = false;
       }
       // Layer 3 — the resource strip (Stage E, ADR-0049). Painted from the SAME `viewRef` snapshot the
@@ -2158,11 +2219,19 @@ export function TsldCanvas({
           // guideline must follow every move. It is the CHEAP layer — a clear plus a rule, a chip
           // and (when a gesture runs) one ghost — never the bar/link scene. Flag-off this whole
           // block is dead, so the idle repaint cadence is byte-for-byte today's.
-          // Gated on `editing` as well as the flag: the interaction canvas only exists while
-          // editing (`ictx` is null otherwise), so on a read-only surface — a Viewer, or the
-          // ADR-0051 guest share view — this would force a `getBoundingClientRect()` on every
-          // raw pointer move for a chip that can never be painted. Per-EVENT layout reads are
-          // exactly what ADR-0026 D3 avoids.
+          // Gated on `editing` as well as the flag, so on a read-only surface — a Viewer, or the
+          // ADR-0051 guest share view — this does not force a `getBoundingClientRect()` on every
+          // raw pointer move for a readout that is never shown. Per-EVENT layout reads are exactly
+          // what ADR-0026 D3 avoids.
+          //
+          // **The reason this comment used to give was false, and had been for a while.** It said
+          // "the interaction canvas only exists while editing (`ictx` is null otherwise)" —
+          // ADR-0080 changed that at `:836`, where `interactionLayerMounted` became
+          // `editing || CANVAS_MULTI_SELECT_ENABLED` so a Viewer could see a marquee sweep. The
+          // gate's EFFECT was right throughout (a reader without the pen has never seen the cursor
+          // readout, because THIS line is what withholds it); only its stated cause was stale, and
+          // a stale cause is what a later edit reasons from. Found while moving the readout into
+          // the ruler for #148, and repaired rather than stepped over.
           if (CANVAS_LIVE_FEEDBACK_ENABLED && editing) {
             cursorPointRef.current = localPoint(e);
             interactionDirtyRef.current = true;
