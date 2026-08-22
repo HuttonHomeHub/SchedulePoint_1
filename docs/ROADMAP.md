@@ -528,3 +528,25 @@ discriminators. Each becomes a spec/plan before build:
 - Maintain the quality bar (tests, a11y, security, docs) on every change.
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
+
+- **Paper is a surface** — **shipped** (ADR-0103, 2026-08-22). The exported PNG/PDF and the printed
+  diagram had no identity of their own: the ground resolved from the app's live theme, so under
+  Graphite the deliverable carried a near-black diagram panel inside white paper chrome. Fixing that
+  produced three `--print-*` tokens, which a review then identified as a **surface family truncated
+  to three members** rather than a pack — background / foreground / muted-foreground is exactly
+  ADR-0055 §1's founding header stub, one medium along. `[data-surface="print"]` is now a complete
+  31-member family governing the one container both print surfaces mount into.
+  The same epic found the export **dropping seven default-on layers**, not the two filed: 25 scene
+  keys on the screen against six in the deliverable, including link routing — so the file a planner
+  sends to someone who was not in the room could draw a line through an unrelated bar, which is the
+  precise thing ADR-0065 exists to prevent. Nobody decided any of it; nine features each added
+  correctly to the screen and nobody re-read the export.
+  Its most transferable finding is about instruments rather than colour. Four of the epic's defects
+  were **in the gates**, not the product: a scope that shipped inert with 31 rebinds and no consumer,
+  a parity gate that could be silenced by a comment containing a brace, a pre-push script that
+  hard-coded the roster it was written to check, and an assertion that counted ground tones so a
+  missing layer passed. Every export unit suite runs in jsdom, where the resolver takes its
+  fallbacks — so they exercise the branch that is correct and can never reach the branch that ships.
+  `apps/web/e2e-export/` decodes the real download instead. Leaves `docs/TECH_DEBT.md` #166 (a
+  whole-plan export of a long programme culls weekends entirely) and #167 (five scene keys are lens
+  state, so the export is the default picture rather than the planner's).
