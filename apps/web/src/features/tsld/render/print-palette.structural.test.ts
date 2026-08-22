@@ -88,14 +88,25 @@ describe('the print palette resolves light (structural)', () => {
     ).toEqual([]);
   });
 
-  it('no surface scope rebinds a --print-* token', () => {
-    // The other direction, and what makes the first assertion mean something: if a scope could
-    // rebind these, "reads --print-*" would stop implying "is light".
+  it('no scope OTHER than print rebinds a --print-* token', () => {
+    // The other direction, and what makes the first assertion mean something: if another scope
+    // could rebind these, "reads --print-*" would stop implying "is light".
+    //
+    // **Repaired rather than replaced when the print scope landed** (#163). The plan proposed
+    // swapping it for "paper's background is a literal", which is a different property — and this
+    // plan's own risk line says replacing an assertion is how a gate stops proving anything. It
+    // went red only because the regex tested the whole block body while the print block has
+    // `var(--print-*)` on the RIGHT-hand side; it now tests declaration NAMES, which is what it
+    // always meant.
     const css = readGlobalsCss().replace(/\/\*[\s\S]*?\*\//g, '');
-    const scopeBlocks = [...css.matchAll(/\[data-surface=['"][a-z]+['"]\]\s*\{([^}]*)\}/g)]
-      .map((m) => m[1] ?? '')
-      .join('\n');
-    expect(scopeBlocks).not.toMatch(/--print-/);
+    const offenders: string[] = [];
+    for (const m of css.matchAll(/\[data-surface=['"]([a-z]+)['"]\]\s*\{([^}]*)\}/g)) {
+      if (m[1] === 'print') continue;
+      for (const name of declarations(m[2] ?? '').keys()) {
+        if (name.startsWith('--print-')) offenders.push(`${m[1]}: ${name}`);
+      }
+    }
+    expect(offenders, `a non-print scope rebinds paper: ${offenders.join(', ')}`).toEqual([]);
   });
 
   it('the paper ground is light', () => {
@@ -210,7 +221,7 @@ describe('the print palette resolves light (structural)', () => {
     // resolvePrintPalette()'s own light fallbacks so the two can't drift". They had drifted.
     // One source, asserted.
     const css = readGlobalsCss();
-    for (const name of ['--print-ground', '--print-ink', '--print-muted-ink']) {
+    for (const name of ['--print', '--print-foreground', '--print-muted-foreground']) {
       expect(css, `${name} is not declared`).toContain(`${name}:`);
     }
   });

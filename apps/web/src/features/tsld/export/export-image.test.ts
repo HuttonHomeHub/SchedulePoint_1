@@ -180,7 +180,7 @@ describe('resolvePrintPalette', () => {
   it('reads the design tokens when present (token-derived) and forces light regardless of theme', () => {
     const root = document.createElement('div');
     root.classList.add('dark');
-    // Stub the token layer: `--print-ground` resolves (token-derived), everything else is blank
+    // Stub the token layer: `--print` resolves (token-derived), everything else is blank
     // (so the LIGHT fallbacks apply). Proves the palette reads the design tokens, not hard-coded hex.
     //
     // **It named `--background` until TECH_DEBT #158.** That is the defect in one line: the paper
@@ -195,7 +195,7 @@ describe('resolvePrintPalette', () => {
     // alias too, so it went on passing throughout: it was asserting that the resolver reads whatever
     // name the resolver reads.
     const spy = vi.spyOn(window, 'getComputedStyle').mockReturnValue({
-      getPropertyValue: (name: string) => (name === '--print-ground' ? 'oklch(1 0 0)' : ''),
+      getPropertyValue: (name: string) => (name === '--print' ? 'oklch(1 0 0)' : ''),
     } as unknown as CSSStyleDeclaration);
     try {
       const print = resolvePrintPalette(root);

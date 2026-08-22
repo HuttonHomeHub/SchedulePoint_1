@@ -154,11 +154,11 @@ export function resolveTsldPalette(root: Element): TsldPalette {
  * the diagram — the paper `ground`, the title `ink`, and the muted subtitle `mutedInk`.
  */
 export interface PrintPalette extends TsldPalette {
-  /** The paper ground the export lays behind the diagram (token `--print-ground`, light by declaration). */
+  /** The paper ground the export lays behind the diagram (token `--print`, light by declaration). */
   ground: string;
-  /** Title-band foreground ink (token `--print-ink`) — dark, legible on the paper. */
+  /** Title-band foreground ink (token `--print-foreground`) — dark, legible on the paper. */
   ink: string;
-  /** Muted subtitle / generated-at ink (token `--print-muted-ink`). */
+  /** Muted subtitle / generated-at ink (token `--print-muted-foreground`). */
   mutedInk: string;
 }
 
@@ -175,10 +175,10 @@ export interface PrintPalette extends TsldPalette {
  * and the reason freezing these to literals would be wrong. See the gate for what guards it.
  */
 export const PRINT_TOKEN_SOURCES = {
-  ground: ['--print-ground', '#ffffff'],
-  ink: ['--print-ink', '#333333'],
-  mutedInk: ['--print-muted-ink', '#666666'],
-  canvasGround: ['--print-ground', '#ffffff'],
+  ground: ['--print', '#ffffff'],
+  ink: ['--print-foreground', '#333333'],
+  mutedInk: ['--print-muted-foreground', '#666666'],
+  canvasGround: ['--print', '#ffffff'],
   gridLine: ['--border', '#e0e0e0'],
   gridLineDay: ['--canvas-grid-day', '#dee0e2'],
   gridLineMonth: ['--canvas-grid-month', '#72777e'],
@@ -195,7 +195,7 @@ export const PRINT_TOKEN_SOURCES = {
   today: ['--destructive', '#9c0711'],
   todayInk: ['--destructive-foreground', '#ffffff'],
   dataDate: ['--foreground', '#333333'],
-  dataDateInk: ['--print-ground', '#ffffff'],
+  dataDateInk: ['--print', '#ffffff'],
   conflict: ['--warning', '#9f5600'],
   laneOverlap: ['--warning', '#9f5600'],
   labelInside: ['--primary-foreground', '#151b24'],
@@ -203,7 +203,7 @@ export const PRINT_TOKEN_SOURCES = {
   labelInsideNearCritical: ['--warning-foreground', '#ffffff'],
   barStroke: ['--border', '#e0e0e0'],
   hoverRing: ['--muted-foreground', '#666666'],
-  handleHalo: ['--print-ground', '#ffffff'],
+  handleHalo: ['--print', '#ffffff'],
   monthBand: ['--canvas-band', '#f6f7f9'],
 } as const satisfies Record<keyof PrintPalette, readonly [token: string, fallback: string]>;
 

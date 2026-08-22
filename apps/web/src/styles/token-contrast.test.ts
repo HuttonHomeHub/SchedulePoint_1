@@ -22,8 +22,8 @@ import {
  * checked the moment they add a value, without anyone remembering to extend this file.
  */
 
-type Scope = 'page' | 'chrome' | 'panel' | 'brand' | 'auth' | 'canvas';
-const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand', 'auth', 'canvas'];
+type Scope = 'page' | 'chrome' | 'panel' | 'brand' | 'auth' | 'canvas' | 'print';
+const SCOPES: Scope[] = ['page', 'chrome', 'panel', 'brand', 'auth', 'canvas', 'print'];
 
 /**
  * Resolve the tokens a component would actually see, given a theme and a surface scope —

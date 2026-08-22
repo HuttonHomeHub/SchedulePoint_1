@@ -15,7 +15,7 @@
  * *JS value*, but a custom property is CSS and resolves normally. The same mistaken belief was in
  * `PrintSurface.css`, and the two sheets pinned the same literals to each other on the strength of
  * it. TECH_DEBT #158 moved that file to the tokens and left this one, which silently made this
- * docblock's "look like one product" claim false: ink went var(--print-ink) there and stayed var(--print-ink) here.
+ * docblock's "look like one product" claim false: ink went var(--print-foreground) there and stayed var(--print-foreground) here.
  * Caught by the deferred ux gate, and it is the defect class #158 exists to close, committed while
  * closing it.
  *
@@ -39,8 +39,8 @@
   .gantt-print-root {
     display: block !important;
     margin: 0;
-    background: var(--print-ground);
-    color: var(--print-ink);
+    background: var(--print);
+    color: var(--print-foreground);
     color-scheme: light;
     font-family:
       'Inter',
@@ -64,14 +64,14 @@
   .gantt-print-subtitle {
     margin: 0 0 10px;
     font-size: 11px;
-    color: var(--print-muted-ink);
+    color: var(--print-muted-foreground);
     line-height: 1.2;
   }
 
   .gantt-print-empty {
     margin: 0;
     font-size: 11px;
-    color: var(--print-muted-ink);
+    color: var(--print-muted-foreground);
   }
 
   .gantt-print-table {
@@ -82,7 +82,7 @@
 
   .gantt-print-table th {
     padding: 0 4px 3px;
-    border-bottom: 1px solid var(--print-ink);
+    border-bottom: 1px solid var(--print-foreground);
     font-weight: 600;
     text-align: left;
     vertical-align: bottom;
@@ -138,7 +138,7 @@
     font-size: 8px;
     font-weight: 400;
     white-space: nowrap;
-    color: var(--print-muted-ink);
+    color: var(--print-muted-foreground);
   }
 
   /* ----- the bars ----- */
@@ -155,19 +155,19 @@
     height: 8px;
     margin-top: -4px;
     background: #d1d5db;
-    border: 1px solid var(--print-muted-ink);
+    border: 1px solid var(--print-muted-foreground);
     overflow: hidden;
   }
 
   /* Criticality is carried by BOTH a darker fill and a heavier outline, so it survives greyscale. */
   .gantt-print-critical {
     background: #9ca3af;
-    border: 1.5px solid var(--print-ink);
+    border: 1.5px solid var(--print-foreground);
   }
 
   .gantt-print-summary-bar {
-    background: var(--print-muted-ink);
-    border-color: var(--print-ink);
+    background: var(--print-muted-foreground);
+    border-color: var(--print-foreground);
   }
 
   .gantt-print-progress {
@@ -190,7 +190,7 @@
     position: absolute;
     bottom: 1px;
     height: 4px;
-    border: 1px dashed var(--print-muted-ink);
+    border: 1px dashed var(--print-muted-foreground);
   }
 
   .gantt-print-diamond {
@@ -200,7 +200,7 @@
     height: 7px;
     margin-top: -3.5px;
     margin-left: -3.5px;
-    background: var(--print-ink);
+    background: var(--print-foreground);
     transform: rotate(45deg);
   }
 
@@ -209,7 +209,7 @@
   .gantt-print-legend {
     margin: 8px 0 0;
     font-size: 9px;
-    color: var(--print-muted-ink);
+    color: var(--print-muted-foreground);
   }
 
   .gantt-print-swatch {

@@ -25,7 +25,7 @@ const TEST_DIR = join(SRC, 'test');
  * that asserts the invariant has to be able to say its name, and failing a seam test because a
  * comment mentions `--chrome` teaches people to widen allowlists rather than respect them.
  */
-const ALLOWED = ['components/ui/surface.tsx', 'styles/globals.css'];
+const ALLOWED = ['components/ui/surface.tsx', 'lib/print-document.ts', 'styles/globals.css'];
 
 /**
  * The narrower list for the token-naming assertions, and the split is a finding rather than a
@@ -87,7 +87,13 @@ describe('surface scope seams (structural)', () => {
   it('only the allowlisted files write a data-surface attribute', () => {
     // `Surface` renders it; everything else must go through `Surface`. A hand-written
     // `data-surface` would paint correctly today and drift the moment the rebind list changes.
-    expect(filesMatching(/data-surface/)).toEqual([...ALLOWED].sort());
+    // **`dataset.surface` is the same act spelled differently, and this gate could not see it.**
+    // Found by tripping over it: `lib/print-document.ts` applied a scope with
+    // `container.dataset.surface = 'print'` and the suite stayed green, because the DOM property
+    // is camelCase and the regex tested for the hyphenated attribute. A gate that only catches
+    // one spelling of the thing it forbids is the shape #124 records. That file now uses
+    // `setAttribute` so it is visible, and both spellings are matched so the next one is too.
+    expect(filesMatching(/data-surface|dataset\.surface/)).toEqual([...ALLOWED].sort());
   });
 
   it('no component reaches for a surface family through var()', () => {
