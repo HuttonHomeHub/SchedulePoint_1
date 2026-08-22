@@ -678,3 +678,105 @@ for that is a printed sheet, and it should be printed once during M2 rather than
   (the palette section, which is independently stale — see §3 Dependencies), `docs/adr/` (new ADR
   - `README.md` row + `CLAUDE.md` §16 entry + the banner count, in **one** commit —
     `scripts/check-counts.mjs` derives the ADR count from `docs/adr/`).
+
+---
+
+# Review amendments (2026-08-22)
+
+**This section is authoritative where it contradicts the body above.** The body is kept as reviewed
+rather than rewritten, because two of the corrections are to arguments the body makes well and one
+is to its headline claim — and a clean file would hide that the strongest-sounding argument was the
+weakest one.
+
+Two specialist reviews, both blocking. Every figure below was recomputed independently through
+`@/test/colour`, not taken from the body.
+
+## A1 — The polarity finding is real, unfixable, and was NOT the strongest argument (blocking)
+
+§4.3 finding 1 calls the month band's polarity inversion "the strongest single argument for
+paper-derived values". **Struck.** `--print-ground` is `oklch(1 0 0)` — maximum lightness — so no
+band value can be lighter than paper. The inversion is a mathematical consequence of the true-white
+decision, not something paper-derived values can remedy, and the spec's own CQ-4 already accepts it
+on the correct ground: an alternating band carries no polarity meaning, and light-grey bands on
+white _is_ the printed convention. The two statements sat 250 lines apart in one document and
+contradict each other.
+
+The finding stays as an observation — it is real, it was created by #158's own fix, and a lightness
+**floor** structurally cannot see it (verified: band luminance is Y = 0.930 under both polarities,
+so `> 0.5` passes either way). The decision now rests on findings 2 and 3, which is where it always
+belonged.
+
+The ADR-0097 citation is also imprecise and is corrected: `--print-ground` and `--canvas-band` are
+both `:root` pack tokens, so the split is of **intent**, not of scope. It becomes a genuine
+ADR-0097 split pair only once §4.6's scope exists.
+
+## A2 — The proposed band value is 25% weaker than the shipped one, and below this repo's own threshold (blocking)
+
+|               | value          | ΔL vs paper | ratio    |
+| ------------- | -------------- | ----------- | -------- |
+| shipped       | `oklch(0.976)` | 0.024       | 1.0714:1 |
+| proposed §4.6 | `oklch(0.982)` | 0.018       | 1.0529:1 |
+
+`token-architecture.test.ts:757-767` sets this repository's own perceptibility threshold at
+`distance >= 0.02`, and `:738` flags a ΔL 0.018 pair as _"below threshold"_ in as many words. The
+proposal lands the month band — half the diagram's ground — exactly there, **on paper**, where
+§4.3 finding 3 separately warns halftone may drop faint tints. It was derived from the wash rather
+than from visibility against paper. **Keep `oklch(0.976)`**, or justify going below 0.02 in the
+declaration; success criterion 2 otherwise passes on a step no reader can see.
+
+## A3 — The hatch row cites the wrong ground and its instruction contradicts its number (blocking)
+
+§4.6 says "hatch — keep at ≈ 1.25:1 relative to the paper wash. Already correct; do not amplify."
+1.2472:1 is the hatch against **paper**, not against the wash. The hatch is only ever drawn inside a
+non-working column (`paint.ts:426-435` builds the tile as hatch-over-wash; `:839` sets one
+`fillStyle`), so the operative pair is hatch-vs-wash:
+
+|                                    | ratio    |
+| ---------------------------------- | -------- |
+| hatch 0.925 on shipped wash 0.965  | 1.1271:1 |
+| hatch 0.925 on proposed wash 0.955 | 1.0942:1 |
+
+So "keep it" as written produces a **weaker** hatch. Holding ≈1.127:1 against a 0.955 wash needs
+the hatch at ≈`oklch(0.915)`. This matters more than its size: see A5.
+
+## A4 — There are THREE grounds, not two (blocking)
+
+§4.8 widens the sweep to "paper and the paper month band". The non-working wash is **opaque** and
+paints over the band (`paint.ts:839` — `fillStyle` then `fillRect`, no `globalAlpha`), so after M2
+the diagram has three. Recomputed, **nothing currently asserted fails** — worst case `edge`
+5.749 → 5.365 against a floor of 3 — but the sweep must be three or it does not say what §4.8
+claims. Add `bar`/`critical`/`nearCritical` at 3:1 while there: the ladder was solved for "≥ 3:1 on
+the 0.958 ground" and on the proposed wash `bar` is **3.126:1**, the narrowest margin in the
+picture and currently unswept.
+
+A consequence the body does not name: **a weekend column erases the band**, because both paint
+opaquely. Today that is nearly harmless (band↔wash 1.0328:1); under the proposal it becomes
+1.0826:1, so a month boundary landing on a weekend goes invisible for that column's width.
+
+## A5 — On paper, the hatch is the SOLE weekend channel, and the screen's 1.4.1 exemption does not transfer (blocking)
+
+The wash alone measures 1.1066:1 (shipped) / 1.1398:1 (proposed) against paper — no meaningful
+colour signal at print, which §4.3 finding 3 concedes. `token-contrast.test.ts:283-286` already
+rules that 1.4.1 is satisfied because "the hatch distinguishes non-working **by kind** rather than
+being the only cue" — **but that ruling was made for the screen**, where the wash carries some
+signal and the hatch is a second channel. On paper the wash carries none, so the hatch is the only
+one and the exemption's own premise no longer holds.
+
+Worse, `paint.ts:832,836-839` paints wash and hatch as one `fillStyle`, both culled below
+`NON_WORKING_MIN_PX = 3` — so a whole-plan export of a long programme loses weekends **entirely**,
+not gracefully. CQ-2 defers this as "exactly as on screen at the same scale". The artefact is not
+the screen: a planner can zoom, a sheet of paper cannot. The print gate's docblock must state which
+channel carries non-working on paper and why 1.4.1 holds, rather than inheriting a screen-derived
+exemption.
+
+## A6 — The divergence is SEVEN layers and 25 keys, not six and 22 (blocking)
+
+Verified by counting: `TsldCanvas.tsx:850-890` composes **25** scene keys; `use-diagram-image.ts`
+composes six. The body accounts for 7 screen-only + 6 named = 13, and CQ-5 covers 4 more. **Two are
+named nowhere: `todayFraction` and `dimmedIds`.**
+
+`todayFraction` is a seventh divergent default-on layer of exactly the same class: `paint.ts:1353`
+interpolates the Today line by it, `:1367` gates the **Today pill** on it being non-null, and
+`env.ts:833` records `VITE_CANVAS_TIME_AXIS` as default-on since 2026-07-27. So the deliverable
+draws a whole-day Today line with no pill while the screen draws a fractional one with a pill —
+unreported, in the artefact a planner sends out. This strengthens the epic's case and enlarges M2.

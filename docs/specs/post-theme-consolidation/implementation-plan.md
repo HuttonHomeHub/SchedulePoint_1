@@ -779,3 +779,109 @@ one changes what gets built.
 
 **Awaiting approval before implementation.** Nothing in this plan has been built; no application
 code has been written.
+
+---
+
+# Review amendments (2026-08-22)
+
+**Authoritative where it contradicts the body.** Two specialist reviews of the plan **before** any
+code, per the ADR-0090 precedent that reviewing a plan is cheaper than reviewing the code. Both
+blocked. The body is kept as reviewed.
+
+## P1 — The recurrence gate must be DERIVED, not a list (blocking)
+
+W3-M2's structural gate is specified as failing on a literal six-name list. US-4 promises the
+opposite: _"a **new** flag-derived scene key added to `TsldCanvas`'s composition when the export's
+composition is not updated, then the build fails naming the key."_ A seventh key is in neither list
+and fails nothing — and the spec's own A6 proves a seventh already exists.
+
+This is the ADR-0073 C4 defect the plan cites approvingly elsewhere: a literal beside a vocabulary
+that grows. **Replace with the ADR-0093 shape** the plan already invokes: parse both scene literals,
+compute `canvasKeys − exportKeys`, assert it equals a named `SCREEN_ONLY` const carrying a reason per
+entry. `todayFraction` and `dimmedIds` then fail on day one, and CQ-5's four become explicit rather
+than filed. Carry ADR-0093's **second** assertion too — that the export roster is non-empty —
+or an empty export scene passes.
+
+Preferred over both: **one `composeScene()` returning a whole `TsldScene`**, the export overriding
+the interaction keys. Then the compiler does it and no text-matching gate is needed.
+`composeSceneLayers()` returning six of twenty-five is the partial abstraction that _requires_ a
+fragile grep to hold it together.
+
+## P2 — The composer breaks an effect-dependency contract, invisibly (blocking)
+
+`monthBandsEnabled` / `dataDateLineEnabled` were hoisted to `TsldCanvas.tsx:844,849` **because** a
+review found two call sites drifting — the comment at `:841-843` says so — and they are effect
+dependencies at `:988-989`. Replacing them with `composeSceneLayers(view)` yields a fresh object per
+render; in the dep array at `:979-998` that runs the effect every render, setting `dirtyRef` and
+`interactionDirtyRef` (`:977-978`) — **a repaint per render**. That is ADR-0026 D3's invariant, which
+ADR-0078 records has **never been asserted**, so nothing fails and the frame budget quietly doubles.
+One `useMemo` keyed on `[view]` fixes it. W3-M2-T2's risk list names only call-site drift; add this.
+
+## P3 — Gate before values, not after (blocking)
+
+W3-M2-T1's steps are (1) re-derive, (2) declare values, (3) add the band ground to the gate.
+`token-contrast.test.ts:297-299` states this repository's rule in the opposite order: _"the gate
+lands BEFORE the CSS value, verified red, because writing the value first is how
+`--canvas-grid-month` shipped at 2.08:1 behind a green suite."_ Reorder 3 → 2, each assertion
+verified red against the shipped values first. Add the signed-ordering assertion A1 identifies — a
+floor cannot detect polarity, so assert the chain `L(wash) < L(band) < L(ground)` in its accepted
+direction, and a later flip fails instead of passing.
+
+## P4 — The print scope must govern a subtree, or it is a pack wearing a scope's name (blocking)
+
+As specified the scope covers a throwaway element for the **image export only**, while
+`PrintSurface.css` and `GanttPrintSurface.css` read `--print-*` by raw name from **outside any
+scope**. A 31-member family consumed as a 3-member pack by the two DOM artefacts and as a scope by a
+canvas with no DOM is #163's own rebind-vs-pack diagnosis re-created one level up — and it would be
+both at once. `lib/print-document.ts:64-66` already mounts **one** container shared by the TSLD print
+surface and the Gantt programme; `data-surface="print"` belongs there.
+
+## P5 — Alias `--page-*` by default, not `--plot-*` (blocking)
+
+`--plot-*` is the **diagram's** vocabulary. Once P4 puts the scope over the print container, its
+consumers include a `<table>` with header borders, row rules and legend swatches
+(`GanttPrintSurface.css`) and a title/subtitle block (`PrintSurface.css`) — where `--border`,
+`--muted`, `--muted-foreground` and `--accent` resolving to plot values is wrong. Alias `--page-*`
+by default, which is the ADR-0097 Landing E shape (`token-architecture.test.ts:373-393`), and alias
+`--plot-*` only for the enumerable diagram members the painter reads (`PRINT_TOKEN_SOURCES`).
+"Cannot drift from the screen" only ever applied to those.
+
+The plan's analogy is also imprecise: `canvas` is deliberately **not** in `FAMILIES` because
+`--canvas`/`--canvas-band` collide with the plot pack. `print` joining `FAMILIES` is the shape of
+`chrome`/`panel`/`brand`/`auth` — all of which alias page-derived values.
+
+## P6 — W2a is not a dependency. Folded back into W2b (blocking)
+
+The whole justification was that an implementer would derive a paper wash against
+`DESIGN_SYSTEM.md:227`'s `oklch(0.177)`. Opening the file refutes it: `:224-231` is a **blockquote
+historical note** opening _"This section described the navy-and-amber palette until the 2026-08-20
+reconciliation pass"_, sitting directly under _"`globals.css` is the source of truth for every
+value; this section is the **rule**, not a second copy of the values"_ (`:219-222`) and
+_"**Do not quote a ratio here** — quote the gate"_ (`:253`). The epic never reads it: §4.3 derives
+from `globals.css` and W3-M2-T1 mandates re-deriving with `@/test/colour`.
+
+Two of its three claims **are** genuinely stale and worth fixing — `:15` and `:39-41` still call
+light and dark first-class — plus the note itself now describes the pre-ADR-0102 palette in the
+present tense. None concerns a ground value, so none blocks W3. **Sequence becomes
+W1 → W3-M1 → W3-M2 → W2b**, with the DESIGN_SYSTEM corrections inside W2b where they belong. Scope
+them correctly: the real edit is about four lines, not the `:216-268` rewrite W2a-T1 specified —
+`:233-250` and `:255-258` survived ADR-0102 intact.
+
+## P7 — W3 would merge before its own specialist review (blocking, sequencing)
+
+W2b-T3 points the specialists at W3's diff, which puts the review **after** the merge. Every
+enablement retrospective in this register says that review is where the defects are. Run component
+and accessibility **inside W3-M2**, before it lands; W2b keeps the documentary half.
+
+## P8 — Two existing gate assertions, repaired rather than replaced (suggested, taken)
+
+`print-palette.structural.test.ts:91-99` — the plan swaps "no surface scope rebinds a `--print-*`
+token" for "paper's background is a literal". Different properties, and the plan's own risk line
+says replacing an assertion is how a gate stops proving anything. It goes red only because the regex
+tests the whole block body while a print block has `var(--print-*)` on the **right**-hand side; test
+declaration **names** instead (`declarations()` is already imported). Keep both.
+
+`:208-216` — "the print stylesheet reads the same tokens" asserts only that `globals.css` contains
+`--print-ground:`. It never opens either print stylesheet, so it cannot catch the half-landed rename
+the rollup risk relies on it for. That is a mis-named gate in its own right, and a new assertion
+rather than a widening.
