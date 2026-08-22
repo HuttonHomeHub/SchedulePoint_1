@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1057 web
+> (`apps/api/src/modules/`), 29 Prisma models across 57 migrations, 1056 web
 > source files with 38 Playwright suites beside the base journey, and
 > 106 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -2957,6 +2957,20 @@ progress` off the command surface because **an object action belongs on the obje
   covered (`recalculate()` ends in a reload, which drops the pen); a 1.5:1 contrast floor between the
   two fills drafted and withdrawn on measurement at 1.48:1, with the reason written down; and a
   `leading-[14px]` that tripped the sizing ratchet.
+  **The M4 gate pass found a seventh, and all three blocking reviews reached it separately.** The
+  transient readout shipped painted with `bg-card`/`text-card-foreground` — ADR-0097 **resets**,
+  absent from the canvas rebind, so they resolve the page's white card at **1.13:1** against the
+  ruler ground, under a docblock claiming it used the bar colour (which the old chip did). That is
+  `docs/TECH_DEBT.md` #162 repeated one file over four days later, in the one treatment of three
+  the epic's own new contrast block did not cover — the shape the ADR quotes about the guards it
+  deletes, occurring inside it. A second finding was **answered rather than fixed**, and the answer
+  is better than the proposed remedy: the transient row can cover the ruler's sticky month label,
+  and biasing its clamp would move the readout off the guideline it names, whereas
+  `formatCanvasDate` renders `D MMM` so **the covering label carries the covered fact** — now a
+  test rather than a paragraph. The pass also found a defect in a **gate**:
+  `reset-fills.structural.test.ts` scanned raw text, so the docblock explaining why this treatment
+  must not use `bg-card` counted as using it — the fourth scan-matching-prose in this repository,
+  whose sibling had already fixed itself the same way. Five non-blocking findings are #174.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

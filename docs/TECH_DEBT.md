@@ -3725,3 +3725,59 @@ the paint path, or the first draw of every session is in the fallback face.
 **Not scheduled.** The three marks #148 moves to DOM pick up Space Grotesk incidentally, which
 narrows the inconsistency without addressing it; that is a side effect, not a fix, and it is
 recorded so the next reader does not mistake it for one.
+
+## 174. The axis-markers gate pass's non-blocking findings
+
+**Raised 2026-08-22.** Four specialists over the ADR-0106 epic diff. Frontend-performance passed
+outright, having built both refs and measured **+0.79 kB gzip** for the whole epic, and having
+re-derived the cache-miss analysis from the code rather than from the M0 numbers. Component,
+accessibility and UX each blocked, **all three independently on the same defect** — the cursor
+readout painted with `bg-card`/`text-card-foreground`, which are ADR-0097 **resets** and therefore
+absent from the canvas rebind, so they resolved the page's white card at **1.13:1** against the
+ruler ground while the fill's own docblock claimed it used the bar colour. That is
+`docs/TECH_DEBT.md` **#162** repeated one file over, four days later, by the epic whose own ADR
+quotes the "one correct pattern applied to a control and not its neighbour" shape. It is fixed with
+the pair added to the contrast gate and the docblock corrected. What follows is what was
+deliberately **not** folded, with the reason.
+
+- **The withheld `Today` label is silent.** When the data date and today are too close for both
+  words, `Today`'s is withheld and its dashed rule remains — measured to bite only within 0.5 days
+  at the Day preset and 1.1 at Week, but within 13.5 at Quarter and **40.5 at Year**, which on a
+  live programme is common. Nothing on screen says _why_ the word disappeared between one zoom step
+  and the next, and the UX review is right that a first-time reader has no reason to know the dash
+  convention without opening the legend. Not fixed, because every fix considered is worse than the
+  silence: a third label state (`Data date · today +3d`) is permanent cost for every plan to name a
+  distinction under four pixels wide; a tooltip on an `aria-hidden` band in a `pointer-events-none`
+  element is unreachable; and an icon is a fourth channel on a mark that already has three. The
+  honest framing is that at Quarter and Year the two marks ARE one position, and the register
+  should say so rather than pretend a cue would help. **Revisit if a planner reports it**, which is
+  the only evidence that would distinguish "acceptable" from "we got used to it".
+- **The escalation trigger measured pixel collision, not information loss.** The M0-T2 test written
+  before the measurement asked whether the two marks _overlap_; the question a reader has at the
+  Quarter preset is whether they can still see how far behind the programme is. Those are not the
+  same question, and the first does not answer the second. Recorded because this register's
+  recurring shape is a measured trigger answering a narrower question than the one it was meant to
+  settle — naming it is cheaper than re-deriving it.
+- **M0-T7's cost is measured in isolation.** `label-widths.spec.ts` times a forced layout on a probe
+  span that is the only thing written in that harness. In production `syncRuler()` runs immediately
+  before `syncAxisMarkers()` in the same synchronous pass and can reposition dozens of tick spans on
+  a panning frame, so a layout forced after it has more invalidated subtree to resolve. The
+  compounded worst case — panning _while_ a create-drag mints a fresh label — is not measured, and
+  the "0.25 % of a 16.7 ms frame" figure does not cover it. Both numbers are single-digit
+  microseconds to low tenths of a millisecond and the painter itself is already 4–6× over its budget
+  (#75), so this is very unlikely to matter; it is recorded because CLAUDE.md §19.11 says a claim
+  that decides something carries the evidence for the case it decides, and this one carries the
+  evidence for a cleaner case.
+- **`AxisMarkerMark.width` and `left` are correlated by convention, not by type.** They are always
+  set together by `place()`, and a discriminated union would make that structural in the spirit of
+  the module's own preference for compiler-enforced invariants. Left alone: one call site, fully
+  tested, and the union costs every reader a narrowing for a risk that is currently theoretical.
+- **`axisMarkers()` builds `marks` even when called unmeasured**, which the painter never reads.
+  Cheap (two objects), and splitting the function would give the epic two entry points to the one
+  decision it exists to keep single. Not changed.
+
+**A process finding belongs here too, and it is mine.** A read-only review agent left a scratch test
+file in the working tree, and a `git add -A` in the middle of the gate pass swept it into the ADR
+commit. It is removed, but the lesson is the general one: `git add -A` is not safe while anything
+else is writing to the tree, and a review pass is exactly when something else is. Stage by path
+during a gate pass.

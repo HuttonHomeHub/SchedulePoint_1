@@ -639,6 +639,19 @@ function syncRulerRow(
 }
 
 /**
+ * The axis-marker width cache's cap. Reached only by the transient row, whose labels are unbounded;
+ * past it the map clears wholesale rather than evicting, because an LRU would cost more code than
+ * the 0.041 ms it saves (M0-T7) and the three persistent labels are re-measured on the next frame
+ * either way.
+ */
+const AXIS_MARKER_WIDTH_CACHE_MAX = 256;
+
+function rememberWidth(cache: Map<string, number>, label: string, width: number): void {
+  if (cache.size >= AXIS_MARKER_WIDTH_CACHE_MAX) cache.clear();
+  cache.set(label, width);
+}
+
+/**
  * The axis markers' shared shape, and their two treatments.
  *
  * Written as literal class strings so Tailwind's scanner sees them — these nodes are created with
@@ -662,12 +675,27 @@ const AXIS_MARKER_CLASS = 'inline-flex h-3.5 items-center rounded-sm px-1 text-x
 const AXIS_MARKER_DATA_DATE_CLASS = `${AXIS_MARKER_CLASS} bg-foreground text-background`;
 const AXIS_MARKER_TODAY_CLASS = `${AXIS_MARKER_CLASS} bg-destructive text-destructive-foreground`;
 /**
- * The transient cursor readout's treatment. It keeps the canvas chip's own colours — a bar fill
- * with a selection-coloured outline — because it is a **live, temporary** mark and must not read as
- * one of the two standing facts beside it; the outline is what said so on the canvas and is what
- * says so here.
+ * The transient cursor readout's treatment: the canvas chip's own colours — the bar fill with a
+ * ring-hued outline — because it is a **live, temporary** mark and must not read as one of the two
+ * standing facts beside it. The ring is what said so on the canvas (`docs/DESIGN_SYSTEM.md`'s
+ * marker-channel table gives the ring hue to the cursor guideline for exactly this reason) and is
+ * what says so here.
+ *
+ * **`bg-primary`, and this shipped once as `bg-card`, which three independent reviews blocked.**
+ * `--card` and `--card-foreground` are ADR-0097 **resets**: deliberately absent from the
+ * `[data-surface='canvas']` rebind, so inside `<Surface tone="canvas">` they resolve the PAGE's
+ * white card rather than anything the diagram's family says — measured **1.13:1** against the ruler
+ * ground, a mark whose fill is invisible and whose whole legibility rides on a 1 px ring. The old
+ * canvas chip used `palette.bar` (= `--primary`, `render/palette.ts`), which IS rebound here, so
+ * this is what the docblock above always claimed and what the code now does.
+ *
+ * It is also the second recorded instance of one defect: `docs/TECH_DEBT.md` **#162** logs the same
+ * mistake in `TsldLegend.tsx`, one file over, raised the day before this epic began. The two
+ * persistent treatments picked rebound tokens correctly and the third did not — the "one correct
+ * pattern applied to a control and not its neighbour" shape this register has now recorded six
+ * times, occurring inside the epic whose own ADR quotes it.
  */
-const AXIS_MARKER_CURSOR_CLASS = `${AXIS_MARKER_CLASS} bg-card text-card-foreground ring-ring ring-1`;
+const AXIS_MARKER_CURSOR_CLASS = `${AXIS_MARKER_CLASS} bg-primary text-primary-foreground ring-ring ring-1`;
 
 /**
  * The Canvas 2D TSLD painter (ADR-0026). Draws the plan's computed schedule from the pure
@@ -989,7 +1017,16 @@ export function TsldCanvas({
   // Label → rendered width. `getBoundingClientRect` on a ruler-resident span is a forced synchronous
   // layout; measured at 0.041 ms cold against 0.0015 ms warm (M0-T7), i.e. 27× — so it is cached by
   // label string and read ONLY inside the rAF frame, never in a pointer handler (ADR-0026 D3). The
-  // persistent row has exactly three possible labels, so the cache is cold three times per session.
+  // persistent row has exactly three possible labels, so it is cold three times per session.
+  //
+  // **Bounded, unlike the precedent it is modelled on.** `render/measure.ts`'s `createMeasureCache`
+  // documents itself as "bounded by the plan's label count", which is a finite set; this cache is
+  // shared with the TRANSIENT row, whose labels are not — a create drag mints a fresh
+  // `12 Sep – 30 Sep · 19d` per day the drag crosses, so it could only ever grow for the life of the
+  // mounted canvas. The cost is measured in kilobytes rather than megabytes, which is why this is a
+  // cap and not a strategy: past the limit it clears wholesale and the next three persistent labels
+  // pay 0.041 ms each to come back. A frontend-performance review found this and recommended
+  // filing it; capping it is cheaper than the register row.
   const axisMarkerWidthsRef = useRef(new Map<string, number>());
   const axisMarkerCursorNodeRef = useRef<HTMLSpanElement | null>(null);
   const axisMarkerCursorLabelRef = useRef<string | null>(null);
@@ -1517,7 +1554,7 @@ export function TsldCanvas({
           row.appendChild(probe);
           const measured = probe.getBoundingClientRect().width;
           probe.remove();
-          widths.set(label, measured);
+          rememberWidth(widths, label, measured);
           return measured;
         },
       );
@@ -1591,7 +1628,7 @@ export function TsldCanvas({
       let width = widths.get(label);
       if (width === undefined) {
         width = node.getBoundingClientRect().width;
-        widths.set(label, width);
+        rememberWidth(widths, label, width);
       }
       node.style.transform = `translateX(${String(clampMarkLeft(cursorAnchorRef.current, width, sizeRef.current.width))}px)`;
     };

@@ -2,6 +2,7 @@ import { render, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RenderActivity } from '../render/render-model';
+import { DEFAULT_VIEW_TOGGLES } from '../render/view-toggles';
 
 import { RULER_HEIGHT, TsldCanvas } from './TsldCanvas';
 
@@ -180,6 +181,63 @@ describe('the axis-marker rows live inside the ruler band', () => {
     expect(
       [...(row?.querySelectorAll('[data-axis-marker]') ?? [])].map((m) => m.textContent),
     ).toEqual(['Data date']);
+    rect.mockRestore();
+  });
+
+  it('RETIRES a pooled marker rather than leaving it showing a stale label', async () => {
+    // The transition the first version of this suite could not see, because every case was a fresh
+    // `render()`: a pool that grows to two nodes and then needs one. A retired node keeps its text
+    // and is hidden with `display: none`, so a reader who only counted `[data-axis-marker]` would
+    // find the stale one and a reader who only checked `textContent` would too. Both halves are
+    // asserted, which is why this case is not the same as the paired one above with a different
+    // fixture.
+    //
+    // It also pins the shape a browser gate structurally cannot: `e2e-axis-markers` filters to
+    // markers with a NON-ZERO rect, so a retired node is invisible to it by design (trap T13).
+    // Nothing there would notice a pool that never retired.
+    const rect = stubLayout();
+    const { container, rerender } = render(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-03-16"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+        todayOffset={1}
+        todayFraction={0}
+      />,
+    );
+    const row = container.querySelector('[data-testid="tsld-axis-markers"]');
+    const shown = (): HTMLElement[] =>
+      [...(row?.querySelectorAll<HTMLElement>('[data-axis-marker]') ?? [])].filter(
+        (n) => n.style.display !== 'none',
+      );
+    await waitFor(() => {
+      expect(shown().map((n) => n.textContent)).toEqual(['Data date', 'Today']);
+    });
+
+    // Turn the Today toggle off: the model drops that mark, and the pool must retire its node.
+    rerender(
+      <TsldCanvas
+        activities={ACTIVITIES}
+        edges={[]}
+        dataDate="2026-03-16"
+        selectedId={null}
+        onSelect={vi.fn()}
+        fitSignal={0}
+        todayOffset={1}
+        todayFraction={0}
+        view={{ ...DEFAULT_VIEW_TOGGLES, today: false }}
+      />,
+    );
+    await waitFor(() => {
+      expect(shown().map((n) => n.textContent)).toEqual(['Data date']);
+    });
+    // The retired node still exists in the pool — that is the point of a pool — and is hidden.
+    const all = [...(row?.querySelectorAll<HTMLElement>('[data-axis-marker]') ?? [])];
+    expect(all).toHaveLength(2);
+    expect(all[1]?.style.display).toBe('none');
     rect.mockRestore();
   });
 });

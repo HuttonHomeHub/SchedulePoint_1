@@ -394,6 +394,15 @@ describe('the axis markers are legible in the ruler band', () => {
   const MARKERS: ReadonlyArray<readonly [name: string, fill: string, ink: string]> = [
     ['Data date', '--foreground', '--background'],
     ['Today', '--destructive', '--destructive-foreground'],
+    // **The transient cursor readout, named here because leaving it out was the epic's own defect.**
+    // The first version of this block covered the two persistent marks and stopped, on the reasoning
+    // that they were the ones the register row was about — and the third mark, added by the same
+    // diff, shipped painted with `--card`/`--card-foreground`. Those are ADR-0097 RESETS, absent
+    // from the canvas rebind, so they resolved the page's white card at **1.13:1** against the ruler
+    // ground while every gate stayed green. Three independent reviews caught it; this pair is what
+    // stops the fourth marker doing it again, since a treatment nobody asserts is a treatment
+    // nobody can be wrong about.
+    ['the cursor readout', '--primary', '--primary-foreground'],
   ];
 
   // `--canvas` and not `--background`: inside this scope they resolve to the same value
@@ -439,6 +448,20 @@ describe('the axis markers are legible in the ruler band', () => {
    * than the one being made here. `axis-markers.test.ts` carries the assertion that actually protects
    * the reader: the two marks never render the same word.
    */
+  it("the cursor readout's RING is what bounds it, and clears 3:1 on the ruler ground", () => {
+    // Its outline is load-bearing in a way the two persistent marks' are not: they are solid fills
+    // on a light band, while this one is deliberately the canvas chip's own treatment — a fill plus
+    // a ring-hued 1 px outline — because it is a live, temporary mark that must not read as one of
+    // the two standing facts beside it. `--ring` is the marker-channel table's transient hue
+    // (`docs/DESIGN_SYSTEM.md`), the same channel the cursor GUIDELINE on the canvas uses, so a
+    // planner meets one vocabulary rather than two.
+    const value = ratio(tokens, '--canvas', '--ring');
+    expect(
+      value,
+      `the cursor readout's ring is ${fmtRatio(value)} on the ruler ground`,
+    ).toBeGreaterThanOrEqual(3);
+  });
+
   it('reports the two fills against each other, which is not a criterion but is worth knowing', () => {
     const value = ratio(tokens, '--foreground', '--destructive');
     expect(value, `the two marker fills differ by ${fmtRatio(value)}`).toBeGreaterThan(1);

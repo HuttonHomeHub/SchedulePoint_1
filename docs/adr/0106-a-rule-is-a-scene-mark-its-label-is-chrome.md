@@ -214,3 +214,58 @@ running something rather than by reading.
    (the two marks never render the same word) lives where it is checkable.
 6. **`leading-[14px]` tripped the sizing ratchet from 18 to 20.** The ratchet is right and the class
    was lazy; `items-center` and `px-1` say the same thing in the ramp's own vocabulary.
+
+## The gate pass (M4), and the finding all three blocking reviews reached separately
+
+Four specialists over the combined diff. Frontend-performance passed, having built both refs and
+measured **+0.79 kB gzip** for the whole epic and re-derived the cache-miss analysis from the code.
+Component, accessibility and UX each blocked, and **all three independently on the same defect**.
+
+**`AXIS_MARKER_CURSOR_CLASS` shipped as `bg-card text-card-foreground`.** Those are ADR-0097
+**resets** — deliberately absent from the `[data-surface='canvas']` rebind — so inside
+`<Surface tone="canvas">` they resolve the **page's** white card rather than anything the diagram's
+family expresses. Measured at **1.13:1** against the ruler ground: a mark whose fill is effectively
+invisible and whose entire legibility rides on a 1 px ring, beside two solid high-contrast marks.
+And the docblock above it claimed the opposite — _"it keeps the canvas chip's own colours, a bar
+fill"_ — which the old chip did (`palette.bar` = `--primary`, which **is** rebound here).
+
+Two things make it worth recording rather than just fixing.
+
+- **It is `docs/TECH_DEBT.md` #162 repeated one file over, four days later.** That row logs the same
+  mistake in `TsldLegend.tsx` and states the fix in as many words. This epic's own ADR quotes the
+  "one correct pattern applied to a control and not its neighbour" shape as what the deleted guards
+  got wrong for a year — and then did it, in the one treatment of three that the epic's own new
+  contrast block did not cover.
+- **The contrast block was scoped to the two persistent marks and stopped**, on the reasoning that
+  those were the ones the register row was about. The third mark was added by the same diff. That is
+  M0-T6's own standard — _established by reading the file rather than assuming_ — applied to two
+  cases out of three. The cursor readout now has its pair, and its ring has one too, because a
+  treatment nobody asserts is a treatment nobody can be wrong about.
+
+**A second finding was answered rather than fixed, and the answer is better than the proposed fix.**
+The UX review observed that the transient row sits over the ruler's sticky month label, which has
+the same "not inferable from a neighbour" property that earned the year row absolute protection —
+and proposed biasing the transient clamp to start after it. That would move the readout away from
+the guideline it names, so a planner reading a date at the left edge would read it off the wrong
+column. The real answer is that **the covering label carries the covered fact**:
+`formatCanvasDate` renders `D MMM`, so every shape the readout can take names its month, for the one
+column the reader is pointing at. It is now a test (`cursor-readout.test.ts`, verified red against a
+bare-day-number format) rather than a paragraph, so shortening the format would fail rather than
+silently take the month away.
+
+Two further gaps were real and are closed: the pool's **retire** path had no coverage in either
+suite (a node that kept its last label and was merely repositioned would have looked right in every
+frame previously asserted, and would have left a stale date on screen the moment a planner moved to
+the toolbar), and the shared width cache was **unbounded** for the transient row's labels, against
+the "bounded by the plan's label count" invariant its own cited precedent documents. Five
+non-blocking findings are `docs/TECH_DEBT.md` **#174**, including the honest one: the withheld
+`Today` label is silent, every remedy considered is worse than the silence, and the evidence that
+would settle it is a planner reporting it.
+
+**The gate pass also found a defect in a gate.** `reset-fills.structural.test.ts` scanned raw source
+text, so the docblock _explaining why this treatment must not use `bg-card`_ counted as using it —
+a gate that penalises its own documentation, and the fourth occurrence of a scan matching prose in
+this repository. `token-architecture.test.ts:452-457` records the other three and had already fixed
+itself the same way; this file had not been told. Comments are stripped now, the allow-list was
+re-derived after the change (it did not move), and the stripped scan was verified still to catch a
+real use.

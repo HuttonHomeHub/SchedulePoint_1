@@ -267,3 +267,19 @@ create-drag producing a novel range label on every frame — costs one cold read
 quarter of one per cent of the budget. This is the one place in the epic where the honest answer is
 that the cost does not matter; it is measured anyway, because ADR-0076 Class 3 is twice recorded as
 a claim about cost that nobody ran.
+
+---
+
+## What M0-T7 does **not** measure (added 2026-08-22, from the M4 gate pass)
+
+The 0.041 ms cold figure above is a forced layout on a probe span that is **the only thing written
+in that harness**. In production `syncRuler()` runs immediately before `syncAxisMarkers()` in the
+same synchronous pass and can reposition dozens of tick spans on a panning frame, so a layout forced
+after it has more invalidated subtree to resolve than an isolated one-span microbenchmark.
+
+The compounded worst case — **panning while a create-drag mints a fresh label** — is not measured
+here, so "0.25 % of a 16.7 ms frame" is a claim about the clean case rather than about the worst
+one. Both numbers are single-digit microseconds to low tenths of a millisecond, and the painter
+itself already runs 4–6× over its own budget (`docs/TECH_DEBT.md` #75), so this is very unlikely to
+matter — but stating it is cheaper than a reader inferring coverage the harness does not provide.
+Recorded as `docs/TECH_DEBT.md` **#174**.

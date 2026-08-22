@@ -207,5 +207,18 @@ test.describe('The axis markers', () => {
     await page.mouse.move(box.x + box.width / 2 + 200, box.y + box.height / 2, { steps: 10 });
     await expectNoMarkerOverTheScene(page, 'mid-drag');
     await page.mouse.up();
+
+    // …and it goes away when the pointer leaves the surface. The retire path is the half a pool
+    // gets wrong: a node that keeps its last label and is merely repositioned would look right in
+    // every frame this test has asserted so far, and would leave a stale date on screen the moment
+    // a planner moved to the toolbar. `readMarkers` filters to a non-zero rect, so a hidden node is
+    // invisible to it — which is exactly what makes the count assertable.
+    await page.mouse.move(0, 0);
+    await expect
+      .poll(
+        async () => (await readMarkers(page)).markers.filter((m) => m.kind === 'cursor').length,
+        { timeout: 15_000 },
+      )
+      .toBe(0);
   });
 });
