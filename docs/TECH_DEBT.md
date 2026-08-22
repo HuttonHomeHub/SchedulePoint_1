@@ -3438,7 +3438,7 @@ planner performs in order to show something, so the honest default may differ pe
 is. That is why it is deferred rather than done — but deferred with the enumeration attached, which
 is the part CQ-5 called durable and did not deliver.
 
-## 168. Below `lg`, Escape closes and announces a drawer the reader cannot see
+## 168. Below `lg`, Escape closes and announces a drawer the reader cannot see **(CLOSED 2026-08-22)**
 
 **Raised 2026-08-22** (found while fixing #165a, deliberately excluded from it). **Size:** S.
 
@@ -3465,6 +3465,26 @@ the exclusion and points here.
 The fix is the term plus a unit case, and the unit case needs `useMediaQuery` mocked: jsdom has no
 `matchMedia`, so `isDesktop` takes its `true` fallback and a test written without the mock would
 assert the fix while exercising the desktop path.
+
+**Closed 2026-08-22, and the fix renamed the thing that hid it.** `drawerOnScreen` meant "has
+content and is not collapsed" — not "is on screen" — and that overstatement is most of why a guard
+disagreeing with a CSS class read as correct. It splits into `drawerHasContent`, which the **render**
+keeps (the column must still mount below `lg` and be hidden by CSS; not rendering it would change
+remount behaviour across a resize, which is a different question), and `drawerVisible`
+(`drawerHasContent && isDesktop`), which the Escape rung and `selectSubject` take. `LG_QUERY` is
+`(min-width: 64rem)` and the class's breakpoint is the same `64rem`, so the two track by
+construction rather than by anyone keeping them in step — checked, not assumed.
+
+Both directions are asserted, because a case that only pins the narrow viewport passes equally
+against a rung that never fires at all, which would undo what ADR-0104 shipped. Verified red first:
+the narrow case failed against the old guard while the desktop case stayed green.
+
+**This is the first change made under ADR-0105, and its trigger determination is recorded rather
+than implicit**: it fires none of the four — no new user-facing entry point, no Playwright config or
+CI step, no component public-contract change (`AppShell` takes no props) and no shared gate, no
+schema. So this row covered stages 1–2 and no spec was needed. What the fix does **not** prove is
+that `hidden lg:flex` genuinely hides the column in a browser; that is a Tailwind class, established
+by this defect existing, and the wider absence of any below-`lg` authenticated coverage is **#172**.
 
 ## 169. The Project Explorer's actions row is an empty bordered strip for non-writers
 
@@ -3578,3 +3598,45 @@ resolver round-trip nobody needs.
 The fix is the shape `recent-plans` already has: key by user id, and sweep on sign-out beside it.
 Both halves in one change, since keying without sweeping leaves orphans and sweeping without keying
 still shows the wrong slug to a second reader in the same session.
+
+## 172. No authenticated journey has ever run below `lg` — the shell's narrow half is unexercised
+
+**Raised 2026-08-22** (found while scoping #168). **Size:** M if actioned. **Filed, deliberately not
+scheduled** — the product owner's call, and the right one: they work at 1646 px, so nothing is
+failing for the person actually using the product.
+
+**Measured, not impressionistic.** Every one of the `playwright.*.config.ts` files that sets a
+viewport sets one at **1440 px or wider**; the rest inherit Playwright's 1280 default. The `lg`
+breakpoint is **1024**. So **no authenticated journey has ever driven the app below `lg`.** The only
+suite that sweeps narrow viewports is `e2e-public`, and its subject is the six **unauthenticated**
+screens.
+
+**What that leaves untested**, all of it live code with explicit breakpoint branches:
+
+- the off-canvas `Sheet` that IS the Project Explorer below `lg`, and the header hamburger that
+  opens it — a whole navigation surface no browser has ever opened;
+- `app-header.tsx`'s below-`lg` row, which renders a second `BrandLink`, the org switcher and the
+  account chip;
+- every `hidden lg:flex` / `lg:hidden` branch in the shell, including the drawer column whose
+  invisibility below `lg` is the entire premise of **#168**;
+- the `useMediaQuery(LG_QUERY)` transition effect that closes the sheet on crossing the breakpoint.
+
+**Why it is worth a row even unscheduled.** #168 was found by _reading_, which is not a repeatable
+method — the register's standing position (ADR-0058) is that what can be checked should be. A defect
+in any of the above ships silently today, and the next person to notice the gap would re-derive it
+from scratch. It is also the same shape as `docs/TECH_DEBT.md` #133, which records that a
+coarse-pointer run had never been taken in this repository until ADR-0091 M7 took one and
+immediately found Row 2 losing all nine labels.
+
+**Two honest options when it IS actioned**, and they point in opposite directions:
+
+1. **Cover it** — a narrow-viewport authenticated journey. Note this fires ADR-0105's Playwright-config
+   trigger, so it needs a spec and plan before code, whatever its size.
+2. **Decide below-`lg` is not a supported surface for the authenticated app, and write that down.**
+   That is the honest alternative rather than the lazy one: an untested branch is a promise the
+   product has not verified, and ADR-0088's argument about unexercised alternative surfaces applies
+   one layer along — a second layout nobody verifies is maintained on every change to the code
+   around it, forever.
+
+Do not read this row as "narrow viewports are broken". Nothing here says they are; it says **nobody
+knows**, which is the point.
