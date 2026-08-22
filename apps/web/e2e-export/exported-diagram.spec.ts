@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
   createHierarchy,
   ensurePen,
+  linkActivities,
   newPlan,
   onboard,
   recalculate,
@@ -64,11 +65,18 @@ test.describe('The exported diagram', () => {
     // earlier harness in this repository had them collide in lane 0 and assert against a picture
     // of one bar. Long enough, together, to span more than one month so the band alternation is
     // actually in frame.
-    await seedActivities(page, orgSlug, [
+    const seeded = await seedActivities(page, orgSlug, [
       { name: 'Site setup', laneIndex: 0, durationDays: 12 },
       { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
       { name: 'Blind and reinforce', laneIndex: 2, durationDays: 16 },
     ]);
+    // **Two links, deliberately, and across lanes.** The fixture had none, so `linkRouting` and
+    // `timeTrueLinks` — two of the seven layers this milestone restored — were unassertable on it,
+    // and ADR-0065 is the sharpest instance of the defect: a line drawn through an unrelated bar
+    // makes the reader disprove a relationship the picture appears to assert. A journey that
+    // cannot see a link cannot see that.
+    await linkActivities(page, orgSlug, seeded[0]!.id, seeded[1]!.id);
+    await linkActivities(page, orgSlug, seeded[1]!.id, seeded[2]!.id);
     await recalculate(page, orgSlug);
 
     // ── The entry point IS the subject (ADR-0081). By role and accessible name, never by copy or
@@ -151,17 +159,35 @@ test.describe('The exported diagram', () => {
       'the diagram region is almost entirely bare paper — the ground layers are missing',
     ).toBeLessThan(0.75);
 
-    // ── At least two distinct light ground tones besides paper: the month band and the
-    // non-working wash. Counted rather than named, because naming a hex would re-create the
-    // brittle golden this suite exists to avoid.
-    const lightGrounds = stats.top.filter(({ colour, n }) => {
-      const [r, g, b] = colour.split(',').map(Number) as [number, number, number];
-      const mean = (r + g + b) / 3;
-      return mean > 225 && mean < 255 && n / stats.total > 0.02;
-    });
-    expect(
-      lightGrounds.length,
-      `expected a month band and a non-working wash beside paper; saw ${JSON.stringify(stats.top)}`,
-    ).toBeGreaterThanOrEqual(2);
+    // ── The ground layers, asserted SEPARATELY rather than counted.
+    //
+    // A count cannot say which layer is present, and that is not academic: with `>= 2` and three
+    // candidate tones, dropping `monthBands` alone still leaves the wash and its hatch, so the
+    // assertion passes while a restored layer is missing again. Each band is therefore named by
+    // the lightness range it occupies — a range, not a hex, so a re-value moves within it and only
+    // a layer's absence fails.
+    const toneShare = (lo: number, hi: number): number =>
+      stats.top
+        .filter(({ colour }) => {
+          const mean =
+            colour
+              .split(',')
+              .map(Number)
+              .reduce((a, b) => a + b, 0) / 3;
+          return mean > lo && mean <= hi;
+        })
+        .reduce((sum, { n }) => sum + n, 0) / stats.total;
+
+    // The month band sits just off paper; the weekend wash a step below it; the hatch below that.
+    // Measured at the time of writing: band 246.7, wash 242.7, hatch 230.7, paper 255.
+    expect(toneShare(244, 254), 'no month band in the exported picture').toBeGreaterThan(0.02);
+    expect(toneShare(236, 244), 'no non-working wash in the exported picture').toBeGreaterThan(
+      0.02,
+    );
+
+    // ── The links are in the picture. Dark ink well below any ground tone, which on this fixture
+    // can only be a bar fill, a label or a link — and the bars are counted separately above.
+    const inkShare = toneShare(0, 200);
+    expect(inkShare, 'no dark ink at all — bars and links are both missing').toBeGreaterThan(0.02);
   });
 });
