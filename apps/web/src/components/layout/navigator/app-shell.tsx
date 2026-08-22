@@ -557,14 +557,21 @@ function ShellFrame(): React.ReactElement {
                   makes an Explorer with no organisation UNREPRESENTABLE rather than something two
                   guards in two files agree about. #165a is what happens when they stop agreeing.
 
-                  **The gate is on `open`, not on the element**, and that is the component review's
-                  finding rather than a style choice. Below `lg` the account chip sits outside this
-                  sheet and stays live, so a reader can open the Explorer on an organisation route
-                  and then navigate to `/account` from behind it. Unmounting a native `showModal()`
+                  **The gate is on `open`, not on the element.** Unmounting a native `showModal()`
                   `<dialog>` while it is open drops focus to `<body>` — the WCAG 2.4.3 class this
                   register has recorded three times (ADR-0099 M10, ADR-0080 M2). `Sheet` keeps its
                   `<dialog>` mounted and drives it from `open`, so closing it runs `dialog.close()`
-                  and the browser restores focus to whatever opened it. */}
+                  and the browser restores focus to whatever opened it.
+
+                  **The route to it is narrower than the review that found it said, and narrower
+                  than this comment first claimed.** The reasoning offered was that the account chip
+                  sits outside the sheet and stays live, so a reader could navigate to `/account`
+                  from behind an open Explorer — but `Sheet` is `showModal()`, so everything outside
+                  it is INERT and that chip cannot be reached (`sheet.tsx` says so in its own
+                  docblock: "an inert backdrop for free"). What is left is browser history: Back out
+                  of an organisation route with the sheet open. Exotic, and the guard is a line, so
+                  it stays — recorded at its real reachability rather than at the one that would
+                  make it sound more necessary. */}
               <Sheet
                 open={drawerOpen && explorerAvailable}
                 onClose={closeDrawer}
