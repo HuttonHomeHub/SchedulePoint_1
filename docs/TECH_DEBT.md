@@ -3306,8 +3306,10 @@ organisation" and that a journey clicked a nav link not rendered there. Same roo
 screens, and it is a shell decision rather than three screen bugs.
 
 **Closed by deriving the fact once.** `ShellFrame` derives _the Explorer has a root to show_
-(`orgSlug !== undefined`) and _a drawer is on screen_, and routes the rail button, the drawer
-column, the Escape rung and the below-`lg` `Sheet` through them — rather than adding a third copy of
+(`orgSlug !== undefined`) and _a drawer is on screen_, and routes the drawer column, the Escape rung
+and the below-`lg` `Sheet` through them, while the rail derives the same fact from the `orgSlug` it
+already holds (the component gate's correction: a derived boolean passed beside its own source is
+two guards that can stop agreeing, which is this row's defect one level down) — rather than a third copy of
 a condition two of its neighbours already carried. **Omitted, not shaded**: ADR-0082's third omit
 clause is this case verbatim, and picking an organisation in the switcher does not make the Explorer
 available _here_ — it navigates elsewhere, and that switcher two rows up the same rail is already

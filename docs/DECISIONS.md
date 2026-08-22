@@ -2611,10 +2611,21 @@ one 48 px rail** — the ADR-0064 §7 / ADR-0093 shape, at the instance where th
 says extract rather than repeat.
 
 So the shell derives **one fact** — the Explorer has a root — and a second derived from it — a
-drawer is on screen — and routes the rail button, the drawer column, the Escape rung and the
-below-`lg` `Sheet` through them. The rail's prop is **not defaulted**, deliberately: a default
-makes the org-less case the one a caller gets by forgetting, which is how the sibling guard came to
-be missing. The compiler found all five fixtures.
+drawer is on screen — and routes the drawer column, the Escape rung and the below-`lg` `Sheet`
+through them, while the **rail derives the same fact from the `orgSlug` it already has**.
+
+That last clause is a correction, made the same day by the component gate and worth keeping rather
+than smoothing over. The first attempt passed `explorerAvailable` down as a prop, argued as "the
+shell derives it once and both consumers read it" — but the rail already held `orgSlug` and already
+derived the identical condition for the destinations one cluster along, so
+`<ToolRail orgSlug="acme" explorerAvailable={false} />` typechecked. **Two guards for one fact that
+can silently stop agreeing is this row's own defect, moved one level down into a prop list.** One
+source, and divergence is unrepresentable.
+
+`NavigatorRail`'s `orgSlug` went the other way and became **required**, for the same reason read
+forwards: both production call sites now guarantee one, so the `"Select an organisation to browse."`
+fallback was unreachable code carrying the exact sentence the fix exists to remove. Requiring it
+turns the shell's guarantee into a compiler check, and the compiler found every fixture.
 
 **Omit, not shade** (ADR-0082). Its third omit clause is this case verbatim — nothing to show at
 all, rather than an action shut by a state the reader can change. The objection worth answering is
