@@ -126,6 +126,57 @@ function ShellFrame(): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
 
+  /**
+   * **Whether the Project Explorer has a root to show at all** (`docs/TECH_DEBT.md` #165a).
+   *
+   * Three of the thirteen `_authed` routes are not organisation-scoped — `/onboarding`, `/account`
+   * and `/me/activity` (`app/router.tsx`) — and on all three the shell rendered the Explorer
+   * anyway: ~298 px of drawer at 1646 saying "Select an organisation to browse", beside a card on
+   * `/onboarding` asking the reader to create their first organisation. There is nothing to select,
+   * by definition, on the first screen a new member ever sees.
+   *
+   * **The rule was never missing; it was applied to two controls and not their third neighbour.**
+   * `app-header.tsx`'s below-`lg` Explorer trigger is already `{shell && orgSlug ? …}`, and
+   * `tool-rail.tsx` already withholds the six organisation destinations without a slug — whose own
+   * test is titled "renders no destinations outside an organisation — there are none to show". The
+   * Explorer button sat forty lines from that, ungated. So this is one derived fact rather than a
+   * third copy of the same condition, which is the ADR-0064 §7 / ADR-0093 shape: at the third
+   * instance, extract.
+   *
+   * **Omitted, not shaded** (ADR-0082). Its third omit clause is this case verbatim — there is
+   * nothing to show at all, rather than an action shut by a state the reader can change. Picking an
+   * organisation in the switcher does not make the Explorer available *here*; it navigates
+   * elsewhere, and the switcher two rows up the same rail is already that affordance unshaded. A
+   * reason sentence would be the very sentence #165a reports as useless, moved somewhere quieter.
+   */
+  const explorerAvailable = orgSlug !== undefined;
+
+  /**
+   * **Whether the drawer has anything to put in it**, and then whether one is on screen.
+   *
+   * Deliberately NOT `subject === 'explorer' && explorerAvailable`, which is the symmetric-looking
+   * derivation and would silently delete an unrelated behaviour: the content below falls back to
+   * the Explorer when a context registration goes away while `subject` is still `'context'` (the
+   * case the comment on `contextSubject` above exists for). Keying on the active subject would
+   * leave an empty drawer on an organisation route. The term is availability, not selection.
+   *
+   * `drawerOnScreen` gates the Escape rung as well as the render, and that is the sharp half rather
+   * than tidiness. The rung guards on `drawer.collapsed` alone, so with the preference set to open
+   * and nothing available to show, an Escape on `/account` would have called `drawer.collapse()` —
+   * which `use-resizable-panel-prefs.ts` persists to `localStorage` through an effect — and
+   * announced "Project Explorer closed." when nothing was open. A reader's panel preference would
+   * die on a trip through their account settings, and the only evidence would arrive later, on a
+   * plan, with nothing saying why.
+   *
+   * **No `isDesktop` term, and that is deliberate rather than overlooked.** Below `lg` the drawer's
+   * column is `hidden lg:flex`, so it is in the DOM and invisible, and Escape there already closes
+   * and announces a panel the reader cannot see — a guard disagreeing with a CSS class. That is a
+   * live pre-existing defect (`docs/TECH_DEBT.md` #168), it is not what #165a is about, and fixing
+   * it would change behaviour on a viewport this epic's journey does not drive. Excluded on
+   * purpose, filed rather than absorbed.
+   */
+  const drawerOnScreen = !drawer.collapsed && (showingContext || explorerAvailable);
+
   // Shared, per-org expansion (ADR-0029 Phase 2): both rails and the CRUD coordinator
   // read one set, so revealing a freshly-created node works and pinned/drawer agree.
   const expansion = useExpansionState(orgSlug ?? '');
@@ -165,7 +216,7 @@ function ShellFrame(): React.ReactElement {
 
   const selectSubject = useCallback(
     (next: DrawerSubject) => {
-      const showing = !drawer.collapsed;
+      const showing = drawerOnScreen;
       if (showing && next === subject) {
         drawer.collapse();
         announce(`${subjectName(next)} closed.`);
@@ -175,7 +226,7 @@ function ShellFrame(): React.ReactElement {
       if (!showing) drawer.expand();
       announce(`${subjectName(next)} opened.`);
     },
-    [drawer, subject, announce, subjectName],
+    [drawer, drawerOnScreen, subject, announce, subjectName],
   );
 
   /**
@@ -195,7 +246,20 @@ function ShellFrame(): React.ReactElement {
   const railButtons = useRef(new Map<DrawerSubject, HTMLButtonElement | null>());
   const focusRailButton = useCallback(() => {
     const button = railButtons.current.get(subject) ?? railButtons.current.get('explorer');
-    button?.focus();
+    if (button) {
+      button.focus();
+      return;
+    }
+    /**
+     * **A last rung that always exists**, because #165a made the fallback above reachable-but-dead.
+     * A callback ref fires with `null` on unmount, so a rail whose Explorer button is withheld
+     * leaves `'explorer' → null` in the map and `button?.focus()` becomes a silent no-op — focus
+     * stays wherever it was, or sits on `<body>` if the element that had it is the one that went.
+     * That is the WCAG 2.4.3 failure this function exists to prevent, arriving through the door
+     * this change opened. `<main>` is already `tabIndex={-1}` for the skip link, so it costs
+     * nothing and cannot itself disappear.
+     */
+    document.getElementById('main')?.focus();
   }, [subject]);
 
   const closeDrawerPanel = useCallback(() => {
@@ -270,7 +334,7 @@ function ShellFrame(): React.ReactElement {
    */
   const onShellKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || drawer.collapsed) return;
+      if (event.key !== 'Escape' || event.defaultPrevented || !drawerOnScreen) return;
       const target = event.target;
       if (
         target instanceof HTMLElement &&
@@ -282,7 +346,7 @@ function ShellFrame(): React.ReactElement {
       event.preventDefault();
       closeDrawerPanel();
     },
-    [drawer.collapsed, closeDrawerPanel],
+    [drawerOnScreen, closeDrawerPanel],
   );
 
   // Close the drawer once the viewport reaches `lg`+, where the pinned rail is shown — otherwise a
@@ -369,6 +433,7 @@ function ShellFrame(): React.ReactElement {
                 <div className="col-start-1 row-span-3 row-start-1 hidden shrink-0 lg:block">
                   <ToolRail
                     orgSlug={orgSlug}
+                    explorerAvailable={explorerAvailable}
                     railSlotRef={railSlotRef}
                     subject={subject}
                     drawerOpen={!drawer.collapsed}
@@ -438,7 +503,7 @@ function ShellFrame(): React.ReactElement {
                   className="border-border col-span-2 col-start-2 row-start-3 border-t"
                 />
 
-                {drawer.collapsed ? null : (
+                {drawerOnScreen ? (
                   <div className="col-start-3 row-start-2 hidden min-h-0 shrink-0 lg:flex">
                     <ContextDrawer
                       // The registered subject names ITSELF ("Excavate"), and says so explicitly
@@ -465,18 +530,24 @@ function ShellFrame(): React.ReactElement {
                       )}
                     </ContextDrawer>
                   </div>
-                )}
+                ) : null}
               </div>
 
-              {/* Below lg: the rail as an off-canvas drawer. */}
-              <Sheet open={drawerOpen} onClose={closeDrawer} title="Project Explorer">
-                <NavigatorRail
-                  orgSlug={orgSlug}
-                  expansion={expansion}
-                  onClose={closeDrawer}
-                  onNavigate={closeDrawer}
-                />
-              </Sheet>
+              {/* Below lg: the rail as an off-canvas drawer. Gated on the same fact as the
+                  pinned column — not because it is reachable without one today (its only trigger,
+                  `app-header.tsx`'s hamburger, has always been guarded) but because gating it here
+                  makes an Explorer with no organisation UNREPRESENTABLE rather than something two
+                  guards in two files agree about. #165a is what happens when they stop agreeing. */}
+              {explorerAvailable ? (
+                <Sheet open={drawerOpen} onClose={closeDrawer} title="Project Explorer">
+                  <NavigatorRail
+                    orgSlug={orgSlug}
+                    expansion={expansion}
+                    onClose={closeDrawer}
+                    onNavigate={closeDrawer}
+                  />
+                </Sheet>
+              ) : null}
             </>
           )}
         </ChromeSlotHost>

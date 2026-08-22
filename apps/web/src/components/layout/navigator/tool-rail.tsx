@@ -46,6 +46,7 @@ export type DrawerSubject = 'explorer' | 'context';
  */
 export function ToolRail({
   orgSlug,
+  explorerAvailable,
   railSlotRef,
   subject,
   drawerOpen,
@@ -54,6 +55,19 @@ export function ToolRail({
   buttonRef,
 }: {
   orgSlug?: string | undefined;
+  /**
+   * Whether the Project Explorer has a root to show (`docs/TECH_DEBT.md` #165a).
+   *
+   * **`false` renders no button at all**, which is the contract `contextSubject` below already
+   * states — and the reason this prop exists rather than a second `orgSlug ?` test is that the rail
+   * had the rule and applied it to one cluster: the six organisation destinations are withheld
+   * without a slug, forty lines below a Project Explorer button that was not. The shell derives the
+   * fact once and both consumers read it.
+   *
+   * Not defaulted. A default would make the org-less case the one a caller gets by forgetting,
+   * which is how the sibling guard came to be missing in the first place.
+   */
+  explorerAvailable: boolean;
   /**
    * Where a plan portals its **mode cluster** (Graphite M5). Empty on the twelve screens that are
    * not a plan, so `empty:hidden` costs them nothing — the same contract the command band's slot
@@ -117,16 +131,18 @@ export function ToolRail({
           actually open on that subject — a lit button beside a closed panel is a control claiming
           something the screen contradicts. */}
       <div className="mt-1 flex flex-col items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Project Explorer"
-          aria-pressed={drawerOpen && subject === 'explorer'}
-          ref={(node) => buttonRef?.('explorer', node)}
-          onClick={() => onSelectSubject('explorer')}
-        >
-          <PanelLeft aria-hidden="true" className="size-4" />
-        </Button>
+        {explorerAvailable ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Project Explorer"
+            aria-pressed={drawerOpen && subject === 'explorer'}
+            ref={(node) => buttonRef?.('explorer', node)}
+            onClick={() => onSelectSubject('explorer')}
+          >
+            <PanelLeft aria-hidden="true" className="size-4" />
+          </Button>
+        ) : null}
         {contextSubject ? (
           <Button
             variant="ghost"

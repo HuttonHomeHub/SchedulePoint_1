@@ -14,12 +14,26 @@ function renderShell(): ReturnType<typeof render> {
   );
 }
 
-// The workspace Outlet + route params are external routing — stub them (no active
-// org here, so the rail shows its fallback; the tree itself is tested separately).
+/**
+ * **The route params, and this suite's own part in `docs/TECH_DEBT.md` #165a.**
+ *
+ * This was `useParams: () => ({})` — *no* organisation — for the whole life of the shell, and the
+ * suite's first assertion was that the Project Explorer navigation IS present. So the suite that
+ * would have caught #165a was the suite that pinned it as correct behaviour: five of its six cases
+ * described the org-less shell, every reviewer read them as describing the product, and the state
+ * they exercised is the one a planner only ever meets on three routes where it is wrong.
+ *
+ * It is now a mutable fixture with an organisation by default, so the existing cases keep testing
+ * what they were written to test, and the org-less shell is a case of its own rather than the
+ * silent default.
+ */
+let params: { orgSlug?: string } = { orgSlug: 'acme' };
+
+// The workspace Outlet + route params are external routing — stub them.
 vi.mock('@tanstack/react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof ReactRouter>()),
   Outlet: () => <div data-testid="workspace">workspace</div>,
-  useParams: () => ({}),
+  useParams: () => params,
   // The rail renders the brand link since Graphite M3, and it reads the pathname to decide
   // whether it is the current page. This suite mounts the shell without a router.
   useRouterState: () => '/',
@@ -55,7 +69,10 @@ vi.mock('@/components/layout/app-header', async () => {
   return { AppHeaderRow: DrawerTrigger };
 });
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  params = { orgSlug: 'acme' };
+});
 
 describe('AppShell', () => {
   it('mounts the workspace outlet and the pinned Project Explorer rail', () => {
@@ -171,6 +188,71 @@ describe('AppShell', () => {
    * without moving focus, so the next Tab resumes inside the rail — the link appears to work and
    * changes nothing.
    */
+  /**
+   * **The shell offers no organisation navigation on a route that has no organisation**
+   * (`docs/TECH_DEBT.md` #165a).
+   *
+   * `/onboarding`, `/account` and `/me/activity` are the three `_authed` routes with no `orgSlug`,
+   * and the shell rendered the Project Explorer on all of them — on `/onboarding` beside a card
+   * asking the reader to create their first organisation.
+   *
+   * Verified red first, all four assertions.
+   */
+  describe('on a route with no organisation', () => {
+    beforeEach(() => {
+      params = {};
+    });
+
+    it('withholds the Explorer trigger, the panel and the below-lg Sheet', () => {
+      renderShell();
+      expect(screen.queryByRole('button', { name: 'Project Explorer' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('navigation', { name: 'Project Explorer' }),
+      ).not.toBeInTheDocument();
+      // The trigger and the panel are separately rendered — the drawer opens from a persisted
+      // preference, not only from the button — so withholding one and not the other is a live
+      // possibility rather than a hypothetical.
+      expect(
+        screen.queryByRole('complementary', { name: 'Project Explorer' }),
+      ).not.toBeInTheDocument();
+
+      // The Sheet has always been unreachable without an org (its trigger is guarded in
+      // `app-header.tsx`); this asserts it is now unREPRESENTABLE, which is a different claim.
+      fireEvent.click(screen.getByRole('button', { name: 'Open Explorer Drawer' }));
+      expect(screen.queryByRole('dialog', { name: 'Project Explorer' })).not.toBeInTheDocument();
+    });
+
+    it('still mounts the route and the skip link', () => {
+      renderShell();
+      // The removal is from the shell, not from the route. A test that only proves an absence
+      // would pass equally against a shell that rendered nothing at all.
+      expect(screen.getByTestId('workspace')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Skip to main content' })).toBeInTheDocument();
+    });
+
+    /**
+     * **The silent half, and the one the naive fix ships.**
+     *
+     * The Escape rung guarded on `drawer.collapsed` alone. With the preference set to open and
+     * nothing available to show, an Escape on `/account` called `drawer.collapse()` — which
+     * `use-resizable-panel-prefs.ts` persists through an effect — and announced "Project Explorer
+     * closed." when nothing was open. The reader's panel preference died on a trip through their
+     * account settings and the evidence arrived later, on a plan, with nothing saying why.
+     *
+     * Asserted against `localStorage` rather than against the screen, because on this route there
+     * is nothing on screen either way: the write is the whole defect.
+     */
+    it('does not write a collapse to storage when Escape is pressed with nothing to close', () => {
+      const { container } = renderShell();
+      const grid = screen.getByRole('main').parentElement!;
+      fireEvent.keyDown(grid, { key: 'Escape' });
+
+      const stored = localStorage.getItem('schedulepoint-context-drawer');
+      expect(stored === null || JSON.parse(stored).collapsed === false).toBe(true);
+      expect(within(container).queryByText(/Project Explorer closed/)).not.toBeInTheDocument();
+    });
+  });
+
   it('puts a skip link first in the document, pointing at a focusable main', () => {
     const { container } = renderShell();
     const link = screen.getByRole('link', { name: 'Skip to main content' });

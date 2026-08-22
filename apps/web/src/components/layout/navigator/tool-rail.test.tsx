@@ -53,6 +53,7 @@ function renderRail(ui: React.ReactElement) {
 
 const props = {
   orgSlug: 'acme',
+  explorerAvailable: true,
   subject: 'explorer' as const,
   drawerOpen: true,
   onSelectSubject: vi.fn(),
@@ -78,9 +79,33 @@ describe('ToolRail', () => {
     expect(screen.getByRole('button', { name: /^Account:/ })).toBeInTheDocument();
   });
 
-  it('renders no destinations outside an organisation — there are none to show', () => {
-    renderRail(<ToolRail {...props} orgSlug={undefined} />);
+  /**
+   * **The same rule, and the button four rows above the destinations was exempt from it**
+   * (`docs/TECH_DEBT.md` #165a).
+   *
+   * This case's title has stated the rule since the rail was built, and it asserted it of one of
+   * the rail's two organisation-dependent clusters. The Project Explorer button was the other, and
+   * it rendered on `/onboarding`, `/account` and `/me/activity` opening a ~298 px panel whose whole
+   * content was "Select an organisation to browse." Both halves are asserted here now, in one case,
+   * because the defect was precisely that they were separable.
+   *
+   * Verified red first: the button resolved against the pre-fix rail.
+   */
+  it('renders no organisation navigation outside an organisation — there is none to show', () => {
+    renderRail(<ToolRail {...props} orgSlug={undefined} explorerAvailable={false} />);
     expect(screen.queryByRole('navigation', { name: 'Organisation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Project Explorer' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * **Availability is not the same question as which subject is active**, and the rail must not
+   * conflate them: the account controls and the brand survive an unavailable Explorer, because they
+   * are the reader's only route off a screen that now offers no navigation at all.
+   */
+  it('keeps the brand and the account chip when the Explorer is unavailable', () => {
+    renderRail(<ToolRail {...props} orgSlug={undefined} explorerAvailable={false} />);
+    expect(screen.getByRole('link', { name: /SchedulePoint/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Account:/ })).toBeInTheDocument();
   });
 
   /**
