@@ -282,8 +282,9 @@ property of the system, not a feature detail.
 
 - **Structured JSON logs via Pino** (`nestjs-pino`) with a per-request
   correlation id, redaction of secrets and PII, and no `console.log`.
-- **`GET /health`** (liveness) and **`GET /health/ready`** (readiness, checks the
-  database via `@nestjs/terminus`). Both `@Public()`.
+- **`GET /api/v1/health`** (liveness) and **`GET /api/v1/health/ready`** (readiness,
+  checks the database via `@nestjs/terminus`). Both `@Public()`. The paths carry the
+  `/api` prefix and the URI version — `/health` is a **404**.
 - **Rate limiting** via `@nestjs/throttler`: a global limit plus a tighter
   per-IP limit on the unauthenticated guest-share routes.
 - Metrics and tracing are **not yet wired** — see §10 and

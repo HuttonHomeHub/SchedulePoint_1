@@ -52,9 +52,9 @@ durationMs }` — enough to watch the performance NFR (`durationMs` vs plan size
 
 ## Health & readiness — wired
 
-- **`GET /health`** — **liveness**: the process is up (fast, dependency-free).
+- **`GET /api/v1/health`** — **liveness**: the process is up (fast, dependency-free).
   Used by the orchestrator to decide restarts.
-- **`GET /health/ready`** — **readiness**: the app can serve traffic; checks the
+- **`GET /api/v1/health/ready`** — **readiness**: the app can serve traffic; checks the
   database (and any future critical dependency) via `@nestjs/terminus`. Used to
   gate rollout and load-balancer membership.
 - Both are `@Public()` and must not leak internal detail beyond up/down + checks.
