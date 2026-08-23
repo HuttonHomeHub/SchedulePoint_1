@@ -176,6 +176,17 @@ other is a client bug in a different file.
 
 ### 63. The Progress tab carries no unsaved marker for its three panels
 
+> **The confirmation half is CLOSED (2026-08-23, ADR-0108 D2); the tab-marker half remains open.**
+> The three panels now report dirtiness up to the editor via one `onDirtyChange` callback each —
+> which is the lift this row prescribed — and the editor composes a six-scope report that the
+> discard confirmation reads. So closing the editor with a changed weighted step now confirms and
+> names the scope; before, `requestClose` called `onClose()` outright and the work went in silence.
+> That was the more consequential half, and this row was right that the lift closes it.
+>
+> **Still open:** the tab LABEL still carries no dirty marker for Progress, so switching to General
+> with unsaved step edits shows nothing on the tab itself. The report now exists to drive it, so what
+> is left is presentation rather than plumbing.
+
 Every other tab in the activity editor shows a dirty/error marker in its tab label (ADR-0060 §4).
 **Progress does not** — its three panels (Reported progress / How value is measured / Weighted
 steps) own independent forms, and none of their state reaches the tab.

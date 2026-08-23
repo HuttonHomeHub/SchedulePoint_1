@@ -529,6 +529,15 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **Unsaved work is not discarded silently** — **shipped** (ADR-0108, 2026-08-23). The web app had
+  no unload handler and no navigation blocker at all: a planner with unsaved activity edits could
+  reload or close the tab and lose them with no prompt. Four surfaces now declare what they hold —
+  the activity editor, the create dialog, the calendar form and its exceptions editor — and a
+  reload, a tab close or a browser navigation confirms first. It also fixed a live defect on the way:
+  the editor's own confirmation named three dirty scopes while the editor held six, so a changed
+  weighted step closed in silence. What a modal dialog already blocked (in-app links) it still
+  blocks; what it never blocked is now covered.
+
 - **Sign-in keeps working on Better Auth 1.7** — **shipped** (ADR-0107, 2026-08-23). 1.7 scopes
   account identity by an `issuer` column and reads it in the sign-in predicate, so the library had
   been held at `~1.6.28` to stop it arriving unattended: at 1.7 without the column, 522 of 559 API

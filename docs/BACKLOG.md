@@ -39,13 +39,21 @@ a product idea that has not yet earned a roadmap line:
   scope edits. Verified 2026-08-23 — `beforeunload`, `useBlocker` and any router blocker return
   **zero** matches across `apps/web/src`.
 
-  **Its stated reason was stale and is corrected here rather than carried.** This read "now easier to
-  hit, because a drawer does not block the canvas behind it" until 2026-08-23, and **ADR-0101 had
-  already reversed that** two days earlier: the editor returned to `modalShell`, and
-  `registerDrawerSubject` has zero production callers (`docs/TECH_DEBT.md` #156). The accurate
-  statement is narrower and still real — a modal `<dialog>` blocks the canvas and blocks **nothing**
-  about browser Back/Forward, closing the tab, or reload. That is the exposure, and it was never
-  about the drawer. Third instance in this file of an entry outliving the decision that changed it.
+  **SHIPPED 2026-08-23 (ADR-0108).** Four surfaces now register what they hold — the activity
+  editor, `ActivityCreateDialog`, `CalendarFormDialog` and the calendar exceptions editor — and a
+  reload, a tab close or a browser navigation confirms before discarding. It also closed a live
+  defect this entry did not know about: the editor's own confirmation named three dirty scopes while
+  the editor held **six**, so a changed weighted step closed in silence (`docs/TECH_DEBT.md` #63's
+  second half).
+
+  **Two corrections this entry earned along the way.** Its stated reason was stale — it read "now
+  easier to hit, because a drawer does not block the canvas behind it", and **ADR-0101 had already
+  reversed that**: the editor returned to `modalShell` and `registerDrawerSubject` has zero
+  production callers (#156). And the accurate scope is narrower than it implied: a modal `<dialog>`
+  sits in the browser's top layer and intercepts clicks behind it, so an in-app link was never
+  reachable while the editor was open. What had no guard was reload, tab close and browser
+  navigation. One channel is still open rather than claimed — a browser **Back** does not reach the
+  blocker in this app (instrumented; see ADR-0108 D7).
 
 - `S` **The Gantt's remaining editing gaps.** The epic landed (ADR-0095, M1–M5,
   `web-v0.92.0` 2026-08-18) and this entry is rewritten to be about what is
