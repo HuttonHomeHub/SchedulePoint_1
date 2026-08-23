@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/layout/navigator/app-shell';
+import { NavigationGuard } from '@/components/layout/unsaved-work/navigation-guard';
 import { UnsavedWorkProvider } from '@/components/layout/unsaved-work/unsaved-work-provider';
 
 /**
@@ -12,9 +13,10 @@ import { UnsavedWorkProvider } from '@/components/layout/unsaved-work/unsaved-wo
  * every later change to be made twice, which is how it came to carry its own copy of the
  * `h-dvh` + scrolling-`main` fix.
  *
- * **`UnsavedWorkProvider` wraps the shell and currently guards nothing** (unsaved-work guard, M1-T3
- * — ships dark, ADR-0081). It is a registry only: surfaces declare what they hold, and the
- * navigation blocker that reads it arrives in M3. It sits here rather than at the root route
+ * **`UnsavedWorkProvider` + `NavigationGuard`**: surfaces declare what unsaved work they hold, and
+ * the guard stops a navigation that would discard it. A modal blocks the canvas and blocks nothing
+ * about Back, Forward, reload or a closed tab — before this, that work vanished silently. It sits
+ * here rather than at the root route
  * because every surface that can hold unsaved work is authenticated — the five public auth forms
  * deliberately do not register, since losing a half-typed sign-in is not work.
  *
@@ -25,6 +27,7 @@ import { UnsavedWorkProvider } from '@/components/layout/unsaved-work/unsaved-wo
 export function AuthedLayout(): React.ReactElement {
   return (
     <UnsavedWorkProvider>
+      <NavigationGuard />
       <AppShell />
     </UnsavedWorkProvider>
   );
