@@ -4136,3 +4136,55 @@ which is correct and rewrites every citation in the tree. Or have the scanner re
 `verifiedAgainst` — narrower, and does nothing for the many citations written as a bare basename.
 The second is probably right; neither should be done inside an upgrade epic, because the gate would
 then be changing underneath the citations it is checking.
+
+---
+
+## 182. Three base-journey sign-up specs sit close enough to a 5 s timeout that Firefox tips under load
+
+_Found 2026-08-23, on the Better Auth 1.7 release (#176 / ADR-0107). Filed because a green re-run
+proves the failure is not **deterministic**, not that the tests are not **marginal** — and the
+evidence for that distinction only exists while somebody has just looked at it._
+
+PR #367's end-to-end job failed with **three tests, all Firefox, 48 passed**. All three died at the
+same place: after clicking **Create an account**, waiting `5000ms` for the
+`Create your organisation` heading, `element(s) not found`.
+
+- `apps/web/e2e/clients.spec.ts:10`
+- `apps/web/e2e/dependencies.spec.ts:15`
+- `apps/web/e2e/dependencies.spec.ts:76`
+
+Re-running the same job passed all three and completed all 58 steps with no failures.
+
+**It is not the 1.7 bump**, and that was established by reading rather than by the re-run. 1.6.28
+was fetched with `npm pack` and diffed against the installed 1.7.1: the session cookie attributes are
+identical (`sameSite: "lax"`, `httpOnly: true`, `secure: !!secureCookiePrefix`), `setSessionCookie`
+is byte-identical apart from line numbers, `dist/client/index.mjs` has a **zero-line** diff, and the
+browser-client changes are additive opt-ins (`hydrateSession` / `hydrateSessionAtom`, which returns
+immediately unless configured). The sign-up route's diff is a refactor, one new argument, one error
+branch and the `issuer` line — and **a server response cannot vary by browser**. Corroborating:
+Firefox passed **14 of 17** base specs, and nearly every one of them signs up, so sign-up is not
+broken on that engine.
+
+**What it is, most likely:** the base journey is 17 specs × 3 engines, and it runs inside a job that
+also runs the API Supertest suite, the pairwise suite and 36 further Playwright suites — 58 steps
+back to back on one runner. Firefox is the heaviest engine, and a 5 s budget for a post-submit
+heading is the tightest assertion in those three specs.
+
+**The remedy is not re-running.** Re-running is what makes this invisible: it converts a marginal
+test into an occasional mystery, and the next occurrence may be during a release nobody is watching.
+Two candidates, neither costed yet:
+
+- raise the timeout on the post-sign-up heading assertion specifically (it follows a form submit, a
+  network round trip and a client-side route change — 5 s is not generous for that on a loaded
+  runner), rather than raising the global `expect` timeout, which would hide real regressions
+  everywhere else;
+- split the end-to-end job so the base journey is not competing with 36 flag-scoped suites.
+
+**Local reproduction is impossible here**, which is why this row carries the analysis rather than a
+fix: this dev container ships **no Firefox or WebKit binary** and `playwright install firefox` fails
+on download, so the base suite is Chromium-only locally whatever the config says (see **#1**, which
+records the same limitation and notes this journey has caught a _real_ Firefox-only failure before —
+which is why the flake verdict here is stated with its evidence rather than assumed).
+
+Cross-references **#1** (web e2e is Chromium-first, and the flag-scoped suites never run these
+engines at all).
