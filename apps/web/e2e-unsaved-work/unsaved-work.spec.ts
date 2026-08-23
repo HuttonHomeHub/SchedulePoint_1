@@ -48,7 +48,7 @@ test.describe('Navigating away from unsaved work', () => {
     await createHierarchy(page);
     await newPlan(page, 'Unsaved work journey');
     await ensurePen(page);
-    await seedActivities(page, orgSlug, [{ name: 'Excavate', durationDays: 5 }]);
+    await seedActivities(page, orgSlug, [{ name: 'Excavate', laneIndex: 0, durationDays: 5 }]);
     await recalculate(page, orgSlug);
 
     // Captured rather than reached with goBack(): the clean navigation below leaves the plan, and
