@@ -1,5 +1,5 @@
 import { type ActivitySummary, type CalendarSummary, type DependencySummary } from '@repo/types';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useWatch } from 'react-hook-form';
 
 import { costBody, generalBody, schedulingBody } from '../api/scope-bodies';
@@ -38,6 +38,7 @@ import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
 
+import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -65,6 +66,7 @@ import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
 import { ActivityMembersPanel } from '@/features/wbs';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
+import { describeUnsavedWork, type UnsavedWorkReport } from '@/lib/unsaved-work/report';
 import { cn } from '@/lib/utils';
 
 type TabKey = ActivityEditorTab;
@@ -126,6 +128,9 @@ export type ActivityEditorShell = (chrome: {
  * grouped into field components that both this editor and the create dialog render; above it, {@link ContextStrip}
  * keeps the computed dates and float on screen, which the previous version showed nowhere at all.
  */
+/** The three Progress-tab scopes whose forms live inside the panels rather than the host. */
+type ProgressScopeKey = 'progress' | 'measure' | 'steps';
+
 export function ActivityEditor({
   shell,
   orgSlug,
@@ -303,6 +308,30 @@ export function ActivityEditor({
   const scheduling = useScopeForm(activitySchedulingSchema, seedScheduling, activity, open);
   const cost = useScopeForm(activityCostSchema, seedCost, activity, open);
 
+  /**
+   * The three Progress panels own their forms, so their dirtiness has to be REPORTED up
+   * (unsaved-work guard, M2-T1/T2). Before this, `dirtyScopeNames` below named three scopes while
+   * the editor held six, so a dirty weighted step closed on Escape in silence —
+   * `docs/TECH_DEBT.md` #63's second half.
+   *
+   * One state object rather than three, so a panel reporting `false` on mount cannot schedule three
+   * separate renders. The setter is identity-stable per panel (`useCallback`) because it is a
+   * dependency of each panel's reporting effect.
+   */
+  const [progressDirty, setProgressDirty] = useState<Record<ProgressScopeKey, boolean>>({
+    progress: false,
+    measure: false,
+    steps: false,
+  });
+  const setScopeDirty = useCallback(
+    (key: ProgressScopeKey) => (dirty: boolean) =>
+      setProgressDirty((held) => (held[key] === dirty ? held : { ...held, [key]: dirty })),
+    [],
+  );
+  const onProgressDirty = useMemo(() => setScopeDirty('progress'), [setScopeDirty]);
+  const onMeasureDirty = useMemo(() => setScopeDirty('measure'), [setScopeDirty]);
+  const onStepsDirty = useMemo(() => setScopeDirty('steps'), [setScopeDirty]);
+
   // The live factor follows the calendar the SCHEDULING scope currently selects — a planner can
   // change the calendar and the duration in one visit, and the two tabs must agree (ADR-0070 §3).
   //
@@ -344,11 +373,61 @@ export function ActivityEditor({
    * their own forms and their own saves, so they are not represented here — each is one endpoint
    * away from durable, and none of them can be lost by a stray Escape without the others.
    */
-  const dirtyScopeNames = [
-    general.isDirty ? 'General' : null,
-    scheduling.isDirty ? 'Scheduling' : null,
-    cost.isDirty && gating.cost.readable ? 'Cost' : null,
-  ].filter((name): name is string => name !== null);
+  /**
+   * **Every scope this editor can hold work in, with whether it could still be saved.**
+   *
+   * Six, not three. The `cost` condition on `gating.cost.readable` is preserved exactly: a role that
+   * cannot read cost has no Cost tab, and naming a tab the reader cannot see would be worse than
+   * saying nothing. That was the one piece of the old derivation that was not a plain `isDirty`.
+   *
+   * `savable` carries the product owner's CQ-2 answer: when the pen is lost mid-edit the work is
+   * unsaved AND unsavable, and the reader is told so rather than let go in silence.
+   */
+  const unsavedReport = useMemo<UnsavedWorkReport>(
+    () => ({
+      subject: 'This activity',
+      scopes: [
+        ...(general.isDirty
+          ? [{ key: 'general', label: 'General', savable: gating.general.writable }]
+          : []),
+        ...(scheduling.isDirty
+          ? [{ key: 'scheduling', label: 'Scheduling', savable: gating.general.writable }]
+          : []),
+        ...(cost.isDirty && gating.cost.readable
+          ? [{ key: 'cost', label: 'Cost', savable: gating.cost.writable }]
+          : []),
+        ...(progressDirty.progress
+          ? [{ key: 'progress', label: 'Progress', savable: gating.progress.writable }]
+          : []),
+        ...(progressDirty.measure
+          ? [{ key: 'measure', label: 'Value measure', savable: gating.progress.writable }]
+          : []),
+        ...(progressDirty.steps
+          ? [{ key: 'steps', label: 'Steps', savable: gating.steps.writable }]
+          : []),
+      ],
+    }),
+    [
+      general.isDirty,
+      scheduling.isDirty,
+      cost.isDirty,
+      progressDirty,
+      gating.general.writable,
+      gating.cost.readable,
+      gating.cost.writable,
+      gating.progress.writable,
+      gating.steps.writable,
+    ],
+  );
+
+  /**
+   * Register with the shell so a navigation, a reload or a closed tab is guarded too — not just
+   * this dialog's own Close (unsaved-work guard, M2-T4). `null` when closed, or a stale form from a
+   * dismissed editor would block navigation forever.
+   */
+  useRegisterUnsavedWork(open ? unsavedReport : null);
+
+  const dirtyScopeNames = unsavedReport.scopes.map((scope) => scope.label);
 
   /**
    * **Adopt a new subject, or hold the old one and ask** (Graphite M6-T3).
@@ -764,6 +843,7 @@ export function ActivityEditor({
                       gate={gating.progress}
                       open={open}
                       announce={announce}
+                      onDirtyChange={onProgressDirty}
                     />
                     <ValueMeasurePanel
                       orgSlug={orgSlug}
@@ -773,6 +853,7 @@ export function ActivityEditor({
                       pending={update.isPending}
                       saved={savedScope === 'progress'}
                       onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
+                      onDirtyChange={onMeasureDirty}
                     />
                     {/* Same flag pair the Steps entry points check (`ActivitiesTable`,
                       `selection-actions`). Without it the tab would show a checklist that no menu
@@ -788,6 +869,7 @@ export function ActivityEditor({
                         // Only the **Steps** entry point asks for this. Landing at the top of a
                         // three-panel tab would make that action feel like it opened the wrong thing.
                         autoFocusHeading={intent?.focusSteps === true}
+                        onDirtyChange={onStepsDirty}
                       />
                     ) : null}
                   </div>
@@ -854,9 +936,10 @@ export function ActivityEditor({
             else onClose();
           }}
           title="Discard unsaved changes?"
-          description={`${dirtyScopeNames.join(', ')} ${
-            dirtyScopeNames.length === 1 ? 'has' : 'have'
-          } unsaved changes. ${
+          // The first sentence comes from the shared builder so this dialog and the navigation
+          // guard cannot drift about what is dirty (ADR-0065's one-implementation argument). The
+          // action clause stays here, because only this call site knows which action it confirms.
+          description={`${describeUnsavedWork([unsavedReport])} ${
             confirming === 'subject'
               ? `Switching to ${incomingActivity?.name ?? 'another activity'} will discard them.`
               : 'Closing will discard them.'

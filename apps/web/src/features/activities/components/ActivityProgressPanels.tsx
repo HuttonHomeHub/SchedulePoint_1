@@ -76,6 +76,7 @@ export function ReportedProgressPanel({
   gate,
   open,
   announce,
+  onDirtyChange,
 }: {
   orgSlug: string;
   planId: string;
@@ -89,6 +90,14 @@ export function ReportedProgressPanel({
   gate: ScopeGate;
   open: boolean;
   announce: (message: string) => void;
+  /**
+   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
+   *
+   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
+   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
+   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }): React.ReactElement {
   const mutation = useUpdateActivityProgress(orgSlug, planId);
   const { form, isDirty } = useScopeForm<ProgressFormValues>(
@@ -104,6 +113,11 @@ export function ReportedProgressPanel({
     activity,
     open,
   );
+
+  // Reported rather than derived by the host: only this panel owns the form that knows.
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [onDirtyChange, isDirty]);
 
   const values = useWatch({ control: form.control }) as ProgressFormValues;
 
@@ -230,6 +244,7 @@ export function ValueMeasurePanel({
   onOpenResources,
   pending,
   saved = false,
+  onDirtyChange,
 }: {
   orgSlug: string;
   activity: ActivitySummary;
@@ -240,8 +255,21 @@ export function ValueMeasurePanel({
   pending: boolean;
   /** This panel saves through the host (it shares the activity PATCH), so the host owns the flag. */
   saved?: boolean;
+  /**
+   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
+   *
+   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
+   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
+   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }): React.ReactElement {
   const { form, isDirty } = useScopeForm(activityMeasureSchema, seedMeasure, activity, open);
+
+  // Reported rather than derived by the host: only this panel owns the form that knows.
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [onDirtyChange, isDirty]);
   const steps = useActivitySteps(orgSlug, activity.id);
   const measure = useWatch({ control: form.control, name: 'percentCompleteType' });
   const manual = useWatch({ control: form.control, name: 'physicalPercentComplete' });
@@ -355,6 +383,7 @@ export function WeightedStepsPanel({
   open,
   announce,
   autoFocusHeading = false,
+  onDirtyChange,
 }: {
   orgSlug: string;
   planId: string;
@@ -364,6 +393,20 @@ export function WeightedStepsPanel({
   announce: (message: string) => void;
   /** The **Steps** entry point opened the editor: move focus here rather than the tab's top. */
   autoFocusHeading?: boolean;
+  /**
+   * Report this panel's dirtiness to the host (unsaved-work guard, M2-T1).
+   *
+   * The editor's confirmation named three scopes and the editor holds **six**, so a dirty panel
+   * here closed on Escape in silence — `docs/TECH_DEBT.md` #63's second half, and exactly the lift
+   * that row prescribes. The host composes these into one `UnsavedWorkReport`.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * NOTE: this panel's `isDirty` comes from its own `useForm` + `useFieldArray`, not `useScopeForm`,
+   * so a `move()` re-keys the rows and marks it dirty even if the planner restores the order.
+   * Accepted rather than fixed: the cost of that false positive is one extra confirmation dialog,
+   * and the cost of chasing it is comparing arrays on every keystroke.
+   */
 }): React.ReactElement {
   const steps = useActivitySteps(orgSlug, activity.id);
   const replace = useReplaceActivitySteps(orgSlug, planId, activity.id);
@@ -394,6 +437,11 @@ export function WeightedStepsPanel({
     resolver: zodResolver(stepsFormSchema),
     defaultValues: { steps: [] },
   });
+
+  // Reported rather than derived by the host: only this panel owns the form that knows.
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [onDirtyChange, isDirty]);
   const { fields, append, remove, move } = useFieldArray({ control, name: 'steps' });
 
   // Seeded on open / target / load change — a late-arriving fetch still populates. Unlike the
