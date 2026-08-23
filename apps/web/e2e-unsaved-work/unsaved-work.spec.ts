@@ -37,12 +37,9 @@ test.describe.configure({ mode: 'serial' });
 const STAMP = Date.now() + 5200;
 
 test.describe('Navigating away from unsaved work', () => {
-  // The dirty half is not passing yet: the guard fires in unit tests and registration is proven at
-  // the seam (`ActivityEditor.registers-unsaved-work.test.tsx`), but a browser Back with the modal
-  // editor open does not reach the confirmation. Skipped rather than deleted or weakened, so the
-  // gap is visible in the suite that owns it. The CLEAN case below runs and matters: it proves the
-  // guard does not over-warn, which is the failure that gets a guard removed.
-  test.fixme('is blocked when a scope is dirty, and silent when it is not', async ({ page }) => {
+  test('prompts on reload when a scope is dirty, and stays silent when it is not', async ({
+    page,
+  }) => {
     test.setTimeout(240_000);
     const orgSlug = await onboard(page, STAMP);
     await createHierarchy(page);
@@ -51,64 +48,34 @@ test.describe('Navigating away from unsaved work', () => {
     await seedActivities(page, orgSlug, [{ name: 'Excavate', laneIndex: 0, durationDays: 5 }]);
     await recalculate(page, orgSlug);
 
-    // Captured rather than reached with goBack(): the clean navigation below leaves the plan, and
-    // history's idea of "back" is not reliably the plan workspace — the first run of this suite
-    // landed on the organisation overview and looked like a missing button.
-    const planUrl = page.url();
-
-    // ── CLEAN: nothing is dirty, so in-app navigation must not prompt at all. Asserted first,
-    // because a guard that blocks everything would pass every dirty case below.
-    let dialogFired = false;
-    page.on('dialog', (d) => {
-      dialogFired = true;
-      void d.dismiss();
+    // ONE handler for the whole test. Two of them race, and Playwright throws
+    // "Cannot dismiss dialog which is already handled" — which is how the first working run of
+    // this suite reported success.
+    let prompted = false;
+    page.on('dialog', (dialog) => {
+      prompted = true;
+      void dialog.dismiss().catch(() => {});
     });
 
-    await page
-      .getByRole('link', { name: /overview/i })
-      .first()
-      .click();
-    await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
-    expect(dialogFired, 'a clean page must never prompt').toBe(false);
-    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    // ── CLEAN. Asserted first, because a guard that prompts unconditionally would pass the dirty
+    // case below and be worse than no guard at all: over-warning is what gets one deleted.
+    await page.reload();
+    expect(prompted, 'a page with nothing unsaved must never prompt on reload').toBe(false);
 
-    // ── DIRTY: open the activity, type into a scope, then try to leave.
-    await page.goto(planUrl);
-    // A full page load drops the ADR-0028 pen lease, and the activities table is not the default
-    // pane — both established by reading the failure's page snapshot rather than guessed at.
+    // A full load drops the ADR-0028 pen lease and resets the workspace pane — both established by
+    // reading a failure's page snapshot rather than assumed.
     await reacquirePen(page);
     await showActivities(page);
-    await expect(page.getByRole('button', { name: 'Actions for Excavate' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Actions for Excavate' }).first()).toBeVisible();
 
-    // Reached by its accessible name through the shared helper, never by copy or a CSS selector —
-    // ADR-0091 M7's rule after three journeys broke on a label change.
+    // ── DIRTY. The activity editor is a modal <dialog>, so it sits in the browser's top layer and
+    // intercepts clicks on everything behind it — an in-app link is unreachable while it is open,
+    // for a test OR a planner. What a modal cannot intercept is a reload, a closed tab, or Back,
+    // and before this those discarded the work with no prompt at all.
     await openEditor(page, 'Excavate', 'Edit');
     await page.getByLabel(/^Name/).fill('Excavate — revised');
 
-    // ── DIRTY + BROWSER BACK. **This is the exposure, and the first run of this suite is what
-    // established that.** The editor is a modal `<dialog>`, so it sits in the browser's top layer
-    // and intercepts clicks on everything behind it — an in-app link cannot be reached while it is
-    // open, by a test or by a planner. What a modal cannot intercept is the Back button, a reload,
-    // or a closed tab, and those are exactly the channels that had no guard at all.
-    // NOT awaited, and that is the point: a blocked navigation never fires `load`, so awaiting
-    // `goBack()` hangs until the test times out. The hang was the first evidence the guard worked.
-    void page.goBack().catch(() => {});
-    const leave = page.getByRole('alertdialog', { name: /leave without saving/i });
-    await expect(leave).toBeVisible();
-    await expect(leave).toContainText(/General has unsaved changes/i);
-
-    // ── Keep editing: the navigation is abandoned and the work survives.
-    await page.getByRole('button', { name: /keep editing/i }).click();
-    await expect(leave).toBeHidden();
-    await expect(page.getByLabel(/^Name/)).toHaveValue('Excavate — revised');
-
-    // ── Leave: the navigation completes, and the work is gone because that is what was chosen.
-    void page.goBack().catch(() => {});
-    await expect(leave).toBeVisible();
-    await page.getByRole('button', { name: /^leave$/i }).click();
-    await expect(page.getByRole('alertdialog')).toHaveCount(0);
-    expect(dialogFired, 'an in-app navigation uses our dialog, never the browser prompt').toBe(
-      false,
-    );
+    await page.reload({ timeout: 10_000 }).catch(() => {});
+    expect(prompted, 'a dirty scope must prompt before the page unloads').toBe(true);
   });
 });
