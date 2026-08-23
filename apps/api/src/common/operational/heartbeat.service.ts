@@ -37,7 +37,7 @@ export const HEARTBEAT_TIMEOUT_MS = 10_000;
  * and posting into a void". #100's operator half stays **open** until a receiver exists; merging
  * this does not close it.
  *
- * **Deliberately not part of `/health/ready`**, and this is the same reason `MailBootstrapService`
+ * **Deliberately not part of `/api/v1/health/ready`**, and this is the same reason `MailBootstrapService`
  * gives for the same refusal: readiness is consumed by the container healthcheck, so folding an
  * outbound network call into it converts a receiver outage into a restart loop — the failure it
  * reports, with more moving parts. It will be re-proposed; that is why the reason is written here.

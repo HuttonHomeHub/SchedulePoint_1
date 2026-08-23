@@ -21,7 +21,7 @@ import { PrismaService } from '../../prisma/prisma.service';
  * **Warn, never refuse, and never fail the boot** — the `MailBootstrapService` precedent for its
  * reason: the host recreates containers unattended (ADR-0047), so a check that could fail the boot
  * would turn a configuration opinion into an outage nobody is awake for. It is likewise not part of
- * `/health/ready`: a staff allowlist has no bearing on whether the API can serve schedules.
+ * `/api/v1/health/ready`: a staff allowlist has no bearing on whether the API can serve schedules.
  */
 @Injectable()
 export class StaffBootstrapService implements OnApplicationBootstrap {

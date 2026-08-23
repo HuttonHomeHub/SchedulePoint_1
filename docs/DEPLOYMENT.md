@@ -210,7 +210,7 @@ When `MAIL_SMTP_URL` is set, the API performs **one bounded SMTP handshake at st
 `event: "mail.transport_verified"` or `event: "mail.transport_check_failed"`, with the **host and
 port only** — never the credential inside the URL. It is capped at 5 seconds.
 
-**It never fails the boot, and it is deliberately not part of `/health/ready`.** Your host
+**It never fails the boot, and it is deliberately not part of `/api/v1/health/ready`.** Your host
 recreates containers unattended on a released image (ADR-0047), so a relay that is briefly
 unreachable at 03:00 would otherwise take the API down and keep it down until somebody noticed;
 and putting it in readiness would turn a mail outage into a restart loop. Mail is not on the
@@ -427,7 +427,9 @@ secret manager — never baked into images or committed. See
 
 ## Runtime health & rollout
 
-- The API exposes `/health` (liveness/readiness) for the orchestrator.
+- The API exposes `/api/v1/health` (liveness) and `/api/v1/health/ready` (readiness)
+  for the orchestrator. **Both carry the `/api` prefix and the URI version** — a probe
+  pointed at `/health` gets a 404 and marks the container unhealthy forever.
 - Roll out gradually where the platform supports it; watch health and error
   rates. **Rollback = redeploy the previous image tag** (plus any compensating
   migration).
@@ -686,7 +688,7 @@ rather than about the mail.
 ntfy topic, a Slack or Discord webhook, or a phone push all work; the script only needs a URL that
 accepts a POST. It refuses to run with no `SP_ALERT_URL` rather than watching silently.
 
-It is **not** wired into `/health/ready`, and that is deliberate: the host recreates containers
+It is **not** wired into `/api/v1/health/ready`, and that is deliberate: the host recreates containers
 unattended (ADR-0047), so a readiness probe failing on a 03:00 relay blip would take the API down
 and keep it down. Same reasoning as the boot-time SMTP handshake being warn-only.
 

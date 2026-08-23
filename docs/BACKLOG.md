@@ -36,8 +36,24 @@ a product idea that has not yet earned a roadmap line:
   because the modal had been getting that from the platform, and a modal opened for one commit and
   took focus with it. All three are fixed. What is genuinely **left** is the case that entry named
   and the epic did not reach: **there is still no guard on navigating away** from a plan with unsaved
-  scope edits — unchanged from the modal, and now easier to hit, because a drawer does not block the
-  canvas behind it.
+  scope edits. Verified 2026-08-23 — `beforeunload`, `useBlocker` and any router blocker return
+  **zero** matches across `apps/web/src`.
+
+  **SHIPPED 2026-08-23 (ADR-0108).** Four surfaces now register what they hold — the activity
+  editor, `ActivityCreateDialog`, `CalendarFormDialog` and the calendar exceptions editor — and a
+  reload, a tab close or a browser navigation confirms before discarding. It also closed a live
+  defect this entry did not know about: the editor's own confirmation named three dirty scopes while
+  the editor held **six**, so a changed weighted step closed in silence (`docs/TECH_DEBT.md` #63's
+  second half).
+
+  **Two corrections this entry earned along the way.** Its stated reason was stale — it read "now
+  easier to hit, because a drawer does not block the canvas behind it", and **ADR-0101 had already
+  reversed that**: the editor returned to `modalShell` and `registerDrawerSubject` has zero
+  production callers (#156). And the accurate scope is narrower than it implied: a modal `<dialog>`
+  sits in the browser's top layer and intercepts clicks behind it, so an in-app link was never
+  reachable while the editor was open. What had no guard was reload, tab close and browser
+  navigation. One channel is still open rather than claimed — a browser **Back** does not reach the
+  blocker in this app (instrumented; see ADR-0108 D7).
 
 - `S` **The Gantt's remaining editing gaps.** The epic landed (ADR-0095, M1–M5,
   `web-v0.92.0` 2026-08-18) and this entry is rewritten to be about what is

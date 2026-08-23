@@ -176,6 +176,17 @@ other is a client bug in a different file.
 
 ### 63. The Progress tab carries no unsaved marker for its three panels
 
+> **The confirmation half is CLOSED (2026-08-23, ADR-0108 D2); the tab-marker half remains open.**
+> The three panels now report dirtiness up to the editor via one `onDirtyChange` callback each —
+> which is the lift this row prescribed — and the editor composes a six-scope report that the
+> discard confirmation reads. So closing the editor with a changed weighted step now confirms and
+> names the scope; before, `requestClose` called `onClose()` outright and the work went in silence.
+> That was the more consequential half, and this row was right that the lift closes it.
+>
+> **Still open:** the tab LABEL still carries no dirty marker for Progress, so switching to General
+> with unsaved step edits shows nothing on the tab itself. The report now exists to drive it, so what
+> is left is presentation rather than plumbing.
+
 Every other tab in the activity editor shows a dirty/error marker in its tab label (ADR-0060 §4).
 **Progress does not** — its three panels (Reported progress / How value is measured / Weighted
 steps) own independent forms, and none of their state reaches the tab.
@@ -4136,3 +4147,134 @@ which is correct and rewrites every citation in the tree. Or have the scanner re
 `verifiedAgainst` — narrower, and does nothing for the many citations written as a bare basename.
 The second is probably right; neither should be done inside an upgrade epic, because the gate would
 then be changing underneath the citations it is checking.
+
+---
+
+## 182. Three base-journey sign-up specs sit close enough to a 5 s timeout that Firefox tips under load
+
+_Found 2026-08-23, on the Better Auth 1.7 release (#176 / ADR-0107). Filed because a green re-run
+proves the failure is not **deterministic**, not that the tests are not **marginal** — and the
+evidence for that distinction only exists while somebody has just looked at it._
+
+PR #367's end-to-end job failed with **three tests, all Firefox, 48 passed**. All three died at the
+same place: after clicking **Create an account**, waiting `5000ms` for the
+`Create your organisation` heading, `element(s) not found`.
+
+- `apps/web/e2e/clients.spec.ts:10`
+- `apps/web/e2e/dependencies.spec.ts:15`
+- `apps/web/e2e/dependencies.spec.ts:76`
+
+Re-running the same job passed all three and completed all 58 steps with no failures.
+
+**It is not the 1.7 bump**, and that was established by reading rather than by the re-run. 1.6.28
+was fetched with `npm pack` and diffed against the installed 1.7.1: the session cookie attributes are
+identical (`sameSite: "lax"`, `httpOnly: true`, `secure: !!secureCookiePrefix`), `setSessionCookie`
+is byte-identical apart from line numbers, `dist/client/index.mjs` has a **zero-line** diff, and the
+browser-client changes are additive opt-ins (`hydrateSession` / `hydrateSessionAtom`, which returns
+immediately unless configured). The sign-up route's diff is a refactor, one new argument, one error
+branch and the `issuer` line — and **a server response cannot vary by browser**. Corroborating:
+Firefox passed **14 of 17** base specs, and nearly every one of them signs up, so sign-up is not
+broken on that engine.
+
+**What it is, most likely:** the base journey is 17 specs × 3 engines, and it runs inside a job that
+also runs the API Supertest suite, the pairwise suite and 36 further Playwright suites — 58 steps
+back to back on one runner. Firefox is the heaviest engine, and a 5 s budget for a post-submit
+heading is the tightest assertion in those three specs.
+
+**The remedy is not re-running.** Re-running is what makes this invisible: it converts a marginal
+test into an occasional mystery, and the next occurrence may be during a release nobody is watching.
+Two candidates, neither costed yet:
+
+- raise the timeout on the post-sign-up heading assertion specifically (it follows a form submit, a
+  network round trip and a client-side route change — 5 s is not generous for that on a loaded
+  runner), rather than raising the global `expect` timeout, which would hide real regressions
+  everywhere else;
+- split the end-to-end job so the base journey is not competing with 36 flag-scoped suites.
+
+**Local reproduction is impossible here**, which is why this row carries the analysis rather than a
+fix: this dev container ships **no Firefox or WebKit binary** and `playwright install firefox` fails
+on download, so the base suite is Chromium-only locally whatever the config says (see **#1**, which
+records the same limitation and notes this journey has caught a _real_ Firefox-only failure before —
+which is why the flake verdict here is stated with its evidence rather than assumed).
+
+Cross-references **#1** (web e2e is Chromium-first, and the flag-scoped suites never run these
+engines at all).
+
+---
+
+## 183. `check:claims` cannot see a camelCase basename in its colon form
+
+_Found 2026-08-23 by the `ui-architect` while designing the unsaved-work guard, and confirmed here._
+
+`scripts/check-claims.mjs`'s colon-form citation pattern is case-sensitive lowercase, so a citation
+written as `useBlocker.js:35` is invisible to the completeness scan **in both directions**: it is
+not demanded when unregistered, and a registered entry for it reads as uncited. The prose form
+carries an `i` flag and does match, which is the workaround this epic used.
+
+This is the same family as the dotted-basename hole the file already records about itself — the scan
+is a text pattern over shapes, and every shape it does not anticipate is a silent gap rather than a
+failure. It matters more now than it did: this repository's dependencies are increasingly camelCase
+module files (`useBlocker.js`, `useNavigate.js`), so the blind spot is growing rather than static.
+
+**Not fixed here, deliberately.** Widening the scan is a change to a **shared gate**, which fires
+ADR-0105's trigger and would mean the gate changing underneath the citations it is checking — the
+same reason **#178** and **#181** were left alone during the Better Auth upgrade. Fix it on its own,
+with its own before/after count of what the widened pattern newly demands, because the last two
+widenings each surfaced unregistered citations that had been sitting in the tree (ADR-0077 M0).
+
+Cross-references **#178** (the resolver takes the first store directory) and **#181** (a `ref`
+carries no version) — three holes in one gate, all found by using it rather than by reading it.
+
+---
+
+## 184. Unsaved-work guard: the findings its gate pass did not block on
+
+_Filed 2026-08-23 with ADR-0108. Six blocking findings were fixed in the milestone; these are the
+rest, recorded rather than carried in someone's head._
+
+**From the accessibility review**
+
+- **The CONFIRM path hands focus to nothing.** Choosing "Discard and leave" completes the
+  navigation, and nothing moves focus to the new view's landmark or heading — so a keyboard or AT
+  user is left wherever the removed dialog left them. This is a **systemic router gap** the guard
+  exposes rather than causes: it is the first feature that deliberately interposes itself in a
+  navigation. Worth its own look at where focus should land after any route change.
+- **`describeUnsavedWork` has no upper-bound treatment.** All six editor scopes dirty produces
+  `"General, Scheduling, Cost, Reported progress, How value is measured, Weighted steps have
+unsaved changes."` — a comma list with no "and", delivered as one sentence with no structure. The
+  multi-surface branch two lines away _does_ use "and", so the two read inconsistently. Consider a
+  count past two or three ("6 sections have unsaved changes: …"), which is what ADR-0094 did with a
+  list for the same reason. No test has ever read the six-scope sentence.
+- **Silent auto-proceed.** If the registry goes clean while the confirmation is open, the guard
+  calls `proceed()` and the navigation completes with no announcement — an unexpected context change
+  while the reader may be mid-sentence. Low likelihood; nothing currently guards it.
+
+**From the component review**
+
+- **`useUnsavedWorkReports` has no production caller.** Only tests import it. It is documented as
+  future-facing, and it is exactly the ADR-0081 shape — a capability with no entry point — one
+  register along. Either wire a consumer or say plainly that it is dormant.
+- **The `onDirtyChange` effect is authored three times** in `ActivityProgressPanels.tsx`, identical
+  body and deps. `WeightedStepsPanel` does not use `useScopeForm`, so a shared two-line hook is a
+  better home than a `useScopeForm` option.
+- **Thirteen conditional array spreads** across the four report builders
+  (`...(cond ? [{ key, label, savable }] : [])`). A pure `buildReport(subject, scopes)` helper in the
+  already-React-free `lib/unsaved-work/report.ts` would read declaratively and be independently
+  testable. Every current call site is correct; the idiom is the risk, and ADR-0074 records this
+  exact shape going wrong elsewhere.
+
+**From the security review, and it is about my own conduct**
+
+- **Coverage was deleted and not replaced.** An earlier commit on this branch (`33b12b8f`) drove
+  `page.goBack()` with a dirty scope and asserted the confirmation, "Keep editing" and "Leave". When
+  Back turned out not to reach the blocker, that whole case was replaced with the narrower
+  reload-only journey — and the in-app confirmation lost its only browser-level coverage in the
+  process. The allow-list's _behaviour_ now has a real unit test (added at the gate pass, verified
+  red), but **no journey opens the in-app `ConfirmDialog` at all**, so the "Keep editing" focus
+  return is asserted nowhere a real `<dialog>` exists. That matters because the focus defect the
+  accessibility review found was invisible to jsdom by construction.
+
+**Why Back is unresolved**, since it belongs beside the above: instrumented in a real browser,
+`shouldBlockFn` is **never called** on `page.goBack()` while the guard is mounted and the URL does
+not change — so something other than this guard reverts the pop. Recorded rather than claimed
+(ADR-0108 D7).

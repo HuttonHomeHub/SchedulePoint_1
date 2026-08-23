@@ -40,7 +40,7 @@ export function smtpEndpoint(smtpUrl: string): { host: string; port: string } | 
  * person noticed — trading an inconvenience nobody is awake for against an outage of the whole
  * product. Mail is not on the critical path of scheduling; the API is.
  *
- * **It is also deliberately not part of readiness.** `/health/ready` is what the container
+ * **It is also deliberately not part of readiness.** `/api/v1/health/ready` is what the container
  * healthcheck and any load balancer consume, so folding this in would convert a mail outage into a
  * restart loop — the same failure with more moving parts. If you are tempted to add it there, that
  * is the reason not to.

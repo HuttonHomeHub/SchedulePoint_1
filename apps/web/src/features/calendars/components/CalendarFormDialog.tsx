@@ -23,6 +23,7 @@ import {
   type WeekRows,
 } from './WeeklyShiftEditor';
 
+import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -122,7 +123,7 @@ export function CalendarFormDialog({
     handleSubmit,
     setValue,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<CalendarFormValues>({
     resolver: zodResolver(calendarFormSchema),
     defaultValues: { name: '', description: '' },
@@ -158,6 +159,36 @@ export function CalendarFormDialog({
   // for "reset state when a prop changes"). An effect would set state after paint — one frame of
   // last calendar's hours on screen — and a cascading re-render the lint rule correctly objects to.
   const [seededFor, setSeededFor] = useState<string | null>(null);
+  /**
+   * The week as it was when this dialog opened.
+   *
+   * **The shift rows live outside react-hook-form on purpose** (see the comment at their
+   * declaration), which means `formState.isDirty` **structurally cannot see them**: a planner can
+   * rewrite all seven days' hours and the form still reports itself clean. The M0 inventory found
+   * this to be the ONLY surface in the app in that state, and it is the sharpest case the guard has
+   * — so dirtiness here is a comparison against the opening value rather than a flag.
+   */
+  const [seededWeek, setSeededWeek] = useState<WeekRows>(emptyWeek);
+
+  /**
+   * Dirtiness here is `isDirty` OR a changed working week, and the second half is the whole point:
+   * `formState.isDirty` is blind to the shift rows, so registering on it alone would leave the one
+   * surface this feature most needs to cover reporting itself clean. Compared by value against the
+   * opening week — the rows are plain strings a planner is mid-way through typing, so there is no
+   * cheaper identity to lean on.
+   */
+  const weekChanged = JSON.stringify(week) !== JSON.stringify(seededWeek);
+  useRegisterUnsavedWork(
+    open && (isDirty || weekChanged)
+      ? {
+          subject: 'This calendar',
+          scopes: [
+            ...(isDirty ? [{ key: 'details', label: 'Calendar details', savable: true }] : []),
+            ...(weekChanged ? [{ key: 'week', label: 'Working week', savable: true }] : []),
+          ],
+        }
+      : null,
+  );
   const seedKey = `${String(open)}:${calendar?.id ?? 'new'}`;
   if (open && seededFor !== seedKey) {
     setSeededFor(seedKey);
@@ -170,6 +201,7 @@ export function CalendarFormDialog({
       calendar === undefined ? presetWeek('standard') : shiftsToWeekRows(calendar.shifts);
     setWeek(seededWeek);
     setWeekProblems([]);
+    setSeededWeek(seededWeek);
     // The calendar's standard working day (ADR-0068). Seeded from the stored value so an edit that
     // touches nothing else sends it back unchanged; a NEW calendar takes the figure the server
     // would derive from the week seeded above, so the two can never open disagreeing.
@@ -445,6 +477,7 @@ export function CalendarFormDialog({
             orgSlug={orgSlug}
             calendarId={calendar.id}
             readOnly={readOnly}
+            open={open}
           />
         </div>
       ) : null}

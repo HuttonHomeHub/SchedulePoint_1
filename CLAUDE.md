@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1056 web
-> source files with 38 Playwright suites beside the base journey, and
-> 107 ADRs.
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1069 web
+> source files with 39 Playwright suites beside the base journey, and
+> 108 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3039,6 +3039,50 @@ progress` off the command surface because **an object action belongs on the obje
   Fixing either is a shared-gate change and fires ADR-0105's trigger, so neither was smuggled into a
   dependency bump. **The CPM engine is not imported and the ADR-0034 parity gate is untouched** — in
   its honest form: there is nothing here to hold parity for.
+
+- **ADR-0108** _(Accepted; M0–M5 landed 2026-08-23)_ — A modal guards the canvas and nothing else.
+  `apps/web` had **no `beforeunload` handler and no router blocker anywhere** — zero matches for
+  either — so a planner with unsaved activity edits could reload or close the tab and lose them with
+  no prompt and no record. The backlog had carried this for months with a justification that had
+  **gone stale**: it blamed the Graphite drawer for making it easier to hit, and ADR-0101 had
+  reversed that two days earlier (the editor returned to `modalShell`; `registerDrawerSubject` has
+  zero production callers, TECH_DEBT #156). The gap was real; the stated reason was not, and was
+  corrected before any code was written.
+  **The unit is a report of scopes, not a boolean**, because ADR-0060 saves per **write scope**: an
+  `isDirty` flag cannot name what is at risk, and cannot separate work that could still be saved from
+  work that cannot. `savable` carries the product owner's decision that a pen taken mid-edit is
+  **warned about anyway** — the work is unsaved and unsavable, and letting it go silently reads as
+  the application discarding an edit rather than the lock being taken.
+  **It fixed a live defect before adding any capability.** `dirtyScopeNames` named **three** scopes
+  and the editor holds **six** — the three Progress panels each own a form — and `requestClose`
+  returns `onClose()` outright when that array is empty, so a changed weighted step closed **in
+  silence**. That is TECH_DEBT #63's second half, now closed.
+  **The trap that would have shipped it broken was measured, not reasoned about**: `@tanstack/history`'s
+  unload path (`dist/esm/index.js:247-257`) **never calls `shouldBlockFn`** — it reads
+  `enableBeforeUnload ?? true` and treats `true` as block. Registered with the default it prompts on
+  **every reload of every page**, including a clean one, while the in-app half behaves perfectly and
+  every unit test stays green. Both callbacks must also be referentially stable or the blocker
+  re-registers per render: inline arrows measured **6 registrations against 1**.
+  **Registration tokens are minted by the hook** (`useId`), never supplied by the caller, or two
+  mounts of one component share an entry and the first to unmount deletes the survivor's — a guard
+  that silently stops guarding. Both naive designs were verified red against **different** tests.
+  **Scope is four surfaces, on a measured inventory** — 25 components, 32 RHF instances, and exactly
+  **one** holding user input outside react-hook-form: `CalendarFormDialog`'s working week, which
+  lives in `useState` on purpose and is therefore **invisible to `formState.isDirty`**. It registers
+  on an explicit value comparison, pinned by a test verified red against registering on `isDirty`
+  alone — the refactor a later reader would think reasonable. `ActivityCreateDialog` had no guard of
+  any kind, around twenty fields across four scope forms.
+  **What a modal actually guards is stated because the backlog implied otherwise**: the editor is a
+  modal `<dialog>` in the browser's **top layer**, so it intercepts clicks behind it and an in-app
+  link was never reachable while it was open — for a test or a planner. The guard's value is reload,
+  tab close and browser navigation. **One channel is recorded as open rather than claimed**: a
+  browser Back does not reach the blocker in this app, established by instrumenting
+  (`shouldBlockFn` **never called**, guard mounted, URL unchanged).
+  **The census gate caught itself on its first run**, which is the most transferable part. Its
+  "nothing is unclassified" assertion passed perfectly — because the glob matched **zero files**, so
+  there was nothing to be unclassified; the **pinned positive case** is what failed. That is the
+  ADR-0093 lesson (a green suite that cannot tell "all classified" from "found nothing") landing on
+  this epic's own gate. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -131,3 +131,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0105](0105-a-register-row-is-not-a-spec.md)                                | A register row is not a spec                                            | Accepted           |
 | [0106](0106-a-rule-is-a-scene-mark-its-label-is-chrome.md)                  | A rule is a scene mark; its label is chrome                             | Accepted           |
 | [0107](0107-a-migration-a-pristine-database-cannot-test.md)                 | A migration a pristine database cannot test                             | Accepted           |
+| [0108](0108-a-modal-guards-the-canvas-and-nothing-else.md)                  | A modal guards the canvas and nothing else                              | Accepted           |

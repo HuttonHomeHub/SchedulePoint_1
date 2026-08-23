@@ -26,6 +26,7 @@ import {
   type ExceptionFormValues,
 } from '../schemas/calendar-schemas';
 
+import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -148,11 +149,21 @@ function ExceptionEditForm({
   orgSlug,
   calendarId,
   onDone,
+  onDirtyChange,
 }: {
   exception: CalendarExceptionSummary;
   orgSlug: string;
   calendarId: string;
   onDone: () => void;
+  /**
+   * Report edits to the host so the unsaved-work guard can see them. This form holds ALL of its
+   * state in `useState` — kind, rows, label, end date — so nothing here is visible to any
+   * `formState.isDirty`, and before this it was guarded by nothing at all: a planner could extend a
+   * shutdown, add specific hour windows, and lose every keystroke to a reload in silence. Found by
+   * the ux review, which named it as a second instance of the very defect this feature exists to
+   * close, shipping in the same change.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 }): React.ReactElement {
   const updateException = useUpdateException(orgSlug, calendarId);
   const announce = useAnnounce();
@@ -171,6 +182,17 @@ function ExceptionEditForm({
   const [endDate, setEndDate] = useState(exception.endDate);
   const [problems, setProblems] = useState<readonly WindowProblem[]>([]);
   const [message, setMessage] = useState<string | undefined>(undefined);
+
+  // Compared against what the row held when Edit opened it — there is no `isDirty` to ask.
+  const editDirty =
+    kind !== exceptionKindOf(exception) ||
+    label !== (exception.label ?? '') ||
+    endDate !== exception.endDate ||
+    JSON.stringify(rows) !== JSON.stringify(exceptionRowsOf(exception));
+  useEffect(() => {
+    onDirtyChange?.(editDirty);
+  }, [onDirtyChange, editDirty]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   // Checked here as well as at the API for the same reason the add form checks it: the 422 is the
   // enforcing boundary, but a planner who has just typed both dates should be told at the field.
   const rangeError =
@@ -286,10 +308,22 @@ export function CalendarExceptionsEditor({
   orgSlug,
   calendarId,
   readOnly = false,
+  open = true,
 }: {
   orgSlug: string;
   calendarId: string;
   readOnly?: boolean;
+  /**
+   * Whether the dialog hosting this editor is showing.
+   *
+   * **Required for correctness, not tidiness.** `Dialog` renders its children unconditionally
+   * (`components/ui/dialog.tsx:133`) — it toggles the native `<dialog>`, it does not unmount the
+   * subtree — and `CalendarsTable` keeps the calendar dialog permanently mounted. So without this
+   * gate a half-typed exception stayed registered after the dialog closed, and every later
+   * navigation was blocked by a scope the reader could no longer see or resolve. Found by the
+   * component review; the three sibling registrants all gate on `open` and this one did not.
+   */
+  open?: boolean;
 }): React.ReactElement {
   const calendar = useCalendar(orgSlug, calendarId);
   const addException = useAddException(orgSlug, calendarId);
@@ -301,6 +335,7 @@ export function CalendarExceptionsEditor({
   const [problems, setProblems] = useState<readonly WindowProblem[]>([]);
   const [message, setMessage] = useState<string | undefined>(undefined);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDirty, setEditDirty] = useState(false);
   // `useId`, not a hard-coded string: two editors on one screen would otherwise share a `<label>`
   // target and the second one's Type field would be unlabelled. The edit form already did this.
   const addKindId = useId();
@@ -309,11 +344,28 @@ export function CalendarExceptionsEditor({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ExceptionFormValues>({
     resolver: zodResolver(exceptionFormSchema),
     defaultValues: { date: '', endDate: '', isWorking: false, label: '' },
   });
+
+  /**
+   * A half-entered exception is unsaved work too — the dates and hours a planner has typed but not
+   * added yet. Registered as one scope: unlike the calendar form beside it, everything here does
+   * live in react-hook-form, so `isDirty` is the whole answer.
+   */
+  useRegisterUnsavedWork(
+    open && (isDirty || editDirty)
+      ? {
+          subject: 'This calendar exception',
+          scopes: [
+            ...(isDirty ? [{ key: 'add', label: 'New exception', savable: true }] : []),
+            ...(editDirty ? [{ key: 'edit', label: 'Exception being edited', savable: true }] : []),
+          ],
+        }
+      : null,
+  );
 
   const onAdd = handleSubmit((values) => {
     const result = toExceptionHours(kind, rows);
@@ -408,6 +460,7 @@ export function CalendarExceptionsEditor({
                     orgSlug={orgSlug}
                     calendarId={calendarId}
                     onDone={() => closeEditor(exception.id)}
+                    onDirtyChange={setEditDirty}
                   />
                 ) : (
                   <>
