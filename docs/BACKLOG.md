@@ -36,8 +36,16 @@ a product idea that has not yet earned a roadmap line:
   because the modal had been getting that from the platform, and a modal opened for one commit and
   took focus with it. All three are fixed. What is genuinely **left** is the case that entry named
   and the epic did not reach: **there is still no guard on navigating away** from a plan with unsaved
-  scope edits — unchanged from the modal, and now easier to hit, because a drawer does not block the
-  canvas behind it.
+  scope edits. Verified 2026-08-23 — `beforeunload`, `useBlocker` and any router blocker return
+  **zero** matches across `apps/web/src`.
+
+  **Its stated reason was stale and is corrected here rather than carried.** This read "now easier to
+  hit, because a drawer does not block the canvas behind it" until 2026-08-23, and **ADR-0101 had
+  already reversed that** two days earlier: the editor returned to `modalShell`, and
+  `registerDrawerSubject` has zero production callers (`docs/TECH_DEBT.md` #156). The accurate
+  statement is narrower and still real — a modal `<dialog>` blocks the canvas and blocks **nothing**
+  about browser Back/Forward, closing the tab, or reload. That is the exposure, and it was never
+  about the drawer. Third instance in this file of an entry outliving the decision that changed it.
 
 - `S` **The Gantt's remaining editing gaps.** The epic landed (ADR-0095, M1–M5,
   `web-v0.92.0` 2026-08-18) and this entry is rewritten to be about what is
