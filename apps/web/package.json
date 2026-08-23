@@ -2,7 +2,7 @@
   "name": "@repo/web",
   "version": "0.99.3",
   "private": true,
-  "description": "SchedulePoint web client — React + Vite + Tailwind CSS, hand-rolled WAI-ARIA APG primitives.",
+  "description": "SchedulePoint web client \u2014 React + Vite + Tailwind CSS, hand-rolled WAI-ARIA APG primitives.",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -58,7 +58,8 @@
     "test:e2e:overview": "playwright test --config playwright.overview.config.ts --pass-with-no-tests",
     "test:e2e:shell": "playwright test --config playwright.shell.config.ts",
     "clean": "rimraf dist .turbo *.tsbuildinfo",
-    "test:e2e:gantt-editing": "playwright test --config playwright.gantt-editing.config.ts"
+    "test:e2e:gantt-editing": "playwright test --config playwright.gantt-editing.config.ts",
+    "test:e2e:unsaved-work": "playwright test --config playwright.unsaved-work.config.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.8.0",
