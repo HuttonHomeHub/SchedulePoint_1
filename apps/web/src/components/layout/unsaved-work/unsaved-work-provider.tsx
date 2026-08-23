@@ -1,0 +1,133 @@
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef } from 'react';
+import { useSyncExternalStore } from 'react';
+
+import type { UnsavedWorkReport } from '@/lib/unsaved-work/report';
+
+/**
+ * Who is holding unsaved work, right now.
+ *
+ * **The registry is a ref, not state.** Its primary reader is the navigation blocker, which is
+ * *called* at the moment a navigation is attempted rather than rendered — so a `useState` registry
+ * would re-render the whole authenticated shell on every keystroke that flips a form's dirty flag,
+ * to serve a reader that never renders. A subscription is offered separately for consumers that
+ * genuinely need to paint from it.
+ *
+ * **Registration is keyed by a token this hook mints itself** (`useId`), never by a caller-supplied
+ * string. A caller-supplied key means two mounts of the same component share an entry, and then the
+ * first to unmount deletes the survivor's registration — a guard that silently stops guarding,
+ * which is the worst failure this feature has.
+ *
+ * **Release belongs to unmount alone**, following the `drawer-subject.tsx:257-272` precedent and for
+ * the reason recorded there: a cleanup returned from the reporting effect runs on every dependency
+ * change, which would unregister and re-register on every edit. That is harmless today only because
+ * React batches the pair into one commit — i.e. it relies on a batching detail to make a wrong
+ * statement look right.
+ */
+interface Registry {
+  register: (token: string, report: UnsavedWorkReport | null) => void;
+  release: (token: string) => void;
+  /** Live read for the blocker. Not safe to call during render. */
+  read: () => readonly UnsavedWorkReport[];
+  subscribe: (fn: () => void) => () => void;
+  version: () => number;
+}
+
+const UnsavedWorkContext = createContext<Registry | null>(null);
+
+export function UnsavedWorkProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}): React.ReactElement {
+  const entries = useRef(new Map<string, UnsavedWorkReport>());
+  const subscribers = useRef(new Set<() => void>());
+  const version = useRef(0);
+
+  const registry = useMemo<Registry>(() => {
+    const bump = (): void => {
+      version.current += 1;
+      for (const fn of subscribers.current) fn();
+    };
+    return {
+      register: (token, report) => {
+        const held = entries.current.get(token);
+        // Nothing to say, and nothing was being said: skip the notify entirely, or every render of
+        // a clean form wakes every subscriber.
+        if (report === null || report.scopes.length === 0) {
+          if (held === undefined) return;
+          entries.current.delete(token);
+          bump();
+          return;
+        }
+        entries.current.set(token, report);
+        bump();
+      },
+      // Deletes THIS token's entry and no other. A successor that mounted under a different token
+      // is untouched, which is what makes remount-during-transition safe.
+      release: (token) => {
+        if (entries.current.delete(token)) bump();
+      },
+      read: () => [...entries.current.values()],
+      subscribe: (fn) => {
+        subscribers.current.add(fn);
+        return () => {
+          subscribers.current.delete(fn);
+        };
+      },
+      version: () => version.current,
+    };
+  }, []);
+
+  return <UnsavedWorkContext.Provider value={registry}>{children}</UnsavedWorkContext.Provider>;
+}
+
+/**
+ * Read the registry live. For the blocker and for anything else called rather than rendered.
+ * Returns an empty list outside a provider, so a surface can register unconditionally.
+ */
+export function useUnsavedWorkRegistry(): Registry | null {
+  return useContext(UnsavedWorkContext);
+}
+
+/** Re-render when the registry changes. Only for consumers that must paint from it. */
+export function useUnsavedWorkReports(): readonly UnsavedWorkReport[] {
+  const registry = useContext(UnsavedWorkContext);
+  const subscribe = useCallback(
+    (fn: () => void) => registry?.subscribe(fn) ?? (() => {}),
+    [registry],
+  );
+  // Snapshot must be referentially stable between changes or useSyncExternalStore loops; the
+  // version counter is what makes that cheap without copying the map on every check.
+  const versionSnapshot = useSyncExternalStore(
+    subscribe,
+    () => registry?.version() ?? 0,
+    () => 0,
+  );
+  return useMemo(
+    () => registry?.read() ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-read exactly when the registry says it changed
+    [registry, versionSnapshot],
+  );
+}
+
+/**
+ * Declare this surface's unsaved work. Pass `null` (or a report with no scopes) when clean.
+ *
+ * The token is minted here and is stable for this component instance's lifetime, so two mounts of
+ * the same component never share an entry.
+ */
+export function useRegisterUnsavedWork(report: UnsavedWorkReport | null): void {
+  const token = useId();
+  const registry = useContext(UnsavedWorkContext);
+
+  useEffect(() => {
+    registry?.register(token, report);
+  }, [registry, token, report]);
+
+  useEffect(
+    () => () => {
+      registry?.release(token);
+    },
+    [registry, token],
+  );
+}

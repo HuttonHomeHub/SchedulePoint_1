@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/layout/navigator/app-shell';
+import { UnsavedWorkProvider } from '@/components/layout/unsaved-work/unsaved-work-provider';
 
 /**
  * The authenticated app shell — the persistent app-shell of ADR-0029: a mounted-once top bar, the
@@ -10,7 +11,21 @@ import { AppShell } from '@/components/layout/navigator/app-shell';
  * passes it, so no user could reach that branch and none ever had. What it did instead was oblige
  * every later change to be made twice, which is how it came to carry its own copy of the
  * `h-dvh` + scrolling-`main` fix.
+ *
+ * **`UnsavedWorkProvider` wraps the shell and currently guards nothing** (unsaved-work guard, M1-T3
+ * — ships dark, ADR-0081). It is a registry only: surfaces declare what they hold, and the
+ * navigation blocker that reads it arrives in M3. It sits here rather than at the root route
+ * because every surface that can hold unsaved work is authenticated — the five public auth forms
+ * deliberately do not register, since losing a half-typed sign-in is not work.
+ *
+ * It re-renders nothing on a registration change: the registry lives in a ref, and the only
+ * consumer that paints from it subscribes. The `app-shell` suites passing unchanged through this
+ * commit is the before/after oracle for that (ADR-0078's barrel-preserving argument).
  */
 export function AuthedLayout(): React.ReactElement {
-  return <AppShell />;
+  return (
+    <UnsavedWorkProvider>
+      <AppShell />
+    </UnsavedWorkProvider>
+  );
 }
