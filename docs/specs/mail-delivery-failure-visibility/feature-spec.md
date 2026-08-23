@@ -48,7 +48,7 @@ code that was deleted.
 > line is the only signal of a broken relay" — `docs/DEPLOYMENT.md:166-168`
 
 That line is emitted by Better Auth's `runInBackgroundOrAwait`
-(`context/create-context.mjs:214-224`) **when the promise it is given rejects**. Since
+(`context/create-context.mjs:217-227`) **when the promise it is given rejects**. Since
 D1, the promise resolves — the adapter has already caught. So on a host with
 `MAIL_SMTP_URL` configured, a delivery failure produces:
 
@@ -109,7 +109,7 @@ this work touches #94.
 `AUTH_REQUIRE_EMAIL_VERIFICATION` defaults `false` (`env.validation.ts:46-49`) and
 ADR-0074's acceptance ledger records **M5-T6/T7/T8 — verification enforced — "Pending —
 operator"**. With the switch off, `shouldSkipAutoSignIn` is false
-(`sign-up.mjs:162-163`), sign-up issues a session, and the new member lands in the
+(`sign-up.mjs:163-164`), sign-up issues a session, and the new member lands in the
 application. An undelivered verification email then costs exactly one thing: they cannot
 accept an organisation invitation (ADR-0016 §5) — and that refusal is itself guarded by
 the same switch.
@@ -129,7 +129,7 @@ analysis.
 
 The task framing (and it is the natural reading) is that sign-up differs from reset
 because the caller owns the address. That holds for the address the caller _types_. It
-does not hold for the response, because `sign-up.mjs:162` + `sign-up.mjs:169-207` derives
+does not hold for the response, because `sign-up.mjs:163` + `sign-up.mjs:203-241` derives
 `shouldReturnGenericDuplicateResponse` from `requireEmailVerification` and, for an address
 that **already exists**, returns a **synthetic 200** with a fabricated user and no
 session — deliberately, so sign-up is not an enumeration oracle. That branch **sends
@@ -173,9 +173,9 @@ against a real Postgres with a rejecting `MailService`):
   **403**.
 
 The mechanism is settled and is not configurable: Better Auth invokes the port through
-`ctx.context.runInBackgroundOrAwait(...)` (`api/routes/sign-up.mjs:246`), whose default
+`ctx.context.runInBackgroundOrAwait(...)` (`api/routes/sign-up.mjs:254`), whose default
 implementation is `try { await promise } catch (e) { logger.error(...) }`
-(`context/create-context.mjs:214-224`). It never rethrows, and the alternative
+(`context/create-context.mjs:217-227`). It never rethrows, and the alternative
 `advanced.backgroundTasks.handler` branch only `.catch()`es. **Verified in
 `node_modules` for this spec, not taken from the row.**
 
@@ -583,7 +583,7 @@ remedy here is honesty on screen plus operator signal, not a different status co
 
 **Password reset — out of scope for caller-visible failure, and this is the hard
 constraint.** `POST /api/auth/request-password-reset` answers identically for a known and
-an unknown address; `password.mjs:60-72` performs a dummy `generateId` /
+an unknown address; `password.mjs:67-79` performs a dummy `generateId` /
 `findVerificationValue` on an unknown address purely to equalise timing. Any
 caller-visible difference — status, body, or latency — tells an attacker which addresses
 hold accounts. `MailService.sendPasswordReset`'s own docblock states this, and
@@ -648,7 +648,7 @@ Record the send outcome in request-scoped storage; in `hooks.after` on `/sign-up
 throw an `APIError` when it failed.
 
 This is more nearly viable than it looks. `runAfterHooks`
-(`api/dispatch.mjs:117-126`) catches an `APIError` thrown by an after-hook and installs it
+(`api/dispatch.mjs:119-128`) catches an `APIError` thrown by an after-hook and installs it
 as `context.context.returned`, so the hook genuinely can replace a successful response.
 
 But three things break:

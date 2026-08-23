@@ -150,9 +150,9 @@ and every dependency claim this epic rests on is registered.
      rots; update it deliberately.)
   2. Register the **new** citations, each with package, dist path, line range and a verified anchor
      (the `ref` is the base filename and the line range, joined by a colon):
-     - `better-auth` `dist/api/routes/sign-in.mjs`, lines **234** — the `rememberMe` body field,
+     - `better-auth` `dist/api/routes/sign-in.mjs`, lines **264** — the `rememberMe` body field,
        anchor `rememberMe: z.boolean()`. Establishes that `rememberMe` **defaults to `true`**.
-     - `better-auth` `dist/api/routes/sign-in.mjs`, lines **326** — anchor
+     - `better-auth` `dist/api/routes/sign-in.mjs`, lines **353** — anchor
        `const session = await ctx.context.internalAdapter.createSession(`. Establishes that
        `rememberMe === false` is what produces a non-persistent session.
      - `better-auth` `dist/api/rate-limiter/index.mjs`, lines **64-70** — anchor
@@ -357,7 +357,7 @@ milestone with the shortest path to value and it should ship on its own.
      what 429 means.
   3. Copy (en-GB, no number): _"Too many attempts. Wait a moment and try again."_ — and on the two
      60-second routes, _"Too many requests. Wait a minute before asking for another email."_ The
-     windows are 10 s and 60 s respectively (`index.mjs:370-383`); the copy reflects the difference
+     windows are 10 s and 60 s respectively (`index.mjs:311-324`); the copy reflects the difference
      without quoting a countdown.
   4. Record in the ADR that `/change-password` and `/change-email` share the 10 s rule, so `/account`
      inherits the fix.
@@ -468,7 +468,7 @@ action; one link style. Still visually conservative — no brand panel yet.
 - **Risks:**
   - **Load-bearing copy must move verbatim.** `ResetPasswordForm.tsx:43-45` ("Password changed. Every
     other session has been signed out.") is the reader's confirmation that the lockout is over and
-    the revocation claim is true (`password.mjs:172`). It moves; it is not rewritten.
+    the revocation claim is true (`password.mjs:173`). It moves; it is not rewritten.
   - `RequestPasswordResetForm.tsx:52-56` is enumeration-safe and must survive the move **word for
     word**. A rewrite that distinguishes known from unknown addresses is a security regression.
 - **Testing:** per terminal state, assert the `<h1>` text; assert exactly one `<h1>`; assert the

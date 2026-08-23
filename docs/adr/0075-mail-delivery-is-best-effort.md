@@ -20,7 +20,7 @@ with a rejecting port):
 - the following sign-in, with the correct password, is **403**
 
 The mechanism is not ours to change: Better Auth calls the port through
-`ctx.context.runInBackgroundOrAwait(...)` (`api/routes/sign-up.mjs:246`), whose default is
+`ctx.context.runInBackgroundOrAwait(...)` (`api/routes/sign-up.mjs:254`), whose default is
 `try { await promise } catch { logger.error(...) }`. It never rethrows, and the
 `advanced.backgroundTasks.handler` branch only `.catch()`es — **no configuration this application
 can set changes it**.
@@ -49,7 +49,7 @@ below closes with "mail is not on the critical path of scheduling". The second i
 readiness. The first was **false**, and the review pass caught it:
 
 - `runInBackgroundOrAwait` does `else await promise` when no handler is configured
-  (`better-auth@1.6.25`, `dist/context/create-context.mjs:214-224`, the `await` on line 220)
+  (`better-auth@1.6.25`, `dist/context/create-context.mjs:217-227`, the `await` on line 220)
 - `grep -rn "backgroundTasks" apps/api/src` returns **nothing** — no such handler is configured
 - `InvitationsService` (`invitations.service.ts:119`) awaits `sendInvitation` in the handler outright
 
@@ -82,7 +82,7 @@ decided" is about exactly that failure. It is the second time in one milestone.
 the finding that decided the ADR — the spec was commissioned believing the opposite.
 
 Under `requireEmailVerification`, a sign-up for an address that **already exists** returns a
-synthetic `200` with a fabricated user id and **sends nothing** (`sign-up.mjs:162` + `sign-up.mjs:169-207`); Better
+synthetic `200` with a fabricated user id and **sends nothing** (`sign-up.mjs:163` + `sign-up.mjs:203-241`); Better
 Auth hashes the submitted password regardless, purely to equalise timing. It is a deliberate
 anti-enumeration control. So surface a delivery failure and, during an outage:
 

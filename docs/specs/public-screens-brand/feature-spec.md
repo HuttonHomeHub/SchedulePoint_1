@@ -61,7 +61,7 @@ are live in production:
   ADR-0063 M6 each closed elsewhere;
 - and the **rate limiter is unhandled**. Better Auth caps `/sign-in*` and `/sign-up*` at
   **3 requests per 10 seconds** and `/request-password-reset` / `/send-verification-email` at
-  **3 per 60 seconds** (`better-auth@1.6.25`, `index.mjs:370-383`). It is
+  **3 per 60 seconds** (`better-auth@1.6.25`, `index.mjs:311-324`). It is
   `enabled: options.isProduction` (`apps/api/src/common/auth/better-auth.ts:270-274`), so **it does
   not exist in development at all** — which is exactly why nobody saw it. A user who mistypes a
   password three times gets a bare red line reading "Too many requests. Please try again later."
@@ -324,7 +324,7 @@ correct pattern applied to a control and not its neighbour**, for the third time
 **B4 — unhandled rate limit, live in production.** Verified against the installed package:
 
 - `better-auth@1.6.25`, `dist/api/rate-limiter/index.mjs`, `getDefaultSpecialRules()` at
-  `index.mjs:370-383`: `/sign-in*`, `/sign-up*`, `/change-password*`, `/change-email*` →
+  `index.mjs:311-324`: `/sign-in*`, `/sign-up*`, `/change-password*`, `/change-email*` →
   `window: 10, max: 3`; `/request-password-reset`, `/send-verification-email`, `/forget-password*`
   and two email-OTP paths → `window: 60, max: 3`. **The brief omitted `/change-password` and
   `/change-email`** — those are authed screens (`/account`) and inherit the same fix for free.
@@ -381,7 +381,7 @@ must continue to match the schema; a copy pass that drifts one from the other is
 | `verify-email.tsx:54-57` (`pendingDescription`)   | ADR-0075: asserts **intent, not delivery**. A send failure never reaches the request, so a "we sent it" claim would be false for the reader staring at an empty inbox. It also names a human as the exit from a total mail outage.                                       |
 | `RequestPasswordResetForm.tsx:52-56`              | Enumeration-safe. The endpoint answers identically for known and unknown addresses and performs a dummy lookup to match the timing; a branch here hands back the oracle.                                                                                                 |
 | `reset-password.tsx:47` and `verify-email.tsx:83` | ADR-0074: **cause-agnostic**. Naming "already used" was wrong — a second visit to a verified address takes the library's _success_ branch.                                                                                                                               |
-| `ResetPasswordForm.tsx:43-45`                     | "Password changed. Every other session has been signed out." The revocation claim is true (`revokeSessionsOnPasswordReset`, `password.mjs:172`) and is the reader's confirmation that the lockout is over. If CQ-2 moves it into the header slot, it moves **verbatim**. |
+| `ResetPasswordForm.tsx:43-45`                     | "Password changed. Every other session has been signed out." The revocation claim is true (`revokeSessionsOnPasswordReset`, `password.mjs:173`) and is the reader's confirmation that the lockout is over. If CQ-2 moves it into the header slot, it moves **verbatim**. |
 
 ---
 

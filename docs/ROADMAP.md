@@ -529,6 +529,17 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **Sign-in keeps working on Better Auth 1.7** — **shipped** (ADR-0107, 2026-08-23). 1.7 scopes
+  account identity by an `issuer` column and reads it in the sign-in predicate, so the library had
+  been held at `~1.6.28` to stop it arriving unattended: at 1.7 without the column, 522 of 559 API
+  tests fail. The column landed first, in its own release, with the library following — so the
+  irreversible half and the reversible half could fail separately. The migration is hand-written
+  rather than generated, because the generated form succeeds on an empty table and fails on a
+  populated one, which makes the defect invisible to CI and unattended on the deployed host. It also
+  repairs accounts 1.7 would otherwise lock out silently. Nothing about the product changes: the
+  whole user-visible success criterion is that signing in, changing a password and resetting one all
+  behave exactly as before.
+
 - **No date label covers a bar** — **shipped** (ADR-0106, 2026-08-22). The TSLD painted its three
   date marks — `Data date`, `Today` and the cursor readout — as pills at a **fixed screen y** on the
   scene canvas, which is chrome drawn onto a surface that scrolls: a label printed over whichever

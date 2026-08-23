@@ -64,7 +64,7 @@ export interface CreateAuthOptions {
    *
    * **Configuring this is what makes reset exist at all.** Absent, Better Auth's
    * `/request-password-reset` throws `RESET_PASSWORD_DISABLED` outright
-   * (`api/routes/password.mjs:51-57`), which is why the product had no recovery path rather than
+   * (`api/routes/password.mjs:53-59`), which is why the product had no recovery path rather than
    * merely no screen for one.
    */
   sendPasswordReset: (input: { to: string; resetUrl: string }) => Promise<void>;
@@ -200,7 +200,7 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
        * **A completed reset ends every other session** (ADR-0074 B2).
        *
        * `resetPassword` deletes the user's sessions only when this is truthy
-       * (`better-auth/dist/api/routes/password.mjs:172`); unset, a reset leaves them all alive.
+       * (`better-auth/dist/api/routes/password.mjs:173`); unset, a reset leaves them all alive.
        * That is the wrong default for the commonest reason someone resets a password: a forgotten
        * password is sometimes *caused by* a compromise, and a reset that leaves the compromise
        * signed in has closed nothing.
@@ -214,7 +214,7 @@ export function createAuth(prisma: PrismaService, options: CreateAuthOptions) {
      * **Verification identifiers are hashed at rest** (ADR-0074 B1).
      *
      * With no `verification` key configured, `processIdentifier` returns the identifier unchanged
-     * (`better-auth/dist/db/verification-token-storage.mjs:8-13`) — so a password-reset row would
+     * (`better-auth/dist/db/verification-token-storage.mjs:11-16`) — so a password-reset row would
      * hold the literal `reset-password:<token>` in cleartext for the token's whole lifetime, and
      * anyone who could read that table would hold a usable account-takeover credential.
      *

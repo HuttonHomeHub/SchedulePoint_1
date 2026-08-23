@@ -1126,7 +1126,7 @@ It is not uniform in **how long it takes**. Better Auth awaits the send
 A caller with a stopwatch can therefore distinguish the two, which is the thing the uniform body
 exists to prevent. Note this is the **opposite** shape to `/send-verification-email`, where Better
 Auth mints a throwaway token and holds a 500 ms floor precisely to equalise the two branches
-(`email-verification.mjs:104-117`) — the machinery exists in the library, and this route does not
+(`email-verification.mjs:108-121`) — the machinery exists in the library, and this route does not
 use it.
 
 **ADR-0075 M4 narrowed it and did not close it.** `SEND_TIMEOUT_MS` bounds the known-address branch
@@ -1146,7 +1146,7 @@ network, and the gap is _reliable_ rather than noisy because it tracks a real ne
    the floor exceeds a slow send — which is exactly what a bad day removes.
 3. **Accept and document.** Defensible, but check the mitigation before leaning on it. The route's
    limit is **3 per 60 s per IP** — its own rule, not the 3-per-10-s one that covers
-   `/sign-in`/`/sign-up`/`/change-password` (`index.mjs:370-383`) — and it is
+   `/sign-in`/`/sign-up`/`/change-password` (`index.mjs:311-324`) — and it is
    `enabled: options.isProduction` (`better-auth.ts:271`), so it does not exist in development at
    all. It is also per-replica in-process memory (#14(b)), so the real ceiling is 3 × replicas.
    Three probes a minute still enumerates a targeted list; it does not enumerate a dictionary.
@@ -1278,7 +1278,7 @@ open-ended rather than bounded by a poll interval, because there is no poll.
 
 `pnpm check:claims` (ADR-0076) shipped matching one citation form, `<base>.mjs:<line>`, and passed
 green on the day it was written **because it could not see half its input**. ADR-0077's M0-T2 widened
-it — both `.js` and `.mjs`, the prose form ("`dist/api/routes/sign-in.mjs`, lines **234**"), and an
+it — both `.js` and `.mjs`, the prose form ("`dist/api/routes/sign-in.mjs`, lines **264**"), and an
 exclusion for files this repository owns — and the widening immediately surfaced **two dependency
 citations that had been in the tree unregistered all along**: `nodemailer`'s `_formatError` and
 `zod`'s `allowsEval` probe. Both were verified and registered. Two limitations remain, recorded here
@@ -1302,7 +1302,7 @@ rather than solved, because each trade is a real one:
    covers `scripts`, `packages` and `apps/seed-cli` as well. The cost was **measured before the
    change rather than after**: a standalone scan of those three trees with the live patterns turned
    up **zero** unregistered citations, so this widening was free, not hopeful. What remains is
-   root-level markdown, which is left out on purpose: it would demand `sign-up.mjs:162` (a real
+   root-level markdown, which is left out on purpose: it would demand `sign-up.mjs:163` (a real
    claim, cited in `CLAUDE.md` at a line range that differs from the register's) and one more that is
    `CLAUDE.md`'s own worked example of this notation. Both need a human, which is exactly the cost
    this item describes.
@@ -3842,6 +3842,24 @@ gate: **`check:doc-links` verifies that a link resolves, not that a claim about 
 
 ## 176. Better Auth 1.7 needs a schema migration, and a minor bump is how we found out
 
+> **CLOSED 2026-08-23 — ADR-0107.** Both workspaces run `^1.7.1`; the pin is gone. `accounts.issuer`
+> shipped first, alone, in `api-v0.52.0` (migration `20260823120000_account_issuer`), with the
+> library following in its own release so the irreversible and reversible halves could fail
+> separately. `scripts/e2e-local.sh api` is **565/565** against the 522-of-559 baseline recorded
+> below, and the three account journeys (public screens, reset with session revocation, change
+> password, verification enforcement) pass at 1.7.1.
+>
+> Two things this left behind rather than fixed, both because they are shared-gate changes that fire
+> ADR-0105's trigger: **#178** was observed live — with the API on 1.7.1 and the web client still on
+> 1.6.28, `check:claims` reported 52 claims OK _against 1.6.28_ — and is worked around by keeping one
+> installed version, not closed; and **#181** was filed after a 1.7.1 citation passed the gate on a
+> line coinciding with a registered 1.6.28 one.
+>
+> **Still owed, and only the product owner can do it:** on the deployed host, after each of the two
+> releases, sign in as a user whose account predates the migration, change a password, and complete a
+> reset. They declined the read-only pre-flight, so the deployed `accounts` table was never measured;
+> a migration failure appears as the API **restart-looping**, not as a broken page.
+
 **Raised 2026-08-22** while working the dependency backlog. The version pin is now `~1.6.28`
 (patch-only) in both `apps/api/package.json` and `apps/web/package.json` **specifically so 1.7
 cannot arrive unattended**; that tilde is a deviation from this repo's `^` convention and it is
@@ -3888,8 +3906,8 @@ outstanding** — whoever picks this up inherits a verified register, not a cold
 ## 177. A compound citation is invisible to `check:claims`
 
 **Raised 2026-08-22.** The completeness scan's regex is
-`\b([a-z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b`, which matches `sign-up.mjs:162` inside
-`sign-up.mjs:162,169-207` and stops. The second range was therefore **never registered**, never
+`\b([a-z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b`, which matches `sign-up.mjs:163` inside
+`sign-up.mjs:163,169-207` and stops. The second range was therefore **never registered**, never
 version-pinned and never re-verified — while sitting inside a citation that looks complete and
 carries a real claim: ADR-0075's synthetic-200 anti-enumeration control, which is the reason that
 ADR rejects an abort-on-send-failure design.
@@ -4089,8 +4107,8 @@ coincide with a registered one**, satisfies the gate and reads to every later re
 evidence.
 
 **It happened.** `docs/specs/better-auth-1-7-account-issuer/migration-design.md` cited
-`better-auth@1.7.1` `sign-up.mjs:246` for _"the credential issuer is `local:credential`"_. The
-register holds `sign-up.mjs:246` — verified against **1.6.28**, where that line is
+`better-auth@1.7.1` `sign-up.mjs:254` for _"the credential issuer is `local:credential`"_. The
+register holds `sign-up.mjs:254` — verified against **1.6.28**, where that line is
 `if (ctx.context.options.emailVerification?.sendVerificationEmail)`, the verification-email call,
 which has nothing to do with issuers. `pnpm check:claims` reported **52 claims OK**. The two sibling
 citations in the same table — into `account.mjs` and one line further into `sign-up.mjs` — **were**
@@ -4112,7 +4130,7 @@ exactly what an upgrade epic does, and exactly when the citations matter most. T
 clean: the three 1.7.1 citations now name their symbol and carry no line, with the reason recorded
 in the design file, and they get real anchors at M4 against the version that lands.
 
-**Candidate fixes, none free.** Make `ref` version-qualified (`better-auth@1.6.28:sign-up.mjs:246`),
+**Candidate fixes, none free.** Make `ref` version-qualified (`better-auth@1.6.28:sign-up.mjs:254`),
 which is correct and rewrites every citation in the tree. Or have the scanner read the
 `package@version` prefix a citation already often carries and refuse a mismatch against the entry's
 `verifiedAgainst` — narrower, and does nothing for the many citations written as a bare basename.

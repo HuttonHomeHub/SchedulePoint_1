@@ -18,7 +18,7 @@ configuration by throwing outright:
 
 <!-- prettier-ignore -->
 ```text
-// better-auth/dist/api/routes/password.mjs:51-57 — quoted verbatim; do not reformat
+// better-auth/dist/api/routes/password.mjs:53-59 — quoted verbatim; do not reformat
 	if (!ctx.context.options.emailAndPassword?.sendResetPassword) {
 		ctx.context.logger.error("Reset password isn't enabled.Please pass an emailAndPassword.sendResetPassword function in your auth config!");
 		throw APIError.from("BAD_REQUEST", {
@@ -47,13 +47,13 @@ change is needed". That is **true for the API and false for the web**. Enabling
 `AUTH_REQUIRE_EMAIL_VERIFICATION` arms three dead ends simultaneously, all latent today and all
 verified against the installed `better-auth@1.6.25`:
 
-1. **Sign-up creates no session.** `sign-up.mjs:162-163` derives `shouldSkipAutoSignIn` from
+1. **Sign-up creates no session.** `sign-up.mjs:163-164` derives `shouldSkipAutoSignIn` from
    `requireEmailVerification`, so this app's `autoSignIn: true` (`better-auth.ts:133`) is
    **overridden** and the route returns `{ token: null, user }` (`:252-254`). `useSignUp` inspects
    only `error` (`use-session.ts:76-81`), so it reports success, `SignUpScreen` navigates to `/`
    (`sign-up.tsx:16`), and the `_authed` guard finds no session (`router.tsx:66-71`) and bounces to
    `/sign-in` **with no explanation**.
-2. **Sign-in 403s and resends nothing.** `sign-in.mjs:312-324` re-sends only when `sendOnSignIn` is
+2. **Sign-in 403s and resends nothing.** `sign-in.mjs:339-351` re-sends only when `sendOnSignIn` is
    set, and only `sendOnSignUp` is (`better-auth.ts:146-162`). The raw library message lands in a
    red `<p role="alert">` with no affordance.
 3. **Invitation-accept refuses with instructions the product cannot satisfy.**
@@ -88,7 +88,7 @@ through `processIdentifier(identifier, storageOption)`, and that function return
 
 <!-- prettier-ignore -->
 ```text
-// better-auth/dist/db/verification-token-storage.mjs:8-13 — quoted verbatim; do not reformat
+// better-auth/dist/db/verification-token-storage.mjs:11-16 — quoted verbatim; do not reformat
 async function processIdentifier(identifier, option) {
 	if (!option || option === "plain") return identifier;
 	if (option === "hashed") return defaultKeyHasher(identifier);
@@ -110,7 +110,7 @@ reason in one sentence: "a database leak never exposes a usable token" (ADR-0016
 ADR-0051 share links). The newer and more dangerous surface would silently not do that — the
 ADR-0064/0067 shape again, one correct pattern applied to a control and not its neighbour.
 
-**B2 — a completed reset would leave every session alive.** `password.mjs:172` deletes the user's
+**B2 — a completed reset would leave every session alive.** `password.mjs:173` deletes the user's
 sessions only when `emailAndPassword.revokeSessionsOnPasswordReset` is truthy, and this app does not
 set it. A password reset is frequently a response to suspected compromise; leaving the compromise
 signed in is the whole failure the reset was meant to close.
@@ -121,13 +121,13 @@ Recorded so a later reader does not "harden" a working property:
 
 - **Enumeration equalisation is in the library and is good.** `/request-password-reset` performs a
   dummy `generateId`/`findVerificationValue` on an unknown address to equalise timing and returns an
-  identical body either way (`password.mjs:60-72`). `/send-verification-email` goes further with a
-  hard **500 ms floor** (`email-verification.mjs:98-117`) to hide the difference between a fast local
+  identical body either way (`password.mjs:67-79`). `/send-verification-email` goes further with a
+  hard **500 ms floor** (`email-verification.mjs:108-127`) to hide the difference between a fast local
   JWT sign and a slow outbound SMTP call. **The only way to lose these is for our web layer to undo
   them** — by pre-validating an address against a members lookup, or by rendering a different state
   per branch.
 - **Rate limiting is already present and stricter than the general window.** Better Auth's
-  special-rule table (`dist/api/rate-limiter/index.mjs:370-384`) covers `/change-password` at 3 per
+  special-rule table (`dist/api/rate-limiter/index.mjs:311-325`) covers `/change-password` at 3 per
   10 s and `/request-password-reset` and `/send-verification-email` at 3 per 60 s, gated on
   `rateLimit.enabled: options.isProduction` (`better-auth.ts:169-173`). **No new configuration is
   needed.** Its in-process, per-replica store is the limitation ADR-0073 C2.1 already recorded —
@@ -432,7 +432,7 @@ server-side flag, held by tests rather than by a compiler. `MAIL_SMTP_URL` becom
 succeed and deliver nothing, which is `TECH_DEBT` #94's invisible-failure mode **inherited, not
 re-solved**; the cheap half (routing Better Auth's logger into Pino) is paid here, the hard half
 stays open. `CORS_ORIGINS` becomes load-bearing in a new way: `redirectTo` passes `originCheck`
-against `trustedOrigins` (`password.mjs:49`, bound at `auth.module.ts:34`), so a deployed origin
+against `trustedOrigins` (`password.mjs:50`, bound at `auth.module.ts:34`), so a deployed origin
 missing from it makes **every** reset fail with nothing on screen to explain it — hence a tested
 rejection path and a deployment precondition rather than a hope. And the theme-boot script becomes
 one extra render-blocking request.
@@ -464,7 +464,7 @@ correct, `302 → /verify-email?verified=1`, before anything was changed.
    suite was green throughout, and `router-search.test.ts` now composes the real parser with the
    real validator, which is the only shape that could have caught it (`docs/TECH_DEBT.md` #96
    records what the fix does **not** cover, and why).
-2. **Sign-up sent no `callbackURL`.** `sign-up.mjs:244` defaults it to `/`, so the **first**
+2. **Sign-up sent no `callbackURL`.** `sign-up.mjs:252` defaults it to `/`, so the **first**
    verification email — the one every new member actually receives — verified the address and then
    dropped the reader on the app root, where the `_authed` guard bounced them to `/sign-in` with
    nothing said. That is the _same dead end_ M2 was written to close, one send path along: the

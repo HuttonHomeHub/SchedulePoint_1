@@ -191,6 +191,29 @@ duplicate the migration genuinely cannot resolve rather than one it quietly fixe
 
 ---
 
+## 3b. The rollback contract, demonstrated rather than argued
+
+Observed in `app_test` after a full `scripts/e2e-local.sh api` run, before the library was bumped.
+The suite runs at **1.6.28** — a version that does not know `issuer` exists and never writes it —
+against the **migrated** schema. Afterwards:
+
+```
+ provider_id |      issuer      | count
+-------------+------------------+-------
+ credential  | local:credential |     1
+```
+
+That row was created by the real sign-up path, through the real library, at the version a rollback
+would return to. Its `issuer` came from the column's `DEFAULT`, which is exactly what step 4 exists
+for. The same query showed `account_id <> user_id` for **0** rows, so 1.6.28 also writes
+`account_id = user_id` — the premise step 0's repair is built on, observed in the product rather
+than read off `sign-up.mjs`.
+
+**This is stronger evidence than the spec's own rollback test**, which does a hand-written INSERT
+omitting the column: that proves the DDL permits it, this shows the pre-1.7 code path doing it. It
+cost nothing — it fell out of a gate already being run for another reason, and would have been
+missed by reading only the suite's pass/fail.
+
 ## 4. What is still outstanding, and why it is not a footnote
 
 **The four M0-T1 queries have not been run against the deployed database.** The plan's fallback is

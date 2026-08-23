@@ -72,7 +72,7 @@ Alongside this, four defects are live on these screens (spec §2.5): six states 
 them, a heading that outlives the task it names, one native `disabled` on a primary action, and an
 **unhandled 429**. The last is worth naming here because it explains why nobody saw it: Better Auth
 caps `/sign-in*` and `/sign-up*` at 3 requests per 10 seconds and the two email routes at 3 per 60
-(`better-auth@1.6.25`, `index.mjs:370-383`), and our configuration sets
+(`better-auth@1.6.25`, `index.mjs:311-324`), and our configuration sets
 `rateLimit: { enabled: options.isProduction }` (`apps/api/src/common/auth/better-auth.ts:270-274`).
 **The limiter does not exist in development.** A defect that only exists in production, on the one
 surface no member of the team routinely uses signed-out, is a good argument for the browser
@@ -236,9 +236,9 @@ in use (`CLAUDE.md` §17).
 ### 6. Consequential decisions recorded here so they are not re-litigated
 
 - **No "Remember me" checkbox** (PO decision, and the code agrees). Better Auth's sign-in body defines
-  `rememberMe` with **`.default(true)`** (`better-auth@1.6.25`, `dist/api/routes/sign-in.mjs`,
-  line 234), and it is `rememberMe === false` that produces a non-persistent session (same file,
-  line 326). We never send the field, so **every session is already "remembered"**. A checkbox would
+  `rememberMe` with **`.default(true)`** (`better-auth@1.7.1`, `dist/api/routes/sign-in.mjs`,
+  line 264), and it is `rememberMe === false` that produces a non-persistent session (same file,
+  line 353). We never send the field, so **every session is already "remembered"**. A checkbox would
   therefore only ever offer to make a session _less_ persistent — the opposite of what the control
   conventionally promises — and would put a session-management question in front of a reader at the
   worst moment. Sessions are unchanged. _(These two citations must be registered in
@@ -254,7 +254,7 @@ in use (`CLAUDE.md` §17).
   the parsed body plus `status` and `statusText` and **does not carry response headers**
   (`dist/index.js`, lines 733-739), so `X-Retry-After` is not reachable without a client-level hook and
   a module-level side channel. A fabricated countdown is worse than none.
-- **`/change-password` and `/change-email` share the 10-second rule** (`index.mjs:370-383`), so the
+- **`/change-password` and `/change-email` share the 10-second rule** (`index.mjs:311-324`), so the
   authed `/account` screen inherits the 429 handling for free. Recorded so nobody re-implements it.
 - **All six public routes carry `useNoindex`** (PO decision). Two do today (`forgot-password`,
   `reset-password`) and four do not, which is drift rather than a decision — and one of the four,
@@ -603,7 +603,7 @@ the day somebody relies on it.
   `@better-fetch/fetch` as `@better-fetch+fetch@…`, and the lookup used `startsWith(name + '@')`);
   its completeness scan was a text pattern over `<base>.mjs:<line>`, so **every citation into a
   `.js` file was invisible** and so was the prose form this ADR's own artefacts used
-  ("`dist/api/routes/sign-in.mjs`, lines **234**"); and the same pattern drew **no distinction
+  ("`dist/api/routes/sign-in.mjs`, lines **264**"); and the same pattern drew **no distinction
   between a dependency and this repository's own tooling**, so citing `scripts/check-counts.mjs` by
   line failed the gate with a demand to register a file that is in the repository — which is what
   pushed the artefacts into the prose form in the first place. That is the ADR-0076 Class 2 failure
