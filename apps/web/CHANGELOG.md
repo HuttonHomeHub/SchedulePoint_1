@@ -1,5 +1,13 @@
 # @repo/web
 
+## 0.99.2
+
+### Patch Changes
+
+- [#360](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/360) [`ebb9b6f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ebb9b6fdc8afa7d2998c5007f5782689e400b3e4) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update @playwright/test to 1.62.1.
+
+- [#358](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/358) [`6135db4`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/6135db4d38db99d086151936cd5f35b96d46a503) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update react-hook-form to 7.86.0 and lucide-react to 1.33.0.
+
 ## 0.99.1
 
 ### Patch Changes
