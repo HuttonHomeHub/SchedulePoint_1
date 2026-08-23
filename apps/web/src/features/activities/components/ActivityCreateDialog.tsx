@@ -41,6 +41,7 @@ import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
 
+import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -281,6 +282,28 @@ export function ActivityCreateDialog({
   );
   const measure = useScopeForm(activityMeasureSchema, seedMeasure, undefined, open, NO_SCOPE_FOCUS);
   const cost = useScopeForm(activityCostSchema, seedCost, undefined, open, NO_SCOPE_FOCUS);
+
+  /**
+   * Creation had **no unsaved-work guard at all** — around twenty fields across four scope forms,
+   * and a reload discarded every one of them in silence. Unlike the editor, creation is one act with
+   * one permission (ADR-0089 D3), so every scope here is savable: there is no per-scope gate to
+   * strand one of them.
+   */
+  useRegisterUnsavedWork(
+    open && (general.isDirty || scheduling.isDirty || measure.isDirty || cost.isDirty)
+      ? {
+          subject: 'The new activity',
+          scopes: [
+            ...(general.isDirty ? [{ key: 'general', label: 'General', savable: true }] : []),
+            ...(scheduling.isDirty
+              ? [{ key: 'scheduling', label: 'Scheduling', savable: true }]
+              : []),
+            ...(measure.isDirty ? [{ key: 'measure', label: 'Value measure', savable: true }] : []),
+            ...(cost.isDirty ? [{ key: 'cost', label: 'Cost', savable: true }] : []),
+          ],
+        }
+      : null,
+  );
 
   // `useScopeForm` re-seeds the four forms on `[open, activity?.id]`; it has no equivalent for the
   // MUTATION, and dropping this is silent — a failed create's server-error banner would survive into

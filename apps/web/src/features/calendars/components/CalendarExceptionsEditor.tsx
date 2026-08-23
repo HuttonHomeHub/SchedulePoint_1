@@ -26,6 +26,7 @@ import {
   type ExceptionFormValues,
 } from '../schemas/calendar-schemas';
 
+import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -309,11 +310,25 @@ export function CalendarExceptionsEditor({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<ExceptionFormValues>({
     resolver: zodResolver(exceptionFormSchema),
     defaultValues: { date: '', endDate: '', isWorking: false, label: '' },
   });
+
+  /**
+   * A half-entered exception is unsaved work too — the dates and hours a planner has typed but not
+   * added yet. Registered as one scope: unlike the calendar form beside it, everything here does
+   * live in react-hook-form, so `isDirty` is the whole answer.
+   */
+  useRegisterUnsavedWork(
+    isDirty
+      ? {
+          subject: 'This calendar exception',
+          scopes: [{ key: 'exception', label: 'Exception', savable: true }],
+        }
+      : null,
+  );
 
   const onAdd = handleSubmit((values) => {
     const result = toExceptionHours(kind, rows);
