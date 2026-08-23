@@ -44,6 +44,7 @@ import { useScopeForm } from './useScopeForm';
 import { useRegisterUnsavedWork } from '@/components/layout/unsaved-work/unsaved-work-provider';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Dialog } from '@/components/ui/dialog';
 import { FormProblemCount } from '@/components/ui/form';
 import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
@@ -54,7 +55,7 @@ import {
 } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
-import type { UnsavedWorkReport } from '@/lib/unsaved-work/report';
+import { describeUnsavedWork, type UnsavedWorkReport } from '@/lib/unsaved-work/report';
 
 /** One field, named against the scope form that owns it. The scope tag is what makes the list below
  * checkable: `{ scope: 'general', name: 'constraintType' }` does not compile, because
@@ -311,6 +312,26 @@ export function ActivityCreateDialog({
   );
   useRegisterUnsavedWork(unsavedReport);
 
+  const [confirmingClose, setConfirmingClose] = useState(false);
+
+  /**
+   * Ask before discarding, exactly as the editor does.
+   *
+   * **Registration alone was not enough, and the plan said so before this shipped without it.** The
+   * navigation half covers a reload, a tab close or a browser navigation — it cannot cover Escape,
+   * the backdrop or Cancel, because those never leave the page. So the twenty-odd fields this form
+   * collects were guarded against the rare exits and not against the commonest one. Found by the ux
+   * review, which quoted the plan's own words back: the two halves ship together or Escape is left
+   * unguarded, which is the "one control and not its neighbour" shape.
+   */
+  const requestClose = useCallback(() => {
+    if (unsavedReport !== null) {
+      setConfirmingClose(true);
+      return;
+    }
+    onClose();
+  }, [unsavedReport, onClose]);
+
   // `useScopeForm` re-seeds the four forms on `[open, activity?.id]`; it has no equivalent for the
   // MUTATION, and dropping this is silent — a failed create's server-error banner would survive into
   // the next open of a dialog these hosts keep mounted and merely toggle.
@@ -491,7 +512,10 @@ export function ActivityCreateDialog({
   return (
     <Dialog
       open={open}
-      onClose={onClose}
+      // Escape and the backdrop route through the same guard as Cancel — an Escape reflex is
+      // exactly the case the confirmation exists for.
+      onClose={requestClose}
+      confirmBeforeClose
       title="New activity"
       size="lg"
       description="Add an activity to this plan."
@@ -619,7 +643,7 @@ export function ActivityCreateDialog({
           </div>
 
           <div className="border-border flex justify-end gap-2 border-t pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={requestClose}>
               Cancel
             </Button>
             {/* `aria-disabled`, never native `disabled` (ADR-0060 M6, ADR-0063 M6, ADR-0064 §7).
@@ -642,6 +666,23 @@ export function ActivityCreateDialog({
           </div>
         </form>
       </FieldGridContainer>
+      {confirmingClose && unsavedReport !== null ? (
+        <ConfirmDialog
+          open
+          title="Discard unsaved changes?"
+          // Same builder the editor and the navigation guard use, so three dialogs cannot disagree
+          // about what is dirty. The action clause is this call site's, because only it knows which
+          // action it is confirming.
+          description={`${describeUnsavedWork([unsavedReport])} Closing will discard them.`}
+          confirmLabel="Discard"
+          cancelLabel="Keep editing"
+          onClose={() => setConfirmingClose(false)}
+          onConfirm={() => {
+            setConfirmingClose(false);
+            onClose();
+          }}
+        />
+      ) : null}
     </Dialog>
   );
 }

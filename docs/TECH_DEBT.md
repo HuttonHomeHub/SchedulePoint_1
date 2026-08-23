@@ -4224,3 +4224,57 @@ widenings each surfaced unregistered citations that had been sitting in the tree
 
 Cross-references **#178** (the resolver takes the first store directory) and **#181** (a `ref`
 carries no version) — three holes in one gate, all found by using it rather than by reading it.
+
+---
+
+## 184. Unsaved-work guard: the findings its gate pass did not block on
+
+_Filed 2026-08-23 with ADR-0108. Six blocking findings were fixed in the milestone; these are the
+rest, recorded rather than carried in someone's head._
+
+**From the accessibility review**
+
+- **The CONFIRM path hands focus to nothing.** Choosing "Discard and leave" completes the
+  navigation, and nothing moves focus to the new view's landmark or heading — so a keyboard or AT
+  user is left wherever the removed dialog left them. This is a **systemic router gap** the guard
+  exposes rather than causes: it is the first feature that deliberately interposes itself in a
+  navigation. Worth its own look at where focus should land after any route change.
+- **`describeUnsavedWork` has no upper-bound treatment.** All six editor scopes dirty produces
+  `"General, Scheduling, Cost, Reported progress, How value is measured, Weighted steps have
+unsaved changes."` — a comma list with no "and", delivered as one sentence with no structure. The
+  multi-surface branch two lines away _does_ use "and", so the two read inconsistently. Consider a
+  count past two or three ("6 sections have unsaved changes: …"), which is what ADR-0094 did with a
+  list for the same reason. No test has ever read the six-scope sentence.
+- **Silent auto-proceed.** If the registry goes clean while the confirmation is open, the guard
+  calls `proceed()` and the navigation completes with no announcement — an unexpected context change
+  while the reader may be mid-sentence. Low likelihood; nothing currently guards it.
+
+**From the component review**
+
+- **`useUnsavedWorkReports` has no production caller.** Only tests import it. It is documented as
+  future-facing, and it is exactly the ADR-0081 shape — a capability with no entry point — one
+  register along. Either wire a consumer or say plainly that it is dormant.
+- **The `onDirtyChange` effect is authored three times** in `ActivityProgressPanels.tsx`, identical
+  body and deps. `WeightedStepsPanel` does not use `useScopeForm`, so a shared two-line hook is a
+  better home than a `useScopeForm` option.
+- **Thirteen conditional array spreads** across the four report builders
+  (`...(cond ? [{ key, label, savable }] : [])`). A pure `buildReport(subject, scopes)` helper in the
+  already-React-free `lib/unsaved-work/report.ts` would read declaratively and be independently
+  testable. Every current call site is correct; the idiom is the risk, and ADR-0074 records this
+  exact shape going wrong elsewhere.
+
+**From the security review, and it is about my own conduct**
+
+- **Coverage was deleted and not replaced.** An earlier commit on this branch (`33b12b8f`) drove
+  `page.goBack()` with a dirty scope and asserted the confirmation, "Keep editing" and "Leave". When
+  Back turned out not to reach the blocker, that whole case was replaced with the narrower
+  reload-only journey — and the in-app confirmation lost its only browser-level coverage in the
+  process. The allow-list's _behaviour_ now has a real unit test (added at the gate pass, verified
+  red), but **no journey opens the in-app `ConfirmDialog` at all**, so the "Keep editing" focus
+  return is asserted nowhere a real `<dialog>` exists. That matters because the focus defect the
+  accessibility review found was invisible to jsdom by construction.
+
+**Why Back is unresolved**, since it belongs beside the above: instrumented in a real browser,
+`shouldBlockFn` is **never called** on `page.goBack()` while the guard is mounted and the URL does
+not change — so something other than this guard reverts the pop. Recorded rather than claimed
+(ADR-0108 D7).

@@ -91,6 +91,54 @@ describe('the navigation guard registers once, not once per render', () => {
     expect(typeof lastOpts?.enableBeforeUnload).toBe('function');
   });
 
+  /**
+   * **Sign-out must never be blocked, and this asserts the BEHAVIOUR rather than the source text.**
+   *
+   * The security review found the allow-list pinned only by `navigation-guard.allow-list.test.ts`,
+   * which greps the file — so reordering the two `if`s inside `shouldBlockFn`, or changing the
+   * comparison, would keep that test green while trapping a planner with unsaved work on a machine
+   * they are trying to leave. The consequence is an unattended, still-authenticated session, which
+   * is why it earns a real invocation.
+   */
+  it('never blocks a navigation to sign-in, even with unsaved work', () => {
+    render(
+      <UnsavedWorkProvider>
+        <NavigationGuard />
+        <Typist value="dirty" />
+      </UnsavedWorkProvider>,
+    );
+    const shouldBlock = lastOpts?.shouldBlockFn as (a: unknown) => boolean;
+
+    // Dirty, going somewhere else: blocked.
+    expect(
+      shouldBlock({
+        next: { fullPath: '/orgs/$orgSlug' },
+        current: { fullPath: '/plans/$planId' },
+      }),
+    ).toBe(true);
+
+    // Dirty, going to sign-in: never blocked.
+    expect(
+      shouldBlock({ next: { fullPath: '/sign-in' }, current: { fullPath: '/plans/$planId' } }),
+    ).toBe(false);
+  });
+
+  it('does not block a navigation to where the reader already is', () => {
+    render(
+      <UnsavedWorkProvider>
+        <NavigationGuard />
+        <Typist value="dirty" />
+      </UnsavedWorkProvider>,
+    );
+    const shouldBlock = lastOpts?.shouldBlockFn as (a: unknown) => boolean;
+    expect(
+      shouldBlock({
+        next: { fullPath: '/plans/$planId' },
+        current: { fullPath: '/plans/$planId' },
+      }),
+    ).toBe(false);
+  });
+
   it('the beforeunload gate answers false when nothing is dirty', () => {
     render(
       <UnsavedWorkProvider>

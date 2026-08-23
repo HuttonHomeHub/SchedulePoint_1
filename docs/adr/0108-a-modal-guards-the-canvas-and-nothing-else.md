@@ -126,6 +126,35 @@ registered or carries a written exclusion, and a new one fails the gate until so
 distinguish "everything is classified" from "the census found nothing" — landing on this epic's own
 gate, and it is why the positive case is asserted first and deliberately.
 
+## The gate pass, and what five specialists found
+
+Six defects in code that had already passed a human read. Security and frontend-performance passed
+clean, both having re-derived their own numbers from the final code (bundle delta **+1,704 B gzip**,
+measured against a pre-epic build rather than another epic's baseline). The other three blocked.
+
+**Four of the six are one correct pattern applied to a control and not its neighbour** — the shape
+this register has now recorded across ADR-0064 §7, ADR-0067, ADR-0080, ADR-0090 M5 and ADR-0099 M10.
+
+| Finding                                      | What it was                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A phantom registration**                   | `CalendarExceptionsEditor` had no `open` gate. `Dialog` renders children unconditionally — it toggles the native `<dialog>`, it does not unmount — and the calendar dialog stays mounted, so a half-typed exception stayed registered after it closed and blocked every later navigation with a scope nobody could see. Its three siblings all gate on `open`. |
+| **The edit path had no guard at all**        | `ExceptionEditForm` holds kind, rows, label and end date in `useState`, so no `isDirty` can see any of it — the same blind spot as the calendar week, in a sibling of the file that fixes that one.                                                                                                                                                            |
+| **Creation shipped half a guard**            | It registered for navigation and had **no in-dialog confirmation**, so Escape, the backdrop and Cancel still discarded twenty-odd fields in silence. The plan had said in as many words that the two halves must ship together, naming Escape as the commonest way to lose the form.                                                                           |
+| **The scope labels named nothing on screen** | `'Progress'`, `'Value measure'`, `'Steps'` against headings `Reported progress`, `How value is measured`, `Weighted steps` — and `'Progress'` is also the name of the tab hosting all three, so the dialog could name a tab and a string that appears nowhere. The spec had the right labels; the code had not used them.                                      |
+| **The focus restore was a no-op**            | It ran inside the close handler, while the `<dialog>` was still open — so the target was `inert` and `.focus()` did nothing, under a docblock claiming it was what put focus back. **Fourth occurrence of this class at this seam.** Now an effect keyed on `blocked` going true → false.                                                                      |
+| **Every keystroke woke every subscriber**    | Callers pass fresh object literals, so `register()` bumped on each re-render. Fixed in the registry with a scope-for-scope equality check rather than by asking four call sites to memoise — three of the four had already diverged from the one that got it right, which is the argument for making the API robust instead of documenting a contract.         |
+
+Every fix carries a regression test verified red against the specific defect first. Non-blocking
+findings are `docs/TECH_DEBT.md` **#184**.
+
+**One finding is about the epic's own conduct and is recorded rather than tidied away.** An earlier
+commit on this branch drove a browser Back with a dirty scope and asserted the confirmation, "Keep
+editing" and "Leave". When Back turned out not to reach the blocker, that case was replaced with the
+narrower reload-only journey — and the in-app confirmation lost its only browser-level coverage on
+the way. The allow-list now has a real behavioural test (the security review found it pinned only by
+a source-text regex, which would stay green while sign-out was trapped), but no journey opens the
+in-app dialog, which is exactly where the focus defect above lived and exactly what jsdom cannot see.
+
 ## Consequences
 
 - Four surfaces register; roughly 27 other form instances are **classified and unregistered**, so
