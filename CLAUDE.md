@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1056 web
 > source files with 38 Playwright suites beside the base journey, and
-> 106 ADRs.
+> 107 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -2971,6 +2971,74 @@ progress` off the command surface because **an object action belongs on the obje
   `reset-fills.structural.test.ts` scanned raw text, so the docblock explaining why this treatment
   must not use `bg-card` counted as using it — the fourth scan-matching-prose in this repository,
   whose sibling had already fixed itself the same way. Five non-blocking findings are #174.
+
+- **ADR-0107** _(Accepted; M0–M6 landed 2026-08-23)_ — A migration a pristine database cannot
+  test. Better Auth 1.7 scopes account identity by an `issuer` column — `TEXT NOT NULL`, no default,
+  `UNIQUE (issuer, accountId)`, read by the sign-in predicate — and the library had been pinned
+  `~1.6.28` in both workspaces specifically to stop it arriving unattended. Measured first: at 1.7
+  **without** the column, `scripts/e2e-local.sh api` fails **522 of 559** tests across 37 of 42 files.
+  **The decision worth recording is not "add a column" but what to do when the failure mode is a
+  property of the data and every automatic gate runs against data that cannot exhibit it.**
+  `prisma migrate diff` generates one `ADD COLUMN "issuer" TEXT NOT NULL`, which **succeeds on an
+  empty table and fails on a populated one** — so CI, which provisions a pristine container, goes
+  green on `migrate deploy`, the drift check and all 565 tests, while the failure lands on the
+  deployed host inside `docker-entrypoint.sh` under `set -e` (ADR-0018), where the first run leaves
+  `P3018` and **every retry reports `P3009` forever**: a restart loop needing
+  `prisma migrate resolve --rolled-back`, on a host that auto-pulls releases (ADR-0047) with nobody
+  watching. Both halves verified against a real database rather than reasoned about.
+  So five ordered steps, and **the ordering is load-bearing twice**: the `DEFAULT` lands **after**
+  the backfill (in step 1 it would silently give a non-credential row the credential issuer; after
+  step 3 the guard is free to abort loudly), and the repair lands **first**, so a row it fixes is a
+  row the unique index no longer refuses. **The `DEFAULT` exists for the rollback, not the library** —
+  1.7 always writes the value explicitly, and without a default the stated rollback (redeploy the
+  previous image) **fails**, because a pre-1.7 image writes no `issuer` and its sign-up dies against a
+  `NOT NULL` column: a rollback causing a worse outage than the fault. The design and the spec had
+  written those two halves independently and neither noticed the other until they were read side by
+  side. It was then **demonstrated by a gate run for another reason**: the e2e suite runs at 1.6.28
+  against the migrated schema, and the account row it created through the real sign-up path read
+  `issuer = local:credential` — a value 1.6.28 never writes — with `account_id = user_id`, the premise
+  the repair rests on, observed in the product rather than read off `sign-up.mjs`. The suite's
+  pass/fail said nothing about either.
+  **1.7's predicate gained TWO new conjuncts, not one**, and no `issuer` backfill helps the second:
+  1.6.28 matches `providerId === "credential"` alone, 1.7.1 also requires
+  `issuer === credentialIssuer && accountId === userRecord.user.id`. A row failing the third answers
+  `INVALID_EMAIL_OR_PASSWORD` — the user is told their password is wrong — and reset-password then
+  takes the **create** branch and writes a second credential row, so the product appears to heal
+  itself while the data goes wrong. The product owner chose to repair those rows with the deployed
+  table deliberately unmeasured.
+  **The guard on that repair is where this ADR is most worth reading, because the first one was wrong
+  in two ways at once and both were found by re-reading the finished file rather than by anything
+  failing.** It refused to repair a row when a correct one already existed, on the stated grounds that
+  repairing it would create the duplicate step 5 refuses — and **that reason was false** (a correct
+  row and a stale row carry different `account_id`s, so they are not a unique violation at all), with
+  the false half written into the migration's comment **and** a test name, the test passing throughout
+  because it asserted the right rows for a reason that was not true. Meanwhile it **missed the shape
+  that actually breaks**: a user with two _wrong_ rows has no correct row, so neither was excluded,
+  both were repaired to the same `account_id`, the index refused the duplicate and the whole migration
+  aborted — the restart loop above, caused by the repair meant to help, reproduced against Postgres
+  before anything changed. The shipped guard is a **count** (repair only where the user has exactly
+  one credential row, which cannot collide because there is nothing to collide with); two wrong rows
+  leave that user locked out, which is where they already were, because a migration has no basis for
+  choosing which row is theirs.
+  Two releases, so the halves fail separately. The test **reads the SQL from the shipped migration
+  file**, never restated, and each of its six cases was **verified red against the specific defect it
+  guards** — with two blind spots recorded in the file rather than left implicit, since two cases pass
+  equally against the wrong thing and their discriminator is a sibling case.
+  **Both workspaces take the bump, and the reason is not the bundle.** `apps/api` was bumped first
+  with `apps/web` left behind, and `pnpm check:claims` then reported **52 claims OK against
+  `better-auth@1.6.28`** while the API loaded 1.7.1 — green, against a version the application no
+  longer ran, which is `docs/TECH_DEBT.md` #178's stated "dangerous direction, the quiet one",
+  observed live. It is structural: the resolver takes the **first** matching store directory and
+  `verifiedAgainst` holds **one version per package**, so a split estate leaves the claims register
+  unable to describe the code that ships, whichever way it is set. The bundle falsification condition
+  was measured anyway — **+74 bytes gzip** against a 5,120 threshold — so the two arguments agreed and
+  there was nothing to escalate. #178 is **worked around, not closed** (the workaround is "only ever
+  install one version of a cited package", which held only because the split was ours to remove), and
+  **#181 is filed here**: a `ref` is `basename:lines` and carries no version, so a citation into 1.7.1
+  at a line coinciding with a registered 1.6.28 one **passed the gate** and read as re-read evidence.
+  Fixing either is a shared-gate change and fires ADR-0105's trigger, so neither was smuggled into a
+  dependency bump. **The CPM engine is not imported and the ADR-0034 parity gate is untouched** — in
+  its honest form: there is nothing here to hold parity for.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -3842,6 +3842,24 @@ gate: **`check:doc-links` verifies that a link resolves, not that a claim about 
 
 ## 176. Better Auth 1.7 needs a schema migration, and a minor bump is how we found out
 
+> **CLOSED 2026-08-23 — ADR-0107.** Both workspaces run `^1.7.1`; the pin is gone. `accounts.issuer`
+> shipped first, alone, in `api-v0.52.0` (migration `20260823120000_account_issuer`), with the
+> library following in its own release so the irreversible and reversible halves could fail
+> separately. `scripts/e2e-local.sh api` is **565/565** against the 522-of-559 baseline recorded
+> below, and the three account journeys (public screens, reset with session revocation, change
+> password, verification enforcement) pass at 1.7.1.
+>
+> Two things this left behind rather than fixed, both because they are shared-gate changes that fire
+> ADR-0105's trigger: **#178** was observed live — with the API on 1.7.1 and the web client still on
+> 1.6.28, `check:claims` reported 52 claims OK _against 1.6.28_ — and is worked around by keeping one
+> installed version, not closed; and **#181** was filed after a 1.7.1 citation passed the gate on a
+> line coinciding with a registered 1.6.28 one.
+>
+> **Still owed, and only the product owner can do it:** on the deployed host, after each of the two
+> releases, sign in as a user whose account predates the migration, change a password, and complete a
+> reset. They declined the read-only pre-flight, so the deployed `accounts` table was never measured;
+> a migration failure appears as the API **restart-looping**, not as a broken page.
+
 **Raised 2026-08-22** while working the dependency backlog. The version pin is now `~1.6.28`
 (patch-only) in both `apps/api/package.json` and `apps/web/package.json` **specifically so 1.7
 cannot arrive unattended**; that tilde is a deviation from this repo's `^` convention and it is
