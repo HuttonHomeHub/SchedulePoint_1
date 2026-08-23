@@ -16,5 +16,5 @@ catalog:
   # Testing
   vitest: ^4.1.10
   '@vitest/coverage-v8': ^4.1.10
-  '@playwright/test': ^1.49.1
+  '@playwright/test': ^1.62.1
   supertest: ^7.0.0
