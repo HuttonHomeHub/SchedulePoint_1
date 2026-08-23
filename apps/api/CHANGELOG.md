@@ -1,5 +1,15 @@
 # @repo/api
 
+## 0.51.2
+
+### Patch Changes
+
+- [#363](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/363) [`c18f3f7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/c18f3f76a2f02b5ba5b0764a60100dc931f6ae03) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update @changesets/changelog-github to 1.0.0.
+
+- [#364](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/364) [`712971e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/712971efa3ffa6898f1feaed75dd350c2f726168) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Migrate the release workflow to changesets/action v2.
+
+- [#361](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/361) [`1ea04a1`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/1ea04a1c64cd790bba657e62ce97dba2454167b7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Update @changesets/cli to 3.0.1 and opt private packages back in to versioning.
+
 ## 0.51.1
 
 ### Patch Changes
