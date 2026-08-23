@@ -4188,3 +4188,28 @@ which is why the flake verdict here is stated with its evidence rather than assu
 
 Cross-references **#1** (web e2e is Chromium-first, and the flag-scoped suites never run these
 engines at all).
+
+---
+
+## 183. `check:claims` cannot see a camelCase basename in its colon form
+
+_Found 2026-08-23 by the `ui-architect` while designing the unsaved-work guard, and confirmed here._
+
+`scripts/check-claims.mjs`'s colon-form citation pattern is case-sensitive lowercase, so a citation
+written as `useBlocker.js:35` is invisible to the completeness scan **in both directions**: it is
+not demanded when unregistered, and a registered entry for it reads as uncited. The prose form
+carries an `i` flag and does match, which is the workaround this epic used.
+
+This is the same family as the dotted-basename hole the file already records about itself — the scan
+is a text pattern over shapes, and every shape it does not anticipate is a silent gap rather than a
+failure. It matters more now than it did: this repository's dependencies are increasingly camelCase
+module files (`useBlocker.js`, `useNavigate.js`), so the blind spot is growing rather than static.
+
+**Not fixed here, deliberately.** Widening the scan is a change to a **shared gate**, which fires
+ADR-0105's trigger and would mean the gate changing underneath the citations it is checking — the
+same reason **#178** and **#181** were left alone during the Better Auth upgrade. Fix it on its own,
+with its own before/after count of what the widened pattern newly demands, because the last two
+widenings each surfaced unregistered citations that had been sitting in the tree (ADR-0077 M0).
+
+Cross-references **#178** (the resolver takes the first store directory) and **#181** (a `ref`
+carries no version) — three holes in one gate, all found by using it rather than by reading it.
