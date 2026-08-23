@@ -1,6 +1,6 @@
 # Feature Spec: The unsaved-work navigation guard
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Approved 2026-08-23 (product owner; CQ-1 four surfaces, CQ-2 warn on pen loss, CQ-3 build the census)
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-23
 - **Tracking issue / epic:** —
@@ -154,6 +154,33 @@ dialog, no unload prompt, no extra render.
 See §6. Three are **critical**; everything else has a stated default.
 
 ---
+
+---
+
+## Decisions taken by the product owner, 2026-08-23
+
+Both were put with the alternatives and their costs; these are the answers, recorded here so the
+plan below is read against them rather than against its defaults.
+
+**CQ-1 — scope: four surfaces.** The activity editor, `ActivityCreateDialog`, `CalendarFormDialog`
+and the calendar exceptions editor register. The remaining ~27 form instances are **classified and
+left unregistered**, not overlooked — the census records each with its reason, so adding one later is
+an addition rather than a redesign. The two agents disagreed here (the analyst proposed four, the
+architect enumerated 28–32); the disagreement was about what "in scope" counted, and the answer is
+the four that hold work a planner would be upset to lose.
+
+**CQ-2 — pen taken mid-edit: warn anyway.** When the ADR-0028 lock is lost while scopes are dirty,
+the work is unsaved **and unsavable** — no button on screen would persist it. The guard still shows
+the leave confirmation, with copy saying so. The rejected alternative (let them go silently, since
+nothing can be done) loses the work with no acknowledgement it existed, which reads as the
+application discarding an edit rather than the lock being taken. This is what the report's
+`savable` field exists to carry, and it is the one place the two agents' models had to be merged:
+the architect's record was `{ label, subject }` and had no way to express it.
+
+**CQ-3 — the census gate: build it.** Following the analyst's default. A hand-kept list of four
+registrants is the shape `docs/TECH_DEBT.md` #178/#181/#183 keep recording as a gate that goes quiet
+rather than wrong; the census forces every form dialog to be classified once, one way, with a pinned
+positive case so it cannot be satisfied by an empty set.
 
 ## 2. Functional requirements
 
