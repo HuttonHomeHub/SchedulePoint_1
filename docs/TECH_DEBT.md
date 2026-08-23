@@ -3970,3 +3970,55 @@ verification against the copy that does not run — and, unlike the orphan case 
 nothing to delete that would fix it, because both resolutions are correct. The register format
 needs a way to name the consumer (`axe-core` _via_ `@axe-core/playwright`), not just the package.
 That is the same shared-gate change as the resolver fix and belongs with it.
+
+## 179. Changesets v3 stops versioning private packages, and says nothing
+
+**Raised 2026-08-23**, found while bumping `@changesets/cli` (Dependabot #318) and closed in the
+same change. Recorded because the **failure mode** is the interesting part, not the fix.
+
+`@repo/api` and `@repo/web` are both `private: true` — they are applications published as container
+images, never to npm. Changesets **3.0.0 stops versioning private packages by default**; the opt-in
+is a new `privatePackages` config key that `.changeset/config.json` did not have.
+
+**What that looks like is the problem.** Run against v3 without the key, on a real pending
+changeset:
+
+```
+🦋  changeset v3.0.1
+All files have been updated. Review them and commit at your leisure
+```
+
+**Exit code 0.** `@repo/web` stayed at 0.99.2. The changeset was not consumed, no `CHANGELOG.md`
+moved, and nothing anywhere said a package had been skipped. Every downstream consequence is silent
+in the same way: the "Version Packages" PR would carry no version bump, `hasChangesets` would stay
+`true`, the release gate would correctly conclude there is nothing to tag, and the workflow would go
+**green** — while no new image ever reached GHCR and the host kept serving the old one.
+
+That is the identical shape `.github/workflows/release.yml` already carries a fail-loud assertion
+for on a _different_ input (the v1→v2 `hasChangesets` → `has-changesets` rename, #323): a release
+pipeline whose only symptom of failure is that nothing happens. Two independent routes to it in one
+dependency family is a fair argument that this pipeline's real risk is silence rather than error.
+
+**Fixed by `privatePackages: { version: true, tag: false }`** — `version: true` restores the bump,
+`tag: false` keeps changesets out of tagging, which the workflow does itself with per-package
+`api-vX.Y.Z` / `web-vX.Y.Z` tags (ADR-0027). Verified in both directions rather than reasoned:
+without the key nothing moves; with it, `api` 0.51.1 → 0.51.2 and `web` 0.99.2 → 0.99.3, both
+changelogs written, the changeset consumed.
+
+**What is NOT covered, stated plainly.** The proof above is `changeset version` run by hand. The
+release **pipeline** cannot be fully exercised without cutting a real release, so the first genuine
+test of this configuration is the next release that lands. If that release produces no version bump,
+this row is where to look first.
+
+**Two other v3 breaks were checked and are inert here**, so nobody re-derives them:
+
+- **`changeset version` now exits 1 when there are no unreleased changesets** (it exited 0 in v2).
+  Read `changesets/action@v1`'s source to be sure rather than assuming: it runs the version command
+  only inside its `case hasChangesets:` branch, so the pipeline never invokes it on an empty tree.
+  It **does** bite anyone running `pnpm version-packages` by hand on a clean checkout, which is now
+  a failure rather than a no-op.
+- **`changeset tag` renamed to `changeset git-tag`**, and `--sinceMaster` removed. Neither appears
+  anywhere in this repository — grepped, not assumed.
+
+`engines.node` moved `>=22.0.0` → `>=22.11.0` to match v3's own floor (`^22.11 || ^24 || >=26`).
+The old range admitted 22.0–22.10, on which v3 refuses to run.
