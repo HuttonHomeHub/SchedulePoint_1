@@ -554,8 +554,9 @@ jobs:
       # page with nothing unsaved never prompts. Over-warning is the failure that gets a guard
       # deleted rather than fixed, and it cannot be shown in jsdom: `createMemoryHistory` attaches
       # no `beforeunload` listener at all, so the browser channel is unreachable there in principle.
-      # The dirty half is `test.fixme` with its reason in the spec — the guard's behaviour is
-      # covered by unit tests, but a browser Back with the modal editor open is not yet driven.
+      # It drives the reload channel in both states: clean (must not prompt) and dirty (must). A
+      # browser Back does NOT reach the blocker in this app — instrumented, `shouldBlockFn` is never
+      # called — so that channel is deliberately not asserted here rather than claimed.
       - name: Web end-to-end tests (unsaved-work guard)
         run: pnpm --filter @repo/web test:e2e:unsaved-work
 

@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import {
   UnsavedWorkProvider,
   useRegisterUnsavedWork,
+  useUnsavedWorkRegistry,
   useUnsavedWorkReports,
 } from './unsaved-work-provider';
 
@@ -36,10 +37,53 @@ const out = () => screen.getByTestId('out').textContent;
 
 describe('unsaved-work registry', () => {
   /**
-   * **Written first and verified red**, per the plan's M1-T2. A cleanup that clears the whole map,
-   * or one keyed on a caller-supplied string, passes every other case in this file and fails only
-   * this one — and the failure it represents is a guard that silently stops guarding.
+   * The registrant-side counterpart to `navigation-guard.test.tsx`'s registration count, and it
+   * exists because the component review found the asymmetry: the BLOCKER side was pinned at one
+   * registration across five renders while the REGISTRANT side had no equivalent, and three of the
+   * four shipped call sites were passing a fresh object literal on every render. Each of those woke
+   * every subscriber on every keystroke.
    */
+  it('does not notify subscribers when a re-render reports the same thing', () => {
+    let notifications = 0;
+    // Subscribes to the registry DIRECTLY rather than counting renders: a consumer component
+    // re-renders whenever its parent does, so a render count cannot tell a notification from
+    // ordinary tree work. The first version of this test made exactly that mistake and reported
+    // 6-vs-1 against a working guard.
+    function Probe(): null {
+      const registry = useUnsavedWorkRegistry();
+      useEffect(
+        () =>
+          registry?.subscribe(() => {
+            notifications += 1;
+          }),
+        [registry],
+      );
+      return null;
+    }
+    function Churner({ tick }: { tick: number }): React.ReactElement {
+      // A NEW object literal every render — what the un-memoised call sites do.
+      useRegisterUnsavedWork({
+        subject: 'This activity',
+        scopes: [{ key: 'general', label: 'General', savable: true }],
+      });
+      return <output data-testid="tick">{tick}</output>;
+    }
+    const tree = (tick: number) => (
+      <UnsavedWorkProvider>
+        <Probe />
+        <Churner tick={tick} />
+      </UnsavedWorkProvider>
+    );
+    const { rerender } = render(tree(0));
+    const afterFirst = notifications;
+    expect(afterFirst).toBe(1);
+
+    for (const tick of [1, 2, 3, 4, 5]) rerender(tree(tick));
+
+    // Verified red against the registry without the equality guard, where each re-render bumped.
+    expect(notifications).toBe(afterFirst);
+  });
+
   it('unmounting one registrant leaves the other still registered', () => {
     const { rerender } = render(
       <UnsavedWorkProvider>

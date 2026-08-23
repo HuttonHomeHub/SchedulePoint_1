@@ -1,5 +1,5 @@
 import { type ActivitySummary, type CalendarSummary } from '@repo/types';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   useWatch,
   type FieldErrors,
@@ -54,6 +54,7 @@ import {
 } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
+import type { UnsavedWorkReport } from '@/lib/unsaved-work/report';
 
 /** One field, named against the scope form that owns it. The scope tag is what makes the list below
  * checkable: `{ scope: 'general', name: 'constraintType' }` does not compile, because
@@ -289,21 +290,26 @@ export function ActivityCreateDialog({
    * one permission (ADR-0089 D3), so every scope here is savable: there is no per-scope gate to
    * strand one of them.
    */
-  useRegisterUnsavedWork(
-    open && (general.isDirty || scheduling.isDirty || measure.isDirty || cost.isDirty)
-      ? {
-          subject: 'The new activity',
-          scopes: [
-            ...(general.isDirty ? [{ key: 'general', label: 'General', savable: true }] : []),
-            ...(scheduling.isDirty
-              ? [{ key: 'scheduling', label: 'Scheduling', savable: true }]
-              : []),
-            ...(measure.isDirty ? [{ key: 'measure', label: 'Value measure', savable: true }] : []),
-            ...(cost.isDirty ? [{ key: 'cost', label: 'Cost', savable: true }] : []),
-          ],
-        }
-      : null,
+  const unsavedReport = useMemo<UnsavedWorkReport | null>(
+    () =>
+      open && (general.isDirty || scheduling.isDirty || measure.isDirty || cost.isDirty)
+        ? {
+            subject: 'The new activity',
+            scopes: [
+              ...(general.isDirty ? [{ key: 'general', label: 'General', savable: true }] : []),
+              ...(scheduling.isDirty
+                ? [{ key: 'scheduling', label: 'Scheduling', savable: true }]
+                : []),
+              ...(measure.isDirty
+                ? [{ key: 'measure', label: 'Value measure', savable: true }]
+                : []),
+              ...(cost.isDirty ? [{ key: 'cost', label: 'Cost', savable: true }] : []),
+            ],
+          }
+        : null,
+    [open, general.isDirty, scheduling.isDirty, measure.isDirty, cost.isDirty],
   );
+  useRegisterUnsavedWork(unsavedReport);
 
   // `useScopeForm` re-seeds the four forms on `[open, activity?.id]`; it has no equivalent for the
   // MUTATION, and dropping this is silent — a failed create's server-error banner would survive into

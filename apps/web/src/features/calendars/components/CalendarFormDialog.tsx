@@ -477,6 +477,7 @@ export function CalendarFormDialog({
             orgSlug={orgSlug}
             calendarId={calendar.id}
             readOnly={readOnly}
+            open={open}
           />
         </div>
       ) : null}

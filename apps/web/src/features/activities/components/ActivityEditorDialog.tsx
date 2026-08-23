@@ -34,6 +34,7 @@ import { ActivityExpenseFields } from './fields/ActivityExpenseFields';
 import { ActivityExternalDatesFields } from './fields/ActivityExternalDatesFields';
 import { ActivityIdentityFields } from './fields/ActivityIdentityFields';
 import { ActivityLevellingField } from './fields/ActivityLevellingField';
+import { MEASURE_SECTION_TITLE } from './fields/ActivityMeasureFields';
 import { ActivityPlacementFields } from './fields/ActivityPlacementFields';
 import { ActivityWorkFields } from './fields/ActivityWorkFields';
 import { useScopeForm } from './useScopeForm';
@@ -396,14 +397,19 @@ export function ActivityEditor({
         ...(cost.isDirty && gating.cost.readable
           ? [{ key: 'cost', label: 'Cost', savable: gating.cost.writable }]
           : []),
+        // The labels are the SECTION HEADINGS a planner actually sees, not shorthand. The first
+        // version said 'Progress', 'Value measure' and 'Steps' — and 'Progress' is also the name of
+        // the TAB that hosts all three, so the dialog could say "Progress, Value measure have
+        // unsaved changes", naming a tab and a string that appears nowhere on screen. Found by the
+        // ux review; the spec had named the right labels and the code had not used them.
         ...(progressDirty.progress
-          ? [{ key: 'progress', label: 'Progress', savable: gating.progress.writable }]
+          ? [{ key: 'progress', label: 'Reported progress', savable: gating.progress.writable }]
           : []),
         ...(progressDirty.measure
-          ? [{ key: 'measure', label: 'Value measure', savable: gating.progress.writable }]
+          ? [{ key: 'measure', label: MEASURE_SECTION_TITLE, savable: gating.progress.writable }]
           : []),
         ...(progressDirty.steps
-          ? [{ key: 'steps', label: 'Steps', savable: gating.steps.writable }]
+          ? [{ key: 'steps', label: 'Weighted steps', savable: gating.steps.writable }]
           : []),
       ],
     }),

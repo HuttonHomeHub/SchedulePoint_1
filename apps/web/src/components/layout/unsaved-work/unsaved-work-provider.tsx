@@ -32,6 +32,20 @@ interface Registry {
   version: () => number;
 }
 
+/** Scope-for-scope equality, so a re-rendered literal is not mistaken for a change. */
+function sameReport(a: UnsavedWorkReport, b: UnsavedWorkReport): boolean {
+  if (a.subject !== b.subject || a.scopes.length !== b.scopes.length) return false;
+  return a.scopes.every((scope, i) => {
+    const other = b.scopes[i];
+    return (
+      other !== undefined &&
+      scope.key === other.key &&
+      scope.label === other.label &&
+      scope.savable === other.savable
+    );
+  });
+}
+
 const UnsavedWorkContext = createContext<Registry | null>(null);
 
 export function UnsavedWorkProvider({
@@ -59,6 +73,13 @@ export function UnsavedWorkProvider({
           bump();
           return;
         }
+        // Skip the notify when nothing actually changed. Callers pass an object literal, so a
+        // re-render produces a NEW report that is scope-for-scope identical — without this, every
+        // keystroke in a registered form woke every subscriber. Fixing it here rather than asking
+        // four call sites to memoise correctly: the component review found three of the four
+        // already diverging from the one that got it right, which is the argument for making the
+        // API robust instead of documenting a contract.
+        if (held !== undefined && sameReport(held, report)) return;
         entries.current.set(token, report);
         bump();
       },

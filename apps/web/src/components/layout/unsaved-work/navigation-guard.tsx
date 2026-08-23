@@ -74,6 +74,29 @@ export function NavigationGuard(): React.ReactElement | null {
     if (blocked && !hasUnsavedWork(registry?.read() ?? [])) resolver.proceed?.();
   }, [blocked, registry, resolver]);
 
+  /**
+   * Put focus back where the reader left it — **after** the dialog has gone, never inside the click
+   * handler.
+   *
+   * The first version called `focus()` from `onClose`, and the accessibility review established it
+   * was a **no-op**: at that moment the `<dialog>` is still open, so everything outside it is
+   * `inert`, and the HTML spec says an inert element cannot be focused. The docblock claimed the
+   * call was what put focus back; it never did anything. This seam has now shipped focus to
+   * `<body>` four times (ADR-0063 M6, ADR-0092, ADR-0099 M10, and this).
+   *
+   * Keyed on `blocked` going true → false, which is the commit after the dialog unmounts. Only the
+   * RESET path restores: on proceed the route is leaving and the element is going with it.
+   */
+  const wasBlocked = useRef(false);
+  useEffect(() => {
+    if (wasBlocked.current && !blocked) {
+      const target = returnFocusTo.current;
+      returnFocusTo.current = null;
+      if (target?.isConnected === true) target.focus();
+    }
+    wasBlocked.current = blocked;
+  }, [blocked]);
+
   if (!blocked) return null;
 
   return (
@@ -81,18 +104,15 @@ export function NavigationGuard(): React.ReactElement | null {
       open
       title="Leave without saving?"
       description={`${describeUnsavedWork(reports)} Leaving this page will discard them.`}
-      confirmLabel="Leave"
+      // "Discard and leave", not "Leave": the sibling confirmation in the activity editor says
+      // "Discard" for the same irreversible act, and one word for losing work is worth more than a
+      // shorter button. Found by the ux review as copy drift between two dialogs in one tree.
+      confirmLabel="Discard and leave"
       cancelLabel="Keep editing"
       confirmVariant="destructive"
       onConfirm={() => resolver.proceed?.()}
       onClose={() => {
         resolver.reset?.();
-        // Focus goes back to what the reader activated. Native <dialog> restore is not enough here:
-        // the element that opened this was a link or a rail button, not a trigger this dialog owns,
-        // so without an explicit return focus lands on <body> — which is a WCAG 2.4.3 failure and
-        // also silently kills the workspace keyboard accelerators. That exact drop has shipped
-        // three times at this seam (ADR-0063 M6, ADR-0092, ADR-0099 M10).
-        returnFocusTo.current?.focus();
       }}
     />
   );

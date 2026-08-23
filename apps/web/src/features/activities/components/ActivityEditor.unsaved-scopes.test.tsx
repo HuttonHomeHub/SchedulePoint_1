@@ -114,7 +114,12 @@ describe('the editor reports every dirty scope, not only the three it used to', 
     fireEvent.click(screen.getByRole('button', { name: /^close/i }));
 
     // Naming it is the point: "something is unsaved" sends the reader hunting across four tabs.
-    expect(await screen.findByText(/Value measure has unsaved changes/i)).toBeInTheDocument();
+    // And the name must be the SECTION HEADING on screen — this asserted 'Value measure' until the
+    // ux review found the scope labels were shorthand that appeared nowhere in the interface, with
+    // 'Progress' additionally colliding with the name of the tab hosting all three panels.
+    expect(
+      await screen.findByText(/How value is measured has unsaved changes/i),
+    ).toBeInTheDocument();
   });
 
   it('still closes silently when nothing anywhere is dirty', async () => {
