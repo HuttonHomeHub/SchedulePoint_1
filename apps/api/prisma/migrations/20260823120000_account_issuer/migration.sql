@@ -28,22 +28,32 @@
 --    2026-08-23, taken with the deployed table unmeasured; the measured database has zero such
 --    rows (m0-measurement.md Q3), so on that data this statement is a no-op.
 --
---    The `NOT EXISTS` guard is load-bearing. Without it, a user holding two credential rows — one
---    already correct, one not — would have both rewritten to the same `account_id` and the unique
---    index at step 5 would abort the whole migration. That turns a repair into an outage on
---    exactly the data most in need of repairing. Guarded, the colliding row is left alone and step
---    5 still refuses it, which is the loud failure a human should see rather than a silent merge
---    of two accounts.
+--    The guard is load-bearing, and it is a COUNT rather than a NOT EXISTS. An earlier draft
+--    refused only when a correct row already existed, and a probe found that insufficient: a user
+--    with TWO wrong credential rows has no correct row, so both were repaired to the same
+--    `account_id`, the index at step 5 refused the duplicate, and the whole migration aborted —
+--    the restart loop this file exists to avoid, caused by the repair meant to help. Repairing
+--    only when the user has exactly ONE credential row cannot collide with anything, because there
+--    is nothing to collide with. Every other shape is left exactly as it was found:
+--
+--      * one wrong row                -> repaired.
+--      * one correct + one wrong      -> untouched. The correct row still satisfies all three
+--                                       conjuncts, so that user signs in; the stale row is inert.
+--      * two wrong rows               -> untouched. That user stays locked out, which is where
+--                                       they already were, and nothing else breaks. A migration
+--                                       has no basis for choosing which of two rows is theirs.
+--      * two rows already correct     -> a genuine duplicate; step 5 refuses it, which is right.
+--                                       Two accounts for one person is not something to merge
+--                                       silently.
 UPDATE "accounts" a
    SET "account_id" = a."user_id"
  WHERE a."provider_id" = 'credential'
    AND a."account_id" <> a."user_id"
-   AND NOT EXISTS (
-         SELECT 1 FROM "accounts" b
+   AND (
+         SELECT count(*) FROM "accounts" b
           WHERE b."user_id" = a."user_id"
             AND b."provider_id" = 'credential'
-            AND b."account_id" = a."user_id"
-       );
+       ) = 1;
 
 -- 1. Add it nullable. Metadata-only on PostgreSQL 11+ (0.4-0.7 ms flat from 85 to 1,000,000 rows,
 --    which a table rewrite could not be). No default yet — see the note above.

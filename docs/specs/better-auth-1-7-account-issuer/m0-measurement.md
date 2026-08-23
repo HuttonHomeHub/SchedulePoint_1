@@ -164,12 +164,23 @@ condition on, and a repair written later is a second migration. Shipping it unco
 same decision with its condition removed, which is why the row above is marked as differing from the
 default rather than matching it.
 
-**The guard on the repair was not in the spec and came out of writing the test.** A user holding two
-credential rows — one already correct, one not — would have both rewritten to the same `account_id`,
-and the unique index at step 5 would abort the whole migration: a repair turning into an outage on
-exactly the data most in need of repairing. The `NOT EXISTS` clause leaves the colliding row alone
-and lets step 5 refuse it, which is the loud failure a person should see rather than a silent merge
-of two accounts.
+**The guard on the repair was not in the spec, and it took two attempts.** The first was a
+`NOT EXISTS (a correct row for this user)` test, written to stop the repair creating the duplicate
+step 5 would then refuse. Re-reading the finished file against a scratch database found that it does
+not: a user with **two wrong rows** has no correct row, so neither is excluded, both are repaired to
+the same `account_id`, and the index aborts the whole migration — the restart loop this design
+exists to avoid, caused by the repair meant to help.
+
+Worse, the test written for that guard asserted the right rows for a **false stated reason**. Its
+name ended "and then refuses it", and the migration does not refuse it: a correct row and a stale row
+carry _different_ `account_id`s, so they are not a unique violation at all. The same false half was
+written into the migration's own comment. The test passed throughout.
+
+The shipped guard is a **count**: repair only where the user has exactly one credential row, which
+cannot collide because there is nothing to collide with. Every other shape is left as found —
+including two wrong rows, where the user stays locked out (where they already were) rather than the
+migration guessing which row is theirs, and two already-correct duplicate rows, which step 5 rightly
+refuses rather than silently merging two accounts.
 
 Writing that test also **invalidated an earlier one**. The duplicate-abort case had been seeded with
 two rows sharing an `account_id` under different users — which step 0 now repairs, so the migration

@@ -21,4 +21,6 @@ The repair is not about `issuer` at all. 1.7's sign-in predicate also requires
 `accountId === user.id`, and a row failing that is told its password is wrong — after which
 reset-password writes the user a second account row rather than repairing the first, so the product
 appears to heal itself while the data goes wrong. It is guarded so it cannot itself create the
-duplicate the unique index would then refuse.
+duplicate the unique index would then refuse: it repairs only a user who has exactly one credential
+row, because a user with two wrong ones would otherwise have both rewritten to the same value and
+the index would abort the migration.

@@ -35,12 +35,19 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
  * | ------------------------ | ----------------------------------------------------------------- |
  * | backfill / abort / rollback | the naive `ADD COLUMN ... NOT NULL` form `migrate diff` generates |
  * | repair                   | the file with step 0 deleted                                       |
- * | repair-would-collide     | step 0 with its `NOT EXISTS` guard deleted                         |
+ * | more-than-one-credential-row | step 0's earlier `NOT EXISTS` guard, which aborts on that data  |
  *
- * The last is the one worth knowing about: it passes equally against a migration with **no repair
- * at all**, because leaving the row alone is the same observable outcome. It discriminates only
- * against an *unguarded* repair, which is the defect it exists for — the repair test above is what
- * proves a repair happens.
+ * The last is the one worth knowing about, and it was rewritten after it had already passed. It was
+ * first written as "leaves a mismatched row alone when repairing it would collide, **and then
+ * refuses it**" — and the migration does not refuse it, because a correct row and a stale row carry
+ * *different* `account_id`s and so are not a unique violation at all. The test asserted the right
+ * rows for a stated reason that was false, and the false half was also written into the migration's
+ * own comment. Probing the shape it had actually missed — a user with two *wrong* rows, where the
+ * old guard repaired both into one value and aborted the migration — is what produced the count
+ * guard that ships.
+ *
+ * It still passes equally against a migration with **no repair at all**, because leaving rows alone
+ * is the same observable outcome; the repair case above is what proves a repair happens.
  *
  * Each case runs in its own schema with `search_path` pointed at it, so the unqualified table name
  * in the migration resolves there and the real `accounts` table is untouched. Statements run inside
@@ -220,14 +227,20 @@ describe.skipIf(!hasDatabase)('accounts.issuer migration (e2e)', () => {
     ]);
   });
 
-  it('leaves a mismatched row alone when repairing it would collide, and then refuses it', async () => {
+  it('leaves a user with more than one credential row exactly as it found them', async () => {
     await seed([
-      // Already correct for u1.
+      // u1 already has a correct row, plus a stale one. The correct row satisfies all three of
+      // 1.7's conjuncts, so this user signs in; the stale row is inert.
       ['a1', 'u1', 'credential', 'u1'],
-      // Also u1's, and wrong. Repairing this one blindly would make two rows `(local:credential,
-      // u1)` and the unique index would abort — a repair turning into an outage on exactly the
-      // data most in need of repair. The guard leaves it, and step 5 refuses it loudly instead.
       ['a2', 'stale-external-id', 'credential', 'u1'],
+      // u2 has TWO wrong rows and no correct one. This is the shape that broke an earlier draft of
+      // the guard: with a `NOT EXISTS (a correct row)` test, neither of these is excluded, so both
+      // were repaired to `u2`, and step 5 then refused the duplicate and aborted the whole
+      // migration — a restart loop caused by the repair. A count guard cannot do that, because a
+      // user with one credential row has nothing to collide with. u2 stays locked out, which is
+      // where they already were; a migration has no basis for picking which row is theirs.
+      ['b1', 'wrong-one', 'credential', 'u2'],
+      ['b2', 'wrong-two', 'credential', 'u2'],
     ]);
 
     await applyMigration();
@@ -238,6 +251,8 @@ describe.skipIf(!hasDatabase)('accounts.issuer migration (e2e)', () => {
     expect(rows).toEqual([
       { id: 'a1', account_id: 'u1' },
       { id: 'a2', account_id: 'stale-external-id' },
+      { id: 'b1', account_id: 'wrong-one' },
+      { id: 'b2', account_id: 'wrong-two' },
     ]);
   });
 
