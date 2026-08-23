@@ -63,6 +63,10 @@ model Account {
   id                    String    @id
   accountId             String    @map("account_id")
   providerId            String    @map("provider_id")
+  // Better Auth 1.7 scopes account identity by issuer. The value is always written explicitly by
+  // the library (`local:${encodeURIComponent(providerId)}`); the database default exists only so a
+  // rollback to a pre-1.7 image can still INSERT — see 20260823120000_account_issuer.
+  issuer                String    @default("local:credential")
   userId                String    @map("user_id")
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?   @map("access_token")
@@ -75,6 +79,7 @@ model Account {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  @@unique([issuer, accountId])
   @@index([userId])
   @@map("accounts")
 }
