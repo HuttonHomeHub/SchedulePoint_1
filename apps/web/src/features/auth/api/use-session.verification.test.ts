@@ -67,7 +67,7 @@ describe('useSignUp — the enforcement branch', () => {
   });
 
   it('reports NOT signed in when verification is enforced and the token is null', async () => {
-    // `sign-up.mjs:252-254` — with `requireEmailVerification` on, the account is created and the
+    // `sign-up.mjs:260-262` — with `requireEmailVerification` on, the account is created and the
     // route answers `{ token: null, user }`. There is no `error`, which is exactly why inspecting
     // only `error` reported success and sent the new member into a guard that bounced them out.
     vi.mocked(authClient.signUp.email).mockResolvedValue({
@@ -88,7 +88,7 @@ describe('useSignUp — the enforcement branch', () => {
   });
 
   it('points the FIRST verification email at the landing route, like every later one', async () => {
-    // The other half of the same dead end (ADR-0074 M5). `sign-up.mjs:244` defaults `callbackURL`
+    // The other half of the same dead end (ADR-0074 M5). `sign-up.mjs:252` defaults `callbackURL`
     // to `/` when the caller sends none, so the very first verification link verified the address
     // and then dropped the reader on the app root — where the `_authed` guard bounced them to
     // `/sign-in` saying nothing. Only the flag-on journey could see it: with the switch off,

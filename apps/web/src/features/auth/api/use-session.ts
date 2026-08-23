@@ -90,7 +90,7 @@ function statusFrom(error: unknown): number | undefined {
  *
  * **One predicate, because six screens must not drift on what 429 means.** Better Auth applies
  * 3-per-10s to `/sign-in*`, `/sign-up*`, `/change-password` and `/change-email`, and 3-per-60s to
- * `/request-password-reset` and `/send-verification-email` (`index.mjs:370-383`).
+ * `/request-password-reset` and `/send-verification-email` (`index.mjs:311-324`).
  *
  * **It is `enabled: options.isProduction`** (`better-auth.ts:270-274`), so no journey against the
  * dev or test API can reach this state — which is exactly why it went unhandled for so long, and
@@ -145,7 +145,7 @@ export function throttledMessage(scope: RateLimitScope = 'attempts'): string {
 
 /**
  * Better Auth's code for "this account exists but its address is unverified", returned as a 403
- * from `/sign-in/email` when `AUTH_REQUIRE_EMAIL_VERIFICATION` is on (`sign-in.mjs:312-324`).
+ * from `/sign-in/email` when `AUTH_REQUIRE_EMAIL_VERIFICATION` is on (`sign-in.mjs:339-351`).
  *
  * **Nothing on the client can predict whether the server has that switch on** — it is an operator
  * env var read at API boot, and a `VITE_` constant is baked into the bundle long before. That is
@@ -211,7 +211,7 @@ export interface SignUpOutcome {
  * **Returns an outcome rather than `void`, and that is the whole fix** (ADR-0074 M2-T4). This
  * previously inspected only `error`, so with verification enforced it reported success, the screen
  * navigated to `/`, the `_authed` guard found no session and bounced to `/sign-in` **with no
- * explanation whatsoever**. The cause: `sign-up.mjs:162-163` derives `shouldSkipAutoSignIn` from
+ * explanation whatsoever**. The cause: `sign-up.mjs:163-164` derives `shouldSkipAutoSignIn` from
  * `requireEmailVerification`, which **overrides** this app's `autoSignIn: true`, and the route
  * returns `{ token: null, user }`.
  *
@@ -219,11 +219,11 @@ export interface SignUpOutcome {
  * no build-time flag could have gated the fix, and why it ships unflagged.
  *
  * **`callbackURL` is the other half of the same dead end.** Sign-up is what sends the *first*
- * verification email, and `sign-up.mjs:244` defaults its `callbackURL` to `/` when the caller sends
+ * verification email, and `sign-up.mjs:252` defaults its `callbackURL` to `/` when the caller sends
  * none — so the link in that email verified the address correctly and then landed the reader on the
  * app root, where the `_authed` guard bounced them to `/sign-in` with nothing said. Sending the same
  * destination the resend sends (`useSendVerificationEmail`) makes both links end on the screen that
- * confirms it worked. The value is consumed only to compose that URL; `sign-up.mjs:149` discards it
+ * confirms it worked. The value is consumed only to compose that URL; `sign-up.mjs:150` discards it
  * from the created user.
  */
 export function useSignUp() {
@@ -263,7 +263,7 @@ export function useSignUp() {
  *
  * The endpoint answers identically for an unknown address, an already-verified one and a real
  * pending one, and enforces a 500 ms floor to hide the timing difference
- * (`email-verification.mjs:98-117`). **The UI must not undo that**: one "check your email" state,
+ * (`email-verification.mjs:108-127`). **The UI must not undo that**: one "check your email" state,
  * whatever the truth, with no branch a caller could read as an existence oracle.
  */
 export function useSendVerificationEmail() {
@@ -327,7 +327,7 @@ export function useChangePassword() {
 }
 
 /**
- * Better Auth's code when `sendResetPassword` is not configured on the server (`password.mjs:51-57`)
+ * Better Auth's code when `sendResetPassword` is not configured on the server (`password.mjs:53-59`)
  * — the whole reason SchedulePoint had no reset before ADR-0074 M0. Surfaced separately because
  * "reset is not available here" and "no such account" must never read as the same sentence.
  */
@@ -337,12 +337,12 @@ export const RESET_PASSWORD_DISABLED = 'RESET_PASSWORD_DISABLED';
  * Ask for a password-reset link (ADR-0074 M4).
  *
  * **The endpoint answers identically for a known and an unknown address, and the UI must not undo
- * that.** `password.mjs:62-66` even performs a dummy verification lookup so the timing matches.
+ * that.** `password.mjs:67-71` even performs a dummy verification lookup so the timing matches.
  * There is one submitted state, and no branch a caller could read as an existence oracle — that is
  * a requirement, not a copy preference.
  *
  * `redirectTo` is where the emailed link's handler sends the browser once it has checked the token.
- * It is origin-checked server-side (`password.mjs:49`), which is why `disableOriginCheck: false`
+ * It is origin-checked server-side (`password.mjs:50`), which is why `disableOriginCheck: false`
  * and a correct `CORS_ORIGINS` are M0 deployment preconditions rather than nice-to-haves.
  */
 export function useRequestPasswordReset() {

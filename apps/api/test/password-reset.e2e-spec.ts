@@ -120,7 +120,7 @@ describe.skipIf(!hasDatabase)('Password reset (e2e)', () => {
 
   it('is enabled at all — the endpoint no longer answers RESET_PASSWORD_DISABLED', async () => {
     // The regression that names the whole gap. Before `sendResetPassword` was configured, Better
-    // Auth refused this request outright (`api/routes/password.mjs:51-57`), so the product had no
+    // Auth refused this request outright (`api/routes/password.mjs:53-59`), so the product had no
     // recovery path rather than merely no screen for one.
     await signUp('locked-out@example.com');
 

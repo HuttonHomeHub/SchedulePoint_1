@@ -82,7 +82,7 @@ file-based).
 in — not "the screen is missing", but the server refuses: `createAuth()` configures
 `emailAndPassword` with no `sendResetPassword`, so Better Auth throws
 `RESET_PASSWORD_DISABLED` on `POST /request-password-reset`
-(`better-auth/dist/api/routes/password.mjs:51-57`). A signed-in user cannot change their
+(`better-auth/dist/api/routes/password.mjs:53-59`). A signed-in user cannot change their
 password either. There is no account screen to host any of it: `/me` is `@Get()` only
 (`apps/api/src/modules/me/me.controller.ts:28`) and the router has no `/account`.
 
@@ -112,10 +112,10 @@ Both are one configuration key in `apps/api/src/common/auth/better-auth.ts`, bot
 in **this app's wiring** rather than in Better Auth, and both were independently re-verified
 against the installed `better-auth@1.6.25` and by reading the whole `betterAuth({…})` call.
 
-| #      | Finding                                                                                                                                                                                                                                                                                                                         | Evidence                                                                                                                               | Fix                                                                                                                                                     |
-| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **B1** | **Reset tokens would be stored in cleartext.** `betterAuth({…})` sets no `verification` key, so `getStorageOption` returns `undefined` and `processIdentifier` returns the identifier **unchanged**. The `verification` row's `identifier` column would hold the literal `reset-password:<token>` for the full one-hour window. | `better-auth.ts:118-237` (no `verification` key — confirmed by reading the entire call); `dist/db/verification-token-storage.mjs:8-13` | `verification: { storeIdentifier: { hash: hashToken } }`, reusing **this app's own** `common/tokens/token.ts` hasher so there is one hashing convention |
-| **B2** | **A completed reset would leave every session alive.** `resetPassword` calls `deleteUserSessions` only when `emailAndPassword.revokeSessionsOnPasswordReset` is truthy. It is unset.                                                                                                                                            | `password.mjs:172`; `better-auth.ts:125-134`                                                                                           | `revokeSessionsOnPasswordReset: true`                                                                                                                   |
+| #      | Finding                                                                                                                                                                                                                                                                                                                         | Evidence                                                                                                                                | Fix                                                                                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **B1** | **Reset tokens would be stored in cleartext.** `betterAuth({…})` sets no `verification` key, so `getStorageOption` returns `undefined` and `processIdentifier` returns the identifier **unchanged**. The `verification` row's `identifier` column would hold the literal `reset-password:<token>` for the full one-hour window. | `better-auth.ts:118-237` (no `verification` key — confirmed by reading the entire call); `dist/db/verification-token-storage.mjs:11-16` | `verification: { storeIdentifier: { hash: hashToken } }`, reusing **this app's own** `common/tokens/token.ts` hasher so there is one hashing convention |
+| **B2** | **A completed reset would leave every session alive.** `resetPassword` calls `deleteUserSessions` only when `emailAndPassword.revokeSessionsOnPasswordReset` is truthy. It is unset.                                                                                                                                            | `password.mjs:173`; `better-auth.ts:125-134`                                                                                            | `revokeSessionsOnPasswordReset: true`                                                                                                                   |
 
 **Why these outrank the UI.** B1 fails the bar this repository set for its own tokens —
 ADR-0051 and `common/tokens/token.ts:15-22`: mint 256-bit, return raw once, store **only**
@@ -127,7 +127,7 @@ evict the compromise.
 
 Both compound with `TECH_DEBT` #88 (§3.5): `GET /reset-password/:token` validates and
 **302-redirects with the raw token as a query parameter on the `Location` header**
-(`password.mjs:92-128`), and the GET does **not** consume it. A proxy that logs `Location`,
+(`password.mjs:127-163`), and the GET does **not** consume it. A proxy that logs `Location`,
 or a mail scanner that follows the redirect, captures a live token for the full hour — so an
 attacker needs no database access at all.
 
@@ -161,7 +161,7 @@ forgets a password exactly as often as an Org Admin.
 address → identical "if that address has an account, we've sent a link" for known and
 unknown → email → click → auth handler validates + 302s to `/reset-password?token=…` → app
 strips the token from the URL → new password twice → success → **"Password changed. Sign
-in."** with a link (reset creates **no** session — `password.mjs:173` returns
+in."** with a link (reset creates **no** session — `password.mjs:174` returns
 `{status:true}`) → sign in → every other session is already dead (B2).
 
 **Happy path — change password.** Signed in → account menu → `/account` → Password section →
@@ -265,7 +265,7 @@ Three critical (§6). Everything else has a stated default and proceeds.
 >   `/sign-in`.
 > - **Given** enforcement is on and the address is **already registered** **then** I see the
 >   **same** "account created — check your email" copy, because Better Auth deliberately
->   returns a generic duplicate response in this mode (`sign-up.mjs:162` + `sign-up.mjs:169-207`). Adding an
+>   returns a generic duplicate response in this mode (`sign-up.mjs:163` + `sign-up.mjs:203-241`). Adding an
 >   "email already in use" message would reintroduce the enumeration oracle the library just
 >   closed. **This is a requirement, not an omission.**
 > - **Given** enforcement is on **when** I sign in with an unverified address **then** the
@@ -309,7 +309,7 @@ Three critical (§6). Everything else has a stated default and proceeds.
 address client-side → `authClient.requestPasswordReset({ email, redirectTo: '/reset-password' })`
 → **always** render the same submitted state. **Never** pre-check the address against a
 members lookup, and never branch the rendering: Better Auth already equalises timing with a
-dummy `generateId`/`findVerificationValue` on the unknown branch (`password.mjs:60-72`), and
+dummy `generateId`/`findVerificationValue` on the unknown branch (`password.mjs:67-79`), and
 the only way to lose that is for us to undo it above.
 
 **W2 — Consume reset.** Email link → `{authBaseURL}/reset-password/{token}?callbackURL=…`
@@ -325,7 +325,7 @@ reset.
 **W4 — Resend verification (session-less).** `/verify-email?email=…` or the sign-in 403
 branch or the invitation card → `authClient.sendVerificationEmail({ email, callbackURL })` →
 submitting → sent. This endpoint enforces a hard **500 ms floor**
-(`email-verification.mjs:98-117`) specifically to hide the difference between a fast local
+(`email-verification.mjs:108-127`) specifically to hide the difference between a fast local
 JWT sign and a slow SMTP call — so a spinner is expected, and shortening it is not a
 performance improvement.
 
@@ -344,10 +344,10 @@ the new ones → flip the mode variable → redeploy.
 | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Reset requested for an unknown address                      | Identical response, identical screen, identical status. No timing signal (library-provided).                                                                                                                                                             |
 | Reset requested for an **unverified** address               | Same. Reset is a recovery path, not a verification path; branching would leak.                                                                                                                                                                           |
-| Two reset links requested; first used                       | Second is `INVALID_TOKEN` → "This link has already been used." (Better Auth consumes single-use: `internal-adapter.mjs:650-660`.)                                                                                                                        |
+| Two reset links requested; first used                       | Second is `INVALID_TOKEN` → "This link has already been used." (Better Auth consumes single-use: `internal-adapter.mjs:773-783`.)                                                                                                                        |
 | Token expired (1 h default)                                 | Same explained state + "Send a new link".                                                                                                                                                                                                                |
 | Reset link **prefetched by a mail scanner**                 | The GET only redirects; it does **not** consume. The user's own click still works. But the scanner's proxy may have logged the `Location` header carrying the token — this is `TECH_DEBT` #88 extended (§3.5).                                           |
-| `redirectTo` origin not in `CORS_ORIGINS`                   | `originCheck` (`password.mjs:49`) rejects **every** reset and nothing on screen explains it. A **deployment precondition**, verified in M0, not code (`auth.module.ts:34`).                                                                              |
+| `redirectTo` origin not in `CORS_ORIGINS`                   | `originCheck` (`password.mjs:50`) rejects **every** reset and nothing on screen explains it. A **deployment precondition**, verified in M0, not code (`auth.module.ts:34`).                                                                              |
 | SMTP relay broken                                           | Every request still returns `{status:true}` and no email arrives. Inherited from `TECH_DEBT` #94 — the same invisible-failure mode as verification. Do **not** invent a stricter contract for this one message (§3.6).                                   |
 | Already signed in, visits `/forgot-password`                | Point at `/account`; do not bounce silently.                                                                                                                                                                                                             |
 | Signed-in user changes password on device A                 | Device B's session dies at its next request; the client's existing 401 → `/sign-in` path handles it.                                                                                                                                                     |
@@ -416,11 +416,11 @@ would catch the omission** (§0.3). ADR-0072/0073's own stated reason for existi
 (→ `sign-ins`; note the C4 lesson that the action-filter cap is **derived** from
 `AUDIT_ACTIONS` and must not fall behind — three new actions must not silently re-break it):
 
-| Action                          | Actor       | Seam                                                                             | Notes                                          |
-| ------------------------------- | ----------- | -------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `auth.password_changed`         | the user    | `hooks.after` on `/change-password`                                              | Same shape as the existing five                |
-| `auth.password_reset_completed` | the user    | `emailAndPassword.onPasswordReset` (`password.mjs:168-171`) **or** `hooks.after` | **Verify against a real hook before choosing** |
-| `auth.password_reset_requested` | `ANONYMOUS` | its own `hooks.after` branch on `ctx.path`                                       | **Needs real design — see below**              |
+| Action                          | Actor       | Seam                                                                         | Notes                                          |
+| ------------------------------- | ----------- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
+| `auth.password_changed`         | the user    | `hooks.after` on `/change-password`                                          | Same shape as the existing five                |
+| `auth.password_reset_completed` | the user    | `emailAndPassword.onPasswordReset` (`password.mjs:172`) **or** `hooks.after` | **Verify against a real hook before choosing** |
+| `auth.password_reset_requested` | `ANONYMOUS` | its own `hooks.after` branch on `ctx.path`                                   | **Needs real design — see below**              |
 
 **`auth.password_reset_requested` cannot use the existing classification signals.** The
 handler returns success uniformly for known and unknown addresses, so `failed` is always
@@ -523,7 +523,7 @@ observe at runtime, not a swap of behaviour.** Concretely, `useSignUp` currently
 only `error` (`use-session.ts:76-81`). The fix is to inspect the **result**:
 
 - enforcement **off** → the response carries a session/user → route to `/` exactly as today;
-- enforcement **on** → `token === null` (`sign-up.mjs:252-254`) → route to `/verify-email`.
+- enforcement **on** → `token === null` (`sign-up.mjs:260-262`) → route to `/verify-email`.
 
 The flag-off path is not "preserved by a constant"; it is **the same code path taking the
 branch it always took**, because the server tells it which world it is in. The same holds
@@ -574,7 +574,7 @@ link** specifically.
 1. **M0's B1 + B2 config fixes** — before any reset UI exists at all.
 2. **`MailService.sendPasswordReset` + `sendResetPassword` wiring** — before `/forgot-password`.
 3. **`CORS_ORIGINS` contains the deployed app origin** — a deployment precondition, not
-   code. `redirectTo` passes `originCheck` (`password.mjs:49`) against `trustedOrigins`,
+   code. `redirectTo` passes `originCheck` (`password.mjs:50`) against `trustedOrigins`,
    bound to `config.corsOrigins` (`auth.module.ts:34`). If it is absent, **every** reset
    fails with an origin error and nothing on screen explains it.
 4. **A working `MAIL_SMTP_URL` + `MAIL_FROM`** — recovery is now a second thing that breaks
@@ -600,7 +600,7 @@ consumed nothing — "**that was luck, not design**"). It notes the hazard appli
 the **invitation accept URL**. It was never extended to reset, and reset is worse:
 
 `GET /reset-password/:token` validates the token and **302-redirects with the raw token as a
-query parameter on the `Location` header** (`password.mjs:92-128`). A corporate scanner that
+query parameter on the `Location` header** (`password.mjs:127-163`). A corporate scanner that
 follows redirects, or any proxy that logs `Location`, captures a **live, unconsumed** token
 valid for the remaining hour. **This compounds with B1**: an attacker with a proxy log needs
 no database access.
@@ -1070,7 +1070,7 @@ new debt or already recorded.
 | N5  | **An Org Admin cannot rename or delete their own organisation.** `organizations.controller.ts` exposes `POST` (create), `GET` (list), `GET :orgSlug` — and nothing else.     | `organizations.controller.ts:29-57`                                         | **New debt row.** This is the most surprising find in the sweep: an organisation's name is fixed forever at creation. Not a security gap, but a plain functional hole in the org-admin surface.                                                                    |
 | N6  | **No "leave organisation".** `DELETE members/:memberId` is the admin's removal action; there is no self-service exit.                                                        | `members.controller.ts:87`                                                  | **New debt row.** Pairs with N5 as the org-admin/member lifecycle gap.                                                                                                                                                                                             |
 | N7  | **No resend-invitation.** An Org Admin whose invitation email bounced must revoke and re-create, which mints a new token and invalidates any link already in flight.         | `org-invitations.controller.ts:52-82`                                       | **New debt row.** Low severity; a real papercut once #16 makes invitations depend on mail more heavily.                                                                                                                                                            |
-| N8  | **Better Auth's rate-limit store is per-replica in-process memory.**                                                                                                         | `dist/context/create-context.mjs:169-175`; no `secondaryStorage` configured | **Already recorded** — `TECH_DEBT` #14(b), sibling #49. Inherited by this epic's five routes; **state it, do not re-litigate it.**                                                                                                                                 |
+| N8  | **Better Auth's rate-limit store is per-replica in-process memory.**                                                                                                         | `dist/context/create-context.mjs:174-180`; no `secondaryStorage` configured | **Already recorded** — `TECH_DEBT` #14(b), sibling #49. Inherited by this epic's five routes; **state it, do not re-litigate it.**                                                                                                                                 |
 | N9  | **Mail-scanner prefetch of the verify and invite links.**                                                                                                                    | `TECH_DEBT` #88                                                             | **Already recorded.** This epic **extends** #88 to cover reset and the `Location`-header exposure (§3.5) but does **not** build the confirm-button interstitial, which is #88's own remediation.                                                                   |
 | N10 | **`X-Forwarded-Proto` is overwritten by our own nginx.**                                                                                                                     | `TECH_DEBT` #89; `nginx.conf:24`                                            | **Already recorded.** The three-line code half is offered as an **optional** task in M1 because the file is open (§4.5); the product owner may descope it.                                                                                                         |
 | N11 | **A failed verification/reset mail send is invisible.**                                                                                                                      | `TECH_DEBT` #94                                                             | **Already recorded.** The cheap half (Better Auth logger → Pino) is **in scope** (§3.6); the hard half stays out.                                                                                                                                                  |

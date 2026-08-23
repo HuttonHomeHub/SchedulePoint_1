@@ -113,7 +113,7 @@ exploitable the moment the feature exists, however polished the form is.
   it unnoticed.
 - **Development steps:**
   1. Add the key; import `hashToken`.
-  2. Confirm `processIdentifier` accepts the `{ hash }` shape (`verification-token-storage.mjs:10-12`).
+  2. Confirm `processIdentifier` accepts the `{ hash }` shape (`verification-token-storage.mjs:11-13`).
   3. Write the e2e first and watch it fail against the current code.
   4. Check the deployed `verification` table for outstanding rows; note the finding.
 
@@ -180,7 +180,7 @@ exploitable the moment the feature exists, however polished the form is.
      entries (→ `sign-ins`).
   2. `auth.password_changed`: extend `classifyAuthEvent` for `/change-password`.
   3. `auth.password_reset_completed`: prefer `emailAndPassword.onPasswordReset`
-     (`password.mjs:168-171`) — **but drive a real hook first** and use `hooks.after` if the
+     (`password.mjs:172`) — **but drive a real hook first** and use `hooks.after` if the
      callback does not carry what is needed.
   4. `auth.password_reset_requested`: its own `hooks.after` branch on `ctx.path` — the
      existing `failed`/`newSession` signals **cannot** see it (the handler succeeds
@@ -211,7 +211,7 @@ exploitable the moment the feature exists, however polished the form is.
 - **Description:** the two things that will otherwise make reset fail with nothing on screen.
 - **Complexity:** S
 - **Dependencies:** M0-T4
-- **Risks:** **`redirectTo` passes `originCheck` (`password.mjs:49`) against `trustedOrigins`,
+- **Risks:** **`redirectTo` passes `originCheck` (`password.mjs:50`) against `trustedOrigins`,
   bound to `config.corsOrigins` (`auth.module.ts:34`). If the deployed app origin is not in
   `CORS_ORIGINS`, EVERY reset fails with an origin error and nothing explains it.**
 - **Testing:** an API e2e driving a reset with a `redirectTo` outside `trustedOrigins`,
@@ -406,11 +406,11 @@ first**, asserting **both** enforcement branches.
 
 - **Complexity:** S · **Dependencies:** M2-T3
 - **Description:** `useSignUp` (`use-session.ts:72-87`) inspects only `error`; with enforcement
-  on, sign-up returns `{ token: null }` (`sign-up.mjs:252-254`), so it reports success,
+  on, sign-up returns `{ token: null }` (`sign-up.mjs:260-262`), so it reports success,
   `SignUpScreen` navigates to `/`, the `_authed` guard finds `session === null` and bounces to
   `/sign-in` **with no explanation whatsoever**.
 - **Risks:** **copy.** With enforcement on, a **duplicate** address also returns a generic
-  success (`sign-up.mjs:162` + `sign-up.mjs:169-207`). "Account created — check your email" is therefore the
+  success (`sign-up.mjs:163` + `sign-up.mjs:203-241`). "Account created — check your email" is therefore the
   correct and **required** copy for that case too. **Do not add an "email already in use"
   message** — it would reintroduce the enumeration oracle the library just closed.
 - **Testing:** a regression test **verified to fail first**, asserting **both** branches:

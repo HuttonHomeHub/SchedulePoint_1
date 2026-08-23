@@ -190,7 +190,7 @@ export class SmtpMailService extends MailService {
    * Auth's `/send-verification-email` goes to real trouble to be uniform: for an unknown or
    * already-verified address it mints a **throwaway token** so the CPU work matches, then holds
    * every response to a 500 ms floor so the timings match
-   * (`api/routes/email-verification.mjs:104-117`). And then, at the end of that same block,
+   * (`api/routes/email-verification.mjs:108-121`). And then, at the end of that same block,
    * `if (error) throw error` — so a transport failure reaches `better-call`'s router, which turns a
    * non-`APIError` into a bare **500**, distinguishable from the uniform 200 that every other
    * branch returns. A caller submitting a candidate address gets 200 for "unknown", 200 for
@@ -198,7 +198,7 @@ export class SmtpMailService extends MailService {
    * failed" — which is precisely the oracle this epic exists to keep closed, handed back by the one
    * branch that was never analysed.
    *
-   * The sign-up call site was analysed and is safe (`runInBackgroundOrAwait`, `sign-up.mjs:246`),
+   * The sign-up call site was analysed and is safe (`runInBackgroundOrAwait`, `sign-up.mjs:254`),
    * which is why the previous docblock's reasoning read as sound. It was sound about sign-up and
    * silent about resend — the ADR-0064/0067 shape, one call site examined and its neighbour not.
    *
@@ -229,7 +229,7 @@ export class SmtpMailService extends MailService {
    * Password reset (ADR-0074). Swallows and logs, matching {@link sendEmailVerification}.
    *
    * **This one is not currently an oracle, and it is swallowed anyway — deliberately.** Better Auth
-   * calls `sendResetPassword` through `runInBackgroundOrAwait` (`api/routes/password.mjs:82`), so a
+   * calls `sendResetPassword` through `runInBackgroundOrAwait` (`api/routes/password.mjs:83`), so a
    * rejection here is already caught before it can reach the response, and
    * `/request-password-reset` stays uniform for a known and an unknown address.
    *

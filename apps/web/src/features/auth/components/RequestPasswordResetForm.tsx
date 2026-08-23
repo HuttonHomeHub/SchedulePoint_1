@@ -20,7 +20,7 @@ import { useClearOnEdit } from '@/hooks/use-clear-on-edit';
  * Ask for a password-reset link (ADR-0074 M4).
  *
  * **One submitted state, whatever the truth.** The endpoint answers identically for a known and an
- * unknown address and performs a dummy lookup so the timing matches (`password.mjs:62-66`). A UI
+ * unknown address and performs a dummy lookup so the timing matches (`password.mjs:67-71`). A UI
  * that branched — a different message, a pre-flight members lookup, anything — would hand back the
  * account-enumeration oracle the library deliberately closed. There is therefore no "we could not
  * find that address" copy to write, and its absence is the feature.

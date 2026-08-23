@@ -1398,7 +1398,7 @@ model/wbs-groups.ts`, shared with the Gantt row model so the two cannot disagree
   **not to build**: sending from application code before handing off to Better Auth, so a failure
   could abort the request, would create an **enumeration oracle** — under
   `AUTH_REQUIRE_EMAIL_VERIFICATION` a sign-up for an address that already exists returns a
-  synthetic 200 with **no send** (`sign-up.mjs:162` + `sign-up.mjs:169-207`, which hashes the password anyway to
+  synthetic 200 with **no send** (`sign-up.mjs:163` + `sign-up.mjs:203-241`, which hashes the password anyway to
   equalise timing), so a delivery-failure signal would make "that address was free" distinguishable
   from "that address is taken" on an unauthenticated endpoint. Also rejected: the wrapper, which
   **bypasses Better Auth's rate limiter** (it runs at the router's `onRequest`, so `auth.api.*`

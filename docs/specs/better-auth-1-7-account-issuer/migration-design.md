@@ -70,8 +70,8 @@ The guarded constant is the design: fail-closed in the same sense as `ck_notes_e
 
 > **The three 1.7.1 citations above deliberately carry no line number**, and finding out why was
 > itself a finding. They did carry them, and `pnpm check:claims` **accepted one of them**: the
-> design cited `sign-up.mjs:246` for "the credential issuer is `local:credential`", and the register
-> already holds a `sign-up.mjs:246` — verified at **1.6.28**, where that line is the
+> design cited `sign-up.mjs:254` for "the credential issuer is `local:credential`", and the register
+> already holds a `sign-up.mjs:254` — verified at **1.6.28**, where that line is the
 > verification-email call and has nothing to do with issuers. The gate matches a citation by its
 > **ref string**, so a citation into a different version at a coinciding line passes silently and
 > the document then reads as though the claim had been re-read. That is `docs/TECH_DEBT.md` **#181**.

@@ -157,7 +157,7 @@ for (const claim of register.claims) {
 // dependency file nobody had cited yet went uncited. `/` is deliberately absent from the class, so a
 // leading path still falls away.
 const CITATIONS = [
-  // `sign-in.mjs:234` / `dist/api/routes/sign-in.mjs:234-240` / `dist/throttler.guard.js:148-150`
+  // `sign-in.mjs:264` / `dist/api/routes/sign-in.mjs:234-240` / `dist/throttler.guard.js:148-150`
   /\b([a-z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b/g,
   // `` `dist/api/routes/sign-in.mjs`, lines **234** `` — also "line", "on lines", ``234``, 234–240
   /`[^`\n]*?([a-z0-9.-]+\.m?js)`[,;]?\s*(?:on\s+)?lines?\s*\**`?(\d+(?:\s*[-–]\s*\d+)?)/gi,
