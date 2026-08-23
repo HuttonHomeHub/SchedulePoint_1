@@ -43,21 +43,31 @@ jobs:
 
       # When there are pending changesets this opens/updates the "Version
       # Packages" PR (bumping versions + writing CHANGELOG.md). When that PR is
-      # merged, no changesets remain (hasChangesets == 'false') and the bumped
+      # merged, no changesets remain (`has-changesets` == 'false') and the bumped
       # versions are already on this commit — that is a release.
       #
       # We do NOT use a `publish` command here: `changeset publish` is npm-only
       # and no-ops on our private packages (so it never creates a tag). Tagging
       # and image publishing are handled explicitly below.
+      #
+      # **v2 renames FIVE things, not one** (read from the action's own `action.yml`
+      # at the v2 tag, not from release notes or from the comment this replaces):
+      # `version` → `version-script`, `commit` → `commit-message`, `title` →
+      # `pr-title`, the `GITHUB_TOKEN` env var → a `github-token` INPUT, and the
+      # `hasChangesets` output → `has-changesets`. GitHub Actions **silently ignores
+      # unrecognised `with:` keys**, so migrating only the output — which is what the
+      # note here used to describe — would have left this step running a bare
+      # `changeset version` instead of `pnpm version-packages`, titling the PR
+      # "Version Packages", and reading an empty output. Two of those are invisible
+      # and the third stops the release.
       - name: Create release pull request
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
-          version: pnpm version-packages
-          commit: 'chore(release): version packages'
-          title: 'chore(release): version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version-script: pnpm version-packages
+          commit-message: 'chore(release): version packages'
+          pr-title: 'chore(release): version packages'
 
       # A release lands when the "Version Packages" PR was just merged: no
       # changesets remain AND a package's version has no git tag yet. Each app is
@@ -68,26 +78,32 @@ jobs:
       # api had already tagged, so the web release was silently skipped (ADR-0027).
       # Per-package tags are monotonic per package, so that collision can't recur.
       #
-      # `hasChangesets` is a changesets/action@v1 output (camelCase). v2 renames it
-      # to `has-changesets`, and reading the wrong name yields an EMPTY string — on
-      # which `[ "" = "false" ]` is false, so nothing is tagged, nothing is
-      # published, and the workflow goes GREEN. The only symptom is that no new
-      # image ever reaches GHCR while the host keeps serving the old one, and the
-      # "Version Packages" PR carries no checks by design (§11), so nothing else
-      # would catch it either.
+      # `has-changesets` is the **v2** output name. Under v1 it was `hasChangesets`
+      # (camelCase), and reading the wrong name yields an EMPTY string — on which
+      # `[ "" = "false" ]` is false, so nothing is tagged, nothing is published, and
+      # the workflow goes GREEN. The only symptom is that no new image ever reaches
+      # GHCR while the host keeps serving the old one, and the "Version Packages" PR
+      # carries no checks by design (§11), so nothing else would catch it either.
       #
-      # This was a NOTE telling the next person to update the expression when they
-      # bump the major. Dependabot has now opened exactly that PR (#323), which is
-      # the moment to notice that a comment is not a gate (ADR-0058): the assertion
-      # below turns a silent no-release into a loud failure, so the upgrade breaks
-      # visibly and at the right moment rather than quietly and later.
+      # The assertion below predates the upgrade. It was written when this was still
+      # a v1 workflow, precisely so that the eventual bump would fail LOUDLY instead
+      # of going quiet — a comment is not a gate (ADR-0058). It is kept, and its job
+      # is now the mirror image: if a future version renames the output again, or if
+      # someone reverts to v1 without reverting this expression, the release stops
+      # with a message instead of succeeding at nothing.
+      #
+      # Note it guards only the OUTPUT. The three renamed **inputs** have no such
+      # protection and cannot easily get one — Actions ignores unknown `with:` keys
+      # without warning, so a wrong input name is indistinguishable from an omitted
+      # one. That asymmetry is why the migration was done by reading `action.yml`
+      # rather than by trusting the note that used to sit here (TECH_DEBT #180).
       - name: Determine release
         id: meta
         run: |
-          HAS_CHANGESETS='${{ steps.changesets.outputs.hasChangesets }}'
+          HAS_CHANGESETS='${{ steps.changesets.outputs.has-changesets }}'
           if [ "$HAS_CHANGESETS" != "true" ] && [ "$HAS_CHANGESETS" != "false" ]; then
-            echo "::error::changesets/action gave hasChangesets='$HAS_CHANGESETS' (expected 'true' or 'false')." >&2
-            echo "::error::v2 renames this output to 'has-changesets'. Update this step for the new name — otherwise the release gate reads empty and silently stops tagging and publishing." >&2
+            echo "::error::changesets/action gave has-changesets='$HAS_CHANGESETS' (expected 'true' or 'false')." >&2
+            echo "::error::The output name has moved. v1 called it 'hasChangesets', v2 calls it 'has-changesets'; check this step against the action's own action.yml at the pinned tag. Reading the wrong name yields an empty string, on which the release gate silently stops tagging and publishing." >&2
             exit 1
           fi
           API_VERSION="$(node -p "require('./apps/api/package.json').version")"

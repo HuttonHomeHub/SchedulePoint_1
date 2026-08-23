@@ -4022,3 +4022,56 @@ this row is where to look first.
 
 `engines.node` moved `>=22.0.0` → `>=22.11.0` to match v3's own floor (`^22.11 || ^24 || >=26`).
 The old range admitted 22.0–22.10, on which v3 refuses to run.
+
+## 180. A workflow's renamed INPUTS have no equivalent of the output guard
+
+**Raised 2026-08-23** while migrating `changesets/action` v1 → v2 (Dependabot #323), and it is a
+finding about **what can be guarded**, not about that upgrade, which is done.
+
+`.github/workflows/release.yml` carried a careful note predicting the v2 upgrade: `hasChangesets`
+becomes `has-changesets`, reading the wrong name yields an empty string, and the release then stops
+tagging and publishing while going green. It also carried a **fail-loud assertion** for exactly
+that, written while the workflow was still on v1 so the eventual bump would break visibly.
+
+**The note was right and incomplete, and the incomplete half is the dangerous one.** Read from the
+action's own `action.yml` at the v2 tag, v2 renames **five** things:
+
+| v1                         | v2                       |
+| -------------------------- | ------------------------ |
+| input `version`            | `version-script`         |
+| input `commit`             | `commit-message`         |
+| input `title`              | `pr-title`               |
+| `GITHUB_TOKEN` **env var** | `github-token` **input** |
+| output `hasChangesets`     | `has-changesets`         |
+
+Migrating by the note alone — bumping the tag and renaming the output — would have left three
+unrecognised `with:` keys. **GitHub Actions ignores unrecognised inputs without warning**, so the
+step would have run the action's _default_ behaviour: a bare `changeset version` instead of
+`pnpm version-packages`, and a PR titled "Version Packages" instead of the Conventional Commit title
+this repository requires. No error, no annotation, nothing red.
+
+**The asymmetry is the point.** An output read with the wrong name produces an empty string, which
+is a _value_ the workflow can test — and does. An input passed with the wrong name produces
+**nothing observable at all**: a misspelt input and an omitted input are indistinguishable from
+inside the workflow, so there is no expression that could catch it. The existing assertion is not
+weak; it is guarding the only half of this interface that admits a guard.
+
+**What can be done instead, none of it free:**
+
+- **Assert on the effect rather than the input.** The version step's own log line, or a check that
+  the opened PR's title matches the expected string. Both are indirect and only fire on a release.
+- **Pin the action by commit SHA rather than by tag.** That does not prevent a wrong input, but it
+  removes the class of surprise where the action's contract changes underneath an unchanged
+  workflow. Widely recommended for third-party actions and worth considering on its own merits.
+- **Accept it and re-read `action.yml` on every major bump**, which is what was done here.
+
+The last is what CLAUDE.md §19.11 already requires — _a claim that decides something carries its
+evidence_ — applied to a workflow rather than to prose. Recorded so the next person bumping a
+third-party action knows the note in the file is a starting point rather than a specification.
+
+**Not a defect in the current workflow**, which is migrated correctly and verified: `action.yml`
+read at the v2 tag, all five renames applied, the YAML parsed and the step's resolved `with:` keys
+confirmed as the four v2 names with no leftover `env:` block. The hyphenated output read
+(`steps.changesets.outputs.has-changesets`) uses dot notation, which was checked against
+`actions/cache`'s own documented `steps.cache.outputs.cache-hit` rather than assumed — this
+repository had no hyphenated output anywhere to copy from.
