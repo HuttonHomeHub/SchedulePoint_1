@@ -29,6 +29,19 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
  * The SQL is **read from the shipped migration file**, never restated here: a copy would pass while
  * the file it claims to test drifted.
  *
+ * **Each case was verified red against the specific defect it guards**, not merely against nothing:
+ *
+ * | Case                     | Verified red against                                              |
+ * | ------------------------ | ----------------------------------------------------------------- |
+ * | backfill / abort / rollback | the naive `ADD COLUMN ... NOT NULL` form `migrate diff` generates |
+ * | repair                   | the file with step 0 deleted                                       |
+ * | repair-would-collide     | step 0 with its `NOT EXISTS` guard deleted                         |
+ *
+ * The last is the one worth knowing about: it passes equally against a migration with **no repair
+ * at all**, because leaving the row alone is the same observable outcome. It discriminates only
+ * against an *unguarded* repair, which is the defect it exists for — the repair test above is what
+ * proves a repair happens.
+ *
  * Each case runs in its own schema with `search_path` pointed at it, so the unqualified table name
  * in the migration resolves there and the real `accounts` table is untouched. Statements run inside
  * one transaction, which is how `prisma migrate deploy` wraps a migration file — the reason a
@@ -173,14 +186,59 @@ describe.skipIf(!hasDatabase)('accounts.issuer migration (e2e)', () => {
   });
 
   it('aborts on a duplicate (issuer, account_id) rather than half-applying', async () => {
+    // Both rows already satisfy `account_id = user_id`, so step 0's repair does not touch either —
+    // which is what makes this a duplicate the migration cannot resolve rather than one it fixes.
+    // It is also the shape step 0's comment describes: a second credential row written for a user
+    // who was already locked out. Two accounts for one person is not something a migration should
+    // silently merge, so the index is the right place for this to stop.
     await seed([
-      ['a1', 'shared', 'credential', 'u1'],
-      ['a2', 'shared', 'credential', 'u2'],
+      ['a1', 'u1', 'credential', 'u1'],
+      ['a2', 'u1', 'credential', 'u1'],
     ]);
 
     // 23505 = unique_violation. Asserted on the code for the reason given above.
     await expect(applyMigration()).rejects.toThrow(/23505/);
     expect(await issuerColumnExists()).toBe(false);
+  });
+
+  it('repairs a credential row whose account_id is not the user id', async () => {
+    await seed([
+      ['a1', 'u1', 'credential', 'u1'],
+      // The lockout shape: 1.7 requires `accountId === user.id`, so this user would be told their
+      // password is wrong, and reset-password would write them a second credential row.
+      ['a2', 'legacy-external-id', 'credential', 'u2'],
+    ]);
+
+    await applyMigration();
+
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string; account_id: string }>>(
+      `SELECT id, account_id FROM "${SCHEMA}"."accounts" ORDER BY id`,
+    );
+    expect(rows).toEqual([
+      { id: 'a1', account_id: 'u1' },
+      { id: 'a2', account_id: 'u2' },
+    ]);
+  });
+
+  it('leaves a mismatched row alone when repairing it would collide, and then refuses it', async () => {
+    await seed([
+      // Already correct for u1.
+      ['a1', 'u1', 'credential', 'u1'],
+      // Also u1's, and wrong. Repairing this one blindly would make two rows `(local:credential,
+      // u1)` and the unique index would abort — a repair turning into an outage on exactly the
+      // data most in need of repair. The guard leaves it, and step 5 refuses it loudly instead.
+      ['a2', 'stale-external-id', 'credential', 'u1'],
+    ]);
+
+    await applyMigration();
+
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string; account_id: string }>>(
+      `SELECT id, account_id FROM "${SCHEMA}"."accounts" ORDER BY id`,
+    );
+    expect(rows).toEqual([
+      { id: 'a1', account_id: 'u1' },
+      { id: 'a2', account_id: 'stale-external-id' },
+    ]);
   });
 
   it('lets a pre-1.7 image, which writes no issuer, still INSERT (the rollback contract)', async () => {

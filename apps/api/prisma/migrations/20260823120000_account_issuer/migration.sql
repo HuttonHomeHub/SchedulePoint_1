@@ -17,6 +17,34 @@
 -- which the backfill is 10.7 s and leaves one dead tuple per live tuple until autovacuum.
 -- See docs/specs/better-auth-1-7-account-issuer/m0-measurement.md.
 
+-- 0. Repair credential rows whose `account_id` is not the user's id.
+--
+--    This is not about `issuer`, and no issuer backfill would help such a row: 1.7's sign-in
+--    predicate is `providerId === 'credential' && issuer === 'local:credential' && accountId ===
+--    user.id`, and the third conjunct is also new. An affected user is told their password is
+--    wrong, and reset-password then takes the CREATE branch and writes them a SECOND credential
+--    row — so the product appears to heal itself while the data goes wrong. Doing nothing here
+--    ships a known lockout with no self-service route out of it. Product-owner decision,
+--    2026-08-23, taken with the deployed table unmeasured; the measured database has zero such
+--    rows (m0-measurement.md Q3), so on that data this statement is a no-op.
+--
+--    The `NOT EXISTS` guard is load-bearing. Without it, a user holding two credential rows — one
+--    already correct, one not — would have both rewritten to the same `account_id` and the unique
+--    index at step 5 would abort the whole migration. That turns a repair into an outage on
+--    exactly the data most in need of repairing. Guarded, the colliding row is left alone and step
+--    5 still refuses it, which is the loud failure a human should see rather than a silent merge
+--    of two accounts.
+UPDATE "accounts" a
+   SET "account_id" = a."user_id"
+ WHERE a."provider_id" = 'credential'
+   AND a."account_id" <> a."user_id"
+   AND NOT EXISTS (
+         SELECT 1 FROM "accounts" b
+          WHERE b."user_id" = a."user_id"
+            AND b."provider_id" = 'credential'
+            AND b."account_id" = a."user_id"
+       );
+
 -- 1. Add it nullable. Metadata-only on PostgreSQL 11+ (0.4-0.7 ms flat from 85 to 1,000,000 rows,
 --    which a table rewrite could not be). No default yet — see the note above.
 ALTER TABLE "accounts" ADD COLUMN "issuer" TEXT;

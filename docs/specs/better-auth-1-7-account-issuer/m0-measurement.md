@@ -145,11 +145,38 @@ about a cost that is real at scale.
 | Question | Answer, on the evidence above                                                              | Differs from the spec's default?                                                           |
 | -------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
 | **CQ-1** | Credential-only on `app_test`. Backfill stays **guarded** on `provider_id`, not blanket.   | No — the guard is R5's conservative branch, kept because the deployed table is unmeasured. |
-| **CQ-2** | No mismatched rows here, so **no data repair ships**. Not closed for the deployed host.    | No                                                                                         |
+| **CQ-2** | No mismatched rows here — but the **repair ships anyway**, guarded. See below.             | **Yes**                                                                                    |
 | **CQ-3** | Zero duplicates and a 1.8–92 ms build, so **take the unique index in the same migration**. | No                                                                                         |
 
 CQ-4 (does `apps/web` take the bump) and CQ-5 (one release or two) are untouched by M0 and keep
 their spec defaults: bump both, ship two releases.
+
+### CQ-2 was decided by the product owner, against this measurement rather than because of it
+
+Put to the product owner on 2026-08-23 together with the choice of whether to run the pre-flight
+against the deployed host first. They chose **proceed without the pre-flight** and **repair the rows
+if any exist** — so the repair ships as step 0 of the migration, unconditional in the file and a
+no-op on any table that has none, which is every table measured here.
+
+The spec's stated default was "repair, **only if M0 finds any**". That conditional cannot be
+honoured once the deployed table is deliberately left unmeasured: there is no measurement to
+condition on, and a repair written later is a second migration. Shipping it unconditionally is the
+same decision with its condition removed, which is why the row above is marked as differing from the
+default rather than matching it.
+
+**The guard on the repair was not in the spec and came out of writing the test.** A user holding two
+credential rows — one already correct, one not — would have both rewritten to the same `account_id`,
+and the unique index at step 5 would abort the whole migration: a repair turning into an outage on
+exactly the data most in need of repairing. The `NOT EXISTS` clause leaves the colliding row alone
+and lets step 5 refuse it, which is the loud failure a person should see rather than a silent merge
+of two accounts.
+
+Writing that test also **invalidated an earlier one**. The duplicate-abort case had been seeded with
+two rows sharing an `account_id` under different users — which step 0 now repairs, so the migration
+succeeded and the test went red. Its seed is now two credential rows for **one** user, both already
+satisfying `account_id = user_id`, which step 0 cannot touch. That is the shape step 0's own comment
+describes (reset-password writing a second row for a locked-out user), so the case is now about the
+duplicate the migration genuinely cannot resolve rather than one it quietly fixes.
 
 ---
 
