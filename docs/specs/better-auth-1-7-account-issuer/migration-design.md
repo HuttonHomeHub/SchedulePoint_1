@@ -62,12 +62,22 @@ The guarded constant is the design: fail-closed in the same sense as `ck_notes_e
 
 | Claim                                      | Verdict | Evidence                                                                                                                                                                                                        |
 | ------------------------------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `issuer: z.string()`, not nullish          | ✅      | `@better-auth/core@1.7.1/dist/db/schema/account.mjs:6`                                                                                                                                                          |
+| `issuer: z.string()`, not nullish          | ✅      | `@better-auth/core@1.7.1` `dist/db/schema/account.mjs`, the `accountSchema` `issuer` field                                                                                                                      |
 | `UNIQUE (issuer, accountId)` declared      | ✅      | `dist/db/get-tables.mjs` `account.indexes`                                                                                                                                                                      |
-| credential issuer is `local:credential`    | ✅      | `better-auth@1.7.1/dist/api/routes/sign-up.mjs:246`                                                                                                                                                             |
+| credential issuer is `local:credential`    | ✅      | `better-auth@1.7.1` `dist/api/routes/sign-up.mjs`, the `createLocalAccountIssuer` call                                                                                                                          |
 | **credential-only installation**           | ✅ ×4   | no `socialProviders` anywhere; no `plugins` key; **no code in this repo inserts an `Account` row** (`grep '\.account\.\(create\|createMany\|upsert\)'` → zero hits); 85/85 live rows `provider_id='credential'` |
-| `account_id = user_id` for credential rows | ✅      | library `sign-up.mjs:247`; data 85/85                                                                                                                                                                           |
+| `account_id = user_id` for credential rows | ✅      | library `sign-up.mjs`, the `accountId` argument of the same call; data 85/85                                                                                                                                    |
 
+> **The three 1.7.1 citations above deliberately carry no line number**, and finding out why was
+> itself a finding. They did carry them, and `pnpm check:claims` **accepted one of them**: the
+> design cited `sign-up.mjs:246` for "the credential issuer is `local:credential`", and the register
+> already holds a `sign-up.mjs:246` — verified at **1.6.28**, where that line is the
+> verification-email call and has nothing to do with issuers. The gate matches a citation by its
+> **ref string**, so a citation into a different version at a coinciding line passes silently and
+> the document then reads as though the claim had been re-read. That is `docs/TECH_DEBT.md` **#181**.
+> Until the bump lands (M4) these name the symbol instead, which is what #176 did for the same
+> reason; the line anchors get registered at M4, against the version that is actually installed.
+>
 > **Every citation above is a store read of an UNINSTALLED version.** `apps/api` has `1.6.28`
 > installed; the `1.7.1` directory is an orphan left by the reverted bump — `docs/TECH_DEBT.md`
 > **#178 live in this working tree**. Delete the orphan before registering any citation, or

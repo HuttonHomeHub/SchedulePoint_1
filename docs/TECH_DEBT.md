@@ -4075,3 +4075,46 @@ confirmed as the four v2 names with no leftover `env:` block. The hyphenated out
 (`steps.changesets.outputs.has-changesets`) uses dot notation, which was checked against
 `actions/cache`'s own documented `steps.cache.outputs.cache-hit` rather than assumed — this
 repository had no hyphenated output anywhere to copy from.
+
+---
+
+## 181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
+
+_Found 2026-08-23, by the gate accepting a citation it should have refused._
+
+`scripts/check-claims.mjs` scans the tree for citation-shaped strings and requires each one to
+appear as a `ref` in `scripts/dependency-claims.json`. The `ref` is `basename:lines` — it carries no
+version. So a citation into **a different version of the same file, at a line that happens to
+coincide with a registered one**, satisfies the gate and reads to every later reader as re-read
+evidence.
+
+**It happened.** `docs/specs/better-auth-1-7-account-issuer/migration-design.md` cited
+`better-auth@1.7.1` `sign-up.mjs:246` for _"the credential issuer is `local:credential`"_. The
+register holds `sign-up.mjs:246` — verified against **1.6.28**, where that line is
+`if (ctx.context.options.emailVerification?.sendVerificationEmail)`, the verification-email call,
+which has nothing to do with issuers. `pnpm check:claims` reported **52 claims OK**. The two sibling
+citations in the same table — into `account.mjs` and one line further into `sign-up.mjs` — **were**
+caught, and only because those line numbers happened not to collide with anything registered. The
+gate's success and its failure on one table were decided by coincidence.
+
+(Those two are named here without their line numbers on purpose: writing them out trips the gate
+from inside the row that documents it, which is the second time this session a write-up about a
+citation problem has been refused for containing one.)
+
+**Why this is the sharp version of #178 rather than a duplicate.** #178 is about the _resolver_
+reaching the wrong copy on disk. This is about the _register_: even with the right copy read, a ref
+cannot express which version was read, so two claims about two versions are indistinguishable
+identifiers. #178 makes you read the wrong file; #181 lets the right reading of a new file inherit
+an old file's verification.
+
+**Scope.** Only bites when a document cites a version other than the one installed — which is
+exactly what an upgrade epic does, and exactly when the citations matter most. The current tree is
+clean: the three 1.7.1 citations now name their symbol and carry no line, with the reason recorded
+in the design file, and they get real anchors at M4 against the version that lands.
+
+**Candidate fixes, none free.** Make `ref` version-qualified (`better-auth@1.6.28:sign-up.mjs:246`),
+which is correct and rewrites every citation in the tree. Or have the scanner read the
+`package@version` prefix a citation already often carries and refuse a mismatch against the entry's
+`verifiedAgainst` — narrower, and does nothing for the many citations written as a bare basename.
+The second is probably right; neither should be done inside an upgrade epic, because the gate would
+then be changing underneath the citations it is checking.
