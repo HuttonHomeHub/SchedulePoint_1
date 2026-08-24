@@ -34,7 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
-import { Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
@@ -1285,29 +1285,29 @@ export function ToolbarPlanWorkspace({
               `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
               equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
               everything below it. */}
-          {/* **One strip** (Graphite M5). ADR-0031's two-row amendment split the surface into "what
-              you look at" and "what you build with", and four epics (ADR-0090/0091/0092/0094) then
-              spent themselves making both rows fit. The split is deleted rather than re-grouped:
-              `TOOLBAR_GROUPS` was already a menu structure — `frame · lens · find · tools · object ·
-              output · help` — so the merged strip's order is the taxonomy's, unchanged.
+          {/* **The command deck** (workspace redesign, 2026-08-24) — `Deck`, not `Toolbar`, and the
+              difference is the whole point rather than a styling choice.
 
-              The row captions go with it. They existed because the Look/Do split lived only in each
-              row's `aria-label` and was invisible to sighted readers; with one row there is nothing
-              to distinguish, and a caption naming the only thing present is noise.
+              `Toolbar` answers "too many commands" by measuring its container and demoting the
+              lowest-priority items into a `⋯`. Four epics (ADR-0090/0091/0092/0094) tuned that
+              mechanism, and the product owner's verdict was that the overflow "is not what we
+              agreed to — we need all commands visible when we can". Reading the OLD Flask app
+              settled it: its toolbar wrapped over five labelled group cards and had no overflow
+              because a row allowed to become two rows cannot run out of width. The entire ladder
+              was a consequence of insisting this surface stay one row tall.
 
-              `alignEndGroup="object"` does NOT survive, and that is a decision rather than an
-              omission: it right-aligned Row 1's single read-out, and `object` on the merged strip is
-              the plan-action cluster (Analysis, Settings, Comments) that Row 2 carried. Pushing
-              those to the trailing edge would put the commands a planner reaches for most at the far
-              end of the widest row in the product. The `⋯` keeps the trailing edge, which is what
-              ADR-0091 M7's S9 asserts. */}
-          <div className="flex items-center gap-2 px-2 py-1">
-            <Toolbar
+              So `Deck` wraps, groups into four foldable captioned cards, and has no `⋯` at all.
+              `alignEndGroup` goes with the ladder — a trailing edge is a property of a single row,
+              and there is no longer one to have an edge. `className="flex-1"` goes too: the deck
+              fills the band by wrapping into it rather than by being told to grow, and a flex child
+              that grows is exactly how a row ends up measuring its own leftover width, which is the
+              defect class this replaces. */}
+          <div className="px-2 py-1.5">
+            <Deck
               items={rows.strip}
               context={ctx}
               label="Plan commands"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-              className="flex-1"
             />
           </div>
         </ToolbarBandProvider>

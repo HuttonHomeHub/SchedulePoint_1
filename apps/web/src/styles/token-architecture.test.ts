@@ -550,11 +550,23 @@ describe('weight is a governed axis', () => {
    * A rise here is not automatically wrong — it is what the screen ceiling coming down looks like
    * from this side, and Landing B is exactly that trade: four screen sites became one primitive.
    * It is a ceiling so that the trade is a decision somebody makes rather than a drift.
+   *
+   * **23 → 25 (workspace redesign, 2026-08-24).** `Deck` is a new primitive and it places two
+   * weights: `font-bold` on the group caption, `font-medium` on the stacked button label. That is
+   * this rule's own stated purpose — a primitive deciding, once, what a caption weighs — rather
+   * than a drift, and the decision is being made here in the open, which is what the ceiling is
+   * for. Both are also load-bearing rather than decorative: the caption is a disclosure control
+   * and must read as one, and the 10px stacked label needs the extra weight to survive at that
+   * size on a navy card.
+   *
+   * It should come back DOWN when `Toolbar`'s ladder is deleted in the same epic — that file and
+   * its overflow menu place weights of their own — so this number is expected to move twice, and
+   * the second move is the one that matters.
    */
-  it('no more than 23 weights placed inside the primitives', () => {
+  it('no more than 25 weights placed inside the primitives', () => {
     const sites = weightSites().filter((site) => site.startsWith('components/ui/'));
     expect(sites.length, `primitives placing weight rose to ${sites.length}`).toBeLessThanOrEqual(
-      23,
+      25,
     );
   });
 });

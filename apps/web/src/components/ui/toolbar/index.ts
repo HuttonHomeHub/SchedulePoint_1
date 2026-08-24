@@ -1,3 +1,4 @@
+export { Deck, type DeckProps, type DeckGroupId } from './Deck';
 export { Toolbar, type ToolbarProps } from './Toolbar';
 export { ToolbarButton, type ToolbarButtonProps } from './ToolbarButton';
 export { ToolbarPopover } from './ToolbarPopover';
