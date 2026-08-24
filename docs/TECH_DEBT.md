@@ -4339,7 +4339,8 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 
 ## #184 — The bulk-delete focus restoration is a race, and it failed once under load
 
-_Filed 2026-08-24 with ADR-0109 M5. **Not reproduced**, and that is the finding._
+_Filed 2026-08-24 with ADR-0109 M5 as **not reproduced**. **Closed the same day, reproduced under
+load and hardened** — the update is below._
 
 `e2e-multi-select`'s "a bulk delete is ONE undo step" asserts `expect(list).toBeFocused()` after a
 bulk delete. It failed once, in a 35-suite sweep, and **passed on its own immediately afterwards**.
@@ -4367,6 +4368,24 @@ What would settle it, in order of cost: instrument `focusListboxAfterModal` to r
 first frame won, and run the suite under load; if it loses, replace the single frame with a bounded
 self-verifying retry — check `document.activeElement` and try again next frame, up to a small cap —
 which converts the race into a check and cannot make the winning case worse.
+
+**UPDATE, same day — reproduced, and the second half of that sentence is what shipped.** A second
+35-suite sweep failed the identical assertion at the identical line, and the suite passed on its own
+again immediately afterwards. Two failures under load, two passes in isolation, is a pattern rather
+than an event: a single-frame race losing on a busy runner.
+
+`focusListboxAfterModal` now asks whether it won instead of assuming — focus, compare
+`document.activeElement`, try again next frame, bounded at five frames (~80 ms). `then` fires
+exactly once whether the retry succeeds or the cap is reached, because the deletion announcement
+must not be spoken twice and must still be spoken if focus never lands, or a planner loses the
+confirmation as well as the focus.
+
+**What was NOT done, and why it is worth recording:** the leading hypothesis for the narrowed margin
+— that ADR-0109 D3 added React state to a deliberately render-free `usePlanAutoRecalc`, so `notify()`
+now renders where it did not — is still unverified, and no attempt was made to revert it. The
+hardening fixes the class regardless of which change narrowed the margin, which is the right shape
+of fix for a race whose cause is uncertain: it cannot make the winning case worse, and it removes
+the failure mode rather than one of its possible causes.
 
 ---
 

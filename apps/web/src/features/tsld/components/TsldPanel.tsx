@@ -684,10 +684,35 @@ export function TsldPanel({
    * modal focus restoration to lose the race to.
    */
   const focusListboxAfterModal = useCallback((then?: () => void) => {
-    requestAnimationFrame(() => {
+    /**
+     * **Self-verifying, not fire-and-forget** (`docs/TECH_DEBT.md` #184).
+     *
+     * One `requestAnimationFrame` was a race won by a margin nobody had measured, and the estate
+     * sweep found the margin: `e2e-multi-select`'s `expect(list).toBeFocused()` failed in TWO
+     * consecutive 35-suite sweeps and passed on its own after each — load-dependent, which is
+     * exactly what a single-frame race looks like on a busy runner.
+     *
+     * So it asks whether it won rather than assuming: focus, check, and try again next frame if the
+     * dialog's own restoration landed after us. Bounded at five frames (~80 ms) because an
+     * unbounded retry against a genuinely unmountable target is a loop, and `then` fires exactly
+     * once either way — the announcement must not be spoken twice, and must still be spoken if the
+     * cap is reached, or a planner loses the confirmation as well as the focus.
+     *
+     * It cannot make the winning case worse: when the first frame lands, this is the previous
+     * behaviour with one comparison added.
+     */
+    const MAX_FRAMES = 5;
+    let frames = 0;
+    const attempt = (): void => {
       listboxRef.current?.focus();
+      if (document.activeElement !== listboxRef.current && frames < MAX_FRAMES) {
+        frames += 1;
+        requestAnimationFrame(attempt);
+        return;
+      }
       then?.();
-    });
+    };
+    requestAnimationFrame(attempt);
   }, []);
   // Set just before a Next-conflict cycle focuses the listbox programmatically, so the listbox's
   // `onFocus` default-select (pick the first row when nothing is selected) doesn't clobber the conflict
