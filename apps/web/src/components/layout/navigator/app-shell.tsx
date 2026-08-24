@@ -481,10 +481,17 @@ function ShellFrame(): React.ReactElement {
                     column, which is §4a solved by geometry: opening the drawer redistributes width
                     between `<main>` and the drawer, both inside this span, so the band changes by
                     zero. The rail is outside the span and is a fixed column, so it cannot affect it
-                    either. */}
+                    either.
+
+                    The margin is what makes the band read as a card FLOATING on the gradient rather
+                    than a bar welded to the top of the window, and it lives here rather than in the
+                    component for the reason that component's docblock gives: it has no opinion
+                    about what sits beneath it. `mb-2` is smaller than the other three deliberately —
+                    the gap to the content below wants to be tighter than the gap to the window edge,
+                    or the band floats away from the thing it commands. */}
                 <ChromeBandRow
                   rowsSlotRef={rowsSlotRef}
-                  className="col-span-2 col-start-2 row-start-1"
+                  className="col-span-2 col-start-2 row-start-1 mt-3 mr-3 mb-2 ml-3"
                 />
 
                 {/* Row 2, column 2 — the one `<main>` for the page. `min-h-0` lets it shrink to the
