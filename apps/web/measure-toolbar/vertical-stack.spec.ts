@@ -67,6 +67,7 @@ async function stackHeights(page: Page): Promise<unknown> {
     // be found must throw, which is this harness's own rule and the reason the ADR-0090 M5 gap was
     // findable at all.
     const rowStrip = rowOf('Plan commands');
+    const deckToolbar = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
     const commandBand = rowStrip?.parentElement ?? null;
 
     // The **identity line** — plan name, status, edit pencil, mode toolbar, pen status.
@@ -146,6 +147,46 @@ async function stackHeights(page: Page): Promise<unknown> {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       bands,
       aboveCanvas: canvasBox ? Math.round(canvasBox.top * 10) / 10 : null,
+      /**
+       * **Why the command strip is as tall as it is** (`docs/TECH_DEBT.md` #185).
+       *
+       * The strip measured 182 px after the redesign against 44 px for the row it replaced, and the
+       * obvious explanation — "34 stacked buttons over four cards wrap to two lines" — is arithmetic
+       * over class names, which is what ADR-0090 M0 and ADR-0091 M0 both exist because of. It is
+       * also contradicted by the total being IDENTICAL at 1920 and 1280, which a `flex-wrap`
+       * container should not produce.
+       *
+       * So the cards are reported: how many, how wide, and which line each sits on (`top`). Two per
+       * line at every measured width would explain the constant and would make card WIDTH the lever
+       * rather than button height — which matters, because the button-height lever reverses an
+       * approved design decision and the width one does not.
+       */
+      /**
+       * **Measured from the TOOLBAR, not from `rowStrip`.** `rowOf` returns the toolbar's PARENT —
+       * the wrapper that carries the row's caption — so `:scope > [role="group"]` on it found
+       * nothing and reported an empty list, which is the "green because it matched nothing" shape
+       * this repository keeps recording. The first version of this block did exactly that.
+       *
+       * The distinction is not pedantic: it decides whether the 182 px belongs to the deck or to
+       * the chrome around it, and therefore which of the two is worth changing.
+       */
+      deckHeight: deckToolbar ? Math.round(deckToolbar.getBoundingClientRect().height) : null,
+      deckCards: [...(deckToolbar?.querySelectorAll(':scope > [role="group"]') ?? [])].map(
+        (card) => {
+          const cardBox = card.getBoundingClientRect();
+          const firstButton = card.querySelector('button')?.getBoundingClientRect();
+          return {
+            name: card.getAttribute('aria-label'),
+            width: Math.round(cardBox.width),
+            height: Math.round(cardBox.height),
+            top: Math.round(cardBox.top),
+            buttons: card.querySelectorAll('button').length,
+            firstButton: firstButton
+              ? { w: Math.round(firstButton.width), h: Math.round(firstButton.height) }
+              : null,
+          };
+        },
+      ),
       canvasHeight: canvasBox ? Math.round(canvasBox.height * 10) / 10 : null,
       // Deliberately NOT a sum of every band: the command rows nest inside the chrome band, so
       // adding both double-counts. This is the attribution `aboveCanvas` must reconcile against.
