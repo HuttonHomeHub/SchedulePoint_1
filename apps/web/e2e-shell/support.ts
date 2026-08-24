@@ -57,6 +57,10 @@ export async function openFromAccountMenu(
  */
 export async function expectNoOrganisationNavigation(page: Page): Promise<void> {
   await expect(page.locator('a[href*="/orgs/"]')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Project Explorer' })).toHaveCount(0);
+  // Neither the column nor either of its two controls. Asserted as three rather than one, because
+  // M3-T1 split what used to be one rail button into a fold and a spine, and a rule that withheld
+  // the panel while leaving a control that promises it is the dead end #165a is about.
   await expect(page.getByRole('navigation', { name: 'Project Explorer' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Hide Project Explorer' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Show Project Explorer' })).toHaveCount(0);
 }

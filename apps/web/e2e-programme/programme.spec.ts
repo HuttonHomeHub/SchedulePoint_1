@@ -10,6 +10,7 @@ import {
   onboard,
   openProject,
   recalculate,
+  showActivities,
 } from './support';
 
 /**
@@ -110,9 +111,22 @@ test('a planner links plans across projects and recalculates the programme', asy
   // up in the activities table (the M1 badge the programme surface reuses; matched by its sr-only text).
   await expect(page.getByText(/imported date from another project/i)).toBeVisible();
 
-  // Staleness: recalculate the upstream alone, then the downstream shows the stale banner.
+  // Staleness: **edit** the upstream, so it recalculates, so its `schedule_computed_at` moves past
+  // the downstream's — then the downstream shows the stale banner.
+  //
+  // **It used to press Recalculate on an unedited plan, and that stopped working for a good
+  // reason.** ADR-0109 D3 attaches that control to the condition it answers, so a plan that is
+  // already current does not offer one — and the shared helper's postcondition ("the schedule is
+  // current") was satisfied without pressing anything, so nothing moved and the banner never came.
+  //
+  // The product is right and the test was leaning on a lever that should not exist: a schedule is a
+  // pure function of its inputs, so re-running it on unchanged inputs produces identical dates and
+  // there is nothing for a planner to force. What moves ADR-0045's pull-staleness is a
+  // recalculation, and what causes one is an edit. So the journey now does what a planner would.
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('link', { name: 'Procurement', exact: true }).click();
+  await showActivities(page);
+  await addActivity(page, 'Late delivery', 4);
   await recalculate(page);
   await page.getByRole('link', { name: 'Riverside' }).click();
   await page.getByRole('link', { name: 'Construction', exact: true }).click();

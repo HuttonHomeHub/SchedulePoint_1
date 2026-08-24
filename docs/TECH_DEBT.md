@@ -4278,3 +4278,50 @@ unsaved changes."` — a comma list with no "and", delivered as one sentence wit
 `shouldBlockFn` is **never called** on `page.goBack()` while the guard is mounted and the URL does
 not change — so something other than this guard reverts the pop. Recorded rather than claimed
 (ADR-0108 D7).
+
+---
+
+## #182 — The deck's folded groups are unreachable by any journey
+
+_Filed 2026-08-24 with ADR-0109 M2._
+
+`Deck` renders four captioned groups that a reader can fold, and a folded group's items are absent
+from the DOM. **Nothing exercises that path.** Every Playwright suite starts from a fresh profile,
+the fold state lives in `localStorage` under `schedulepoint-deck-folds`, and no journey writes it —
+so every run drives the all-open case and the folded one is dark.
+
+`revealToolbarCommand` in `e2e-support/toolbar.ts` is where the answer belongs (its docblock says
+so) and it is currently a straight `getByRole` because the width ladder it was written for is gone.
+Its `⋯` branch is kept as the shape that would serve a folded group, not as live code.
+
+**Why this is not urgent and is still worth writing down.** A fold is a deliberate act by a reader
+who then knows the group is folded, so the failure mode is not silent — unlike the ladder, which
+folded commands away at widths nobody had measured. What is untested is whether a _keyboard_ reader
+can get back to a folded group's contents, and whether the roving `tabindex` stays coherent across a
+fold. Both are asserted at unit level (`Deck.test.tsx`) and neither has been driven in a browser.
+
+Cost: one journey that folds a group, tabs through the strip, and unfolds it.
+
+---
+
+## #183 — A journey that seeds through the API must tell the client itself
+
+_Filed 2026-08-24 with ADR-0109 M5, from the estate sweep._
+
+Several support layers write plans, activities and links straight to the REST API with
+`page.evaluate` — much faster than driving the UI, and correct — and then relied on **a later
+`Recalculate` press** to invalidate the open page's queries. Nobody wrote that reliance down; it was
+a side effect of a mutation, and it worked for as long as that control was offered unconditionally.
+
+ADR-0109 D3 made it conditional, and six `e2e-gantt-editing` specs opened a Gantt with no rows in
+it. `e2e-gantt/support.ts` now reloads at the point of the out-of-band write, which is the idiom
+`e2e-workspace-chrome/support.ts` already used with the same one-line reason.
+
+**What is left is an audit rather than a defect.** The sweep proves today's estate green, so no other
+suite is currently relying on it — but "no suite relies on it today" is a fact about today, and the
+next API-seeding helper will be written by copying one of the existing ones. The candidates are the
+nine support files that POST through `page.evaluate`; each should either reload or say in a comment
+why its caller does not need it to.
+
+Cost: one pass over nine files. There is no gate for this and a structural one looks unpromising —
+"does this helper's caller later observe what it wrote" is not a property of a file.

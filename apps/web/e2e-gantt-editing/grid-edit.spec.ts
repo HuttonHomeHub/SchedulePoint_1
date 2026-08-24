@@ -4,13 +4,13 @@ import {
   createClient,
   createPlan,
   createProject,
-  ensurePen,
   ganttRow,
   onboard,
   openPlanId,
   seedActivities,
   showGantt,
   startEditing,
+  syncClient,
 } from '../e2e-gantt/support';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -109,8 +109,7 @@ async function useEightHourCalendar(page: Page, orgSlug: string): Promise<void> 
   // times immediately after the reload landed. `ensurePen` rather than `startEditing`, because a
   // reload may leave the lease already held and clicking "Start editing" would then hang on a
   // button that is not there.
-  await page.reload();
-  await ensurePen(page);
+  await syncClient(page);
 }
 
 /** The stored row, straight from the API — the only honest place to check a write. */

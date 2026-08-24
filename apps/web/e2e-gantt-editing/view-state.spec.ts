@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 
 import {
   createClient,
-  ensurePen,
   createPlan,
   createProject,
   ganttGrid,
@@ -11,6 +10,7 @@ import {
   seedActivities,
   showGantt,
   startEditing,
+  syncClient,
 } from '../e2e-gantt/support';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -131,13 +131,13 @@ test('Indent files a row under the summary above it, and the write reaches the A
     },
     { org: orgSlug, id: planId },
   );
-  await page.reload();
-  // The reload DROPS THE PEN LEASE, so every structure action shades with the pen's refusal rather
-  // than its own — which is what the first run of this case actually hit, and why it read as
-  // "Indent is refused" when the summary above it was perfectly valid. `grid-edit.spec.ts` records
-  // the same trap two files along. `ensurePen`, not `startEditing`: a reload may leave the lease
-  // already held, and clicking a button that is not there would hang.
-  await ensurePen(page);
+  // `syncClient` = reload + `ensurePen`, and the second half is what this case learnt the hard way:
+  // the reload DROPS THE PEN LEASE, so every structure action shades with the pen's refusal rather
+  // than its own — which read as "Indent is refused" when the summary above it was perfectly valid.
+  // `ensurePen`, not `startEditing`: a reload may leave the lease already held, and clicking a
+  // button that is not there would hang. Four files had a copy of this before it had a name
+  // (`docs/TECH_DEBT.md` #183).
+  await syncClient(page);
   await expect(ganttGrid(page)).toBeVisible();
 
   // Sort by Activity, so "Phase A" is deterministically ABOVE "Seeded 0". Indent reads the display
@@ -243,8 +243,7 @@ test('the row menu opens from the KEYBOARD, and Indent driven that way reaches t
     },
     { org: orgSlug, id: planId },
   );
-  await page.reload();
-  await ensurePen(page); // the reload drops the lease — see the case above
+  await syncClient(page); // reload + re-pen — see the case above
   await expect(ganttGrid(page)).toBeVisible();
 
   await page.getByRole('columnheader', { name: 'Activity' }).getByRole('button').click();

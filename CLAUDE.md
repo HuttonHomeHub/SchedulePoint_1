@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1065 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1066 web
 > source files with 38 Playwright suites beside the base journey, and
-> 108 ADRs.
+> 109 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3083,6 +3083,57 @@ progress` off the command surface because **an object action belongs on the obje
   there was nothing to be unclassified; the **pinned positive case** is what failed. That is the
   ADR-0093 lesson (a green suite that cannot tell "all classified" from "found nothing") landing on
   this epic's own gate. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0109** _(Accepted; M1–M5 landed 2026-08-24)_ — A command surface wraps, and the leading
+  edge belongs to the work. Four consecutive epics (ADR-0090/0091/0092/0094) worked this product's
+  command surface and a fifth (ADR-0099) rebuilt the shell around it; each asked _does the row
+  fit?_ and each answered by shaving something. The product owner's verdict after all five was that
+  it still looked poor, and their complaints were specific: the overflow menu was not what had been
+  agreed, all commands should be visible when there is room, and the colour scheme "was working in
+  the old SchedulePoint repo but somehow doesn't here". They then **set the rulebook aside for one
+  epic** — recorded in `docs/specs/workspace-redesign/README.md` with an explicit obligation to
+  rewrite the standards afterwards, which this ADR and the pass beside it discharge.
+  **The diagnosis came from reading the old Flask app rather than describing it from memory, and it
+  inverted both halves.** That app's toolbar **wrapped** — `flex-wrap` over five labelled group
+  cards holding fifteen buttons — so it never needed an overflow. The premise all four command
+  epics tuned, that a command surface must stay one row tall, was **never a requirement anybody had
+  stated**; it was inherited, and the `ResizeObserver`, the width cache, the priority ranking, the
+  band floors, the hysteresis and the `⋯` were all consequences of it. And the palette was never
+  wrong: `--chrome` has held `#14213D` since ADR-0102 and `--chrome-primary` its `#FCA311`. What was
+  missing were **surfaces** — `chrome-band.tsx` was the shell's only chrome surface and it was a
+  flat `border-b` bar with the page's white running edge to edge above and below it.
+  **D1: a command surface wraps; it never hides.** ~1550 lines deleted — `toolbar-ladder.ts`,
+  `ToolbarOverflow.tsx`, the `e2e-toolbar-fit` journey with its config and CI step, and the
+  measuring machinery inside `Toolbar`. The gate goes **with** the ladder rather than staying green:
+  a gate whose subject no longer exists does not become a safety net by continuing to pass, it
+  becomes a claim that something is checked when nothing is. The cost is stated rather than glossed
+  — a surface that wraps has a height that is a function of its width. **D2: the leading edge
+  belongs to the work.** The 48 px tool rail is deleted and the Explorer docked, resizable 200–420
+  and folding to a 34 px spine; the rail's four jobs return to a header row that renders at every
+  width again. It is a **reversal whose premise changed underneath it**: ADR-0099 D2's argument was
+  "one panel, two subjects", and ADR-0101 left the other subject with no production registrant at
+  all (TECH_DEBT #156), so it had quietly become one subject reached through a switcher. **D3:
+  Recalculate is attached to the condition it answers** — auto-recalculation has fired on every
+  structural edit since ADR-0032 M3, so on a healthy plan that command re-ran a calculation that had
+  already run. **D4: the diagram is ruled both ways and its ground is quiet** — the weekend hatch
+  goes, the month band defaults off (its switch stays), lane hairlines arrive, derived from the
+  **viewport** so the layer is O(visible lanes) and never O(plan). **D5: no flag** (ADR-0088 D1 — a
+  `VITE_` constant is inlined at build time and has never been an operator rollback).
+  **Two of the plan's own tasks described work that was already shipped** — arrowheads have been
+  filled and batched since ADR-0065, the criticality ladder gated at 1.5:1 since ADR-0097 Landing E
+  — recorded rather than re-implemented, the fourth time §19's re-verify-the-problem rule has paid.
+  **And the estate sweep earned its keep three times over.** It found a real accessibility defect I
+  had introduced: the status bar's Recalculate carried its `sr-only` reason INSIDE the button, so
+  the linked text was concatenated into the **name** as well as the description and the control
+  announced itself as "Recalculate Start editing to" — `ToolbarButton` avoids this with one line I
+  had not copied, and the unit case could not catch it because it asked for `{ name: /Recalculate/ }`,
+  which a polluted name still matches. It found that six `e2e-gantt-editing` specs had been using an
+  unconditional Recalculate press as a **cache-invalidation lever** after seeding through the API —
+  a reliance nobody had written down, which a conditional control silently removes. And it found a
+  journey leaning on a lever that should not exist: `e2e-programme` pressed Recalculate on an
+  unedited plan to move ADR-0045's pull-staleness, where the honest act is an edit. **The CPM
+  engine, the REST API and the database are untouched** — `apps/web` only, which is what makes the
+  whole redesign revertible.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

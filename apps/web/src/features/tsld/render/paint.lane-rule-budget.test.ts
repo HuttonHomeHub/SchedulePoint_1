@@ -105,6 +105,7 @@ function countingCtx() {
     lineWidth: 1,
     font: '',
     textBaseline: 'middle' as CanvasTextBaseline,
+    textAlign: 'left' as CanvasTextAlign,
     globalAlpha: 1,
     save: () => {},
     restore: () => {},

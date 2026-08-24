@@ -357,6 +357,18 @@ every journey passes through, and its first two runs say why:
   one, and the only thing that stopped it was `expectTheme`, written for exactly that reason. **A
   sweep finds the suites that are wrong about a change they were never about**, and neither of these
   two is named for what changed.
+- ADR-0109 made `Recalculate` conditional — it appears only when the schedule is behind the plan —
+  and the sweep found **six `e2e-gantt-editing` specs using an unconditional press as a
+  cache-invalidation lever.** They seeded activities through the REST API, which leaves the open page
+  knowing nothing about them, and then pressed a button whose mutation happened to invalidate the
+  plan's queries. Nobody had written that reliance down and no suite named it; a control that stops
+  being offered removes it silently, and the symptom is a Gantt with no rows rather than an error.
+  **The rule this leaves behind: a helper that writes through the API tells the client itself** —
+  with a reload, at the point of the out-of-band write — rather than relying on a later UI action to
+  do it as a side effect. The same run found a real accessibility defect in the new control (its
+  linked reason was polluting its accessible NAME, so three suites' `Start editing` locators
+  resolved to two elements) that the unit suite structurally could not, because it matched the name
+  with a regex.
 
 It has now happened twice, and the second time the rule worked: ADR-0098 replaced the organisation
 landing, and `e2e/auth.spec.ts` and `e2e/members.spec.ts` were both still asserting

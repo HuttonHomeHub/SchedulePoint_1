@@ -207,7 +207,18 @@ function ScheduleStateRegion({
         // whenever a peer takes the pen. The linked `sr-only` sibling is `ToolbarButton`'s exact
         // pattern rather than a second one invented here.
         aria-disabled={state.refusal ? true : undefined}
-        {...(state.refusal ? { 'aria-describedby': reasonId, title: state.refusal } : {})}
+        // **The explicit name is load-bearing whenever a reason is linked**, and copying
+        // `ToolbarButton`'s span without copying this line is what shipped a defect. The `sr-only`
+        // sibling lives INSIDE the button, so without an `aria-label` its text is concatenated into
+        // the button's NAME as well as its description: the control announced itself as
+        // "Recalculate Start editing to", and three journeys broke on
+        // `getByRole('button', { name: 'Start editing' })` suddenly matching two elements.
+        //
+        // The unit suite could not have caught it — it asked for `{ name: /Recalculate/ }`, which a
+        // polluted name still matches. It asks for the exact name now.
+        {...(state.refusal
+          ? { 'aria-label': 'Recalculate', 'aria-describedby': reasonId, title: state.refusal }
+          : {})}
         onClick={() => {
           if (!state.refusal) onRecalculate();
         }}

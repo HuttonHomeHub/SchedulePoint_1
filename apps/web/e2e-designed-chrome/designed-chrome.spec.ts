@@ -22,10 +22,12 @@ test.describe('the chrome band', () => {
     await createPlan(page, `Band Plan ${stamp}`);
 
     // **Located by what it CONTAINS, not by document order.** `.first()` worked while the band was
-    // the only chrome surface; the light corporate theme moved the tool rail from `panel` to
-    // `chrome` (the rail stays navy, the Project Explorer went light), and the rail precedes the
-    // band in the DOM — so `.first()` silently started selecting the wrong element. The header is
-    // what makes this the band.
+    // the only chrome surface; the light corporate theme gave the 48 px tool rail the `chrome`
+    // scope too, and that rail preceded the band in the DOM — so `.first()` silently started
+    // selecting the wrong element. The rail was deleted by the workspace redesign and `.first()`
+    // would work again today, which is exactly why the containment filter stays: a locator that is
+    // right by accident is one shell change from being wrong by accident, and this one has been
+    // both inside a week. The header is what makes this the band.
     const band = page
       .locator('[data-surface="chrome"]')
       .filter({ has: page.locator('header') })
@@ -49,10 +51,12 @@ test.describe('the chrome band', () => {
     const stamp = Date.now() + 1;
     await onboard(page, stamp);
     // **Located by what it CONTAINS, not by document order.** `.first()` worked while the band was
-    // the only chrome surface; the light corporate theme moved the tool rail from `panel` to
-    // `chrome` (the rail stays navy, the Project Explorer went light), and the rail precedes the
-    // band in the DOM — so `.first()` silently started selecting the wrong element. The header is
-    // what makes this the band.
+    // the only chrome surface; the light corporate theme gave the 48 px tool rail the `chrome`
+    // scope too, and that rail preceded the band in the DOM — so `.first()` silently started
+    // selecting the wrong element. The rail was deleted by the workspace redesign and `.first()`
+    // would work again today, which is exactly why the containment filter stays: a locator that is
+    // right by accident is one shell change from being wrong by accident, and this one has been
+    // both inside a week. The header is what makes this the band.
     const band = page
       .locator('[data-surface="chrome"]')
       .filter({ has: page.locator('header') })

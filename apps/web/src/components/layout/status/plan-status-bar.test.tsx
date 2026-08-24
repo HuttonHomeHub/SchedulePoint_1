@@ -110,12 +110,12 @@ describe('PlanStatusBar', () => {
       // that can change nothing is worse than an absent one, and an affirmative "up to date" chip
       // would put the loudest thing on the bar in the commonest state.
       render(<PlanStatusBar {...base} scheduleState={{ kind: 'current' }} />);
-      expect(screen.queryByRole('button', { name: /Recalculate/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Recalculate' })).not.toBeInTheDocument();
     });
 
     it('does not offer it mid-flight either — the answer is already on the wire', () => {
       render(<PlanStatusBar {...base} scheduleState={{ kind: 'recalculating' }} />);
-      expect(screen.queryByRole('button', { name: /Recalculate/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Recalculate' })).not.toBeInTheDocument();
     });
 
     it('counts the outstanding edits, singular and plural', () => {
@@ -170,7 +170,7 @@ describe('PlanStatusBar', () => {
           onRecalculate={onRecalculate}
         />,
       );
-      fireEvent.click(screen.getByRole('button', { name: /Recalculate/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Recalculate' }));
       expect(onRecalculate).toHaveBeenCalledTimes(1);
     });
 
@@ -192,7 +192,11 @@ describe('PlanStatusBar', () => {
           onRecalculate={onRecalculate}
         />,
       );
-      const button = screen.getByRole('button', { name: /Recalculate/ });
+      // **A string, not a regex.** Testing Library matches a string name EXACTLY by default and a
+      // regex loosely, and the first version of this case asked for `/Recalculate/` — so it passed
+      // against a control announcing itself as "Recalculate Start editing to", which is what three
+      // journeys found and this suite could not.
+      const button = screen.getByRole('button', { name: 'Recalculate' });
       expect(button).toHaveAttribute('aria-disabled', 'true');
       expect(button).not.toBeDisabled();
       expect(button).toHaveAccessibleDescription('Start editing to recalculate.');

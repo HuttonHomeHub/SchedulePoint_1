@@ -529,6 +529,18 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **The plan workspace redesign — "Drafting Table"** — **shipped** (ADR-0109, 2026-08-24). Four
+  consecutive epics worked the command surface and each answered the same question by shaving
+  something; the product owner's verdict after all five was that it still looked poor. The diagnosis
+  came from reading the old Flask app rather than describing it from memory, and it inverted both
+  halves: that app's toolbar **wrapped** and therefore never needed an overflow, and this app's
+  palette was never wrong — the surfaces to paint it on had gone. So the width ladder and its `⋯`
+  are deleted (~1550 lines), the command surface is a deck that wraps with every command visible,
+  the 48 px tool rail is deleted and the Project Explorer is docked on the leading edge, Recalculate
+  moves to the status bar where it appears only when the schedule is behind the plan, and the
+  diagram loses its weekend hatch and month banding and gains lane hairlines. The CPM engine, the
+  REST API and the database are untouched — `apps/web` only, which is what makes it revertible.
+
 - **Unsaved work is not discarded silently** — **shipped** (ADR-0108, 2026-08-23). The web app had
   no unload handler and no navigation blocker at all: a planner with unsaved activity edits could
   reload or close the tab and lose them with no prompt. Four surfaces now declare what they hold —

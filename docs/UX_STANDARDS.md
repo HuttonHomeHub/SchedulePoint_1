@@ -118,10 +118,19 @@ a bug:
 
 ## Navigation & information architecture
 
-- Primary navigation in the Project Explorer rail (Client → Project → Plan);
-  secondary via the workspace's own chrome (the plan toolbar's grouped command
-  rows, ADR-0031); tertiary via in-context menus. Don't exceed this depth
+- Primary navigation in the **docked Project Explorer** on the leading edge
+  (Client → Project → Plan, ADR-0109 D2), which also carries the organisation's
+  six destinations — one navigator, not two; secondary via the workspace's own
+  chrome (the plan command deck's captioned groups, ADR-0031's taxonomy rendered
+  by ADR-0109 D1); tertiary via in-context menus. Don't exceed this depth
   without review.
+- **An action's surface is decided by its subject.** An action whose subject is
+  the selected object belongs on the object's surface; the command surface
+  carries actions whose subject is the plan or the view (ADR-0093, gated by
+  `selection-duplication.structural.test.ts`). A **fact** belongs on the status
+  bar, and a control that answers a condition belongs beside the condition it
+  answers — which is why Recalculate is offered only when the schedule is behind
+  the plan (ADR-0109 D3).
 - Breadcrumbs for anything two or more levels deep.
 - Deep-linkable everything: filters, tabs, and pagination live in the URL so a
   view can be shared and restored.
@@ -130,8 +139,12 @@ a bug:
 
 - **Mobile-first.** Design the small-screen experience first; it is not a
   degraded desktop.
-- The Project Explorer rail collapses to a drawer below `lg` (64rem); the plan
-  workspace swaps from split panes to a single-pane toggle below `md` (48rem);
+- The Project Explorer folds to a 34 px **spine** — never to nothing, because a
+  panel that vanishes leaves a reader with no way back — and becomes an
+  off-canvas `Sheet` below `lg` (64rem). Its spine keeps the organisation's
+  destinations: folding it is how a planner buys canvas width, and it must not
+  take the product's secondary navigation with it. The plan workspace swaps
+  from split panes to a single-pane toggle below `md` (48rem);
   tables scroll horizontally within a bordered container; dialogs become
   full-height sheets on small screens where appropriate.
 - Touch targets ≥ 44px; hover-only affordances always have a non-hover

@@ -10,6 +10,7 @@ import {
   seedActivities,
   showGantt,
   startEditing,
+  syncClient,
 } from '../e2e-gantt/support';
 import { recalculate } from '../e2e-support/toolbar';
 
@@ -90,11 +91,10 @@ async function useVisualMode(page: Page, orgSlug: string): Promise<void> {
   );
   if (failure !== null) throw new Error(failure);
 
-  // Out-of-band, so the client is still holding the EARLY plan — the same reload/re-pen pattern
-  // `grid-edit.spec.ts` needed, and for the same reason.
-  await page.reload();
-  const stop = page.getByRole('button', { name: 'Stop editing' });
-  if (!(await stop.isVisible().catch(() => false))) await startEditing(page);
+  // Out-of-band, so the client is still holding the EARLY plan. `syncClient` is this pattern with
+  // a name (`docs/TECH_DEBT.md` #183) — three copies of it existed in this suite before the
+  // workspace redesign found a fourth place that needed it and none of them was reusable.
+  await syncClient(page);
 }
 
 async function ganttPlan(page: Page, count = 3): Promise<string> {

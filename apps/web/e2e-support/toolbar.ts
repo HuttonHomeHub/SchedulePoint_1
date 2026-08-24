@@ -1,30 +1,28 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
- * Locating a plan command **wherever the width ladder has put it**.
+ * Locating a plan command by **registry id**, wherever the surface has put it.
  *
  * ## Why this is shared rather than per-suite
  *
- * The TSLD command surface demotes commands into the `⋯` when the row runs out of width, so
- * "where is this control" is a function of the viewport, the plan's state and the item's
- * `priority` — none of which a journey should have to model. A locator written against the inline
- * control is a locator coupled to one layout answer at one width.
+ * It was written for a command surface that DEMOTED: the TSLD row hid commands in a `⋯` when it ran
+ * out of width, so "where is this control" was a function of the viewport, the plan's state and the
+ * item's `priority` — none of which a journey should have to model. Two implementations of that
+ * question would drift and the drift would be invisible until a width changed (the ADR-0065
+ * `routeOrthogonal` argument), so there was one.
  *
- * That coupling was invisible while ADR-0031's two rows had room for nearly everything. Graphite
- * M5 merged them onto one budget, `calendar` became menu-only at every width, and
- * `e2e-library/support.ts` timed out on a locator whose own comment promised the opposite:
- * *"the id is what the registry actually guarantees"*.
- *
- * `e2e-float-paths` had already met the same problem and solved it locally. Two implementations of
- * "where is this command" would drift, and the drift would be invisible until a width changed —
- * the ADR-0065 `routeOrthogonal` argument. So there is one.
+ * **The width ladder and its `⋯` are gone** (workspace redesign M2). The command surface is a deck
+ * that wraps, so every command is inline at every width and the menu branch below is unreachable.
+ * It is kept rather than deleted for one reason and it is not sentiment: the deck's groups FOLD, and
+ * a folded group's items are absent from the DOM. Nothing exercises that path today because nothing
+ * persists a fold across a journey's fresh profile, and a helper that already answers "wherever the
+ * surface has put it" is where that answer belongs when it does.
  *
  * ## What makes it work at all
  *
- * `data-toolbar-item` is now written by `Toolbar` on the inline control **and** by
- * `ToolbarOverflow` on the menu row (both the enabled and the shaded branch). Before that this
- * helper could not have existed: the menu row was reachable only by copy, so a suite would have had
- * to name a label inline and a different one in the menu, and re-edit both on every wording change.
+ * `data-toolbar-item` is written by `Toolbar` on every inline control. Locating by it rather than by
+ * copy is the standing rule after three journeys broke on a label change (ADR-0091 M7): the id is
+ * what the registry guarantees, and the words are not.
  */
 
 /** The plan workspace's single command strip (Graphite M5 merged the two rows into it). */
