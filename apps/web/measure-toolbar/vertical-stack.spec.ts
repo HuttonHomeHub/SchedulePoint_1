@@ -105,10 +105,12 @@ async function stackHeights(page: Page): Promise<unknown> {
       }
       return null;
     })();
-    // What the band holds besides the portalled rows — the app header row. **Below `lg` only** since
-    // Graphite M3 deleted the top bar: at the widths measured here it is `display: none`, so this
-    // reports 0 and that zero IS the milestone's headline. Located by the landmark rather than by
-    // `firstElementChild`, which now finds the wrapper that hides it.
+    // What the band holds besides the portalled rows — the app header row. **At every width again**
+    // since ADR-0109 D2: Graphite M3 had deleted it above `lg` and moved its three controls onto a
+    // 48 px icon rail, and the workspace redesign deletes that rail and docks the Project Explorer
+    // in its column, so the row returns. Until then this reported 0 at every width measured here
+    // and that zero was Graphite M3's headline; a non-zero figure now is the trade, not a
+    // regression, and the number it should be judged against is `aboveCanvas`.
     const appHeaderRow = chromeBand?.querySelector('header') ?? null;
 
     // The canvas itself — what all of the above costs.
@@ -122,7 +124,7 @@ async function stackHeights(page: Page): Promise<unknown> {
     const bands = [
       ['shell chrome band (total)', chromeBand],
       // 0 at every width measured here since Graphite M3 — the top bar survives only below `lg`.
-      ['app header row (below lg only)', appHeaderRow],
+      ['app header row', appHeaderRow],
       // A row of its own again since Graphite M3, because the header row it was merged into does
       // not exist at these widths. Its height is reported rather than asserted, so the trade the
       // milestone made — lose a 56 px header, gain back a 44 px identity row — is checkable.
