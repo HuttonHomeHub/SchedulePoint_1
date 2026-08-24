@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import { recalculate } from '../e2e-support/toolbar';
+
 import { awaitComputedSchedule, showActivities } from './workspace';
 
 /**
@@ -68,7 +70,7 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
     .fill('2026-01-01');
   await page.getByRole('dialog').getByRole('button', { name: 'Save changes' }).click();
   await addActivity(page, 'Excavate');
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await recalculate(page);
   await awaitComputedSchedule(page, orgSlug);
 
   // No baseline yet → no variance column.
@@ -110,7 +112,7 @@ test('a planner captures a baseline and sees per-activity variance (accessible)'
 
   // Add a new activity after capture and recalculate → it reads as "Added" variance.
   await addActivity(page, 'Pour slab');
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await recalculate(page);
   // "Added" shows in all three variance columns (start/finish/float) for the new activity.
   await expect(page.getByRole('cell', { name: 'Added' }).first()).toBeVisible();
 

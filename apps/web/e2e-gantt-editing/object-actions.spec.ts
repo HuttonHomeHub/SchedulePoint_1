@@ -13,7 +13,7 @@ import {
   startEditing,
 } from '../e2e-gantt/support';
 import { activityEditor } from '../e2e-support/activity-editor';
-import { clickToolbarCommand, toolbarOffers } from '../e2e-support/toolbar';
+import { recalculate, toolbarOffers } from '../e2e-support/toolbar';
 
 /**
  * **M1 — object actions in the Gantt**, driven against a real API with the pen enforced.
@@ -56,7 +56,7 @@ test('a planner acts on a Gantt selection from the docked object bar', async ({ 
 
   // Recalculate so the chart has bars — the Gantt renders its not-calculated state otherwise, and a
   // selection assertion against that state would be testing the empty view.
-  await clickToolbarCommand(page, 'recalculate');
+  await recalculate(page);
   await showGantt(page);
   await expect(ganttGrid(page)).toBeVisible();
 
@@ -94,7 +94,7 @@ test('the Gantt offers no canvas-only action, and no longer offers Add note', as
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await clickToolbarCommand(page, 'recalculate');
+  await recalculate(page);
   await showGantt(page);
   await ganttRow(page, 'Seeded 0').click();
 
@@ -137,7 +137,7 @@ test('the docked bar in the Gantt is accessible', async ({ page }) => {
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await clickToolbarCommand(page, 'recalculate');
+  await recalculate(page);
   await showGantt(page);
   await ganttRow(page, 'Seeded 0').click();
   await expect(page.getByRole('toolbar', { name: /Actions for/ })).toBeVisible();

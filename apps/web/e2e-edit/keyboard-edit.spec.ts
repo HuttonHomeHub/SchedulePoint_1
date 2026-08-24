@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { recalculate } from '../e2e-support/toolbar';
+
 import {
   addActivity,
   awaitComputedSchedule,
@@ -32,7 +34,7 @@ test('a planner nudges an activity by keyboard; Alt+arrows never navigate histor
   await addActivity(page, 'Pour slab');
 
   // Recalculate so the diagram has computed activities to plot + navigate.
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await recalculate(page);
   // The checkpoint used to be `getByText('Project finish')` — the legacy page's
   // `ScheduleSummaryStrip` label. The workspace carries that fact in the toolbar's finish chip,
   // which renders the DATE and withholds itself below the `compact` density band, so at this

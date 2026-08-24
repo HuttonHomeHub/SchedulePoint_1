@@ -194,7 +194,13 @@ vi.mock('@/features/schedule', () => ({
   RecalculateButton: () => <div data-testid="recalculate-button" />,
   // The model reads useRecalculate from the barrel (the builder uses the api-path mock below).
   useRecalculate: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  usePlanAutoRecalc: () => ({ notify: vi.fn(), flush: vi.fn(), isPending: false }),
+  usePlanAutoRecalc: () => ({
+    notify: vi.fn(),
+    flush: vi.fn(),
+    isPending: false,
+    pendingEdits: 0,
+    failed: false,
+  }),
   // The canvas's recalculation-settle announcement reads the project finish from the SAME
   // summary query the status bar shows (a cache read, not a second request) — so the two mocks
   // must AGREE. They did not: this one answered `undefined` while the api-path mock below answered

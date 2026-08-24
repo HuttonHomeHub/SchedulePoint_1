@@ -184,7 +184,13 @@ vi.mock('@/features/dependencies', async (importOriginal) => ({
 
 vi.mock('@/features/schedule', () => ({
   useRecalculate: () => ({ mutateAsync: h.recalculate }),
-  usePlanAutoRecalc: () => ({ notify: vi.fn(), flush: vi.fn(), isPending: false }),
+  usePlanAutoRecalc: () => ({
+    notify: vi.fn(),
+    flush: vi.fn(),
+    isPending: false,
+    pendingEdits: 0,
+    failed: false,
+  }),
   RecalculateButton: ({ canCalculate }: { canCalculate: boolean }) => (
     <div data-testid="recalculate" data-can-calc={String(canCalculate)} />
   ),

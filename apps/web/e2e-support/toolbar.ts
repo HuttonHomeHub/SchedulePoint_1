@@ -95,3 +95,36 @@ export async function toolbarOffers(page: Page, id: string): Promise<boolean> {
   if (!wasOpen) await page.keyboard.press('Escape');
   return offered;
 }
+
+/**
+ * Ensure the open plan's schedule is computed, pressing the status bar's **Recalculate** when there
+ * is something to compute.
+ *
+ * ## Why a helper rather than a locator (workspace redesign M3-T5)
+ *
+ * `Recalculate` used to be a toolbar command, offered at every moment of every session, so nineteen
+ * call sites across ten suites could write `getByRole('button', { name: 'Recalculate' }).click()`
+ * and be right. It is now attached to the condition it answers: it appears only when the schedule is
+ * behind the plan, and disappears the moment it is not.
+ *
+ * That makes the naive locator **racy in both directions**. Auto-recalculation has fired on every
+ * structural edit since ADR-0032 M3, so after a UI edit the control may appear and vanish before a
+ * journey looks; and a plan seeded through the API has never been calculated, so the control is
+ * waiting from first paint. "Renders nothing" is indistinguishable from "has not painted yet" by any
+ * point-in-time read — the exact trap `revealToolbarCommand` above records hitting on a slow
+ * machine — which is why the bar carries `data-schedule-state` unconditionally and this waits on it.
+ *
+ * The postcondition is what every caller actually wanted: **the schedule is current**. Callers that
+ * merely need dates on the bars get that whether the press happened or auto-recalculation beat them
+ * to it, which is why the press is conditional rather than asserted.
+ */
+export async function recalculate(page: Page): Promise<void> {
+  const bar = page.locator('[data-schedule-state]');
+  await expect(bar).toBeVisible();
+  // Wait out any run already in flight, so the read below is a settled answer.
+  await expect(bar).not.toHaveAttribute('data-schedule-state', 'recalculating');
+  if ((await bar.getAttribute('data-schedule-state')) === 'stale') {
+    await bar.getByRole('button', { name: 'Recalculate' }).click();
+  }
+  await expect(bar).toHaveAttribute('data-schedule-state', 'current');
+}

@@ -28,7 +28,7 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
-import { PlanStatusBar } from '@/components/layout/status/plan-status-bar';
+import { PlanStatusBar, type ScheduleState } from '@/components/layout/status/plan-status-bar';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -451,6 +451,53 @@ export function ToolbarPlanWorkspace({
   // toolbar's pinned Finish chip already runs, so this is a cache read and adds no request; a recalc
   // invalidates the key, which is exactly the value the settle needs to compare.
   const scheduleSummary = useScheduleSummary(model.orgSlug, model.planId);
+
+  /**
+   * **What the schedule owes the reader**, derived once for the status bar (M3-T4).
+   *
+   * The order of these tests is the decision. `recalculating` outranks everything because a run in
+   * flight is about to answer the question — telling a planner the plan is behind while the request
+   * that fixes it is on the wire is true for a few hundred milliseconds and useless for all of them.
+   * After that, being behind is reported whether or not the last attempt failed, because the failure
+   * and the outstanding edits are two facts and `describe()` says both.
+   *
+   * **The refusal is derived from the same three terms the hook's `enabled` predicate uses**, in the
+   * same order, so the sentence cannot disagree with the behaviour: `canRecalc` (role + pen) carries
+   * its own message through `scheduleRefusal`, and a missing data date is the one term that has no
+   * refusal text of its own because nothing else in the product refuses on it. `CANVAS_AUTHORING`
+   * is the fourth term and is deliberately absent: it is a build-time constant that is on in every
+   * published image (ADR-0088 D1), so a sentence about it could never reach a reader.
+   */
+  const scheduleState = useMemo<ScheduleState>(() => {
+    if (model.autoRecalc.isPending) return { kind: 'recalculating' };
+    const { pendingEdits, failed } = model.autoRecalc;
+    /**
+     * **The fourth case, and the one a first-time reader meets.** `projectFinish` is null until the
+     * plan has been calculated, so a plan with activities and no finish has never been computed —
+     * imported, seeded, or built by somebody else's session. The client-side edit counter cannot
+     * know about any of those: it counts what THIS tab did.
+     *
+     * Guarded on `activityCount > 0` because an empty plan has no finish either, and offering to
+     * calculate nothing is a control that cannot change anything — the state this milestone exists
+     * to stop rendering.
+     */
+    const summary = scheduleSummary.data;
+    const neverCalculated =
+      summary !== undefined && summary.activityCount > 0 && summary.projectFinish === null;
+    if (!failed && pendingEdits === 0 && !neverCalculated) return { kind: 'current' };
+    const refusal = !model.canRecalc
+      ? (model.scheduleRefusal('recalculate') ?? 'The schedule cannot be recalculated.')
+      : plan.plannedStart == null
+        ? 'Set a data date before the schedule can be calculated.'
+        : null;
+    return { kind: 'stale', edits: pendingEdits, failed, refusal };
+  }, [
+    model.autoRecalc,
+    model.canRecalc,
+    model.scheduleRefusal,
+    plan.plannedStart,
+    scheduleSummary.data,
+  ]);
 
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
   // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
@@ -1575,7 +1622,8 @@ export function ToolbarPlanWorkspace({
           criticalCount={scheduleSummary.data?.criticalCount}
           dataDate={scheduleSummary.data?.dataDate}
           projectFinish={scheduleSummary.data?.projectFinish}
-          recalculating={model.autoRecalc.isPending}
+          scheduleState={scheduleState}
+          onRecalculate={() => ctx.recalculate()}
           pending={scheduleSummary.isPending}
         />
       </ChromePortal>

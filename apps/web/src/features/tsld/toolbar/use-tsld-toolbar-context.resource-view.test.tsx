@@ -76,7 +76,13 @@ function makeModel(activities: ActivitySummary[]): PlanWorkspaceModel {
       undo: vi.fn(),
       redo: vi.fn(),
     },
-    autoRecalc: { isPending: false, flush: vi.fn(), notify: vi.fn() },
+    autoRecalc: {
+      isPending: false,
+      flush: vi.fn(),
+      notify: vi.fn(),
+      pendingEdits: 0,
+      failed: false,
+    },
     variance: { data: undefined, isPending: false, isError: false },
   } as unknown as PlanWorkspaceModel;
 }

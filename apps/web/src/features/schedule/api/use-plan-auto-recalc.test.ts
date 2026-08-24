@@ -296,4 +296,89 @@ describe('usePlanAutoRecalc — holds (ADR-0064 T7)', () => {
     });
     expect(recalcMock.run).toHaveBeenCalledTimes(1);
   });
+
+  describe('the two facts the status bar reads (M3-T4)', () => {
+    it('counts EDITS, not bursts — three inside one debounce window owe three', () => {
+      // The sentence the bar prints is about work the reader did. A burst coalesced into one
+      // recalculation still owes three edits, and a flag would render "one drag" and "an afternoon
+      // of re-sequencing" identically.
+      const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+      act(() => {
+        result.current.notify();
+        result.current.notify();
+        result.current.notify();
+      });
+      expect(result.current.pendingEdits).toBe(3);
+      expect(recalcMock.run, 'still one run — the coalescer is unchanged').not.toHaveBeenCalled();
+    });
+
+    it('counts an edit made inside an open hold', () => {
+      // A hold defers the recalculation, not the edit. Someone who arms the Link tool and drags a
+      // bar has still moved it, and the plan is behind either way.
+      const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+      act(() => {
+        result.current.hold(Symbol('pick'));
+        result.current.notify();
+      });
+      expect(result.current.pendingEdits).toBe(1);
+    });
+
+    it('clears the count on success and reports no failure', () => {
+      const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+      act(() => {
+        result.current.notify();
+        vi.advanceTimersByTime(AUTO_RECALC_DEBOUNCE_MS);
+      });
+      act(() => recalcMock.run.mock.calls[0]![0]!.onSuccess!());
+      expect(result.current.pendingEdits).toBe(0);
+      expect(result.current.failed).toBe(false);
+    });
+
+    it('clears only the edits the run was ASKED to compute', () => {
+      // An edit made while a request is in flight must survive that request's success: it queues a
+      // second run, and zeroing the counter would report the schedule as current while the request
+      // that makes it so has not been sent.
+      const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+      act(() => {
+        result.current.notify();
+        vi.advanceTimersByTime(AUTO_RECALC_DEBOUNCE_MS);
+      });
+      act(() => {
+        result.current.notify(); // arrives mid-flight; queues a second run
+      });
+      expect(result.current.pendingEdits).toBe(2);
+      act(() => recalcMock.run.mock.calls[0]![0]!.onSuccess!());
+      expect(result.current.pendingEdits, 'the mid-flight edit is still owed').toBe(1);
+    });
+
+    it('flags a failure and KEEPS the outstanding edits', () => {
+      // The edits are still uncomputed, which is what makes the failure worth reporting rather than
+      // merely worth logging.
+      const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+      act(() => {
+        result.current.notify();
+        result.current.notify();
+        vi.advanceTimersByTime(AUTO_RECALC_DEBOUNCE_MS);
+      });
+      act(() => recalcMock.run.mock.calls[0]![0]!.onError!('Recalculation failed.'));
+      expect(result.current.failed).toBe(true);
+      expect(result.current.pendingEdits).toBe(2);
+    });
+
+    it('a later success supersedes an earlier failure', () => {
+      const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+      act(() => {
+        result.current.notify();
+        vi.advanceTimersByTime(AUTO_RECALC_DEBOUNCE_MS);
+      });
+      act(() => recalcMock.run.mock.calls[0]![0]!.onError!('nope'));
+      expect(result.current.failed).toBe(true);
+      act(() => result.current.flush());
+      act(() => recalcMock.run.mock.calls[1]![0]!.onSuccess!());
+      // Cleared together: a bar that says the schedule is both current and out of date is worse
+      // than one that says neither.
+      expect(result.current.failed).toBe(false);
+      expect(result.current.pendingEdits).toBe(0);
+    });
+  });
 });

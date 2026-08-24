@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
-import { PlanStatusBar } from './plan-status-bar';
+import { PlanStatusBar, type ScheduleState } from './plan-status-bar';
 
 /**
  * **Branch cover for the plan status bar** (Graphite M10; title corrected 2026-08-20).
@@ -32,7 +32,8 @@ describe('PlanStatusBar', () => {
     criticalCount: 0,
     dataDate: '2026-03-02',
     projectFinish: '2026-09-30',
-    recalculating: false,
+    scheduleState: { kind: 'current' } as ScheduleState,
+    onRecalculate: () => {},
     pending: false,
   };
 
@@ -92,12 +93,112 @@ describe('PlanStatusBar', () => {
   it('carries the running state in a word, not only in a spin', () => {
     // `prefers-reduced-motion` reduces the spin to 0.01ms, so a motion-only cue says nothing to the
     // reader most likely to be relying on it (the ADR-0031 `isBusy` rule).
-    const { unmount } = render(<PlanStatusBar {...base} recalculating />);
+    const { unmount } = render(
+      <PlanStatusBar {...base} scheduleState={{ kind: 'recalculating' }} />,
+    );
     expect(screen.getByText('Recalculating…')).toBeInTheDocument();
     unmount();
 
-    render(<PlanStatusBar {...base} recalculating={false} />);
+    render(<PlanStatusBar {...base} scheduleState={{ kind: 'current' }} />);
     expect(screen.queryByText('Recalculating…')).not.toBeInTheDocument();
+  });
+
+  describe('the schedule state, and Recalculate attached to it (M3-T5)', () => {
+    it('offers nothing at all when the schedule is current', () => {
+      // The point of the milestone. Recalculate was on the toolbar at every moment of every
+      // session, re-running a calculation auto-recalc had already run (ADR-0032 M3). A control
+      // that can change nothing is worse than an absent one, and an affirmative "up to date" chip
+      // would put the loudest thing on the bar in the commonest state.
+      render(<PlanStatusBar {...base} scheduleState={{ kind: 'current' }} />);
+      expect(screen.queryByRole('button', { name: /Recalculate/ })).not.toBeInTheDocument();
+    });
+
+    it('does not offer it mid-flight either — the answer is already on the wire', () => {
+      render(<PlanStatusBar {...base} scheduleState={{ kind: 'recalculating' }} />);
+      expect(screen.queryByRole('button', { name: /Recalculate/ })).not.toBeInTheDocument();
+    });
+
+    it('counts the outstanding edits, singular and plural', () => {
+      const { unmount } = render(
+        <PlanStatusBar
+          {...base}
+          scheduleState={{ kind: 'stale', edits: 1, failed: false, refusal: null }}
+        />,
+      );
+      expect(screen.getByText('1 edit not calculated')).toBeInTheDocument();
+      unmount();
+
+      render(
+        <PlanStatusBar
+          {...base}
+          scheduleState={{ kind: 'stale', edits: 7, failed: false, refusal: null }}
+        />,
+      );
+      expect(screen.getByText('7 edits not calculated')).toBeInTheDocument();
+    });
+
+    it('says a failure happened, and still says how much is owed', () => {
+      // Two facts, not one. "Nothing has been calculated" and "calculating it did not work" look
+      // identical from the dates alone, and a reader acts on them differently.
+      render(
+        <PlanStatusBar
+          {...base}
+          scheduleState={{ kind: 'stale', edits: 3, failed: true, refusal: null }}
+        />,
+      );
+      expect(screen.getByText('Could not calculate — 3 edits still pending')).toBeInTheDocument();
+    });
+
+    it('drops the count from a failure that owes nothing', () => {
+      // A manual recalculation that fails on an unedited plan is a failure about the plan, not
+      // about work the reader has done. "0 edits still pending" would blame them for it.
+      render(
+        <PlanStatusBar
+          {...base}
+          scheduleState={{ kind: 'stale', edits: 0, failed: true, refusal: null }}
+        />,
+      );
+      expect(screen.getByText('Could not calculate the schedule')).toBeInTheDocument();
+    });
+
+    it('runs the recalculation when it is allowed', () => {
+      const onRecalculate = vi.fn();
+      render(
+        <PlanStatusBar
+          {...base}
+          scheduleState={{ kind: 'stale', edits: 2, failed: false, refusal: null }}
+          onRecalculate={onRecalculate}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: /Recalculate/ }));
+      expect(onRecalculate).toHaveBeenCalledTimes(1);
+    });
+
+    it('shades the control with its reason rather than removing it (ADR-0082)', () => {
+      // `aria-disabled`, not the native attribute: this control flips under a planner whenever a
+      // peer takes the pen, and `disabled` would take the sentence explaining that out of the tab
+      // order — unreachable by exactly the readers who need it. Verified by both halves: the
+      // reason is linked AND the click does nothing.
+      const onRecalculate = vi.fn();
+      render(
+        <PlanStatusBar
+          {...base}
+          scheduleState={{
+            kind: 'stale',
+            edits: 2,
+            failed: false,
+            refusal: 'Start editing to recalculate.',
+          }}
+          onRecalculate={onRecalculate}
+        />,
+      );
+      const button = screen.getByRole('button', { name: /Recalculate/ });
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).not.toBeDisabled();
+      expect(button).toHaveAccessibleDescription('Start editing to recalculate.');
+      fireEvent.click(button);
+      expect(onRecalculate).not.toHaveBeenCalled();
+    });
   });
 
   it('announces nothing', () => {
@@ -106,7 +207,9 @@ describe('PlanStatusBar', () => {
     // finish, critical count and run state together — drops at least one message with the reader
     // unable to tell which. A live region appearing here would be that race arriving quietly, so
     // it is pinned rather than left to a comment.
-    const { container } = render(<PlanStatusBar {...base} recalculating criticalCount={3} />);
+    const { container } = render(
+      <PlanStatusBar {...base} scheduleState={{ kind: 'recalculating' }} criticalCount={3} />,
+    );
     expect(container.querySelector('[aria-live]')).toBeNull();
     expect(container.querySelector('[role="status"], [role="alert"]')).toBeNull();
   });

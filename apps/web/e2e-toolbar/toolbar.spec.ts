@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
+import { recalculate } from '../e2e-support/toolbar';
+
 import { addActivity, onboard, openNewPlan, startEditing } from './support';
 
 /**
@@ -50,7 +52,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   await startEditing(page); // take the pen — the authoring toolbar group goes live
   await addActivity(page, 'Excavate');
   await addActivity(page, 'Pour slab');
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await recalculate(page);
 
   // With activities computed, the `hasDiagram`-gated controls light up on Row 1 · Look — the `View▾`
   // lens popover — and the Project-finish read-out appears beside `Summary ▾`.
