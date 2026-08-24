@@ -62,7 +62,7 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   // right. What M2-T3 was protecting is asserted directly below rather than through placement: the
   // read-out is not a stop in the arrow-key sequence.
   const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
-  await expect(lookRow.getByRole('button', { name: /^View/ })).toBeVisible();
+  await expect(lookRow.getByRole('button', { name: 'View', exact: true })).toBeVisible();
 
   // **The Project-finish read-out is no longer in the row, and that is the assertion.** Its third
   // placement: ADR-0090 M2-T3 took it out of the toolbar, ADR-0091 M7-S4 put it back as a

@@ -166,7 +166,7 @@ describe('the print palette resolves light (structural)', () => {
     //
     // Deliberately NOT applied to `gridLineMonth`/`gridLineYear`: those are RULES, and are meant
     // to be mid-dark. Applying a lightness floor to them would gate the wrong property.
-    for (const field of ['nonWorking', 'nonWorkingHatch', 'monthBand', 'gridLineDay'] as const) {
+    for (const field of ['nonWorking', 'monthBand', 'gridLineDay'] as const) {
       const luminance = relativeLuminance(srgb(resolved(field)));
       expect(luminance, `${field} (${resolved(field)}) is not a tint of paper`).toBeGreaterThan(
         0.5,
@@ -233,8 +233,6 @@ describe('the print palette resolves light (structural)', () => {
     const ground = L(resolved('canvasGround'));
     const band = L(resolved('monthBand'));
     const wash = L(resolved('nonWorking'));
-    const hatch = L(resolved('nonWorkingHatch'));
-    expect(hatch, `hatch ${hatch} is not darker than the wash ${wash}`).toBeLessThan(wash);
     expect(wash, `wash ${wash} is not darker than the band ${band}`).toBeLessThan(band);
     expect(band, `band ${band} is not darker than paper ${ground}`).toBeLessThan(ground);
   });

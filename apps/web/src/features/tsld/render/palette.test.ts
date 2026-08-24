@@ -71,7 +71,7 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   it('resolvePrintPalette carries LIGHT fallbacks for the same entries (total contract)', () => {
     const palette = resolvePrintPalette(document.documentElement);
     expect(palette.barStroke).toBe('#e0e0e0');
-    expect(palette.hoverRing).toBe('#666666');
+    expect(palette.hoverRing).toBe('#636363');
   });
 });
 
@@ -122,18 +122,24 @@ describe('gridline tier palette entries (gridLineDay / gridLineMonth / gridLineY
   });
 });
 
-// ── Non-working hatch palette entry (F7a, `VITE_CANVAS_TIME_AXIS`) ──────────────────────
-describe('non-working hatch stripe ink (nonWorkingHatch)', () => {
-  it('resolveTsldPalette resolves a distinct hatch colour from the wash it draws over (documented jsdom fallback)', () => {
+// ── Non-working wash palette entry ──────────────────────────────────────────────────────
+describe('non-working wash ink (nonWorking)', () => {
+  // The diagonal hatch that used to sit on this wash was deleted in the workspace redesign
+  // (2026-08-24): it was the loudest thing on the diagram. Its `nonWorkingHatch` entry went with
+  // it, and this pair of cases replaces the pair that asserted the two were distinct.
+  //
+  // What matters now is that the wash resolves its OWN token rather than borrowing `--muted`.
+  // That is not tidiness: `--muted` sits 0.007 of lightness from the canvas, so under the hatch
+  // the wash was invisible and the stripes were carrying the whole signal. A wash that has to
+  // work alone needs a value chosen for the job.
+  it('resolveTsldPalette resolves the dedicated wash token, not the shared muted grey', () => {
     const palette = resolveTsldPalette(document.documentElement);
-    expect(palette.nonWorkingHatch).toBe('#454b58');
-    expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
+    expect(palette.nonWorking).toBe('#20242d');
   });
 
-  it('resolvePrintPalette carries a LIGHT fallback for the same entry, also distinct from its wash', () => {
+  it('resolvePrintPalette carries a light fallback for the same entry', () => {
     const palette = resolvePrintPalette(document.documentElement);
-    expect(palette.nonWorkingHatch).toBe('#e3e6ea');
-    expect(palette.nonWorkingHatch).not.toBe(palette.nonWorking);
+    expect(palette.nonWorking).toBe('#e9eef4');
   });
 });
 

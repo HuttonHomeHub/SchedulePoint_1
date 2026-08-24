@@ -104,7 +104,7 @@ test('the toggle reveals a link between two rows neither of which is selected', 
   // `checkbox` — not `menuitemcheckbox`, which is what I reached for first and what a menu-shaped
   // popover invites you to assume. Established by reading `ViewTogglesPanel` rather than by
   // guessing again.
-  await page.getByRole('button', { name: /View/ }).first().click();
+  await page.getByRole('button', { name: 'View', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Logic links' }).check();
   await page.keyboard.press('Escape');
 

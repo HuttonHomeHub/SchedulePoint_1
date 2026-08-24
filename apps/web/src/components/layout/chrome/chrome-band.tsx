@@ -40,6 +40,22 @@ export function ChromeBand({ children }: { children: React.ReactNode }): React.R
  * now exactly the viewport with `<main>` as the scroller. `z-20` stays — it clears the canvas
  * ruler's `z-10` and the rail resizer, so a scrolled workspace never rides over the band. A `Sheet`
  * is a native `<dialog>` in the top layer, above every z-index, and still covers the band correctly.
+ *
+ * **It is a CARD, not a bar** (workspace redesign, 2026-08-24), and that is the change rather than
+ * a decoration. Four restyles re-valued colours and none of them fixed the complaint, because the
+ * complaint was never about colour: `--chrome` has held the old Flask app's navy since ADR-0102 and
+ * this component was the ONLY thing in the shell asking for it — as a flat `border-b` bar with the
+ * page's white running edge-to-edge above and below it. Figure and ground had a 1px border between
+ * them and nothing else.
+ *
+ * So: a radius, a real shadow, and a 3px `--primary` rule along the base. The amber rule is the old
+ * app's own device (`border-bottom: 3px solid var(--secondary-color)` on both its header and its
+ * toolbar) and it is doing work rather than ornament — it is the only thing that separates a navy
+ * card from a navy card stacked beneath it.
+ *
+ * The margin that lets the gradient show around it belongs to the SHELL, not here: this component
+ * has no opinion about what sits beneath it, and giving it one would make it unplaceable anywhere
+ * else. The shell passes it in `className`.
  */
 export function ChromeBandRow({
   rowsSlotRef,
@@ -49,7 +65,10 @@ export function ChromeBandRow({
   className?: string;
 }): React.ReactElement {
   return (
-    <Surface tone="chrome" className={`border-border z-20 border-b ${className ?? ''}`}>
+    <Surface
+      tone="chrome"
+      className={`border-border border-b-primary z-20 rounded-lg border border-b-[3px] shadow-md ${className ?? ''}`}
+    >
       {/* **Below `lg` only** (Graphite M3). At `lg`+ the Project Explorer rail is the leading
           column top to bottom and carries the brand, the switcher and the account itself, so the
           top bar is deleted and the band starts with the plan's own rows. Below `lg` the rail is

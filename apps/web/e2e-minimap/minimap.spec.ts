@@ -40,7 +40,7 @@ test.describe('The minimap', () => {
 
     // ── Before any activity has computed dates: the row is SHADED with a reason, not hidden
     // (ADR-0082) — and it is not pressable.
-    await page.getByRole('button', { name: /^View/ }).click();
+    await page.getByRole('button', { name: 'View', exact: true }).click();
     const shadedRow = page.getByRole('checkbox', { name: 'Minimap' });
     await expect(shadedRow).toBeVisible();
     await expect(shadedRow).toHaveAttribute('aria-disabled', 'true');
@@ -61,7 +61,7 @@ test.describe('The minimap', () => {
     await ensurePen(page);
 
     // ── The entry point (the test's real subject): View ▾ → Panels → Minimap.
-    await page.getByRole('button', { name: /^View/ }).click();
+    await page.getByRole('button', { name: 'View', exact: true }).click();
     const row = page.getByRole('checkbox', { name: 'Minimap' });
     await expect(row).not.toBeChecked();
     await row.click();
@@ -131,7 +131,7 @@ test.describe('The minimap', () => {
     // plan is visible), so a click near the edge lands on the pad — which correctly refuses
     // to jump. The first run of this journey established that, which is exactly the kind of
     // fact only a real browser reports.
-    await page.getByRole('button', { name: /^View/ }).click();
+    await page.getByRole('button', { name: 'View', exact: true }).click();
     await page.getByRole('radio', { name: /^Day/ }).click();
     await page.keyboard.press('Escape');
     const atHome = await ruler.innerText();
@@ -166,7 +166,7 @@ test.describe('The minimap', () => {
     expect(focusedTag, 'focus must not drop to <body> on dismissal').not.toBe('BODY');
 
     // ── And the toggle row now reads unchecked again.
-    await page.getByRole('button', { name: /^View/ }).click();
+    await page.getByRole('button', { name: 'View', exact: true }).click();
     await expect(page.getByRole('checkbox', { name: 'Minimap' })).not.toBeChecked();
   });
 });

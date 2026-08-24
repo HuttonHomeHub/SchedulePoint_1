@@ -69,7 +69,7 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
   // journey says so rather than wrapping both in one helper that hides which surface each is on.
   // `openView()` stays idempotent, so its uses read as "reach the control" rather than "manage a
   // popover" — which is what keeps the assertions below about the LENS.
-  const viewTrigger = lookToolbar.getByRole('button', { name: /^View/ });
+  const viewTrigger = lookToolbar.getByRole('button', { name: 'View', exact: true });
   const openView = async (): Promise<void> => {
     if ((await viewTrigger.getAttribute('aria-expanded')) !== 'true') await viewTrigger.click();
   };

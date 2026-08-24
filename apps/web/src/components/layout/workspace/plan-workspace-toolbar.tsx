@@ -34,7 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
-import { Toolbar, splitByRow } from '@/components/ui/toolbar';
+import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import {
@@ -1226,32 +1226,47 @@ export function ToolbarPlanWorkspace({
                 ) : null}
               </div>
             </div>
-            {/* **The mode cluster now portals into the RAIL** (Graphite M5). It was 400 px of this
-                band — a quarter of the room at 1646 — spent on four controls that are not commands,
-                which is ADR-0091 D1's own thesis about where a mode belongs. It stays a registry
-                `Toolbar` rather than becoming four hand-rolled rail buttons: arm/disarm, Escape
-                precedence, announcement and pen gating are the registry's, and hand-rolling is how
-                one control gets a rule and its neighbour does not (plan.md §E).
+            {/* **The mode cluster is back on the identity line, beside the pen** (workspace
+                redesign, 2026-08-24) — where ADR-0091 D1 argued a mode belongs in the first place:
+                a mode is not a command, it sets how every command behaves, which is exactly the
+                pen's relationship to the deck.
 
-                `orientation="vertical"` is one prop on the primitive, not a second one: the keyboard
-                already answered both axes, and what was hard-coded was the ANNOUNCEMENT. A vertical
-                toolbar also opts out of the ladder — its items stack, so there is no row to overflow
-                and its `clientWidth` says nothing about whether its content fits. That replaces the
-                `shrink-0` this needed here, which existed to stop a squeezed row demoting an armed
-                mode into a `⋯` (the ADR-0064 dead end). */}
-            <ChromePortal name="rail">
+                Graphite M5 had banished it to the vertical rail, and the reason it gave was
+                sound at the time: on the horizontal band it was 400 px, a quarter of the room at
+                1646, and squeezing it risked demoting an armed mode into the `⋯` — the ADR-0064
+                dead end. **Both halves of that objection are now void.** The deck wraps instead of
+                competing for this row's width, and there is no ladder and no `⋯` left to demote
+                into. The constraint that moved these controls has been deleted, so they come back.
+
+                Still a registry `Toolbar` rather than four hand-rolled buttons: arm/disarm, Escape
+                precedence, announcement and pen gating are all the registry's, and hand-rolling is
+                how one control gets a rule and its neighbour does not. `shrink-0` because the
+                identity block beside it carries `flex-1` and is the one that should give way — it
+                is text with a `title`, so shrinking truncates a name a reader can still reach. */}
+            <div className="flex shrink-0 items-center gap-2">
+              <span
+                aria-hidden="true"
+                // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the
+                // navy and measured 4.48:1 — under the 4.5 bar by 0.02, which no token matrix
+                // could see because the failing colour does not exist until the alpha is
+                // composited. axe found it in a real browser on the first journey run. At full
+                // strength amber on navy is 7.9:1, and the caption is a label rather than a
+                // decoration, so there was never a reason to fade it.
+                className="text-primary text-micro font-bold tracking-wider uppercase"
+              >
+                Mode
+              </span>
               <Toolbar
                 items={rows.mode}
                 context={ctx}
                 label="Plan mode"
                 authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                // All four are `group: 'lens'`, whose default label is "Display" — also the strip's
+                // All four are `group: 'lens'`, whose default label is "Display" — also the deck's
                 // `lens` group name, so unoverridden this announces a second, unrelated name for
                 // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
                 groupLabels={ROW_MODE_GROUP_LABELS}
-                orientation="vertical"
               />
-            </ChromePortal>
+            </div>
             <CompactPenStatus
               pen={model.pen}
               {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
@@ -1285,29 +1300,29 @@ export function ToolbarPlanWorkspace({
               `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
               equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
               everything below it. */}
-          {/* **One strip** (Graphite M5). ADR-0031's two-row amendment split the surface into "what
-              you look at" and "what you build with", and four epics (ADR-0090/0091/0092/0094) then
-              spent themselves making both rows fit. The split is deleted rather than re-grouped:
-              `TOOLBAR_GROUPS` was already a menu structure — `frame · lens · find · tools · object ·
-              output · help` — so the merged strip's order is the taxonomy's, unchanged.
+          {/* **The command deck** (workspace redesign, 2026-08-24) — `Deck`, not `Toolbar`, and the
+              difference is the whole point rather than a styling choice.
 
-              The row captions go with it. They existed because the Look/Do split lived only in each
-              row's `aria-label` and was invisible to sighted readers; with one row there is nothing
-              to distinguish, and a caption naming the only thing present is noise.
+              `Toolbar` answers "too many commands" by measuring its container and demoting the
+              lowest-priority items into a `⋯`. Four epics (ADR-0090/0091/0092/0094) tuned that
+              mechanism, and the product owner's verdict was that the overflow "is not what we
+              agreed to — we need all commands visible when we can". Reading the OLD Flask app
+              settled it: its toolbar wrapped over five labelled group cards and had no overflow
+              because a row allowed to become two rows cannot run out of width. The entire ladder
+              was a consequence of insisting this surface stay one row tall.
 
-              `alignEndGroup="object"` does NOT survive, and that is a decision rather than an
-              omission: it right-aligned Row 1's single read-out, and `object` on the merged strip is
-              the plan-action cluster (Analysis, Settings, Comments) that Row 2 carried. Pushing
-              those to the trailing edge would put the commands a planner reaches for most at the far
-              end of the widest row in the product. The `⋯` keeps the trailing edge, which is what
-              ADR-0091 M7's S9 asserts. */}
-          <div className="flex items-center gap-2 px-2 py-1">
-            <Toolbar
+              So `Deck` wraps, groups into four foldable captioned cards, and has no `⋯` at all.
+              `alignEndGroup` goes with the ladder — a trailing edge is a property of a single row,
+              and there is no longer one to have an edge. `className="flex-1"` goes too: the deck
+              fills the band by wrapping into it rather than by being told to grow, and a flex child
+              that grows is exactly how a row ends up measuring its own leftover width, which is the
+              defect class this replaces. */}
+          <div className="px-2 py-1.5">
+            <Deck
               items={rows.strip}
               context={ctx}
               label="Plan commands"
               authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-              className="flex-1"
             />
           </div>
         </ToolbarBandProvider>
@@ -1398,7 +1413,14 @@ export function ToolbarPlanWorkspace({
           the strips are produced by the first and land in the second. Provider here rather than at
           the shell, so the shell stays plan-unaware (ADR-0029). */}
       <CanvasDockProvider>
-        <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* `px-3 pb-3` — the workspace's own inset, so the stage and the docked panels read as
+            CARDS FLOATING on the gradient ground rather than as the window's inner walls
+            (workspace redesign, 2026-08-24). It lives here, on the workspace body, and
+            deliberately NOT on the shell's `<main>`: `<main>` carries every route, and the
+            content screens already bring their own container padding, so putting it there would
+            double the inset on a dozen screens to fix one. The chrome band above supplies the
+            matching top and side gutters from the shell, because it is the shell that places it. */}
+        <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3">
           {isWide ? (
             // Wide: a HORIZONTAL split — the canvas+activities vertical stack (left) beside the docked
             // notes panel (right, when open). Opening notes narrows the canvas; closing restores it.
@@ -1407,7 +1429,12 @@ export function ToolbarPlanWorkspace({
                 {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                   panel (when open) is overlaid via the `relative` container. */}
                 {/* No padding — see the single-pane branch below for why. */}
-                <div className="relative flex min-h-0 flex-1 flex-col gap-2">
+                {/* The stage is a CARD (workspace redesign, 2026-08-24): a radius, a hairline
+                    and a shadow, so the diagram reads as a sheet of paper laid on the gradient
+                    rather than as the window's own white. `overflow-hidden` is what makes the
+                    radius real — the canvas paints to its own bounds and would otherwise square
+                    off the corners it sits under. */}
+                <div className="border-border relative flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-lg border shadow-md">
                   {surface}
                   {legendPanel}
                   {resourceStripPanel}

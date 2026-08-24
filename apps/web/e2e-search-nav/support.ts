@@ -247,7 +247,7 @@ export async function jumpPrevious(page: Page): Promise<string> {
  * read from which radio is checked.
  */
 export async function openZoomPresets(page: Page): Promise<Locator> {
-  const view = lookToolbar(page).getByRole('button', { name: /^View/ });
+  const view = lookToolbar(page).getByRole('button', { name: 'View', exact: true });
   if ((await view.getAttribute('aria-expanded')) !== 'true') await view.click();
   return page.getByRole('dialog', { name: 'View' }).getByRole('radiogroup', { name: 'Zoom level' });
 }

@@ -33,7 +33,6 @@ const PALETTE: TsldPalette = {
   outline: '#ffffff',
   selection: '#0ea5e9',
   nonWorking: '#f3f4f6',
-  nonWorkingHatch: '#e5e7eb',
   today: '#dc2626',
   todayInk: '#ffffff',
   dataDate: '#111827',
