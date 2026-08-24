@@ -53,28 +53,20 @@ function renderRows(context: TsldToolbarContext) {
 const floatPathsButton = () => overflowItem(/float paths/i);
 
 /**
- * Reach a command that lives in the `⋯` overflow (ADR-0090 M2, 2026-08-12).
+ * Reach a command that USED to live in the `⋯` overflow.
  *
- * Four commands moved to tier 3 so the two rows could label themselves at 1920 — the trade the
- * product owner took with the measured numbers. Nothing about what these assertions prove changes;
- * they open the menu first and read a `menuitem` instead of a top-level button. A `MenuItem` also
- * links its reason by `aria-describedby` rather than a `title`, which is why the shade cases assert
- * the accessible description.
+ * **The overflow is gone** (workspace redesign, 2026-08-24): the command deck wraps instead of
+ * demoting, so every command is a top-level control and there is no menu to open. This helper is
+ * kept rather than inlined at ~15 call sites, and kept with its history, because what these
+ * assertions prove has not changed — only where the control is. It is now a plain `getByRole`.
+ *
+ * The shade cases still assert an accessible DESCRIPTION rather than a `title`: a `MenuItem` linked
+ * its reason by `aria-describedby` and so does `ToolbarButton`, so that half needed no change at
+ * all — which is worth knowing, since it means those assertions were testing the contract rather
+ * than the markup.
  */
 function overflowItem(name: string | RegExp): HTMLElement {
-  const more = screen.queryAllByRole('button', { name: 'More toolbar actions' });
-  for (const trigger of more) {
-    if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-    // Any of the three menu-item roles: a toggle in the overflow is a `menuitemcheckbox` since
-    // ADR-0090 M2 (it was a plain `menuitem` announcing no state), and `getByRole('menuitem')`
-    // does not match it — which is how that fix announced itself here.
-    for (const role of ['menuitem', 'menuitemcheckbox', 'menuitemradio'] as const) {
-      const hit = screen.queryByRole(role, { name });
-      if (hit) return hit;
-    }
-    fireEvent.click(trigger);
-  }
-  throw new Error(`No overflow item named ${String(name)}`);
+  return screen.getByRole('button', { name });
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -89,7 +81,11 @@ describe('TSLD toolbar — Float paths (flag on)', () => {
   it('carries the panel open state as aria-pressed, and closes when pressed again', () => {
     renderRows(ctx({ floatPathsOpen: true }));
     const button = floatPathsButton();
-    expect(button).toBeChecked();
+    // `aria-pressed`, not `toBeChecked()`. In the `⋯` this was a `menuitemcheckbox`, which is a
+    // checkable role; as a top-level toolbar control it is a toggle BUTTON, and a button conveys
+    // its state through `aria-pressed`. The state being asserted is identical — the role carrying
+    // it changed when the overflow went.
+    expect(button).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(button);
     expect(toggleFloatPaths).toHaveBeenCalledOnce();
   });

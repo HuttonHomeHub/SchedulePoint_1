@@ -135,6 +135,10 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(btn).not.toHaveAttribute('aria-disabled', 'true');
     // Logic discoverability (entry-route gap #6): the hover tooltip points a toolbar-only user at the
     // Logic panel, without changing the accessible name ("Add note").
+    // This one KEEPS its label prefix where the disabled cases below dropped theirs, and the
+    // difference is real rather than an inconsistency: this is an ENABLED button carrying a
+    // `description`, and `ToolbarButton` composes `label — description` for those. The disabled
+    // cases carry a `disabledReason`, which stands alone once the label is visible.
     expect(btn).toHaveAttribute('title', 'Add note — Opens the Logic panel (links & notes)');
     fireEvent.click(btn);
     expect(spies.openActivityNotes).toHaveBeenCalledOnce();
@@ -144,20 +148,20 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: undefined, canWriteNotes: true }));
     const btn = screen.getByRole('button', { name: 'Add note' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Add note — Select an activity first');
+    expect(btn).toHaveAttribute('title', 'Select an activity first');
   });
 
   it('Add note: disabled with "Select an activity first" when nothing is selected', () => {
     renderRows(ctx({ selectedActivityId: null, selectedActivity: undefined }));
     const btn = screen.getByRole('button', { name: 'Add note' });
     expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Add note — Select an activity first');
+    expect(btn).toHaveAttribute('title', 'Select an activity first');
   });
 
   it('Add note: disabled with the role reason for a viewer who cannot write notes', () => {
     renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canWriteNotes: false }));
     const btn = screen.getByRole('button', { name: 'Add note' });
-    expect(btn).toHaveAttribute('title', 'Add note — You don’t have permission to add notes');
+    expect(btn).toHaveAttribute('title', 'You don’t have permission to add notes');
   });
 
   it('Add note: role reason wins over selection for a viewer with nothing selected (U2/A5 precedence)', () => {
@@ -165,7 +169,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
       ctx({ selectedActivityId: null, selectedActivity: undefined, canWriteNotes: false }),
     );
     const btn = screen.getByRole('button', { name: 'Add note' });
-    expect(btn).toHaveAttribute('title', 'Add note — You don’t have permission to add notes');
+    expect(btn).toHaveAttribute('title', 'You don’t have permission to add notes');
   });
 
   // --- F5 · Clear visual placement -----------------------------------------------------------

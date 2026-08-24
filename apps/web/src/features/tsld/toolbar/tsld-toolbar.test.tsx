@@ -277,7 +277,16 @@ describe('TSLD toolbar registry (two-row)', () => {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       // Icon-only tooltip names the button, then the reason (WCAG/discoverability).
-      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
+      // The title repeats the label ONLY when the button is icon-only, because then it is the
+      // single thing identifying which control is refusing. A labelled button already shows its
+      // name, so the tooltip carries the reason alone. Derived from the rendered button rather
+      // than hard-coded, so this case keeps working whichever side of that line an item is on.
+      // NOT `hasAttribute('aria-label')` — that was the first shape and it is wrong, because
+      // `ToolbarButton` also sets `aria-label` on a LABELLED button once a reason is linked by
+      // `aria-describedby`. The discriminator is whether the visible label is rendered, and the
+      // label span is the button's first text node.
+      const iconOnly = !btn.textContent?.startsWith(name);
+      expect(btn).toHaveAttribute('title', iconOnly ? `${name} — Coming soon` : 'Coming soon');
     }
   });
 
@@ -295,7 +304,14 @@ describe('TSLD toolbar registry (two-row)', () => {
     for (const name of ['Share & export']) {
       const item = screen.getByRole('button', { name });
       expect(item).toHaveAttribute('aria-disabled', 'true');
-      expect(item).toHaveAttribute('title', `${name} — Coming soon`);
+      // The title repeats the label ONLY when the button is icon-only, because then it is the
+      // single thing identifying which control is refusing. A labelled button already shows its
+      // name, so the tooltip carries the reason alone. Derived from the rendered button rather
+      // than hard-coded, so this case keeps working whichever side of that line an item is on.
+      // NOT `hasAttribute('aria-label')` — see the sibling case: a labelled button with a linked
+      // reason carries one too. The visible label is the button's first text node.
+      const iconOnly = !item.textContent?.startsWith(name);
+      expect(item).toHaveAttribute('title', iconOnly ? `${name} — Coming soon` : 'Coming soon');
     }
   });
 

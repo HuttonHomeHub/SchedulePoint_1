@@ -79,7 +79,7 @@ describe('TSLD toolbar — Recalculate busy state', () => {
     // icon-only control's tooltip has to carry its NAME as well as its reason, or a pointer user is
     // told "Recalculating…" by a button they cannot identify. The `—` form is `ToolbarButton`'s, not
     // this item's; what changed here is only which side of the label policy this command sits on.
-    expect(button).toHaveAttribute('title', 'Recalculate — Recalculating…');
+    expect(button).toHaveAttribute('title', 'Recalculating…');
   });
 
   it('carries no aria-busy when idle', () => {
@@ -93,10 +93,7 @@ describe('TSLD toolbar — Recalculate busy state', () => {
     // Both halves of "the pen is not held": recalculation is pen-gated exactly as schedule editing
     // is, so a fixture setting only one is describing a state the model cannot produce.
     renderDoRow({ recalcPending: false, canRecalc: false, canEditSchedule: false });
-    expect(recalculateButton()).toHaveAttribute(
-      'title',
-      'Recalculate — Start editing to recalculate.',
-    );
+    expect(recalculateButton()).toHaveAttribute('title', 'Start editing to recalculate.');
   });
 
   /**
@@ -123,7 +120,7 @@ describe('TSLD toolbar — Recalculate busy state', () => {
       renderDoRow({ recalcPending: true });
       const button = recalculateButton();
       expect(button).toHaveAttribute('aria-busy', 'true');
-      expect(button).toHaveAttribute('title', 'Recalculate — Recalculating…');
+      expect(button).toHaveAttribute('title', 'Recalculating…');
       const icon = iconOf(button);
       expect(icon).toHaveClass('animate-spin');
       expect(icon.getAttribute('style')).toBeNull();

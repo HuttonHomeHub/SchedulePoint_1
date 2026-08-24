@@ -75,6 +75,26 @@ export type DeckGroupId = (typeof DECK_GROUPS)[number]['id'];
  */
 const ICON_ONLY = new Set(['zoom-in', 'zoom-out', 'fit', 'undo', 'redo', 'print']);
 
+/**
+ * Does this keystroke belong to a form field rather than to the roving toolbar?
+ *
+ * **Load-bearing, and re-derived rather than inherited.** A `render` item may be an `<input>` — the
+ * deck's own activity search is one — and a toolbar that treats every ArrowLeft as "move to the
+ * previous control" takes the caret keys away from the field a planner is typing in. Home and End
+ * are worse: in a text field they mean start-of-line and end-of-line, and stealing them moves focus
+ * to the far end of the surface instead.
+ *
+ * This guard was dropped when the width ladder was deleted and the test caught it immediately,
+ * which is the gate working: the assertion is about the contract, not about the machinery that was
+ * removed around it.
+ */
+function isTextEntry(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
 const FOLD_STORAGE_KEY = 'schedulepoint-deck-folds';
 
 /**
@@ -188,6 +208,7 @@ export function Deck<Ctx>({
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (isTextEntry(event.target)) return;
       const keys = ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'];
       if (!keys.includes(event.key)) return;
       const nodes = focusables();

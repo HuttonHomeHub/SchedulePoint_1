@@ -51,7 +51,16 @@ describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', (
     for (const name of ['Go to today', 'Comments', 'Add note']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
-      expect(btn).toHaveAttribute('title', `${name} — Coming soon`);
+      // The title repeats the label ONLY when the button is icon-only, because then it is the
+      // single thing identifying which control is refusing. A labelled button already shows its
+      // name, so the tooltip carries the reason alone. Derived from the rendered button rather
+      // than hard-coded, so this case keeps working whichever side of that line an item is on.
+      // NOT `hasAttribute('aria-label')` — that was the first shape and it is wrong, because
+      // `ToolbarButton` also sets `aria-label` on a LABELLED button once a reason is linked by
+      // `aria-describedby`. The discriminator is whether the visible label is rendered, and the
+      // label span is the button's first text node.
+      const iconOnly = !btn.textContent?.startsWith(name);
+      expect(btn).toHaveAttribute('title', iconOnly ? `${name} — Coming soon` : 'Coming soon');
     }
     // **Clear visual placement was a fourth here and is deliberately gone** (ADR-0094 M4-T1).
     // It moved to the selection bar, which registers it behind the SAME `VITE_TOOLBAR_QUICK_WINS`
