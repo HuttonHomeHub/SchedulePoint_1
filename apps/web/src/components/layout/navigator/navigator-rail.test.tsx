@@ -96,22 +96,40 @@ describe('NavigatorRail', () => {
   });
 
   /**
-   * **The destinations are the rail's, and this renders them only as the `Sheet`'s content.**
-   * Rendering them in both put "Clients" on screen twice in two treatments — ADR-0093's rule, and
-   * it was caught by a strict-mode locator resolving to two elements rather than by anyone looking
-   * at the screen. Below `lg` the rail is hidden and this IS the navigator, so they have to be here
-   * and nowhere else.
+   * **The destinations are carried at every width** (workspace redesign M3-T2).
    *
-   * Both directions are asserted: pinning only the drawer case passes equally against a component
-   * that always renders them, which is the state that was wrong.
+   * The case this replaces asserted the opposite — present in the `Sheet`, absent otherwise —
+   * because Graphite M4 split them across two surfaces, this list below `lg` and an icon strip on
+   * the tool rail above it, and rendering both put "Clients" on screen twice. That rail is deleted;
+   * this component is the persistent navigator at every width, so there is nothing left to
+   * discriminate and the `onClose` condition went with the second surface.
+   *
+   * Still asserted in both shapes, for the reason the old case gave: pinning one passes equally
+   * against a component that renders them nowhere.
    */
-  it('carries the organisation destinations in the Sheet and not in the drawer', () => {
+  it('carries the organisation destinations in both shapes', () => {
     const { unmount } = renderRail(<NavigatorRail orgSlug="acme" onClose={vi.fn()} />);
     expect(screen.getByRole('navigation', { name: 'Organisation' })).toBeInTheDocument();
     unmount();
 
     renderRail(<NavigatorRail orgSlug="acme" />);
-    expect(screen.queryByRole('navigation', { name: 'Organisation' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Organisation' })).toBeInTheDocument();
+  });
+
+  /**
+   * **The fold control appears only when this rail IS the docked column** (M3-T1). Below `lg` the
+   * `Sheet` has a Close instead, and offering both would be two controls for one dismissal that
+   * persist differently — one writes a width preference, the other does not.
+   */
+  it('offers the fold control only when the column asks for one', () => {
+    const { unmount } = renderRail(<NavigatorRail orgSlug="acme" />);
+    expect(screen.queryByRole('button', { name: 'Hide Project Explorer' })).not.toBeInTheDocument();
+    unmount();
+
+    const onCollapse = vi.fn();
+    renderRail(<NavigatorRail orgSlug="acme" onCollapse={onCollapse} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Project Explorer' }));
+    expect(onCollapse).toHaveBeenCalledTimes(1);
   });
 
   it('names the root create control "New client", not just "Client"', () => {

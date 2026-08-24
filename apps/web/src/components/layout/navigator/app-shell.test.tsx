@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type * as ReactRouter from '@tanstack/react-router';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppShell } from './app-shell';
@@ -122,34 +122,46 @@ describe('AppShell', () => {
   });
 
   /**
-   * **The rail's panel button is a toggle over what the drawer shows**, so pressing the lit one has
-   * to do something: re-pointing the drawer at the subject it already shows is invisible, and a
-   * control that appears inert is worse than one that is absent.
+   * **The Explorer folds to a spine and back, and focus follows** (workspace redesign M3-T1).
    *
-   * Focus is deliberately NOT moved. The rail button that closed the drawer is still mounted and
-   * still focused, which is the behaviour the old collapse/expand pair had to reconstruct with a
-   * `focusToggleOnMount` flag precisely because its own control unmounted. A fixed rail has nothing
-   * to restore.
+   * The case this replaces pressed a rail button that toggled the drawer's subject, and its whole
+   * point was that focus needed no restoring because that button survived its own press. The docked
+   * column's control does NOT survive: collapsing unmounts the panel that holds it, so a browser
+   * would drop focus to `<body>` — the WCAG 2.4.3 class this repository has shipped four times.
+   *
+   * So the assertion inverts. Focus is moved deliberately, to the counterpart control in the state
+   * being entered, and both directions are pinned because each drops focus on its own and neither
+   * failure is visible on screen.
    */
-  it('closes the drawer when its own subject button is pressed again, and reopens it', () => {
+  it('folds the Explorer to its spine and back, carrying focus both ways', async () => {
     renderShell();
-    const explorer = screen.getByRole('button', { name: 'Project Explorer' });
     expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
-    expect(explorer).toHaveAttribute('aria-pressed', 'true');
 
-    fireEvent.click(explorer);
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Project Explorer' }));
     expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
-    expect(explorer).toHaveAttribute('aria-pressed', 'false');
-    // **Still the same element**, which is the whole reason focus needs no restoring. The
-    // collapse/expand pair this replaced swapped one control for another and had to reconstruct
-    // focus with a `focusToggleOnMount` flag; a fixed rail's button survives its own press.
-    // Asserted by identity rather than with `toHaveFocus`, which in jsdom would be asserting that
-    // `fireEvent.click` moves focus — it does not, and a real click does.
-    expect(screen.getByRole('button', { name: 'Project Explorer' })).toBe(explorer);
+    const spine = screen.getByRole('button', { name: 'Show Project Explorer' });
+    await waitFor(() => expect(spine).toHaveFocus());
 
-    fireEvent.click(explorer);
+    fireEvent.click(spine);
     expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
-    expect(explorer).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Hide Project Explorer' })).toHaveFocus(),
+    );
+  });
+
+  /**
+   * **The spine keeps the organisation's destinations**, which is the objection
+   * `OrgDestinationsCollapsed` was written to answer, arriving one surface along.
+   *
+   * Folding this column is the gesture a planner makes to gain canvas width. Without the icon strip
+   * it would also take the product's entire secondary navigation with it — six places reachable
+   * from nowhere else, hidden by a control whose label says nothing about them.
+   */
+  it('keeps the destinations reachable from the folded spine', () => {
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Project Explorer' }));
+    expect(screen.getByRole('navigation', { name: 'Organisation' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Clients' })).toBeInTheDocument();
   });
 
   /**
@@ -161,44 +173,28 @@ describe('AppShell', () => {
    * absence cost a planner the Link tool mid-search); and a closed drawer must not swallow the key
    * from anything above it.
    */
-  it('closes the drawer on Escape, deferring to inner rungs and to text entry', () => {
+  it('leaves Escape alone when there is no drawer on screen', () => {
+    // **The shape of this case changed with the drawer's contents** (M3-T2). It used to open on the
+    // Project Explorer, so Escape always had something to close; the Explorer is a docked column
+    // now and the drawer holds only what a route registers — nothing, in this fixture and in the
+    // shipped product (`docs/TECH_DEBT.md` #156).
+    //
+    // What that leaves is the half that was always the sharp one: a shell with no drawer must not
+    // swallow Escape from anything above it, and must not write a collapse a reader never asked
+    // for. The three-rung deferral is asserted in `drawer-entry-point.test.tsx`, where a subject IS
+    // registered and there is a panel for the rung to act on.
     renderShell();
     const grid = screen.getByRole('main').parentElement!;
-    const drawer = () => screen.queryByRole('complementary', { name: 'Project Explorer' });
-    expect(drawer()).toBeInTheDocument();
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
 
-    // An inner rung acted: `defaultPrevented` is the whole contract. It cannot be faked through
-    // `fireEvent`'s init — the flag is set by a real `preventDefault()` — so a native listener on a
-    // descendant plays the inner rung. React 19 delegates to the root container, so this runs
-    // first, exactly as a workspace rung would.
-    const main = screen.getByRole('main');
-    const innerRung = (event: Event): void => event.preventDefault();
-    main.addEventListener('keydown', innerRung);
-    fireEvent.keyDown(main, { key: 'Escape' });
-    expect(drawer()).toBeInTheDocument();
-    main.removeEventListener('keydown', innerRung);
-
-    // Typed into a field: the field's, not the drawer's. A real one, appended to the stage rather
-    // than looked up — the switcher renders `null` until the reader has organisations, and a
-    // locator that resolves to nothing would make this case pass by finding no field to type in.
-    const field = document.createElement('input');
-    main.appendChild(field);
-    fireEvent.keyDown(field, { key: 'Escape' });
-    expect(drawer()).toBeInTheDocument();
-    field.remove();
-
+    // The Explorer must survive it. This is the sharp half: the rung guards on `drawer.collapsed`,
+    // which `use-resizable-panel-prefs.ts` persists through an effect, so a rung that fired here
+    // would write a collapse nobody asked for — and this shell has a docked column whose own fold
+    // state is a SECOND persisted preference, so a mis-aimed rung could now fold the Explorer as
+    // well. Asserted rather than reasoned about.
     fireEvent.keyDown(grid, { key: 'Escape' });
-    expect(drawer()).not.toBeInTheDocument();
-  });
-
-  it('closes the drawer from its own close control', () => {
-    renderShell();
-    fireEvent.click(screen.getByRole('button', { name: 'Close context drawer' }));
-    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Project Explorer' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
   });
 
   it('opens the rail as a drawer from the header toggle and closes it', () => {
@@ -360,13 +356,30 @@ describe('AppShell', () => {
     });
   });
 
-  it('still closes the drawer on Escape at lg and above', () => {
-    renderShell();
+  it('never persists a collapse from an Escape with no drawer, at any width', () => {
+    // **The positive half of #168 moved rather than went** (M3-T2). It used to assert that Escape
+    // at `lg`+ closed the Project Explorer — true while the Explorer WAS the drawer's subject, and
+    // meaningless now that it is a docked column with its own fold state and its own control.
+    // The rung's positive case is asserted in `drawer-entry-point.test.tsx`, against a registered
+    // subject, which is the only shape that has a drawer to close.
+    //
+    // What is pinned here is the half this suite can still see, and it is the one #168 was about:
+    // the guard must not write a preference for a panel that is not on screen. Asserted at `lg`+ as
+    // well as below it, because the `describe` above pins only the narrow half — and a rung that
+    // fires wrongly at the wide one would be invisible to it.
+    const writes = spyOnStorageWrites();
+    const { container } = renderShell();
     const grid = screen.getByRole('main').parentElement!;
-    expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
 
     fireEvent.keyDown(grid, { key: 'Escape' });
-    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+
+    expect(
+      writes.filter(
+        ([key, value]) =>
+          key === 'schedulepoint-context-drawer' && value.includes('"collapsed":true'),
+      ),
+    ).toEqual([]);
+    expect(within(container).queryByText(/closed/)).not.toBeInTheDocument();
   });
 
   it('puts a skip link first in the document, pointing at a focusable main', () => {

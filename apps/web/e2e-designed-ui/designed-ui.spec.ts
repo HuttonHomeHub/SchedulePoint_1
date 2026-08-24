@@ -166,18 +166,20 @@ for (const { choice, colorScheme } of THEMES) {
       // — a real defect, since two links claiming to be the current page is two answers to "where
       // am I" — so reaching the brand's current state means going to the landing.
       //
-      // Scoped by the rail's `data-tool-rail` hook. Two weaker selectors were tried first and both
-      // resolved to the WRONG element rather than to nothing, which is the failure mode worth
-      // naming: `nav[aria-label="Project Explorer"] a[...]` finds the drawer's tree, and the
-      // accessible name alone finds two links, because the below-`lg` top bar still renders the
-      // same brand behind `display: none`. A selector that resolves and measures a real pair is how
-      // a green assertion ends up describing a control nobody can see.
+      // Scoped to the header. It used to be scoped by `[data-tool-rail]`, a hook that existed
+      // because the brand rendered TWICE — once on the rail and once in a below-`lg` top bar behind
+      // `display: none` — so the accessible name alone found two links and
+      // `nav[aria-label="Project Explorer"] a[...]` found the tree instead. The workspace redesign
+      // deletes the rail and restores the header at every width, so there is one brand link in one
+      // place and `header` is enough. The count assertion below is what proves that rather than
+      // assuming it. A selector that resolves and measures a real pair is how a green assertion
+      // ends up describing a control nobody can see.
       await page.goto(`/orgs/${orgSlug}`);
-      const currentBrand = '[data-tool-rail] a[aria-current="page"]';
+      const currentBrand = 'header a[aria-current="page"]';
       await expect(page.locator(currentBrand)).toBeVisible();
       expect(contrast(await computedPair(page, currentBrand))).toBeGreaterThanOrEqual(TEXT_MIN);
       // And exactly ONE thing claims it. The prefix-match defect above is only visible as a count.
-      await expect(page.locator('[data-tool-rail] a[aria-current="page"]')).toHaveCount(1);
+      await expect(page.locator('header a[aria-current="page"]')).toHaveCount(1);
 
       await page.goto(`/orgs/${orgSlug}/calendars`);
       const currentRail = 'nav[aria-label="Organisation"] a[aria-current="page"]';

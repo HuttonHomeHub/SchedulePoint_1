@@ -15,7 +15,7 @@ import {
  *
  * ## Why this exists rather than a `DrawerSubject` union member
  *
- * `tool-rail.tsx` states the rule the shell has kept since Graphite M4: _"The drawer subjects the
+ * `app-shell.tsx` states the rule the shell has kept since Graphite M4: _"The drawer subjects the
  * shell itself owns. Plan-scoped subjects arrive with the plan."_ An activity is plan-scoped, so
  * adding an `'activity'` literal to `DrawerSubject` would be the shell knowing what a plan is —
  * precisely what ADR-0029 exists to prevent, and what three previous epics had to undo after

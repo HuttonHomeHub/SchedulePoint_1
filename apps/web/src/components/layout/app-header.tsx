@@ -11,13 +11,17 @@ import { OrgSwitcher } from '@/features/organizations';
 /**
  * The header's contents — brand mark, organisation switcher, account chip. **No navigation.**
  *
- * **Below `lg` only, since Graphite M3.** At `lg`+ the Project Explorer rail is the leading
- * column top to bottom and carries all three of these itself, so the top bar is deleted and the
- * ~56 px it held goes back to the stage — which is ADR-0099 D1's whole point. Below `lg` the rail
- * is an off-canvas `Sheet` with nothing pinned to open it, so a bar survives there carrying the
- * drawer trigger beside the same three controls. They are the SAME components in both places, not
- * a second copy: only one is in the accessibility tree at a time, because the other is
- * `display: none`.
+ * **At every width again, since the workspace redesign M3-T2.** Graphite M3 deleted this row above
+ * `lg` and moved all three controls onto a 48 px icon rail down the leading edge, to give the
+ * ~56 px back to the stage. The rail is gone — M3-T1 docks the Project Explorer in that column,
+ * and the product owner's question about what the rail was still adding had a short answer: the
+ * brand, a switcher, six links and an account menu, none of which is a reason to spend the leading
+ * edge of every screen.
+ *
+ * One consequence is worth naming rather than discovering: this row and the `Sheet` trigger inside
+ * it are now a SINGLE rendering rather than two `display: none` twins, so a selector written by
+ * role or accessible name resolves to one element at every width. The trigger itself keeps its
+ * `lg:hidden`, because above `lg` the Explorer is a docked column and there is nothing to open.
  *
  * The six organisation destinations (Clients, Calendars, Resources, Members, Audit log, Recently
  * deleted) moved to the Project Explorer rail's bottom zone in ADR-0097 Landing D1: they are

@@ -108,8 +108,8 @@ and components. Deleting a feature should mean deleting one folder.
   be the gate: that spread widens the registered-route union to contain the route
   in **both** branches, so `pnpm typecheck` cannot catch a link to a route the
   build did not register. Nested **layout routes** model the app shell once:
-  `_authed` renders the mounted-once chrome band + tool rail, and children render
-  into its single workspace region (ADR-0029). The **Project Explorer is withheld
+  `_authed` renders the mounted-once chrome band + docked Project Explorer, and
+  children render into its single workspace region (ADR-0029). The **Project Explorer is withheld
   on the three `_authed` routes that carry no `orgSlug`** — `/onboarding`,
   `/account`, `/me/activity` — because a tree with no root is navigation that
   cannot navigate (`docs/TECH_DEBT.md` #165a); the shell derives that fact once and
@@ -325,19 +325,23 @@ sequenceDiagram
 - **Fluid by default:** relative units, flex/grid, `max-width` containers;
   avoid fixed pixel widths.
 - **Adaptive navigation:** the primary navigator collapses to a drawer/sheet below
-  `lg`. The **persistent app-shell** (ADR-0029) realises this, and its shape changed
-  twice after that ADR: the leading edge is now a **fixed 48 px tool rail** with no
-  collapse (ADR-0099 D1), and the Project Explorer is a **subject of the trailing
-  context drawer** — resizable 224–420 and closable, with its own persisted
-  preference — or an off-canvas `Sheet` below `lg`. It mounts in the layout route so
-  it survives child-route swaps, and derives its active node and ancestor expansion
-  from the URL — never a competing selection store.
+  `lg`. The **persistent app-shell** (ADR-0029) realises this, and its shape has
+  changed three times after that ADR. It is now: a **docked Project Explorer** on the
+  leading edge — resizable 200–420, folding to a 34 px spine, with its own persisted
+  preference — or an off-canvas `Sheet` below `lg`; a **chrome band** across the top
+  carrying identity, the organisation switcher and the account; and a **trailing
+  context drawer** a route may register a subject into (resizable 224–420, and with
+  no production registrant today — `docs/TECH_DEBT.md` #156). It mounts in the layout
+  route so it survives child-route swaps, and derives its active node and ancestor
+  expansion from the URL — never a competing selection store.
 
-  <!-- Corrected 2026-08-22. This said "behind `VITE_NAV_TREE`", a flag ADR-0098 M0
-  retired on 2026-08-19, and described the superseded rail — "pinned/collapsible/
-  resizable on `lg`+" — which Graphite M4 replaced with the tool rail plus a drawer
-  subject. Three stale claims in one paragraph, found while writing the sentence
-  above it. -->
+  <!-- Corrected 2026-08-22 and again 2026-08-24. The first correction removed a
+  retired flag and a superseded rail description. The second removes the 48 px tool
+  rail Graphite M4 introduced and this paragraph had described for two days: the
+  workspace redesign deletes it, docks the Explorer back on the leading edge and
+  restores the header row at every width. Two rewrites of one paragraph in three days
+  is the cost of a shell whose shape is being worked on — which is a reason to keep
+  it current, not a reason to describe it loosely. -->
 
 - **A `useMediaQuery`/`useBreakpoint` hook** exposes breakpoints to logic when
   layout alone can't express a change.
