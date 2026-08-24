@@ -575,7 +575,37 @@
 
      (ADR-0101's comment quoted 1.18:1 for the dark pair; recomputed here it is 1.103:1. Corrected
      rather than carried.) */
-  --canvas-nonworking-hatch: oklch(0.925 0.006 252);
+  /* ----------------------------------------------------------------------- */
+  /* The non-working wash (workspace redesign, 2026-08-24).                    */
+  /*                                                                          */
+  /* **The diagonal hatch is gone**, and this token exists because removing it */
+  /* exposed something the hatch had been hiding. In the product owner's       */
+  /* screenshot the single loudest element was weekend striping — a wall of    */
+  /* diagonals across the whole diagram, louder than the schedule it was       */
+  /* meant to sit behind.                                                      */
+  /*                                                                          */
+  /* But the wash UNDER that hatch was `--muted` at oklch(0.965) on a canvas   */
+  /* of oklch(0.958): a 0.007 step, invisible on its own. The hatch was not    */
+  /* decorating a visible wash, it WAS the whole signal — which is why         */
+  /* deleting it without this token would have made weekends vanish entirely   */
+  /* rather than become quiet.                                                */
+  /*                                                                          */
+  /* So the wash gets a real value and does the job alone: enough separation   */
+  /* to read as a different kind of day, far too little to compete with a bar. */
+  /* ----------------------------------------------------------------------- */
+  /* Solved, not chosen. Two floors bound it from opposite sides and the window between them is
+     narrow: a bar must clear 3:1 against the wash it crosses, and the wash must differ from the
+     canvas enough to read as a different kind of day. At 0.947 the bar sits at 3.05:1 and the
+     wash at 1.03:1 against the canvas.
+     
+     **My first attempt at this was 0.924 and it was wrong** — it looked right in isolation and
+     pushed the bar to 2.85:1, under the floor. Fixing THAT by darkening the bar then broke four
+     more pairs, because the diagram's three criticality states are a ladder with very little
+     slack in it: normal/near-critical carries both a 1.5 floor and a 1.70 ceiling, and moving one
+     rung moves what every other rung has to clear. The gates refused all of it, and were right —
+     the design's own weekend tint is a 4.5% wash, so the subtle value was the intended one and
+     the darker bar was my invention. */
+  --canvas-nonworking: oklch(0.947 0.01 252);
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
@@ -1366,7 +1396,7 @@
   --color-canvas-grid-day: var(--canvas-grid-day);
   --color-canvas-grid-month: var(--canvas-grid-month);
   --color-canvas-grid-year: var(--canvas-grid-year);
-  --color-canvas-nonworking-hatch: var(--canvas-nonworking-hatch);
+  --color-canvas-nonworking: var(--canvas-nonworking);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

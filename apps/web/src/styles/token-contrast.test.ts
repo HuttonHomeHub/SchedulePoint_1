@@ -485,7 +485,7 @@ describe('the diagram grid is readable on both of its grounds', () => {
     // Deliberately unasserted — see the block comment above for why each is exempt. Reported so a
     // REGRESSION is still visible in the test output, which is the same contract the decorative
     // border below has.
-    for (const ink of ['--canvas-grid-day', '--canvas-nonworking-hatch']) {
+    for (const ink of ['--canvas-grid-day', '--canvas-nonworking']) {
       for (const [, ground] of PLOT_GROUNDS) {
         expect(ratio(tokens, ground, ink)).toBeGreaterThan(1);
       }

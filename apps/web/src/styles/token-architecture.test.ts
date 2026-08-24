@@ -120,7 +120,7 @@ const OUTSIDE_THE_CLOSURE = {
     '--canvas-grid-day',
     '--canvas-grid-month',
     '--canvas-grid-year',
-    '--canvas-nonworking-hatch',
+    '--canvas-nonworking',
     // The minimap rectangle's two-tone frame (ADR-0100 decision 9): the same discriminator
     // as the gridline tiers — a viewport frame has no meaning on a header and no semantic
     // sibling in the base vocabulary, and its contrast is gated by its OWN pairs
@@ -528,7 +528,11 @@ describe('weight is a governed axis', () => {
   // exists to prevent, inverted.
   // ...and 163 -> 164: the shortcuts sheet's new Minimap section heading takes the
   // `font-semibold` every other section heading in that sheet already carries.
-  const SCREEN_WEIGHT_CEILING = 164;
+  // ...and 164 -> 165: the plan identity line's `Mode` caption, which names the segmented
+  // controls that moved there from the rail (workspace redesign, 2026-08-24). A caption naming a
+  // cluster is exactly the kind of screen-level weight this ceiling governs rather than forbids —
+  // it rose because a screen gained a label, not because a decision leaked out of a primitive.
+  const SCREEN_WEIGHT_CEILING = 165;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

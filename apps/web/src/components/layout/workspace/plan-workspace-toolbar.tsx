@@ -1226,32 +1226,41 @@ export function ToolbarPlanWorkspace({
                 ) : null}
               </div>
             </div>
-            {/* **The mode cluster now portals into the RAIL** (Graphite M5). It was 400 px of this
-                band — a quarter of the room at 1646 — spent on four controls that are not commands,
-                which is ADR-0091 D1's own thesis about where a mode belongs. It stays a registry
-                `Toolbar` rather than becoming four hand-rolled rail buttons: arm/disarm, Escape
-                precedence, announcement and pen gating are the registry's, and hand-rolling is how
-                one control gets a rule and its neighbour does not (plan.md §E).
+            {/* **The mode cluster is back on the identity line, beside the pen** (workspace
+                redesign, 2026-08-24) — where ADR-0091 D1 argued a mode belongs in the first place:
+                a mode is not a command, it sets how every command behaves, which is exactly the
+                pen's relationship to the deck.
 
-                `orientation="vertical"` is one prop on the primitive, not a second one: the keyboard
-                already answered both axes, and what was hard-coded was the ANNOUNCEMENT. A vertical
-                toolbar also opts out of the ladder — its items stack, so there is no row to overflow
-                and its `clientWidth` says nothing about whether its content fits. That replaces the
-                `shrink-0` this needed here, which existed to stop a squeezed row demoting an armed
-                mode into a `⋯` (the ADR-0064 dead end). */}
-            <ChromePortal name="rail">
+                Graphite M5 had banished it to the vertical rail, and the reason it gave was
+                sound at the time: on the horizontal band it was 400 px, a quarter of the room at
+                1646, and squeezing it risked demoting an armed mode into the `⋯` — the ADR-0064
+                dead end. **Both halves of that objection are now void.** The deck wraps instead of
+                competing for this row's width, and there is no ladder and no `⋯` left to demote
+                into. The constraint that moved these controls has been deleted, so they come back.
+
+                Still a registry `Toolbar` rather than four hand-rolled buttons: arm/disarm, Escape
+                precedence, announcement and pen gating are all the registry's, and hand-rolling is
+                how one control gets a rule and its neighbour does not. `shrink-0` because the
+                identity block beside it carries `flex-1` and is the one that should give way — it
+                is text with a `title`, so shrinking truncates a name a reader can still reach. */}
+            <div className="flex shrink-0 items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="text-primary/70 text-micro font-bold tracking-wider uppercase"
+              >
+                Mode
+              </span>
               <Toolbar
                 items={rows.mode}
                 context={ctx}
                 label="Plan mode"
                 authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                // All four are `group: 'lens'`, whose default label is "Display" — also the strip's
+                // All four are `group: 'lens'`, whose default label is "Display" — also the deck's
                 // `lens` group name, so unoverridden this announces a second, unrelated name for
                 // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
                 groupLabels={ROW_MODE_GROUP_LABELS}
-                orientation="vertical"
               />
-            </ChromePortal>
+            </div>
             <CompactPenStatus
               pen={model.pen}
               {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}

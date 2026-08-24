@@ -122,7 +122,6 @@ export interface TsldPalette {
    * stronger than `nonWorking`, so a weekend/holiday reads as a distinct KIND of surface, not just
    * a darker shade of the month band. Read only by the hatch-pattern builder; the flat `nonWorking`
    * fill remains the fallback when a pattern can't be built (jsdom, or a minimal test context). */
-  nonWorkingHatch: string;
   /** The TODAY marker line + label (shares the critical/destructive hue, dashed to distinguish). */
   today: string;
   /** Ink for the Today pill's `Today` text (F6b) — paired with `today` the same way every other
@@ -384,58 +383,6 @@ const GESTURE_SOURCE_ALPHA = 0.18;
 
 /** Spacing (px) between a float/drift tail's hatch strokes — the non-colour cue's density. */
 const TAIL_HATCH_STEP = 6;
-
-/**
- * Cache of the last-built non-working hatch tile (F7a, `VITE_CANVAS_TIME_AXIS`), keyed on the
- * resolved colour pair — so the offscreen tile is rebuilt only on a theme switch, never per frame.
- */
-let nonWorkingHatchCache: { fill: string; hatch: string; tile: HTMLCanvasElement | null } | null =
-  null;
-
-/**
- * Build (and memoise) a small offscreen diagonal-stripe tile for the non-working column wash
- * (F7a): the same `TAIL_HATCH_STEP` rhythm as the shipped float-tail hatch, so the canvas speaks
- * one hatch language, not two. `ctx.createPattern(tile, 'repeat')` turns this into the actual fill
- * pattern; screen-anchored (not `DOMMatrix`-corrected to pan with the columns), matching the
- * float-tail hatch's own screen-space `hx` — accepted, not corrected.
- *
- * Returns null when the offscreen 2D context can't be created (jsdom without the `canvas`
- * package): that single guard is what keeps every existing painter unit suite on the deterministic
- * flat-fill fallback, and gives the budget gate its clean assertion — the `fillRect` count is
- * identical; only `fillStyle` differs.
- */
-function nonWorkingHatchTile(fill: string, hatch: string): HTMLCanvasElement | null {
-  if (
-    nonWorkingHatchCache &&
-    nonWorkingHatchCache.fill === fill &&
-    nonWorkingHatchCache.hatch === hatch
-  ) {
-    return nonWorkingHatchCache.tile;
-  }
-  const size = TAIL_HATCH_STEP;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const tileCtx = canvas.getContext('2d');
-  if (!tileCtx) {
-    nonWorkingHatchCache = { fill, hatch, tile: null };
-    return null;
-  }
-  tileCtx.fillStyle = fill;
-  tileCtx.fillRect(0, 0, size, size);
-  tileCtx.strokeStyle = hatch;
-  tileCtx.lineWidth = 1;
-  tileCtx.beginPath();
-  // The same diagonal, drawn three times offset by ±`size`, so the 45° stripe wraps seamlessly
-  // across a tiled `repeat` fill instead of breaking at the tile edge.
-  for (const dx of [-size, 0, size]) {
-    tileCtx.moveTo(dx, size);
-    tileCtx.lineTo(dx + size, 0);
-  }
-  tileCtx.stroke();
-  nonWorkingHatchCache = { fill, hatch, tile: canvas };
-  return canvas;
-}
 
 /** Height (px) of the relationship-slack chip — the lag/cursor chip treatment, one size smaller. */
 const SLACK_CHIP_H = 13;
@@ -831,13 +778,15 @@ export function paintScene(
   // calendar (`isWorkingDay` present) and the toggle is on, and only once columns are wide enough
   // to read — at coarse zoom the columns are sub-pixel, so it's culled (and avoids a long loop).
   if (toggles.nonWorking && scene.isWorkingDay && view.pxPerDay >= NON_WORKING_MIN_PX) {
-    // The hatch (F7a) is a pattern of the SAME flat fill, not an extra layer: a weekend still
-    // reads as its wash even where the pattern can't build, so this is one `fillStyle` choice,
-    // never a second pass — the fillRect count below is identical either way.
-    const tile = nonWorkingHatchTile(palette.nonWorking, palette.nonWorkingHatch);
-    const pattern =
-      tile && typeof ctx.createPattern === 'function' ? ctx.createPattern(tile, 'repeat') : null;
-    ctx.fillStyle = pattern ?? palette.nonWorking;
+    // **A flat wash, no hatch** (workspace redesign, 2026-08-24). This used to build an offscreen
+    // diagonal-stripe tile and paint the columns with it. In the product owner's screenshot that
+    // striping was the single loudest thing on the diagram — a texture covering most of the
+    // picture, competing with the bars it sits behind.
+    //
+    // Removing it needed a real `--canvas-nonworking` value, because the wash beneath the hatch
+    // was `--muted`, 0.007 of lightness from the canvas: the hatch was not decorating a visible
+    // wash, it WAS the entire signal. Deleting it alone would have made weekends disappear.
+    ctx.fillStyle = palette.nonWorking;
     for (let d = firstDay; d <= lastDay; d += 1) {
       if (scene.isWorkingDay(d)) continue;
       ctx.fillRect(screenXOfDay(d, view), 0, view.pxPerDay, size.height);

@@ -96,10 +96,9 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     outline: token('--foreground', '#e6e8ee'),
     selection: token('--ring', '#6ea8fe'),
     // A muted wash for non-working columns and the destructive hue for the today marker.
-    nonWorking: token('--muted', '#20242d'),
+    nonWorking: token('--canvas-nonworking', '#20242d'),
     // The non-working hatch stripe (F7a, `VITE_CANVAS_TIME_AXIS`) — a step stronger than the wash
     // it draws over, so a weekend/holiday differs by KIND, not just a darker shade of grey.
-    nonWorkingHatch: token('--canvas-nonworking-hatch', '#454b58'),
     today: token('--destructive', '#c83c3c'),
     // Today pill ink (F6b, `VITE_CANVAS_TIME_AXIS`) — paired with `today` the same way every other
     // fill pairs with its `*-foreground` token.
@@ -190,8 +189,7 @@ export const PRINT_TOKEN_SOURCES = {
   outline: ['--foreground', '#333333'],
   labelBeside: ['--foreground', '#333333'],
   selection: ['--ring', '#1266a9'],
-  nonWorking: ['--muted', '#f2f3f5'],
-  nonWorkingHatch: ['--canvas-nonworking-hatch', '#e3e6ea'],
+  nonWorking: ['--canvas-nonworking', '#e9eef4'],
   today: ['--destructive', '#9c0711'],
   todayInk: ['--destructive-foreground', '#ffffff'],
   dataDate: ['--foreground', '#333333'],
