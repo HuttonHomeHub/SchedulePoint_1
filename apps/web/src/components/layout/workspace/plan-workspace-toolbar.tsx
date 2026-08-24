@@ -1246,7 +1246,13 @@ export function ToolbarPlanWorkspace({
             <div className="flex shrink-0 items-center gap-2">
               <span
                 aria-hidden="true"
-                className="text-primary/70 text-micro font-bold tracking-wider uppercase"
+                // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the
+                // navy and measured 4.48:1 — under the 4.5 bar by 0.02, which no token matrix
+                // could see because the failing colour does not exist until the alpha is
+                // composited. axe found it in a real browser on the first journey run. At full
+                // strength amber on navy is 7.9:1, and the caption is a label rather than a
+                // decoration, so there was never a reason to fade it.
+                className="text-primary text-micro font-bold tracking-wider uppercase"
               >
                 Mode
               </span>

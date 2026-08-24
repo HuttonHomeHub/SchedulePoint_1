@@ -93,7 +93,7 @@ test('a column choice survives a reload, and Activity can never be hidden', asyn
   // `checkbox`, not `menuitemcheckbox`, and the trigger name is prefixed — both read from
   // `tsld-toolbar-columns.test.tsx` rather than assumed, because a locator invented from the shape
   // a menu "ought" to have is how a journey fails for a reason that is not its subject.
-  await page.getByRole('button', { name: /^View/ }).click();
+  await page.getByRole('button', { name: 'View', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Predecessors' }).click();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('columnheader', { name: 'Predecessors' })).toBeVisible();
@@ -104,7 +104,7 @@ test('a column choice survives a reload, and Activity can never be hidden', asyn
 
   // The one column the chooser must never offer: it identifies the row, carries the inline editor
   // and is what a screen-reader user hears on landing.
-  await page.getByRole('button', { name: /^View/ }).click();
+  await page.getByRole('button', { name: 'View', exact: true }).click();
   await expect(page.getByRole('checkbox', { name: 'Activity' })).toHaveCount(0);
 });
 

@@ -159,7 +159,7 @@ test.describe('The axis markers', () => {
 
     // ── A second zoom preset. The marks' x is a function of the scale, and the Month preset is
     // where M0-T2 measured the overlap rule actually biting.
-    await page.getByRole('button', { name: /^View/ }).click();
+    await page.getByRole('button', { name: 'View', exact: true }).click();
     await page.getByRole('radio', { name: /^Month\b/ }).check();
     await page.keyboard.press('Escape');
     await expectNoMarkerOverTheScene(page, 'at the Month preset');

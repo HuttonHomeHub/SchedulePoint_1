@@ -278,6 +278,17 @@ export function Deck<Ctx>({
               data-toolbar-focusable=""
               data-toolbar-item={`caption:${group.id}`}
               aria-expanded={!isFolded}
+              // **Named `<caption> commands`, not just `<caption>`.** The visible word is the
+              // group's name and must stay short, but `View` alone collides with the `View ▾`
+              // display-toggles popover that lives INSIDE this very group — two buttons with one
+              // accessible name, which two journeys reported as a strict-mode violation on their
+              // first run against the deck.
+              //
+              // It satisfies WCAG 2.5.3 because the accessible name CONTAINS the visible label.
+              // The fold state is not in the name: that is `aria-expanded`'s job, and putting it
+              // in the name too would make the control announce its state twice and change what
+              // it is called every time somebody presses it.
+              aria-label={`${group.caption} commands`}
               tabIndex={tabIndexFor(`caption:${group.id}`)}
               onFocus={() => setActiveId(`caption:${group.id}`)}
               onClick={() => toggleFold(group.id)}
