@@ -27,11 +27,19 @@ what shipped.
 it inverted both halves of the problem.
 
 Its toolbar **wrapped**: `flex-wrap: wrap` over five labelled group cards holding fifteen buttons.
-It had no overflow menu because it never needed one. The premise all four command-surface epics
-tuned — that a command surface must stay one row tall — was never a requirement anybody had stated.
-It was inherited, and every subsequent decision was a consequence of it: the `ResizeObserver`, the
-per-item width cache, the priority ranking, the band floors, the hysteresis, and the `⋯` the
-product owner was complaining about.
+It had no overflow menu because it never needed one.
+
+> **Re-verified against the source rather than from memory** (ADR-0076 §19.10), because this one
+> sentence is what the whole epic turns on. In the old app's checkout: `static/css/main-toolbar.css`
+> declares `flex-wrap: wrap` twice — line 13 on the toolbar container and line 56 on each group's
+> `.group-content` — beside `background-color: var(--primary-color)`, `border-radius: 8px` and
+> `box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15)`, which is the card treatment. `templates/main-toolbar.html`
+> contains **5** `toolbar-group` elements, **15** `<button>`s, and **zero** occurrences of
+> "overflow" or "⋯". The premise all four command-surface epics
+> tuned — that a command surface must stay one row tall — was never a requirement anybody had stated.
+> It was inherited, and every subsequent decision was a consequence of it: the `ResizeObserver`, the
+> per-item width cache, the priority ranking, the band floors, the hysteresis, and the `⋯` the
+> product owner was complaining about.
 
 And **the palette was never wrong**. `--chrome` has held the old app's `#14213D` since ADR-0102 and
 `--chrome-primary` its `#FCA311`. What was missing was surfaces to paint them on: `chrome-band.tsx`
