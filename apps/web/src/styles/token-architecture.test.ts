@@ -121,6 +121,12 @@ const OUTSIDE_THE_CLOSURE = {
     '--canvas-grid-month',
     '--canvas-grid-year',
     '--canvas-nonworking',
+    // The lane hairline (ADR-0109 D4), on the same discriminator as the gridline tiers it runs
+    // perpendicular to: a rule between two lanes has no meaning on a header and no semantic sibling
+    // in the base vocabulary. It is deliberately the faintest structural mark on the surface and
+    // carries no information a reader must perceive, so it is gated by neither a scope's
+    // completeness nor a contrast floor — every bar it aligns is already a shape with its own.
+    '--canvas-lane-rule',
     // The minimap rectangle's two-tone frame (ADR-0100 decision 9): the same discriminator
     // as the gridline tiers — a viewport frame has no meaning on a header and no semantic
     // sibling in the base vocabulary, and its contrast is gated by its OWN pairs
