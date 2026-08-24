@@ -469,22 +469,35 @@ describe('weight is a governed axis', () => {
     // Ownership, not a re-scale. The values are today's; what changes is that they are now a
     // theme decision with a name rather than whatever Tailwind ships.
     const tokens = themeTokens(':root');
-    for (const step of ['light', 'normal', 'medium', 'semibold', 'bold']) {
+    for (const step of ['normal', 'medium', 'semibold', 'bold']) {
       expect(tokens.get(`--weight-${step}`), `--weight-${step} is not declared`).toBeDefined();
     }
+
+    // `--weight-light` is deliberately ABSENT, and asserted absent rather than merely not
+    // listed. Space Grotesk's axis reached 300; IBM Plex Sans's starts at 400, so the token
+    // would name a weight the shipped face cannot produce. This gate caught its removal when
+    // the typeface changed — which is the gate working — and now guards the other direction:
+    // re-adding it would put a synthesised weight back within reach.
+    expect(tokens.get('--weight-light'), '--weight-light is outside Plex’s axis').toBeUndefined();
   });
 
-  it('uses no weight outside the variable font’s 300–700 axis', () => {
+  it('uses no weight outside the variable font’s 400–700 axis', () => {
     // **The one assertion here that prevents a visible defect rather than governing a count.**
-    // Space Grotesk's `wght` axis runs 300–700, so `font-thin` (100), `font-extralight` (200),
-    // `font-extrabold` (800) and `font-black` (900) have no real instance to interpolate to —
-    // the browser SYNTHESISES them, and faux-bold on a grotesque reads as a rendering fault
-    // rather than a choice. Nothing uses them today; this is what keeps it that way after
+    // IBM Plex Sans's `wght` axis runs 400–700, so `font-thin` (100), `font-extralight` (200),
+    // `font-light` (300), `font-extrabold` (800) and `font-black` (900) have no real instance
+    // to interpolate to — the browser SYNTHESISES them, and a faux weight reads as a rendering
+    // fault rather than a choice. Nothing uses them; this is what keeps it that way after
     // somebody reaches for `font-black` on a heading.
+    //
+    // `font-light` JOINED this list with the typeface change (2026-08-24). Under Space Grotesk
+    // 300 was a real instance and `font-light` was legitimate; under Plex it is not. Nothing in
+    // the product was using it — verified before the token was removed, not assumed — so this
+    // tightening cost no call sites. It is the kind of narrowing that a typeface change makes
+    // necessary and that nothing else in the pipeline would have noticed.
     const outside = weightSites().filter((site) =>
-      /font-(thin|extralight|extrabold|black)\b/.test(site),
+      /font-(thin|extralight|light|extrabold|black)\b/.test(site),
     );
-    expect(outside, `weights outside the 300–700 axis: ${outside.join(', ')}`).toEqual([]);
+    expect(outside, `weights outside the 400–700 axis: ${outside.join(', ')}`).toEqual([]);
   });
 
   /**
@@ -637,7 +650,8 @@ describe('the typeface is chosen, shipped, and legible in a table', () => {
     // runner. A value that looked decided, was cited, and had never been set.
     const css = readGlobalsCss();
     expect(css).toMatch(/@font-face\s*\{/);
-    expect(themeTokens(':root').get('--font-sans')).toContain('Space Grotesk');
+    expect(themeTokens(':root').get('--font-sans')).toContain('IBM Plex Sans');
+    expect(themeTokens(':root').get('--font-mono')).toContain('IBM Plex Mono');
   });
 
   it('serves the face from this origin, because the CSP allows no other', () => {
@@ -656,14 +670,21 @@ describe('the typeface is chosen, shipped, and legible in a table', () => {
   });
 
   it('sets tabular figures wherever a number is data', () => {
-    // **Load-bearing for THIS face rather than a refinement.** Space Grotesk's digits are
-    // proportional by default and dramatically so: its `1` is 404 units against the `0`'s 638,
-    // a 58% difference. Measured with fontTools before the face was committed. Without
-    // `tabular-nums` a column of dates does not line up and a duration ticking from `9 d` to
-    // `10 d` shifts everything after it — which reads as a rendering bug, not a font setting.
+    // **The reason for this rule CHANGED when the typeface did, and the rule survives on the
+    // new reason rather than the old one.**
     //
-    // This gate exists because the next person to change the typeface will not know that, and
-    // the failure is quiet: the columns simply stop aligning.
+    // Measured with fontTools on the vendored files (2026-08-24): Space Grotesk's digits are
+    // proportional and dramatically so — `1` at 404 units against `0` at 638, a 57.9% spread,
+    // which is what made `tabular-nums` load-bearing for that face. **IBM Plex Sans and IBM
+    // Plex Mono are tabular by default**: every digit measures exactly 600 units. So for the
+    // face we now ship, this declaration changes nothing.
+    //
+    // It is kept anyway, and not out of inertia. It protects the FALLBACK: `--font-sans` ends
+    // in `system-ui, -apple-system, 'Segoe UI', Roboto…`, and those are proportional. A reader
+    // on a cold cache, a blocked font request, or `font-display: swap`'s pre-swap frame sees
+    // the fallback — and that is exactly when a column of durations would stop lining up.
+    // Deleting this on the grounds that "Plex is tabular anyway" would be correct about the
+    // face and wrong about the product.
     const css = readGlobalsCss();
     expect(css).toMatch(/font-variant-numeric:\s*tabular-nums/);
     const base = blockBody('@layer base');

@@ -27,54 +27,83 @@
 /* ------------------------------------------------------------------------- */
 /* The typeface (ADR-0097)                                                    */
 /*                                                                            */
-/* SchedulePoint is set in SPACE GROTESK. Chosen by the product owner from    */
-/* four candidates rendered on real product chrome — the specimen is in       */
-/* `docs/specs/design-system-rewrite/typeface.md`.                            */
+/* SchedulePoint is set in IBM PLEX SANS, with IBM PLEX MONO for data.        */
 /*                                                                            */
-/* **Until this landed the product had never actually chosen a typeface.**    */
-/* There was no `@font-face` anywhere and no font file in the repository;     */
-/* `--font-sans` merely NAMED 'Inter' first in a fallback stack, so the       */
-/* product's face was whatever each reader's machine happened to have — and   */
-/* every width measurement in this repository (the toolbar ladder, the band   */
-/* floors, `e2e-toolbar-fit`) was taken in whichever face resolved on the CI  */
-/* runner. A value that looked decided, was cited, and had never been set.    */
+/* Chosen by the product owner in the workspace redesign of 2026-08-24, from  */
+/* three fully-realised directions rendered on the real workspace at 1646 px  */
+/* rather than from a specimen sheet — see                                    */
+/* `docs/specs/workspace-redesign/approved-mockup.html`.                      */
 /*                                                                            */
-/* SELF-HOSTED, and that is a requirement rather than a preference: the CSP   */
-/* is `font-src 'self'` (ADR-0074), so a Google Fonts URL would be blocked in */
-/* enforce mode — silently, before first paint, on the deployed origin only.  */
-/* Imported from `src/assets/` rather than `public/` so Vite fingerprints the */
-/* files and they can be cached immutably.                                    */
+/* It replaces Space Grotesk, which was itself a deliberate choice (ADR-0097) */
+/* and is being changed rather than corrected. Plex is a drawing-office face: */
+/* IBM commissioned it for technical and engineering interfaces, and the pair */
+/* gives this product a sans and a monospace with the same skeleton, which is */
+/* what lets a duration sit inside a bar beside a name without reading as two */
+/* typefaces fighting.                                                        */
 /*                                                                            */
-/* ONE variable file per subset covers every weight from 300 to 700 — 41 kB   */
-/* for the whole family, against roughly that per static weight.              */
+/* SELF-HOSTED, and the binding reason is PRIVACY rather than the CSP:        */
+/* requesting a font from `fonts.gstatic.com` transmits every reader's IP to  */
+/* a third party on first paint, which a German court has found to breach the */
+/* GDPR, and this product has European clients. The CSP (`font-src 'self'`)   */
+/* independently blocks it in enforce mode. Imported from `src/assets/` so    */
+/* Vite fingerprints the files and they cache immutably.                      */
 /*                                                                            */
-/* `font-display: swap` deliberately: the fallback stack below is metrically  */
-/* close enough that a swap is a reflow of a few pixels, and the alternative  */
-/* (`block`) is invisible text on the coldest page in the product.            */
+/* WEIGHTS. Sans is ONE variable file spanning 400–700. Mono is static and    */
+/* ships at 400 and 500 ONLY: the design uses no heavier monospace, and a     */
+/* third static weight costs 15 kB for a difference invisible at the 9.5–11px */
+/* these numerals are set at. If a heavier mono is ever wanted, add the file  */
+/* — do not let the browser synthesise it, which smears a monospace badly.    */
+/*                                                                            */
+/* SUBSETS. Sans ships `latin` and `latin-ext`; mono ships `latin` only.      */
+/* Mono renders durations, dates and counts and never a person's name, so the */
+/* accented range it would carry has no reachable caller. Sans keeps its      */
+/* `latin-ext` precisely because client and contractor names need it.         */
 /* ------------------------------------------------------------------------- */
 @font-face {
-  font-family: 'Space Grotesk';
+  font-family: 'IBM Plex Sans';
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 400 700;
   font-display: swap;
-  src: url('../assets/fonts/space-grotesk-latin.woff2') format('woff2');
+  src: url('../assets/fonts/ibm-plex-sans-latin.woff2') format('woff2');
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
     U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Space Grotesk';
+  font-family: 'IBM Plex Sans';
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 400 700;
   font-display: swap;
-  src: url('../assets/fonts/space-grotesk-latin-ext.woff2') format('woff2');
+  src: url('../assets/fonts/ibm-plex-sans-latin-ext.woff2') format('woff2');
   /* Latin Extended-A onwards — the accented characters in European client and
      contractor names. A separate file so the common case never downloads it. */
   unicode-range:
     U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
     U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
     U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -814,13 +843,18 @@
   /* Today's values, deliberately — the same discipline as the type ramp.      */
   /* This commit takes OWNERSHIP; re-scaling is a separate, visible decision.  */
   /*                                                                          */
-  /* NOTE the range. Space Grotesk's variable axis is 300–700, so `light`      */
+  /* NOTE the range. IBM Plex Sans's variable axis is 400–700, so `normal`     */
   /* through `bold` are real instances and anything outside them would be      */
   /* SYNTHESISED by the browser — faux-bold, which looks like a rendering      */
-  /* fault rather than a choice. Nothing in the product uses those today and a */
-  /* gate keeps it that way.                                                   */
+  /* fault rather than a choice. Nothing in the product uses those and a gate  */
+  /* keeps it that way.                                                        */
+  /*                                                                          */
+  /* `--weight-light: 300` was REMOVED with the typeface change, not merely    */
+  /* left declared. Space Grotesk's axis reached 300; Plex's does not, so the  */
+  /* token would have named a weight the face cannot produce. It had no        */
+  /* consumer in the product — verified, not assumed — so removing it costs    */
+  /* nothing and leaving it would have been a loaded gun for the next reader.  */
   /* ----------------------------------------------------------------------- */
-  --weight-light: 300;
   --weight-normal: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
@@ -849,11 +883,14 @@
   /*  1. `--type-micro` — the size the seven escapes were reaching for. An     */
   /*     uppercase eyebrow label, a Gantt ruler tick, a menu section heading.  */
   /*     It exists so the rhythm ratchet has somewhere to send them.           */
-  /*  2. Negative tracking at the large end. Space Grotesk is a grotesque      */
-  /*     with generous default spacing, which is right at 13px and loose at    */
-  /*     27px — display sizes in this class of face need pulling in or the     */
-  /*     words stop reading as one shape. Confined to the sizes used for       */
-  /*     headings, so the blast radius is a few dozen call sites.              */
+  /*  2. Negative tracking at the large end. Set for Space Grotesk and KEPT    */
+  /*     through the change to IBM Plex Sans, deliberately and with the        */
+  /*     reason stated: display sizes in any text-first face need pulling in   */
+  /*     or the words stop reading as one shape. The values have NOT been      */
+  /*     re-derived for Plex — if headings read tight, that is where to look,  */
+  /*     and re-scaling is a separate visible decision rather than a silent    */
+  /*     tidy-up here. Confined to heading sizes, so the blast radius is a     */
+  /*     few dozen call sites.                                                 */
   /* ----------------------------------------------------------------------- */
   --type-micro: 0.625rem;
   --type-micro--line-height: 0.875rem;
@@ -890,9 +927,9 @@
 
   /* Typography */
   --font-sans:
-    'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
     sans-serif;
-  --font-mono: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1195,7 +1232,6 @@
      this only names them for Tailwind. Declaring `--font-weight-*` directly here would put a
      design decision in the build config rather than the theme, which is exactly what the
      "no token outside a theme block" rule exists to prevent. */
-  --font-weight-light: var(--weight-light);
   --font-weight-normal: var(--weight-normal);
   --font-weight-medium: var(--weight-medium);
   --font-weight-semibold: var(--weight-semibold);
