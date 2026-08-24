@@ -4317,6 +4317,15 @@ ADR-0109 D3 made it conditional, and six `e2e-gantt-editing` specs opened a Gant
 it. `e2e-gantt/support.ts` now reloads at the point of the out-of-band write, which is the idiom
 `e2e-workspace-chrome/support.ts` already used with the same one-line reason.
 
+**A second, sharper form of the same mistake was found in the product, not the tests.** The status
+bar's own staleness rule first asked the **schedule summary** for the plan's activity count — and
+that query is invalidated by a **recalculation**, not by an edit. So on a plan whose summary was
+fetched while it was empty, adding two activities left the count at 0 for good: the bar published
+"the schedule is current" on `data-schedule-state` while its own `Finish` fact, read from the same
+stale summary, said `Not calculated`. Two halves of one row disagreeing. It reads the client's
+activity rows now — the ones the reader is looking at — so no cache can go stale relative to the
+screen. **The lesson generalises past the tests: ask the query that the edit invalidates.**
+
 **What is left is an audit rather than a defect.** The sweep proves today's estate green, so no other
 suite is currently relying on it — but "no suite relies on it today" is a fact about today, and the
 next API-seeding helper will be written by copying one of the existing ones. The candidates are the
@@ -4325,3 +4334,36 @@ why its caller does not need it to.
 
 Cost: one pass over nine files. There is no gate for this and a structural one looks unpromising —
 "does this helper's caller later observe what it wrote" is not a property of a file.
+
+---
+
+## #184 — The bulk-delete focus restoration is a race, and it failed once under load
+
+_Filed 2026-08-24 with ADR-0109 M5. **Not reproduced**, and that is the finding._
+
+`e2e-multi-select`'s "a bulk delete is ONE undo step" asserts `expect(list).toBeFocused()` after a
+bulk delete. It failed once, in a 35-suite sweep, and **passed on its own immediately afterwards**.
+
+The assertion is not decorative: the workspace's undo accelerator is a React `onKeyDown` on the
+workspace root, so focus landing on `<body>` makes Ctrl+Z reach nothing. `focusListboxAfterModal`
+(`TsldPanel.tsx:686`) exists because that already shipped once, and its docblock records the cause —
+a native `<dialog>` restores focus to the element that opened it, and when that element has itself
+unmounted (the bulk bar's Delete button, once the selection is gone) the browser lands on `<body>`
+and a synchronous `focus()` from the handler is silently undone a moment later. The fix was **one**
+`requestAnimationFrame`, i.e. a race won by a margin nobody has measured.
+
+**The leading hypothesis is my own change and it is UNVERIFIED.** `usePlanAutoRecalc` was
+deliberately render-free — its docblock says "all burst state is in refs" — and ADR-0109 D3 added
+two pieces of React state to it, so `notify()` now causes a render at exactly the moment of the
+delete where it never did before. An extra render plausibly narrows the rAF's margin. Plausibly.
+The alternative is that the sweep's machine load did it, which is what a single-frame race looks
+like on a loaded runner either way.
+
+**Nothing was changed on that hypothesis**, because ADR-0064's rule is that an unreproduced report
+is closed unreproduced rather than fixed, and because twice in this same session a plausible cause
+turned out to be the wrong one.
+
+What would settle it, in order of cost: instrument `focusListboxAfterModal` to record whether the
+first frame won, and run the suite under load; if it loses, replace the single frame with a bounded
+self-verifying retry — check `document.activeElement` and try again next frame, up to a small cap —
+which converts the race into a check and cannot make the winning case worse.

@@ -119,8 +119,11 @@ export async function toolbarOffers(page: Page, id: string): Promise<boolean> {
 export async function recalculate(page: Page): Promise<void> {
   const bar = page.locator('[data-schedule-state]');
   await expect(bar).toBeVisible();
-  // Wait out any run already in flight, so the read below is a settled answer.
+  // **Both transient states, not just the obvious one.** `recalculating` is a run in flight;
+  // `pending` is the summary not yet arrived, and the read below is meaningless in either. Waiting
+  // out only the first is what let this helper report success on a plan it had not looked at.
   await expect(bar).not.toHaveAttribute('data-schedule-state', 'recalculating');
+  await expect(bar).not.toHaveAttribute('data-schedule-state', 'pending');
   if ((await bar.getAttribute('data-schedule-state')) === 'stale') {
     await bar.getByRole('button', { name: 'Recalculate' }).click();
   }
