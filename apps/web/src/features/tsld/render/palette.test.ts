@@ -71,7 +71,7 @@ describe('M4 refresh palette entries (barStroke / hoverRing)', () => {
   it('resolvePrintPalette carries LIGHT fallbacks for the same entries (total contract)', () => {
     const palette = resolvePrintPalette(document.documentElement);
     expect(palette.barStroke).toBe('#e0e0e0');
-    expect(palette.hoverRing).toBe('#666666');
+    expect(palette.hoverRing).toBe('#636363');
   });
 });
 

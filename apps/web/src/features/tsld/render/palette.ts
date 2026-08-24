@@ -183,7 +183,7 @@ export const PRINT_TOKEN_SOURCES = {
   gridLineDay: ['--canvas-grid-day', '#dee0e2'],
   gridLineMonth: ['--canvas-grid-month', '#72777e'],
   gridLineYear: ['--canvas-grid-year', '#595e66'],
-  edge: ['--muted-foreground', '#666666'],
+  edge: ['--muted-foreground', '#636363'],
   bar: ['--primary', '#4b8cca'],
   critical: ['--destructive', '#9c0711'],
   nearCritical: ['--warning', '#9f5600'],
@@ -202,7 +202,7 @@ export const PRINT_TOKEN_SOURCES = {
   labelInsideCritical: ['--destructive-foreground', '#ffffff'],
   labelInsideNearCritical: ['--warning-foreground', '#ffffff'],
   barStroke: ['--border', '#e0e0e0'],
-  hoverRing: ['--muted-foreground', '#666666'],
+  hoverRing: ['--muted-foreground', '#636363'],
   handleHalo: ['--print', '#ffffff'],
   monthBand: ['--canvas-band', '#f6f7f9'],
 } as const satisfies Record<keyof PrintPalette, readonly [token: string, fallback: string]>;

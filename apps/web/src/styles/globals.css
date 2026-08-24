@@ -606,7 +606,40 @@
   /* block must restate the page family literally, or the alias silently keeps */
   /* the light values.                                                         */
   /* ----------------------------------------------------------------------- */
-  --page-background: oklch(0.982 0.002 248);
+  /* ----------------------------------------------------------------------- */
+  /* The ground, and why it stopped being flat white (workspace redesign,      */
+  /* 2026-08-24).                                                              */
+  /*                                                                          */
+  /* The product owner's verdict on four consecutive restyles was that the app */
+  /* still looked poor, and reading the OLD Flask app rather than describing   */
+  /* it located the cause: its chrome was navy CARDS FLOATING ON A GRADIENT,   */
+  /* and this app kept the navy in one top band only. Everything below it was  */
+  /* white on white on white, so figure and ground had nothing between them    */
+  /* but a 1px border and the amber never appeared at all.                     */
+  /*                                                                          */
+  /* THE PALETTE WAS NEVER THE PROBLEM — that is worth stating, because the    */
+  /* obvious diagnosis was that the colours were wrong and it is false.        */
+  /* `--chrome` was ALREADY oklch(0.252 0.056 264), which is exactly the old   */
+  /* app's `#14213D`; `--chrome-primary` was ALREADY its `#FCA311`. The values */
+  /* were right and nothing asked for them. What was missing was SURFACES.     */
+  /*                                                                          */
+  /* So the ground gains a gradient, and it takes TWO tokens rather than one   */
+  /* because a gradient is a background IMAGE and no colour token can hold     */
+  /* one. `--page-background` stays a real colour — the gradient's mid tone,   */
+  /* so anything that composites against it, or paints before the image        */
+  /* arrives, gets the right answer rather than white. `--page-backdrop` is    */
+  /* the image, applied once at `body`.                                        */
+  /*                                                                          */
+  /* Splitting them is not tidiness. A single token would either be unusable   */
+  /* by `color-mix()` and the contrast matrix (which resolve colours, and a    */
+  /* gradient has none), or it would silently flatten the design back.         */
+  /* ----------------------------------------------------------------------- */
+  --page-background: oklch(0.914 0.014 258.3);
+  --page-backdrop: linear-gradient(
+    135deg,
+    oklch(0.969 0.006 255.5) 0%,
+    oklch(0.892 0.02 257.5) 100%
+  );
   /* The page's ink, and the end of ADR-0101's stopgap. That comment recorded a dark-ground value
      softened from 14.61:1 to 10.84:1 and said the light theme would replace it wholesale; this is
      that replacement, and it is a RECOVERED value rather than a softened one — 0.321 on the 0.982
@@ -617,9 +650,15 @@
      under two points wide, and inside it the rule enforces the wrong quantity). */
   --page-foreground: oklch(0.321 0 0);
   --page-muted: oklch(0.965 0.002 248);
-  --page-muted-foreground: oklch(0.51 0 0);
+  /* 0.51 -> 0.50 and 0.62 -> 0.595 with the gradient ground (2026-08-24). The
+     ground moved from oklch(0.982) to oklch(0.914), and these two pairs were the
+     only ones in the whole matrix that could not absorb it: muted text landed at
+     4.46:1 against a 4.5 bar and the control outline at 2.82:1 against a 3.0 bar.
+     Both are solved values with a little headroom, not guesses — and the matrix
+     is what found them, before anything was rendered. */
+  --page-muted-foreground: oklch(0.5 0 0);
   --page-border: oklch(0.907 0 0);
-  --page-input: oklch(0.62 0.02 264);
+  --page-input: oklch(0.595 0.02 264);
   --page-accent: oklch(0.955 0.04 78);
   --page-accent-foreground: oklch(0.252 0.056 264);
   --page-primary: oklch(0.252 0.056 264);
@@ -627,7 +666,14 @@
   --page-field: oklch(1 0 0);
   --page-field-foreground: oklch(0.321 0 0);
   --page-field-muted-foreground: oklch(0.51 0 0);
-  --page-destructive-text: oklch(0.505 0.19 27.5);
+  /* 0.505 -> 0.488 with the gradient ground. A destructive alert tints its own
+     ink at 10% for the wash it sits on, so a darker ground darkens the wash and
+     the ink loses contrast against it — 4.29:1 against a 4.5 bar. Solved, with
+     headroom: it now reads 4.6:1 on its own wash, 5.4:1 on the bare ground and
+     6.9:1 on a white card. `alpha-composite.test.ts` is what caught this, and it
+     is the one gate here that could: the pair only exists after compositing, so
+     no token-versus-token matrix can see it. */
+  --page-destructive-text: oklch(0.488 0.19 27.5);
   --page-success-text: oklch(0.45 0.11 150);
   --page-warning-text: oklch(0.47 0.11 55);
   --page-info-text: oklch(0.3 0.075 262);
@@ -1348,22 +1394,29 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    /* The gradient ground. `background-image` over the `bg-background` colour
+       rather than instead of it: the colour is what composites and what paints
+       first, and the image is the design. `fixed` so a scrolling page does not
+       drag the gradient with it — the ground should sit still under the
+       content, which is what makes chrome read as floating ON something. */
+    background-image: var(--page-backdrop);
+    background-attachment: fixed;
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
   }
 
-  /* **Tabular figures, and for this typeface they are load-bearing rather than a
-     refinement** (ADR-0097). Space Grotesk's digits are PROPORTIONAL by default and
-     dramatically so — its `1` is 404 units against the `0`'s 638, a 58% difference —
-     so a column of dates set in it does not line up, and a duration that ticks from
-     `9 d` to `10 d` shifts everything after it. Measured with fontTools before the
-     face was committed, which is also how we know the family ships a real `tnum`.
+  /* **Tabular figures — kept, but the reason changed with the typeface.**
+     Measured with fontTools on the vendored files: IBM Plex Sans and IBM Plex Mono are
+     TABULAR BY DEFAULT (every digit 600 units), where the removed Space Grotesk spread
+     57.9% (404 against 638) and genuinely needed this. For the face we ship it changes
+     nothing.
 
-     Applied to the elements where a number is DATA rather than prose: table cells,
-     and anything opting in with `.tabular-nums`. Deliberately NOT applied to `body`,
-     because tabular figures in running text are the wrong choice — the even spacing
-     that aligns a column reads as gappy in a sentence. */
+     It stays to protect the FALLBACK. `--font-sans` ends in `system-ui, -apple-system,
+     'Segoe UI', Roboto…`, all proportional, and a reader meets those on a cold cache, a
+     blocked font request, or the frame before `font-display: swap` swaps. That is exactly
+     when a column of durations would stop lining up. Deleting this because "Plex is
+     tabular anyway" would be right about the face and wrong about the product. */
   th,
   td,
   .tabular-nums {
