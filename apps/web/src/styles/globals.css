@@ -606,6 +606,12 @@
      the design's own weekend tint is a 4.5% wash, so the subtle value was the intended one and
      the darker bar was my invention. */
   --canvas-nonworking: oklch(0.947 0.01 252);
+  /* **The lane hairline** (workspace redesign M4-T2). Deliberately the FAINTEST structural line on
+     the surface — fainter than a day gridline — because it repeats once per lane down the whole
+     diagram and is the most-repeated mark on the picture by a wide margin. It is a rule to sit a
+     bar on, not a boundary to read, so 1.4.11's 3:1 does not apply: it carries no information a
+     reader must perceive, and every bar it aligns is already a shape with its own contrast. */
+  --canvas-lane-rule: oklch(0.936 0.004 250);
 
   --radius: 0.625rem;
   /* ----------------------------------------------------------------------- */
@@ -1397,6 +1403,7 @@
   --color-canvas-grid-month: var(--canvas-grid-month);
   --color-canvas-grid-year: var(--canvas-grid-year);
   --color-canvas-nonworking: var(--canvas-nonworking);
+  --color-canvas-lane-rule: var(--canvas-lane-rule);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

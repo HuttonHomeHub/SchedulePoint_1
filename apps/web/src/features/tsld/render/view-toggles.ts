@@ -79,7 +79,21 @@ export const DEFAULT_VIEW_TOGGLES: TsldViewToggles = {
   nonWorking: true,
   labels: true,
   lateOverlay: false,
-  monthBands: true,
+  /**
+   * **Off by default since the workspace redesign (M4-T1).**
+   *
+   * ADR-0055 §4 shipped the alternating month band as ground, on by default, so a planner could
+   * count months without reading a label. The product owner looked at the shipped diagram and said
+   * row striping is not useful *at the moment* — and named the case where it would be, which is
+   * swimlanes. That is not this band, but the judgement transfers: the drafting-table diagram wants
+   * one quiet ground with the structure carried by rules, and two grounds alternating under a wall
+   * of bars is the second-loudest thing on the picture after the weekend hatch that went with it.
+   *
+   * **The switch stays** (`View ▾ ▸ Structure ▸ Month bands`, ADR-0056 F7b). It costs a line, and
+   * the README already records striping as a legitimate tracking aid at scale — so this is a
+   * default, not a deletion, and a planner who wants it back is one menu item away.
+   */
+  monthBands: false,
   // The data-date line defaults ON under its flag (a plan fact, like the month bands' ground);
   // the flag itself — composed by the host, never read here — is what decides reachability.
   dataDate: true,

@@ -41,7 +41,7 @@ export function sceneLayers(view: TsldViewToggles | undefined): SceneLayers {
   return {
     // The flag decides whether the layer exists at all; the reader's `View ▾` preference only
     // narrows the flag-on case. The painter stays flag-free, as every other layer does.
-    monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands ?? true),
+    monthBands: CANVAS_VISUAL_LANGUAGE_ENABLED && (view?.monthBands ?? false),
     gridTiers: CANVAS_TIME_AXIS_ENABLED,
     timeTrueLinks: CANVAS_DIRECT_MANIPULATION_ENABLED,
     visualRefresh: CANVAS_DIRECT_MANIPULATION_ENABLED,
