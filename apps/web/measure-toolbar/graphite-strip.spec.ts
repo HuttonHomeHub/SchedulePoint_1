@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **Graphite M0** — does the single command strip fit?
@@ -103,6 +103,7 @@ const PLAN_MENU_MEMBERS = ['calendar', 'analysis', 'comments', 'export'];
 const STATUS_BAR_ITEMS = ['finish-chip'];
 
 test('M0 — the Graphite strip, composed from real controls', async ({ page }) => {
+  clearMeasurement('graphite-strip');
   test.setTimeout(240_000);
   const stamp = Date.now();
 

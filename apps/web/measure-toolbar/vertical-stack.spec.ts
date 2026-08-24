@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **M4-T1** — the vertical stack, measured before M4 claims anything about it.
@@ -327,6 +327,7 @@ async function stackHeights(page: Page): Promise<unknown> {
 }
 
 test('M4-T1 — the vertical stack on a populated plan, pen held', async ({ page }) => {
+  clearMeasurement('m4-vertical-stack');
   const stamp = Date.now();
 
   await page.setViewportSize(VIEWPORTS[0]!);

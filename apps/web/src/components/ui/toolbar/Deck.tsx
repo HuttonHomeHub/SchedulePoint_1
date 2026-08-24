@@ -271,7 +271,18 @@ export function Deck<Ctx>({
             key={group.id}
             role="group"
             aria-label={group.caption}
-            className="border-border/60 bg-foreground/5 rounded-md border px-2 pt-1.5 pb-2"
+            // **A ROW, caption leading — not a caption stacked above the buttons.**
+            //
+            // Measured (`measure-output/m4-vertical-stack.json`): as a stacked card this was 81 px,
+            // of which ~29 was a full-width caption row, and the deck was 170 px because the four
+            // cards need ~2,126 px and never fit on one line at any width from 1280 to 1920. Two
+            // rows of 81. The canvas was down to 224 px at 1280×900.
+            //
+            // Turning the card on its side spends the caption's width instead of its height, which
+            // the deck has to spare and the workspace does not: the card becomes one row tall, and
+            // the deck 170 → ~112. The buttons are untouched — stacked, labelled, exactly as
+            // approved. The height was never theirs.
+            className="border-border/60 bg-foreground/5 flex items-stretch gap-2 rounded-md border px-2 py-1.5"
           >
             <button
               type="button"
@@ -297,15 +308,24 @@ export function Deck<Ctx>({
                 // The mockup drew this at 9px with wider tracking; using the ramp's 10px instead is
                 // the disciplined answer, and the difference is imperceptible at a caption. A ramp
                 // that gets a new member every time a design wants half a pixel is not a ramp.
-                'text-primary text-micro flex w-full items-center gap-1.5 font-bold tracking-wider uppercase',
+                'text-primary text-micro flex shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
                 'border-primary/25 cursor-pointer',
-                isFolded ? 'pb-0' : 'mb-1.5 border-b pb-1',
+                // The rule that separated the caption from its buttons was a `border-b` under a
+                // full-width row; on its side it is a `border-r` beside them, doing the same job in
+                // the dimension the deck can afford. Absent when folded: there is nothing left to
+                // separate the caption FROM.
+                isFolded ? '' : 'border-r pr-2',
               )}
             >
               <span>{group.caption}</span>
               <ChevronDown
                 aria-hidden="true"
-                className={cn('ml-auto size-3 opacity-60', isFolded && '-rotate-90')}
+                // **`-rotate-90` on the folded state is kept and now means something different.**
+                // Stacked, the chevron pointed down at the buttons below it and sideways when they
+                // were gone. Leading, it points down at rest and sideways when folded — the same
+                // two glyphs, and the same convention a disclosure uses everywhere else in the
+                // product, so nothing about it has to be re-learnt.
+                className={cn('size-3 opacity-60', isFolded && '-rotate-90')}
               />
             </button>
 

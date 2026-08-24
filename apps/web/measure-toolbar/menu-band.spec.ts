@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **ADR-0097 Landing C, M0** — does a single menu-bar band fit at 1646?
@@ -218,6 +218,7 @@ async function measureBand(page: Page): Promise<unknown> {
 }
 
 test('Landing C M0 — the menu band, measured before it is built', async ({ page }) => {
+  clearMeasurement('landing-c-m0-menu-band');
   const stamp = Date.now();
 
   await page.setViewportSize({ width: 1920, height: 1080 });

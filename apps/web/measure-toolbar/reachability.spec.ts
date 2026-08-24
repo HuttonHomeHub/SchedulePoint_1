@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **M0b** — the follow-up the first pass forced.
@@ -79,6 +79,7 @@ async function probe(page: Page, ariaLabel: string): Promise<unknown> {
 }
 
 test('M0b — is a clipped toolbar control actually reachable?', async ({ page }) => {
+  clearMeasurement('toolbar-m0b');
   const stamp = Date.now();
 
   await page.setViewportSize({ width: 1920, height: 1080 });
