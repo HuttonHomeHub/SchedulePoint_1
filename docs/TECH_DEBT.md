@@ -4367,3 +4367,49 @@ What would settle it, in order of cost: instrument `focusListboxAfterModal` to r
 first frame won, and run the suite under load; if it loses, replace the single frame with a bounded
 self-verifying retry — check `document.activeElement` and try again next frame, up to a small cap —
 which converts the race into a check and cannot make the winning case worse.
+
+---
+
+## #185 — The command deck is 182 px tall, and nobody measured it before building it
+
+_Filed 2026-08-24 with ADR-0109. **Measured, cause not yet established.** This is the epic's own
+premise landing on it._
+
+`measure-toolbar/vertical-stack` on a populated plan with the pen held, after the redesign:
+
+| band                 | before | after      |
+| -------------------- | ------ | ---------- |
+| **above the canvas** | 135 px | **357 px** |
+| the command strip    | 44 px  | **182 px** |
+| app header row       | 0 px   | 56 px      |
+| identity row         | 28 px  | 28 px      |
+
+Canvas height falls to **284 px at 1440×960** and **224 px at 1280×900**.
+
+**The header row is only 56 of the 222 px added.** The deck is 182, and that is the finding: the
+wrap solved the overflow the product owner complained about and spent four times the vertical to do
+it. Their original words were that "the 6 tool bars take up a lot of space" — this makes that worse
+in the other dimension.
+
+**ADR-0090 and ADR-0091 both record this project building a command surface and measuring it
+afterwards; ADR-0109 did it again.** M0 of both those epics exists precisely because a design
+written without a shell is arithmetic over class names. This epic had a mockup at 1646 and no
+vertical measurement of the built thing until after it shipped to the branch.
+
+**The cause is NOT established and the obvious arithmetic is suspect.** "34 stacked buttons over
+four cards must wrap to two lines" is a guess, and it is contradicted by the figure being
+**identical at 1920 and 1280** — a `flex-wrap` container should reflow between those. A probe
+written to answer this returned nulls for `[role="toolbar"][aria-label="Plan commands"]` on a
+freshly-created plan while `vertical-stack` finds it, so the two harnesses disagree about when the
+deck exists; that discrepancy is itself worth resolving first. The probe was deleted rather than
+committed reporting nulls.
+
+**The likely lever reverses an approved decision, which is why it is filed rather than taken.**
+Mockup decision 1 is stacked buttons — icon above a 9.5 px label — and un-stacking them is the
+single biggest term in the height. That is the product owner's call, and it wants the measurement
+and a recommendation put to them, not a unilateral revert.
+
+**`e2e-toolbar` line 134 is a symptom of this, not a separate defect.** The activities panel's
+`effectiveMax` is `max(140, bodyHeight − 240)`, so once the chrome takes 357 px the panel is pinned
+at its 140 px minimum and a keyboard shrink step has nowhere to go. Fixing the height fixes the
+test; changing the test would be hiding the finding.
