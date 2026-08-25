@@ -233,11 +233,44 @@ test('M0 repaired: baselines per row, deck height in both geometries, bands by h
     })()`);
     await page.waitForTimeout(250);
 
+    // ── The FOURTH geometry, and the one CQ-1 is really about: stack EVERYTHING. The complaint is
+    // caused by the mix — at 1646 inline items put their label at 137, captions at 140, and stacked
+    // buttons 12 px lower at 149 — so only picking ONE treatment fixes it. Inlining everything was
+    // probed above and reverses mockup decision 1; this is the direction that keeps it.
+    //
+    // It prices the geometry and NOT the implementation: a split button's caret has to go
+    // somewhere once its trigger stacks, and a style override cannot answer that. M1 must.
+    await page.evaluate(`(() => {
+      ${HELPERS}
+      const deck = deckOf();
+      for (const el of deck.querySelectorAll('[data-toolbar-item]')) {
+        if (getComputedStyle(el).flexDirection === 'column') continue;
+        el.setAttribute('data-probe-converted', '');
+        el.style.setProperty('flex-direction', 'column', 'important');
+        el.style.setProperty('height', 'auto', 'important');
+        el.style.setProperty('gap', '0.125rem', 'important');
+        el.style.setProperty('align-items', 'center', 'important');
+        el.style.setProperty('line-height', '1', 'important');
+      }
+      void document.body.offsetHeight;
+    })()`);
+    await page.waitForTimeout(250);
+    const stackAllGeometry = await readGeometry(page);
+    await page.evaluate(`(() => {
+      for (const el of document.querySelectorAll('[data-probe-converted]')) {
+        el.removeAttribute('style');
+        el.removeAttribute('data-probe-converted');
+      }
+      void document.body.offsetHeight;
+    })()`);
+    await page.waitForTimeout(250);
+
     report[`${viewport.width}`] = {
       bands,
       stackedGeometry,
       inlineGeometry,
       unifiedHeightGeometry,
+      stackAllGeometry,
     };
   }
 
