@@ -58,15 +58,14 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // `aria-describedby`, not a `title`, so the assertion follows the channel.
   // **Where this command lives is now a function of width, so the journey stops assuming.**
   // ADR-0090 M2 made it tier 3, i.e. permanently inside the `⋯`; ADR-0091 M7 added the admission
-  // rung, so a row with room takes it back out and the `⋯` may not render at all. Both are correct
-  // states, and neither is this journey's subject — what it is about is that the command is
-  // *shaded with a reason* rather than hidden, and that the reason travels by `aria-describedby`.
+  // rung, so a row with room took it back out. **ADR-0109 D1 deleted the `⋯` altogether** — the
+  // command surface wraps now and every command is inline at every width — so "wherever the ladder
+  // has put it" has exactly one answer and the two-branch dance below is gone with it.
   //
-  // So it is located by `[data-toolbar-item]` and never by role or copy: inline it is a
-  // `button[aria-pressed]`, in the menu a `menuitemcheckbox`, and a locator that names either one
-  // is a locator that breaks the next time the row's width changes.
+  // It stays located by `[data-toolbar-item]` and never by role or copy. That was never about the
+  // menu: the id is what the registry guarantees and the words are not, which is the standing rule
+  // after three journeys broke on a label change (ADR-0091 M7).
   const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
-  const more = lookRow.getByRole('button', { name: 'More toolbar actions' });
   const inlineFloatPaths = lookRow.locator('[data-toolbar-item="float-paths"]');
   /**
    * The control, wherever it is — opening the `⋯` only when it is not on the row.
@@ -84,10 +83,15 @@ test('a planner reads the float paths into an activity, in both views', async ({
    * this command no longer breaks this line.
    */
   const revealFloatPaths = () => revealToolbarCommand(page, 'float-paths');
-  /** What focus must return to after the panel closes: the control if it is still mounted, else
-   *  the `⋯` it was reached through — a menu item unmounts with its menu. */
-  const restoreTarget = async () =>
-    (await inlineFloatPaths.count()) > 0 ? inlineFloatPaths : more;
+  /**
+   * What focus must return to after the panel closes.
+   *
+   * This used to have two answers — the inline control if it was still mounted, else the `⋯` it was
+   * reached through, because a menu item unmounts with its menu. ADR-0109 D1 deleted the `⋯`, so
+   * the control is always the one that opened the panel and always still there. The indirection
+   * goes; the assertion it served does not.
+   */
+  const restoreTarget = () => inlineFloatPaths;
 
   let floatPaths = await revealFloatPaths();
   await expect(floatPaths).toBeVisible();

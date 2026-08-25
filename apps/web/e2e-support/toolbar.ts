@@ -45,15 +45,28 @@ export async function revealToolbarCommand(page: Page, id: string): Promise<Loca
   const inline = row.locator(`[data-toolbar-item="${id}"]`);
   if ((await inline.count()) > 0) return inline;
 
-  const more = row.getByRole('button', { name: 'More toolbar actions' });
+  /**
+   * **Not inline means a FOLDED GROUP now, never an overflow** (ADR-0109 D1).
+   *
+   * This branch used to open the `⋯` and look in the menu. That control no longer exists — the deck
+   * wraps and every command is inline — so the branch was unreachable *and* its failure message
+   * blamed a menu the product does not have. It is not deleted, because "not inline" is still
+   * reachable: a folded group renders `null` for its items, and the fold persists in
+   * `localStorage`, so a journey that folds a group and then reaches for something inside it lands
+   * here. What changes is that the message now names the real cause.
+   *
+   * Unfolding is deliberately NOT automatic. A journey that folded a group meant to, and silently
+   * undoing it would make the helper change the state it is supposed to be reading.
+   */
+  const folded = await row.locator('[data-toolbar-item^="caption:"][aria-expanded="false"]').all();
+  const foldedNames = await Promise.all(folded.map((caption) => caption.textContent()));
   await expect(
-    more,
-    `${id} is neither on the row nor is there an overflow to look in`,
-  ).toBeVisible();
-  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-
-  // The menu portals to `document.body`, so it is scoped from the page rather than from the row.
-  return page.locator(`[role="menu"] [data-toolbar-item="${id}"]`);
+    inline,
+    folded.length > 0
+      ? `${id} is not on the deck — these groups are folded: ${foldedNames.join(', ')}`
+      : `${id} is not on the deck, and no group is folded`,
+  ).toHaveCount(1);
+  return inline;
 }
 
 /**
@@ -70,28 +83,23 @@ export async function clickToolbarCommand(page: Page, id: string): Promise<void>
 }
 
 /**
- * Is `id` offered by the command strip at all — on the row **or** in the `⋯`?
+ * Is `id` offered by the command surface at all?
  *
- * The negative form matters as much as the positive one. A journey asserting a command is *gone*
- * has to look in both places, or it passes the moment the ladder demotes it — which is what
- * happened to `e2e-gantt-editing`'s "switching back brings Add note home": that assertion had been
- * failing since the two command rows merged and `add-note` moved into the menu, in the one suite a
- * sweep never finished.
+ * The negative form matters as much as the positive one. Under the ladder this had to look in two
+ * places, or it passed the moment a command demoted — which is what happened to
+ * `e2e-gantt-editing`'s "switching back brings Add note home": that assertion had been failing since
+ * the two command rows merged and `add-note` moved into the menu, in the one suite a sweep never
+ * finished.
  *
- * Leaves the `⋯` as it found it, so a caller can assert either way without a side effect.
+ * **There is one place now** (ADR-0109 D1): the deck wraps and nothing hides. That makes the
+ * negative form structurally sound rather than dependent on remembering to check the menu — which
+ * is the same argument the ADR makes for deleting the `e2e-toolbar-fit` gate rather than leaving it
+ * green.
  */
 export async function toolbarOffers(page: Page, id: string): Promise<boolean> {
   const row = planCommands(page);
   await expect(row).toBeVisible();
-  if ((await row.locator(`[data-toolbar-item="${id}"]`).count()) > 0) return true;
-
-  const more = row.getByRole('button', { name: 'More toolbar actions' });
-  if ((await more.count()) === 0) return false;
-  const wasOpen = (await more.getAttribute('aria-expanded')) === 'true';
-  if (!wasOpen) await more.click();
-  const offered = (await page.locator(`[role="menu"] [data-toolbar-item="${id}"]`).count()) > 0;
-  if (!wasOpen) await page.keyboard.press('Escape');
-  return offered;
+  return (await row.locator(`[data-toolbar-item="${id}"]`).count()) > 0;
 }
 
 /**

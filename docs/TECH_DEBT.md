@@ -4432,3 +4432,36 @@ and a recommendation put to them, not a unilateral revert.
 `effectiveMax` is `max(140, bodyHeight − 240)`, so once the chrome takes 357 px the panel is pinned
 at its 140 px minimum and a keyboard shrink step has nowhere to go. Fixing the height fixes the
 test; changing the test would be hiding the finding.
+
+---
+
+## #186 — WCAG 2.5.8 lost its only automated cover when the fit gate was deleted
+
+_Filed 2026-08-24 with ADR-0109 M5. The product passes; the **gate** is gone._
+
+ADR-0090 M5 established that **axe cannot see target size**: `target-size` is tagged `wcag22aa`,
+every scan in this estate requests `wcag2a`/`wcag2aa`, and the rule ships `enabled: false` besides.
+"The axe scan is green" was true and meaningless for 2.5.8. What covered it instead was
+`e2e-toolbar-fit`'s `elementFromPoint` sweep, which asserted every command was pointer-reachable at
+eight widths — and ADR-0109 D1 **deleted that journey with the ladder it tested**, correctly: it
+asserted a row that no longer exists, and a gate whose subject is gone does not become a safety net
+by continuing to pass.
+
+**The deletion was right and it left a hole.** Nothing now checks that a command's target clears
+24×24.
+
+**Measured, so this is a missing gate rather than a live defect.** The deck's controls at 1646 are
+40 px tall and 51–69 px wide (`measure-output/m4-vertical-stack.json`), and the group captions —
+which are real controls, being fold toggles — stretch to the card height at 54 px rather than the
+19 px they were as a full-width row. Everything clears the floor with room to spare.
+
+**Why it is not fixed here.** The obvious move is to lift the `elementFromPoint` sweep out of the
+deleted journey into one that survives. That is a new Playwright step and a shared gate, which
+ADR-0105 says makes it spec work rather than a tech-debt row. It is also genuinely easier now: a
+surface that wraps has no demotion to model, so the sweep is "every `[data-toolbar-item]` clears
+24×24 and is hit-testable", with no width ladder to drive.
+
+**The trap for whoever writes it**, from ADR-0090 M5's own findings: sweep the item's _focusable
+control_, not `[data-toolbar-item]` on a wrapper — that is how the split-button caret went unmeasured
+at 23×36 — and assert pointer reachability rather than overhang, because a control shrunk to zero
+width has zero overhang and is still in the DOM.
