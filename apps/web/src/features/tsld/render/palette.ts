@@ -87,6 +87,11 @@ export function resolveTsldPalette(root: Element): TsldPalette {
     gridLineDay: token('--canvas-grid-day', '#565c6a'),
     gridLineMonth: token('--canvas-grid-month', '#2a2f3a'),
     gridLineYear: token('--canvas-grid-year', '#9098ab'),
+    // The lane hairline (workspace redesign M4-T2). Its own token rather than `--border`: this rule
+    // runs the length of the diagram once per lane, so it is by far the most-repeated line on the
+    // surface, and a value chosen for a card's edge is the wrong one for it by an order of
+    // magnitude of total ink.
+    laneRule: token('--canvas-lane-rule', '#232833'),
     edge: token('--muted-foreground', '#7a8090'),
     bar: token('--primary', '#3b6fbf'),
     critical: token('--destructive', '#c83c3c'),
@@ -182,6 +187,7 @@ export const PRINT_TOKEN_SOURCES = {
   gridLineDay: ['--canvas-grid-day', '#dee0e2'],
   gridLineMonth: ['--canvas-grid-month', '#72777e'],
   gridLineYear: ['--canvas-grid-year', '#595e66'],
+  laneRule: ['--canvas-lane-rule', '#e8eaec'],
   edge: ['--muted-foreground', '#636363'],
   bar: ['--primary', '#4b8cca'],
   critical: ['--destructive', '#9c0711'],

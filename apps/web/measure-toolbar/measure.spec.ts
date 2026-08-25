@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **M0** for `docs/specs/workspace-layout/design.md` — the measurement that design asks for, and
@@ -113,6 +113,7 @@ async function readRow(page: Page, ariaLabel: string): Promise<RowReading> {
 }
 
 test('M0 — measure the two toolbar rows across five viewport widths', async ({ page }) => {
+  clearMeasurement('toolbar-m0');
   const stamp = Date.now();
 
   await page.setViewportSize({ width: 2133, height: 1080 });

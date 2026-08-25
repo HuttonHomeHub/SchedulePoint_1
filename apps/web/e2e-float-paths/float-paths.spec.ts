@@ -52,42 +52,43 @@ test('a planner reads the float paths into an activity, in both views', async ({
   expect(analysis.hasMorePaths).toBe(true);
 
   // ── 2 · The command: shaded without a selection, live with one ────────────────────────────
-  // It moved into the Row-1 `⋯` in ADR-0090 M2 (tier 3), one of four commands that bought the two
-  // rows their labels at 1920. Still one click, and still shaded-with-a-reason rather than hidden —
-  // which is what this section is actually about. In a menu the reason travels by
-  // `aria-describedby`, not a `title`, so the assertion follows the channel.
-  // **Where this command lives is now a function of width, so the journey stops assuming.**
+  // Shaded-with-a-reason rather than hidden, which is what this section is actually about, and the
+  // reason travels by `aria-describedby` rather than a `title` — so the assertion follows the
+  // channel rather than the rendering.
   // ADR-0090 M2 made it tier 3, i.e. permanently inside the `⋯`; ADR-0091 M7 added the admission
-  // rung, so a row with room takes it back out and the `⋯` may not render at all. Both are correct
-  // states, and neither is this journey's subject — what it is about is that the command is
-  // *shaded with a reason* rather than hidden, and that the reason travels by `aria-describedby`.
+  // rung, so a row with room took it back out. **ADR-0109 D1 deleted the `⋯` altogether** — the
+  // command surface wraps now and every command is inline at every width — so "wherever the ladder
+  // has put it" has exactly one answer and the two-branch dance below is gone with it.
   //
-  // So it is located by `[data-toolbar-item]` and never by role or copy: inline it is a
-  // `button[aria-pressed]`, in the menu a `menuitemcheckbox`, and a locator that names either one
-  // is a locator that breaks the next time the row's width changes.
+  // It stays located by `[data-toolbar-item]` and never by role or copy. That was never about the
+  // menu: the id is what the registry guarantees and the words are not, which is the standing rule
+  // after three journeys broke on a label change (ADR-0091 M7).
   const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
-  const more = lookRow.getByRole('button', { name: 'More toolbar actions' });
   const inlineFloatPaths = lookRow.locator('[data-toolbar-item="float-paths"]');
   /**
-   * The control, wherever it is — opening the `⋯` only when it is not on the row.
+   * The control, through the shared helper.
    *
-   * **Converged onto the shared `revealToolbarCommand`** in Graphite M5's follow-up. This suite
-   * solved the problem first and correctly, including the trap its own comment recorded: `count()`
-   * is a point-in-time read with no auto-wait, so on a slower machine the first call ran before the
-   * toolbar mounted, found nothing inline, and then waited two minutes for a `⋯` that a wide row
-   * never renders — a helper that reports "the item is in the menu" when what it saw was an empty
-   * page. `e2e-library` then hit the same problem and had no such helper. Two implementations of
-   * "where is this command" would drift, and the drift would be invisible until a width changed.
+   * **Converged onto `revealToolbarCommand`** in Graphite M5's follow-up. This suite solved the
+   * problem first and correctly, including the trap its own comment recorded: `count()` is a
+   * point-in-time read with no auto-wait, so on a slower machine the first call ran before the
+   * toolbar mounted, found nothing, and then waited out the timeout — a helper that reports "it is
+   * elsewhere" when what it saw was an empty page. Two implementations of "where is this command"
+   * would drift, and the drift would be invisible until a width changed.
    *
-   * The one behavioural difference is an improvement: the shared version locates the menu row by
-   * `data-toolbar-item` rather than by the `menuitemcheckbox` role and its copy, so a rename of
-   * this command no longer breaks this line.
+   * The helper still earns its place with the `⋯` gone: it awaits the surface before asking, which
+   * is the half that trap was really about, and it now diagnoses a FOLDED GROUP — the one remaining
+   * way a command can be absent from the DOM.
    */
   const revealFloatPaths = () => revealToolbarCommand(page, 'float-paths');
-  /** What focus must return to after the panel closes: the control if it is still mounted, else
-   *  the `⋯` it was reached through — a menu item unmounts with its menu. */
-  const restoreTarget = async () =>
-    (await inlineFloatPaths.count()) > 0 ? inlineFloatPaths : more;
+  /**
+   * What focus must return to after the panel closes.
+   *
+   * This used to be an async two-branch lookup — the inline control if it was still mounted, else
+   * the `⋯` it was reached through, because a menu item unmounts with its menu. ADR-0109 D1 deleted
+   * the `⋯`, so there is one answer and it needs no lookup: the control that opened the panel is
+   * the control that is still there. The indirection goes; the assertion it served does not.
+   */
+  const restoreTarget = inlineFloatPaths;
 
   let floatPaths = await revealFloatPaths();
   await expect(floatPaths).toBeVisible();
@@ -176,5 +177,5 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // Focus returns to the control the planner opened this from — the inline button when the row has
   // room for it, and otherwise the `⋯` it lives behind, because a menu item unmounts with its menu.
   // Returning to a detached node dropped focus to `<body>`; this journey is what found that.
-  await expect(await restoreTarget()).toBeFocused();
+  await expect(restoreTarget).toBeFocused();
 });

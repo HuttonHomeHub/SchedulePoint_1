@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useRecalculateCommand } from './use-schedule';
 
@@ -40,6 +40,28 @@ export interface PlanAutoRecalc {
   hold: (token: symbol) => void;
   /** Release a hold taken with {@link PlanAutoRecalc.hold}. Idempotent and unknown-token-safe. */
   release: (token: symbol) => void;
+  /**
+   * How many structural edits have been made since the schedule was last computed successfully.
+   *
+   * **A count, not a boolean, and it counts EDITS rather than bursts.** The status bar's sentence
+   * is about work the reader did — "2 edits since the last calculation" — so a burst of edits
+   * coalesced into one recalculation still owes two of them. A flag would collapse "one drag" and
+   * "an afternoon of re-sequencing" into the same sentence, which is exactly the absence a reader
+   * cannot distinguish from a fact (ADR-0073 C3.1).
+   *
+   * It resets on success and NOT on failure: a failed recalculation leaves every one of those edits
+   * still uncomputed, which is the whole reason the reader is being told.
+   */
+  pendingEdits: number;
+  /**
+   * The last recalculation this hook ran **failed**.
+   *
+   * Separate from `pendingEdits` because the two answer different questions and only one of them
+   * has a remedy the reader can press: edits are owed by the plan, a failure is owed by the last
+   * attempt. Cleared by the next success, never by a new edit — an edit made after a failure does
+   * not make the failure untrue.
+   */
+  failed: boolean;
 }
 
 /**
@@ -95,6 +117,29 @@ export function usePlanAutoRecalc(
   /** The cap timer, armed by the FIRST hold and cleared by the last release. */
   const holdCapRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * The two facts the status bar reads (M3-T4). **State, not refs**, unlike every other piece of
+   * burst bookkeeping here: those exist so the debounced fire never reads a stale closure and are
+   * deliberately invisible to React, whereas these two are the only things in this hook a reader
+   * looks at, so they have to cause a render.
+   *
+   * `setPendingEdits`/`setFailed` are stable, so `notify` and `fire` keep the referential identity
+   * the toolbar context memo depends on.
+   */
+  const [pendingEdits, setPendingEdits] = useState(0);
+  const [failed, setFailed] = useState(false);
+  /**
+   * The same count, live, for the fire path to read.
+   *
+   * **A recalculation clears the edits it was ASKED to compute, not whatever is owed when it
+   * lands.** An edit made while a request is in flight increments this and queues a second run; if
+   * success simply zeroed the counter, that edit would read as computed for the few hundred
+   * milliseconds before its own run finished — a bar saying the schedule is current while the
+   * request that will make it so has not been sent. Subtracting the snapshot instead makes the
+   * arithmetic correct at every instant rather than only at rest.
+   */
+  const pendingEditsRef = useRef(0);
+
   const fire = useCallback((): void => {
     const { enabled, onMessage } = optsRef.current;
     if (!enabled) {
@@ -108,18 +153,28 @@ export function usePlanAutoRecalc(
     }
     inFlightRef.current = true;
     queuedRef.current = false;
+    const owed = pendingEditsRef.current;
     const drain = (): void => {
       inFlightRef.current = false;
       if (queuedRef.current && mountedRef.current) fireRef.current();
     };
     recalcRef.current.run({
       onSuccess: () => {
+        // Cleared TOGETHER: a successful run computed everything it was asked for and supersedes
+        // any earlier failure. Doing one without the other leaves the bar saying the schedule is
+        // both current and out of date.
+        pendingEditsRef.current = Math.max(0, pendingEditsRef.current - owed);
+        setPendingEdits(pendingEditsRef.current);
+        setFailed(false);
         const announce = manualSuccessRef.current;
         manualSuccessRef.current = null;
         announce?.();
         drain();
       },
       onError: (message) => {
+        // `pendingEdits` is deliberately NOT reset here. The edits are still uncomputed; that is
+        // what makes the failure worth reporting rather than merely worth logging.
+        setFailed(true);
         manualSuccessRef.current = null; // a failed manual flush must not later announce success
         onMessage?.(message);
         drain();
@@ -136,6 +191,11 @@ export function usePlanAutoRecalc(
   });
 
   const notify = useCallback((): void => {
+    // Counted BEFORE the hold branch, so an edit made inside an open two-click pick is owed like any
+    // other. The hold defers the recalculation, not the edit — the plan is out of date either way,
+    // and a reader who arms the Link tool and drags a bar has still moved it.
+    pendingEditsRef.current += 1;
+    setPendingEdits(pendingEditsRef.current);
     // Held: remember that a recalculation is owed, and let the last release schedule it. No timer is
     // armed, so a burst of edits during one open pick still becomes exactly one run afterwards.
     if (holdsRef.current.size > 0) {
@@ -245,7 +305,7 @@ export function usePlanAutoRecalc(
   // Stable identity except when `isPending` flips, so a consumer can safely depend on it (the toolbar
   // context memo) without churning every render (notify/flush are already stable).
   return useMemo(
-    () => ({ notify, flush, hold, release, isPending: recalc.isPending }),
-    [notify, flush, hold, release, recalc.isPending],
+    () => ({ notify, flush, hold, release, isPending: recalc.isPending, pendingEdits, failed }),
+    [notify, flush, hold, release, recalc.isPending, pendingEdits, failed],
   );
 }

@@ -27,18 +27,14 @@ import { ChromeSlot, ChromeSlotProvider, useChromeSlot } from './chrome-slot';
  */
 export function TestChromeHost({ children }: { children: React.ReactNode }): React.ReactElement {
   const rows = useChromeSlot();
-  const rail = useChromeSlot();
   const drawer = useChromeSlot();
   const status = useChromeSlot();
   return (
     <>
       <ChromeSlot slotRef={rows.slotRef} />
-      <ChromeSlot slotRef={rail.slotRef} name="rail" />
       <ChromeSlot slotRef={drawer.slotRef} name="drawer" />
       <ChromeSlot slotRef={status.slotRef} name="status" />
-      <ChromeSlotProvider
-        nodes={{ rows: rows.node, rail: rail.node, drawer: drawer.node, status: status.node }}
-      >
+      <ChromeSlotProvider nodes={{ rows: rows.node, drawer: drawer.node, status: status.node }}>
         {children}
       </ChromeSlotProvider>
     </>

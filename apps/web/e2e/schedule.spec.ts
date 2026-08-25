@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 import { activityEditor } from '../e2e-support/activity-editor';
-import { revealToolbarCommand } from '../e2e-support/toolbar';
+import { recalculate, revealToolbarCommand } from '../e2e-support/toolbar';
 
 import { chooseComboboxOption, comboboxField } from './combobox';
 import { awaitComputedSchedule, showActivities } from './workspace';
@@ -109,7 +109,7 @@ test('a planner sets a start date, recalculates, and sees the critical path (acc
   // produced the dates. It still proves the button is present, pressable and harmless, and the
   // critical-path badge and the axe pass below are the substance either way. Nothing available to a
   // client can distinguish the two recalculations — they are the same request.
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await recalculate(page);
 
   // The summary strip and the table now show the computed schedule.
   await awaitComputedSchedule(page, orgSlug);
@@ -169,7 +169,7 @@ test('a planner picks the plan calendar and recalculates on it (accessible)', as
   await expect(page.getByRole('dialog', { name: 'Schedule settings' })).toBeHidden();
 
   await addActivity(page, 'Excavate');
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await recalculate(page);
   await awaitComputedSchedule(page, orgSlug);
   // `awaitComputedSchedule` reads the API, so on its own it proves the SERVER recalculated and
   // says nothing about the screen. This test's pre-conversion checkpoint was

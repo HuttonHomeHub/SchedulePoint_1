@@ -91,10 +91,11 @@ export async function addActivity(page: Page, name: string, durationDays?: numbe
   await expect(page.getByRole('cell', { name, exact: true })).toBeVisible();
 }
 
-/** Recalculate the open plan's own schedule (the header Recalculate control). */
-export async function recalculate(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Recalculate', exact: true }).click();
-}
+// `recalculate` now comes from the shared support layer (workspace redesign M3-T5) and is
+// re-exported so this suite's specs keep importing it from here. The local wrapper it replaces
+// pressed a toolbar button by name; that control moved to the status bar and appears only when the
+// schedule is behind the plan, so "press it" is no longer a thing a caller can assume it may do.
+export { recalculate } from '../e2e-support/toolbar';
 
 /**
  * Wait until the open plan actually has a computed schedule.

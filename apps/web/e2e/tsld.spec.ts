@@ -1,6 +1,8 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
+import { recalculate } from '../e2e-support/toolbar';
+
 import { awaitComputedSchedule, showActivities } from './workspace';
 
 /**
@@ -88,7 +90,7 @@ test('a planner sees the computed schedule in the logic diagram, keyboard-operab
   // The post-recalculation checks below are unchanged and carry the weight.
 
   // Recalculate → the canvas renders and the parallel listbox mirrors the activities.
-  await page.getByRole('button', { name: 'Recalculate' }).click();
+  await recalculate(page);
   await awaitComputedSchedule(page, orgSlug);
   const listbox = diagram.getByRole('listbox', { name: 'Activities in the diagram' });
   await expect(listbox).toBeAttached();

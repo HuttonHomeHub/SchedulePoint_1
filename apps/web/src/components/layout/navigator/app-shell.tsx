@@ -1,10 +1,11 @@
 import { Outlet, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ExplorerColumn } from './explorer-column';
 import { NavigatorCrud } from './navigator-crud';
 import { NavigatorRail } from './navigator-rail';
 import { ShellContext } from './shell-context';
-import { ToolRail, type DrawerSubject } from './tool-rail';
+import { useExplorerPrefs } from './use-explorer-prefs';
 
 /**
  * Width kept for the stage when the drawer's stored width would otherwise eat it. The plan
@@ -64,7 +65,18 @@ function ShellFrame(): React.ReactElement {
   // Only steal focus onto the (re)mounted rail toggle after a *user* collapse/expand,
   // never on first paint.
   const drawer = useContextDrawerPrefs();
-  const [subject, setSubject] = useState<DrawerSubject>('explorer');
+  const explorer = useExplorerPrefs();
+  /**
+   * **Whether a route has ASKED for its subject to be shown.**
+   *
+   * Registration and display are two different statements — "I have something to put here" and
+   * "put it there now" — and collapsing them is a defect rather than a simplification. This was
+   * carried by `subject === 'context'` while the drawer had two subjects; when M3-T2 removed the
+   * second, dropping the state with it made a mere registration open the panel, so navigating to a
+   * plan would swap the workspace's trailing column before the planner had pressed anything. Caught
+   * by `drawer-entry-point.test.tsx`, which is the suite named for exactly this seam.
+   */
+  const [showRequested, setShowRequested] = useState(false);
   const announce = useAnnounce();
   const contextSubject = useDrawerSubjectRegistration();
   /**
@@ -91,7 +103,7 @@ function ShellFrame(): React.ReactElement {
    * every width below `lg` has used all along (M6-T5's finding that the modal is not a legacy path).
    */
   const isDesktop = useMediaQuery(LG_QUERY, true);
-  const showingContext = isDesktop && subject === 'context' && contextSubject !== null;
+  const showingContext = isDesktop && showRequested && contextSubject !== null;
 
   /**
    * **The drawer's effective maximum, clamped against the live shell width.**
@@ -154,45 +166,34 @@ function ShellFrame(): React.ReactElement {
   /**
    * **Whether the drawer has anything to put in it**, and then whether one is on screen.
    *
-   * Deliberately NOT `subject === 'explorer' && explorerAvailable`, which is the symmetric-looking
-   * derivation and would silently delete an unrelated behaviour: the content below falls back to
-   * the Explorer when a context registration goes away while `subject` is still `'context'` (the
-   * case the comment on `contextSubject` above exists for). Keying on the active subject would
-   * leave an empty drawer on an organisation route. The term is availability, not selection.
+   * **One subject now, not two** (workspace redesign M3-T2). The Project Explorer used to be the
+   * drawer's other subject, reached by a button on the icon rail; it is a docked column on the
+   * leading edge since M3-T1, so the drawer holds only what a route registers. The `subject` state,
+   * the switcher and the "pressing the lit button closes it" rule went with the second subject —
+   * a switcher over one thing is a control that cannot switch.
    *
-   * `drawerVisible` gates the Escape rung and `drawerHasContent` the render, and that split is the
-   * sharp half rather than tidiness. The rung guards on `drawer.collapsed` alone, so with the preference set to open
-   * and nothing available to show, an Escape on `/account` would have called `drawer.collapse()` —
-   * which `use-resizable-panel-prefs.ts` persists to `localStorage` through an effect — and
-   * announced "Project Explorer closed." when nothing was open. A reader's panel preference would
-   * die on a trip through their account settings, and the only evidence would arrive later, on a
-   * plan, with nothing saying why.
+   * That leaves the drawer with **no production registrant at all** today (`docs/TECH_DEBT.md`
+   * #156, opened by ADR-0101 when the activity editor returned to a modal). The mechanism is kept
+   * rather than deleted, because it is what a route uses to host something beside the work, and an
+   * `auto` grid column with no child is zero wide — an unused drawer costs the stage nothing. It is
+   * recorded here as unused rather than left to read as live.
    *
-   * **The `isDesktop` term now lives on `drawerVisible` below, and this paragraph is the history of
-   * why it did not.** ADR-0104 deliberately excluded it: the defect was real but it was not what
-   * #165a was about, and including it would have changed behaviour on a viewport that epic's journey
-   * did not drive. It was filed as `docs/TECH_DEBT.md` #168 rather than absorbed, and closed
-   * separately — which is the point of filing rather than fixing in passing.
+   * `drawerVisible` gates the Escape rung and `drawerHasContent` the render, and that split
+   * survives the collapse: the rung guards on `drawer.collapsed`, which
+   * `use-resizable-panel-prefs.ts` persists through an effect, so firing it with nothing on screen
+   * would silently write a collapse a reader never asked for and announce a panel closing that was
+   * never open.
    */
-  const drawerHasContent = !drawer.collapsed && (showingContext || explorerAvailable);
+  const drawerHasContent = !drawer.collapsed && showingContext;
 
   /**
    * **Whether a drawer is actually on screen** (`docs/TECH_DEBT.md` #168).
    *
-   * Below `lg` the drawer's column is `hidden lg:flex`: it is in the DOM and invisible, and the
-   * Explorer's real surface there is the `Sheet`, which is separate state. So a rung that fires on
-   * `drawerHasContent` alone was **a guard disagreeing with a CSS class** — on every viewport under
-   * 1024 px, Escape closed and announced a panel the reader could not see, writing a silent
-   * collapse to `localStorage` and speaking a false sentence into a live region.
-   *
-   * `LG_QUERY` is `(min-width: 64rem)` and the class's breakpoint is the same `64rem`, so the two
-   * track by construction rather than by anyone keeping them in step.
-   *
-   * The **render** keeps `drawerHasContent` deliberately: the column must still mount below `lg` and
-   * be hidden by CSS. Not rendering it would change remount behaviour on a resize across the
-   * breakpoint, which is a different question from the one #168 asks.
+   * The viewport term rides on `showingContext` above, so this is now the same fact; it is kept as
+   * a separate name because the two questions are different — "is there content" and "can the
+   * reader see it" — and collapsing them is how #168 happened in the first place.
    */
-  const drawerVisible = drawerHasContent && isDesktop;
+  const drawerVisible = drawerHasContent;
 
   // Shared, per-org expansion (ADR-0029 Phase 2): both rails and the CRUD coordinator
   // read one set, so revealing a freshly-created node works and pinned/drawer agree.
@@ -207,97 +208,37 @@ function ShellFrame(): React.ReactElement {
   const shell = useMemo(() => ({ openDrawer }), [openDrawer]);
 
   /**
-   * **Pressing the button for the subject already showing closes the drawer.** A panel button is a
-   * toggle over what the drawer shows, so pressing the lit one has to do something, and re-pointing
-   * it at itself does nothing visible — a control that appears inert. Pressing a different
-   * subject's button always opens, because that request is unambiguous.
+   * **Where focus goes when the drawer's contents leave under it.**
    *
-   * The announcement is here rather than in the rail because only the shell knows which of the
-   * three outcomes happened; the rail knows only which button was pressed.
+   * Closing the drawer unmounts its whole subtree — including the "Close context drawer" button the
+   * reader has just pressed — and a browser drops focus from a removed element to `<body>`. That is
+   * WCAG 2.4.3, and this repository has now shipped it four times (ADR-0080 M2, ADR-0099 M10,
+   * TECH_DEBT #64/#67).
+   *
+   * **The destination used to be the rail button that opened it, and there is no longer one**
+   * (M3-T2). The drawer is no longer a switcher over two subjects: its content is whatever a route
+   * registers, and a route that registers something owns the control that opened it. So the honest
+   * destination is `<main>`, which is `tabIndex={-1}` for the skip link and therefore always exists
+   * — the same last rung the old map fell back to, promoted from unreachable guard to the rule.
+   *
+   * The name is kept because it is exposed on `DrawerSubjectControls` and a route's own Close
+   * button calls it; renaming it would be a change to a seam that has no registrant to test it
+   * against (TECH_DEBT #156).
    */
-  /**
-   * What to CALL the drawer when speaking about it.
-   *
-   * Both announcements said "Project Explorer" unconditionally, which was true while that was the
-   * only subject and becomes a false statement the moment a second one exists — a reader who opens
-   * the activity panel would be told the Explorer opened. The register keeps recording this exact
-   * shape (ADR-0064's confirmation naming the wrong edit, ADR-0060's invented pen message that was
-   * false whenever nobody held the pen); it is cheaper to fix while adding the second subject than
-   * to find later from a report.
-   */
-  const subjectName = useCallback(
-    (which: DrawerSubject) =>
-      which === 'context' ? (contextSubject?.label ?? 'Details') : 'Project Explorer',
-    [contextSubject],
-  );
-
-  const selectSubject = useCallback(
-    (next: DrawerSubject) => {
-      const showing = drawerVisible;
-      if (showing && next === subject) {
-        drawer.collapse();
-        announce(`${subjectName(next)} closed.`);
-        return;
-      }
-      setSubject(next);
-      if (!showing) drawer.expand();
-      announce(`${subjectName(next)} opened.`);
-    },
-    [drawer, drawerVisible, subject, announce, subjectName],
-  );
-
-  /**
-   * **Where focus goes when the panel's contents leave under it.**
-   *
-   * Collapsing the drawer unmounts the whole `<ContextDrawer>` subtree — including the "Close
-   * context drawer" button the reader has just pressed — and a browser drops focus from a removed
-   * element to `<body>`. That is WCAG 2.4.3, and this repository has now shipped it three times
-   * (ADR-0080 M2, TECH_DEBT #64/#67), each time in a different control. The rail button is the right
-   * destination on the same argument ADR-0080 used: it survives the transition, and it is *about*
-   * the panel that went away, so a reader who presses Enter again gets it back.
-   *
-   * The route needs the same target for the same reason one layer in — the editor's own Close button
-   * is inside the portalled subtree — so this is exposed through `DrawerSubjectControls` rather than
-   * kept private.
-   */
-  const railButtons = useRef(new Map<DrawerSubject, HTMLButtonElement | null>());
   const focusRailButton = useCallback(() => {
-    const button = railButtons.current.get(subject) ?? railButtons.current.get('explorer');
-    if (button) {
-      button.focus();
-      return;
-    }
-    /**
-     * **A last rung that always exists — and it is UNREACHABLE today, which was established rather
-     * than assumed.**
-     *
-     * The concern it answers is real in shape: a callback ref fires with `null` on unmount, so a
-     * rail whose Explorer button is withheld leaves `'explorer' → null` in the map and
-     * `button?.focus()` becomes a silent no-op, dropping focus to `<body>` — the WCAG 2.4.3 class
-     * this register has recorded three times (ADR-0080 M2, ADR-0099 M10, TECH_DEBT #64/#67).
-     *
-     * But it cannot happen. `ToolRail` is mounted on every `_authed` route, its Explorer button
-     * renders whenever `orgSlug` is defined, and its context button renders whenever a subject is
-     * registered — while `closeDrawerPanel`, the only caller, requires `drawerVisible`, whose
-     * content term is `showingContext || explorerAvailable`. Both disjuncts imply a mounted button. A test written
-     * for this rung was tried and withdrawn: detaching the button with `.remove()` leaves a
-     * TRUTHY, detached element in the map, so `focus()` silently does nothing and the rung is still
-     * not reached — which incidentally proves the map is only ever correct because React fires the
-     * ref with `null`, not because anything here checks.
-     *
-     * It stays because it is one line, it cannot itself disappear (`<main>` is `tabIndex={-1}` for
-     * the skip link), and the day the `'context'` subject regains a registrant (TECH_DEBT #156)
-     * the reasoning above has to be redone. Named as an invariant guard rather than left to read
-     * as live code somebody should be able to reach.
-     */
     document.getElementById('main')?.focus();
-  }, [subject]);
+  }, []);
 
   const closeDrawerPanel = useCallback(() => {
+    // Both, and the pair is the contract: `showRequested` is the ask a route made and `collapsed`
+    // is the preference a reader set. Clearing only the ask would leave a closed panel that the
+    // next registration reopens; collapsing only the preference would leave the ask standing, so
+    // expanding any panel later would bring this subject back unbidden.
+    setShowRequested(false);
     drawer.collapse();
-    announce(`${subjectName(subject)} closed.`);
+    announce(`${contextSubject?.label ?? 'Details'} closed.`);
     focusRailButton();
-  }, [drawer, announce, subjectName, subject, focusRailButton]);
+  }, [drawer, announce, contextSubject, focusRailButton]);
 
   /**
    * **The route's entry point into the drawer** — what M6-T4 said it had built and had not.
@@ -327,11 +268,11 @@ function ShellFrame(): React.ReactElement {
      * selection change once the drawer is already on this subject, and announcing there would talk
      * over the canvas's own `describeActivity`. It says "opened" when something opened.
      */
-    const opening = subject !== 'context' || drawer.collapsed;
-    setSubject('context');
+    const opening = drawer.collapsed || !showRequested;
+    setShowRequested(true);
     if (drawer.collapsed) drawer.expand();
-    if (opening) announce(`${subjectName('context')} opened.`);
-  }, [drawer, subject, announce, subjectName]);
+    if (opening) announce(`${contextSubject?.label ?? 'Details'} opened.`);
+  }, [drawer, announce, contextSubject, showRequested]);
 
   const drawerControls = useMemo(
     () => ({ show: showContextSubject, focusRailButton }),
@@ -399,7 +340,7 @@ function ShellFrame(): React.ReactElement {
     <ShellContext.Provider value={shell}>
       <NavigatorCrud orgSlug={orgSlug} canWrite={canWrite} expansion={expansion}>
         <ChromeSlotHost>
-          {({ rowsSlotRef, railSlotRef, drawerSlotRef, statusSlotRef }) => (
+          {({ rowsSlotRef, drawerSlotRef, statusSlotRef }) => (
             <>
               {/* **The shell is ONE grid** (Graphite M2). It replaces nested flex columns, and the
                   reason is §4a: the command band spans the columns the drawer sits inside, so
@@ -434,11 +375,11 @@ function ShellFrame(): React.ReactElement {
               >
                 {/* **The skip link** — the first focusable thing in the document, and the only
                     one there is (`apps/web/src` had none at all before Graphite M3, plan.md §A4).
-                    It became load-bearing when the rail took the leading column top to bottom: a
-                    keyboard user now tabs brand → switcher → the New-client and collapse controls →
-                    a `tree` of however many clients, projects and plans the organisation has → six
-                    destinations → the account menu, before reaching any of the thirteen routes'
-                    content. That is WCAG 2.4.1 Bypass Blocks.
+                    It stays load-bearing after the rail's deletion, with a different traversal to
+                    bypass: a keyboard user now tabs the band's header row and then the Explorer's
+                    heading, collapse control and a `tree` of however many clients, projects and
+                    plans the organisation has, before reaching any of the thirteen routes' content.
+                    Shorter than the rail's path and still WCAG 2.4.1 Bypass Blocks.
 
                     `sr-only focus:not-sr-only` rather than an off-screen box that animates in: it
                     must be reachable, not decorative, and `not-sr-only` restores a real box the
@@ -451,37 +392,34 @@ function ShellFrame(): React.ReactElement {
                   Skip to main content
                 </a>
 
-                {/* Column 1 — the tool rail, spanning EVERY row. It is the leading edge top to
-                    bottom at a fixed 48 px (Graphite M3 gave it the column, M4 gave it its width):
-                    the brand, the organisation switcher, the drawer's panel buttons, the six
-                    organisation destinations and the account menu, none of them behind anything.
+                {/* **Row 2, column 1 — the docked Project Explorer** (workspace redesign M3-T1).
+                    It replaces the 48 px icon rail that spanned all three rows, and the swap is
+                    the milestone: the rail's four jobs were the brand, the organisation switcher,
+                    the six destinations and the account chip — all of them identity or navigation,
+                    none of them a reason to give the leading edge of every screen to a column of
+                    icons. They are back in the band's header row, which now renders at every width
+                    rather than below `lg` only.
 
-                    It comes BEFORE the band in the DOM, and that is reading order rather than a
-                    preference: the rail's top-left corner is the document's, and the band starts
-                    48 px in. plan.md §A4's rule is that DOM order IS visual order — never `order:`,
-                    `row-reverse` or `direction: rtl`, each of which decouples focus from reading.
-                    The cost is the tab traversal the skip link above exists to answer. */}
-                <div className="col-start-1 row-span-3 row-start-1 hidden shrink-0 lg:block">
-                  <ToolRail
-                    orgSlug={orgSlug}
-                    railSlotRef={railSlotRef}
-                    subject={subject}
-                    drawerOpen={!drawer.collapsed}
-                    onSelectSubject={selectSubject}
-                    buttonRef={(which, node) => railButtons.current.set(which, node)}
-                    contextSubject={
-                      contextSubject
-                        ? { label: contextSubject.label, icon: contextSubject.icon }
-                        : null
-                    }
-                  />
-                </div>
+                    It occupies row 2 ALONE, not all three. The rail spanned every row because it
+                    was chrome; a navigator is content beside content, so the band above it and the
+                    status bar below it run the full width and the Explorer sits between them —
+                    which is also what lets the band's own geometry argument widen from "columns
+                    2–3" to "every column" and stay exactly as true.
 
-                {/* Row 1, columns 2–3 — the command band. It spans the stage AND the drawer's
-                    column, which is §4a solved by geometry: opening the drawer redistributes width
-                    between `<main>` and the drawer, both inside this span, so the band changes by
-                    zero. The rail is outside the span and is a fixed column, so it cannot affect it
-                    either.
+                    Hidden below `lg`, where the `Sheet` at the foot of this file is the Explorer
+                    and always has been. */}
+                {explorerAvailable ? (
+                  <div className="col-start-1 row-start-2 hidden min-h-0 shrink-0 lg:flex">
+                    <ExplorerColumn orgSlug={orgSlug} expansion={expansion} prefs={explorer} />
+                  </div>
+                ) : null}
+
+                {/* Row 1, ALL THREE COLUMNS — the command band. §4a solved by geometry, and now
+                    trivially: every column that can change width is inside the span, so resizing
+                    the Explorer, opening the drawer and folding either one redistribute width
+                    *within* the band and change it by exactly zero. Under the icon rail this had to
+                    be `2–3` and rely on column 1 being a fixed 48 px; the docked Explorer is
+                    resizable, so the span widened rather than the argument getting a caveat.
 
                     The margin is what makes the band read as a card FLOATING on the gradient rather
                     than a bar welded to the top of the window, and it lives here rather than in the
@@ -491,7 +429,7 @@ function ShellFrame(): React.ReactElement {
                     or the band floats away from the thing it commands. */}
                 <ChromeBandRow
                   rowsSlotRef={rowsSlotRef}
-                  className="col-span-2 col-start-2 row-start-1 mt-3 mr-3 mb-2 ml-3"
+                  className="col-span-3 col-start-1 row-start-1 mt-3 mr-3 mb-2 ml-3"
                 />
 
                 {/* Row 2, column 2 — the one `<main>` for the page. `min-h-0` lets it shrink to the
@@ -526,9 +464,9 @@ function ShellFrame(): React.ReactElement {
 
                     Below `lg` it is not rendered at all: there it would have to overlay, and
                     overlaying means modal, which the `Sheet` below already is. */}
-                {/* Row 3, columns 2–3 — **the plan status bar** (ADR-0099 D5). It mirrors the
-                    command band above: same span, so the drawer's width changes it by zero, and the
-                    rail is outside the span because it owns column 1 for all three rows.
+                {/* Row 3, all three columns — **the plan status bar** (ADR-0099 D5). It mirrors
+                    the command band above: same span, for the same reason and with the same
+                    geometry.
 
                     The row is `auto` and the slot is `empty:hidden`, so a screen that portals
                     nothing into it is a zero-height row and keeps exactly the frame it had. That is
@@ -537,7 +475,7 @@ function ShellFrame(): React.ReactElement {
                 <ChromeSlot
                   slotRef={statusSlotRef}
                   name="status"
-                  className="border-border col-span-2 col-start-2 row-start-3 border-t"
+                  className="border-border col-span-3 col-start-1 row-start-3 border-t"
                 />
 
                 {drawerHasContent ? (
@@ -547,29 +485,18 @@ function ShellFrame(): React.ReactElement {
                       // when it has nothing selected rather than keeping the previous subject's
                       // heading over an empty body — the M4 rule ("never the last subject's stale
                       // data") applied to the heading as well as the content.
-                      title={
-                        showingContext
-                          ? (contextSubject?.title ?? contextSubject?.label ?? 'Details')
-                          : 'Project Explorer'
-                      }
+                      title={contextSubject?.title ?? contextSubject?.label ?? 'Details'}
                       onClose={closeDrawerPanel}
                       width={drawerWidth}
                       onResize={drawer.setSize}
                       className="flex min-h-0"
                     >
-                      {showingContext ? (
-                        // The route's own markup arrives by portal, so it stays in the plan's React
-                        // tree and keeps reading the plan's model and gating (ADR-0029). The shell
-                        // hosts a `<div>` and learns nothing.
-                        <ChromeSlot slotRef={drawerSlotRef} name="drawer" />
-                      ) : explorerAvailable ? (
-                        // The `null` arm is unreachable: `drawerHasContent` above is
-                        // `showingContext || explorerAvailable`, so arriving here with neither is
-                        // impossible. It is written as a condition rather than an `orgSlug!`
-                        // assertion because the condition keeps the compiler checking and an
-                        // assertion stops it — and `NavigatorRail` requires a slug since #165a.
-                        <NavigatorRail orgSlug={orgSlug} expansion={expansion} />
-                      ) : null}
+                      {/* The route's own markup arrives by portal, so it stays in the plan's React
+                          tree and keeps reading the plan's model and gating (ADR-0029). The shell
+                          hosts a `<div>` and learns nothing. There is no second arm any more: the
+                          Explorer left this panel for its own column in M3-T1, so `drawerHasContent`
+                          IS `showingContext` and the fallback it used to guard cannot arise. */}
+                      <ChromeSlot slotRef={drawerSlotRef} name="drawer" />
                     </ContextDrawer>
                   </div>
                 ) : null}

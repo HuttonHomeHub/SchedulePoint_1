@@ -69,14 +69,16 @@ export function ChromeBandRow({
       tone="chrome"
       className={`border-border border-b-primary z-20 rounded-lg border border-b-[3px] shadow-md ${className ?? ''}`}
     >
-      {/* **Below `lg` only** (Graphite M3). At `lg`+ the Project Explorer rail is the leading
-          column top to bottom and carries the brand, the switcher and the account itself, so the
-          top bar is deleted and the band starts with the plan's own rows. Below `lg` the rail is
-          an off-canvas `Sheet` with nothing pinned to open it, so the bar survives there to carry
-          the trigger. */}
-      <div className="lg:hidden">
-        <AppHeaderRow />
-      </div>
+      {/* **At every width again** (workspace redesign M3-T2). Graphite M3 deleted this row above
+          `lg` and moved its three controls — brand, organisation switcher, account — onto a 48 px
+          icon rail down the leading edge, to give the 56 px back to the stage. M3-T1 docks the
+          Project Explorer in that column, so there is no rail to carry them and the row returns.
+
+          The 56 px is not simply given back: the row that used to sit below this one carried the
+          plan identity line, and that content moves INTO this row's centre cell — which is the
+          fold ADR-0092 M5 withdrew for want of exactly the width the destinations' departure
+          (ADR-0097 Landing D1, a measured 540 px) had already freed. */}
+      <AppHeaderRow />
       <ChromeSlot slotRef={rowsSlotRef} />
     </Surface>
   );
@@ -91,13 +93,11 @@ export function ChromeSlotHost({
 }: {
   children: (slots: {
     rowsSlotRef: (node: HTMLDivElement | null) => void;
-    railSlotRef: (node: HTMLDivElement | null) => void;
     drawerSlotRef: (node: HTMLDivElement | null) => void;
     statusSlotRef: (node: HTMLDivElement | null) => void;
   }) => React.ReactNode;
 }): React.ReactElement {
   const rows = useChromeSlot();
-  const rail = useChromeSlot();
   // The trailing drawer's body (Graphite M6-T2). Mounted only while the drawer shows the registered
   // `'context'` subject, so a route's portal renders `null` the rest of the time rather than
   // painting into a hidden node — `ChromePortal`'s existing "no slot, no children" contract.
@@ -105,12 +105,9 @@ export function ChromeSlotHost({
   const status = useChromeSlot();
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider
-        nodes={{ rows: rows.node, rail: rail.node, drawer: drawer.node, status: status.node }}
-      >
+      <ChromeSlotProvider nodes={{ rows: rows.node, drawer: drawer.node, status: status.node }}>
         {children({
           rowsSlotRef: rows.slotRef,
-          railSlotRef: rail.slotRef,
           drawerSlotRef: drawer.slotRef,
           statusSlotRef: status.slotRef,
         })}

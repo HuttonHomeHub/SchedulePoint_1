@@ -27,6 +27,7 @@ import {
   linkHighlightIds,
   loeBracketRects,
   makeWorkingDayWalk,
+  laneAtScreenY,
   progressGeometry,
   rectsIntersect,
   routeOrthogonal,
@@ -187,6 +188,8 @@ export interface TsldPalette {
   gridLineMonth: string;
   /** The coarsest tier (year boundaries) — a step stronger than `gridLine`, drawn at `lineWidth 2`. */
   gridLineYear: string;
+  /** The per-lane horizontal hairline (workspace redesign M4-T2). */
+  laneRule: string;
 }
 
 /** Which optional canvas layers are drawn — the toolbar's view toggles, defaulting all on. */
@@ -841,6 +844,35 @@ export function paintScene(
     }
     if (toggles.monthGrid) for (const d of bounds.months) gridLine(d);
     if (toggles.yearGrid) for (const d of bounds.years) gridLine(d);
+    ctx.stroke();
+  }
+
+  // Layer 1.5: **lane hairlines** — one 1 px horizontal rule per lane boundary (workspace redesign
+  // M4-T2). The time axis has had three tiers of vertical structure since ADR-0056 and the lane
+  // axis had none, so a bar three lanes below another had nothing to sit on: the eye had to measure
+  // the gap. A drafting table has rules both ways.
+  //
+  // **Derived from the viewport, never from the activities.** The lane range comes from
+  // `laneAtScreenY` at the top and bottom of the canvas, which is arithmetic on `view.originY` — so
+  // this is O(visible lanes) with no dependency on plan size, and it deliberately does NOT call
+  // `frame.laneRows()`. That getter is lazy on purpose (`paint-frame.ts`): it buckets and sorts the
+  // visible set, and a paint with the labels and dates layers off never builds it. Reading it here
+  // would make every frame pay for a build this layer has no use for — it needs boundaries, not
+  // contents.
+  //
+  // Batched into one path with one stroke, on a half-pixel y for the same crispness rule the day
+  // and month gridlines follow. `paint.lane-rule-budget.test.ts` counts the calls.
+  {
+    ctx.strokeStyle = palette.laneRule;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const firstLane = Math.floor(laneAtScreenY(0, view));
+    const lastLane = Math.ceil(laneAtScreenY(size.height, view));
+    for (let lane = firstLane; lane <= lastLane; lane += 1) {
+      const y = Math.round(screenYOfLane(lane, view)) + 0.5;
+      ctx.moveTo(0, y);
+      ctx.lineTo(size.width, y);
+    }
     ctx.stroke();
   }
 

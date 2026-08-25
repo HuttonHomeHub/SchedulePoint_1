@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **What a hand-rolled `Combobox` costs on a coarse pointer** — the question
@@ -35,6 +35,7 @@ test.describe('coarse pointer', () => {
   test.use({ hasTouch: true });
 
   test('TECH_DEBT #145 — a native select and a Combobox, measured on touch', async ({ page }) => {
+    clearMeasurement('combobox-coarse');
     const stamp = Date.now();
     // The Surface Pro's own width (2880×1920 at 175 %), which ADR-0091's retrospective established
     // as the width this product is actually judged at and which no measurement had used before it.

@@ -111,15 +111,17 @@ test.describe('Visual placement rolls forward, on the server', () => {
     await useVisualMode(page);
 
     // ADR-0081: a milestone that removes a capability names where it is no longer reachable. The
-    // control was a Row 1 toggle, and it was gated on Visual mode + the pen — so this asserts its
-    // absence in the one state it used to be live in, which is the only state where "it is gone"
-    // is a claim rather than a tautology. A check that only looked at Row 1 would pass if the
-    // control had merely demoted into the `⋯`, which is the failure mode this epic's own fit work
-    // makes likely, so the overflow is opened first.
+    // control was a Row 1 toggle gated on Visual mode + the pen — so this asserts its absence in the
+    // one state it used to be live in, which is the only state where "it is gone" is a claim rather
+    // than a tautology.
+    //
+    // **The overflow-opening loop that used to precede this is deleted with the `⋯` itself**
+    // (ADR-0109 D1). It existed because a control could pass an inline check by having merely
+    // demoted into the menu; a surface that wraps has nowhere to demote to, so the three role
+    // assertions below are now exhaustive rather than a net with a hole the loop had to cover.
+    // The two menu roles are KEPT deliberately: they cost nothing, and they are what would catch a
+    // future reader reintroducing a menu without reintroducing this loop.
     await expect(canvas(page)).toBeVisible();
-    for (const trigger of await page.getByRole('button', { name: 'More toolbar actions' }).all()) {
-      if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
-    }
     await expect(page.getByRole('button', { name: 'Snap to grid' })).toHaveCount(0);
     await expect(page.getByRole('menuitem', { name: 'Snap to grid' })).toHaveCount(0);
     await expect(page.getByRole('menuitemcheckbox', { name: 'Snap to grid' })).toHaveCount(0);

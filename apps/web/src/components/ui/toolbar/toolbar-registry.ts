@@ -163,7 +163,7 @@ export function bandIsAtLeast(layout: ToolbarLayoutMode, atLeast: ToolbarLayoutM
  * partitions items — grouping, tiering, gating and overflow are unchanged within each row.
  */
 /**
- * `mode` is the tool rail's vertical cluster; `strip` is the one command row.
+ * `mode` is the identity line's mode cluster; `strip` is the command deck.
  *
  * **`look` and `do` merged at Graphite M5.** ADR-0031's two-row amendment split the surface into
  * "what you look at" and "what you build with", and four epics then spent themselves making both

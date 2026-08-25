@@ -111,7 +111,10 @@ error, empty, and selected/active. A missing state is an incomplete component.
 The single **action menu** primitive: a hand-rolled WAI-ARIA APG "Menu Button" on
 semantic HTML (no new dependency), sibling to `Combobox`. Portal-rendered and anchored
 to a viewport point, so one component serves a trigger button, a right-click context
-menu and the toolbar overflow. Focus moves into the menu on open, ↑/↓/Home/End rove,
+menu and every popover a toolbar item raises. (It also served the **toolbar overflow**
+until ADR-0109 D1 deleted the width ladder and the `⋯` with it — a command surface wraps
+now, so there is nothing to demote into a menu.) Focus moves into the menu on open,
+↑/↓/Home/End rove,
 and Escape/Tab/selection return focus to `restoreFocusRef`.
 
 Scope is deliberately minimal — a flat list of a handful of actions, no submenus and no

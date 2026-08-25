@@ -28,7 +28,11 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
-import { PlanStatusBar } from '@/components/layout/status/plan-status-bar';
+import {
+  deriveScheduleState,
+  PlanStatusBar,
+  type ScheduleState,
+} from '@/components/layout/status/plan-status-bar';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -451,6 +455,34 @@ export function ToolbarPlanWorkspace({
   // toolbar's pinned Finish chip already runs, so this is a cache read and adds no request; a recalc
   // invalidates the key, which is exactly the value the settle needs to compare.
   const scheduleSummary = useScheduleSummary(model.orgSlug, model.planId);
+
+  /**
+   * **What the schedule owes the reader**, derived once for the status bar (M3-T4).
+   *
+   * The rule itself is `deriveScheduleState` — pure, exported and tested beside the component that
+   * renders it, because a `useMemo` in a 1,600-line component is a rule nothing can check: this
+   * suite mounts the workspace and reads the DOM, so deleting a branch of the derivation left it
+   * green while breaking a journey. What is left here is the wiring.
+   */
+  const scheduleState = useMemo<ScheduleState>(
+    () =>
+      deriveScheduleState({
+        isRecalculating: model.autoRecalc.isPending,
+        pendingEdits: model.autoRecalc.pendingEdits,
+        failed: model.autoRecalc.failed,
+        activities: model.activities.data,
+        canRecalculate: model.canRecalc,
+        refusalReason: model.scheduleRefusal('recalculate'),
+        hasDataDate: plan.plannedStart != null,
+      }),
+    [
+      model.autoRecalc,
+      model.canRecalc,
+      model.scheduleRefusal,
+      plan.plannedStart,
+      model.activities.data,
+    ],
+  );
 
   // The read-only Late-start overlay (ADR-0033 M4) suppresses all editing. Derive it once so the
   // canvas, the toolbar's authoring group, and the explanatory note stay in lock-step — otherwise the
@@ -1575,7 +1607,8 @@ export function ToolbarPlanWorkspace({
           criticalCount={scheduleSummary.data?.criticalCount}
           dataDate={scheduleSummary.data?.dataDate}
           projectFinish={scheduleSummary.data?.projectFinish}
-          recalculating={model.autoRecalc.isPending}
+          scheduleState={scheduleState}
+          onRecalculate={() => ctx.recalculate()}
           pending={scheduleSummary.isPending}
         />
       </ChromePortal>

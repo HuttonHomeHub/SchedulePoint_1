@@ -167,34 +167,45 @@ Prefer `border` + low elevation on light surfaces; avoid stacking heavy shadows.
 Mobile-first Tailwind defaults: `sm 40rem` · `md 48rem` · `lg 64rem` ·
 `xl 80rem` · `2xl 96rem`. Primary layout shift (sidebar ⇄ drawer) at `lg`.
 
-#### The toolbar layout-mode ladder (ADR-0090)
+#### A command surface wraps (ADR-0109)
 
-A dense command row does **not** use the breakpoints above, and the difference is deliberate rather
-than an oversight: those are **viewport** widths, and a toolbar's problem is the width of **its own
-container** — a row inside a panel beside an open activity editor has a fraction of the viewport to
-work with, and a viewport media query cannot see that. So the ladder is resolved from the measured
-container via `resolveLayoutMode(width, current)`
-(`apps/web/src/components/ui/toolbar/toolbar-registry.ts`):
+**A dense command row is not made to fit; it is allowed to become two rows.** That is the rule this
+section replaces a ladder with, and the history is the argument for it.
 
-| mode          | container ≥ | what changes                                  |
-| ------------- | ----------- | --------------------------------------------- |
-| `comfortable` | 1536 px     | labels where `showLabel: 'auto'` affords them |
-| `compact`     | 1280 px     | tighter control padding, fewer labels         |
-| `condensed`   | 1024 px     | icon-only for most groups                     |
-| `collapsed`   | 0           | the minimum that still reaches every command  |
+Four consecutive epics (ADR-0090/0091/0092/0094) tuned a **layout-mode ladder**: a `ResizeObserver`
+on the toolbar's own container, a per-item width cache, a priority ranking, four band floors with
+48 px of asymmetric hysteresis, a label-demotion pass, and a `⋯` overflow menu that the losers were
+demoted into. It was carefully built and it worked. It also answered a question nobody had asked —
+_how do we fit 34 commands into one row?_ — whose premise was inherited rather than decided.
 
-Two properties are load-bearing and easy to lose in a refactor:
+The old Flask app this product replaces used `flex-wrap: wrap` over five labelled groups and had no
+overflow menu, because it never needed one.
 
-- **Hysteresis is asymmetric.** A row narrows immediately but only widens after clearing the target
-  rung's floor by `TOOLBAR_LAYOUT_HYSTERESIS_PX` (48 px), walking **one rung at a time**. Narrowing
-  late clips controls; widening early makes a window-edge drag re-lay the row out on every pixel of
-  hand tremor.
-- **A preset is a command, not a derivation.** Resizing preserves the scale a user chose; it never
-  re-derives it (ADR-0056).
+So, for any command surface:
 
-Authoring rule: a control's `showLabel` is **presentation** and its `tier` is **priority**. Do not
-conflate them — they were one property once, which meant a static per-item flag decided a question
-that is really about the width available at render time (ADR-0031, TECH_DEBT #61).
+- **`flex-wrap`, never `overflow-x-auto` and never a demotion pass.** A line that cannot fit becomes
+  two lines. Flex line-breaking cannot place a child outside its container, so "every command is
+  reachable" is structural rather than a gate anyone has to keep passing.
+- **Grouping is the affordance.** The plan workspace's `Deck` renders the registry's seven-group
+  taxonomy as four captioned groups that a reader can **fold**, which is a decision the reader makes
+  about their own screen — not one a `ResizeObserver` makes for them at a width nobody measured.
+- **`showLabel` is presentation and it means what it says.** `'auto'` now means _yes_: under the
+  ladder it meant "if the row can afford it", and a row that wraps can always afford it. `'never'`
+  is for the handful of icons that are genuinely universal (zoom ±, fit, undo, redo, print).
+- **The vertical variant is always icon-only.** A 48 px rail cannot hold a label without wrapping,
+  clipping, or widening the leading edge of the application.
+
+**What this costs, stated:** a surface that wraps has a height that is a function of its width, so a
+narrow window buys its commands with vertical space the content would otherwise have. That is the
+trade, made deliberately — all commands visible when there is room.
+
+`tier` survives as **priority within a group**, and it is still not `showLabel`. They were one
+property once, which meant a static per-item flag decided a question about render-time width
+(ADR-0031, TECH_DEBT #61); they are two now for the opposite reason — neither of them is about
+width any more.
+
+**A preset is still a command, not a derivation.** Resizing preserves the scale a user chose; it
+never re-derives it (ADR-0056). That rule was never about the ladder and outlives it.
 
 ### One theme
 

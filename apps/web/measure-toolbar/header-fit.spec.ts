@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **Does the app header row fit its container, and is every control in it reachable by pointer?**
@@ -27,6 +27,7 @@ const VIEWPORTS = [
 ];
 
 test('the app header row, measured for fit and pointer reachability', async ({ page }) => {
+  clearMeasurement('header-fit');
   const stamp = Date.now();
 
   await page.setViewportSize(VIEWPORTS[0]!);

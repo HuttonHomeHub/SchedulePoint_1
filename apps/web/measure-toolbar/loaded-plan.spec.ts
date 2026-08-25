@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **M0c** — the correction the feature-analyst forced, and the one that makes the numbers honest.
@@ -85,6 +85,7 @@ async function readRow(page: Page, ariaLabel: string): Promise<unknown> {
 }
 
 test('M0c — measure a plan that has a computed diagram', async ({ page }) => {
+  clearMeasurement('toolbar-m0c');
   const stamp = Date.now();
 
   await page.setViewportSize({ width: 2133, height: 1080 });

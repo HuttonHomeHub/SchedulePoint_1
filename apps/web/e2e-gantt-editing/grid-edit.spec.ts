@@ -4,15 +4,15 @@ import {
   createClient,
   createPlan,
   createProject,
-  ensurePen,
   ganttRow,
   onboard,
   openPlanId,
   seedActivities,
   showGantt,
   startEditing,
+  syncClient,
 } from '../e2e-gantt/support';
-import { clickToolbarCommand } from '../e2e-support/toolbar';
+import { recalculate } from '../e2e-support/toolbar';
 
 /**
  * **M2-T5 — a duration typed into the Gantt grid, checked at the API.**
@@ -109,8 +109,7 @@ async function useEightHourCalendar(page: Page, orgSlug: string): Promise<void> 
   // times immediately after the reload landed. `ensurePen` rather than `startEditing`, because a
   // reload may leave the lease already held and clicking "Start editing" would then hang on a
   // button that is not there.
-  await page.reload();
-  await ensurePen(page);
+  await syncClient(page);
 }
 
 /** The stored row, straight from the API — the only honest place to check a write. */
@@ -154,7 +153,7 @@ test('a sub-day duration typed into the grid is stored as minutes', async ({ pag
   await startEditing(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
-  await clickToolbarCommand(page, 'recalculate');
+  await recalculate(page);
   await showGantt(page);
 
   await durationCell(page).dblclick();
@@ -182,7 +181,7 @@ test('a whole-day duration on the same calendar stores its own minutes', async (
   await startEditing(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
-  await clickToolbarCommand(page, 'recalculate');
+  await recalculate(page);
   await showGantt(page);
 
   await durationCell(page).dblclick();
@@ -208,7 +207,7 @@ test('Escape discards, so a mistyped cell writes nothing', async ({ page }) => {
   await startEditing(page);
   await useEightHourCalendar(page, orgSlug);
   await seedActivities(page, orgSlug, 3);
-  await clickToolbarCommand(page, 'recalculate');
+  await recalculate(page);
   await showGantt(page);
 
   const before = (await readActivity(page, orgSlug, 'Seeded 0')).durationMinutes;
@@ -234,7 +233,7 @@ test('F2 opens a cell from the keyboard, and the name it writes is stored', asyn
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await clickToolbarCommand(page, 'recalculate');
+  await recalculate(page);
   await showGantt(page);
 
   // Focus a row the way a keyboard planner does, then enter cell mode. The unit suite proves F2

@@ -4278,3 +4278,190 @@ unsaved changes."` — a comma list with no "and", delivered as one sentence wit
 `shouldBlockFn` is **never called** on `page.goBack()` while the guard is mounted and the URL does
 not change — so something other than this guard reverts the pop. Recorded rather than claimed
 (ADR-0108 D7).
+
+---
+
+## #182 — The deck's folded groups are unreachable by any journey
+
+_Filed 2026-08-24 with ADR-0109 M2._
+
+`Deck` renders four captioned groups that a reader can fold, and a folded group's items are absent
+from the DOM. **Nothing exercises that path.** Every Playwright suite starts from a fresh profile,
+the fold state lives in `localStorage` under `schedulepoint-deck-folds`, and no journey writes it —
+so every run drives the all-open case and the folded one is dark.
+
+`revealToolbarCommand` in `e2e-support/toolbar.ts` is where the answer belongs (its docblock says
+so) and it is currently a straight `getByRole` because the width ladder it was written for is gone.
+Its `⋯` branch is kept as the shape that would serve a folded group, not as live code.
+
+**Why this is not urgent and is still worth writing down.** A fold is a deliberate act by a reader
+who then knows the group is folded, so the failure mode is not silent — unlike the ladder, which
+folded commands away at widths nobody had measured. What is untested is whether a _keyboard_ reader
+can get back to a folded group's contents, and whether the roving `tabindex` stays coherent across a
+fold. Both are asserted at unit level (`Deck.test.tsx`) and neither has been driven in a browser.
+
+Cost: one journey that folds a group, tabs through the strip, and unfolds it.
+
+---
+
+## #183 — A journey that seeds through the API must tell the client itself
+
+_Filed 2026-08-24 with ADR-0109 M5, from the estate sweep._
+
+Several support layers write plans, activities and links straight to the REST API with
+`page.evaluate` — much faster than driving the UI, and correct — and then relied on **a later
+`Recalculate` press** to invalidate the open page's queries. Nobody wrote that reliance down; it was
+a side effect of a mutation, and it worked for as long as that control was offered unconditionally.
+
+ADR-0109 D3 made it conditional, and six `e2e-gantt-editing` specs opened a Gantt with no rows in
+it. `e2e-gantt/support.ts` now reloads at the point of the out-of-band write, which is the idiom
+`e2e-workspace-chrome/support.ts` already used with the same one-line reason.
+
+**A second, sharper form of the same mistake was found in the product, not the tests.** The status
+bar's own staleness rule first asked the **schedule summary** for the plan's activity count — and
+that query is invalidated by a **recalculation**, not by an edit. So on a plan whose summary was
+fetched while it was empty, adding two activities left the count at 0 for good: the bar published
+"the schedule is current" on `data-schedule-state` while its own `Finish` fact, read from the same
+stale summary, said `Not calculated`. Two halves of one row disagreeing. It reads the client's
+activity rows now — the ones the reader is looking at — so no cache can go stale relative to the
+screen. **The lesson generalises past the tests: ask the query that the edit invalidates.**
+
+**What is left is an audit rather than a defect.** The sweep proves today's estate green, so no other
+suite is currently relying on it — but "no suite relies on it today" is a fact about today, and the
+next API-seeding helper will be written by copying one of the existing ones. The candidates are the
+nine support files that POST through `page.evaluate`; each should either reload or say in a comment
+why its caller does not need it to.
+
+Cost: one pass over nine files. There is no gate for this and a structural one looks unpromising —
+"does this helper's caller later observe what it wrote" is not a property of a file.
+
+---
+
+## #184 — The bulk-delete focus restoration is a race, and it failed once under load
+
+_Filed 2026-08-24 with ADR-0109 M5 as **not reproduced**. **Closed the same day, reproduced under
+load and hardened** — the update is below._
+
+`e2e-multi-select`'s "a bulk delete is ONE undo step" asserts `expect(list).toBeFocused()` after a
+bulk delete. It failed once, in a 35-suite sweep, and **passed on its own immediately afterwards**.
+
+The assertion is not decorative: the workspace's undo accelerator is a React `onKeyDown` on the
+workspace root, so focus landing on `<body>` makes Ctrl+Z reach nothing. `focusListboxAfterModal`
+(`TsldPanel.tsx:686`) exists because that already shipped once, and its docblock records the cause —
+a native `<dialog>` restores focus to the element that opened it, and when that element has itself
+unmounted (the bulk bar's Delete button, once the selection is gone) the browser lands on `<body>`
+and a synchronous `focus()` from the handler is silently undone a moment later. The fix was **one**
+`requestAnimationFrame`, i.e. a race won by a margin nobody has measured.
+
+**The leading hypothesis is my own change and it is UNVERIFIED.** `usePlanAutoRecalc` was
+deliberately render-free — its docblock says "all burst state is in refs" — and ADR-0109 D3 added
+two pieces of React state to it, so `notify()` now causes a render at exactly the moment of the
+delete where it never did before. An extra render plausibly narrows the rAF's margin. Plausibly.
+The alternative is that the sweep's machine load did it, which is what a single-frame race looks
+like on a loaded runner either way.
+
+**Nothing was changed on that hypothesis**, because ADR-0064's rule is that an unreproduced report
+is closed unreproduced rather than fixed, and because twice in this same session a plausible cause
+turned out to be the wrong one.
+
+What would settle it, in order of cost: instrument `focusListboxAfterModal` to record whether the
+first frame won, and run the suite under load; if it loses, replace the single frame with a bounded
+self-verifying retry — check `document.activeElement` and try again next frame, up to a small cap —
+which converts the race into a check and cannot make the winning case worse.
+
+**UPDATE, same day — reproduced, and the second half of that sentence is what shipped.** A second
+35-suite sweep failed the identical assertion at the identical line, and the suite passed on its own
+again immediately afterwards. Two failures under load, two passes in isolation, is a pattern rather
+than an event: a single-frame race losing on a busy runner.
+
+`focusListboxAfterModal` now asks whether it won instead of assuming — focus, compare
+`document.activeElement`, try again next frame, bounded at five frames (~80 ms). `then` fires
+exactly once whether the retry succeeds or the cap is reached, because the deletion announcement
+must not be spoken twice and must still be spoken if focus never lands, or a planner loses the
+confirmation as well as the focus.
+
+**What was NOT done, and why it is worth recording:** the leading hypothesis for the narrowed margin
+— that ADR-0109 D3 added React state to a deliberately render-free `usePlanAutoRecalc`, so `notify()`
+now renders where it did not — is still unverified, and no attempt was made to revert it. The
+hardening fixes the class regardless of which change narrowed the margin, which is the right shape
+of fix for a race whose cause is uncertain: it cannot make the winning case worse, and it removes
+the failure mode rather than one of its possible causes.
+
+---
+
+## #185 — The command deck is 182 px tall, and nobody measured it before building it
+
+_Filed 2026-08-24 with ADR-0109. **Measured, cause not yet established.** This is the epic's own
+premise landing on it._
+
+`measure-toolbar/vertical-stack` on a populated plan with the pen held, after the redesign:
+
+| band                 | before | after      |
+| -------------------- | ------ | ---------- |
+| **above the canvas** | 135 px | **357 px** |
+| the command strip    | 44 px  | **182 px** |
+| app header row       | 0 px   | 56 px      |
+| identity row         | 28 px  | 28 px      |
+
+Canvas height falls to **284 px at 1440×960** and **224 px at 1280×900**.
+
+**The header row is only 56 of the 222 px added.** The deck is 182, and that is the finding: the
+wrap solved the overflow the product owner complained about and spent four times the vertical to do
+it. Their original words were that "the 6 tool bars take up a lot of space" — this makes that worse
+in the other dimension.
+
+**ADR-0090 and ADR-0091 both record this project building a command surface and measuring it
+afterwards; ADR-0109 did it again.** M0 of both those epics exists precisely because a design
+written without a shell is arithmetic over class names. This epic had a mockup at 1646 and no
+vertical measurement of the built thing until after it shipped to the branch.
+
+**The cause is NOT established and the obvious arithmetic is suspect.** "34 stacked buttons over
+four cards must wrap to two lines" is a guess, and it is contradicted by the figure being
+**identical at 1920 and 1280** — a `flex-wrap` container should reflow between those. A probe
+written to answer this returned nulls for `[role="toolbar"][aria-label="Plan commands"]` on a
+freshly-created plan while `vertical-stack` finds it, so the two harnesses disagree about when the
+deck exists; that discrepancy is itself worth resolving first. The probe was deleted rather than
+committed reporting nulls.
+
+**The likely lever reverses an approved decision, which is why it is filed rather than taken.**
+Mockup decision 1 is stacked buttons — icon above a 9.5 px label — and un-stacking them is the
+single biggest term in the height. That is the product owner's call, and it wants the measurement
+and a recommendation put to them, not a unilateral revert.
+
+**`e2e-toolbar` line 134 is a symptom of this, not a separate defect.** The activities panel's
+`effectiveMax` is `max(140, bodyHeight − 240)`, so once the chrome takes 357 px the panel is pinned
+at its 140 px minimum and a keyboard shrink step has nowhere to go. Fixing the height fixes the
+test; changing the test would be hiding the finding.
+
+---
+
+## #186 — WCAG 2.5.8 lost its only automated cover when the fit gate was deleted
+
+_Filed 2026-08-24 with ADR-0109 M5. The product passes; the **gate** is gone._
+
+ADR-0090 M5 established that **axe cannot see target size**: `target-size` is tagged `wcag22aa`,
+every scan in this estate requests `wcag2a`/`wcag2aa`, and the rule ships `enabled: false` besides.
+"The axe scan is green" was true and meaningless for 2.5.8. What covered it instead was
+`e2e-toolbar-fit`'s `elementFromPoint` sweep, which asserted every command was pointer-reachable at
+eight widths — and ADR-0109 D1 **deleted that journey with the ladder it tested**, correctly: it
+asserted a row that no longer exists, and a gate whose subject is gone does not become a safety net
+by continuing to pass.
+
+**The deletion was right and it left a hole.** Nothing now checks that a command's target clears
+24×24.
+
+**Measured, so this is a missing gate rather than a live defect.** The deck's controls at 1646 are
+40 px tall and 51–69 px wide (`measure-output/m4-vertical-stack.json`), and the group captions —
+which are real controls, being fold toggles — stretch to the card height at 54 px rather than the
+19 px they were as a full-width row. Everything clears the floor with room to spare.
+
+**Why it is not fixed here.** The obvious move is to lift the `elementFromPoint` sweep out of the
+deleted journey into one that survives. That is a new Playwright step and a shared gate, which
+ADR-0105 says makes it spec work rather than a tech-debt row. It is also genuinely easier now: a
+surface that wraps has no demotion to model, so the sweep is "every `[data-toolbar-item]` clears
+24×24 and is hit-testable", with no width ladder to drive.
+
+**The trap for whoever writes it**, from ADR-0090 M5's own findings: sweep the item's _focusable
+control_, not `[data-toolbar-item]` on a wrapper — that is how the split-button caret went unmeasured
+at 23×36 — and assert pointer reachability rather than overhang, because a control shrunk to zero
+width has zero overhang and is still in the DOM.

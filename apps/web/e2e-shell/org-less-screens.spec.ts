@@ -66,8 +66,8 @@ test('an organisation-scoped route still gets the whole navigator', async ({ pag
   // assertion: a suite that only proves the absence passes equally well against a shell that
   // withholds the Explorer everywhere, and could not then tell "the defect is fixed" from "the
   // capability is gone".
-  await expect(page.getByRole('button', { name: 'Project Explorer' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Project Explorer' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hide Project Explorer' })).toBeVisible();
   await expect(
     page.getByRole('navigation', { name: 'Organisation' }).getByRole('link', { name: 'Clients' }),
   ).toBeVisible();
@@ -83,22 +83,27 @@ test('an organisation-scoped route still gets the whole navigator', async ({ pag
 /**
  * **The persisted drawer preference must survive a trip through an org-less screen.**
  *
- * `useResizablePanelPrefs` stores `collapsed` in `localStorage`, and the shell's own close paths
- * write it (`app-shell.tsx` `selectSubject` / `closeDrawerPanel`). A fix that suppressed the
- * Explorer by COLLAPSING the drawer rather than by not rendering it would pass every assertion
- * above and quietly rewrite a reader's preference every time they opened their account settings —
- * the panel would then be shut when they came back to their plan, with nothing on screen saying
- * why. Both directions are asserted, because a rule that only preserves "open" is satisfied by a
- * shell that never closes anything.
+ * `useResizablePanelPrefs` stores `collapsed` in `localStorage`, and the shell's own paths write it.
+ * A fix that suppressed the Explorer by FOLDING it rather than by not rendering it would pass every
+ * assertion above and quietly rewrite a reader's preference every time they opened their account
+ * settings — the panel would then be shut when they came back to their plan, with nothing on screen
+ * saying why. Both directions are asserted, because a rule that only preserves "open" is satisfied
+ * by a shell that never closes anything.
+ *
+ * **The subject moved and the property did not** (workspace redesign M3-T1). This used to be about
+ * the trailing context drawer, whose subject was the Explorer; the Explorer is a docked column with
+ * its own preference now, so the same trap has a new key and a new pair of controls — which is
+ * exactly why it is retargeted rather than deleted.
  */
-test('a trip through an org-less screen leaves the drawer preference alone, either way', async ({
+test('a trip through an org-less screen leaves the Explorer preference alone, either way', async ({
   page,
 }) => {
   const stamp = Date.now();
   await signUpAndStop(page, stamp);
   await createOrganisation(page, stamp);
 
-  const explorer = page.getByRole('button', { name: 'Project Explorer' });
+  const fold = page.getByRole('button', { name: 'Hide Project Explorer' });
+  const spine = page.getByRole('button', { name: 'Show Project Explorer' });
   const panel = page.getByRole('navigation', { name: 'Project Explorer' });
 
   // --- open stays open
@@ -107,12 +112,12 @@ test('a trip through an org-less screen leaves the drawer preference alone, eith
   await page.goBack();
   await expect(panel).toBeVisible();
 
-  // --- closed stays closed
-  await explorer.click();
+  // --- folded stays folded
+  await fold.click();
   await expect(panel).toHaveCount(0);
   await openFromAccountMenu(page, 'Your account');
   await page.goBack();
-  await expect(explorer).toBeVisible();
+  await expect(spine).toBeVisible();
   await expect(panel).toHaveCount(0);
 });
 

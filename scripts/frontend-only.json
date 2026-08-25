@@ -1,7 +1,7 @@
 {
-  "active": false,
-  "epic": null,
-  "spec": null,
-  "reason": "No frontend-only epic is in flight. The gantt-editing declaration was left ACTIVE after that epic released as web-v0.92.0 — this file's own docblock says 'the epic's own gate pass removes it', and ADR-0095's M6 pass did not. It first mattered on 2026-08-18, when it blocked ADR-0096, an epic that legitimately changes apps/api/ and whose parity argument is that the CPM engine is not imported at all. A gate outliving its subject is the ADR-0058 shape one layer up: this one did not go quiet, it went wrong about a different epic. Set active:true with an epic and a reason when the next frontend-only epic starts, and remove it in that epic's gate pass.",
-  "guarded": ["apps/api/"]
+  "active": true,
+  "epic": "workspace-redesign",
+  "spec": "docs/specs/workspace-redesign/",
+  "reason": "ADR-0109's parity argument is that the CPM engine, the REST API and the database are untouched — apps/web only, which is what makes the whole redesign revertible by one commit. That claim was made in four commit messages, an ADR and this repository's operating manual before anybody armed the gate that proves it; it was verified by hand at M5 (`git diff --name-only origin/main...HEAD -- apps/api packages` is empty) and armed here so the remaining milestones cannot quietly break it. A hand-verified claim is exactly the kind ADR-0058 says to replace with a check. Remove it in this epic's closing pass — the previous declaration outlived its epic by weeks and went wrong about a different one.",
+  "guarded": ["apps/api/", "packages/"]
 }

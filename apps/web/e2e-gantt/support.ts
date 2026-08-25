@@ -150,6 +150,52 @@ export async function seedActivities(
     },
     { org: orgSlug, id: planId },
   );
+
+  /**
+   * **Tell the client what just happened out of band.**
+   *
+   * Everything above went straight to the REST API, so the open page knows about none of it: not
+   * the activities, not the recalculation. That did not matter while `Recalculate` was an
+   * unconditional toolbar command — every journey pressed it next, the press was a real mutation,
+   * and invalidating the plan's queries was a side effect the suites had come to rely on without
+   * anyone writing it down.
+   *
+   * ADR-0109 D3 made that control conditional: it appears only when the schedule is behind the
+   * plan, and a client that believes the plan is empty believes it is current. So the shared
+   * `recalculate()` helper correctly pressed nothing, and six `e2e-gantt-editing` specs opened a
+   * Gantt with no rows in it.
+   *
+   * A reload is the established idiom here (`e2e-workspace-chrome/support.ts` does exactly this,
+   * with the same one-line reason) and it belongs at the point of the out-of-band write rather than
+   * in a helper that has no way to know one happened.
+   *
+   * **`ensurePen` after it, and that is not belt-and-braces.** A reload drops this session's hold on
+   * the plan lock, and every caller here seeds while holding it — so without this the next write
+   * gets a 423, which is exactly what the first version of this change produced (`create summary:
+   * 423`, five specs). `ensurePen` is idempotent by construction: it reads what the toolbar says
+   * rather than assuming, which its own docblock added for this same reload case.
+   */
+  await syncClient(page);
+}
+
+/**
+ * **Make the open page aware of a write that went straight to the REST API.**
+ *
+ * Named rather than inlined because it is a rule, not a step: **a journey that writes through the
+ * API tells the client itself** (`docs/TECH_DEBT.md` #183). Suites here seed activities and links
+ * with `page.evaluate` — much faster than driving the UI, and correct — and the open page knows
+ * about none of it. That did not matter while `Recalculate` was an unconditional toolbar command,
+ * because every journey pressed it next and the press invalidated the plan's queries as a side
+ * effect nobody had written down. ADR-0109 D3 made that control conditional, and a client that
+ * believes the plan is empty believes it is current.
+ *
+ * The reload is the established idiom (`e2e-workspace-chrome/support.ts`); the `ensurePen` after it
+ * is the part that is easy to miss, because a reload drops this session's hold on the plan lock and
+ * the next write then 423s several specs later, a long way from the cause.
+ */
+export async function syncClient(page: Page): Promise<void> {
+  await page.reload();
+  await ensurePen(page);
 }
 
 /** Switch the workspace to the Gantt and wait for the grid. */

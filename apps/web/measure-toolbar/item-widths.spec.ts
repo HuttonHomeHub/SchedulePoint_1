@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **M2-T0** — the per-item widths the consolidation must be sized against.
@@ -130,6 +130,7 @@ async function itemWidths(page: Page, ariaLabel: string): Promise<unknown> {
 }
 
 test('M2-T0 — per-item widths on a populated plan', async ({ page }) => {
+  clearMeasurement('m2-item-widths');
   const stamp = Date.now();
 
   await page.setViewportSize({ width: 2304, height: 1080 });

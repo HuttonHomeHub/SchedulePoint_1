@@ -9,9 +9,10 @@ import {
   openPlanId,
   seedActivities,
   showGantt,
+  syncClient,
   startEditing,
 } from '../e2e-gantt/support';
-import { clickToolbarCommand } from '../e2e-support/toolbar';
+import { recalculate } from '../e2e-support/toolbar';
 
 /**
  * **M4 — the logic overlay, driven against a real plan with real dependencies.**
@@ -68,7 +69,10 @@ async function planWithLink(page: Page): Promise<string> {
   );
   if (failure !== null) throw new Error(failure);
 
-  await clickToolbarCommand(page, 'recalculate');
+  // The links above went straight to the API, so the open page has not seen them — see
+  // `syncClient`'s docblock and `docs/TECH_DEBT.md` #183.
+  await syncClient(page);
+  await recalculate(page);
   return orgSlug;
 }
 

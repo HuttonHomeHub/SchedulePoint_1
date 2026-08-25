@@ -137,12 +137,18 @@ beforeEach(() => {
  * `docs/TECH_DEBT.md` #156 carries the mechanism's two exits.
  */
 describe('a route asking the shell to show its subject', () => {
-  it('opens the drawer on the registered subject, so the entry point is not the rail button alone', () => {
+  it("opens the drawer on the registered subject, which is the route's only entry point", () => {
     renderShell();
-    // Before: the drawer is on the Explorer and the route is in modal chrome.
-    expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
+    // Before: no drawer at all, and the route in modal chrome. The Explorer used to be the drawer's
+    // resting subject; since M3-T1 it is a docked column, so an unregistered drawer is simply
+    // absent — an `auto` grid column with no child, costing the stage nothing.
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
     expect(screen.getByTestId('chrome')).toHaveTextContent('modal');
     expect(screen.queryByText('Activity fields')).not.toBeInTheDocument();
+    // The docked Explorer is beside it throughout and is NOT what opens or closes here — asserted,
+    // because the two panels now live on opposite edges with separate persisted state and a
+    // regression that folded one when the other opened would look plausible on screen.
+    expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
 
@@ -151,7 +157,7 @@ describe('a route asking the shell to show its subject', () => {
     expect(screen.getByTestId('chrome')).toHaveTextContent('drawer');
     expect(screen.getByText('Activity fields')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Excavate' })).toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Project Explorer' })).toBeInTheDocument();
   });
 
   it('announces the panel it opened, and only when it opens one', async () => {
@@ -182,9 +188,11 @@ describe('a route asking the shell to show its subject', () => {
 
   it('expands a drawer the planner had closed', () => {
     renderShell();
-    // Close it first, the way a planner does.
-    fireEvent.click(screen.getByRole('button', { name: 'Project Explorer' }));
-    expect(screen.queryByRole('navigation', { name: 'Project Explorer' })).not.toBeInTheDocument();
+    // Close it the way a planner does — from its own control, which is the only one there is now
+    // that the rail's subject buttons are gone.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close context drawer' }));
+    expect(screen.queryByText('Activity fields')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
     expect(screen.getByText('Activity fields')).toBeInTheDocument();
@@ -203,28 +211,37 @@ describe('a route asking the shell to show its subject', () => {
 });
 
 describe('closing the drawer', () => {
-  it('puts focus on the rail button rather than dropping it to the body', () => {
-    // WCAG 2.4.3. The Close button lives inside the subtree the collapse unmounts, so the browser
-    // drops focus to `<body>` — which also silently disables every keyboard accelerator bound on
-    // the workspace root (the ADR-0080 M2 finding, in its third costume).
+  /**
+   * **The destination changed and the requirement did not** (M3-T2).
+   *
+   * WCAG 2.4.3. The Close button lives inside the subtree the collapse unmounts, so the browser
+   * drops focus to `<body>` — which also silently disables every keyboard accelerator bound on the
+   * workspace root (the ADR-0080 M2 finding, in its third costume).
+   *
+   * It used to land on the rail button that opened the panel. There is no rail: the drawer is no
+   * longer a switcher over two subjects, so the control that opened it belongs to whichever route
+   * registered the subject and the shell has no handle on it. `<main>` is the honest destination —
+   * always present, `tabIndex={-1}` for the skip link, and the same last rung the old lookup fell
+   * back to, promoted from an unreachable guard to the rule.
+   */
+  it('puts focus on main rather than dropping it to the body', () => {
     renderShell();
     fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
-    const railButton = screen.getByRole('button', { name: 'Activity details' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Close context drawer' }));
 
     expect(screen.queryByText('Activity fields')).not.toBeInTheDocument();
-    expect(railButton).toHaveFocus();
+    expect(screen.getByRole('main')).toHaveFocus();
     expect(document.body).not.toHaveFocus();
   });
 
-  it('puts focus on the rail button when Escape closes it', () => {
+  it('puts focus on main when Escape closes it', () => {
     renderShell();
     fireEvent.click(screen.getByRole('button', { name: 'Edit activity' }));
-    const railButton = screen.getByRole('button', { name: 'Activity details' });
 
     fireEvent.keyDown(screen.getByRole('main'), { key: 'Escape' });
 
-    expect(railButton).toHaveFocus();
+    expect(screen.queryByText('Activity fields')).not.toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveFocus();
   });
 });

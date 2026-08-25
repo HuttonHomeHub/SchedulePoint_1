@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **M0-T2 — what does the toolbar's search icon actually do?**
@@ -127,6 +127,7 @@ async function probeSearchIcon(page: Page): Promise<unknown> {
 }
 
 test('M0-T2 — the search icon: absent, zero-box, or covered?', async ({ page }) => {
+  clearMeasurement('m0-search-icon');
   const stamp = Date.now();
 
   await page.setViewportSize({ width: 1920, height: 1080 });

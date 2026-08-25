@@ -11,7 +11,7 @@ import {
   startEditing,
 } from '../e2e-gantt/support';
 import { activityEditor } from '../e2e-support/activity-editor';
-import { clickToolbarCommand } from '../e2e-support/toolbar';
+import { recalculate } from '../e2e-support/toolbar';
 
 /**
  * **Every remaining action the Gantt's object bar offers, driven from a Gantt selection.**
@@ -41,7 +41,7 @@ async function ganttPlanWithSelection(page: Page, stamp: number): Promise<string
   await createPlan(page, 'Programme');
   await startEditing(page);
   await seedActivities(page, orgSlug, 3);
-  await clickToolbarCommand(page, 'recalculate');
+  await recalculate(page);
   await showGantt(page);
   await ganttRow(page, 'Seeded 0').click();
   await expect(page.getByRole('toolbar', { name: /Actions for/ })).toBeVisible();

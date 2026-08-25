@@ -16,6 +16,7 @@ const PALETTE: TsldPalette = {
   gridLineDay: '#3a3a3a',
   gridLineMonth: '#111111',
   gridLineYear: '#565656',
+  laneRule: '#9c9c9c',
   edge: '#333',
   bar: '#44f',
   critical: '#f00',
@@ -133,7 +134,25 @@ function paint(gridTiers: boolean, view: Viewport) {
     ...(gridTiers ? { gridTiers: true } : {}),
   };
   paintScene(ctx, scene, view, SIZE, PALETTE, 1);
-  return { ...ctx.calls, passes: ctx.passes };
+  return { ...ctx.calls, passes: gridPasses(ctx.passes) };
+}
+
+/**
+ * The grid's own passes, told apart from every other stroked layer by **stroke style**.
+ *
+ * Added with the lane hairlines (workspace redesign M4-T2), which stroke one batched pass of their
+ * own immediately after this layer. Filtering is better than re-baselining a count: a count says
+ * "there are now four passes" and stops distinguishing which four, so the next layer to arrive
+ * would be absorbed silently — and noticing is this gate's entire job.
+ */
+function gridPasses(passes: readonly PassSnapshot[]): PassSnapshot[] {
+  const grid = new Set<string>([
+    PALETTE.gridLine,
+    PALETTE.gridLineDay,
+    PALETTE.gridLineMonth,
+    PALETTE.gridLineYear,
+  ]);
+  return passes.filter((pass) => grid.has(pass.strokeStyle));
 }
 
 // A viewport above DAY_GRID_MIN_PX (6), so day/month/year boundaries all fall within the visible span.
@@ -141,10 +160,18 @@ const VIEW: Viewport = { pxPerDay: 10, originX: 0, originY: 0 };
 
 describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F5)', () => {
   it('flag-off strokes the grid in exactly one batched pass', () => {
+    // **Two passes, not one, and the second is not the grid's** (workspace redesign M4-T2). The lane
+    // hairlines are a layer of their own, drawn in one batch immediately after this one, and these
+    // counters are scene-wide rather than layer-scoped. The figure is re-baselined UPWARD here with
+    // the reason recorded rather than the assertion loosened to `toBeLessThanOrEqual`, which would
+    // stop this gate noticing the next layer that arrives — and noticing is its whole job.
+    //
+    // What it still pins exactly is the grid's own shape: ONE batch for the flag-off single tier,
+    // and the +2 the three tiers cost, both asserted as differences below.
     const off = paint(false, VIEW);
-    expect(off.beginPath).toBe(1);
-    expect(off.stroke).toBe(1);
-    expect(off.strokeStyleSets).toBe(1);
+    expect(off.beginPath).toBe(2);
+    expect(off.stroke).toBe(2);
+    expect(off.strokeStyleSets).toBe(2);
   });
 
   it('flag-on adds exactly two extra beginPath/stroke/strokeStyle sets (three tiers, not one)', () => {
@@ -160,7 +187,9 @@ describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F
     const on = paint(true, VIEW);
     expect(on.moveTo).toBe(off.moveTo);
     expect(on.lineTo).toBe(off.lineTo);
-    // Sanity: every gridline call is one moveTo + one lineTo.
+    // Sanity: every line is one moveTo + one lineTo. Since M4-T2 this total includes the lane
+    // hairlines, which is why the assertion is a DIFFERENCE between two paints of the same scene:
+    // both carry the same lane count, so it cancels and the tiers are still what is measured.
     expect(off.moveTo).toBe(off.lineTo);
     expect(off.moveTo).toBeGreaterThan(0);
   });
@@ -175,9 +204,11 @@ describe('gridline tiers — draw-budget gate (tsld-toolbar-canvas-refinements F
       gridTiers: true,
     };
     paintScene(ctx, scene, VIEW, SIZE, PALETTE, 1);
-    expect(ctx.calls.beginPath).toBe(0);
-    expect(ctx.calls.stroke).toBe(0);
-    expect(ctx.calls.moveTo).toBe(0);
+    // **Asserted by stroke style, not by a count** (M4-T2). Every gridline toggle is off, so the
+    // tier layer must draw nothing — but the lane hairlines have no toggle (they are the surface's
+    // structure, not one of its lenses), so a raw `beginPath === 0` would now be measuring the wrong
+    // thing. `gridPasses` answers the question this case actually asks: did any TIER draw?
+    expect(gridPasses(ctx.passes)).toHaveLength(0);
   });
 
   it('draws day → month → year in that order, year at lineWidth 2 on an INTEGER x, day/month at lineWidth 1 on a HALF-pixel x', () => {

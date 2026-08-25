@@ -207,12 +207,19 @@ describe('TSLD toolbar registry (two-row)', () => {
     expect(spies.toggleAddActivity).toHaveBeenCalledOnce();
   });
 
-  it('disables Recalculate when the model says it cannot recalc', () => {
+  it('carries no Recalculate command at all — it moved to the status bar (M3-T5)', () => {
+    // The case this replaces asserted that Recalculate SHADED correctly when the plan could not be
+    // recalculated. That shading still exists and is still asserted, one surface along, in
+    // `plan-status-bar.test.tsx` — what changed is where the control lives, not whether it explains
+    // itself. Auto-recalculation has fired on every structural edit since ADR-0032 M3, so on a
+    // healthy plan this command re-ran a calculation that had already run.
+    //
+    // Asserted over the WHOLE registry rather than over the rendered strip: the rendered form would
+    // pass equally if the item came back on another row, or behind a menu, which is exactly the
+    // quiet return this case exists to catch.
+    expect(buildTsldToolbarItems().some((item) => item.id === 'recalculate')).toBe(false);
     renderRows(ctx({ canRecalc: false }));
-    expect(screen.getByRole('button', { name: 'Recalculate' })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(screen.queryByRole('button', { name: 'Recalculate' })).not.toBeInTheDocument();
   });
 
   it('drives the plan-analysis seams from the Analysis trigger (Baselines)', () => {

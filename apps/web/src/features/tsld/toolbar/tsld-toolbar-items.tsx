@@ -31,7 +31,6 @@ import {
   Plus,
   Printer,
   Redo2,
-  RefreshCw,
   Rows3,
   Search,
   Share2,
@@ -2622,92 +2621,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // than being duplicated. `selection-duplication.structural.test.ts` was verified RED against the
     // two-copy state first. Its four-condition gate is now `clearVisualPlacementGate` in
     // `conflict-remedy.ts`, shared by the bar's item and the remedy so they cannot drift.
-    // Recalculate + Undo/Redo close the authoring cluster (moved here from the Object/History groups so
-    // the pen-gated set is contiguous). Recalculate is enabled only with the pen and when not in flight.
-    {
-      id: 'recalculate',
-      group: 'tools',
-      row: 'strip',
-      tier: 1,
-      /**
-       * **`showLabel: 'always'` is deliberately absent, and it is what makes the rank below work.**
-       *
-       * M5 ranked this 95 so a planner would not have to open a menu for the command that makes the
-       * diagram true — and then M10 measured the shipped row and found it in the `⋯` at 1646 and
-       * 1920 while it was **inline at 1280**, which is backwards. The rank was not the problem: at
-       * the narrow band every other plain button goes icon-only at ~40 px, and this one could not,
-       * so a labelled 163 px command was cheap relative to a row of icons and ruinous relative to a
-       * row of words. Pinning its label bought a name at two widths and lost the command at three.
-       *
-       * So it takes the ordinary label policy and keeps the rank: the ladder drops its word before
-       * it drops the command, which is the right way round for something whose icon already spins
-       * while it runs. The read-out that says a recalculation is happening lives in the status bar
-       * now (ADR-0099 D5), so nothing depends on this label being present.
-       *
-       * **Measured before and after, and it is an improvement rather than a fix.** Inline at 1280
-       * only → inline at 1920 and 1280. At **1646 it is still in the `⋯`**, and the reason is not
-       * this item: the row there is 1582 px and every other inline control is a pinned `render`
-       * item wearing its label, so the demotable budget is zero however cheap this one is. That is
-       * `docs/TECH_DEBT.md` #147 — eleven pinned items sharing one budget — surfacing at a WIDE
-       * width because labels are on, rather than at a narrow one. Recorded rather than claimed
-       * fixed: the sentence above would otherwise be the third consecutive width expectation in
-       * this register contradicted by its own measurement.
-       *
-       * TECH_DEBT #61's "its name is the affordance" still holds for the four rail modes, where
-       * there is no row to run out of.
-       */
-      order: 7,
-      /**
-       * **Ranked by Graphite M5, and the reason it needed ranking is the finding.**
-       *
-       * `priority` defaults to `-order`, so this command's rank was **−7 because it registered
-       * eighth**, not because anyone judged it eighth. On ADR-0031's two rows that never mattered:
-       * Row 2 had room for the whole authoring cluster, so an unranked field is indistinguishable
-       * from a ranked one. Merging the rows makes every command compete on one budget, and the
-       * artefact starts deciding what a planner can reach — `Recalculate` fell into the `⋯` at
-       * **every width from 768 to 2133**, behind `Legend` and `Resource view`, and TWO journeys
-       * (`e2e-edit`, `e2e-toolbar`) timed out clicking it within minutes of each other.
-       *
-       * 95: above the lenses at 60 and the whole authoring tail, below the viewport cluster at 100
-       * and `next-conflict` at 110. It earned that on two grounds — it is the command that makes
-       * the diagram TRUE after an edit, and its spinning icon was the only visible cue in the
-       * product that a recalculation is running at all.
-       *
-       * **Re-read at ADR-0099 M7, as this docblock instructed, and the rank stands on one ground.**
-       * The status bar now carries the running state, so the second ground is gone — the spinner
-       * here is no longer the only cue and no longer the reason. The first is enough on its own: a
-       * command that makes the schedule correct after an edit is not one to bury, and dropping the
-       * rank returns it to the `⋯` at every width, which is where `e2e-edit` and `e2e-toolbar` both
-       * timed out on it in M5. Recorded rather than silently kept, because a justification that has
-       * lost half its support and still reads as two grounds is the drift this register is about.
-       */
-      priority: 95,
-      label: 'Recalculate',
-      // In flight the icon spins — the same `Loader2 … animate-spin` idiom the export items above
-      // use, so this is an established pattern rather than a new one. The spin is the *only* cue a
-      // `prefers-reduced-motion` user loses (the global rule reduces it to 0.01 ms), which is why
-      // `isBusy` (→ `aria-busy`) and the "Recalculating…" disabled reason below carry the same fact
-      // in two motion-independent channels. Covers BOTH triggers: `recalcPending` is the shared
-      // coalescer's `isPending` (ADR-0032 M3), so a debounced auto-recalc spins it too.
-      icon: (ctx) =>
-        ctx.recalcPending ? (
-          <Loader2 aria-hidden="true" className="size-4 animate-spin" />
-        ) : (
-          <RefreshCw className="size-4" />
-        ),
-      penGated: true,
-      isBusy: (ctx) => ctx.recalcPending,
-      isEnabled: (ctx) => ctx.canRecalc && !ctx.recalcPending,
-      // Explain the disabled state like the sibling authoring commands do, rather than a silent grey:
-      // in-flight (busy) vs. no pen (identical underlying cause to Add activity).
-      disabledReason: (ctx) =>
-        ctx.recalcPending
-          ? 'Recalculating…'
-          : ctx.canRecalc
-            ? undefined
-            : (ctx.scheduleRefusal('recalculate') ?? undefined),
-      onActivate: (ctx) => ctx.recalculate(),
-    },
+    // **Recalculate has LEFT the command surface** (workspace redesign M3-T5). It is not deleted as
+    // a capability: it moved to the status bar, where it appears only when the schedule is actually
+    // behind the plan. `design.md` §3's phrase for what it was here is exact — "a button pretending
+    // to be a status" — and the arithmetic backs it, because auto-recalculation has fired on every
+    // structural edit since ADR-0032 M3, so on a healthy plan this command re-ran a calculation that
+    // had already run. Its three docblocks of rank tuning (M5's 95, M7's re-read, M10's label
+    // measurement) went with it; a command that is offered only when it can change something needs
+    // no rank at all. `ctx.recalculate` and `ctx.canRecalc` stay on the context — the status bar's
+    // control calls the same function through the same gate.
+    // Undo / Redo close the pen-gated authoring cluster (ADR-0048 M3.2).
     // Undo / Redo close the pen-gated authoring cluster (ADR-0048 M3.2). Flag-off these are the
     // ADR-0031 "Coming soon" placeholders (byte-for-byte the current bar); flag-on they are the real
     // pen-gated commands, disabled from `canUndo`/`canRedo` with a dynamic accessible name.

@@ -39,6 +39,7 @@ const PALETTE: TsldPalette = {
   gridLineDay: '#3a3a3a',
   gridLineMonth: '#111111',
   gridLineYear: '#565656',
+  laneRule: '#9c9c9c',
   edge: '#333',
   bar: '#44f',
   critical: '#f00',
@@ -193,8 +194,28 @@ function corridorCrossings(path: readonly string[]): number[] {
  * head starts a new subpath, so the boundary is unambiguous rather than a count of points.
  */
 function linkPolyline(path: readonly string[]): string[] {
-  const second = path.findIndex((cmd, i) => i > 0 && cmd.startsWith('M'));
-  return second === -1 ? [...path] : path.slice(0, second);
+  // **Skip the lane hairlines first** (workspace redesign M4-T2). They are the surface's structure
+  // and have no toggle, so they are now the first subpaths in every recorded scene — and each is a
+  // full-width horizontal rule, identical between a flag-on and a flag-off paint. Taking "the first
+  // subpath" without this returned one of them, so the assertion compared a lane rule with itself
+  // and reported the routing flag as inert while it was working perfectly.
+  const subpaths: string[][] = [];
+  for (const cmd of path) {
+    if (cmd.startsWith('M')) subpaths.push([cmd]);
+    else subpaths[subpaths.length - 1]?.push(cmd);
+  }
+  const link = subpaths.find((sub) => !isLaneRule(sub));
+  return link ? [...link] : [];
+}
+
+/** A full-width horizontal rule at one y — the shape a lane hairline always has. */
+function isLaneRule(subpath: readonly string[]): boolean {
+  if (subpath.length !== 2) return false;
+  const [move, line] = subpath as [string, string];
+  const start = /^M([\d.]+),([\d.]+)$/.exec(move);
+  const end = /^L([\d.]+),([\d.]+)$/.exec(line);
+  if (!start || !end) return false;
+  return start[1] === '0.000' && start[2] === end[2];
 }
 
 /** The blocking bar's screen span: day 4 → day 8 exclusive-right at 12 px/day from origin 0. */

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { writeMeasurement } from './output';
+import { clearMeasurement, writeMeasurement } from './output';
 
 /**
  * **M1-T1** — attribute the overshoot before anything is changed.
@@ -130,6 +130,7 @@ async function frames(page: Page, ariaLabel: string, count: number): Promise<unk
 }
 
 test('M1-T1 — attribute the row overshoot to a mechanism', async ({ page }) => {
+  clearMeasurement('toolbar-attribution');
   const stamp = Date.now();
 
   await page.setViewportSize({ width: 2133, height: 1080 });

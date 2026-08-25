@@ -1,6 +1,151 @@
-import { CircleAlert, Loader2 } from 'lucide-react';
+import { CircleAlert, Loader2, RefreshCw } from 'lucide-react';
+import { useId } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { formatCalendarDate } from '@/lib/format-date';
+
+/**
+ * What the plan's schedule owes its reader — three states, and Recalculate is attached to the one
+ * that has a remedy (M3-T5).
+ *
+ * **Recalculate used to be a command on the toolbar, offered at every moment of every session.**
+ * Auto-recalculation has fired on every structural edit since ADR-0032 M3, so on a healthy plan
+ * that button did nothing a planner needed: it re-ran a calculation that had already run. It was a
+ * button pretending to be a status, which is `design.md` §3's own phrase for what this bar exists
+ * to fix. It now appears only where it can change something.
+ *
+ * The states are deliberately three rather than five. `no data date` is NOT one of them, because
+ * the bar already carries `Data date · Not set` two facts to the left and a second sentence saying
+ * the same thing in other words is the kind of redundancy a reader learns to skip. It arrives
+ * instead as a {@link ScheduleState.refusal} on the stale state, where it is actionable — attached
+ * to the control it explains rather than floating beside it.
+ */
+export type ScheduleState =
+  /** Everything a planner has done is in the computed dates. **Renders nothing at all.** */
+  | { kind: 'current' }
+  /**
+   * **The client does not yet know.** The schedule summary has not arrived, so whether the plan has
+   * ever been calculated is unanswerable — and answering it anyway is what this kind exists to stop.
+   *
+   * Without it the derivation fell through to `current`, so the bar PUBLISHED "up to date" during a
+   * window in which it was displaying `…` for every fact beside it: honest on screen and not on
+   * `data-schedule-state`. A journey read that attribute, pressed nothing, and asserted success
+   * while nothing had been computed — a green assertion proving the opposite of its name.
+   *
+   * Renders nothing, like `current`, because the facts already say `…`. It exists to be
+   * distinguishable, not to be seen.
+   */
+  | { kind: 'pending' }
+  /** A recalculation is in flight. */
+  | { kind: 'recalculating' }
+  /**
+   * The computed dates are behind the plan, and the reader can see how far.
+   *
+   * `edits` is a count rather than a flag for the reason `PlanAutoRecalc.pendingEdits` is: "1 edit"
+   * and "an afternoon of re-sequencing" are different facts and a reader acts on them differently.
+   * `failed` distinguishes *nobody has calculated this yet* from *calculating it did not work* —
+   * two states that look identical from the dates alone and want different sentences.
+   *
+   * `refusal`, when non-null, is why the reader may not recalculate: the pen, their role, or a
+   * missing data date. The control is **shaded with the reason, never hidden** (ADR-0082) — a
+   * planner who has just made an edit and cannot compute it is exactly the reader who needs to be
+   * told which of the three it is.
+   */
+  | { kind: 'stale'; edits: number; failed: boolean; refusal: string | null };
+
+/**
+ * A stable hook for the journeys, in this repository's established shape (`data-toolbar-item`,
+ * `data-plan-identity`, `data-tool-rail`).
+ *
+ * It exists because the three states are **not** all distinguishable by asking what is on screen:
+ * `current` renders nothing, and "renders nothing" is indistinguishable from "has not painted yet"
+ * by any point-in-time read — the trap `revealToolbarCommand`'s docblock records hitting on a slow
+ * machine. An attribute that is always present turns a race into a wait.
+ */
+export function scheduleStateAttr(state: ScheduleState): string {
+  return state.kind;
+}
+
+/**
+ * Derive {@link ScheduleState} from the four things that decide it.
+ *
+ * **Pure, exported and separately tested, because the bug was HERE and nothing could see it.** This
+ * was a `useMemo` inside `plan-workspace-toolbar.tsx` — a 1,600-line component whose own suite
+ * mounts it and reads the DOM — so the mapping had no test of its own, and removing the
+ * `pending` guard changed nothing in that suite while breaking a journey. A rule that decides what a
+ * control publishes should be checkable in isolation rather than through a mounted workspace.
+ *
+ * The ORDER of these tests is the decision:
+ *
+ * 1. `recalculating` outranks everything: a run in flight is about to answer the question, and
+ *    telling a planner the plan is behind while the request that fixes it is on the wire is true for
+ *    a few hundred milliseconds and useless for all of them.
+ * 2. `pending` — the summary has not arrived, so whether the plan has ever been calculated is
+ *    unanswerable. A failure or an outstanding edit still outranks it, because both are facts THIS
+ *    tab owns and neither needs the server to confirm them.
+ * 3. `current` requires the summary to be present AND to show a computed finish.
+ * 4. Everything else is `stale`, with the refusal derived from the same three terms
+ *    `usePlanAutoRecalc`'s own `enabled` predicate uses, in the same order, so the sentence cannot
+ *    disagree with the behaviour. `CANVAS_AUTHORING` is that predicate's fourth term and is
+ *    deliberately absent: it is on in every published image (ADR-0088 D1), so a sentence about it
+ *    could never reach a reader.
+ */
+export function deriveScheduleState({
+  isRecalculating,
+  pendingEdits,
+  failed,
+  activities,
+  canRecalculate,
+  refusalReason,
+  hasDataDate,
+}: {
+  isRecalculating: boolean;
+  pendingEdits: number;
+  failed: boolean;
+  /**
+   * The plan's activities **as the client holds them**, or `undefined` while that query is
+   * unresolved.
+   *
+   * **Deliberately NOT the schedule summary, and that distinction is the defect this parameter
+   * fixes.** The first version asked the summary for `activityCount` and `projectFinish` — and the
+   * summary query is invalidated by a **recalculation**, not by an edit. So on a plan whose
+   * summary was fetched while it was empty, adding two activities left `activityCount` at 0
+   * forever: `neverCalculated` was false, the state was `current`, and `e2e-toolbar` opened a
+   * diagram with no bars while the status bar said the schedule was up to date. The bar's own
+   * `Finish` fact read `Not calculated` at the same moment, from the same stale summary — the two
+   * halves disagreeing in one row.
+   *
+   * These rows are what the reader is looking at, so no cache can go stale relative to the screen.
+   */
+  activities: readonly { earlyStart: string | null }[] | undefined;
+  canRecalculate: boolean;
+  /** Why not, when `canRecalculate` is false. */
+  refusalReason: string | null;
+  hasDataDate: boolean;
+}): ScheduleState {
+  if (isRecalculating) return { kind: 'recalculating' };
+  if (activities === undefined && !failed && pendingEdits === 0) return { kind: 'pending' };
+  /**
+   * **The case a first-time reader meets, and the one a client-side EDIT COUNTER structurally
+   * cannot see.** A plan whose activities all lack an `earlyStart` has never been computed —
+   * imported, seeded, or built in somebody else's session. The edit counter only knows what THIS
+   * tab did, which is why the rows are consulted as well.
+   *
+   * Guarded on a non-empty list because an empty plan has no dates either, and offering to
+   * calculate nothing is the do-nothing control this whole change removes.
+   */
+  const neverCalculated =
+    activities !== undefined &&
+    activities.length > 0 &&
+    !activities.some((activity) => activity.earlyStart !== null);
+  if (!failed && pendingEdits === 0 && !neverCalculated) return { kind: 'current' };
+  const refusal = !canRecalculate
+    ? (refusalReason ?? 'The schedule cannot be recalculated.')
+    : hasDataDate
+      ? null
+      : 'Set a data date before the schedule can be calculated.';
+  return { kind: 'stale', edits: pendingEdits, failed, refusal };
+}
 
 /**
  * The plan **status bar** — grid row 3 (ADR-0099 D5, Graphite M7).
@@ -30,20 +175,26 @@ export function PlanStatusBar({
   criticalCount,
   dataDate,
   projectFinish,
-  recalculating,
+  scheduleState,
+  onRecalculate,
   pending,
 }: {
   activityCount: number | undefined;
   criticalCount: number | undefined;
   dataDate: string | null | undefined;
   projectFinish: string | null | undefined;
-  /** A recalculation is in flight — the state this bar exists to take off a button. */
-  recalculating: boolean;
+  /** What the schedule owes the reader — see {@link ScheduleState}. */
+  scheduleState: ScheduleState;
+  /** Run a recalculation now. Called only from the `stale` state with no refusal. */
+  onRecalculate: () => void;
   /** The summary has not arrived. Distinct from "arrived and empty", which is a real answer. */
   pending: boolean;
 }): React.ReactElement {
   return (
-    <div className="text-muted-foreground flex h-6 shrink-0 items-center gap-4 px-3 text-xs">
+    <div
+      data-schedule-state={scheduleStateAttr(scheduleState)}
+      className="text-muted-foreground flex h-6 shrink-0 items-center gap-4 px-3 text-xs"
+    >
       <Fact label="Activities" value={pending ? '…' : (activityCount ?? 0).toString()} />
       <Fact
         label="Data date"
@@ -68,15 +219,7 @@ export function PlanStatusBar({
           {criticalCount === 1 ? '1 critical activity' : `${criticalCount} critical activities`}
         </span>
       ) : null}
-      {recalculating ? (
-        <span className="inline-flex items-center gap-1">
-          {/* The spinning cue that used to live on the `Recalculate` button. Paired with the word,
-              because `prefers-reduced-motion` reduces the spin to 0.01 ms and a motion-only signal
-              would then say nothing (the ADR-0031 `isBusy` rule, kept). */}
-          <Loader2 aria-hidden="true" className="size-3 animate-spin" />
-          Recalculating…
-        </span>
-      ) : null}
+      <ScheduleStateRegion state={scheduleState} onRecalculate={onRecalculate} />
     </div>
   );
 }
@@ -99,4 +242,113 @@ function Fact({ label, value }: { label: string; value: string }): React.ReactEl
       <span className="text-foreground">{value}</span>
     </span>
   );
+}
+
+/**
+ * The schedule's state, and its remedy where there is one.
+ *
+ * **Pushed to the trailing edge** (`ml-auto`), which is the one place on this bar where something
+ * appears and disappears. The facts to its left are always present and always in the same order, so
+ * a reader's eye learns their positions; a region that grows and shrinks in the middle of that row
+ * would move every fact after it each time a recalculation started.
+ */
+function ScheduleStateRegion({
+  state,
+  onRecalculate,
+}: {
+  state: ScheduleState;
+  onRecalculate: () => void;
+}): React.ReactElement | null {
+  const reasonId = useId();
+  // `current` renders nothing — not an affirmative "up to date" chip. A bar that says everything is
+  // fine, every second of every session, is a bar a reader stops reading, and it would be the
+  // loudest thing on the status row in the commonest state. `pending` renders nothing for a
+  // different reason: there is nothing yet to say, and the facts beside it already show `…`.
+  if (state.kind === 'current' || state.kind === 'pending') return null;
+
+  if (state.kind === 'recalculating') {
+    return (
+      <span className="ml-auto inline-flex items-center gap-1">
+        {/* The spinning cue that used to live on the `Recalculate` button. Paired with the word,
+            because `prefers-reduced-motion` reduces the spin to 0.01 ms and a motion-only signal
+            would then say nothing (the ADR-0031 `isBusy` rule, kept). */}
+        <Loader2 aria-hidden="true" className="size-3 animate-spin" />
+        Recalculating…
+      </span>
+    );
+  }
+
+  return (
+    <span className="ml-auto inline-flex items-center gap-2">
+      <span
+        className={
+          // A failure is the reader's problem to act on; being behind is merely a fact about the
+          // plan. Colour separates them, and the WORDS do too — colour is never the only carrier
+          // (§13 / WCAG 1.4.1).
+          state.failed ? 'text-destructive-text inline-flex items-center gap-1' : undefined
+        }
+      >
+        {state.failed ? <CircleAlert aria-hidden="true" className="size-3" /> : null}
+        {describe(state)}
+      </span>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-5 gap-1 px-2 text-xs"
+        // **Shaded with its reason, never hidden** (ADR-0082), and `aria-disabled` rather than the
+        // native attribute for the reason this repository has now learnt four times: `disabled`
+        // takes the control out of the tab order, so the sentence explaining the refusal becomes
+        // unreachable by the readers most dependent on it — and this control flips under a planner
+        // whenever a peer takes the pen. The linked `sr-only` sibling is `ToolbarButton`'s exact
+        // pattern rather than a second one invented here.
+        aria-disabled={state.refusal ? true : undefined}
+        // **The explicit name is load-bearing whenever a reason is linked**, and copying
+        // `ToolbarButton`'s span without copying this line is what shipped a defect. The `sr-only`
+        // sibling lives INSIDE the button, so without an `aria-label` its text is concatenated into
+        // the button's NAME as well as its description: the control announced itself as
+        // "Recalculate Start editing to", and three journeys broke on
+        // `getByRole('button', { name: 'Start editing' })` suddenly matching two elements.
+        //
+        // The unit suite could not have caught it — it asked for `{ name: /Recalculate/ }`, which a
+        // polluted name still matches. It asks for the exact name now.
+        {...(state.refusal
+          ? { 'aria-label': 'Recalculate', 'aria-describedby': reasonId, title: state.refusal }
+          : {})}
+        onClick={() => {
+          if (!state.refusal) onRecalculate();
+        }}
+      >
+        <RefreshCw aria-hidden="true" className="size-3" />
+        Recalculate
+        {state.refusal ? (
+          <span id={reasonId} className="sr-only">
+            {state.refusal}
+          </span>
+        ) : null}
+      </Button>
+    </span>
+  );
+}
+
+/**
+ * The sentence for a stale schedule.
+ *
+ * Four cases rather than two, because "nothing has been calculated" and "the calculation failed"
+ * are different facts, and so are "one edit" and "seven". The count is dropped from the failed
+ * sentence when it is zero — a manual recalculation that fails on an unedited plan is a failure
+ * about the plan, not about work the reader has done.
+ */
+function describe(state: { edits: number; failed: boolean }): string {
+  if (state.failed) {
+    return state.edits > 0
+      ? `Could not calculate — ${state.edits === 1 ? '1 edit' : `${state.edits} edits`} still pending`
+      : 'Could not calculate the schedule';
+  }
+  // **No edits and no failure is the fourth case, and it is the one a first-time reader meets.** A
+  // plan with activities and no computed dates has never been calculated — imported, seeded, or
+  // built before anyone pressed anything. "0 edits not calculated" would be arithmetic about work
+  // nobody did; the Finish fact three positions to the left already says `Not calculated`, and this
+  // is the sentence that offers to fix it.
+  if (state.edits === 0) return 'Not yet calculated';
+  return state.edits === 1 ? '1 edit not calculated' : `${state.edits} edits not calculated`;
 }
