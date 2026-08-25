@@ -79,6 +79,29 @@ test.describe('The exported diagram', () => {
     await linkActivities(page, orgSlug, seeded[1]!.id, seeded[2]!.id);
     await recalculate(page, orgSlug);
 
+    /**
+     * **Switch the month band ON, because it is no longer the default** (ADR-0109 D4).
+     *
+     * The band used to be on out of the box, so the export inherited it and the assertion below
+     * came free. The product owner's verdict on the shipped diagram was that a second ground under
+     * a wall of bars is noise, so it now defaults off with its `View ▸ Structure` switch kept.
+     *
+     * That is a decision about the DEFAULT, not about whether the export composes the layer — and
+     * composing it is precisely what this journey exists to prove (TECH_DEBT #164: the export
+     * carried six of the canvas's scene keys and the picture a planner sent out was missing layers
+     * the screen had). Weakening the assertion to match the new default would forfeit that, so the
+     * journey turns the band on and keeps asking the harder question.
+     */
+    await page.getByRole('button', { name: 'View', exact: true }).click();
+    // `checkbox`, NOT `menuitemcheckbox`: the View surface is a disclosure popover of grouped
+    // checkboxes rather than a menu, which the page snapshot settled after the first attempt spent
+    // four minutes timing out on the wrong role. `exact: true` on the trigger matters too — the
+    // deck's group caption is "View commands" and a loose match finds both.
+    const monthBands = page.getByRole('checkbox', { name: 'Month bands' });
+    await expect(monthBands, 'Month bands should default OFF (ADR-0109 D4)').not.toBeChecked();
+    await monthBands.check();
+    await page.keyboard.press('Escape');
+
     // ── The entry point IS the subject (ADR-0081). By role and accessible name, never by copy or
     // a CSS selector — ADR-0091 M7's rule, after three journeys broke on a label change.
     await page
@@ -178,8 +201,12 @@ test.describe('The exported diagram', () => {
         })
         .reduce((sum, { n }) => sum + n, 0) / stats.total;
 
-    // The month band sits just off paper; the weekend wash a step below it; the hatch below that.
-    // Measured at the time of writing: band 246.7, wash 242.7, hatch 230.7, paper 255.
+    // The month band sits just off paper and the non-working wash a step below it. A third tone —
+    // the diagonal hatch over the wash — was here until ADR-0109 D4 removed it: in the product
+    // owner's screenshot it was the single loudest element on the diagram, a texture competing with
+    // the bars it sat behind. The wash it decorated is now a real value rather than a 0.007
+    // difference the hatch was carrying, so the range below still names a layer that exists.
+    // Measured at the time of writing: band 246.7, wash 242.7, paper 255.
     expect(toneShare(244, 254), 'no month band in the exported picture').toBeGreaterThan(0.02);
     expect(toneShare(236, 244), 'no non-working wash in the exported picture').toBeGreaterThan(
       0.02,
