@@ -107,6 +107,31 @@ target in the deck in one pass, and was verified red against a deliberately shru
 all three at 12 × 36 — before the caret was restored and green confirmed. Closing `#186` with a
 blind sweep would have been worse than leaving it open, because a green gate stops anyone looking.
 
+### D5a — What the gate then found, which is the argument for D5 rather than an illustration of it
+
+The sweep was one half of `#186`; the other was `#182`, a row saying the deck's **folded** groups
+were driven by nothing. Writing that journey — fold from the keyboard, assert a roving stop
+survives, arrow along the surface, unfold — turned up a defect in neither of those subjects.
+
+**18 of the deck's 27 commands had no keyboard route at all** (WCAG 2.2 §2.1.1, level A, shipped in
+`web-v0.103.0`). `Deck` vetoed all six navigation keys whenever focus sat on a form field, which
+protects the search field's caret and is why it was written that way. But focusing the field also
+makes it the **roving stop**, so every other control drops to `tabIndex={-1}` and the deck's only
+Tab entry point is that field. With the arrows and Home/End all going to the caret, nothing reached
+Filter, Next conflict, Float paths, or anything in Author or Plan again.
+
+It is **not** a keyboard trap — Tab exits, so §2.1.2 is satisfied — and that is precisely why it
+survived: focus was never stuck, only the commands were unreachable, which no trap check looks for.
+The fix is one line of discrimination: veto per **key**, not per **element**. A single-line input
+has no use for the vertical arrows, so they stay with the toolbar and are the route out.
+
+**`Deck` had no unit suite at all**, while its keyboard docblock read _"this guard was dropped once
+and the test caught it immediately"_ — true of `Toolbar.test.tsx`, about the other primitive. A
+comment claiming coverage that belonged to a neighbour, in the file the defect lived in. `#189`
+carries the measurement; `Deck.test.tsx` now pins both directions of the contract and was verified
+red against the old guard on exactly the two cases that name the defect, with the two caret-
+protection cases staying green — which is what says the fix is narrow rather than merely effective.
+
 ### D6 — The ADR index is gated, not remembered
 
 ADR-0078 S1 found **seven** ADRs missing from `docs/adr/README.md` and repaired them. Writing this
@@ -119,9 +144,11 @@ row an ADR file.
 
 - One of the three complaints is fixed and released (`web-v0.104.0`), one is fixed here, one is
   withdrawn with its arithmetic on the page.
-- `#186` is closed with a gate proven in both directions; `#185` is answered; `#187` is opened for a
-  residual 3 px label spread with three falsified hypotheses recorded, so the next reader does not
-  re-run experiments that have already been run.
+- `#186` is closed with a gate proven in both directions; `#182` is closed by the fold journey's
+  keyboard half; `#185` is answered; `#187` is opened for a residual 3 px label spread with three
+  falsified hypotheses recorded, so the next reader does not re-run experiments that have already
+  been run; `#189` is filed and fixed — a level-A keyboard failure the new gates found on their
+  first run, which is D5 earning its keep rather than illustrating it.
 - **The CPM engine is not imported and no migration runs**, so the ADR-0034 recalculation parity gate
   is untouched by construction.
 - Five specialist reviews ran over the combined diff. Four passed; the fifth returned the D5 finding.

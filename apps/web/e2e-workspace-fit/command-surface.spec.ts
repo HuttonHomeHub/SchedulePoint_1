@@ -209,4 +209,77 @@ test.describe('The plan command surface', () => {
     const targets = await sweep(page);
     expect(targets.filter((t) => t.visible && !t.reachable)).toEqual([]);
   });
+
+  /**
+   * **A keyboard reader can fold a group and get back into it.**
+   *
+   * This is the half `docs/TECH_DEBT.md` #182 actually cares about, and its own words say so: what
+   * was untested is "whether a _keyboard_ reader can get back to a folded group's contents, and
+   * whether the roving `tabindex` stays coherent across a fold". Both are asserted in
+   * `Deck.test.tsx`; neither had been driven in a browser.
+   *
+   * The failure it guards against is specific and would be silent: folding unmounts the group's
+   * items, so a roving stop naming one of them leaves the deck with **no tab stop at all** — a
+   * surface a keyboard reader cannot enter. `Deck` derives the stop rather than repairing it in an
+   * effect precisely so that state cannot exist; this proves it in the only place the derivation
+   * and a real focus ring meet.
+   */
+  test('a keyboard reader folds a group, keeps a tab stop, and unfolds it', async () => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    const deck = page.getByRole('toolbar', { name: 'Plan commands' });
+    await expect(deck).toBeVisible();
+
+    const caption = page.locator('[data-toolbar-item="caption:author"]');
+    const before = await deck.locator('[data-toolbar-item]').count();
+
+    // Fold it from the keyboard, not with a click — that is the path under test.
+    await caption.focus();
+    await page.keyboard.press('Enter');
+    await expect(caption).toHaveAttribute('aria-expanded', 'false');
+    expect(await deck.locator('[data-toolbar-item]').count()).toBeLessThan(before);
+
+    // **Exactly one roving stop, and it points at something rendered.** Zero is the defect: a deck
+    // nobody can Tab into. More than one is the other one: Tab would enter the deck twice.
+    const stops = deck.locator('[data-toolbar-focusable][tabindex="0"]');
+    await expect(stops).toHaveCount(1);
+    await expect(stops.first()).toBeVisible();
+
+    // **The arrow keys still traverse the whole surface in the state the fold left it, INCLUDING
+    // past the search field.** `ArrowDown` rather than `ArrowRight`, and that is the assertion
+    // rather than an implementation detail: the deck's Find group holds an `<input>`, which owns
+    // the horizontal keys and Home/End for its caret. Vetoing the vertical ones too — which is
+    // what shipped until this test ran — made every command after the field unreachable from it,
+    // and the deck's single Tab entry point is the roving stop, which focusing the field had just
+    // moved to the field. WCAG 2.2 §2.1.1, level A. `Deck.test.tsx` pins the mechanism; this
+    // proves it with a real caret and a real focus ring.
+    await page.keyboard.press('Home');
+    const reached: string[] = [];
+    for (let i = 0; i < 40; i += 1) {
+      const id = await page.evaluate(
+        () =>
+          document.activeElement
+            ?.closest('[data-toolbar-item]')
+            ?.getAttribute('data-toolbar-item') ?? null,
+      );
+      if (id !== null && !reached.includes(id)) reached.push(id);
+      await page.keyboard.press('ArrowDown');
+    }
+    expect(reached, "the folded group's caption is not reachable by arrow key").toContain(
+      'caption:author',
+    );
+    // The search field is IN the lap rather than the end of it — a traversal that stops there is
+    // the defect above, and a lap that never reaches it is a fixture proving nothing.
+    expect(reached, 'the search field is not in the roving sequence').toContain('search');
+    expect(
+      reached.indexOf('caption:author'),
+      'the traversal did not get past the search field',
+    ).toBeGreaterThan(reached.indexOf('search'));
+
+    // And back in again, from the keyboard, with every command restored.
+    await caption.focus();
+    await page.keyboard.press('Enter');
+    await expect(caption).toHaveAttribute('aria-expanded', 'true');
+    await expect(deck.locator('[data-toolbar-item]')).toHaveCount(before);
+  });
 });

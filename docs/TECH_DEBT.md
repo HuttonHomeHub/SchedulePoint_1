@@ -4283,7 +4283,15 @@ not change — so something other than this guard reverts the pop. Recorded rath
 
 ## #182 — The deck's folded groups are unreachable by any journey
 
-_Filed 2026-08-24 with ADR-0109 M2._
+_Filed 2026-08-24 with ADR-0109 M2._ **CLOSED 2026-08-25 (ADR-0110 M4).**
+`apps/web/e2e-workspace-fit/command-surface.spec.ts` now drives the fold path in a real browser,
+in both halves this row asked for: a pointer fold **and unfold** that proves the commands come
+back, and a keyboard one that folds with `Enter`, asserts the deck still has **exactly one** roving
+stop pointing at something rendered, arrow-keys across the surface to prove the folded group's
+caption is still in the sequence — it is the only route back into what it hides — and unfolds from
+the keyboard with every command restored. The fold-only half was written first and would not have
+closed this: proving a group can be hidden says nothing about whether a keyboard reader is left
+stranded, which is the sentence below that this row already got right.
 
 `Deck` renders four captioned groups that a reader can fold, and a folded group's items are absent
 from the DOM. **Nothing exercises that path.** Every Playwright suite starts from a fresh profile,
@@ -4558,3 +4566,47 @@ should go the way `e2e-toolbar-fit` went, not be repaired. The rest want their l
 `m0-repaired.spec.ts`, `m0-bands.spec.ts`, `m0-merged-row.spec.ts` and `busy-band.spec.ts` are the
 working examples to copy from, and `m0-measurement.md` records the eight instrument defects found
 writing them — worth reading before writing a ninth.
+
+---
+
+## #189 — The command deck's search field made 18 of its 27 commands unreachable by keyboard
+
+_Filed and **FIXED** 2026-08-25 (ADR-0110 M4). WCAG 2.2 §2.1.1 Keyboard, level A._
+
+`Deck`'s roving-tabindex handler vetoed **all six** navigation keys whenever focus sat on a form
+field, so the caret in the Find group's search `<input>` kept ArrowLeft/ArrowRight/Home/End — which
+is correct and is why it was written that way — **and also ArrowUp/ArrowDown, which it has no use
+for**. Because focusing the field also makes it the roving stop, every other control drops to
+`tabIndex={-1}`, and the deck's only Tab entry point is that stop. So a planner who put focus in
+Find had no key left that reached anything else on the surface.
+
+Measured in Chromium rather than reasoned about — the probe pressed the keys and recorded where
+focus went:
+
+```
+start: INPUT#search
+ArrowRight -> INPUT#search
+End        -> INPUT#search
+Tab        -> UL [OUTSIDE DECK]
+Shift+Tab  -> UL [OUTSIDE DECK]
+```
+
+with all 27 stops enumerated and exactly one — `search` — carrying `tabindex="0"`. Unreachable:
+`filter`, `next-conflict`, `float-paths`, the whole Author group, the whole Plan group, and the nine
+View-group stops before it.
+
+**It is not a keyboard trap**, and that is why it survived: §2.1.2 is satisfied because Tab exits
+the deck. Focus was never stuck; only the commands were unreachable, which no trap check looks for.
+
+**Fixed** by making the veto per **key** rather than per **element**: a single-line `<input>` claims
+the horizontal keys and the line keys and nothing else, so the vertical arrows stay with the toolbar
+and are the route out. `<textarea>`, `<select>` and contenteditable genuinely navigate with the
+vertical arrows, so for those the veto stays total.
+
+**Two things about how it was found are worth more than the fix.** It was found by the `#182`
+journey — written to close a row about folded groups, which is not this — and it was invisible to
+every existing instrument because **`Deck` had no unit suite at all**, while its keyboard docblock
+said "the test caught it immediately". That sentence is true of `Toolbar.test.tsx`, about the other
+primitive: a comment claiming coverage that belonged to a neighbour, which is ADR-0076 Class 3 in
+the file the defect lived in. `Deck.test.tsx` now exists and pins the contract in both directions —
+the caret keys the field must keep, and the vertical ones it must not.

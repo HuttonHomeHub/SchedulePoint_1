@@ -153,6 +153,37 @@ a bug:
   breakpoint the shell supports, and every canvas affordance needs a keyboard
   and screen-reader equivalent in the parallel DOM layer (ADR-0026).
 
+### Give-way order in a fixed-height chrome row (ADR-0110)
+
+A chrome row whose height is fixed — the workspace foot, the command band, the
+status row — has a **width budget its occupants must be ranked against, and the
+ranking is declared rather than emergent**. Three rules, each of which this
+product got wrong once:
+
+- **A fact relocates; it never disappears.** The plan's facts (activity count,
+  critical count, project finish, schedule state) render in the collapsed
+  activities row when that row exists and in the shell's status row when it does
+  not. Below `md` the activities row **is not mounted at all** — measured, not
+  assumed — so a merge that took the row's existence for granted would have
+  deleted the plan's facts on exactly the screens with least room to lose them.
+- **Two hosts, one mechanism: a registry, never a branch.** An outlet registers
+  itself, the component renders into it, and it renders **in place** when no
+  outlet is registered. The in-place fallback is not a courtesy — it is what
+  makes the three states one mechanism instead of three conditionals to get
+  wrong.
+- **A collapse is triggered by the row's pressure, not by its own width.** A
+  container query on the cluster asks "am I narrow?", and what decides whether
+  the cluster should shed its labels is whether the **row** is tight, which
+  depends on what else is docked beside it and is known only at the row.
+  Tailwind's `@container` also applies `contain: inline-size`, so an auto-width
+  `shrink-0` flex item stops sizing to its content: the first attempt collapsed
+  the facts to **24 × 48 px** with all five present and overflowing, every unit
+  suite green because jsdom has no layout.
+
+Where labels can be shed at all, prefer **always showing them** over a
+disclosure: a row that hides four facts behind a press has traded a width
+problem for a discoverability one.
+
 ## Perceived performance playbook
 
 - Prefetch route data on link hover/focus (intent).

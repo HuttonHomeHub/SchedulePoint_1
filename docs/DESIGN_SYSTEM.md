@@ -207,6 +207,37 @@ width any more.
 **A preset is still a command, not a derivation.** Resizing preserves the scale a user chose; it
 never re-derives it (ADR-0056). That rule was never about the ladder and outlives it.
 
+#### One geometry on a command surface (ADR-0110)
+
+**Every control on one surface takes the same box, whatever renders it.** A plain command and a
+split-button or popover trigger are different components; they are not different geometries.
+
+The deck shipped with two, and nobody chose the second: `Deck` applied a stacked
+icon-above-label geometry on the `ToolbarButton` branch only, so every `render`-branch item — the
+split buttons, the popover triggers, the search field — bypassed it and kept its label beside its
+icon. One `if` with a side effect on layout, and the result was labels sitting on alternating
+baselines across a single row, which is what the product owner reported: _"the text on the toolbars
+being different heights draws your eyes."_ Nothing was wrong in either branch. The wrongness lived
+only in the relationship — the ADR-0093 shape.
+
+So, for any surface holding a mixed set of controls:
+
+- **The height is declared once and applied to every branch**, including the ones a `render` item
+  brings its own markup to. On the deck that is `min-h-9`; the width minimums (`min-w-9` icon-only,
+  `min-w-12` labelled) and the label's `text-micro` ramp step are the same in both branches.
+- **A caption is a control and takes the control's box.** The deck's group captions fold their
+  group and are roving tab stops, so a caption measured at a smaller height than the buttons beside
+  it was a target-size question wearing a typography costume (WCAG 2.2 §2.5.8).
+- **Turning the card on its side spends width, not height.** The caption leads its row rather than
+  sitting above it, because a full-width caption row costs the deck a line per group and the deck's
+  scarce axis is vertical.
+
+**What it measured, so the next reader does not re-derive it:** worst within-row label spread
+**12 px → 3 px**; deck height **116 → 108** at 1920/1646/1440 and **116 → 224 at 1280**, where the
+cards wrap from two lines to four. The 1280 cost was put to the product owner with the number and
+taken knowingly. `docs/TECH_DEBT.md` **#187** carries the residual 3 px with three falsified
+hypotheses attached, so nobody re-runs experiments that have already been run.
+
 ### One theme
 
 **There is one theme and no picker** (ADR-0097). It is declared at `:root`, no class is stamped on
