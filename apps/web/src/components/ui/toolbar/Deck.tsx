@@ -308,7 +308,13 @@ export function Deck<Ctx>({
                 // The mockup drew this at 9px with wider tracking; using the ramp's 10px instead is
                 // the disciplined answer, and the difference is imperceptible at a caption. A ramp
                 // that gets a new member every time a design wants half a pixel is not a ramp.
-                'text-primary text-micro flex shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
+                // **`min-h-9`, the same box the buttons take** (M1-T2). The caption measured 32 px
+                // against `toolbarControlVariants`' 36, and both centre their text, so their labels
+                // sat ~2 px apart — the residual spread left after M1-T1 removed the stacked
+                // geometry. A caption is a real control here (it folds its group and is a roving
+                // stop), so matching the control height is what it should have had anyway, and it
+                // moves WCAG 2.5.8's minor axis in the right direction rather than the wrong one.
+                'text-primary text-micro flex min-h-9 shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
                 'border-primary/25 cursor-pointer',
                 // The rule that separated the caption from its buttons was a `border-b` under a
                 // full-width row; on its side it is a `border-r` beside them, doing the same job in
