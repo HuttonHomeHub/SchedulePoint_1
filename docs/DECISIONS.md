@@ -10,6 +10,41 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-08-25 — Reconciliation pass: the cadence itself had stopped
+
+Run at the product owner's request after the `workspace-chrome-fit` epic, with two subjects they
+added by name. Full findings in [`RECONCILE.md`](RECONCILE.md)'s table; the three worth carrying:
+
+**The pass cadence had stopped and nothing noticed.** Eleven ADRs (0100–0110) landed between
+2026-08-20 and 2026-08-25 with **zero** passes recorded, against a rule that says "at each epic
+boundary" and a prior cadence of one every 1–4 days. Each epic looked complete on its own, which is
+exactly why the gap was invisible: there is no single document a reader could have opened and found
+wrong. The `RECONCILE.md` banner said "Last full pass: 2026-08-20" and was **true**.
+
+**A document the previous pass had just fixed was wrong again four days later.**
+`TOOLBAR_ROADMAP.md`'s first substantive paragraph was corrected on 2026-08-20 from a stale `row`
+union; ADR-0109 then deleted the **tool rail** it named and the **`⋯` overflow** it described, so by
+2026-08-25 it documented two mechanisms that no longer exist in the tree. The lesson is not "check
+harder" — a pass had checked, and the epic after it broke the correction. It argues for what the
+paragraph now says: if it goes wrong a third time, delete it and let `Deck.tsx`'s own docblock be
+the single description.
+
+**The product owner's testing hypothesis was falsified, and the real number was somewhere else.**
+They asked whether we over-test locally, suspecting the many `check:*` gates. Measured: those ten
+cost **10.4 s between them — 2.2%** of the gate. `pnpm test` is **345.6 s** and `lint` **112.7 s**,
+96% of an ~8-minute run for a one-line web change, and **both are expensive by configuration rather
+than necessity** (no `eslint --cache`; all 552 web test files on every run). Recorded as `#191` with
+the CI comparison that decides it — CI's equivalent job is 11 m 22 s, so the local gate buys a round
+trip rather than latency — and deliberately **not acted on**, because `prepush.sh` is a shared gate
+and editing it fires an ADR-0105 trigger.
+
+**Also fixed here:** `CLAUDE.md` §19.12's wake-up wording, which said "arm a wake-up **before the
+turn can end**" — advice that permits arming last, and arming last is how a session lost two hours
+on 2026-08-25. ADR-0076 Class 3: correct advice that cannot work. The rule now says _first action of
+the turn_, and records that the mechanism which actually held is the instruction living **inside the
+fired message**, not in this repository — with the honest caveat that it is not a gate and cannot be,
+since nothing in CI can observe whether a session re-armed.
+
 ### 2026-08-20 — Reconciliation pass at the ADR-0099 epic boundary
 
 **What it found**, in the order the runbook walks:

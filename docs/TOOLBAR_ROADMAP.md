@@ -7,19 +7,27 @@ Each renders as a permanently-disabled button with a **"Coming soon"** tooltip, 
 as fully designed and the roadmap is visible in-product. They are defined via `placeholderItem(...)`
 in `apps/web/src/features/tsld/toolbar/tsld-toolbar-items.tsx`.
 
-**One strip and a mode row (ADR-0099 M5).** Each item carries a `row: 'mode' | 'strip'`. The **mode
-row** is the four segments that live on the **tool rail** — `Early | Visual` and `Diagram | Gantt` —
-because a mode is not a command (ADR-0091 D1); the **strip** is every command, on one row. Placeholders
-render **inline** (tier 2 icon buttons) so a normal desktop shows the whole intended command set, and
-the `⋯` appears when the row cannot afford everything, at which point items demote into it by
-`priority`.
+**A wrapping deck and a mode row (ADR-0109 D1/D2).** Each item carries a
+`row: 'mode' | 'strip'`. The **mode row** is the four segments — `Early | Visual` and
+`Diagram | Gantt` — which sit on the **identity line in the header**, because a mode is not a
+command (ADR-0091 D1); the **strip** is every command, rendered by `Deck` as four captioned groups
+that **wrap**. Placeholders render **inline** (tier 2 icon buttons), and every command is visible at
+every width: a line that cannot fit becomes two lines.
 
-> This paragraph read **"Two rows … `row: 'look' | 'do'`. Row 1 · Look … Row 2 · Do"** until the
-> 2026-08-20 reconciliation pass. `ToolbarRow` has been `'mode' | 'strip'`
-> (`toolbar-registry.ts:174`) since ADR-0099 M5 merged the rows, so the first substantive sentence of
-> this document named a type the codebase does not have — and the pen-gated authoring cluster it
-> describes as "Row 2" is no longer a row. The taxonomy, the tiers and the gating are unchanged;
-> only the number of rows that render them.
+> **This paragraph has now been wrong twice, and the second time is the more instructive.**
+>
+> It read _"Two rows … `row: 'look' | 'do'`"_ until the **2026-08-20** reconciliation pass corrected
+> it to `'mode' | 'strip'`. Four days later ADR-0109 invalidated the correction: D2 deleted the
+> **tool rail** the mode segments were said to live on, and D1 deleted the **`⋯` overflow**, the
+> priority demotion and the whole width ladder — `ToolbarOverflow.tsx`, `computeOverflow` and
+> `toolbar-ladder.ts` are all gone from the tree. So this document described a rail that does not
+> exist and a demotion mechanism that does not exist, having been fixed four days earlier.
+>
+> The lesson is not "check harder". A pass fixed this paragraph and the very next epic broke it
+> again, because **no pass was recorded between 2026-08-20 and 2026-08-25 while eleven ADRs landed**
+> — the pass cadence itself had stopped, and nothing noticed because each epic looked complete on
+> its own. Found by the 2026-08-25 pass. If this paragraph is wrong a third time, the answer is
+> probably to delete it and let `Deck.tsx`'s own docblock be the single description.
 
 **Turning one on:** replace its `placeholderItem({...})` stub with a real `ToolbarItem` (wire
 `onActivate`/`render`, `isEnabled`, `disabledReason`, and a context seam), add tests, and remove the

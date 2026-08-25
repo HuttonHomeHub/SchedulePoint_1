@@ -29,9 +29,13 @@ You review; you do not edit code.
   `Menu`, `Combobox`, `Toolbar`, `ToggleChip`, `SearchField`, `Dialog`/`ConfirmDialog`.
   A hand-assembled label+control block is the finding — that idiom had been written
   33 times before `SelectField` (TECH_DEBT #42).
-- **Toolbar items are data (ADR-0031).** A declarative `ToolbarItem` registry, a
-  compiler-enforced 7-group taxonomy, and `tier` (what demotes into `⋯`) split from
-  `showLabel` (presentation). Conflating them again is a regression.
+- **Toolbar items are data (ADR-0031).** A declarative `ToolbarItem` registry and a
+  compiler-enforced 7-group taxonomy, rendered by `Deck` as four captioned groups
+  that **wrap**. `tier` and `showLabel` were one property once and must stay two —
+  conflating them again is a regression — but neither is about width any more:
+  **ADR-0109 D1 deleted the `⋯` overflow, the priority demotion and the whole width
+  ladder.** A command surface wraps; it never hides. This bullet defined `tier` as
+  "what demotes into `⋯`" until the 2026-08-25 pass.
 - **The canvas render layer is pure.** `features/tsld/render/` must not import
   `@/config/env` or React; flags are read in components and threaded as explicit
   scene/prop fields. A flag import there is blocking.

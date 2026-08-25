@@ -3507,12 +3507,30 @@ When operating in this repo, Claude Code should:
     - **So chain the work inside the turn.** Finish a slice, commit it, push it,
       and start the next one **in the same turn**. Report at the end of the turn,
       not instead of continuing.
-    - **And arm a wake-up before the turn can end** (`send_later`, ~25 minutes),
-      carrying the remaining milestone list and re-arming itself each turn while
-      work remains. A turn boundary is a real limit; being unable to cross it
+    - **And arm a wake-up as the FIRST action of the turn** (`send_later`,
+      ~25 minutes), carrying the remaining milestone list. Not last, not "before
+      the turn ends". A turn boundary is a real limit; being unable to cross it
       alone is not a reason to stop, because the tool to cross it exists. This
       session used that tool to babysit a pull request and not to continue the
       work — which is the whole lesson.
+    - **"Before the turn can end" is what this bullet said until 2026-08-25, and
+      that wording is the defect.** It permits arming last, and arming last means
+      remembering at exactly the moment you are least likely to: a wake-up fired
+      at 15:57, was not re-armed, and the session sat idle 16:03–18:02 while the
+      product owner had twice asked for continuous progress. Correct advice that
+      cannot work is ADR-0076 Class 3 — the same shape as a stage banner telling
+      its reader to re-run `ls | wc -l`.
+    - **So the instruction lives in the fired message, not in this file.** A
+      wake-up's own first line orders its own re-arming, which is the only part
+      of the mechanism that does not depend on anybody consulting a document.
+      That is ADR-0058's move one layer over — replace vigilance with something
+      the machine carries — and 2026-08-25 is the evidence: four wake-ups fired,
+      three re-armed themselves correctly, and the fourth stopped only because
+      its terminal condition had been met. **It is still not a gate**, and cannot
+      be: nothing in CI can observe whether a session re-armed. Treat it as the
+      weak instrument §19.11's last bullet describes, and give the message a
+      written **terminal condition** so "stop" is a fact it can check rather than
+      a judgement it has to make.
     - **If something genuinely needs an answer**, ask it, then **keep working on
       everything that does not depend on it**. A blocking question blocks one
       milestone, not the programme.

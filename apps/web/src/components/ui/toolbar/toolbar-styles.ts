@@ -1,9 +1,12 @@
 import { cva } from 'class-variance-authority';
 
 /**
- * The **one** control-surface style for every {@link Toolbar} control (ADR-0031): the plain
- * {@link ToolbarButton}, the {@link ToolbarPopover} trigger, the {@link ToolbarOverflow} `⋯` trigger,
- * and the pinned Project-finish chip. Declared once as a CVA so a change to the toolbar's
+ * The **one** control-surface style for every {@link Toolbar} and {@link Deck} control (ADR-0031):
+ * the plain {@link ToolbarButton}, the {@link ToolbarPopover} trigger, the deck's group captions,
+ * and the pinned Project-finish chip.
+ *
+ * This line named `ToolbarOverflow`'s `⋯` trigger until the 2026-08-25 reconciliation pass —
+ * ADR-0109 D1 deleted that component with the width ladder, so the `{@link}` pointed at nothing. Declared once as a CVA so a change to the toolbar's
  * hover/focus/active/disabled treatment happens in a single place — never hand-copied per control
  * (design-system "variants declared once; no one-off styling"; component review).
  *
