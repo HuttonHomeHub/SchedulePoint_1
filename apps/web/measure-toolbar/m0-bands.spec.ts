@@ -114,7 +114,7 @@ test('M0-T4: bottom bands by hook, the dock cost, and the layouts with no handle
   // broke on a label change.
   const linkTool = page.locator('[data-toolbar-item="link"]').first();
   if ((await linkTool.count()) > 0) {
-    await linkTool.click();
+    await linkTool.click({ timeout: 10_000 });
     await page.waitForTimeout(400);
     dockCost.toolArmed = await readBands(page);
     await page.keyboard.press('Escape');
@@ -123,13 +123,18 @@ test('M0-T4: bottom bands by hook, the dock cost, and the layouts with no handle
     dockCost.toolArmed = { skipped: 'no [data-toolbar-item="link"] on this surface' };
   }
 
-  // Select one activity through the canvas's own parallel listbox (ADR-0026 D7), which is the
-  // route that does not depend on hit-testing a painted bar.
+  // Select one activity through the canvas's own parallel listbox (ADR-0026 D7) — **by keyboard,
+  // never by click**. That layer exists for keyboard and AT and is painted BEHIND the canvas, so a
+  // pointer click is intercepted: the first version of this probe called `.click()` and Playwright
+  // retried for four and a half minutes against the canvas and the activities bar before the test
+  // timed out. The layer is not a clickable list that happens to be hidden; driving it by pointer
+  // is using it for something it is not.
   const options = page
     .getByRole('listbox', { name: 'Activities in the diagram' })
     .getByRole('option');
   if ((await options.count()) > 0) {
-    await options.first().click();
+    await options.first().focus();
+    await page.keyboard.press('Enter');
     await page.waitForTimeout(500);
     dockCost.oneSelected = await readBands(page);
   } else {
