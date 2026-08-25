@@ -42,10 +42,13 @@ const WIDTHS = [
   WIDE,
   { width: 1440, height: 960 },
   { width: 1280, height: 800 },
-  // Deliberately below the single-pane breakpoint: this is where the handle row is expected to be
-  // absent, and it is the case M2's fallback exists for.
-  { width: 900, height: 800 },
-  { width: 768, height: 800 },
+  // **Genuinely below the single-pane breakpoint.** MD_QUERY is 48rem and `isWide` is true AT it
+  // (`plan-workspace-toolbar.tsx:98,343`), so the first version's "narrow" widths of 768 and 900
+  // were both WIDE and this probe never reached the layout it was written to observe. They were
+  // picked without reading the breakpoint, which is the same failure as measuring the wrong
+  // element one file over.
+  { width: 700, height: 800 },
+  { width: 600, height: 800 },
 ];
 
 const BANDS = `
@@ -60,7 +63,11 @@ const BANDS = `
       canvasHeight: box(canvas) ? box(canvas).h : null,
       canvasTop: canvas ? round(canvas.getBoundingClientRect().top) : null,
       activitiesBar: box(bar),
-      activitiesBarPresent: bar !== null,
+      // Mounted is not shown: querySelector finds a display-none node, and the narrow layout
+      // renders the activities pane hidden by default — so a presence check reports a handle row
+      // no planner can see. The first version of this probe shipped exactly that.
+      activitiesBarMounted: bar !== null,
+      activitiesBarVisible: bar !== null && bar.getClientRects().length > 0,
       statusSlot: box(statusSlot),
       factsCluster: box(facts),
       factsText: facts ? (facts.textContent ?? '').replace(/\\s+/g, ' ').trim().slice(0, 90) : null,
@@ -112,7 +119,9 @@ test('M0-T4: bottom bands by hook, the dock cost, and the layouts with no handle
 
   // Arm a tool. By `data-toolbar-item`, never by copy — ADR-0091 M7's rule after three journeys
   // broke on a label change.
-  const linkTool = page.locator('[data-toolbar-item="link"]').first();
+  // link-tool, not link (tsld-toolbar-items.tsx:2516). The first version used the wrong id and the
+  // probe reported `skipped` — which is why the gap is visible rather than silently absent.
+  const linkTool = page.locator('[data-toolbar-item="link-tool"]').first();
   if ((await linkTool.count()) > 0) {
     await linkTool.click({ timeout: 10_000 });
     await page.waitForTimeout(400);
@@ -120,7 +129,7 @@ test('M0-T4: bottom bands by hook, the dock cost, and the layouts with no handle
     await page.keyboard.press('Escape');
     await page.waitForTimeout(400);
   } else {
-    dockCost.toolArmed = { skipped: 'no [data-toolbar-item="link"] on this surface' };
+    dockCost.toolArmed = { skipped: 'no [data-toolbar-item="link-tool"] on this surface' };
   }
 
   // Select one activity through the canvas's own parallel listbox (ADR-0026 D7) — **by keyboard,
@@ -144,9 +153,13 @@ test('M0-T4: bottom bands by hook, the dock cost, and the layouts with no handle
 
   // ── 3. Where is the handle row absent, and do the facts survive there today?
   const narrow: Record<string, unknown> = {};
+  // The SAME widths as the narrow entries above. These were 900 and 768 while the array above had
+  // already been corrected to 700 and 600, so the artefact on disk contradicted itself: one section
+  // reporting no handle row below the breakpoint, another reporting one present at widths that are
+  // not below it. A measurement file that disagrees with itself is worse than one that is missing.
   for (const viewport of [
-    { width: 900, height: 800 },
-    { width: 768, height: 800 },
+    { width: 700, height: 800 },
+    { width: 600, height: 800 },
   ]) {
     await page.setViewportSize(viewport);
     await page.waitForTimeout(700);
@@ -156,7 +169,7 @@ test('M0-T4: bottom bands by hook, the dock cost, and the layouts with no handle
       // The question M2 turns on, stated as a fact rather than an inference: if the handle row is
       // absent AND the facts are present, the shell status row is the fallback M2 must keep.
       handleRowAbsentButFactsPresent:
-        bands.activitiesBarPresent === false && bands.factsCluster !== null,
+        bands.activitiesBarVisible === false && bands.factsCluster !== null,
     };
   }
   report.narrowLayouts = narrow;
