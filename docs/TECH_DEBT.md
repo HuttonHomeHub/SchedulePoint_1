@@ -4489,3 +4489,40 @@ surface that wraps has no demotion to model, so the sweep is "every `[data-toolb
 control_, not `[data-toolbar-item]` on a wrapper — that is how the split-button caret went unmeasured
 at 23×36 — and assert pointer reachability rather than overhang, because a control shrunk to zero
 width has zero overhang and is still in the DOM.
+
+---
+
+## #187 — The deck's labels sit 3 px apart and three hypotheses are falsified
+
+_Filed 2026-08-25 with workspace-chrome-fit M1. **Not a regression** — the spread was 12 px before
+this epic and is 3 px after. This row exists so the next person does not re-run the experiments that
+have already been run._
+
+At 1646 the deck reports label tops of **135 and 138** on every wrap row. Every control is `36 px`
+tall, every control is inline, and the spread persists.
+
+**Three hypotheses, each built and measured, each falsified:**
+
+| hypothesis          | test                                                                                                        | result                                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Control height      | forced every item to `h-10`                                                                                 | spread unchanged at 12 px (pre-M1)                                                                          |
+| Type scale          | deleted `Deck.tsx`'s `[&>span:last-of-type]:text-micro` so every label uses the CVA's `text-sm`             | **+74 px** of item width, spread unchanged at 3 px — twice, once before and once after heights were uniform |
+| One outlier control | the search field was `h-8` + `pointer-coarse:h-9`, the only deck control outside `min-h-9`; raised to `h-9` | heights became uniform `[36]`, spread unchanged at 3 px                                                     |
+
+The search-field fix was **kept** — it was a real breach of M1's one-geometry contract and it closed a
+genuine inconsistency. It simply was not the cause of the spread. The type-scale change was
+**reverted** both times: a change that costs 74 px on a surface already wrapping to four lines at
+1280, and buys nothing measurable, is not worth keeping because it reads as more consistent in source.
+
+**What is left to try**, in rough order of likelihood: the icons. Deck items carry `size-3`/`size-4`
+icons and some carry none; in an `items-center` flex line the tallest child sets the line box, so two
+items with different icon heights centre their text differently even at identical control height. The
+probe would be to null every icon and re-measure — which is cheap and was not done only because 3 px
+is close to the threshold of what the eye tracks, and the complaint that opened this epic was about
+12 px.
+
+**The measurement instrument to use** is `apps/web/measure-toolbar/m0-repaired.spec.ts`, whose
+`perRow.labelTops` is what produced every number above. Note its blind spot, found the hard way: it
+selects labels by `<span>`, so a leaf `<input>` control is invisible to it — that is exactly why the
+search field survived two commits as "unidentified", and it is why the height column above had to be
+read from `distinctControlHeights` rather than from the label tops.

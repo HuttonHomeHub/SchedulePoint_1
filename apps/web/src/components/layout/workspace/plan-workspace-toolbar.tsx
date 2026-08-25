@@ -29,11 +29,13 @@ import { WorkspaceViewToggle, type WorkspacePane } from './workspace-view-toggle
 import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { ChromePortal } from '@/components/layout/chrome/chrome-slot';
 import { useRegisterShortcutsAction } from '@/components/layout/chrome/help-action';
-import {
-  deriveScheduleState,
-  PlanStatusBar,
-  type ScheduleState,
-} from '@/components/layout/status/plan-status-bar';
+import { PlanStatusBar } from '@/components/layout/status/plan-status-bar';
+// The pure module directly, not through `plan-status-bar`'s compatibility re-export. That re-export
+// exists so `plan-status-bar.test.tsx` passed UNEDITED through M2-T1's extraction — it is a seam for
+// an existing consumer, and its own docblock says new ones should come here instead. This import was
+// added by that same epic and did not follow the rule the epic wrote, which the component review
+// caught: a rule its author's own next file ignores is a rule that lasts one commit.
+import { deriveScheduleState, type ScheduleState } from '@/components/layout/status/schedule-state';
 import { useAnnounce } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
