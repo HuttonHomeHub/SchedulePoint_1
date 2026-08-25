@@ -98,7 +98,7 @@ async function sweep(page: Page): Promise<Target[]> {
       return out;
     },
     { minTarget: MIN_TARGET },
-  ) as Promise<Target[]>;
+  );
 }
 
 test.describe.configure({ mode: 'serial' });
