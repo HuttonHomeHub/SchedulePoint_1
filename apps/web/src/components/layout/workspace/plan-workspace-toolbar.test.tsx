@@ -339,7 +339,19 @@ describe('ToolbarPlanWorkspace (ADR-0031 canvas-maximal layout)', () => {
     const finish = screen.getByText('Finish');
     expect(screen.getByText(formatCalendarDate('2026-08-01'))).toBeInTheDocument();
 
-    expect(finish.closest('[data-chrome-slot="status"]')).not.toBeNull();
+    // **A seventh, and it widens rather than reverses** (workspace-chrome M2-T4). The facts now have
+    // TWO legitimate hosts: the collapsed activities bar when one is mounted, and the shell's status
+    // row when none is — which below `md` is every time, because that bar is not mounted at all
+    // there (measured: `m0-measurement.md`). Pinning the status row alone would have failed on the
+    // wide layout for the right reason and passed on the narrow one for the wrong one.
+    //
+    // The assertion's INTENT is unchanged and is what the comment above protects: a finish date is a
+    // fact, so it belongs in a facts host and never in the command strip. Both hosts are named, so
+    // this still fails if the read-out lands anywhere else.
+    expect(
+      finish.closest('[data-chrome-slot="status"], [data-activities-bar]'),
+      'the finish read-out is in neither facts host',
+    ).not.toBeNull();
     const row1 = screen.getByRole('toolbar', { name: 'Plan commands' });
     expect(row1.contains(finish)).toBe(false);
     expect(finish.closest('[data-toolbar-focusable]')).toBeNull();

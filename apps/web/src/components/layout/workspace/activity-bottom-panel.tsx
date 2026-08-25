@@ -2,6 +2,7 @@ import { PanelBottomClose, PanelBottomOpen } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { CanvasDockOutlet } from './canvas-dock';
+import { PlanFactsOutlet } from './plan-facts-host';
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Button } from '@/components/ui/button';
@@ -173,7 +174,15 @@ export function ActivityPanelCollapsedBar({
       data-activities-bar
       className="border-border flex min-h-9 shrink-0 items-center gap-2 border-t px-4"
     >
-      <span className="shrink-0 text-sm font-medium">Activities</span>
+      {/* **The facts land here, and the standalone heading goes with them** (M2-T4). This row said
+          "Activities" and the status bar said "Activities 5" — the same subject rendered twice, one
+          of them a duplicate that had already broken a test three times by being matched instead of
+          this row. The count fact names the panel AND gives its size, so one control does both jobs
+          and the word appears once.
+
+          Leading, where the heading was: the facts are what this row is about when nothing is
+          docked, and a reader's eye should not have to travel to find them. */}
+      <PlanFactsOutlet />
       <CanvasDockOutlet />
       <Button
         ref={expandRef}

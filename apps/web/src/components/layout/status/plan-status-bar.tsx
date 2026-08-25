@@ -1,3 +1,5 @@
+import { PlanFactsHost } from '@/components/layout/workspace/plan-facts-host';
+
 import { PlanFacts } from './plan-facts';
 import { scheduleStateAttr, type ScheduleState } from './schedule-state';
 
@@ -29,9 +31,19 @@ export function PlanStatusBar(props: {
   /** The summary has not arrived. Distinct from "arrived and empty", which is a real answer. */
   pending: boolean;
 }): React.ReactElement {
-  // Rendered in place, exactly as before. M2-T2 gives this an outlet; until then the only change is
-  // where the markup is declared, which is what makes the unedited suite meaningful.
-  return <PlanFacts {...props} />;
+  // **The registry decides where these render, with no conditional here** (M2-T4). An outlet is
+  // mounted only by the COLLAPSED activities bar, so the rule falls out rather than being written:
+  // collapsed, the facts portal into the row the planner is already reading and this slot is empty;
+  // expanded, that bar has unmounted and they render here; below `md` there is no bar at all and
+  // they render here too. Three states, one mechanism, no branch to get wrong.
+  //
+  // `plan-status-bar.test.tsx` mounts this with no provider, so `PlanFactsHost` finds no outlet and
+  // renders in place — which is why that suite still passes unedited through this change.
+  return (
+    <PlanFactsHost>
+      <PlanFacts {...props} />
+    </PlanFactsHost>
+  );
 }
 
 // Referenced so the re-export above is not mistaken for dead code by a reader skimming the file.

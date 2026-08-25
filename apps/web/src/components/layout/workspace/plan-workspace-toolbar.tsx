@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityBottomPanel, ActivityPanelCollapsedBar } from './activity-bottom-panel';
 import { ActivityCrudDialogs } from './activity-crud-dialogs';
 import { CanvasDock, CanvasDockProvider } from './canvas-dock';
+import { PlanFactsProvider } from './plan-facts-host';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
@@ -1126,25 +1127,31 @@ export function ToolbarPlanWorkspace({
     // from the real focusable controls inside it — the case jsx-a11y cannot distinguish from a
     // fake button. Making it focusable to satisfy the rule would ADD a meaningless tab stop, so
     // the accessible answer here is the disable, not the "fix".
-    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-    <div ref={rootRef} onKeyDown={onWorkspaceKeyDown} className="flex min-h-0 flex-1 flex-col">
-      {/*
+    // **The facts provider wraps the whole workspace, above BOTH halves** (M2-T4). The producer is
+    // the status bar, portalled into the shell's row 3; the outlet is in the activities row, inside
+    // the canvas dock's provider. React context flows through portals — it is a property of the
+    // React tree, not the DOM — so one provider here reaches both, and the shell stays plan-unaware
+    // (ADR-0029) exactly as it does for the dock.
+    <PlanFactsProvider>
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
+      <div ref={rootRef} onKeyDown={onWorkspaceKeyDown} className="flex min-h-0 flex-1 flex-col">
+        {/*
         The plan's accessible name for the `<main>` landmark, and it **stays here** while the visible
         identity line moves into the chrome band with the commands (ADR-0090 M4-T2).
         `document.querySelector('h1')` is not the point: a screen-reader user navigating by landmark
         lands in `main`, and a `main` with no heading is a region that does not say what it is. The
         band is outside `main`, so an `<h1>` moved there would name the banner instead.
       */}
-      <h1 className="sr-only">{plan.name}</h1>
+        <h1 className="sr-only">{plan.name}</h1>
 
-      {/* The two-row command surface (ADR-0031 two-row amendment). Row 1 · Look is always live; Row 2 ·
+        {/* The two-row command surface (ADR-0031 two-row amendment). Row 1 · Look is always live; Row 2 ·
           Do carries the pen-gated authoring cluster (shaded as a set when the pen isn't held) beside
           the always-live plan & deliverable actions. Both rows share one `authoringEnabled` — only
           Row 2's `penGated` items react. Row 1 right-aligns its status read-outs (Finish/Summary/Legend). */}
-      {/* These two rows portal into the chrome band, so the top of the app reads as one surface.
+        {/* These two rows portal into the chrome band, so the top of the app reads as one surface.
           Only the DOM node moves — in the React tree they stay right here, which is why `ctx`, the
           registry predicates and the workspace key scope are all untouched by the move. */}
-      {/* **The plan identity line, merged into the app header row** (ADR-0097 D1b) — the merge
+        {/* **The plan identity line, merged into the app header row** (ADR-0097 D1b) — the merge
           ADR-0092 M5 withdrew at "134 px short at 1646", which Landing D1a paid for by moving the
           organisation nav into the rail (+250 px of slack at 1440; `m0-landing-d1-measurement.md`).
           It is a second named slot rather than a second portal API, and the header receives a NODE
@@ -1160,13 +1167,13 @@ export function ToolbarPlanWorkspace({
           Flag-off `ChromePortal` is an identity wrapper, so this renders in place exactly as it did
           before the band existed. */}
 
-      <ChromePortal>
-        {/* Publishes the BAND's width to every `<Toolbar>` inside it (`toolbar-band.tsx`), so a
+        <ChromePortal>
+          {/* Publishes the BAND's width to every `<Toolbar>` inside it (`toolbar-band.tsx`), so a
             row's density reflects the surface rather than whatever width is left after its
             siblings. Without it, the project-finish chip beside Row 1 silently costs the four
             viewport commands their labels — measured on a 1646 px screen, shipped in web-v0.86.0. */}
-        <ToolbarBandProvider className="border-border flex flex-col border-b">
-          {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
+          <ToolbarBandProvider className="border-border flex flex-col border-b">
+            {/* **The mode cluster stays in the band, and this is a withdrawal recorded rather than a
               design.** D1b moved it into the header with the rest of the identity line, and the
               header cannot hold it: measured, the identity wants ~1170 px against ~861 px available
               at 1280, so something has to give. Every arrangement that made the header FIT put
@@ -1181,8 +1188,8 @@ export function ToolbarPlanWorkspace({
               call and is written up with its numbers at the end of
               `m0-landing-d1-measurement.md`**; this is not that decision, it is declining to leave
               a shipped regression in place while the decision is open. */}
-          <div className="border-border flex items-center justify-end gap-3 border-b px-4 py-1">
-            {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
+            <div className="border-border flex items-center justify-end gap-3 border-b px-4 py-1">
+              {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
                 app header through a portal until then (ADR-0097 D1b), and Graphite deleted that
                 header — so without a home it would have taken a 44 px row of its own inside the
                 band, and MEASUREMENT said so: deleting a 56 px bar bought 12 px, which is ADR-0092
@@ -1198,15 +1205,15 @@ export function ToolbarPlanWorkspace({
 
                 No portal any more: the identity and the modes are rendered by the same component,
                 so the slot that carried it across the shell boundary has nothing left to carry. */}
-            <div data-plan-identity className="flex min-w-0 flex-1 items-center gap-3">
-              {/* **`flex-1` here, not on the toolbar** — this block is the one that should give way.
+              <div data-plan-identity className="flex min-w-0 flex-1 items-center gap-3">
+                {/* **`flex-1` here, not on the toolbar** — this block is the one that should give way.
               It is text with a `title`, so shrinking it truncates a name a reader can still get at;
               shrinking the mode cluster puts `Early | Visual | Diagram | Gantt` behind a `⋯`, which
               is ADR-0091 D1's whole objection (a mode is not a command and must be visible beside
               the pen). Measured: with `flex-1` on the toolbar instead, all four demoted into the
               overflow at 1646 — the product owner's own width. */}
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                {/* **Two crumbs: the project, then this plan.**
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  {/* **Two crumbs: the project, then this plan.**
                 D1b first shipped the plan name alone, on the measurement that the four-crumb trail
                 cost 455 px and that the Project Explorer already answers "where am I". Right about
                 orientation, wrong about navigation, and **three Playwright suites failed on one
@@ -1224,19 +1231,19 @@ export function ToolbarPlanWorkspace({
                 duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
                 is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
                 was measured to win. */}
-                <Breadcrumbs
-                  variant="nowrap"
-                  items={[
-                    {
-                      label: model.project.data?.name ?? 'Project',
-                      to: '/orgs/$orgSlug/projects/$projectId',
-                      params: { orgSlug: model.orgSlug, projectId: plan.projectId },
-                    },
-                    { label: plan.name },
-                  ]}
-                />
-                <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-                {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
+                  <Breadcrumbs
+                    variant="nowrap"
+                    items={[
+                      {
+                        label: model.project.data?.name ?? 'Project',
+                        to: '/orgs/$orgSlug/projects/$projectId',
+                        params: { orgSlug: model.orgSlug, projectId: plan.projectId },
+                      },
+                      { label: plan.name },
+                    ]}
+                  />
+                  <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+                  {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
                 ADR-0090 M2-T3 took it off the toolbar; ADR-0091 M7-S4 put it back as a
                 `presentational` registry item, so the `⋯` could stay the row's rightmost control.
                 It came here in M5 because M5-T1 measured the reduced strip **not fitting** at 768,
@@ -1244,21 +1251,21 @@ export function ToolbarPlanWorkspace({
                 decision". **M7 is the decision**: a finish date is a fact, the status bar carries
                 facts, and it has gone there. This comment is kept rather than deleted so the two
                 moves read as one argument reaching its end. */}
-                {model.canWrite ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => model.setEditing(true)}
-                    title="Edit plan…"
-                    aria-label="Edit plan"
-                    className="text-muted-foreground shrink-0"
-                  >
-                    <SquarePen aria-hidden="true" className="size-4" />
-                  </Button>
-                ) : null}
+                  {model.canWrite ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => model.setEditing(true)}
+                      title="Edit plan…"
+                      aria-label="Edit plan"
+                      className="text-muted-foreground shrink-0"
+                    >
+                      <SquarePen aria-hidden="true" className="size-4" />
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            </div>
-            {/* **The mode cluster is back on the identity line, beside the pen** (workspace
+              {/* **The mode cluster is back on the identity line, beside the pen** (workspace
                 redesign, 2026-08-24) — where ADR-0091 D1 argued a mode belongs in the first place:
                 a mode is not a command, it sets how every command behaves, which is exactly the
                 pen's relationship to the deck.
@@ -1275,36 +1282,36 @@ export function ToolbarPlanWorkspace({
                 how one control gets a rule and its neighbour does not. `shrink-0` because the
                 identity block beside it carries `flex-1` and is the one that should give way — it
                 is text with a `title`, so shrinking truncates a name a reader can still reach. */}
-            <div className="flex shrink-0 items-center gap-2">
-              <span
-                aria-hidden="true"
-                // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the
-                // navy and measured 4.48:1 — under the 4.5 bar by 0.02, which no token matrix
-                // could see because the failing colour does not exist until the alpha is
-                // composited. axe found it in a real browser on the first journey run. At full
-                // strength amber on navy is 7.9:1, and the caption is a label rather than a
-                // decoration, so there was never a reason to fade it.
-                className="text-primary text-micro font-bold tracking-wider uppercase"
-              >
-                Mode
-              </span>
-              <Toolbar
-                items={rows.mode}
-                context={ctx}
-                label="Plan mode"
-                authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                // All four are `group: 'lens'`, whose default label is "Display" — also the deck's
-                // `lens` group name, so unoverridden this announces a second, unrelated name for
-                // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
-                groupLabels={ROW_MODE_GROUP_LABELS}
+              <div className="flex shrink-0 items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the
+                  // navy and measured 4.48:1 — under the 4.5 bar by 0.02, which no token matrix
+                  // could see because the failing colour does not exist until the alpha is
+                  // composited. axe found it in a real browser on the first journey run. At full
+                  // strength amber on navy is 7.9:1, and the caption is a label rather than a
+                  // decoration, so there was never a reason to fade it.
+                  className="text-primary text-micro font-bold tracking-wider uppercase"
+                >
+                  Mode
+                </span>
+                <Toolbar
+                  items={rows.mode}
+                  context={ctx}
+                  label="Plan mode"
+                  authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+                  // All four are `group: 'lens'`, whose default label is "Display" — also the deck's
+                  // `lens` group name, so unoverridden this announces a second, unrelated name for
+                  // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
+                  groupLabels={ROW_MODE_GROUP_LABELS}
+                />
+              </div>
+              <CompactPenStatus
+                pen={model.pen}
+                {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
               />
             </div>
-            <CompactPenStatus
-              pen={model.pen}
-              {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-            />
-          </div>
-          {/*
+            {/*
             **The plan identity line** — breadcrumb, status, project finish, Edit plan, pen status —
             folded into the band **above** the commands it governs (ADR-0090 M4-T2). Measured gain:
             the 53 px row plus the 8 px that separated it from the workspace pane, against a 533 px
@@ -1326,13 +1333,13 @@ export function ToolbarPlanWorkspace({
             control here is Edit plan, and the dialog it opens restores focus through its own
             `restoreFocusRef`, which holds an element reference and never queries the DOM at all.
           */}
-          {/* `py-1`, not the `py-2` this row carried as a standalone header. Inside the band it sits
+            {/* `py-1`, not the `py-2` this row carried as a standalone header. Inside the band it sits
               directly above two rows that are `py-1` around a `min-h-9` control, and a third rhythm
               in one surface reads as three surfaces. Measured: 53 → 45 px, the same height as Row 1.
               `px-4` stays: the rows indent by their `w-16` caption gutter, which this line has no
               equivalent of, so matching their `px-2` would leave the breadcrumb hanging left of
               everything below it. */}
-          {/* **The command deck** (workspace redesign, 2026-08-24) — `Deck`, not `Toolbar`, and the
+            {/* **The command deck** (workspace redesign, 2026-08-24) — `Deck`, not `Toolbar`, and the
               difference is the whole point rather than a styling choice.
 
               `Toolbar` answers "too many commands" by measuring its container and demoting the
@@ -1349,41 +1356,41 @@ export function ToolbarPlanWorkspace({
               fills the band by wrapping into it rather than by being told to grow, and a flex child
               that grows is exactly how a row ends up measuring its own leftover width, which is the
               defect class this replaces. */}
-          <div className="px-2 py-1.5">
-            <Deck
-              items={rows.strip}
-              context={ctx}
-              label="Plan commands"
-              authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-            />
-          </div>
-        </ToolbarBandProvider>
-      </ChromePortal>
+            <div className="px-2 py-1.5">
+              <Deck
+                items={rows.strip}
+                context={ctx}
+                label="Plan commands"
+                authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+              />
+            </div>
+          </ToolbarBandProvider>
+        </ChromePortal>
 
-      {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the
+        {/* Export/print failures surface here as a dismissable `role="alert"` banner (UX review B2) — the
           toolbar commands only announce (sr-only), so this is the sighted-user error surface. Renders
           nothing until an export/print fails; `null` when the flag is off. */}
-      {ctx.exportError ? (
-        <div className="px-4 pt-2">
-          <EditConflictBanner message={ctx.exportError} onDismiss={ctx.dismissExportError} />
-        </div>
-      ) : null}
+        {ctx.exportError ? (
+          <div className="px-4 pt-2">
+            <EditConflictBanner message={ctx.exportError} onDismiss={ctx.dismissExportError} />
+          </div>
+        ) : null}
 
-      {/* A lossy-but-successful interchange export (ADR-0050 M4d) surfaces here as a dismissable INFO
+        {/* A lossy-but-successful interchange export (ADR-0050 M4d) surfaces here as a dismissable INFO
           banner with an opt-in "Download report" button — the export already downloaded; the report is
           offered on click (not auto-fired, which the browser's multi-download guard can silently block). */}
-      {ctx.exportNotice ? (
-        <div className="px-4 pt-2">
-          <EditConflictBanner
-            message={ctx.exportNotice.message}
-            severity="info"
-            action={{ label: 'Download report', onClick: ctx.exportNotice.downloadReport }}
-            onDismiss={ctx.dismissExportNotice}
-          />
-        </div>
-      ) : null}
+        {ctx.exportNotice ? (
+          <div className="px-4 pt-2">
+            <EditConflictBanner
+              message={ctx.exportNotice.message}
+              severity="info"
+              action={{ label: 'Download report', onClick: ctx.exportNotice.downloadReport }}
+              onDismiss={ctx.dismissExportNotice}
+            />
+          </div>
+        ) : null}
 
-      {/*
+        {/*
         The keyboard-shortcuts sheet, mounted ONCE for the whole workspace (`docs/TECH_DEBT.md`
         #137). It used to live inside `TsldPanel`, so in the Gantt the `?` binding and the account
         menu set `showHelp` and nothing rendered — a lit-but-inert control in the view that had
@@ -1394,231 +1401,232 @@ export function ToolbarPlanWorkspace({
         opens the logic editor on the canvas and commits a cell edit in the grid — so one merged
         list would qualify half its rows into unreadability.
       */}
-      <PlanShortcutsHelp
-        open={canvasUi.showHelp}
-        onClose={() => canvasUi.setShowHelp(false)}
-        editingEnabled={model.canEditSchedule}
-        view={ctx.planView}
-      />
+        <PlanShortcutsHelp
+          open={canvasUi.showHelp}
+          onClose={() => canvasUi.setShowHelp(false)}
+          editingEnabled={model.canEditSchedule}
+          view={ctx.planView}
+        />
 
-      {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
+        {/* Programme scheduling (ADR-0045, VITE_PROGRAMME_SCHEDULING) — renders nothing unless the plan
           has live cross-plan links, so the slim toolbar layout is unchanged for an ordinary plan. */}
-      {PROGRAMME_SCHEDULING_ENABLED ? (
-        <div className="px-4 pt-2">
-          <ProgrammeScheduleSection
-            orgSlug={model.orgSlug}
-            planId={model.planId}
-            canRecalc={model.canRecalc}
-          />
-        </div>
-      ) : null}
+        {PROGRAMME_SCHEDULING_ENABLED ? (
+          <div className="px-4 pt-2">
+            <ProgrammeScheduleSection
+              orgSlug={model.orgSlug}
+              planId={model.planId}
+              canRecalc={model.canRecalc}
+            />
+          </div>
+        ) : null}
 
-      {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): when on, the notes live
+        {/* Notes (ADR-0046, VITE_NOTES). Entry-route win 1 (`VITE_ENTRY_ROUTES`): when on, the notes live
           in a docked, resizable RIGHT panel inside the body below (toggled by Comments), so the always-
           inline block renders ONLY flag-off — byte-for-byte the prior behaviour. */}
-      {NOTES_ENABLED && !ENTRY_ROUTES_ENABLED ? (
-        <div className="px-4 pt-2">
-          <PlanNotesSection
-            orgSlug={model.orgSlug}
-            planId={model.planId}
-            canWrite={model.canWriteNotes}
-            bounded
-            headingRef={notesHeadingRef}
-          />
-        </div>
-      ) : null}
+        {NOTES_ENABLED && !ENTRY_ROUTES_ENABLED ? (
+          <div className="px-4 pt-2">
+            <PlanNotesSection
+              orgSlug={model.orgSlug}
+              planId={model.planId}
+              canWrite={model.canWriteNotes}
+              bounded
+              headingRef={notesHeadingRef}
+            />
+          </div>
+        ) : null}
 
-      {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
-      {lateOverlayActive && model.canEditSchedule ? (
-        <div className="px-4 pt-2">
-          <p
-            role="status"
-            className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-1.5 text-sm"
-          >
-            The Late-start overlay is on — editing is paused. Turn it off in{' '}
-            <span className="font-medium">View</span> to edit.
-          </p>
-        </div>
-      ) : null}
+        {/* Why the (otherwise-enabled) editing tools are greyed out while the Late-start overlay is on. */}
+        {lateOverlayActive && model.canEditSchedule ? (
+          <div className="px-4 pt-2">
+            <p
+              role="status"
+              className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-1.5 text-sm"
+            >
+              The Late-start overlay is on — editing is paused. Turn it off in{' '}
+              <span className="font-medium">View</span> to edit.
+            </p>
+          </div>
+        ) : null}
 
-      {/* The canvas dock (workspace-chrome M3) wraps the diagram AND the activities row, because
+        {/* The canvas dock (workspace-chrome M3) wraps the diagram AND the activities row, because
           the strips are produced by the first and land in the second. Provider here rather than at
           the shell, so the shell stays plan-unaware (ADR-0029). */}
-      <CanvasDockProvider>
-        {/* `px-3 pb-3` — the workspace's own inset, so the stage and the docked panels read as
+        <CanvasDockProvider>
+          {/* `px-3 pb-3` — the workspace's own inset, so the stage and the docked panels read as
             CARDS FLOATING on the gradient ground rather than as the window's inner walls
             (workspace redesign, 2026-08-24). It lives here, on the workspace body, and
             deliberately NOT on the shell's `<main>`: `<main>` carries every route, and the
             content screens already bring their own container padding, so putting it there would
             double the inset on a dozen screens to fix one. The chrome band above supplies the
             matching top and side gutters from the shell, because it is the shell that places it. */}
-        <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3">
-          {isWide ? (
-            // Wide: a HORIZONTAL split — the canvas+activities vertical stack (left) beside the docked
-            // notes panel (right, when open). Opening notes narrows the canvas; closing restores it.
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
+          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3">
+            {isWide ? (
+              // Wide: a HORIZONTAL split — the canvas+activities vertical stack (left) beside the docked
+              // notes panel (right, when open). Opening notes narrows the canvas; closing restores it.
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                  {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                   panel (when open) is overlaid via the `relative` container. */}
-                {/* No padding — see the single-pane branch below for why. */}
-                {/* The stage is a CARD (workspace redesign, 2026-08-24): a radius, a hairline
+                  {/* No padding — see the single-pane branch below for why. */}
+                  {/* The stage is a CARD (workspace redesign, 2026-08-24): a radius, a hairline
                     and a shadow, so the diagram reads as a sheet of paper laid on the gradient
                     rather than as the window's own white. `overflow-hidden` is what makes the
                     radius real — the canvas paints to its own bounds and would otherwise square
                     off the corners it sits under. */}
-                <div className="border-border relative flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-lg border shadow-md">
-                  {surface}
-                  {legendPanel}
-                  {resourceStripPanel}
+                  <div className="border-border relative flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-lg border shadow-md">
+                    {surface}
+                    {legendPanel}
+                    {resourceStripPanel}
+                  </div>
+
+                  {collapsed ? (
+                    <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
+                  ) : (
+                    <>
+                      <PanelResizer
+                        orientation="horizontal"
+                        size={panelHeight}
+                        min={PANEL_MIN_OPEN}
+                        max={effectiveMax}
+                        label="Resize activities panel"
+                        onResize={onResize}
+                        pointerToSize={pointerToSize}
+                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                      />
+                      <div style={{ height: panelHeight }} className="shrink-0">
+                        <ActivityBottomPanel
+                          model={model}
+                          onCollapse={collapse}
+                          focusCollapseOnMount={interacted}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {collapsed ? (
-                  <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
-                ) : (
+                {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the canvas,
+                never overlays; toggled by Comments. Its vertical splitter sets the width. */}
+                {floatPathsDockActive ? (
                   <>
                     <PanelResizer
-                      orientation="horizontal"
-                      size={panelHeight}
-                      min={PANEL_MIN_OPEN}
-                      max={effectiveMax}
-                      label="Resize activities panel"
-                      onResize={onResize}
-                      pointerToSize={pointerToSize}
+                      orientation="vertical"
+                      size={floatPathsWidth}
+                      min={FLOAT_PATHS_PANEL_MIN_WIDTH}
+                      max={floatPathsEffectiveMax}
+                      label="Resize float paths panel"
+                      onResize={onFloatPathsResize}
+                      pointerToSize={floatPathsPointerToSize}
+                      reverseKeys
                       className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                     />
-                    <div style={{ height: panelHeight }} className="shrink-0">
-                      <ActivityBottomPanel
-                        model={model}
-                        onCollapse={collapse}
-                        focusCollapseOnMount={interacted}
-                      />
+                    <div
+                      style={{ width: floatPathsWidth }}
+                      className="border-border bg-card shrink-0 border-l"
+                    >
+                      {floatPathsDockContent}
                     </div>
                   </>
-                )}
-              </div>
+                ) : null}
 
-              {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the canvas,
-                never overlays; toggled by Comments. Its vertical splitter sets the width. */}
-              {floatPathsDockActive ? (
-                <>
-                  <PanelResizer
-                    orientation="vertical"
-                    size={floatPathsWidth}
-                    min={FLOAT_PATHS_PANEL_MIN_WIDTH}
-                    max={floatPathsEffectiveMax}
-                    label="Resize float paths panel"
-                    onResize={onFloatPathsResize}
-                    pointerToSize={floatPathsPointerToSize}
-                    reverseKeys
-                    className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                  />
-                  <div
-                    style={{ width: floatPathsWidth }}
-                    className="border-border bg-card shrink-0 border-l"
-                  >
-                    {floatPathsDockContent}
-                  </div>
-                </>
-              ) : null}
-
-              {notesDockActive ? (
-                <>
-                  <PanelResizer
-                    orientation="vertical"
-                    size={notesWidth}
-                    min={NOTES_PANEL_MIN_WIDTH}
-                    max={notesEffectiveMax}
-                    label="Resize notes panel"
-                    onResize={onNotesResize}
-                    pointerToSize={notesPointerToSize}
-                    // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
-                    // match (Left = grow, Right = shrink) — otherwise keyboard contradicts the pointer.
-                    reverseKeys
-                    className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                  />
-                  <div
-                    style={{ width: notesWidth }}
-                    className="border-border bg-card shrink-0 border-l"
-                  >
-                    {notesDockContent}
-                  </div>
-                </>
-              ) : null}
-            </div>
-          ) : floatPathsDockActive ? (
-            // Narrow: a right dock doesn't fit — Float paths takes the single pane, exactly as notes
-            // does below. The emphasis it drives is not visible while it holds the pane; that is the
-            // honest consequence of one-pane-at-a-time, and closing the panel returns the diagram.
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {floatPathsDockContent}
-            </div>
-          ) : notesDockActive ? (
-            // Narrow: a right dock doesn't fit — notes takes the single pane (the one-pane-at-a-time
-            // narrow philosophy). Closing (the header Close, or the Comments toggle) restores the toggle.
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{notesDockContent}</div>
-          ) : (
-            <>
-              <WorkspaceViewToggle value={pane} onChange={setPane} />
-              <div
-                className={cn(
-                  // **No padding: the canvas fills its section** (workspace-chrome M1). The inset read as a
-                  // card floating in a pane rather than as the surface the workspace exists to show, and it
-                  // cost 8 px of height and 32 px of width for nothing. Separation from the band above is
-                  // the band's own `border-b`; from the dock below, the dock's.
-                  'relative min-h-0 flex-1 flex-col gap-2',
-                  pane === 'diagram' ? 'flex' : 'hidden',
-                )}
-              >
-                {surface}
-                {legendPanel}
-                {/* Below `md` the strip rides the Diagram pane (no third pane) — Q3 / ADR-0049. */}
-                {resourceStripPanel}
+                {notesDockActive ? (
+                  <>
+                    <PanelResizer
+                      orientation="vertical"
+                      size={notesWidth}
+                      min={NOTES_PANEL_MIN_WIDTH}
+                      max={notesEffectiveMax}
+                      label="Resize notes panel"
+                      onResize={onNotesResize}
+                      pointerToSize={notesPointerToSize}
+                      // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
+                      // match (Left = grow, Right = shrink) — otherwise keyboard contradicts the pointer.
+                      reverseKeys
+                      className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                    />
+                    <div
+                      style={{ width: notesWidth }}
+                      className="border-border bg-card shrink-0 border-l"
+                    >
+                      {notesDockContent}
+                    </div>
+                  </>
+                ) : null}
               </div>
-              <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
-                {/* `hostsDock={false}`: this pane is `display: none` whenever the planner is on the
+            ) : floatPathsDockActive ? (
+              // Narrow: a right dock doesn't fit — Float paths takes the single pane, exactly as notes
+              // does below. The emphasis it drives is not visible while it holds the pane; that is the
+              // honest consequence of one-pane-at-a-time, and closing the panel returns the diagram.
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {floatPathsDockContent}
+              </div>
+            ) : notesDockActive ? (
+              // Narrow: a right dock doesn't fit — notes takes the single pane (the one-pane-at-a-time
+              // narrow philosophy). Closing (the header Close, or the Comments toggle) restores the toggle.
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{notesDockContent}</div>
+            ) : (
+              <>
+                <WorkspaceViewToggle value={pane} onChange={setPane} />
+                <div
+                  className={cn(
+                    // **No padding: the canvas fills its section** (workspace-chrome M1). The inset read as a
+                    // card floating in a pane rather than as the surface the workspace exists to show, and it
+                    // cost 8 px of height and 32 px of width for nothing. Separation from the band above is
+                    // the band's own `border-b`; from the dock below, the dock's.
+                    'relative min-h-0 flex-1 flex-col gap-2',
+                    pane === 'diagram' ? 'flex' : 'hidden',
+                  )}
+                >
+                  {surface}
+                  {legendPanel}
+                  {/* Below `md` the strip rides the Diagram pane (no third pane) — Q3 / ADR-0049. */}
+                  {resourceStripPanel}
+                </div>
+                <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
+                  {/* `hostsDock={false}`: this pane is `display: none` whenever the planner is on the
                     diagram, which is the default, so an outlet here would register while invisible
                     and take every docked strip out of the accessibility tree. Without one,
                     `CanvasDock` renders in place — where those strips were before this epic, and
                     the right answer on a screen with no spare row to dock into. */}
-                <ActivityBottomPanel model={model} hostsDock={false} />
-              </div>
-            </>
-          )}
-        </div>
-      </CanvasDockProvider>
+                  <ActivityBottomPanel model={model} hostsDock={false} />
+                </div>
+              </>
+            )}
+          </div>
+        </CanvasDockProvider>
 
-      {/* Plan-chrome dialogs the toolbar overflow opens (shared with the ADR-0030 header menu). */}
-      <PlanChromeDialogs
-        dialog={dialog}
-        onClose={() => setDialog(null)}
-        model={model}
-        plan={plan}
-      />
+        {/* Plan-chrome dialogs the toolbar overflow opens (shared with the ADR-0030 header menu). */}
+        <PlanChromeDialogs
+          dialog={dialog}
+          onClose={() => setDialog(null)}
+          model={model}
+          plan={plan}
+        />
 
-      {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
-      <PlanDialogs model={model} plan={plan} />
+        {/* Edit-plan form + logic editor (shared with the ADR-0030 layout). */}
+        <PlanDialogs model={model} plan={plan} />
 
-      {/* **The status bar** (Graphite M7). Portalled into the shell's row 3 for the same reason the
+        {/* **The status bar** (Graphite M7). Portalled into the shell's row 3 for the same reason the
           command band and the mode cluster are portalled: the facts belong to the plan, the row
           belongs to the shell, and ADR-0029 says the shell must not learn the difference. */}
-      <ChromePortal name="status">
-        <PlanStatusBar
-          activityCount={scheduleSummary.data?.activityCount}
-          criticalCount={scheduleSummary.data?.criticalCount}
-          dataDate={scheduleSummary.data?.dataDate}
-          projectFinish={scheduleSummary.data?.projectFinish}
-          scheduleState={scheduleState}
-          onRecalculate={() => ctx.recalculate()}
-          pending={scheduleSummary.isPending}
-        />
-      </ChromePortal>
+        <ChromePortal name="status">
+          <PlanStatusBar
+            activityCount={scheduleSummary.data?.activityCount}
+            criticalCount={scheduleSummary.data?.criticalCount}
+            dataDate={scheduleSummary.data?.dataDate}
+            projectFinish={scheduleSummary.data?.projectFinish}
+            scheduleState={scheduleState}
+            onRecalculate={() => ctx.recalculate()}
+            pending={scheduleSummary.isPending}
+          />
+        </ChromePortal>
 
-      {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
-      <ActivityCrudDialogs model={model} />
+        {/* Activity edit/delete dialogs the floating selection bar opens (ADR-0031). */}
+        <ActivityCrudDialogs model={model} />
 
-      {/* The progress editor (toolbar Report-progress + the entry-route selection-bar Report-progress)
+        {/* The progress editor (toolbar Report-progress + the entry-route selection-bar Report-progress)
           now lives in the shared `PlanDialogs`, so it's mounted once for whichever canvas layout is
           active and both entry points open the same dialog. */}
-    </div>
+      </div>
+    </PlanFactsProvider>
   );
 }
