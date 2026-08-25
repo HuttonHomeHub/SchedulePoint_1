@@ -208,7 +208,37 @@ test('M0 repaired: baselines per row, deck height in both geometries, bands by h
     })()`);
     await page.waitForTimeout(250);
 
-    report[`${viewport.width}`] = { bands, stackedGeometry, inlineGeometry };
+    // ── The THIRD geometry: keep stacking, unify the control height. The analyst's reading is
+    // that `items-stretch` over three control heights (32/36/40) is what places the same label
+    // differently, and that one height is the fix the other two causes depend on. Untested until
+    // now, and it is the option that fixes the complaint WITHOUT reversing mockup decision 1.
+    await page.evaluate(`(() => {
+      ${HELPERS}
+      const deck = deckOf();
+      for (const el of deck.querySelectorAll('[data-toolbar-item]')) {
+        el.setAttribute('data-probe-converted', '');
+        el.style.setProperty('height', '2.5rem', 'important');
+        el.style.setProperty('justify-content', 'center', 'important');
+      }
+      void document.body.offsetHeight;
+    })()`);
+    await page.waitForTimeout(250);
+    const unifiedHeightGeometry = await readGeometry(page);
+    await page.evaluate(`(() => {
+      for (const el of document.querySelectorAll('[data-probe-converted]')) {
+        el.removeAttribute('style');
+        el.removeAttribute('data-probe-converted');
+      }
+      void document.body.offsetHeight;
+    })()`);
+    await page.waitForTimeout(250);
+
+    report[`${viewport.width}`] = {
+      bands,
+      stackedGeometry,
+      inlineGeometry,
+      unifiedHeightGeometry,
+    };
   }
 
   const path = writeMeasurement('m0-repaired', report);
