@@ -149,8 +149,24 @@ for target in "${targets[@]}"; do
       log "Web end-to-end (${suite})"
       pnpm --filter @repo/web "test:e2e:${suite}"
       ;;
+    # **Measurement harnesses, which need the same bootstrap and were not getting it.**
+    #
+    # `web:<suite>` maps to `test:e2e:<suite>`, and the measure configs are `measure:<name>` — so
+    # every measurement run in this repository has been launched by a hand-rolled script that
+    # exported DATABASE_URL and hoped Postgres was already up. On 2026-08-25 it was not, and the
+    # M0-T4 run died with `P1001` after the previous run had left the database stopped.
+    #
+    # That is the same class this script's own header is about: a run that cannot be trusted is
+    # worse than no run. It surfaced honestly only because `clearMeasurement` deletes the JSON
+    # first, so the reader saw an absent file rather than an hours-old one — which is exactly the
+    # failure ADR-0099 records costing three consecutive false diagnoses in one session.
+    measure:*)
+      name="${target#measure:}"
+      log "Measurement harness (${name})"
+      pnpm --filter @repo/web "measure:${name}"
+      ;;
     *)
-      echo "Unknown target '${target}'. Use 'api', 'web', 'web:<suite>', or --db-only." >&2
+      echo "Unknown target '${target}'. Use 'api', 'web', 'web:<suite>', 'measure:<name>', or --db-only." >&2
       exit 2
       ;;
   esac
