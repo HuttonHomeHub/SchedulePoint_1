@@ -68,14 +68,20 @@ async function sweep(page: Page): Promise<Target[]> {
         throw new Error('command-surface: no deck — [aria-label="Plan commands"] is absent');
 
       const out: Target[] = [];
-      for (const item of deck.querySelectorAll('[data-toolbar-item]')) {
-        // The controls a pointer can actually press. `button`/`a`/`[role=button]` rather than
-        // `[tabindex]`, deliberately: the caret is `tabIndex={-1}` and must still be swept.
-        const controls = item.matches('button,a,[role="button"]')
-          ? [item]
-          : [...item.querySelectorAll('button,a,[role="button"]')];
-        const targets = controls.length > 0 ? controls : [item];
-        for (const el of targets) {
+      // **Every pointer target in the deck, in one pass — never per-`[data-toolbar-item]`.**
+      // `button`/`a`/`[role=button]` plus `input`, because a split button's caret is
+      // `tabIndex={-1}` and the search field is an `<input>`; both are things a planner clicks.
+      {
+        const all = [
+          ...deck.querySelectorAll('button,a,[role="button"]'),
+          ...deck.querySelectorAll('input'),
+        ];
+        for (const el of all) {
+          // Identify by the owning item where there is one. A caret has no `data-toolbar-item` of
+          // its own — that is the whole reason the per-item version could not see it — so it
+          // reports its accessible name instead, and the failure message still names something a
+          // reader can find on screen.
+          const item = el.closest('[data-toolbar-item]');
           const r = el.getBoundingClientRect();
           const visible = r.width > 0 && r.height > 0;
           let reachable = false;
@@ -84,7 +90,10 @@ async function sweep(page: Page): Promise<Target[]> {
             reachable = hit !== null && (hit === el || el.contains(hit) || hit.contains(el));
           }
           out.push({
-            id: item.getAttribute('data-toolbar-item') ?? '(unnamed)',
+            id:
+              item?.getAttribute('data-toolbar-item') ??
+              el.getAttribute('aria-label') ??
+              '(unnamed)',
             tag: el.tagName.toLowerCase(),
             w: Math.round(r.width),
             h: Math.round(r.height),

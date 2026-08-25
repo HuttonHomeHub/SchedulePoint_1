@@ -159,9 +159,17 @@ function FactList({
 /**
  * One labelled fact.
  *
- * The label is rendered, not an `aria-label`: this bar is read by looking, and a screen-reader user
- * gets the same words in the same order rather than a parallel description that can drift from
- * what is on screen.
+ * **This docblock used to say the label is rendered rather than given as an `aria-label`, and that
+ * stopped being true three lines below it.** It came verbatim from the pre-extraction
+ * `plan-status-bar.tsx`, where the old `Fact` genuinely had none — but an `aria-label` was added
+ * here, so the file shipped a live claim contradicting its own next statement. The top of this file
+ * says its comments are verbatim because they record defects that shipped; this one was not a
+ * preserved record, it was simply wrong, and the M4 accessibility review caught it.
+ *
+ * What is true now: the label IS rendered, **and** the pair is additionally given as one
+ * `aria-label` so it announces as "Finish: 28 Jan 2026" rather than two adjacent fragments a
+ * listener has to join. `aria-label` on the outer span short-circuits name-from-content, so the
+ * inner spans are not also used to compute the name and it does not double-announce.
  */
 function Fact({ label, value }: { label: string; value: string }): React.ReactElement {
   return (

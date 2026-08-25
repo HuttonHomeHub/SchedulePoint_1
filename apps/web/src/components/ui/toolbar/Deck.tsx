@@ -36,7 +36,12 @@ import { cn } from '@/lib/utils';
  * gives its width back. That is the same remedy the old app used on narrow screens, and it is the
  * honest one: the reader decides what they do not need, rather than an algorithm guessing.
  *
- * **Stacked buttons.** Icon above a 9.5 px label rather than beside it — roughly half the width for
+ * **Buttons were stacked until M1 (workspace-chrome-fit, 2026-08-25) made every control inline.**
+ * Read the paragraph below as history: its width argument still explains why the deck can afford to
+ * wrap, but it no longer describes the layout. It said "stacked buttons" while the code two hundred
+ * lines down had stopped stacking them.
+ *
+ * Icon above a 9.5 px label rather than beside it — roughly half the width for
  * the same information, which is the geometry that makes "every command labelled" affordable at all.
  * The label is suppressed only where the icon is genuinely universal ({@link ICON_ONLY}).
  *
@@ -280,8 +285,11 @@ export function Deck<Ctx>({
             //
             // Turning the card on its side spends the caption's width instead of its height, which
             // the deck has to spare and the workspace does not: the card becomes one row tall, and
-            // the deck 170 → ~112. The buttons are untouched — stacked, labelled, exactly as
-            // approved. The height was never theirs.
+            // the deck 170 → ~112. The height was never the buttons'.
+            //
+            // This said "the buttons are untouched — stacked, labelled, exactly as approved" until
+            // M1 unstacked them. Corrected rather than deleted: turning the card on its side is an
+            // argument about the CARD, and is unaffected by what the buttons inside it do.
             className="border-border/60 bg-foreground/5 flex items-stretch gap-2 rounded-md border px-2 py-1.5"
           >
             <button
