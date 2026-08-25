@@ -375,17 +375,25 @@ export function Deck<Ctx>({
                           tabIndex={tabIndexFor(r.item.id)}
                           onActivate={() => r.item.onActivate!(context)}
                           onFocus={() => setActiveId(r.item.id)}
-                          // The stacked geometry. `!` on the layout properties because
-                          // `toolbarControlVariants` sets a horizontal row and a height, and this
-                          // is the one place that is deliberately overridden rather than a variant
-                          // added — the deck is the only surface that stacks, and a variant would
-                          // invite the selection bar to use it.
+                          // **The stacked geometry is GONE, and with it the four `!important`
+                          // overrides** (M1-T1, CQ-1). A plain command stacked its label under its
+                          // icon while a split-button or popover trigger — which never reached this
+                          // branch — kept the shared CVA's row. Nobody chose that: it is one
+                          // `if` having a side effect on layout. Measured at 1646, the deck's label
+                          // tops were 137 for inline items and 149 for stacked ones, and a reader's
+                          // eye tracks the difference along the row.
+                          //
+                          // There is now exactly ONE geometry, so it needs no variant to select it:
+                          // the shared `toolbarControlVariants` row is simply not overridden. A
+                          // two-valued `layout` variant with no second consumer would be dead code
+                          // pretending to be a choice.
+                          //
+                          // Deliberately kept: `min-w-*` and the label's `text-micro`. The M0 probe
+                          // that priced this change altered flex-direction, height, gap and
+                          // alignment and NOTHING else, so its +198 px is the cost of the geometry
+                          // alone. Changing the type scale here as well would make the shipped
+                          // width unattributable to the number that justified the change.
                           className={cn(
-                            '!h-auto !flex-col !gap-0.5 !px-2 !py-1 leading-none',
-                            // Every value from the spacing scale rather than the mockup's exact
-                            // pixels. The ratchets caught the arbitrary forms and they were right
-                            // to: an arbitrary size is invisible to the rhythm and cannot be
-                            // re-scaled with the rest of the product later.
                             ICON_ONLY.has(r.item.id) ? 'min-w-9' : 'min-w-12',
                             '[&>span:last-of-type]:text-micro [&>span:last-of-type]:font-medium',
                           )}
