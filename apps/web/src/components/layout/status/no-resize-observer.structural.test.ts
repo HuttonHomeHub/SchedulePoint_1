@@ -48,11 +48,14 @@ describe('the plan facts do not measure themselves', () => {
         /getBoundingClientRect|clientWidth|offsetWidth/,
       );
     }
-    // The pinned positive: the collapse mechanism exists. Without this the suite would pass just as
-    // happily against a file that had lost its container query altogether and collapsed nothing.
+    // **The pinned positive changed with the collapse's withdrawal** (M2-T4). It used to assert the
+    // container query existed; that query collapsed the facts to 24 px and was withdrawn, so
+    // asserting it now would demand a defect back. What the rule is really about is that this row
+    // does not measure ITSELF, so the positive case is that the facts are still rendered here at
+    // all — without it the suite passes equally against a file that renders nothing.
     const facts = readFileSync(join(DIR, 'plan-facts.tsx'), 'utf8');
-    expect(facts).toMatch(/@container\/facts/);
-    expect(facts).toMatch(/@\[26rem\]\/facts:inline/);
+    expect(facts).toMatch(/<FactList/);
+    expect(facts).toMatch(/label="Finish"/);
   });
 
   it('strips comments before scanning, so prose about the rule cannot break it', () => {

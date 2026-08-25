@@ -68,31 +68,27 @@ export function PlanFacts({
   return (
     <div
       data-schedule-state={scheduleStateAttr(scheduleState)}
-      className="text-muted-foreground @container/facts flex min-h-6 shrink-0 items-center gap-4 px-3 text-xs"
+      className="text-muted-foreground flex min-h-6 shrink-0 items-center gap-4 px-3 text-xs"
     >
-      {/* **A container query, never a `ResizeObserver`** (M2-T3). This row's width is an OUTPUT of
-          what is in it — a docked strip shares it — so a JS measurement here would re-import the
-          "a row measures its own leftover width and gets it wrong" defect this repository has
-          recorded five times, most recently in ADR-0091 M7. `@container` asks the question that
-          actually matters ("is *this* box narrow?") and cannot feed its own answer back in.
+      {/* **The collapse is WITHDRAWN, on its own measurement** (M2-T3, reversed at M2-T4).
+          Tailwind's `@container` sets `container-type: inline-size`, which applies
+          `contain: inline-size`: the element stops sizing to its content and takes its inline size
+          from layout instead. As an auto-width `shrink-0` flex item inside the activities row that
+          collapses it — measured at **24 px wide by 48 px tall**, with all five facts present in
+          the DOM and overflowing a box with no room for them.
 
-          **The plan specified a disclosure and this is not one — recorded rather than done
-          quietly.** A disclosure needs open/closed state, and under the container-query-only
-          constraint the only ways to get it are (a) JS for the breakpoint, which is the forbidden
-          measurement, or (b) both presentations in the markup with CSS choosing one. (b) was built
-          first and rejected on its own evidence: `plan-status-bar.test.tsx` went red with five
-          duplicate-match failures, because jsdom does not evaluate container queries — which is
-          not merely a test artefact but the honest statement that the DOM really does hold two
-          copies, and that only a browser applying the query keeps a reader from meeting the same
-          fact twice.
+          The probe is what caught it. `factsText` still read the whole sentence, so a test asserting
+          the facts are "present" would have passed, and a human glancing at the row would have seen
+          a smear rather than an obvious absence. Only the box measurement said what had happened.
 
-          So the facts collapse by shedding their LABELS, not by hiding. Every fact is present at
-          every width and in one copy; below the threshold the value carries an `aria-label` so the
-          label survives for a reader who cannot see the column it used to sit in. That satisfies
-          "never an absence" more strictly than a disclosure does — a disclosure hides four facts
-          behind a press — and it needs no duplication, no JS and no cross-browser trick. If a
-          later measurement shows the saving is not enough, the disclosure is the escalation and it
-          should be built with the width decided in JS ONCE, above this row. */}
+          It is withdrawn rather than repaired because the query was asking the wrong question
+          anyway. The threshold was 26rem against the FACTS' own width, and the thing that decides
+          whether they need to collapse is whether the ROW is tight — which depends on what is
+          docked beside them, and is known at the row, not here. The facts fit as they are: 465 px
+          of ink in a 979 px bar at the narrowest width where that bar exists.
+
+          If the row ever does get tight, the container belongs on the row and there are two of
+          them, so it wants a decision rather than a class. */}
       <FactList
         activityCount={activityCount}
         criticalCount={criticalCount}
@@ -171,14 +167,12 @@ function Fact({ label, value }: { label: string; value: string }): React.ReactEl
   return (
     <span
       className="inline-flex items-center gap-1 whitespace-nowrap"
-      // The label survives the collapse for a reader who cannot see it. Below the threshold the
-      // visible label is `display: none` — which removes it from the accessibility tree too — so
-      // without this the value would announce as a bare date with nothing saying what it is.
+      // Kept through the collapse's withdrawal: the label and value are two spans, so a reader
+      // using a screen reader gets "Finish, 28 Jan 2026" as one name rather than two adjacent
+      // fragments they have to join themselves.
       aria-label={`${label}: ${value}`}
     >
-      {/* Hidden below the threshold, shown above it (M2-T3). The FACT never goes; only the word
-          that introduces it, which the `aria-label` above still carries. */}
-      <span className="hidden @[26rem]/facts:inline">{label}</span>
+      <span>{label}</span>
       {/* **Colour, not weight.** The bar's ground is `--muted-foreground` and the value is
           `--foreground`, which already separates them; adding `font-medium` on top was one more
           screen placing its own weight and the ADR-0097 ratchet said so on the first run. A ratchet
