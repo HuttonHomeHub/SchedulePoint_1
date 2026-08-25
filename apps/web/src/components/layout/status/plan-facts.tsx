@@ -68,8 +68,70 @@ export function PlanFacts({
   return (
     <div
       data-schedule-state={scheduleStateAttr(scheduleState)}
-      className="text-muted-foreground flex h-6 shrink-0 items-center gap-4 px-3 text-xs"
+      className="text-muted-foreground @container/facts flex min-h-6 shrink-0 items-center gap-4 px-3 text-xs"
     >
+      {/* **A container query, never a `ResizeObserver`** (M2-T3). This row's width is an OUTPUT of
+          what is in it — a docked strip shares it — so a JS measurement here would re-import the
+          "a row measures its own leftover width and gets it wrong" defect this repository has
+          recorded five times, most recently in ADR-0091 M7. `@container` asks the question that
+          actually matters ("is *this* box narrow?") and cannot feed its own answer back in.
+
+          **The plan specified a disclosure and this is not one — recorded rather than done
+          quietly.** A disclosure needs open/closed state, and under the container-query-only
+          constraint the only ways to get it are (a) JS for the breakpoint, which is the forbidden
+          measurement, or (b) both presentations in the markup with CSS choosing one. (b) was built
+          first and rejected on its own evidence: `plan-status-bar.test.tsx` went red with five
+          duplicate-match failures, because jsdom does not evaluate container queries — which is
+          not merely a test artefact but the honest statement that the DOM really does hold two
+          copies, and that only a browser applying the query keeps a reader from meeting the same
+          fact twice.
+
+          So the facts collapse by shedding their LABELS, not by hiding. Every fact is present at
+          every width and in one copy; below the threshold the value carries an `aria-label` so the
+          label survives for a reader who cannot see the column it used to sit in. That satisfies
+          "never an absence" more strictly than a disclosure does — a disclosure hides four facts
+          behind a press — and it needs no duplication, no JS and no cross-browser trick. If a
+          later measurement shows the saving is not enough, the disclosure is the escalation and it
+          should be built with the width decided in JS ONCE, above this row. */}
+      <FactList
+        activityCount={activityCount}
+        criticalCount={criticalCount}
+        dataDate={dataDate}
+        projectFinish={projectFinish}
+        pending={pending}
+      />
+      {/* **Exempt from the collapse, deliberately.** ADR-0082's rule is that a control shut by a
+          state the reader can change is shaded with its reason rather than hidden — and the same
+          reasoning applies one step earlier: Recalculate is the only thing on this row that DOES
+          something, and burying the sole remedy for a stale schedule behind a disclosure is the
+          ADR-0094 defect ("a shading nobody opens the menu to see is not a shading") one surface
+          along. It keeps its place at every width. */}
+      <ScheduleStateRegion state={scheduleState} onRecalculate={onRecalculate} />
+    </div>
+  );
+}
+/**
+ * The five facts, rendered identically in both presentations.
+ *
+ * One component rather than two copies of the markup: a wide row and a disclosure panel that each
+ * look right alone are exactly how ADR-0062's drift happens, and only a reader who opened both
+ * would ever see one is a version behind.
+ */
+function FactList({
+  activityCount,
+  criticalCount,
+  dataDate,
+  projectFinish,
+  pending,
+}: {
+  activityCount: number | undefined;
+  criticalCount: number | undefined;
+  dataDate: string | null | undefined;
+  projectFinish: string | null | undefined;
+  pending: boolean;
+}): React.ReactElement {
+  return (
+    <>
       <Fact label="Activities" value={pending ? '…' : (activityCount ?? 0).toString()} />
       <Fact
         label="Data date"
@@ -94,10 +156,10 @@ export function PlanFacts({
           {criticalCount === 1 ? '1 critical activity' : `${criticalCount} critical activities`}
         </span>
       ) : null}
-      <ScheduleStateRegion state={scheduleState} onRecalculate={onRecalculate} />
-    </div>
+    </>
   );
 }
+
 /**
  * One labelled fact.
  *
@@ -107,8 +169,16 @@ export function PlanFacts({
  */
 function Fact({ label, value }: { label: string; value: string }): React.ReactElement {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap">
-      <span>{label}</span>
+    <span
+      className="inline-flex items-center gap-1 whitespace-nowrap"
+      // The label survives the collapse for a reader who cannot see it. Below the threshold the
+      // visible label is `display: none` — which removes it from the accessibility tree too — so
+      // without this the value would announce as a bare date with nothing saying what it is.
+      aria-label={`${label}: ${value}`}
+    >
+      {/* Hidden below the threshold, shown above it (M2-T3). The FACT never goes; only the word
+          that introduces it, which the `aria-label` above still carries. */}
+      <span className="hidden @[26rem]/facts:inline">{label}</span>
       {/* **Colour, not weight.** The bar's ground is `--muted-foreground` and the value is
           `--foreground`, which already separates them; adding `font-medium` on top was one more
           screen placing its own weight and the ADR-0097 ratchet said so on the first run. A ratchet
