@@ -535,6 +535,25 @@ jobs:
       - name: Web end-to-end tests (workspace chrome — Visual placement)
         run: pnpm --filter @repo/web test:e2e:workspace-chrome
 
+      # WCAG 2.2 §2.5.8 target sizes on the plan's command surface
+      # (playwright.workspace-fit.config.ts, workspace-chrome-fit M1). This closes TECH_DEBT #186:
+      # ADR-0109 D1 deleted `e2e-toolbar-fit` along with the width ladder it tested — correctly,
+      # since it asserted a row that no longer exists — and took with it the ONLY automated cover
+      # 2.5.8 had in this repository.
+      #
+      # axe cannot replace it and its green is meaningless for this criterion: `target-size` is
+      # tagged wcag22aa while every legacy scan here requests wcag2a/wcag2aa, AND the rule ships
+      # enabled:false. Two independent reasons it can never fire.
+      #
+      # It sweeps each item's FOCUSABLE control rather than `[data-toolbar-item]`, because that
+      # attribute sits on a wrapper in some cases and a split button's caret is deliberately
+      # tabIndex={-1} — which is how a caret shipped at 23x36 under a gate reporting green. And it
+      # asserts pointer reachability with elementFromPoint rather than overhang, because a control
+      # shrunk to zero width has zero overhang and is still in the DOM. Runs after the prior suites
+      # tear down their servers.
+      - name: Web end-to-end tests (command surface — target sizes)
+        run: pnpm --filter @repo/web test:e2e:workspace-fit
+
       # The TSLD minimap journey (playwright.minimap.config.ts, ADR-0100 M2-T7 — lands with the
       # first user-facing milestone, ADR-0081). No flags to pin: the epic ships without a VITE_
       # flag, so this runs the default bundle, which IS the shipped surface. What only it can
@@ -723,6 +742,7 @@ jobs:
             apps/web/playwright-report-multi-select/
             apps/web/playwright-report-copy-paste/
             apps/web/playwright-report-workspace-chrome/
+            apps/web/playwright-report-workspace-fit/
             apps/web/playwright-report-staff/
             apps/web/playwright-report-public/
           if-no-files-found: ignore

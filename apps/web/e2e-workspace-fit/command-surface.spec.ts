@@ -104,10 +104,20 @@ async function sweep(page: Page): Promise<Target[]> {
 test.describe.configure({ mode: 'serial' });
 
 test.describe('The plan command surface', () => {
-  test('every command clears 24 × 24 and a pointer can reach it, at every width', async ({
-    page,
-  }) => {
-    test.setTimeout(240_000);
+  /**
+   * **One page, built once, shared by both tests.**
+   *
+   * `mode: 'serial'` shares the WORKER, not the page — each test still gets a fresh `page` fixture,
+   * so the second one opened a blank tab and failed looking for a deck that had never been
+   * rendered. That was the first run's failure, and it was the spec's rather than the product's.
+   *
+   * Shared rather than built twice because the setup is ~25 s of real sign-up, hierarchy, plan,
+   * seed and recalculation, and paying that again to fold one group is not a trade worth making.
+   */
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage({ viewport: { width: 1646, height: 1097 } });
     const orgSlug = await onboard(page, Date.now());
     await createHierarchy(page);
     await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
@@ -121,7 +131,14 @@ test.describe('The plan command surface', () => {
     // without it measures a different, smaller set of enabled controls.
     await ensurePen(page);
     await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+  });
 
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  test('every command clears 24 × 24 and a pointer can reach it, at every width', async () => {
+    test.setTimeout(240_000);
     for (const viewport of WIDTHS) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(500);
@@ -159,7 +176,7 @@ test.describe('The plan command surface', () => {
    * that only folds proves the group can be hidden; it takes the unfold to prove the commands come
    * back, which is the state a planner is left in if it does not.
    */
-  test('a deck group folds and unfolds, and its commands come back', async ({ page }) => {
+  test('a deck group folds and unfolds, and its commands come back', async () => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 1646, height: 1097 });
     const deck = page.getByRole('toolbar', { name: 'Plan commands' });
