@@ -1,5 +1,20 @@
 # @repo/web
 
+## 0.106.0
+
+### Minor Changes
+
+- [#387](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/387) [`45bfb4d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/45bfb4d56f44685cb32e6dab813cdb764d6006e2) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix a keyboard-reachability failure on the plan's command deck (WCAG 2.2 §2.1.1, level A).
+  
+  Focusing the deck's activity-search field made it the roving tab stop, and the deck's key handler
+  handed every navigation key to the caret — so eighteen of the surface's twenty-seven commands had no
+  keyboard route at all until the page was reloaded. The veto is now per key rather than per element:
+  a single-line field keeps the horizontal keys and Home/End for its caret, and the vertical arrows
+  stay with the toolbar as the route out.
+  
+  Also adds the deck's first unit suite and a browser journey that folds and unfolds a command group
+  from the keyboard, which is how the defect was found.
+
 ## 0.105.0
 
 ### Minor Changes
