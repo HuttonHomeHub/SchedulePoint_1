@@ -45,6 +45,14 @@ the turn_, and records that the mechanism which actually held is the instruction
 fired message**, not in this repository — with the honest caveat that it is not a gate and cannot be,
 since nothing in CI can observe whether a session re-armed.
 
+**And the fix produced a second instance of the same defect within the hour, which is why it is
+recorded rather than quietly corrected.** The re-armed message carried a terminal condition
+requiring the work to be "merged and released — tag and publish job confirmed". This change has **no
+changeset**, so merging it opens no Version Packages PR and cuts no release: the exit test could
+never pass, and a loop whose exit test cannot pass does not stop, it re-arms forever while looking
+diligent. ADR-0076 Class 3 committed inside the fix for ADR-0076 Class 3. §19.12 now says to check a
+terminal condition is _reachable_ before arming it.
+
 ### 2026-08-20 — Reconciliation pass at the ADR-0099 epic boundary
 
 **What it found**, in the order the runbook walks:

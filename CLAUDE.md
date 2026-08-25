@@ -3531,6 +3531,14 @@ When operating in this repo, Claude Code should:
       weak instrument §19.11's last bullet describes, and give the message a
       written **terminal condition** so "stop" is a fact it can check rather than
       a judgement it has to make.
+    - **And check the terminal condition is reachable before arming it.** One
+      written the same day as this bullet required the work to be "merged and
+      released, tag and publish job confirmed" — for a documentation change with
+      **no changeset**, which opens no Version Packages PR and cuts no release.
+      A loop whose exit test can never pass does not stop; it re-arms forever
+      while looking diligent. The failure is the same Class 3 shape as the wording
+      three bullets up, committed in the message that fixed it: state the
+      condition, then ask what would actually make it true.
     - **If something genuinely needs an answer**, ask it, then **keep working on
       everything that does not depend on it**. A blocking question blocks one
       milestone, not the programme.
