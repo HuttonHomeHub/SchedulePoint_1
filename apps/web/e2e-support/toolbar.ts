@@ -128,12 +128,30 @@ export async function recalculate(page: Page): Promise<void> {
   const bar = page.locator('[data-schedule-state]');
   await expect(bar).toBeVisible();
   // **Both transient states, not just the obvious one.** `recalculating` is a run in flight;
-  // `pending` is the summary not yet arrived, and the read below is meaningless in either. Waiting
-  // out only the first is what let this helper report success on a plan it had not looked at.
+  // `pending` is the plan's rows not yet arrived, and the read below is meaningless in either.
+  // Waiting out only the first is what let this helper report success on a plan it had not
+  // looked at.
   await expect(bar).not.toHaveAttribute('data-schedule-state', 'recalculating');
   await expect(bar).not.toHaveAttribute('data-schedule-state', 'pending');
+
+  /**
+   * **The press is best-effort; the postcondition is the contract.**
+   *
+   * Reading the state and then clicking is check-then-act, and the gap is real: auto-recalculation
+   * (ADR-0032 M3) can settle the plan between the two, at which point the control unmounts —
+   * because the schedule became current, which is precisely what this helper is for. Playwright
+   * then retries the click against a detached element until the 30 s timeout.
+   *
+   * CI found it deterministically and the local runs never did, which is the sharper half: the race
+   * is decided by how long a debounce and a request take relative to a click, and a faster machine
+   * hides it. Nothing is swallowed — a genuinely broken control still fails, on the assertion below,
+   * with a message about the state rather than about a detached node.
+   */
   if ((await bar.getAttribute('data-schedule-state')) === 'stale') {
-    await bar.getByRole('button', { name: 'Recalculate' }).click();
+    await bar
+      .getByRole('button', { name: 'Recalculate' })
+      .click({ timeout: 5_000 })
+      .catch(() => undefined);
   }
   await expect(bar).toHaveAttribute('data-schedule-state', 'current');
 }
