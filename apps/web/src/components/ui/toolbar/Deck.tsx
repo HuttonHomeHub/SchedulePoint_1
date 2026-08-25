@@ -36,7 +36,12 @@ import { cn } from '@/lib/utils';
  * gives its width back. That is the same remedy the old app used on narrow screens, and it is the
  * honest one: the reader decides what they do not need, rather than an algorithm guessing.
  *
- * **Stacked buttons.** Icon above a 9.5 px label rather than beside it — roughly half the width for
+ * **Buttons were stacked until M1 (workspace-chrome-fit, 2026-08-25) made every control inline.**
+ * Read the paragraph below as history: its width argument still explains why the deck can afford to
+ * wrap, but it no longer describes the layout. It said "stacked buttons" while the code two hundred
+ * lines down had stopped stacking them.
+ *
+ * Icon above a 9.5 px label rather than beside it — roughly half the width for
  * the same information, which is the geometry that makes "every command labelled" affordable at all.
  * The label is suppressed only where the icon is genuinely universal ({@link ICON_ONLY}).
  *
@@ -280,8 +285,11 @@ export function Deck<Ctx>({
             //
             // Turning the card on its side spends the caption's width instead of its height, which
             // the deck has to spare and the workspace does not: the card becomes one row tall, and
-            // the deck 170 → ~112. The buttons are untouched — stacked, labelled, exactly as
-            // approved. The height was never theirs.
+            // the deck 170 → ~112. The height was never the buttons'.
+            //
+            // This said "the buttons are untouched — stacked, labelled, exactly as approved" until
+            // M1 unstacked them. Corrected rather than deleted: turning the card on its side is an
+            // argument about the CARD, and is unaffected by what the buttons inside it do.
             className="border-border/60 bg-foreground/5 flex items-stretch gap-2 rounded-md border px-2 py-1.5"
           >
             <button
@@ -308,7 +316,13 @@ export function Deck<Ctx>({
                 // The mockup drew this at 9px with wider tracking; using the ramp's 10px instead is
                 // the disciplined answer, and the difference is imperceptible at a caption. A ramp
                 // that gets a new member every time a design wants half a pixel is not a ramp.
-                'text-primary text-micro flex shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
+                // **`min-h-9`, the same box the buttons take** (M1-T2). The caption measured 32 px
+                // against `toolbarControlVariants`' 36, and both centre their text, so their labels
+                // sat ~2 px apart — the residual spread left after M1-T1 removed the stacked
+                // geometry. A caption is a real control here (it folds its group and is a roving
+                // stop), so matching the control height is what it should have had anyway, and it
+                // moves WCAG 2.5.8's minor axis in the right direction rather than the wrong one.
+                'text-primary text-micro flex min-h-9 shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
                 'border-primary/25 cursor-pointer',
                 // The rule that separated the caption from its buttons was a `border-b` under a
                 // full-width row; on its side it is a `border-r` beside them, doing the same job in
@@ -375,17 +389,25 @@ export function Deck<Ctx>({
                           tabIndex={tabIndexFor(r.item.id)}
                           onActivate={() => r.item.onActivate!(context)}
                           onFocus={() => setActiveId(r.item.id)}
-                          // The stacked geometry. `!` on the layout properties because
-                          // `toolbarControlVariants` sets a horizontal row and a height, and this
-                          // is the one place that is deliberately overridden rather than a variant
-                          // added — the deck is the only surface that stacks, and a variant would
-                          // invite the selection bar to use it.
+                          // **The stacked geometry is GONE, and with it the four `!important`
+                          // overrides** (M1-T1, CQ-1). A plain command stacked its label under its
+                          // icon while a split-button or popover trigger — which never reached this
+                          // branch — kept the shared CVA's row. Nobody chose that: it is one
+                          // `if` having a side effect on layout. Measured at 1646, the deck's label
+                          // tops were 137 for inline items and 149 for stacked ones, and a reader's
+                          // eye tracks the difference along the row.
+                          //
+                          // There is now exactly ONE geometry, so it needs no variant to select it:
+                          // the shared `toolbarControlVariants` row is simply not overridden. A
+                          // two-valued `layout` variant with no second consumer would be dead code
+                          // pretending to be a choice.
+                          //
+                          // Deliberately kept: `min-w-*` and the label's `text-micro`. The M0 probe
+                          // that priced this change altered flex-direction, height, gap and
+                          // alignment and NOTHING else, so its +198 px is the cost of the geometry
+                          // alone. Changing the type scale here as well would make the shipped
+                          // width unattributable to the number that justified the change.
                           className={cn(
-                            '!h-auto !flex-col !gap-0.5 !px-2 !py-1 leading-none',
-                            // Every value from the spacing scale rather than the mockup's exact
-                            // pixels. The ratchets caught the arbitrary forms and they were right
-                            // to: an arbitrary size is invisible to the rhythm and cannot be
-                            // re-scaled with the rest of the product later.
                             ICON_ONLY.has(r.item.id) ? 'min-w-9' : 'min-w-12',
                             '[&>span:last-of-type]:text-micro [&>span:last-of-type]:font-medium',
                           )}

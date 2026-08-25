@@ -995,7 +995,16 @@ function SearchFieldControl({
         // only ever measured Row 2, and the search field was on Row 1. Merging the rows put it in
         // the sweep for the first time and it failed immediately. A gate that measures half a
         // surface reports on half a surface (WCAG 2.5.8).
-        className={cn('h-8 pl-8 text-sm pointer-coarse:h-9', searchFieldWidth(layout))}
+        // **`h-9`, matching every other control on the deck** (M1-T2 follow-up). This field was
+        // `h-8` with a `pointer-coarse:h-9`, which made it the ONE deck control sized outside
+        // `toolbarControlVariants`' `min-h-9` — and it is the residual 3 px label spread M1 measured
+        // and could not identify. It hid from both measurement probes because it is a leaf `<input>`
+        // with no `<span>` children, so a span-based label probe never saw it: "the control heights
+        // are uniform" was true of every BUTTON in the row and false of the row.
+        //
+        // The coarse-pointer conditional goes with it rather than being kept as a floor. It existed
+        // to raise a 32 px target for touch; the base is 36 px now, so it can only ever be a no-op.
+        className={cn('h-9 pl-8 text-sm', searchFieldWidth(layout))}
       />
     </div>
   );
@@ -1112,7 +1121,11 @@ function LiveSearchControl({
         {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
         className={cn(
-          'h-8 pl-8 text-sm pointer-coarse:h-9',
+          // `h-9`, for the reason at the sibling control above: this was the deck's one control
+          // outside the shared `min-h-9`, and the cause of a label spread M1 measured twice without
+          // finding. Both sites move together — they are the same field in two states, and fixing
+          // one is exactly how a correct pattern gets applied to a control and not its neighbour.
+          'h-9 pl-8 text-sm',
           searchFieldWidth(api.layout),
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is

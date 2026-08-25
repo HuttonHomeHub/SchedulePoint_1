@@ -529,6 +529,25 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **The workspace foot, the deck's labels, and a gate that could not see its own defect** —
+  **shipped** (ADR-0110, 2026-08-25). Three complaints against `web-v0.103.0`. The plan's facts move
+  into the activities row, so the workspace foot is one band instead of two and the word
+  "Activities" appears once — the canvas gains ~25 px at every width where that row exists. Every
+  control on the command deck takes one geometry, taking the worst within-row label spread from
+  12 px to 3 px. The third complaint — a one-row header — is **withdrawn on its own falsification
+  condition**, written before the measurement: at 1440 in the worst pen state the merged row is
+  536 px short against a +120 px bar, because in eight of ten lock states the pen sentence is the
+  only thing naming who holds the plan. That complaint is therefore unfixed, and the arithmetic is
+  on the page rather than the disappointment being buried.
+
+  Its transferable finding is not about layout. Four times in one epic something that looked like
+  evidence was not: a probe that measured the wrong element, a probe that read hidden spans, a
+  container query that collapsed the facts to 24 × 48 px while every unit test passed because jsdom
+  has no layout, and — sharpest — a WCAG 2.5.8 gate written that day to close a debt row, blind to
+  the split-button caret it cited as its reason for existing. Hence the rule the ADR is named for:
+  a gate is finished when it has been made to fail by the defect it was written for, not when it
+  passes.
+
 - **The plan workspace redesign — "Drafting Table"** — **shipped** (ADR-0109, 2026-08-24). Four
   consecutive epics worked the command surface and each answered the same question by shaving
   something; the product owner's verdict after all five was that it still looked poor. The diagnosis

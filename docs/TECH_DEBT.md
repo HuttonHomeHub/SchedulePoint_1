@@ -4391,8 +4391,23 @@ the failure mode rather than one of its possible causes.
 
 ## #185 — The command deck is 182 px tall, and nobody measured it before building it
 
-_Filed 2026-08-24 with ADR-0109. **Measured, cause not yet established.** This is the epic's own
-premise landing on it._
+_Filed 2026-08-24 with ADR-0109. **Cause ESTABLISHED 2026-08-25** by workspace-chrome-fit M0
+(`docs/specs/workspace-chrome-fit/m0-measurement.md`), and it is not the one this row expected._
+
+**The anomaly below is resolved.** This row flags the height being identical at 1920 and 1280 as
+suspect, since a `flex-wrap` container should reflow. It does not reflow because its **2089 px of
+items fit in exactly two lines at every width from 1280 to 1920**. The height is a **wrapping**
+cost, not a **stacking** one.
+
+**So the lever this row names is worth 8 px.** It calls un-stacking "the single biggest term in
+the height"; measured, inlining every control takes the deck 116 → 108 px at 1920/1646/1440 —
+and 116 → **224** at 1280, where the cards wrap from two lines to four. The product owner chose
+inline anyway on 2026-08-25, for the label-alignment win rather than the height: worst within-row
+label spread 12 px → 3 px. That shipped as M1.
+
+**What this row got right** is that the obvious arithmetic was suspect and that the decision was
+the product owner's. What it got wrong is the size of the prize — which is the argument for
+measuring a lever before naming it the biggest one.
 
 `measure-toolbar/vertical-stack` on a populated plan with the pen held, after the redesign:
 
@@ -4437,7 +4452,16 @@ test; changing the test would be hiding the finding.
 
 ## #186 — WCAG 2.5.8 lost its only automated cover when the fit gate was deleted
 
-_Filed 2026-08-24 with ADR-0109 M5. The product passes; the **gate** is gone._
+_Filed 2026-08-24 with ADR-0109 M5. **CLOSED 2026-08-25** by workspace-chrome-fit M1-T3:
+`apps/web/e2e-workspace-fit/command-surface.spec.ts`, its own CI step, green at 1280 / 1440 /
+1646 / 1920 on its first run. The replacement is cheaper than the original, exactly as this row
+predicted: a wrapping surface has no demotion to model, so the sweep is "every command clears
+24×24 and a pointer can reach it" with no width ladder to drive. Both traps this row named were
+taken rather than rediscovered — it descends to each item's focusable control (so a split
+button's `tabIndex={-1}` caret is swept, the half that once shipped at 23×36) and asserts
+`elementFromPoint` reachability rather than overhang (a control at zero width has zero overhang
+and is still in the DOM). A pinned positive requires more than fifteen controls swept, so it
+cannot pass against a deck that renders nothing._
 
 ADR-0090 M5 established that **axe cannot see target size**: `target-size` is tagged `wcag22aa`,
 every scan in this estate requests `wcag2a`/`wcag2aa`, and the rule ships `enabled: false` besides.
@@ -4465,3 +4489,72 @@ surface that wraps has no demotion to model, so the sweep is "every `[data-toolb
 control_, not `[data-toolbar-item]` on a wrapper — that is how the split-button caret went unmeasured
 at 23×36 — and assert pointer reachability rather than overhang, because a control shrunk to zero
 width has zero overhang and is still in the DOM.
+
+---
+
+## #187 — The deck's labels sit 3 px apart and three hypotheses are falsified
+
+_Filed 2026-08-25 with workspace-chrome-fit M1. **Not a regression** — the spread was 12 px before
+this epic and is 3 px after. This row exists so the next person does not re-run the experiments that
+have already been run._
+
+At 1646 the deck reports label tops of **135 and 138** on every wrap row. Every control is `36 px`
+tall, every control is inline, and the spread persists.
+
+**Three hypotheses, each built and measured, each falsified:**
+
+| hypothesis          | test                                                                                                        | result                                                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Control height      | forced every item to `h-10`                                                                                 | spread unchanged at 12 px (pre-M1)                                                                          |
+| Type scale          | deleted `Deck.tsx`'s `[&>span:last-of-type]:text-micro` so every label uses the CVA's `text-sm`             | **+74 px** of item width, spread unchanged at 3 px — twice, once before and once after heights were uniform |
+| One outlier control | the search field was `h-8` + `pointer-coarse:h-9`, the only deck control outside `min-h-9`; raised to `h-9` | heights became uniform `[36]`, spread unchanged at 3 px                                                     |
+
+The search-field fix was **kept** — it was a real breach of M1's one-geometry contract and it closed a
+genuine inconsistency. It simply was not the cause of the spread. The type-scale change was
+**reverted** both times: a change that costs 74 px on a surface already wrapping to four lines at
+1280, and buys nothing measurable, is not worth keeping because it reads as more consistent in source.
+
+**What is left to try**, in rough order of likelihood: the icons. Deck items carry `size-3`/`size-4`
+icons and some carry none; in an `items-center` flex line the tallest child sets the line box, so two
+items with different icon heights centre their text differently even at identical control height. The
+probe would be to null every icon and re-measure — which is cheap and was not done only because 3 px
+is close to the threshold of what the eye tracks, and the complaint that opened this epic was about
+12 px.
+
+**The measurement instrument to use** is `apps/web/measure-toolbar/m0-repaired.spec.ts`, whose
+`perRow.labelTops` is what produced every number above. Note its blind spot, found the hard way: it
+selects labels by `<span>`, so a leaf `<input>` control is invisible to it — that is exactly why the
+search field survived two commits as "unidentified", and it is why the height column above had to be
+read from `distinctControlHeights` rather than from the label tops.
+
+---
+
+## #188 — Eight of fourteen measurement harnesses cannot run
+
+_Filed 2026-08-25 with ADR-0110. **Not a product defect** — these are instruments, and the product
+they measure is fine. The risk is that they are quotable._
+
+`apps/web/measure-toolbar/` holds fourteen specs. **Eight fail in ~8 seconds each**: `header-fit`,
+both `item-widths` specs, `loaded-plan`, `measure`, `menu-band`, `reachability`, `search-icon`. The
+uniform, fast failure says stale locators — almost certainly from ADR-0109 deleting the tool rail,
+moving the organisation destinations and reshaping the command surface.
+
+These are the instruments that priced **four consecutive command-surface epics**.
+
+**A broken harness is worse than a deleted one.** A deleted gate is absent and a reader notices; a
+broken harness is present, reads as authoritative, and its last successful output is still sitting in
+`apps/web/measure-output/` with nothing marking it as pre-redesign. Someone reaching for `header-fit`
+to settle a width question finds a file that looks like the answer and cannot execute — or worse,
+finds its stale JSON and does not check the date. That is `#186`'s shape (a gate whose subject moved)
+crossed with ADR-0076 Class 1 (a number nobody re-derived).
+
+**Not fixed here deliberately.** Repairing eight harnesses does not belong inside a milestone about
+label baselines, and folding it in is how scope gets away. It is filed with the decision recorded
+rather than done quietly or forgotten.
+
+**When it is picked up**, the cheap first move is to decide per harness whether its _subject_ still
+exists. Several measure the width ladder and the overflow menu, which ADR-0109 D1 deleted — those
+should go the way `e2e-toolbar-fit` went, not be repaired. The rest want their locators updated.
+`m0-repaired.spec.ts`, `m0-bands.spec.ts`, `m0-merged-row.spec.ts` and `busy-band.spec.ts` are the
+working examples to copy from, and `m0-measurement.md` records the eight instrument defects found
+writing them — worth reading before writing a ninth.
