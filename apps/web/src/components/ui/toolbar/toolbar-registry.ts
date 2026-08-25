@@ -558,13 +558,16 @@ export function priorityOf<Ctx>(item: ToolbarItem<Ctx>): number {
 }
 
 /**
- * **`computeOverflow` was deleted at ADR-0091 M7.** `computeLadder` (`toolbar-ladder.ts`) replaced
- * it: the overflow decision is now one rung of a ladder that also decides labels and tier-3
- * admission, and the three cannot be taken independently — each reads the budget the one before it
- * left.
+ * **Nothing demotes on width any more, and `priority` no longer decides what a planner can reach.**
+ * `computeOverflow` was deleted at ADR-0091 M7 in favour of `computeLadder` (`toolbar-ladder.ts`),
+ * and ADR-0109 D1 then deleted **that** too: a command surface wraps rather than hiding, so there
+ * is no budget, no demotion and no `⋯`. `priority` survives only as ordering within a group.
  *
- * Recorded here rather than left as a silent gap, because this same milestone *extended* the old
- * function with a new parameter and gave it three new tests hours before making it unreachable. A
- * component review found it still exported, still tested, and still carrying a docblock describing
- * how the running component fed it — the ADR-0058 drift class, in a docblock rather than in prose.
+ * Both halves of this docblock have now been stale in turn. It was written because ADR-0091 M7
+ * *extended* `computeOverflow` with a new parameter and gave it three new tests hours before making
+ * it unreachable — a component review found it still exported, still tested, and still describing
+ * how the running component fed it. The replacement sentence then outlived its own subject by a day
+ * short of a week, citing `toolbar-ladder.ts` after that file was deleted. Corrected by the
+ * 2026-08-25 reconciliation pass; kept rather than deleted because a reader meeting `priority` still
+ * needs to be told it is not the demotion key, which is the one thing both versions got right.
  */

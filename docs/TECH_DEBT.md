@@ -3210,11 +3210,15 @@ pre-existing, and only visible now because the loading state had never been capt
 `web-v0.97.0`, before anyone acted on this row.** It was raised as "worth putting to the product
 owner"; they were asked, chose to make the Explorer light, and it shipped in the same release that
 filed this. The Explorer sits in the context drawer at `tone="panel"`, and `--panel` is now
-`oklch(0.968 0.003 250)`. The navy that remains is the narrow icon rail (`tone="chrome"`), which is
-chrome and carries controls. **Left standing for a day, this row would have sent the product owner a
+`oklch(0.968 0.003 250)`. **Left standing for a day, this row would have sent the product owner a
 question they had already answered** — the drift class ADR-0058 exists for, in the register rather
-than in a spec. The second half is untouched and still open: consider whether the rail should
-compress when sparse, independent of colour.
+than in a spec.
+
+Its second half — "consider whether the **rail** should compress when sparse" — is now **moot, and
+the way it went moot is the point**: this row named "the narrow icon rail (`tone="chrome"`)" as the
+navy that remains, and ADR-0109 D2 **deleted that rail entirely** on 2026-08-24. A register row
+describing a component that no longer exists reads as outstanding work; it was still doing so at the
+2026-08-25 pass. Closed by deletion of its subject, not by anyone acting on it.
 
 **d. The sign-in → organisation-home transition is black-to-white** — **RESOLVED in `web-v0.97.0`,
 before anyone acted on this row.** Correctly identified as a product-owner question; they were asked
@@ -4610,3 +4614,82 @@ said "the test caught it immediately". That sentence is true of `Toolbar.test.ts
 primitive: a comment claiming coverage that belonged to a neighbour, which is ADR-0076 Class 3 in
 the file the defect lived in. `Deck.test.tsx` now exists and pins the contract in both directions —
 the caret keys the field must keep, and the vertical ones it must not.
+
+---
+
+## #190 — `Toolbar`'s vertical variant has no consumer, and a standard still documents it
+
+_Filed 2026-08-25 by the reconciliation pass._
+
+`Toolbar` supports `orientation="vertical"` and its docblock (`Toolbar.tsx:106`) calls it "the
+**vertical mode rail**". `docs/DESIGN_SYSTEM.md:195` documents the rule that governs it — _"the
+vertical variant is always icon-only; a 48 px rail cannot hold a label without wrapping, clipping,
+or widening the leading edge of the application."_
+
+**ADR-0109 D2 deleted that rail on 2026-08-24, and it was the variant's only consumer.** Verified
+rather than assumed: `grep -rn 'orientation="vertical"' apps/web/src` returns five hits and **not one
+is a `Toolbar`** — four are `PanelResizer` and one is `Tabs`.
+
+So the branch is live code with no caller, and the standard beside it reads as a rule somebody must
+follow. That is the ADR-0088 Class A shape one layer down — an alternative surface kept alive by
+documentation rather than by a flag.
+
+**Not fixed here, deliberately.** Removing the variant changes `ToolbarProps` — a component's public
+contract — which fires an ADR-0105 trigger and wants a spec rather than a paragraph inside a
+reconciliation pass. The cheap first move when it is picked up is to decide whether the vertical
+option has a _future_ consumer (a rail is a plausible thing to want again) or whether it is dead:
+if dead, delete the prop, the branch, its two `cn()` arms and the DESIGN_SYSTEM clause together, so
+the standard and the code go in one commit.
+
+---
+
+## #191 — The local pre-push gate costs 8 minutes and 96% of it is two steps
+
+_Filed 2026-08-25 by the reconciliation pass, at the product owner's request to check whether we
+over-test locally._
+
+**The hypothesis was that the ten `check:*` gates are overdone locally. Measured, they are not — they
+cost 10.4 s between them, 2.2% of the gate.** Individually, all under 2 s: `doc-links` 895 ms,
+`playbook` 1,828, `build-contract` 880, `surface-contract` 872, `flags` 845, `counts` 854, `claims`
+1,417, `adr-coverage` 932, `nginx` 991, `frontend-only` 893.
+
+The cost is elsewhere. For a **one-line change to one `apps/web` source file** — the ordinary case,
+timed on this machine with turbo warm for every other package:
+
+| Step             | Cost        | Share | Turbo        |
+| ---------------- | ----------- | ----- | ------------ |
+| `pnpm test`      | **345.6 s** | 73%   | 13/14 cached |
+| `pnpm lint`      | **112.7 s** | 24%   | 14/15 cached |
+| `pnpm typecheck` | 6.5 s       | 1.4%  | 14/15 cached |
+| ten `check:*`    | 10.4 s      | 2.2%  | (uncached)   |
+| **total**        | **~475 s**  |       |              |
+
+A full cold run is **10 m 29 s**. All of the 345.6 s is `@repo/web:test` — **552 unit test files, all
+of them, on every run**.
+
+**Both expensive steps are expensive by configuration, not by necessity**, and neither observation
+requires weakening anything:
+
+- `eslint` runs with **no `--cache`** (`apps/web/package.json:12` is a bare `eslint .`).
+- `vitest` runs the **whole** suite (`"test": "vitest run"`); it has `--changed` and `related`.
+
+**The comparison that decides it:** CI's `quality` job — which runs _the same_ lint, typecheck, test
+and all ten checks, plus `build` — took **11 m 22 s** on PR #387 (19:37:38 → 19:49:00). So the local
+gate spends ~8 minutes to pre-empt an 11-minute job. It is not buying latency; it is buying a **round
+trip** — catching the failure before the push rather than after. Today it did exactly that twice, and
+both were mechanical (a missing `order` prop, a stale count).
+
+**Not changed here.** `scripts/prepush.sh` is a shared gate, so altering what "prepush green" means
+fires an ADR-0105 trigger and needs a spec, not a reconciliation-pass edit. Two candidates for that
+spec, in order of confidence:
+
+1. **`eslint --cache`** — no coverage change at all, and the cache file is gitignorable. Near-certain
+   win; the only question is measuring it.
+2. **Scope the local unit run to what changed** (`vitest --changed` or `related`), with CI keeping
+   the full 552-file suite. This _is_ a real weakening of the local signal and must be argued rather
+   than assumed: it trades "everything still passes" for "what you touched still passes", and the
+   thing that makes it defensible is that **CI is the gate that blocks the merge and it does not
+   change**. If that argument is not accepted, option 1 alone still removes a quarter of the cost.
+
+Do **not** answer this by dropping `check:*` scripts. They are 2.2% of the cost and they are the part
+of the gate that catches what a reviewer cannot see.

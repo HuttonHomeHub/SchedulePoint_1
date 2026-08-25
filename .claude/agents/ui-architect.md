@@ -30,15 +30,23 @@ supersedes the old one rather than diverging silently.
 
 The frontend is not a blank slate; most "new" structure has a precedent.
 
-- **A persistent app shell** (ADR-0029), reshaped by ADR-0099: mounted once, and
-  since Graphite it is a CSS **grid** — a fixed 48 px tool rail on the leading
-  edge (brand, organisation switcher, drawer panel buttons, the plan's mode
-  cluster, destinations, account), a stage, and a trailing **context drawer**
-  whose subjects are the Project Explorer (an ARIA `tree`, lazy + virtualized)
-  and whatever the route registers. **There is no top bar at `lg`+** — this line
-  said there was until the 2026-08-20 pass, three weeks after M3 deleted it;
-  below `lg` it survives to carry the off-canvas trigger. Selection is still
+- **A persistent app shell** (ADR-0029), reshaped by ADR-0099 and again by
+  ADR-0109: mounted once, a CSS **grid** of a **docked Project Explorer** on the
+  leading edge (an ARIA `tree`, lazy + virtualized; resizable 200–420, folding to
+  a 34 px spine, or an off-canvas `Sheet` below `lg`), a **header row** carrying
+  identity, the organisation switcher and the account, a stage, and a trailing
+  **context drawer** a route may register a subject into — which has **no
+  production registrant today** (`docs/TECH_DEBT.md` #156). Selection is still
   derived from the URL, and the shell still knows nothing about plans.
+
+  <!-- This bullet has now been wrong in BOTH directions and the swing is the
+  warning. It asserted a top bar three weeks after Graphite M3 deleted one; the
+  2026-08-20 pass corrected it to "there is no top bar at lg+"; ADR-0109 D2 then
+  deleted the 48 px tool rail, docked the Explorer back on the leading edge and
+  RESTORED the header row at every width — so the correction was inverted four
+  days later. An agent asserting a stale invariant is worse than one asserting
+  none, which is why this is in the runbook's step 6. Corrected 2026-08-25. -->
+
 - **A canvas-first plan workspace** (ADR-0030) with a shared orientation-aware
   resizable-panel primitive, and a declarative **toolbar registry** (ADR-0031) —
   a 7-group taxonomy, three prominence tiers, responsive overflow. New plan
