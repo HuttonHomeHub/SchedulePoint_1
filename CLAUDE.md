@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1071 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1072 web
 > source files with 39 Playwright suites beside the base journey, and
 > 110 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -3134,6 +3134,65 @@ progress` off the command surface because **an object action belongs on the obje
   unedited plan to move ADR-0045's pull-staleness, where the honest act is an edit. **The CPM
   engine, the REST API and the database are untouched** — `apps/web` only, which is what makes the
   whole redesign revertible.
+
+- **ADR-0110** _(Accepted; M0–M4 landed 2026-08-25)_ — A gate is verified against the defect it
+  names. Three complaints against `web-v0.103.0` — the header sits on two rows and must fit on one,
+  the activities panel and the status bar look combinable, the toolbar's label heights differ and
+  draw the eye. What the epic turned out to be about is narrower and more useful than any of them:
+  **four separate times, something that looked like evidence was not.** Twice it was my own
+  instrument, once a feature that passed every test while being visibly broken, once a gate written
+  that day and blind to the exact defect it cited as its reason for existing.
+  **D1: the plan's facts have two hosts and a mandatory fallback.** The workspace foot carried two
+  bands and both said "Activities" — the row's heading and the status bar's activity count, one
+  subject rendered twice. The count now names the panel and gives its size, and the canvas gains
+  ~25 px wherever that row exists. Where the facts render is decided by a **registry rather than a
+  branch** (outlet + in-place fallback, the `CanvasDockProvider` shape), because below `md` the
+  activities bar **is not mounted at all** — measured, not inferred — so a literal merge would have
+  deleted the plan's facts on exactly the screens with least room to lose them, which is ADR-0081's
+  defect shipped green. ADR-0092's 0 px dock guarantee survives, re-measured with the facts present.
+  **D2: one geometry on the command deck.** A plain command stacked its label under its icon while a
+  split-button or popover trigger kept it beside; nobody chose that — `Deck.tsx` applied the stacked
+  geometry on the `ToolbarButton` branch only and every `render`-branch item bypassed it. One `if`
+  with a side effect on layout. All 27 controls are inline; worst within-row label spread **12 → 3
+  px**, deck height **116 → 108** at 1920/1646/1440 and **116 → 224 at 1280**, the last put to the
+  product owner with the number and accepted knowingly. **`docs/TECH_DEBT.md` #185 is answered and
+  was wrong about the size of its own prize**: it calls un-stacking "the single biggest term in the
+  height" and it is worth **8 px** — the 116 px was a **wrapping** cost, since 2089 px of items fit
+  exactly two lines at every width from 1280 to 1920.
+  **D3: M3 is withdrawn on its own falsification condition.** The one-row header was the firmest of
+  the three requirements ("this needs to fit on one line without question") and it does not fit: at
+  1440 in the worst pen state the merged row is **536 px short** against a written +120 px bar,
+  because the pen sentence reaches 432 px where an Org Admin views a plan someone else holds — and
+  in eight of ten lock states that sentence is the only thing naming who holds it. **Fourth costing,
+  third withdrawal**; the difference is that the condition was written before the measurement and
+  the number is on the page. **The complaint is therefore unfixed, and that is stated rather than
+  implied.**
+  **D4: a collapse that collapses the thing it is collapsing is not a collapse.** Tailwind's
+  `@container` applies `contain: inline-size`, so the facts — an auto-width `shrink-0` flex item —
+  **collapsed to 24 × 48 px** with all five present in the DOM and overflowing. Every gate passed:
+  the unit suites run in jsdom, which has no layout; `factsText` still read the whole sentence; and
+  SC-5's 0 px dock equality passed **because the broken facts were taking no width** — a gate
+  satisfied by the thing it protects being broken. Withdrawn rather than repaired, because the query
+  asked the wrong question: what decides whether the facts should shed labels is whether the **row**
+  is tight, which is known at the row.
+  **D5 is the title.** M1 restored the WCAG 2.5.8 target-size sweep ADR-0109 D1 deleted along with
+  the width ladder it tested — correctly deleted, but it was the **only** automated cover 2.5.8 had
+  (`#186`), and axe cannot replace it (`target-size` is tagged `wcag22aa` while every scan here
+  requests `wcag2a`/`wcag2aa`, **and** the rule ships `enabled: false`). The replacement was written
+  with both of ADR-0090 M5's recorded traps in mind and **still could not see a split button's
+  caret** — the exact control class it exists to protect, and the one ADR-0090 records shipping at
+  23 × 36 under a previous gate that was also sweeping the wrong element and also reporting green.
+  `ToolbarSplitButton` spreads `data-toolbar-item` onto the **primary** button; the caret is its
+  **sibling** with no such attribute, so the descent to a focusable control never ran, under a
+  docblock claiming "a split button contributes both halves". So: **a gate is not finished when it
+  passes; it is finished when it has been made to fail by the defect it was written for.** The sweep
+  now enumerates every pointer target in the deck in one pass and was verified red at 12 × 36 naming
+  all three carets. Closing `#186` with a blind sweep would have been worse than leaving it open,
+  because a green gate stops anyone looking.
+  **D6: the ADR index is gated, not remembered.** ADR-0078 S1 found seven ADRs missing from
+  `docs/adr/README.md` and repaired them by hand; writing this one found ADR-0109 missing again,
+  because `check-adr-coverage.mjs` validates coverage and never read the index. It now checks both
+  directions. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

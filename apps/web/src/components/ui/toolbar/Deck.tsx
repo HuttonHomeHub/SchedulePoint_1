@@ -81,7 +81,7 @@ export type DeckGroupId = (typeof DECK_GROUPS)[number]['id'];
 const ICON_ONLY = new Set(['zoom-in', 'zoom-out', 'fit', 'undo', 'redo', 'print']);
 
 /**
- * Does this keystroke belong to a form field rather than to the roving toolbar?
+ * Which navigation keys this focus target has taken for itself.
  *
  * **Load-bearing, and re-derived rather than inherited.** A `render` item may be an `<input>` — the
  * deck's own activity search is one — and a toolbar that treats every ArrowLeft as "move to the
@@ -89,15 +89,31 @@ const ICON_ONLY = new Set(['zoom-in', 'zoom-out', 'fit', 'undo', 'redo', 'print'
  * are worse: in a text field they mean start-of-line and end-of-line, and stealing them moves focus
  * to the far end of the surface instead.
  *
- * This guard was dropped when the width ladder was deleted and the test caught it immediately,
- * which is the gate working: the assertion is about the contract, not about the machinery that was
- * removed around it.
+ * **It used to veto all six keys, and that made 18 of the deck's 27 commands unreachable by
+ * keyboard.** Measured, not reasoned about: focusing the search field sets the roving stop to
+ * `search`, so every other stop is `tabIndex={-1}`; the arrows and Home/End then went to the caret,
+ * and Tab left the deck entirely — whose single entry point is the roving stop, still `search`.
+ * A planner who typed one character into Find could not reach Filter, Next conflict, Float paths,
+ * or anything in Author or Plan again. WCAG 2.2 §2.1.1 Keyboard, level A. Not a keyboard **trap**
+ * (§2.1.2 is satisfied — Tab exits), which is why nothing here caught it: focus was never stuck,
+ * only the commands were unreachable.
+ *
+ * So the veto is now **per key, not per element**. A single-line text input has no use for ArrowUp
+ * or ArrowDown — the browser's own handling of them there is a no-op — so those two stay with the
+ * toolbar and are the route out of the field. A `<textarea>`, a `<select>` and a contenteditable
+ * all genuinely navigate with the vertical arrows, so for those the veto stays total.
+ *
+ * The guard itself was dropped once, when the width ladder was deleted, and the test caught it
+ * immediately: the assertion is about the contract, not about the machinery removed around it.
  */
-function isTextEntry(target: EventTarget | null): boolean {
+function vetoesKey(target: EventTarget | null, key: string): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag !== 'INPUT') return false;
+  // A single-line field owns the horizontal keys and the line keys, and nothing else.
+  return key === 'ArrowLeft' || key === 'ArrowRight' || key === 'Home' || key === 'End';
 }
 
 const FOLD_STORAGE_KEY = 'schedulepoint-deck-folds';
@@ -213,9 +229,9 @@ export function Deck<Ctx>({
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (isTextEntry(event.target)) return;
       const keys = ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'];
       if (!keys.includes(event.key)) return;
+      if (vetoesKey(event.target, event.key)) return;
       const nodes = focusables();
       if (nodes.length === 0) return;
       const current = nodes.findIndex((n) => n === document.activeElement);
