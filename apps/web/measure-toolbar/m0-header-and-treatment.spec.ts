@@ -130,8 +130,12 @@ test('M0: header merge budget, bottom bands, and the toolbar label treatment', a
       const breadcrumb = identityParts[0]?.w ?? 0;
 
       // ── The two bottom bands.
-      const activitiesPanel = document.querySelector('[aria-label="Activities panel"]');
-      const handleRow = activitiesPanel?.firstElementChild ?? null;
+      // `[data-activities-bar]` is the collapsed rail's own hook. The first version of this probe
+      // looked for `[aria-label="Activities panel"]`, which only exists EXPANDED, and reported
+      // `null` — an absence that reads exactly like "there is no such row".
+      const collapsedBar = document.querySelector('[data-activities-bar]');
+      const expandedPanel = document.querySelector('[aria-label="Activities panel"]');
+      const handleRow = collapsedBar ?? expandedPanel?.firstElementChild ?? null;
       const statusBar =
         [...document.querySelectorAll('*')].find(
           (el) =>
@@ -174,7 +178,12 @@ test('M0: header merge budget, bottom bands, and the toolbar label treatment', a
         },
         bottomBands: {
           activitiesHandleRow: box(handleRow),
+          activitiesRowCollapsed: collapsedBar !== null,
           statusBar: box(statusBar),
+          // The duplicated word, counted rather than asserted.
+          activitiesWordOccurrences: [...document.querySelectorAll('span,h2,dt,dd')].filter(
+            (el) => el.children.length === 0 && (el.textContent ?? '').trim() === 'Activities',
+          ).length,
         },
         treatment: {
           total: items.length,
