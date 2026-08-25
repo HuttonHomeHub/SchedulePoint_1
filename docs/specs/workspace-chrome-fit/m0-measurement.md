@@ -167,3 +167,28 @@ A broken harness is worse than a deleted one: it is present, looks authoritative
 successful output is still sitting in `measure-output/` with no marker that it predates the redesign.
 **Filed, not fixed here** — repairing eight harnesses does not belong inside a milestone about label
 baselines.
+
+---
+
+## Product-owner decisions, 2026-08-25
+
+Taken after this document was written, against its numbers.
+
+| question                    | decision                                                                                                                                                                                                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CQ-1** — stack or inline  | **Inline everything.** The measured direction, and it fixes the reported complaint (within-row spread 12 px → 3 px) while making the deck 8 px shorter at 1920/1646/1440. Two costs accepted knowingly: it reverses approved mockup decision 1, and at 1280 the cards wrap 2 lines → 4 for +108 px. |
+| **M3** — the one-row header | **Withdrawal accepted.** The header stays two rows. This is the fourth time this merge has been costed and the third time it has been withdrawn; the difference here is that the condition was written before the measurement and the number is on the page.                                        |
+| the 8 broken harnesses      | **Filed, not fixed** — outside this epic's subject.                                                                                                                                                                                                                                                 |
+| M2                          | **Ships on its own**, ahead of M1.                                                                                                                                                                                                                                                                  |
+
+**M3's withdrawal leaves the product owner's original complaint unfixed, and that is stated rather
+than implied.** They asked for one header row "without question"; the measurement says it cannot
+carry a pen sentence up to 432 px and hold 1440. The re-scope that would work — moving the sentence
+off the row — is a change to where the pen model speaks, in eight states where it is the only thing
+naming who holds the lock and three that carry no action button at all. It belongs to a milestone
+with that as its subject, not to this one.
+
+**TECH_DEBT #185 is answered by this document** and should be updated with two things: that the deck
+does not reflow between 1280 and 1920 because its 2089 px of items fit in exactly two lines at every
+one of those widths, and that un-stacking — which that row calls "the single biggest term in the
+height" — is worth **8 px**.
