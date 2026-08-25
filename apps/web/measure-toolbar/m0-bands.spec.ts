@@ -8,6 +8,7 @@ import {
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
+
 import { clearMeasurement, writeMeasurement } from './output';
 
 /**
@@ -76,7 +77,7 @@ const BANDS = `
 `;
 
 async function readBands(page: Page): Promise<Record<string, unknown>> {
-  return page.evaluate(`(() => { ${BANDS} return read(); })()`) as Promise<Record<string, unknown>>;
+  return page.evaluate(`(() => { ${BANDS} return read(); })()`);
 }
 
 test('M0-T4: bottom bands by hook, the dock cost, and the layouts with no handle row', async ({

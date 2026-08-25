@@ -1,10 +1,10 @@
 import { CircleAlert, Loader2, RefreshCw } from 'lucide-react';
 import { useId } from 'react';
 
+import { scheduleStateAttr, type ScheduleState } from './schedule-state';
+
 import { Button } from '@/components/ui/button';
 import { formatCalendarDate } from '@/lib/format-date';
-
-import { scheduleStateAttr, type ScheduleState } from './schedule-state';
 
 /**
  * **The plan's facts, and the schedule-state region — the content, separated from its host** (M2-T1).

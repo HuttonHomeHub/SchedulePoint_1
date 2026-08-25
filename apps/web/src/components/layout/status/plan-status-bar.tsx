@@ -1,7 +1,7 @@
-import { PlanFactsHost } from '@/components/layout/workspace/plan-facts-host';
-
 import { PlanFacts } from './plan-facts';
 import { scheduleStateAttr, type ScheduleState } from './schedule-state';
+
+import { PlanFactsHost } from '@/components/layout/workspace/plan-facts-host';
 
 /**
  * The plan status bar — grid row 3 (ADR-0099 D5, Graphite M7), now a **thin host** (M2-T1).
