@@ -7,6 +7,7 @@ import {
   onboard,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
+
 import { clearMeasurement, writeMeasurement } from './output';
 
 /**
