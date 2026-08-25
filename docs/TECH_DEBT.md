@@ -4526,3 +4526,35 @@ is close to the threshold of what the eye tracks, and the complaint that opened 
 selects labels by `<span>`, so a leaf `<input>` control is invisible to it — that is exactly why the
 search field survived two commits as "unidentified", and it is why the height column above had to be
 read from `distinctControlHeights` rather than from the label tops.
+
+---
+
+## #188 — Eight of fourteen measurement harnesses cannot run
+
+_Filed 2026-08-25 with ADR-0110. **Not a product defect** — these are instruments, and the product
+they measure is fine. The risk is that they are quotable._
+
+`apps/web/measure-toolbar/` holds fourteen specs. **Eight fail in ~8 seconds each**: `header-fit`,
+both `item-widths` specs, `loaded-plan`, `measure`, `menu-band`, `reachability`, `search-icon`. The
+uniform, fast failure says stale locators — almost certainly from ADR-0109 deleting the tool rail,
+moving the organisation destinations and reshaping the command surface.
+
+These are the instruments that priced **four consecutive command-surface epics**.
+
+**A broken harness is worse than a deleted one.** A deleted gate is absent and a reader notices; a
+broken harness is present, reads as authoritative, and its last successful output is still sitting in
+`apps/web/measure-output/` with nothing marking it as pre-redesign. Someone reaching for `header-fit`
+to settle a width question finds a file that looks like the answer and cannot execute — or worse,
+finds its stale JSON and does not check the date. That is `#186`'s shape (a gate whose subject moved)
+crossed with ADR-0076 Class 1 (a number nobody re-derived).
+
+**Not fixed here deliberately.** Repairing eight harnesses does not belong inside a milestone about
+label baselines, and folding it in is how scope gets away. It is filed with the decision recorded
+rather than done quietly or forgotten.
+
+**When it is picked up**, the cheap first move is to decide per harness whether its _subject_ still
+exists. Several measure the width ladder and the overflow menu, which ADR-0109 D1 deleted — those
+should go the way `e2e-toolbar-fit` went, not be repaired. The rest want their locators updated.
+`m0-repaired.spec.ts`, `m0-bands.spec.ts`, `m0-merged-row.spec.ts` and `busy-band.spec.ts` are the
+working examples to copy from, and `m0-measurement.md` records the eight instrument defects found
+writing them — worth reading before writing a ninth.

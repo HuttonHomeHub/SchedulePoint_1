@@ -35,6 +35,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
 
 const roadmap = read('docs/ROADMAP.md');
+const index = read('docs/adr/README.md');
 const register = JSON.parse(read('scripts/adr-coverage.json'));
 const exempt = new Map(Object.entries(register.exempt));
 
@@ -67,6 +68,27 @@ for (const id of adrs) {
 
 // An exemption for an ADR that does not exist is dead config, and dead config is how a register
 // stops being read (the ADR-0088 finding about no-op flag pins, one file along).
+// **The index, gated rather than remembered** (ADR-0110 D6). ADR-0078 S1 found SEVEN ADRs missing
+// from `docs/adr/README.md` and repaired them by hand; writing ADR-0110 found ADR-0109 missing from
+// it again — because this script validated roadmap coverage and never read the index at all. A rule
+// repaired by hand and left ungated recurs at the next opportunity, and here that was the very next
+// ADR. Both directions are checked: a file with no row is invisible to a reader who starts at the
+// index, and a row with no file is a link to nothing.
+for (const id of adrs) {
+  if (!index.includes(`(${id}-`)) {
+    problems.push(
+      `ADR-${id} has no row in docs/adr/README.md. The index is how a reader finds it; ` +
+        `an ADR absent from it is filed but not published.`,
+    );
+  }
+}
+for (const match of index.matchAll(/\|\s*\[(\d{4})\]\(/g)) {
+  const id = match[1];
+  if (!adrs.includes(id)) {
+    problems.push(`docs/adr/README.md lists ADR-${id}, which has no file.`);
+  }
+}
+
 for (const id of exempt.keys()) {
   if (!adrs.includes(id)) {
     problems.push(`scripts/adr-coverage.json exempts ADR-${id}, which does not exist.`);

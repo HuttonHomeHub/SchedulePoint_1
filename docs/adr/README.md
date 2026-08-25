@@ -132,3 +132,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0106](0106-a-rule-is-a-scene-mark-its-label-is-chrome.md)                  | A rule is a scene mark; its label is chrome                             | Accepted           |
 | [0107](0107-a-migration-a-pristine-database-cannot-test.md)                 | A migration a pristine database cannot test                             | Accepted           |
 | [0108](0108-a-modal-guards-the-canvas-and-nothing-else.md)                  | A modal guards the canvas and nothing else                              | Accepted           |
+| [0109](0109-a-command-surface-wraps.md)                                     | A command surface wraps, and the leading edge belongs to the work       | Accepted           |
+| [0110](0110-a-gate-is-verified-against-the-defect-it-names.md)              | A gate is verified against the defect it names                          | Accepted           |
