@@ -868,18 +868,24 @@ export function TsldPanel({
   const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
     ? null
     : mode === 'marquee'
-      ? { kind: 'marquee' }
+      ? // **`marquee` is KEPT.** `marquee-select` is a plain `ToolbarButton` whose label stays
+        // `Select` when armed (`tsld-toolbar-items.tsx:2558-2573`) — only the pressed wash changes.
+        // So unlike Add and Link there is no restated text anywhere, and the band is the only place
+        // a sighted planner learns a sweep is armed rather than plain selection.
+        { kind: 'marquee' }
       : mode === 'add-activity'
-        ? {
-            kind: 'adding',
-            typeLabel: ACTIVITY_TYPE_LABELS[createType],
-            // Derived here, not in the band: the band stays free of `ActivityType` (a pure render
-            // module reads no domain enum), and this is the same `isMilestone` the gesture machine
-            // itself branches on, so the sentence cannot describe a gesture the canvas won't accept.
-            gesture: isMilestone(createType) ? 'click' : 'drag',
-          }
+        ? // **`adding` is WITHDRAWN.** The trigger already says it: `AddActivityControl` swaps its
+          // visible label to `Adding ${type}` and sets `pressed` (`tsld-toolbar-items.tsx:622-628`,
+          // `:644`), so the band restated a fact the planner could already read on the control they
+          // had just pressed. The instruction it also carried is not lost — `Esc to stop` and the
+          // undocumented `or click for a day` shortcut move onto that trigger as a described
+          // `sr-only` sibling, which is where a keyboard reader can actually reach them.
+          null
         : mode === 'loe'
-          ? { kind: 'loe', startPicked: loeStartId !== null }
+          ? // **`loe` is WITHDRAWN**, for the same reason and more strongly: the trigger swaps to
+            // `Pick start driver` / `Pick finish driver`, which distinguishes the two phases of the
+            // pick exactly as the band did.
+            null
           : mode === 'link'
             ? linkPickedId
               ? {
@@ -889,13 +895,22 @@ export function TsldPanel({
                     activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
                 }
               : lastLink?.armGeneration === linkArmGeneration
-                ? {
+                ? // **`linked` is KEPT**, and it is not an armed-tool statement at all — it is
+                  // ADR-0064's link confirmation, which names the direction and carries an Undo
+                  // `<Button>`. Withdrawing it would delete a control; hiding it visually would
+                  // leave that control focusable at zero size, which is WCAG 2.4.7 and the
+                  // ADR-0090 defect this epic exists to remove.
+                  {
                     kind: 'linked',
                     predecessorName: lastLink.predecessorName,
                     successorName: lastLink.successorName,
                     linkType: lastLink.linkType,
                   }
-                : { kind: 'linking', linkType }
+                : // **`linking` is WITHDRAWN**: the trigger reads `Linking · FS` and is pressed.
+                  // Note this is the ARMED state only — `linkPicking` above is kept, because the
+                  // trigger's label is byte-identical across both phases and the band is the only
+                  // place the picked predecessor is named or the two-rung Escape is stated.
+                  null
             : null;
 
   /**
@@ -2532,9 +2547,12 @@ export function TsldPanel({
           />
         ) : null}
 
-        {/* The mode statement band (ADR-0064 T4/T5) — reserved chrome ABOVE the scene, never an
-            overlay on it. Renders nothing at all when no tool is armed and no link was just made, so
-            it costs no canvas height in the state the canvas is in most of the time. */}
+        {/* The mode statement band (ADR-0064 T4/T5). **It is inside `CanvasDock` above** — this
+            comment said "reserved chrome ABOVE the scene" until 2026-08-26, which described the
+            arrangement before ADR-0092 docked every transient strip at the foot. ADR-0064's rule
+            (nothing overlays the diagram) is intact either way; what changed is that the band now
+            costs no canvas height at all, which is why withdrawing three of its six statements is a
+            decluttering decision and NOT a height saving. See `docs/specs/foot-row/spec.md` D3. */}
         <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
 
         {/*

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { Deck } from './Deck';
 import { defineToolbar, type ToolbarItem } from './toolbar-registry';
@@ -185,5 +185,79 @@ describe('Deck — the roving keyboard model', () => {
     button.focus();
     fireEvent.keyDown(button, { key: 'ArrowDown' });
     expect(focusedItemId(), 'the deck moved focus over a handled key').toBe('claims-arrows');
+  });
+});
+
+/**
+ * **A group holding an ARMED command cannot be folded away** (`docs/specs/foot-row/spec.md` D3).
+ *
+ * Folding unmounts a group's items and the fold set is persisted globally, so a planner who armed a
+ * tool and then folded its group was left with the tool still armed, no trigger rendered to say so,
+ * and no trigger to stop it with — ADR-0064's founding defect restored by a housekeeping gesture.
+ *
+ * The rule is general rather than a carve-out: you should not be able to hide a control that is
+ * currently doing something. It is what lets the mode band withdraw its `adding` / `loe` / `linking`
+ * statements at all, because it is what makes "the trigger states it" true in every state rather
+ * than in most of them.
+ */
+describe('Deck — a group with an active command cannot be folded', () => {
+  /**
+   * **The fold set is persisted in `localStorage`, globally, so it LEAKS between cases.**
+   *
+   * Found by verifying these two red rather than by reading them: with the guard removed the first
+   * case folded `Author` for real, wrote it to storage, and the second then started already folded
+   * — so it reported `aria-expanded="true"` where it expected `"false"`, i.e. it failed for the
+   * pollution and not for the rule. With the guard in place it passed, which is worse: an
+   * order-dependent test that happens to be green.
+   */
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  const armedItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
+    { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
+    {
+      id: 'add-activity',
+      group: 'tools',
+      order: 1,
+      tier: 1,
+      label: 'Add activity',
+      isActive: () => true,
+      onActivate: () => {},
+    },
+  ]);
+
+  it('refuses the fold, shades the caption and says why', () => {
+    render(<Deck items={armedItems} context={{}} label="Plan commands" />);
+    const caption = screen.getByRole('button', { name: /^Author commands/ });
+
+    expect(caption).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
+
+    fireEvent.click(caption);
+
+    // Still expanded, and its command still mounted — which is the point. `aria-expanded` alone
+    // would pass against a caption that flipped its own state while the items vanished.
+    expect(caption).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
+
+    // The reason is REACHABLE, not merely present: shaded with a described reason, never removed
+    // (ADR-0082), and never the native `disabled` attribute on a control that flips as a tool is
+    // armed and disarmed.
+    const describedBy = caption.getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)).toHaveTextContent(
+      'Cannot be folded away while one of its tools is armed.',
+    );
+  });
+
+  it('folds normally when nothing in the group is active', () => {
+    render(<Deck items={items} context={{}} label="Plan commands" />);
+    const caption = screen.getByRole('button', { name: /^Author commands/ });
+
+    expect(caption).not.toHaveAttribute('aria-disabled');
+    fireEvent.click(caption);
+    expect(caption).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Add activity' })).not.toBeInTheDocument();
   });
 });

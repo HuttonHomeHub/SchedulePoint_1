@@ -164,7 +164,30 @@ export function Deck<Ctx>({
       sections: group.members
         .map((member) => byRegistryGroup.get(member) ?? [])
         .filter((section) => section.length > 0),
-    })).filter((group) => group.sections.length > 0);
+    }))
+      .filter((group) => group.sections.length > 0)
+      .map((group) => ({
+        ...group,
+        /**
+         * **A group holding an ACTIVE command cannot be folded away.**
+         *
+         * Folding unmounts a group's items (`:333`), and the fold set is persisted globally — so a
+         * planner who arms a tool and then folds `Author` is left with a tool armed, no trigger
+         * rendered to say so, and no trigger to stop it with. That is ADR-0064's founding defect
+         * restored: a planner who believes a tool is armed and is wrong, or worse, one who does not
+         * know a tool is armed at all.
+         *
+         * The rule is general rather than a carve-out for that case, and it is defensible on its
+         * own terms: **you should not be able to hide a control that is currently doing something.**
+         * It reuses `active`, which `resolveItems` already computes for the pressed state, so the
+         * deck learns nothing new about what its items mean.
+         *
+         * It cannot deadlock. Arming requires the trigger, and a folded group renders none — so a
+         * group can never become active *while* folded, and this can only ever refuse to START a
+         * fold.
+         */
+        hasActive: group.sections.some((section) => section.some((r) => r.active)),
+      }));
   }, [resolved]);
 
   const toggleFold = useCallback((id: string) => {
@@ -297,7 +320,17 @@ export function Deck<Ctx>({
               aria-label={`${group.caption} commands`}
               tabIndex={tabIndexFor(`caption:${group.id}`)}
               onFocus={() => setActiveId(`caption:${group.id}`)}
-              onClick={() => toggleFold(group.id)}
+              onClick={() => {
+                if (group.hasActive) return;
+                toggleFold(group.id);
+              }}
+              // Shaded with a reason, never removed (ADR-0082): the caption keeps its roving tab
+              // stop and its reason is reachable, which is the whole point of that decision. Not
+              // the native `disabled` attribute — this control flips as a tool is armed and
+              // disarmed, and `disabled` blurs to `<body>` mid-interaction.
+              {...(group.hasActive
+                ? { 'aria-disabled': true as const, 'aria-describedby': `fold-held-${group.id}` }
+                : {})}
               className={cn(
                 // `text-micro` is the ramp's smallest member and carries its own letter-spacing.
                 // The mockup drew this at 9px with wider tracking; using the ramp's 10px instead is
@@ -311,6 +344,7 @@ export function Deck<Ctx>({
                 // moves WCAG 2.5.8's minor axis in the right direction rather than the wrong one.
                 'text-primary text-micro flex min-h-9 shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
                 'border-primary/25 cursor-pointer',
+                group.hasActive && 'cursor-default opacity-60',
                 // The rule that separated the caption from its buttons was a `border-b` under a
                 // full-width row; on its side it is a `border-r` beside them, doing the same job in
                 // the dimension the deck can afford. Absent when folded: there is nothing left to
@@ -328,6 +362,11 @@ export function Deck<Ctx>({
                 // product, so nothing about it has to be re-learnt.
                 className={cn('size-3 opacity-60', isFolded && '-rotate-90')}
               />
+              {group.hasActive ? (
+                <span id={`fold-held-${group.id}`} className="sr-only">
+                  Cannot be folded away while one of its tools is armed.
+                </span>
+              ) : null}
             </button>
 
             {isFolded ? null : (
