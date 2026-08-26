@@ -3599,6 +3599,19 @@ When operating in this repo, Claude Code should:
       weak instrument §19.11's last bullet describes, and give the message a
       written **terminal condition** so "stop" is a fact it can check rather than
       a judgement it has to make.
+    - **Re-arm in RESPONSE TO A FIRING, not whenever progress happens — and if you
+      arm one out of band, delete the outstanding trigger first.** On 2026-08-26
+      two were live at once: one armed at 11:16 in response to a firing, and a
+      second armed at 11:33 mid-turn after a pull request was opened, without the
+      first having fired. The older was due at 11:39 carrying **"Branch is pushed;
+      no PR opened yet"** and a milestone listed as remaining that had already
+      landed. Had it fired it would have sent the session to write an ADR that
+      existed and open a pull request that was open. The bullet above puts the
+      re-arming instruction inside the fired message precisely so the mechanism
+      cannot go stale — and this is the mechanism going stale anyway, by being
+      duplicated, which no amount of care inside one message can prevent. Found
+      only because the product owner asked whether the wake-ups were working.
+      `list_triggers` shows what is outstanding; `delete_trigger` removes it.
     - **And check the terminal condition is reachable before arming it.** One
       written the same day as this bullet required the work to be "merged and
       released, tag and publish job confirmed" — for a documentation change with
