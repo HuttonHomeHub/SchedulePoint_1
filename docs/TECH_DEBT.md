@@ -4788,3 +4788,69 @@ their own tests — the ADR-0081 shape: tests validating code nothing calls.
 because the reduced strip does not fit at 1280 or 1440, so `resolveLayoutMode` may yet be needed;
 and removing exports is a public-contract change (ADR-0105). The docblocks, though, are simply wrong
 and should be corrected whether or not the code goes. Decide the two questions separately.
+
+---
+
+## #194 — "The epic's own gate pass removes it" has now failed twice as an instruction
+
+_Filed 2026-08-26 by the reconciliation pass, after the declaration it describes blocked this pass's
+own commit._
+
+`scripts/frontend-only.json` arms an opt-in gate: while an epic declares itself frontend-only, any
+change under `apps/api/` or `packages/` fails CI. It is a good gate and it has now gone stale
+**three times out of three**:
+
+| Epic                 | Released                    | Still armed until | What it then blocked                                  |
+| -------------------- | --------------------------- | ----------------- | ----------------------------------------------------- |
+| `gantt-editing`      | 2026-08-18 (`web-v0.92.0`)  | 2026-08-18        | ADR-0096, which legitimately changes `apps/api/`      |
+| `workspace-redesign` | 2026-08-24 (`web-v0.103.0`) | 2026-08-26        | a lint-script change across nine `package.json` files |
+
+Both times it did what its own docblock says a stale declaration does — **it did not go quiet, it
+went wrong about a different change**, citing a parity argument that was not that change's.
+
+**The remedy in place is a sentence**, in the gate's own docblock: _"the epic's own gate pass removes
+it"_. That sentence has been read by at least two closing passes and acted on by neither, including
+the reconciliation pass of 2026-08-25, whose whole subject was documents that outlive their truth.
+ADR-0058's rule applies to the gate's own lifecycle as much as to prose: **if you find yourself
+writing "remember to remove X", write a mechanism for X instead.**
+
+**Candidate mechanisms, none built** — this is a shared gate, so changing it fires an ADR-0105
+trigger and wants a spec rather than a quiet edit:
+
+1. **Date the declaration** (`declaredOn`), and fail once it is older than a horizon, demanding an
+   explicit renewal. This is `check:flags`' shape (ADR-0084), already accepted here, and the horizon
+   is the natural place to say "an epic lasts about this long".
+2. **Tie it to the ADR**: fail when the named epic's ADR is `Accepted` and its flag/release has
+   shipped. Stronger, but it needs the declaration to name an ADR and the gate to parse ADR status,
+   which is more machinery than the problem deserves.
+3. **Fail on an empty guarded diff**: if the branch touches none of the guarded paths for N days,
+   the epic is probably over. Cheap, but it would fire on a quiet week rather than on a finished
+   epic — the wrong signal.
+
+Option 1 is the one worth costing. Deliberately not built here: this row exists so the third
+instance is not also fixed by writing a fourth sentence.
+
+---
+
+## #195 — `pnpm prepush` cannot see uncommitted work in its diff-based checks
+
+_Filed 2026-08-26 by the reconciliation pass, from a false pass it produced._
+
+`check:frontend-only` diffs `origin/main...HEAD` (`check-frontend-only.mjs:93`) — **committed HEAD,
+not the working tree.** So running `pnpm prepush` on an uncommitted tree asks the question of the
+_previous_ commit, and answers about work that is not the work in hand.
+
+That happened during this pass and is how the failure reached CI: the gate reported green locally
+over a dirty tree, and failed on the same content once pushed. Confirmed both directions —
+re-running it after committing reproduces CI's failure exactly, and `git status --porcelain` shows
+the guarded paths absent from what the diff can see.
+
+**This is not the gate being wrong**; `origin/main...HEAD` is the right question for "what does this
+branch change". It is a mismatch between that and how `pnpm prepush` is documented and used:
+`docs/TESTING.md` presents it as the thing to run _before you push_, and the natural moment to run
+it is while the change is still uncommitted — exactly when this class of check is blind.
+
+`check:frontend-only` is the only current `check:*` that diffs, so the blast radius is one script
+today. The cheap fix is for the script to notice a dirty working tree and either include it or say
+loudly that it cannot see it; the silent green is the defect, not the scope of the diff. Grouped
+with `#194` because both are about this gate, and both should be settled in one spec.

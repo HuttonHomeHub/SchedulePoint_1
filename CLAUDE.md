@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1074 web
 > source files with 39 Playwright suites beside the base journey, and
-> 110 ADRs.
+> 111 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3194,6 +3194,32 @@ progress` off the command surface because **an object action belongs on the obje
   because `check-adr-coverage.mjs` validates coverage and never read the index. It now checks both
   directions. **The CPM engine is not imported and no migration runs.**
 
+- **ADR-0111** _(Accepted; 2026-08-26)_ — A shared primitive's keyboard contract is reviewed
+  before release, not after. Twice in two days a change to a primitive's keyboard model passed
+  every automated gate, a human read and a real-browser journey, and was wrong — the second time
+  **inside the fix for the first**, and already released. `#189`: `Deck` vetoed all six navigation
+  keys for any form field, which is correct for a `<textarea>` and left **18 of 27 commands with no
+  keyboard route** for its single-line search input (WCAG 2.2 §2.1.1, level A), because focusing
+  that field also makes it the roving stop and the deck's only Tab entry point. Not a keyboard
+  **trap**, so nothing looking for traps saw it: focus was never stuck, only the commands were
+  unreachable. `#192`: the fix narrowed the veto by `tagName` alone and broke the shipped
+  `Go to date` field, whose `<input type="date">` steps its segment with the vertical arrows —
+  **worse than the defect it replaced**, since it destroyed an interaction already open rather than
+  failing to leave one.
+  **The decision is deliberately not a gate, and owes the argument because ADR-0058 says prefer
+  one.** Every defect in this class is a statement about what a real browser does with a real focus
+  ring — a single-line input ignoring the vertical arrows and a date input not, a modal's top layer
+  swallowing a portalled menu, `preventDefault` without `stopPropagation` still reaching an ancestor
+  through the React tree. jsdom has no layout, no top layer and no focus ring, so the unit tier
+  **structurally cannot ask**; a journey can, but only about a path somebody thought to drive, and
+  nobody writes one for "press ArrowUp in the date field" before suspecting it. A gate can be built
+  for any **known** rule — `#192`'s tests are exactly that — but not for the next one, which is
+  every instance so far. So: the weak instrument (§19.11), labelled as one, and cheap — two agent
+  runs against a diff, minutes, **before** a release rather than after. Its honest failure mode is
+  named in its own Consequences: a rule whose trigger is "I am about to change a primitive's
+  keyboard model" depends on noticing that that is what you are doing, which is precisely what did
+  not happen between `#189` and `#192`. **The CPM engine is not imported and no migration runs.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -3542,6 +3568,25 @@ When operating in this repo, Claude Code should:
     - **If something genuinely needs an answer**, ask it, then **keep working on
       everything that does not depend on it**. A blocking question blocks one
       milestone, not the programme.
+
+13. **A shared primitive's keyboard contract is reviewed before release** (ADR-0111).
+    Changing which keys `Deck`, `Toolbar`, `Menu`, `Combobox`, `Tabs`, `Dialog` or a
+    `*Field` claims — or where focus goes when one opens, closes, unmounts or shades —
+    means running **accessibility-reviewer** (and **component-reviewer** where more than
+    one primitive implements the rule) **before** the change ships, not at the next
+    epic's gate pass.
+
+    It is not a gate and cannot be. Every defect in this class is a statement about what
+    a real browser does with a real focus ring — that a single-line input ignores the
+    vertical arrows and a date input does not, that a modal's top layer swallows a
+    portalled menu, that `preventDefault` without `stopPropagation` still reaches an
+    ancestor through the React tree. jsdom has none of those things, so the unit tier
+    structurally cannot ask; a journey can, but only about a path somebody thought to
+    drive, and nobody writes one for "press ArrowUp in the date field" before suspecting
+    it. **Twice in two days such a change passed every gate here and was wrong — the
+    second time inside the fix for the first, already released** (`docs/TECH_DEBT.md`
+    #189, then #192). Both were found in minutes by a reviewer that executed the
+    component. Treat it as the weak instrument §19.11's last bullet describes.
 
 ## 20. Specialised agents
 
