@@ -4959,3 +4959,44 @@ already asymmetric._
 
 All three are ADR-0105 public-contract changes, so each wants a spec note rather than a quiet edit.
 Take them in the order above.
+
+---
+
+## #198 — `inkOf` measured a span, not ink — and my first framing of why was wrong
+
+_Filed and **FIXED** 2026-08-26 while preparing the one-row header decision. Recorded with its own
+correction, because the correction is the more useful half._
+
+`measure-toolbar/m0-merged-row.spec.ts`'s `inkOf` returned `max(right) − min(left)` over an
+element's leaf rectangles — a **span**, not a measure of how much of the row is inked. It now returns
+the **covered extent**: leaf x-intervals with overlaps merged. The old measure is kept as `spanOf`,
+under a name that says what it is, and both are emitted.
+
+**What I said it was, and what it actually is.** I filed this as "the span counts the empty middle of
+a `justify-between` row". Measured, that is **wrong**: covered extent came back **equal to the
+container** at all four widths (1222/1382/1588/1862), marginally _above_ the span. The header's leaf
+rectangles tile the full width, so there is no empty middle to count. The real defect is that
+`querySelectorAll('*')` filtered to `children.length === 0` treats a **stretched, non-inking
+wrapper** as a leaf — a `flex-1` div with no children has width and height and therefore "covers"
+everything beneath it.
+
+The prediction was written into `docs/specs/one-row-header/falsification.md` **before** the run, as
+hypothesis 1, precisely so it could be falsified. It was.
+
+**The repair still mattered, for a different reason than I gave.** Every per-occupant figure came
+down once internal gaps stopped counting: header cells 374 → **358**, breadcrumb 424 → **388**, mode
+cluster 435 → **313**, pen furniture 173 → **157**. Those are the numbers the header decision needs,
+and they were all overstated.
+
+**Consequence for ADR-0110 D3.** It withdrew the one-row header on "536 px short at 1440". Measured
+with the repaired instrument the shortfall is **266** at 1440 and **60** at 1646. The withdrawal
+stands — it fails at three of four widths before gaps are even counted — but **the figure that
+justified it was inflated**, so that decision was right for a wrong reason.
+
+**Still not measured: inter-element gaps.** Every figure in the header spec is therefore a best case.
+Anyone taking the merge further needs to measure them; the current per-occupant approach may not
+survive it (hypothesis 3 in that document).
+
+**The aggregate `headerInk` remains a poor question badly asked.** Equal to the container at every
+width, it tells a reader nothing, and it is the field ADR-0110 D3 was priced from. Sum the occupants
+instead. Left in place rather than deleted so the next reader can see why it is useless.
