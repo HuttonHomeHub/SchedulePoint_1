@@ -1,5 +1,26 @@
 # @repo/web
 
+## 0.107.0
+
+### Minor Changes
+
+- [#392](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/392) [`b50a40f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b50a40f4ed6bfae2e48d2a020aa4f2630d6b1234) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan's identity line is folded into the app header row. On a screen 1600 px or wider the
+  breadcrumb, the plan name, its status, the Edit-plan pencil, the four mode controls and the pen
+  controls now sit on the same row as the brand and the account menu, instead of taking a row of their
+  own — which gives the diagram 45 px back (+9.3 % of canvas at 1646 px, measured).
+  
+  Below that width the row wraps to two lines rather than hiding anything. There is no breakpoint: the
+  row breaks where its own content says it must, which is a container of 1480 px.
+
+- [#392](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/392) [`b50a40f`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b50a40f4ed6bfae2e48d2a020aa4f2630d6b1234) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The pen's "who is editing this plan" sentence is now read in the plan's facts row, beside the
+  activity count and the project finish, instead of on the plan's identity line. Its badge and every
+  hand-off control — Start, Stop, Request, Take over, Override, Keep, Dismiss — stay beside the plan,
+  where the action belongs.
+  
+  That frees 155 px on a row which, measured, had four pixels of headroom at 1280 px: any plan name
+  longer than a short one was already being truncated there. It costs no vertical space at any width,
+  measured before and after.
+
 ## 0.106.1
 
 ### Patch Changes
