@@ -249,6 +249,58 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
       };
     });
 
+  /**
+   * **B1 — does the row clip because it is too wide, or because one wrapper cannot shrink?**
+   *
+   * The architecture review's headline finding, offered explicitly as unverified: `Toolbar` already
+   * wraps unconditionally (`Toolbar.tsx:181-189`) and the dock outlet is `flex-1 min-w-0 flex-wrap`
+   * (`canvas-dock.tsx:104`) — but between them sits `selection-actions.tsx:845`, a
+   * `flex shrink-0 items-center` wrapper. A `shrink-0` item takes `max-content` and never shrinks,
+   * so the outlet's width is never imposed on it and the wrapping `Toolbar` inside is never asked
+   * to break a line.
+   *
+   * If that is the cause, the live defect is a one-line CSS fix and D4's responsive fold is not
+   * required for correctness at all. So it is tested rather than argued: drop the class, force a
+   * reflow, and read the row again.
+   */
+  const probeShrinkHypothesis = (): Promise<unknown> =>
+    page.evaluate(() => {
+      const round = (n: number): number => Math.round(n);
+      const row = document.querySelector<HTMLElement>('[data-activities-bar]');
+      const bar = document.querySelector<HTMLElement>(
+        '[role="toolbar"][aria-label^="Actions for"]',
+      );
+      if (!row || !bar) return { error: 'row or selection bar not found' };
+      const wrapper = bar.parentElement;
+      if (!wrapper) return { error: 'bar has no wrapper' };
+
+      const before = {
+        scrollWidth: round(row.scrollWidth),
+        clientWidth: round(row.clientWidth),
+        rowHeight: round(row.getBoundingClientRect().height),
+        overflows: row.scrollWidth > row.clientWidth + 1,
+        wrapperClass: wrapper.className,
+      };
+
+      // The hypothesis, applied: let the wrapper shrink so the flex line can impose a width.
+      wrapper.classList.remove('shrink-0');
+      wrapper.style.minWidth = '0';
+      void row.offsetWidth;
+
+      const after = {
+        scrollWidth: round(row.scrollWidth),
+        clientWidth: round(row.clientWidth),
+        rowHeight: round(row.getBoundingClientRect().height),
+        overflows: row.scrollWidth > row.clientWidth + 1,
+        // Did the toolbar inside actually break a line?
+        barHeight: round(bar.getBoundingClientRect().height),
+      };
+
+      wrapper.classList.add('shrink-0');
+      wrapper.style.minWidth = '';
+      return { before, after };
+    });
+
   const report: Record<string, unknown> = { planName: PLAN_NAME };
 
   for (const viewport of VIEWPORTS) {
@@ -295,7 +347,18 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
       await page.waitForTimeout(300);
     }
 
-    report[`${viewport.width}`] = { deck, footNoSelection, footSelected, dockStrip };
+    // Re-select (the Escape above cleared it) so the hypothesis is probed in the state that clips.
+    await listbox.focus();
+    await page.waitForTimeout(500);
+    const shrinkHypothesis = await probeShrinkHypothesis();
+
+    report[`${viewport.width}`] = {
+      deck,
+      footNoSelection,
+      footSelected,
+      dockStrip,
+      shrinkHypothesis,
+    };
   }
 
   const path = writeMeasurement('m0-foot-row', report);

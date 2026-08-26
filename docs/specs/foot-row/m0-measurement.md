@@ -91,6 +91,58 @@ leave the deck and buy a one-line command band on its own. The earlier reading b
 this at ~136; the figure moves, the conclusion does not. Collapsing the deck to one row would be
 worth **~50 px** of canvas.
 
+## C1b — the row clips because one wrapper cannot shrink, not because it is too wide
+
+Added after the architecture review, which raised this as its headline finding and **explicitly
+offered it as unverified** — derived from four class lists rather than from a run. So it was probed
+rather than argued.
+
+`Toolbar` wraps unconditionally (`Toolbar.tsx:181-189`, _"a line that cannot fit becomes two
+lines"_) and the dock outlet is `flex min-w-0 flex-1 flex-wrap` (`canvas-dock.tsx:104`). Between
+them sits `selection-actions.tsx:845` — `className="flex shrink-0 items-center"`. A `shrink-0` flex
+item takes `max-content` and never shrinks, so the outlet's width is never imposed on it and the
+wrapping `Toolbar` inside is never asked to break a line. The overflow then paints past the row and
+is clipped by the workspace body's `overflow-hidden`.
+
+Measured by dropping the class, forcing a reflow and re-reading:
+
+| viewport |        | scrollWidth | clientWidth | overflows | row height        |
+| -------- | ------ | ----------- | ----------- | --------- | ----------------- |
+| 1920     | before | 1753        | 1619        | **yes**   | 41                |
+| 1920     | after  | **1619**    | 1619        | **no**    | **77** (2 lines)  |
+| 1646     | before | 1753        | 1345        | **yes**   | 41                |
+| 1646     | after  | **1345**    | 1345        | **no**    | **117** (3 lines) |
+
+**Confirmed.** The live defect is one CSS class, and the fix is separable from every other decision
+in this epic.
+
+What it costs is height, which is what makes the streamlining still worth doing — and changes its
+argument from "the row does not fit" to "the wrapped row takes three lines at 1646 and one after
+streamlining", i.e. **~76 px of canvas at 1646 and ~36 px at 1920**.
+
+**It also invalidates the width ladder this file's C2 section is built on.** A row that wraps has no
+fit/no-fit verdict; C2's arithmetic survives only as a line-count estimate, and the slack figures
+(326 px, 494 px) describe a state the product will not be in once the class is dropped.
+
+## C1c — 1753 px is the row's NARROWEST state, not its widest
+
+Also from the architecture review, verified in the code. The fixture is three unlinked activities,
+freshly recalculated, pen held, a plain task selected, isolate inactive — so every variable-width
+term was measured at its minimum or at zero:
+
+- `ScheduleStateRegion` renders **`null`** in `current` and `pending` (`plan-facts.tsx:229`). The
+  `stale`/`failed` states render a sentence **plus a `Recalculate` button** — and that is the state a
+  planner is in _while editing_, which is exactly when a selection exists.
+- `conflict-remedy` was absent (no conflicts in the fixture); `dissolve` / `duplicate-band` were
+  absent (a plain task, not a summary); `Isolate` was measured at its inactive width, not
+  `Isolating · Driving path`; the pen sentence was 126 px in the held state against up to 432 px
+  across the ten lock states.
+- The armed statement's 410 px is the `adding` sentence; `linkPicking` and `linked` carry **activity
+  names** and are unbounded.
+
+The diagnosis stands — the row does clip, at its narrowest. The **budget** does not, and neither do
+the figures derived from it.
+
 ## What the instrument got wrong
 
 Three runs, two of them wasted on the harness rather than the product — and both mis-picks were
