@@ -634,7 +634,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
       onActivate: (ctx) => ctx.onDelete(),
     },
-    // ── Clear visual placement — MOVED here from the command surface (ADR-0094 M4-T1) ──────────
+    // ── Clear visual start — MOVED here from the command surface (ADR-0094 M4-T1) ──────────
     //
     // Its `isEnabled` consulted `ctx.selectedActivity`, which is ADR-0093's discriminator verbatim:
     // an action whose subject is the selected object belongs on the object's surface. It was one of
@@ -656,7 +656,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             tier: 1 as const,
             showLabel: 'always' as const,
             order: 6.5,
-            label: 'Clear visual placement',
+            label: 'Clear visual start',
             /**
              * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
              *

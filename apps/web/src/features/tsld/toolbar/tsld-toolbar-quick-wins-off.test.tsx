@@ -62,13 +62,11 @@ describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', (
       const iconOnly = !btn.textContent?.startsWith(name);
       expect(btn).toHaveAttribute('title', iconOnly ? `${name} — Coming soon` : 'Coming soon');
     }
-    // **Clear visual placement was a fourth here and is deliberately gone** (ADR-0094 M4-T1).
+    // **Clear visual start was a fourth here and is deliberately gone** (ADR-0094 M4-T1).
     // It moved to the selection bar, which registers it behind the SAME `VITE_TOOLBAR_QUICK_WINS`
     // flag — so the rollback contract survives, it is just not this surface's any more. Asserted as
     // an absence rather than dropped from the list: a census that quietly shrinks is how a
     // capability goes missing without anything failing (ADR-0073 C4's shape).
-    expect(
-      screen.queryByRole('button', { name: 'Clear visual placement' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear visual start' })).not.toBeInTheDocument();
   });
 });

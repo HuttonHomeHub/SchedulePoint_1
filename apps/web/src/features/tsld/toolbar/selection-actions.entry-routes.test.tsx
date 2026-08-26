@@ -86,7 +86,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
       'Delete',
       // Last, because it is the rarest action on the bar and the only one inert outside Visual mode
       // — so it is the first to demote to the `⋯` under width pressure (ADR-0094 M4-T1).
-      'Clear visual placement',
+      'Clear visual start',
     ]);
   });
 

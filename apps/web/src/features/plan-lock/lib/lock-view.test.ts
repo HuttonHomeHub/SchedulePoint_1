@@ -139,3 +139,48 @@ describe('resolveLockView', () => {
     expect(view?.message).toMatch(/Jane/);
   });
 });
+
+/**
+ * **The compact badge's name** (`docs/specs/foot-row/spec.md` D4).
+ *
+ * The badge vocabulary is four words for ten states, so a holder's first name is the one thing the
+ * compact form can usefully add. What it must NOT do is add it on the `editing` tone: there the
+ * actor in scope is a REQUESTER, and `Editing · Jane` would tell the reader Jane is editing when in
+ * fact the reader is and Jane is asking. That case is the reason this suite exists rather than a
+ * single happy-path assertion.
+ */
+describe('resolveLockView — the compact badge name', () => {
+  it('names the holder on every locked variant', () => {
+    for (const overrides of [
+      { state: 'HELD_BY_OTHER' as const, holder: JANE },
+      { state: 'HELD_BY_OTHER' as const, holder: JANE, canTakeOver: true },
+      { state: 'HELD_BY_OTHER' as const, holder: JANE, canOverride: true },
+      { state: 'HELD_BY_OTHER' as const, holder: JANE, requestedBy: { ...SAM, id: ME } },
+    ]) {
+      const view = resolveLockView(status(overrides), null, ME, null);
+      expect(view?.tone, JSON.stringify(overrides)).toBe('locked');
+      expect(view?.badgeName, JSON.stringify(overrides)).toBe('Jane');
+    }
+  });
+
+  it('never names anyone on the editing tone, even with a request pending', () => {
+    // The discriminating case. `requestedBy` is Jane; the reader holds the pen. A name here would
+    // attribute the editing to the person merely asking for it.
+    const view = resolveLockView(
+      status({ state: 'HELD_BY_ME', requestedBy: JANE }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.tone).toBe('editing');
+    expect(view?.message).toContain('Jane');
+    expect(view?.badgeName).toBeUndefined();
+  });
+
+  it('names no one when the pen is free or the reader lost it', () => {
+    expect(resolveLockView(status({ state: 'FREE' }), null, ME, null)?.badgeName).toBeUndefined();
+    expect(
+      resolveLockView(status({ state: 'HELD_BY_ME' }), 'PLAN_EDIT_LOCK_LOST', ME, null)?.badgeName,
+    ).toBeUndefined();
+  });
+});

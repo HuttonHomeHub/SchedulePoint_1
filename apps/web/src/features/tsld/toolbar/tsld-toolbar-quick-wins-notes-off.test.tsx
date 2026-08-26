@@ -53,7 +53,7 @@ describe('TSLD toolbar quick-wins (VITE_NOTES off)', () => {
 
   it('still offers the notes-independent quick-win', () => {
     renderRows(ctx());
-    // Singular since ADR-0094 M4-T1: Clear visual placement was the other half and moved to the
+    // Singular since ADR-0094 M4-T1: Clear visual start was the other half and moved to the
     // selection bar (`selection-actions.clear-placement.test.tsx` covers it there), leaving
     // Go-to-today as the only quick-win on this surface that does not depend on notes. Reworded
     // rather than left plural, because a heading that promises two and shows one is the kind of

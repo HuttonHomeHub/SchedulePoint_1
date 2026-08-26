@@ -359,6 +359,56 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
       return result;
     });
 
+  /**
+   * **M3 — what would `Locked · Alexandra` cost the header?**
+   *
+   * The spec requires this measured rather than estimated: the 60–80 px figure was a guess, and
+   * ADR-0112 measured this header at four pixels of headroom at 1280 before the pen sentence left
+   * it. The header wraps now (ADR-0112 D4), so the real question is not "does it truncate" but
+   * "where does the wrap point move".
+   *
+   * Measured by cloning the badge, appending the longest realistic name, and reading it back at
+   * `max-content` — the same technique the relabel savings use.
+   */
+  const probePenPill = (): Promise<unknown> =>
+    page.evaluate(() => {
+      const round = (n: number): number => Math.round(n);
+      const header = document.querySelector<HTMLElement>('header');
+      const pen = document.querySelector<HTMLElement>('[data-plan-pen]');
+      const badge = pen?.querySelector<HTMLElement>('span');
+      if (!header || !pen || !badge) return { error: 'header, pen cluster or badge not found' };
+
+      const widen = (suffix: string): number => {
+        const clone = badge.cloneNode(true) as HTMLElement;
+        clone.style.cssText += ';position:absolute;top:-9999px;left:0;width:max-content;';
+        clone.textContent = `${(badge.textContent ?? '').trim()}${suffix}`;
+        document.body.appendChild(clone);
+        const w = round(clone.getBoundingClientRect().width);
+        clone.remove();
+        return w;
+      };
+
+      const row = header.firstElementChild as HTMLElement | null;
+      const probe = document.createElement('div');
+      probe.style.cssText =
+        'position:absolute;top:-9999px;left:0;display:flex;align-items:center;width:max-content;gap:12px;';
+      for (const child of [...(row?.children ?? [])]) probe.appendChild(child.cloneNode(true));
+      document.body.appendChild(probe);
+      const headerRequired = round(probe.offsetWidth);
+      probe.remove();
+
+      return {
+        badgeText: (badge.textContent ?? '').trim(),
+        badgeWidth: round(badge.getBoundingClientRect().width),
+        // The longest first name a planner is likely to have, plus the separator.
+        withShortName: widen(' · Alex'),
+        withLongName: widen(' · Alexandra'),
+        headerRequiredNow: headerRequired,
+        headerContainer: round(row?.getBoundingClientRect().width ?? 0),
+        viewportWidth: window.innerWidth,
+      };
+    });
+
   const report: Record<string, unknown> = { planName: PLAN_NAME };
 
   for (const viewport of VIEWPORTS) {
@@ -410,6 +460,7 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
     await page.waitForTimeout(500);
     const shrinkHypothesis = await probeShrinkHypothesis();
     const focusReveal = await probeFocusReveal();
+    const penPill = await probePenPill();
 
     report[`${viewport.width}`] = {
       deck,
@@ -418,6 +469,7 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
       dockStrip,
       shrinkHypothesis,
       focusReveal,
+      penPill,
     };
   }
 

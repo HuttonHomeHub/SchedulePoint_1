@@ -131,7 +131,13 @@ export function CompactPenStatus({
       )}
     >
       <Badge variant={view.tone === 'locked' || view.tone === 'lost' ? 'warning' : 'neutral'}>
-        {view.badge}
+        {/* `Locked · Alexandra` where a holder exists — the one thing the four-word badge
+            vocabulary cannot say on its own. Measured at 120 px for the longest realistic name
+            against 106 px of header headroom at 1646 plus a row that wraps (ADR-0112 D4), so it
+            moves the wrap point rather than truncating anything. It is a summary BESIDE the live
+            region below, never a replacement: `Locked` covers four states that differ in what the
+            reader can do next, and only the sentence separates them. */}
+        {view.badgeName ? `${view.badge} · ${view.badgeName}` : view.badge}
       </Badge>
       <PenStatusHost>
         <div
@@ -150,7 +156,22 @@ export function CompactPenStatus({
           // Inheriting is what makes both homes right: `text-xs` in the facts row, and `text-sm`
           // from the controls container in the in-place fallback, which is why that fallback is
           // still byte-identical to the pre-split markup.
-          className={cn('flex min-w-0 items-center gap-2', TONE_TINT[view.tone])}
+          // **Visually hidden, still a live region** (`docs/specs/foot-row/spec.md` D4).
+          //
+          // This is the ONLY announcer of a pen transition anywhere in `features/plan-lock` — the
+          // accessibility review checked, and there is no second one — so deleting it is a WCAG
+          // 4.1.3 regression. A pen transition happens TO a reader without any gesture, which is
+          // ADR-0028's whole point, and an `aria-describedby` on a roleless `<span>` announces on
+          // nothing. So the region stays exactly as it was; only its paint goes.
+          //
+          // What a sighted reader gets instead is the badge — now `Locked · Alexandra` — plus the
+          // hand-off buttons, which already differ per state (Request control / Take over now /
+          // Override / waiting). The honest cost: `adminNote`'s "As an admin, you can take over
+          // editing" becomes screen-reader-only, and a sighted Org Admin infers it from the button
+          // being there. That is a real loss, recorded rather than glossed.
+          //
+          // It frees 126 px measured from the plan's facts row, which is what M3 is for.
+          className={cn('sr-only', TONE_TINT[view.tone])}
         >
           {/* The message is visually truncated to keep the row slim and stays whole in the live
               region; the aria-hidden aside (active …/countdown) never re-announces on its tick. */}

@@ -25,8 +25,16 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   return `${hrs} hr ago`;
 }
 
-/** First name (or the whole name) for friendlier inline copy. */
-function firstName(actor: PlanEditLockActor): string {
+/**
+ * First name (or the whole name) for friendlier inline copy.
+ *
+ * **Exported since 2026-08-26**, when `lock-view` began composing the compact badge
+ * (`Locked · Alexandra`). The foot-row spec's risk table named this as an existing seam and the
+ * architecture review pointed out it was module-private — so the mitigation as written would not
+ * have compiled. Exporting it is what keeps the badge and every sentence in this file agreeing
+ * about what a person is called; a second `split(/\s+/)` beside it is how they would drift.
+ */
+export function firstName(actor: PlanEditLockActor): string {
   return actor.name.trim().split(/\s+/)[0] || actor.name;
 }
 

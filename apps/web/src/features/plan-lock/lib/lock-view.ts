@@ -1,6 +1,6 @@
 import type { PlanEditLockReason, PlanEditLockStatus } from '@repo/types';
 
-import { lockCopy } from './lock-copy';
+import { firstName, lockCopy } from './lock-copy';
 
 /** A control the banner offers, in render order. Each maps to one `PlanPen` intent. */
 export type LockAction =
@@ -20,6 +20,20 @@ export type LockTone = 'neutral' | 'editing' | 'locked' | 'lost';
 export interface LockView {
   tone: LockTone;
   badge: string;
+  /**
+   * The holder's first name, for the compact badge — `Locked · Alexandra`.
+   *
+   * **Only ever set on the `locked` tone**, and that is a rule rather than an accident of which
+   * branches happen to have a holder. The badge vocabulary is four words for ten states, so the
+   * name is the one thing the compact form can add; but on `editing` the actor in scope is a
+   * REQUESTER, not the editor, so `Editing · Alexandra` would tell the reader that Alexandra is
+   * editing when in fact the reader is, and Alexandra is asking. `lost` has no actor at all.
+   *
+   * It is a summary BESIDE the live-region sentence, never a replacement for it: `Locked` alone
+   * covers four states that differ in what the reader can do next (override / take over / waiting /
+   * expired), and only the sentence separates them.
+   */
+  badgeName?: string;
   message: string;
   /** Supplementary text rendered **aria-hidden** (the "active …" relative time, or
    *  the row-6 grace countdown) so its frequent updates never re-announce the banner. */
@@ -104,6 +118,7 @@ export function resolveLockView(
         return {
           tone: 'locked',
           badge: lockCopy.badgeLocked,
+          badgeName: firstName(holder),
           message: `${lockCopy.heldByOther(holder)} ${lockCopy.adminNote}`,
           ...(activeAside ? { aside: activeAside } : {}),
           actions: ['override'],
@@ -113,6 +128,7 @@ export function resolveLockView(
         return {
           tone: 'locked',
           badge: lockCopy.badgeLocked,
+          badgeName: firstName(holder),
           message: lockCopy.canTakeOver(holder),
           actions: ['takeover'],
         };
@@ -124,6 +140,7 @@ export function resolveLockView(
           return {
             tone: 'locked',
             badge: lockCopy.badgeLocked,
+            badgeName: firstName(holder),
             message: lockCopy.waitingForHandover(holder),
             ...(countdown ? { aside: countdown } : {}),
             actions: ['waiting'],
@@ -132,6 +149,7 @@ export function resolveLockView(
         return {
           tone: 'locked',
           badge: lockCopy.badgeLocked,
+          badgeName: firstName(holder),
           message: lockCopy.heldByOther(holder),
           ...(activeAside ? { aside: activeAside } : {}),
           actions: ['request'],
@@ -141,6 +159,7 @@ export function resolveLockView(
       return {
         tone: 'locked',
         badge: lockCopy.badgeLocked,
+        badgeName: firstName(holder),
         message: lockCopy.heldByOther(holder),
         ...(activeAside ? { aside: activeAside } : {}),
         actions: [],

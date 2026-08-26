@@ -170,6 +170,28 @@ term was measured at its minimum or at zero:
 The diagnosis stands — the row does clip, at its narrowest. The **budget** does not, and neither do
 the figures derived from it.
 
+## M3 measured — freeing 126 px bought ZERO height
+
+Re-measured after M3 (the pen sentence made visually hidden, `Clear visual start`):
+
+| viewport | facts         | controls        | container | row height    |
+| -------- | ------------- | --------------- | --------- | ------------- |
+| 1920     | 607 → **481** | 1112 → **1074** | 1619      | 77 → **77**   |
+| 1646     | 607 → **481** | 1112 → **1074** | 1345      | 117 → **117** |
+
+**Not one line was removed.** A wrapping row breaks between ITEMS, not by total width, so freeing
+164 px inside a line that still cannot fit another control changes nothing a reader can see. This is
+the sixth consecutive width expectation on this surface contradicted by its own measurement, and the
+first where the arithmetic was right and the _model_ was wrong.
+
+**What it did reveal is how close 1920 is.** Content is now `481 + 1074 = 1555` plus twelve `gap-2`
+gaps ≈ **1651 against a 1619 container — 32 px from a single line.** Crossing that is worth a whole
+line, i.e. **~36 px of canvas**.
+
+At 1646 the same row needs to lose **306 px** to reach one line. Nothing remaining in the plan
+approaches that; the withdrawn responsive fold (226 px) was the only candidate and would still not
+have been enough on its own.
+
 ## What the instrument got wrong
 
 Three runs, two of them wasted on the harness rather than the product — and both mis-picks were

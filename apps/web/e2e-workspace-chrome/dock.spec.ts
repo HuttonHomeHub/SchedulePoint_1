@@ -126,7 +126,8 @@ test.describe('The canvas dock', () => {
      *
      * ADR-0092's rule is that a docked strip costs the canvas 0 px, and it held because the
      * selection bar could not wrap — its wrapper was `shrink-0`, so the row stayed 36 px tall and
-     * the surplus was CLIPPED, putting `Clear visual placement` off-screen at 1920 and `Edit`,
+     * the surplus was CLIPPED, putting `Clear visual placement` (as it was then labelled)
+     * off-screen at 1920 and `Edit`,
      * `Duplicate` and `Delete` with it at 1646 (`docs/specs/foot-row/m0-measurement.md`). The
      * equality was, in other words, being paid for by hiding controls.
      *

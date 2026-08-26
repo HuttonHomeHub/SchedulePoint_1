@@ -91,7 +91,7 @@ describe('the conflict remedy on the selection bar', () => {
     render(<SelectionActionsBar context={ctx({ conflictKey: 'visualConflict' })} />);
     expect(remedy()).toBeNull();
     expect(
-      within(bar()).getAllByRole('button', { name: 'Clear visual placement' }),
+      within(bar()).getAllByRole('button', { name: 'Clear visual start' }),
       'exactly one control clears a placement, and it is the bar’s own item',
     ).toHaveLength(1);
   });

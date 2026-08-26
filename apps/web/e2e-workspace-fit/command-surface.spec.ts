@@ -296,7 +296,7 @@ test.describe('The plan command surface', () => {
    * `docs/TECH_DEBT.md` #124 put the selection bar outside this sweep's scope **by decision**, and
    * `selection-actions.tsx:286-288` cites that. The decision has cost: measured
    * (`docs/specs/foot-row/m0-measurement.md`), the bar's content is 1753 px at every width against
-   * containers of 1619 and 1345, and it neither wraps nor scrolls — so `Clear visual placement`
+   * containers of 1619 and 1345, and it neither wraps nor scrolls — so `Clear visual start`
    * renders off-screen at 1920 and `Edit`, `Duplicate` and `Delete` join it at 1646. A pointer
    * cannot reach any of them; a keyboard can, because focus scrolls into view, which is why this
    * shipped and stayed unreported.

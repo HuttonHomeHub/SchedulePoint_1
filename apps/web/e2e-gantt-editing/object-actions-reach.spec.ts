@@ -18,7 +18,7 @@ import { recalculate } from '../e2e-support/toolbar';
  *
  * `src/features/gantt/coverage.structural.test.ts` asks that an action reachable in this view be
  * exercised by a journey, or not render. It caught five that were not — `Fix this conflict`,
- * `Resources`, `Duplicate`, `Delete` and `Clear visual placement` — on its first run, which is the
+ * `Resources`, `Duplicate`, `Delete` and `Clear visual start` — on its first run, which is the
  * gate doing the job the Q4 merge condition needs from it: with no feature flag, each milestone
  * reaches the auto-pulling host as it merges, and "the bar appeared" is not the same claim as "its
  * controls work here".
@@ -105,7 +105,7 @@ test('Delete asks before removing, and removes on confirm', async ({ page }) => 
     .toBeLessThan(before);
 });
 
-test('Clear visual placement is shaded with a reason on an EARLY plan', async ({ page }) => {
+test('Clear visual start is shaded with a reason on an EARLY plan', async ({ page }) => {
   test.setTimeout(120_000);
   await ganttPlanWithSelection(page, Date.now());
   const bar = page.getByRole('toolbar', { name: /Actions for/ });
@@ -114,7 +114,7 @@ test('Clear visual placement is shaded with a reason on an EARLY plan', async ({
   // VISUAL mode. Shaded **with a reason**, not hidden — the reader is told why rather than left to
   // wonder whether the control exists (ADR-0082's shade branch, and the distinction ADR-0094 D6
   // moved this control onto this bar to make).
-  const clear = bar.getByRole('button', { name: 'Clear visual placement' });
+  const clear = bar.getByRole('button', { name: 'Clear visual start' });
   await expect(clear).toBeVisible();
   await expect(clear).toBeDisabled();
   // The reason is linked, not merely adjacent — an sr-only sibling via aria-describedby, so a
