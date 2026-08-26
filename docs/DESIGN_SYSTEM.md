@@ -192,8 +192,13 @@ So, for any command surface:
 - **`showLabel` is presentation and it means what it says.** `'auto'` now means _yes_: under the
   ladder it meant "if the row can afford it", and a row that wraps can always afford it. `'never'`
   is for the handful of icons that are genuinely universal (zoom ±, fit, undo, redo, print).
-- **The vertical variant is always icon-only.** A 48 px rail cannot hold a label without wrapping,
-  clipping, or widening the leading edge of the application.
+- **A command surface is horizontal.** `Toolbar` carried an `orientation` prop for Graphite's 48 px
+  mode rail; ADR-0109 D2 deleted that rail, and the prop sat with **no consumer at all** while this
+  clause went on documenting the rule that governed it — dead code kept alive by a standard
+  (`docs/TECH_DEBT.md` #190). Both were removed together on 2026-08-26, so the code and the standard
+  could not disagree about which existed. If a vertical surface is wanted again, the branch is a few
+  lines; the part to get right is the **announcement**, since a stack that tells assistive technology
+  it is horizontal is wrong about the only thing `aria-orientation` exists to say.
 
 **What this costs, stated:** a surface that wraps has a height that is a function of its width, so a
 narrow window buys its commands with vertical space the content would otherwise have. That is the

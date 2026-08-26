@@ -4619,7 +4619,12 @@ the caret keys the field must keep, and the vertical ones it must not.
 
 ## #190 — `Toolbar`'s vertical variant has no consumer, and a standard still documents it
 
-_Filed 2026-08-25 by the reconciliation pass._
+_Filed 2026-08-25 by the reconciliation pass. **CLOSED 2026-08-26** — the product owner chose
+deletion over keeping it. The prop, its three branches, its `showLabel` clause and the
+`DESIGN_SYSTEM.md` rule went in **one commit**, which was the point: the standard and the code could
+not then disagree about which existed. `Toolbar` now announces `aria-orientation="horizontal"` as a
+literal. What a future vertical surface would need is recorded in the primitive's own docblock — a
+few lines of branch, and the **announcement** as the part to get right._
 
 `Toolbar` supports `orientation="vertical"` and its docblock (`Toolbar.tsx:106`) calls it "the
 **vertical mode rail**". `docs/DESIGN_SYSTEM.md:195` documents the rule that governs it — _"the
