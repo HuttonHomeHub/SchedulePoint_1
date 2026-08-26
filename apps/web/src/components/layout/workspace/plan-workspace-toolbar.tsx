@@ -1190,8 +1190,30 @@ export function ToolbarPlanWorkspace({
               call and is written up with its numbers at the end of
               `m0-landing-d1-measurement.md`**; this is not that decision, it is declining to leave
               a shipped regression in place while the decision is open. */}
-            <div className="border-border flex items-center justify-end gap-3 border-b px-4 py-1">
-              {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
+            {/* **The plan's identity, its modes and its pen controls — portalled into the APP HEADER
+          ROW** (the one-row header, 2026-08-26). This block had a row of its own inside the band
+          until now; the header row wraps, so it can hold this beside the brand and the account chip
+          and give the canvas the row back.
+
+          `ChromePortal` moves the DOM node and leaves the React tree alone, so every piece of state
+          this block reads — `model`, `ctx`, the ADR-0031 registry, the workspace key scope — stays
+          exactly where it was and the shell stays plan-unaware (ADR-0029).
+
+          **Deliberately NOT wrapped in a `ToolbarBandProvider`, and that is a reading rather than an
+          omission.** That provider renders a `<div>` and publishes ITS width as the band width; here
+          that div would be the identity block, which is the header row's one shrinkable item — so
+          the published figure would be "whatever width is left after my siblings", which is
+          precisely the conflation `toolbar-band.tsx` exists to prevent and which shipped once in
+          `web-v0.86.0`. Nothing is lost by leaving it out: `resolveLayoutMode` has no production
+          caller at all (`docs/TECH_DEBT.md` #193), and that module's own latent case 3 records this
+          mode toolbar already resolving `collapsed` at every viewport under the old arrangement,
+          harmlessly, because all four of its items are `showLabel: 'always'`. */}
+            <ChromePortal name="identity">
+              {/* `flex-wrap` here as well as on the header row: below the wrap point this block IS the
+            second line, and its three clusters then have to be able to fold in turn rather than
+            overflow. `min-w-0` so the header row can shrink it — see `chrome-slot.tsx`. */}
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
+                {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
                 app header through a portal until then (ADR-0097 D1b), and Graphite deleted that
                 header — so without a home it would have taken a 44 px row of its own inside the
                 band, and MEASUREMENT said so: deleting a 56 px bar bought 12 px, which is ADR-0092
@@ -1207,15 +1229,41 @@ export function ToolbarPlanWorkspace({
 
                 No portal any more: the identity and the modes are rendered by the same component,
                 so the slot that carried it across the shell boundary has nothing left to carry. */}
-              <div data-plan-identity className="flex min-w-0 flex-1 items-center gap-3">
-                {/* **`flex-1` here, not on the toolbar** — this block is the one that should give way.
-              It is text with a `title`, so shrinking it truncates a name a reader can still get at;
-              shrinking the mode cluster puts `Early | Visual | Diagram | Gantt` behind a `⋯`, which
-              is ADR-0091 D1's whole objection (a mode is not a command and must be visible beside
-              the pen). Measured: with `flex-1` on the toolbar instead, all four demoted into the
-              overflow at 1646 — the product owner's own width. */}
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  {/* **Two crumbs: the project, then this plan.**
+                <div data-plan-identity className="flex min-w-0 shrink items-center gap-3">
+                  {/* **`shrink` rather than `flex-1`, and this comment used to claim it was the line
+              the one-row header turns on. It is not, and the correction is worth more than the
+              claim was.** The journey's headline assertion — one line at 1646, two at 1440 — was run
+              against a build with `flex-1` restored *here*, and it **passed**. The wrap is decided
+              one level up, by the identity SLOT's own flex (`chrome-slot.tsx`), because the header
+              row's children are the brand, the slot and the trailing group; what this block does
+              inside the slot cannot make the row wrap or stop it. Putting `flex-1` on the slot fails
+              that assertion at 1440, which is how the load-bearing line was actually identified.
+
+              So this is `shrink` because it is *correct*, not because it is load-bearing: when the
+              slot is shrunk by the row, this block should shrink with it rather than resist. It is
+              text with a
+              `title`, so shrinking it truncates a name a reader can still get at, while shrinking
+              the mode cluster would fold `Early | Visual | Diagram | Gantt` onto a second line
+              inside the row and turn one clean row into two ragged ones.
+
+              What changed is *how* it gives way. `flex-1` makes an item absorb its line's slack, and
+              an item that absorbs the slack means nothing ever moves to a second line — the plan
+              name would truncate towards nothing while the row stayed one line tall, at every width.
+              `shrink` with `min-w-0` gives wrap-then-truncate in the right order: flex starts a new
+              line when the next item does not fit, and shrinks only within a line that still
+              overflows, so truncation is the last resort it should be.
+
+              Measured (`docs/specs/one-row-header/falsification.md`, third result): the header row
+              breaks to two lines below a container of 1480 px — one line at 1646 and 1920, two at
+              1440 and 1280, which is the behaviour the product owner asked for with no breakpoint
+              constant anywhere.
+
+              The ADR-0091 D1 objection this comment used to cite — a mode demoted behind a `⋯` — is
+              **void**: ADR-0109 D1 deleted the width ladder and the overflow menu, and `Toolbar`
+              wraps instead (`Toolbar.tsx:183-187`). The hazard is real but different, and it is
+              named above. */}
+                  <div className="flex min-w-0 shrink items-center gap-2">
+                    {/* **Two crumbs: the project, then this plan.**
                 D1b first shipped the plan name alone, on the measurement that the four-crumb trail
                 cost 455 px and that the Project Explorer already answers "where am I". Right about
                 orientation, wrong about navigation, and **three Playwright suites failed on one
@@ -1233,19 +1281,19 @@ export function ToolbarPlanWorkspace({
                 duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
                 is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
                 was measured to win. */}
-                  <Breadcrumbs
-                    variant="nowrap"
-                    items={[
-                      {
-                        label: model.project.data?.name ?? 'Project',
-                        to: '/orgs/$orgSlug/projects/$projectId',
-                        params: { orgSlug: model.orgSlug, projectId: plan.projectId },
-                      },
-                      { label: plan.name },
-                    ]}
-                  />
-                  <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-                  {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
+                    <Breadcrumbs
+                      variant="nowrap"
+                      items={[
+                        {
+                          label: model.project.data?.name ?? 'Project',
+                          to: '/orgs/$orgSlug/projects/$projectId',
+                          params: { orgSlug: model.orgSlug, projectId: plan.projectId },
+                        },
+                        { label: plan.name },
+                      ]}
+                    />
+                    <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+                    {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
                 ADR-0090 M2-T3 took it off the toolbar; ADR-0091 M7-S4 put it back as a
                 `presentational` registry item, so the `⋯` could stay the row's rightmost control.
                 It came here in M5 because M5-T1 measured the reduced strip **not fitting** at 768,
@@ -1253,21 +1301,21 @@ export function ToolbarPlanWorkspace({
                 decision". **M7 is the decision**: a finish date is a fact, the status bar carries
                 facts, and it has gone there. This comment is kept rather than deleted so the two
                 moves read as one argument reaching its end. */}
-                  {model.canWrite ? (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => model.setEditing(true)}
-                      title="Edit plan…"
-                      aria-label="Edit plan"
-                      className="text-muted-foreground shrink-0"
-                    >
-                      <SquarePen aria-hidden="true" className="size-4" />
-                    </Button>
-                  ) : null}
+                    {model.canWrite ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => model.setEditing(true)}
+                        title="Edit plan…"
+                        aria-label="Edit plan"
+                        className="text-muted-foreground shrink-0"
+                      >
+                        <SquarePen aria-hidden="true" className="size-4" />
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              {/* **The mode cluster is back on the identity line, beside the pen** (workspace
+                {/* **The mode cluster is back on the identity line, beside the pen** (workspace
                 redesign, 2026-08-24) — where ADR-0091 D1 argued a mode belongs in the first place:
                 a mode is not a command, it sets how every command behaves, which is exactly the
                 pen's relationship to the deck.
@@ -1284,35 +1332,37 @@ export function ToolbarPlanWorkspace({
                 how one control gets a rule and its neighbour does not. `shrink-0` because the
                 identity block beside it carries `flex-1` and is the one that should give way — it
                 is text with a `title`, so shrinking truncates a name a reader can still reach. */}
-              <div className="flex shrink-0 items-center gap-2">
-                <span
-                  aria-hidden="true"
-                  // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the
-                  // navy and measured 4.48:1 — under the 4.5 bar by 0.02, which no token matrix
-                  // could see because the failing colour does not exist until the alpha is
-                  // composited. axe found it in a real browser on the first journey run. At full
-                  // strength amber on navy is 7.9:1, and the caption is a label rather than a
-                  // decoration, so there was never a reason to fade it.
-                  className="text-primary text-micro font-bold tracking-wider uppercase"
-                >
-                  Mode
-                </span>
-                <Toolbar
-                  items={rows.mode}
-                  context={ctx}
-                  label="Plan mode"
-                  authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                  // All four are `group: 'lens'`, whose default label is "Display" — also the deck's
-                  // `lens` group name, so unoverridden this announces a second, unrelated name for
-                  // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
-                  groupLabels={ROW_MODE_GROUP_LABELS}
+                <div className="flex shrink-0 items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the
+                    // navy and measured 4.48:1 — under the 4.5 bar by 0.02, which no token matrix
+                    // could see because the failing colour does not exist until the alpha is
+                    // composited. axe found it in a real browser on the first journey run. At full
+                    // strength amber on navy is 7.9:1, and the caption is a label rather than a
+                    // decoration, so there was never a reason to fade it.
+                    className="text-primary text-micro font-bold tracking-wider uppercase"
+                  >
+                    Mode
+                  </span>
+                  <Toolbar
+                    items={rows.mode}
+                    context={ctx}
+                    label="Plan mode"
+                    authoringEnabled={model.canEditSchedule && !lateOverlayActive}
+                    // All four are `group: 'lens'`, whose default label is "Display" — also the deck's
+                    // `lens` group name, so unoverridden this announces a second, unrelated name for
+                    // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
+                    groupLabels={ROW_MODE_GROUP_LABELS}
+                  />
+                </div>
+                <CompactPenStatus
+                  pen={model.pen}
+                  {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
                 />
               </div>
-              <CompactPenStatus
-                pen={model.pen}
-                {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-              />
-            </div>
+            </ChromePortal>
+
             {/*
             **The plan identity line** — breadcrumb, status, project finish, Edit plan, pen status —
             folded into the band **above** the commands it governs (ADR-0090 M4-T2). Measured gain:

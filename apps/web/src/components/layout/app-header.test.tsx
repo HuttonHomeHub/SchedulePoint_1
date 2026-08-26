@@ -6,9 +6,17 @@ import { AppHeaderRow } from '@/components/layout/app-header';
 import { ThemeProvider } from '@/hooks/use-theme';
 
 /**
- * The header's `1fr auto 1fr` grid (feature-spec.md §4.9, ADR-0056 M6). These tests pin the
- * one thing the grid must never break: the DOM order (drawer → brand → org switcher → nav →
- * account), which is what the `e2e-designed-chrome` tab-order journey depends on.
+ * The header's **layout** (feature-spec.md §4.9, ADR-0056 M6). These tests pin the one thing it must
+ * never break: the DOM order (drawer → brand → identity → org switcher → account), which is what the
+ * `e2e-designed-chrome` tab-order journey depends on.
+ *
+ * **This docblock said "the header's `1fr auto 1fr` grid" until 2026-08-26, and there has been no
+ * grid there since the one-row header.** That change rewrote the component's own docblock to say so
+ * in as many words, edited every line inside the `describe` below to add a prop, and left the block
+ * name, this paragraph and one test title all still asserting a grid — a comment above working code
+ * describing what used to be true, which is this repository's most-recorded drift shape, committed
+ * in the diff that removed the thing. Found by the component review, not by a gate; it is checkable
+ * in one grep, since `grid-cols-[minmax` no longer appears in `app-header.tsx` at all.
  *
  * There used to be two shell variants and a case pinning that both rendered the identical inner
  * `HeaderContents`. `AppHeader` was the `VITE_DESIGNED_CHROME` flag-off header and went with the
@@ -82,11 +90,13 @@ function renderWithTheme(ui: React.ReactElement): void {
   render(<ThemeProvider>{ui}</ThemeProvider>);
 }
 
-describe('header grid (feature-spec.md §4.9)', () => {
+describe('header layout (feature-spec.md §4.9)', () => {
   it('keeps the brand → org switcher → account DOM order', () => {
     // The nav used to sit between the switcher and the account chip. It moved to the Project
-    // Explorer rail in ADR-0097 Landing D1; what remains is identity and account.
-    renderWithTheme(<AppHeaderRow />);
+    // Explorer rail in ADR-0097 Landing D1; what remains is identity and account — plus, since the
+    // one-row header, the plan's identity slot between the brand and the trailing group. The slot is
+    // `empty:hidden` and nothing portals into it here, which is why this assertion is unchanged.
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     const header = screen.getByRole('banner');
     const brand = screen.getByText('SchedulePoint');
     const orgSwitcher = screen.getByLabelText('Active organisation');
@@ -103,8 +113,8 @@ describe('header grid (feature-spec.md §4.9)', () => {
     expect(header).toContainElement(account);
   });
 
-  it('AppHeaderRow renders the identical inner structure (same grid, same order)', () => {
-    renderWithTheme(<AppHeaderRow />);
+  it('AppHeaderRow renders the identical inner structure (same children, same order)', () => {
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     expect(screen.getByText('SchedulePoint')).toBeInTheDocument();
     expect(screen.getByLabelText('Active organisation')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Account:/ })).toBeInTheDocument();
@@ -116,7 +126,7 @@ describe('header grid (feature-spec.md §4.9)', () => {
     // place in the organisation and lives in the Project Explorer, where "where am I in this
     // organisation" is answered. Asserted as an ABSENCE because that is what the change is — a
     // test for the rail's copy would pass equally with both copies present.
-    renderWithTheme(<AppHeaderRow />);
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     expect(screen.queryByRole('navigation', { name: 'Organisation' })).toBeNull();
     for (const name of ['Clients', 'Calendars', 'Members', 'Recently deleted']) {
       expect(screen.queryByRole('link', { name })).toBeNull();
@@ -124,7 +134,7 @@ describe('header grid (feature-spec.md §4.9)', () => {
   });
 
   it('caps the org switcher width so a long org name shifts the centre by a bounded amount', () => {
-    renderWithTheme(<AppHeaderRow />);
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     expect(screen.getByLabelText('Active organisation')).toHaveClass('max-w-[12rem]', 'truncate');
   });
 });
@@ -146,14 +156,14 @@ describe('the organisation nav', () => {
     //
     // The nav itself then left the header entirely (ADR-0097 Landing D1), so this can no longer
     // scope itself to it. The roster assertion moved with the nav, to `org-destinations.test.tsx`.
-    renderWithTheme(<AppHeaderRow />);
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     expect(screen.queryByRole('link', { name: 'Overview' })).toBeNull();
   });
 });
 
 describe('the wordmark as the route home', () => {
   it('links to the organisation overview from an organisation route', () => {
-    renderWithTheme(<AppHeaderRow />);
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     const link = screen.getByRole('link', { name: 'SchedulePoint — organisation overview' });
     expect(link).toHaveAttribute('href', '/orgs/$orgSlug');
     expect(link).not.toHaveAttribute('aria-current');
@@ -163,7 +173,7 @@ describe('the wordmark as the route home', () => {
     // The affordance the "Overview" nav item provided via `activeOptions={{ exact: true }}`, which
     // has to survive that item's removal.
     route = { orgSlug: 'acme', pathname: '/orgs/acme' };
-    renderWithTheme(<AppHeaderRow />);
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     expect(
       screen.getByRole('link', { name: 'SchedulePoint — organisation overview' }),
     ).toHaveAttribute('aria-current', 'page');
@@ -173,7 +183,7 @@ describe('the wordmark as the route home', () => {
     // `/account`, `/me/activity`, `/onboarding`, `/staff` carry no `orgSlug`; `/` resolves to the
     // reader's last-active organisation or onboarding, which is the one route that knows.
     route = { orgSlug: undefined, pathname: '/account' };
-    renderWithTheme(<AppHeaderRow />);
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     const link = screen.getByRole('link', { name: 'SchedulePoint — home' });
     expect(link).toHaveAttribute('href', '/');
   });
@@ -181,7 +191,7 @@ describe('the wordmark as the route home', () => {
   it('keeps the visible text inside the accessible name (WCAG 2.5.3)', () => {
     // A speech-input user saying "SchedulePoint" must still match the control. An `aria-label`
     // that replaced the wordmark rather than extending it would break that silently.
-    renderWithTheme(<AppHeaderRow />);
+    renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     const link = screen.getByRole('link', { name: 'SchedulePoint — organisation overview' });
 
     // The visible label is the wordmark, NOT `textContent` — the "S" badge beside it is

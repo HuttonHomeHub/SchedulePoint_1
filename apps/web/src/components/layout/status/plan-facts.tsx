@@ -3,6 +3,7 @@ import { useId } from 'react';
 
 import { scheduleStateAttr, type ScheduleState } from './schedule-state';
 
+import { PenStatusOutlet } from '@/components/layout/workspace/plan-slot-host';
 import { Button } from '@/components/ui/button';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -103,6 +104,21 @@ export function PlanFacts({
           ADR-0094 defect ("a shading nobody opens the menu to see is not a shading") one surface
           along. It keeps its place at every width. */}
       <ScheduleStateRegion state={scheduleState} onRecalculate={onRecalculate} />
+      {/* **Where the pen's sentence lands** (the one-row header, 2026-08-26). An OUTLET, so the
+          sentence follows the facts to whichever host has them rather than being pinned to the
+          status bar — which is what keeps grid row 3 zero-height in the states where it already
+          was. Putting it in `PlanStatusBar` beside `PlanFactsHost` was the first design and it
+          costs ~24 px of vertical whenever the activities row has adopted the facts, which is the
+          wrong direction for an epic whose subject is the height above the canvas (ADR-0092 M4's
+          "relocating a row inside one column removes nothing", earning its keep again).
+
+          **It does not break this component's "announces nothing" rule.** That rule is about the
+          shared `announcer.tsx` region, which clears-then-sets on an animation frame, so wiring
+          several facts to it drops messages silently (`plan.md` §A14). An outlet is not an
+          announcement, and what portals into it is the pen's OWN `role="status"` element, which has
+          announced its own transitions since ADR-0028 and is unrelated to the shared announcer. Two
+          independent live regions do not race; one shared one does. */}
+      <PenStatusOutlet />
     </div>
   );
 }

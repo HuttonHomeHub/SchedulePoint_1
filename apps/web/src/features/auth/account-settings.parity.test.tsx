@@ -85,7 +85,7 @@ beforeEach(() => {
 function openAccountMenu(): void {
   render(
     <ThemeProvider>
-      <AppHeaderRow />
+      <AppHeaderRow identitySlotRef={() => undefined} />
     </ThemeProvider>,
   );
   fireEvent.click(screen.getByRole('button', { name: /Account:/ }));

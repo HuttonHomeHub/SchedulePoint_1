@@ -4959,3 +4959,155 @@ already asymmetric._
 
 All three are ADR-0105 public-contract changes, so each wants a spec note rather than a quiet edit.
 Take them in the order above.
+
+---
+
+## #198 — `inkOf` measured a span, not ink — and my first framing of why was wrong
+
+_Filed and **FIXED** 2026-08-26 while preparing the one-row header decision. Recorded with its own
+correction, because the correction is the more useful half._
+
+`measure-toolbar/m0-merged-row.spec.ts`'s `inkOf` returned `max(right) − min(left)` over an
+element's leaf rectangles — a **span**, not a measure of how much of the row is inked. It now returns
+the **covered extent**: leaf x-intervals with overlaps merged. The old measure is kept as `spanOf`,
+under a name that says what it is, and both are emitted.
+
+**What I said it was, and what it actually is.** I filed this as "the span counts the empty middle of
+a `justify-between` row". Measured, that is **wrong**: covered extent came back **equal to the
+container** at all four widths (1222/1382/1588/1862), marginally _above_ the span. The header's leaf
+rectangles tile the full width, so there is no empty middle to count. The real defect is that
+`querySelectorAll('*')` filtered to `children.length === 0` treats a **stretched, non-inking
+wrapper** as a leaf — a `flex-1` div with no children has width and height and therefore "covers"
+everything beneath it.
+
+The prediction was written into `docs/specs/one-row-header/falsification.md` **before** the run, as
+hypothesis 1, precisely so it could be falsified. It was.
+
+**The repair still mattered, for a different reason than I gave.** Every per-occupant figure came
+down once internal gaps stopped counting: header cells 374 → **358**, breadcrumb 424 → **388**, mode
+cluster 435 → **313**, pen furniture 173 → **157**. Those are the numbers the header decision needs,
+and they were all overstated.
+
+**Consequence for ADR-0110 D3.** It withdrew the one-row header on "536 px short at 1440". Measured
+with the repaired instrument the shortfall is **266** at 1440 and **60** at 1646. The withdrawal
+stands — it fails at three of four widths before gaps are even counted — but **the figure that
+justified it was inflated**, so that decision was right for a wrong reason.
+
+**Still not measured: inter-element gaps.** Every figure in the header spec is therefore a best case.
+Anyone taking the merge further needs to measure them; the current per-occupant approach may not
+survive it (hypothesis 3 in that document).
+
+**The aggregate `headerInk` remains a poor question badly asked.** Equal to the container at every
+width, it tells a reader nothing, and it is the field ADR-0110 D3 was priced from. Sum the occupants
+instead. Left in place rather than deleted so the next reader can see why it is useless.
+
+---
+
+## #199 — `shoot.mjs` cannot photograph three of its own shots, and has not been able to for some time
+
+**Filed 2026-08-26** (the one-row header, M2-T5). **Pre-existing — verified against the stashed
+pre-change tree, where it fails identically.**
+
+`node scripts/shoot.mjs --width 1646` runs 21 shots and then **throws**, killing the process before
+the remaining ones are taken. The failure is in `toggleViewSwitch`, which every shot needing a
+`View ▾` switch goes through — `gantt-arrows` (logic links), the minimap shot, and the lens shot
+that toggles float & drift, link slack and the late-start overlay:
+
+```
+locator.waitFor: Timeout 5000ms exceeded.
+  - waiting for getByRole('dialog').last().getByRole('checkbox', { name: /logic links/i }).first()
+    at toggleViewSwitch (apps/web/scripts/shoot.mjs:461)
+```
+
+**Two things are wrong and only one of them is the locator.**
+
+1. The helper opens `getByRole('button', { name: /^View/ }).first()`. Since ADR-0109 D1 the deck
+   renders foldable **group cards**, and the first group's caption is `VIEW` — a button, matching
+   `/^View/` case-insensitively, and earlier in the DOM than the `View ▾` command it means. So the
+   helper very likely folds a group card and then looks for a checkbox in a dialog that never opened.
+   The docblock immediately above it records the previous version of this same helper timing out
+   "against a perfectly correct control" for an analogous reason, which is why this is filed rather
+   than fixed on a guess: **the next fix must be established by probing the live DOM**, not by
+   reading, exactly as that docblock says its own correction was.
+2. **A throw kills the run.** One unreachable control costs every shot after it, and the shot list is
+   ordered, so the loss is silent unless somebody counts the files. A harness whose job is to put a
+   screen in front of a reviewer should record "could not reach this control" against that shot and
+   carry on — the ADR-0100 lesson that an instrument which produces nothing must say so.
+
+**Why it matters more than a harness bug normally would.** ADR-0102 records two defects that _only_
+photographs found, with every automated gate green, and ADR-0101 records the one surface the shot
+list did not cover being exactly where a four-scrollbar panel reached a user. The three shots this
+kills are the canvas lens states — the ones a contrast matrix and an axe scan structurally cannot
+judge.
+
+**Not fixed here** because it is unrelated to the one-row header and its fix needs a probe rather
+than a reading; the 21 shots it did take were enough to judge M2-T5's question (what the merged
+header did to the twelve screens that are not a plan).
+
+---
+
+## #200 — Two named-slot registries, one of them the better pattern, neither shared
+
+**Filed 2026-08-26** (the one-row header, from the component review). **Not a defect — both are
+correct and tested.** A duplication that will charge the next named slot a tax it need not pay.
+
+`apps/web/src/components/layout/workspace/plan-slot-host.tsx` and
+`apps/web/src/components/layout/chrome/chrome-slot.tsx` now carry the same argument in almost the
+same words — _"a name rather than a second parallel API"_ — and implement it two different ways:
+
+- **`plan-slot-host.tsx` is self-registering.** An outlet calls `usePlanSlotRef(name)` and publishes
+  its own node into a shared context from wherever it renders. No caller lifts or threads anything.
+- **`chrome-slot.tsx` is parent-assembled.** Whoever creates the provider calls `useChromeSlot()`
+  once per name, collects the `.node`s into an object, and hands each matching `.slotRef` **down as a
+  prop** to wherever `<ChromeSlot name="…">` renders.
+
+The self-registering one is better: it is the one carrying the "clear by identity" protection its own
+docblock calls load-bearing, and it needs no threading. It was written one commit before
+`chrome-slot.tsx` gained its `identity` name — and that addition extended the older pattern instead
+of adopting it. **That is the direct cause of `identitySlotRef` being threaded through
+`ChromeSlotHost` → `app-shell.tsx` → `ChromeBandRow` → `AppHeaderRow` → `HeaderContents`, and of the
+eleven test call sites the merge had to touch.**
+
+**What stops a literal merge, and it is real.** `ChromeSlotProvider` is mounted once for the whole
+authenticated shell's lifetime; `PlanSlotProvider` is mounted and torn down per plan workspace. Its
+registrations must **not** survive a plan→plan navigation and the shell's must survive every route
+change, so one shared _provider instance_ would either leak plan-scoped registrations across plans or
+reset shell-scoped ones that should not reset.
+
+**What does not stop sharing the implementation.** `ChromeSlot` could call the same self-registering
+hook shape against `ChromeSlotContext`, which would delete `rowsSlotRef` / `identitySlotRef` /
+`drawerSlotRef` / `statusSlotRef` as props, `ChromeSlotHost`'s render-prop signature, and those
+eleven call sites.
+
+**Trigger:** the next named chrome slot. Adding a fifth this way pays the threading tax again, with
+the better pattern sitting one directory over.
+
+---
+
+## #201 — Two independent mode toggles read as one four-way group
+
+**Filed 2026-08-26** (the one-row header, from the ux review). **Pre-existing** — the grouping dates
+from ADR-0091 M0 (`ab8c2201`), not from the header merge, which only moved the cluster into the
+header row.
+
+`Early mode` / `Visual mode` (ADR-0033's scheduling mode) and `Diagram` / `Gantt` (ADR-0059's view)
+are **two unrelated binary switches**. Both are declared `group: 'lens'`
+(`tsld-toolbar-items.tsx`), so one `<Toolbar>` renders all four under one caption, and
+`plan-workspace-toolbar.tsx`'s `ROW_MODE_GROUP_LABELS = { lens: 'Scheduling and view' }` is that
+group's **accessible name too**. A screen-reader user gets one region named "Scheduling and view"
+holding four buttons with nothing saying which two are mutually exclusive with which.
+
+`demotionGroup` already distinguishes them (`'scheduling-mode'` vs `'view-mode'`) and has **no visual
+or ARIA expression at all** — it only ever affected width-fit demotion, and ADR-0109 D1 deleted the
+ladder that consumed it. Measured on the shipped screenshot: the gap between `Visual mode` and
+`Diagram` is identical to the gap between `Early mode` and `Visual mode`. No divider, no margin,
+nothing.
+
+**What a planner experiences:** four adjacent buttons under one amber `MODE` caption, with no reason
+to expect that pressing `Gantt` leaves `Early mode` untouched rather than being part of the same set.
+
+**Two candidate fixes**, neither costing width: give each `demotionGroup` its own `role="group"` and
+label, or split the group name and use the divider the command deck already uses between distinct
+groups (`ml-1 border-l pl-2`). **Not done here** because it is a change to the mode cluster's own
+grouping semantics rather than to the header that now hosts it, and because `demotionGroup` acquiring
+a rendering meaning is a `Toolbar` contract change — ADR-0105's trigger, so it wants its own spec.

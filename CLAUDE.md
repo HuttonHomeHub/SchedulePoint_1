@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1074 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1077 web
 > source files with 39 Playwright suites beside the base journey, and
-> 111 ADRs.
+> 112 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3219,6 +3219,48 @@ progress` off the command surface because **an object action belongs on the obje
   named in its own Consequences: a rule whose trigger is "I am about to change a primitive's
   keyboard model" depends on noticing that that is what you are doing, which is precisely what did
   not happen between `#189` and `#192`. **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0112** _(Accepted; M1–M5 landed 2026-08-26)_ — A header row wraps, and a pen sentence is a
+  fact. The product owner's firmest complaint against `web-v0.103.0` — _"the header being split over
+  two rows … needs to fit on one line without question"_ — costed four times and withdrawn three,
+  always on a number. So the epic's first act was to **repair the instrument** and its second to
+  write the falsification condition down before running it. `inkOf` summed **leaf rectangles**, which
+  never counts a button's own padding, and the composed row it fed understated the merge by
+  **266 px** — more than twice the +120 px bar the decision turned on. Measured by a shrink-to-fit
+  probe that composes the real occupant nodes, the merge needs **1482 px** against containers of
+  1222/1382/1588/1862, so only 1920 cleared the bar and **1646 missed it by 14 px**. The instrument
+  is credible because it was pointed at something already known: today's identity row needs **1218
+  against 1222** — four pixels, which is exactly what shipped, truncating any real plan name.
+  **D1** moves the pen's **sentence** to the plan's facts row and keeps its badge and every ADR-0028
+  hand-off control beside the plan — ADR-0093's discriminator applied to a model rather than to a
+  command, worth 155 px and closing a live truncation. `containerRef` stays on the controls, because
+  attached to the moved sentence its focus-return and `scrollIntoView` both fire against the status
+  bar and **a test asserting only "focus is not on `<body>`" passes against that**. **Its cost is
+  recorded rather than glossed**: `UX_STANDARDS.md` says a control belongs beside the condition it
+  answers, and for six of ten lock states the two are now at opposite ends of the screen. Put to the
+  product owner with the width consequence (reverting needs ~1749 px against a 1588 container), the
+  decision was to ship and revisit **from use rather than from review**; three alternatives were
+  costed and declined. **D4** is the header row itself: asked where a _wrapping_ row breaks on its
+  own, the answer is a container of **1480 px** — one line at 1646 and 1920, two at 1440 and 1280,
+  which is the approved threshold exactly with **no constant to maintain**, and it disposes of
+  Tailwind's `2xl` being four pixels short. `flex-1` on the identity slot defeats it entirely.
+  Measured: `aboveCanvas` **295 → 250** at 1646, canvas **483 → 528 (+9.3 %)**, no width regressing —
+  and the 45 px comes out of the **command band**, not the header, so ADR-0092 M4's "relocating a row
+  inside one column removes nothing" did not happen here.
+  **Three of the epic's own claims were false and none was caught by reading.** A comment called one
+  line "the single line the one-row header turns on"; the journey was run against that line restored
+  to its broken form and **passed**, which is how the real load-bearing line was found one level up.
+  `TestChromeHost`'s docblock had claimed since Graphite M7 that a gate pinned every
+  `ChromeSlotName`, and **nothing referenced that type from a test at all** — adding `identity`
+  produced exactly the silent gap it promises to prevent. And an `sr-only` badge copy added out of
+  caution announced twice on focus return, found by `e2e-edit` going red on an ambiguous locator.
+  Two more instrument defects in the same probe (labels outliving their DOM; a composed row
+  double-counting once a real one existed, returning a figure four pixels from the truth by luck),
+  and `scripts/e2e-sweep.sh` — the thing that exists because a search is scoped by what you
+  remember — was itself wrong in both directions, naming a deleted suite and omitting **seven**,
+  including the one measuring WCAG 2.5.8. Its list is derived now. Accessibility passed with nothing
+  blocking, having worked the flex-wrap arithmetic by hand. No `VITE_` flag (ADR-0088 D1). **The CPM
+  engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

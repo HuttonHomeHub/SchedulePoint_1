@@ -93,24 +93,83 @@ test('M0-T2: the merged row from ink, priced against the widest pen state', asyn
     report[`${viewport.width}`] = await page.evaluate(
       ([sentences]) => {
         const round = (n: number): number => Math.round(n);
+        /**
+         * **How many horizontal pixels this element actually inks** — the sum of its leaves'
+         * x-intervals with overlaps merged, NOT the distance from the leftmost leaf to the
+         * rightmost.
+         *
+         * That distinction is the whole point and it was wrong here until 2026-08-26
+         * (`docs/TECH_DEBT.md` #198). The old version returned `max(right) - min(left)`, which is a
+         * **span**: for a `justify-between` row with the brand at one end and the account at the
+         * other it counts the empty middle as ink, so `headerInk` came back at 1215 against a
+         * 1222 px container and 1855 against 1862 — it measured the row, whatever was in it.
+         * Anyone pricing a merge from that number would over-state the content by the width of the
+         * gap, which is exactly the question a merge turns on.
+         *
+         * This is the **same track-vs-ink defect ADR-0110 M0 already found in this file** — the
+         * breadcrumb was being read as a `flex-1` track (404–1044) rather than as ink (424) — fixed
+         * for the field in front of the author and not for its neighbour. Fifth instance of that
+         * shape in one week, and the first inside a measuring instrument.
+         *
+         * The degenerate guard below is kept and is a separate problem: some controls put their
+         * visible text on a node whose leaf children are zero-width decorations, so the covered
+         * extent collapses and the element's own box is the honest answer.
+         */
+        const coveredWidth = (rects: DOMRect[]): number => {
+          const spans = rects.map((r) => [r.left, r.right] as const).sort((a, b) => a[0] - b[0]);
+          let total = 0;
+          let openLeft: number | null = null;
+          let openRight = 0;
+          for (const [left, right] of spans) {
+            if (openLeft === null) {
+              openLeft = left;
+              openRight = right;
+            } else if (left <= openRight) {
+              openRight = Math.max(openRight, right);
+            } else {
+              total += openRight - openLeft;
+              openLeft = left;
+              openRight = right;
+            }
+          }
+          if (openLeft !== null) total += openRight - openLeft;
+          return total;
+        };
+
+        const leafRectsOf = (el: Element): DOMRect[] =>
+          [...el.querySelectorAll('*')]
+            .filter((d) => d.children.length === 0)
+            .map((d) => d.getBoundingClientRect())
+            .filter((r) => r.width > 0 && r.height > 0);
+
         const inkOf = (el: Element | null): number | null => {
           if (!el) return null;
           const tag = el.tagName;
           if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA')
             return round(el.getBoundingClientRect().width);
           const own = el.getBoundingClientRect().width;
-          const leaves = [...el.querySelectorAll('*')].filter((d) => d.children.length === 0);
-          const rects = leaves
-            .map((d) => d.getBoundingClientRect())
-            .filter((r) => r.width > 0 && r.height > 0);
+          const rects = leafRectsOf(el);
           if (rects.length === 0) return round(own);
-          const union =
-            Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left));
-          // **A degenerate union means the leaves are not where the ink is.** The organisation
+          const covered = coveredWidth(rects);
+          // **A degenerate result means the leaves are not where the ink is.** The organisation
           // switcher reported 1 px twice — its visible text lives on a control whose leaf children
-          // are zero-width decorations, so the union collapses. When the union is implausibly small
-          // against the element's own box, the box IS the honest answer.
-          return round(union < own * 0.2 ? own : union);
+          // are zero-width decorations. When the covered extent is implausibly small against the
+          // element's own box, the box IS the honest answer.
+          return round(covered < own * 0.2 ? own : covered);
+        };
+
+        /**
+         * The old measure, kept under a name that says what it is: leftmost leaf to rightmost leaf,
+         * gaps included. Useful for "how wide a track does this occupy" — never for "how much room
+         * does this content need".
+         */
+        const spanOf = (el: Element | null): number | null => {
+          if (!el) return null;
+          const rects = leafRectsOf(el);
+          if (rects.length === 0) return round(el.getBoundingClientRect().width);
+          return round(
+            Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left)),
+          );
         };
 
         const header = document.querySelector('header');
@@ -168,6 +227,7 @@ test('M0-T2: the merged row from ink, priced against the widest pen state', asyn
         return {
           container: round(header?.getBoundingClientRect().width ?? 0),
           headerInk: inkOf(header?.firstElementChild ?? null),
+          headerSpan: spanOf(header?.firstElementChild ?? null),
           headerCells: [...(header?.firstElementChild?.children ?? [])].map((c) => ({
             text: (c.textContent ?? '').trim().slice(0, 20),
             track: round(c.getBoundingClientRect().width),
