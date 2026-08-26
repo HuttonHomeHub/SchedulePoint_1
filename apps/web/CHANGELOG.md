@@ -1,5 +1,18 @@
 # @repo/web
 
+## 0.108.0
+
+### Minor Changes
+
+- [#394](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/394) [`5c66529`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5c66529d07b8c05fbcb3cab8c24a0df0b2d1713c) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan header is three sections instead of two clusters pinned to the edges: the brand and the
+  plan's identity, then its modes and pen, then the organisation and account — with the free width
+  split between them. Measured, that is a 202 px gap either side of the middle at 1920 and 65 px at
+  1646, and nothing truncates until the row is narrower than 1458 px.
+  
+  The armed-tool statements lose their explanatory clause and keep what earns its place: the mode
+  they name, the exit they offer, and the two shortcuts (click for a day, Ctrl to add) that nothing
+  else in the product documents.
+
 ## 0.107.0
 
 ### Minor Changes
