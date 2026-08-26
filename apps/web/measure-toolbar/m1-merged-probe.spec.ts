@@ -208,9 +208,51 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
           account: headerCells[2] ? requiredWidth([headerCells[2]], 0) : null,
         };
 
+        /**
+         * **Where a wrapping merged row actually breaks to two lines.**
+         *
+         * ADR-0109 D1's principle — a surface wraps, it never hides — is the alternative to a
+         * breakpoint, and it has the property a breakpoint cannot: it degrades where the content
+         * says, not where a constant says. This finds that width by sweeping the probe's own box
+         * and watching its height, rather than deriving it from the 1482 px figure — because the
+         * derivation assumes every occupant is unshrinkable, and one of them (the identity block)
+         * is not.
+         *
+         * Every occupant is pinned `flex: none` for this reading, which is what makes it a wrap
+         * measurement rather than a shrink measurement: with today's `flex-1 min-w-0` on the
+         * identity block nothing wraps at all — the plan name truncates towards nothing while the
+         * row stays one line.
+         */
+        const wrapBreakWidth = (nodes: Element[], gapPx: number): number | null => {
+          const probe = document.createElement('div');
+          probe.style.cssText = `position:absolute;top:-9999px;left:0;display:flex;flex-wrap:wrap;align-items:center;gap:${gapPx}px;`;
+          for (const n of nodes) {
+            const clone = probe.appendChild(n.cloneNode(true)) as HTMLElement;
+            clone.style.flex = 'none';
+          }
+          host.appendChild(probe);
+          probe.style.width = '4000px';
+          const oneLine = probe.offsetHeight;
+          let broke: number | null = null;
+          for (let w = 2000; w >= 900; w -= 10) {
+            probe.style.width = `${w}px`;
+            if (probe.offsetHeight > oneLine) {
+              broke = w;
+              break;
+            }
+          }
+          probe.remove();
+          return broke;
+        };
+
         return {
           container,
           occupantCount: occupants.length,
+          /** The widest box at which the wrapping row is still TALLER than one line. */
+          wrapBreaksBelow: {
+            gap12: wrapBreakWidth(occupantsNoSentence, 12),
+            gap16: wrapBreakWidth(occupantsNoSentence, 16),
+          },
           sentenceOnScreen,
           widestSentence,
           gap12: at(12),

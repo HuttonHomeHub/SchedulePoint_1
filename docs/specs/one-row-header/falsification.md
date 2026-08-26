@@ -250,3 +250,60 @@ measurement, and the fifth in the same direction.
   shipped identity row does at 1280 today. The +120 px bar treats truncation as failure; the product
   already treats it as normal. That tension is a product decision, not a measurement, and is put to
   the product owner rather than resolved here.
+
+---
+
+# Third result — where a WRAPPING row breaks, 2026-08-26T10:00Z
+
+The threshold the product owner chose is 1600 px. Before writing a constant into the code, the
+same probe was asked a different question: **if the merged row simply wraps, where does it break on
+its own?** That is ADR-0109 D1's principle — _a surface wraps, it never hides_ — applied one surface
+up, and it has the property a breakpoint cannot: it degrades where the **content** says, not where a
+constant says.
+
+The sweep pins every occupant `flex: none`, widens the probe to 4000 px to record the one-line
+height, then narrows it 10 px at a time until the height grows.
+
+| gap  | widest box at which the row is two lines |
+| ---- | ---------------------------------------- |
+| 12px | **1480**                                 |
+| 16px | **1500**                                 |
+
+Against the four containers (1222 / 1382 / 1588 / 1862):
+
+| viewport | container | wraps?       |
+| -------- | --------- | ------------ |
+| 1280     | 1222      | two lines    |
+| 1440     | 1382      | two lines    |
+| 1646     | 1588      | **one line** |
+| 1920     | 1862      | **one line** |
+
+**That is the approved behaviour exactly, with no threshold constant anywhere.** The break lands at
+a container of 1480 px — a viewport of roughly 1538 — which sits between 1440 and 1646, which is
+where the product owner put it. The browser and the product owner agree, and only one of them has
+to be maintained.
+
+It also removes the thing that made 1536 unusable as a Tailwind `2xl` breakpoint (the container
+there is ~1478 against a required 1482, four pixels short): with a wrapping row there is no cliff to
+place, so being four pixels either side of one stops mattering.
+
+## What the wrapping design has to get right
+
+Two flex facts, stated because the obvious classes give the wrong answer:
+
+1. **`flex-1` on the identity block defeats wrapping entirely.** A `flex-1 min-w-0` item absorbs the
+   line's slack and then shrinks, so nothing ever moves to a second line — the plan name truncates
+   towards nothing while the row stays one line tall. It must become `flex: 0 1 auto` with
+   `min-width: 0` kept.
+2. **With that, wrap-then-truncate falls out in the right order.** Flex places items by their
+   hypothetical main size and starts a new line when the next item does not fit; shrinking applies
+   only within a line that still overflows. So an occupant too wide for the remaining space **wraps**,
+   and truncation happens only when a single item is wider than a whole line — which is the last
+   resort it should be.
+
+Every other occupant stays `shrink-0`, which is what today's identity row already does for the mode
+cluster. The reason is now sharper than it was: `Toolbar.tsx:183-187` wraps rather than demoting
+(ADR-0109 D1 deleted the ladder and the `⋯`), so a squeezed mode cluster no longer hides a mode — it
+puts `Early｜Visual｜Diagram｜Gantt` on a second line **inside** the merged row, making the merge
+produce two ragged rows instead of one clean one. That is the hazard to design against, and it is
+not the hazard ADR-0091 D1 named.
