@@ -52,12 +52,19 @@ const TONE_TINT: Record<LockTone, string> = {
  *
  * ### Three things the split has to get right, each of which has a test
  *
- * - **`containerRef` stays here, on the element holding the controls.** It does two jobs in
- *   `use-pen-lock-view.ts`: it pulls focus back after the user's own action unmounts the button
- *   they pressed (WCAG 2.4.3), and it scrolls the surface into view when the pen is lost. Attached
- *   to the *moved* sentence, both would fire against the status bar — throwing focus to the other
- *   end of the screen after every Start/Stop, and a test asserting only "focus is not on `<body>`"
- *   would pass.
+ * - **`containerRef` stays here, on the element holding the controls.** It is declared for two jobs
+ *   in `use-pen-lock-view.ts` — pulling focus back after the user's own action unmounts the button
+ *   they pressed (WCAG 2.4.3), and scrolling the surface into view when the pen is lost. Attached
+ *   to the *moved* sentence, both would fire against the status bar, throwing focus to the other end
+ *   of the screen after every Start/Stop; a test asserting only "focus is not on `<body>`" would
+ *   pass against that, which is why the case that pins it registers a real outlet.
+ *
+ *   **Only the first job is still real, and this said "two jobs" until the accessibility review
+ *   checked.** The shell is `grid h-dvh … overflow-hidden` with `<main>` as the only scroller
+ *   (`app-shell.tsx`), and this container now sits in the always-visible header outside it — so
+ *   there is nothing for `scrollIntoView` to scroll. It is a no-op rather than a defect, and it is
+ *   named here rather than deleted because the hook is shared with `EditLockBanner`, whose host may
+ *   scroll.
  * - **The announcement stays complete, and it needs nothing added to make it so.** `aria-atomic`
  *   announces the whole region, and the region is now the sentence alone — but every one of the ten
  *   sentences in `lock-copy.ts` is self-contained ("No one is editing this plan.", "Alexandra is
@@ -132,7 +139,18 @@ export function CompactPenStatus({
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className={cn(base, TONE_TINT[view.tone])}
+          // **No `text-sm` here, and that is the point rather than an omission.** `base` carries
+          // one, which is right for the controls container beside a `text-sm` button — and it
+          // travelled with the sentence through the portal into `PlanFacts`, a `text-xs` row, so
+          // "You're editing this plan." rendered visibly larger than "Activities 10" beside it. A
+          // component styled for its old home, whose type scale nobody re-derived for its new one
+          // (`UX_STANDARDS.md`: hierarchy comes from the scales, not ad-hoc sizes). Found on the
+          // rendered screenshot by the ux review, not in the code.
+          //
+          // Inheriting is what makes both homes right: `text-xs` in the facts row, and `text-sm`
+          // from the controls container in the in-place fallback, which is why that fallback is
+          // still byte-identical to the pre-split markup.
+          className={cn('flex min-w-0 items-center gap-2', TONE_TINT[view.tone])}
         >
           {/* The message is visually truncated to keep the row slim and stays whole in the live
               region; the aria-hidden aside (active …/countdown) never re-announces on its tick. */}

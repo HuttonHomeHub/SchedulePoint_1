@@ -161,10 +161,17 @@ test.describe('the merged header row', () => {
       return tallest > 0 ? Math.round(row.getBoundingClientRect().height / tallest) : 0;
     });
 
-  test('is one line at 1646 and two at 1440, with the plan name readable in both', async () => {
+  test('is one line at 1646 and two below it, with the plan name readable at every width', async () => {
+    // **1280 is here on the accessibility review's recommendation, and the reason is this epic's
+    // own record.** `falsification.md` warns that a 37 px placeholder plan name once hid a real
+    // overflow, and that a real project crumb makes the identity block larger than the figure the
+    // design was priced on. 1280's arithmetic is the tightest of the three, so it is the width where
+    // a short fixture would be most likely to report a fit the product does not have — and the
+    // fixture above deliberately uses a long name and a real project.
     for (const [width, expected] of [
       [1646, 1],
       [1440, 2],
+      [1280, 2],
     ] as const) {
       await page.setViewportSize({ width, height: 1000 });
       await page.waitForTimeout(400);
@@ -194,8 +201,8 @@ test.describe('the merged header row', () => {
     }
   });
 
-  test('keeps the account chip as the row trailing control on both shapes', async () => {
-    for (const width of [1646, 1440]) {
+  test('keeps the account chip as the row trailing control at every width', async () => {
+    for (const width of [1646, 1440, 1280]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.waitForTimeout(400);
       const account = await page.getByRole('banner').getByRole('button').last().boundingBox();

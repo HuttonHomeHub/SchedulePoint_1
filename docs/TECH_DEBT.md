@@ -5043,3 +5043,71 @@ judge.
 **Not fixed here** because it is unrelated to the one-row header and its fix needs a probe rather
 than a reading; the 21 shots it did take were enough to judge M2-T5's question (what the merged
 header did to the twelve screens that are not a plan).
+
+---
+
+## #200 — Two named-slot registries, one of them the better pattern, neither shared
+
+**Filed 2026-08-26** (the one-row header, from the component review). **Not a defect — both are
+correct and tested.** A duplication that will charge the next named slot a tax it need not pay.
+
+`apps/web/src/components/layout/workspace/plan-slot-host.tsx` and
+`apps/web/src/components/layout/chrome/chrome-slot.tsx` now carry the same argument in almost the
+same words — _"a name rather than a second parallel API"_ — and implement it two different ways:
+
+- **`plan-slot-host.tsx` is self-registering.** An outlet calls `usePlanSlotRef(name)` and publishes
+  its own node into a shared context from wherever it renders. No caller lifts or threads anything.
+- **`chrome-slot.tsx` is parent-assembled.** Whoever creates the provider calls `useChromeSlot()`
+  once per name, collects the `.node`s into an object, and hands each matching `.slotRef` **down as a
+  prop** to wherever `<ChromeSlot name="…">` renders.
+
+The self-registering one is better: it is the one carrying the "clear by identity" protection its own
+docblock calls load-bearing, and it needs no threading. It was written one commit before
+`chrome-slot.tsx` gained its `identity` name — and that addition extended the older pattern instead
+of adopting it. **That is the direct cause of `identitySlotRef` being threaded through
+`ChromeSlotHost` → `app-shell.tsx` → `ChromeBandRow` → `AppHeaderRow` → `HeaderContents`, and of the
+eleven test call sites the merge had to touch.**
+
+**What stops a literal merge, and it is real.** `ChromeSlotProvider` is mounted once for the whole
+authenticated shell's lifetime; `PlanSlotProvider` is mounted and torn down per plan workspace. Its
+registrations must **not** survive a plan→plan navigation and the shell's must survive every route
+change, so one shared _provider instance_ would either leak plan-scoped registrations across plans or
+reset shell-scoped ones that should not reset.
+
+**What does not stop sharing the implementation.** `ChromeSlot` could call the same self-registering
+hook shape against `ChromeSlotContext`, which would delete `rowsSlotRef` / `identitySlotRef` /
+`drawerSlotRef` / `statusSlotRef` as props, `ChromeSlotHost`'s render-prop signature, and those
+eleven call sites.
+
+**Trigger:** the next named chrome slot. Adding a fifth this way pays the threading tax again, with
+the better pattern sitting one directory over.
+
+---
+
+## #201 — Two independent mode toggles read as one four-way group
+
+**Filed 2026-08-26** (the one-row header, from the ux review). **Pre-existing** — the grouping dates
+from ADR-0091 M0 (`ab8c2201`), not from the header merge, which only moved the cluster into the
+header row.
+
+`Early mode` / `Visual mode` (ADR-0033's scheduling mode) and `Diagram` / `Gantt` (ADR-0059's view)
+are **two unrelated binary switches**. Both are declared `group: 'lens'`
+(`tsld-toolbar-items.tsx`), so one `<Toolbar>` renders all four under one caption, and
+`plan-workspace-toolbar.tsx`'s `ROW_MODE_GROUP_LABELS = { lens: 'Scheduling and view' }` is that
+group's **accessible name too**. A screen-reader user gets one region named "Scheduling and view"
+holding four buttons with nothing saying which two are mutually exclusive with which.
+
+`demotionGroup` already distinguishes them (`'scheduling-mode'` vs `'view-mode'`) and has **no visual
+or ARIA expression at all** — it only ever affected width-fit demotion, and ADR-0109 D1 deleted the
+ladder that consumed it. Measured on the shipped screenshot: the gap between `Visual mode` and
+`Diagram` is identical to the gap between `Early mode` and `Visual mode`. No divider, no margin,
+nothing.
+
+**What a planner experiences:** four adjacent buttons under one amber `MODE` caption, with no reason
+to expect that pressing `Gantt` leaves `Early mode` untouched rather than being part of the same set.
+
+**Two candidate fixes**, neither costing width: give each `demotionGroup` its own `role="group"` and
+label, or split the group name and use the divider the command deck already uses between distinct
+groups (`ml-1 border-l pl-2`). **Not done here** because it is a change to the mode cluster's own
+grouping semantics rather than to the header that now hosts it, and because `demotionGroup` acquiring
+a rendering meaning is a `Toolbar` contract change — ADR-0105's trigger, so it wants its own spec.

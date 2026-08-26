@@ -529,6 +529,31 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **The one-row header** — **shipped** (ADR-0112, 2026-08-26). The complaint ADR-0110 left unfixed,
+  costed a fifth time and this time delivered. The header row now carries the plan's breadcrumb,
+  name, status, Edit-plan pencil, four mode controls and pen controls beside the brand and the
+  account menu: **one row at 1646 and above, two below it**, giving the diagram **45 px back at the
+  width the complaint came from (+9.3 % of canvas)**. The pen's "who is editing this plan" sentence
+  moves to the plan's facts row, where the activity count and finish date are read, and its badge and
+  every hand-off control stay beside the plan.
+
+  **There is no breakpoint.** Asked where a _wrapping_ row breaks on its own, the answer was a
+  container of 1480 px — which is the approved 1600 px threshold expressed in widths, so the browser
+  and the product owner agree and only one of them needs maintaining.
+
+  Two things are worth carrying. ADR-0110's own withdrawal figure was **inflated by the instrument
+  that produced it**: measured honestly the shortfall was 266 px at 1440, not 536, so that
+  withdrawal was right for a wrong reason — and the repaired probe then found the whole per-occupant
+  approach understating the row by a further 266 px, because a leaf-rectangle measure never counts a
+  button's padding. And **three of this epic's own claims were false**, each caught by running
+  something rather than reading it, including a comment naming the wrong line as load-bearing that
+  was disproved by running the journey against that line deliberately broken — the ADR-0110 rule
+  applied to itself.
+
+  One cost is recorded as open rather than settled: for six of ten lock states the pen's sentence and
+  the control that answers it are now at opposite ends of the screen. Raised by review, put to the
+  product owner with the width consequence, and accepted to be revisited from use.
+
 - **The workspace foot, the deck's labels, and a gate that could not see its own defect** —
   **shipped** (ADR-0110, 2026-08-25). Three complaints against `web-v0.103.0`. The plan's facts move
   into the activities row, so the workspace foot is one band instead of two and the word
