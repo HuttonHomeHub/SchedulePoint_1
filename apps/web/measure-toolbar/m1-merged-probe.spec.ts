@@ -101,7 +101,15 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
               (el.textContent ?? '').trim(),
             ),
           );
-        const penCluster = penSentence?.closest('[role="status"]') ?? null;
+        // **The CONTROLS cluster, located by its own attribute — not by the sentence.** Until
+        // 2026-08-26 this line read `penSentence?.closest('[role="status"]')`, which was right only
+        // while the sentence and the controls were one element. The moment M1 portalled the sentence
+        // to the plan's facts row, that expression resolved to the sentence's new home and the
+        // merged-row figure came back 166 px lighter — because it no longer contained the pen at
+        // all. An instrument that changes subject at precisely the change it exists to measure is
+        // worse than no instrument, and this is the third time in this file (`inkOf` twice, now
+        // this) that the thing being measured was not the thing named.
+        const penCluster = document.querySelector('[data-plan-pen]');
 
         const headerGrid = header.firstElementChild;
         const modeCluster = modeToolbar.parentElement;
@@ -141,7 +149,11 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
           ...headerCells.slice(1), // organisation switcher, account chip
         ];
 
-        // The same row with the pen's sentence removed and its badge and controls kept.
+        // The same row with the pen's sentence removed and its badge and controls kept. **After M1
+        // the shipped cluster already has no sentence in it**, so this clone and `penCluster` are
+        // the same width and `withSentence`/`withoutSentence` converge — which is the correct
+        // reading of a product where the sentence has already moved, not a bug. Kept so the
+        // pre-M1 and post-M1 runs are comparable.
         const penWithoutSentence = penCluster?.cloneNode(true) as HTMLElement | null;
         if (penWithoutSentence && penSentence) {
           const clonedSentence = [...penWithoutSentence.querySelectorAll('span,p,div')]

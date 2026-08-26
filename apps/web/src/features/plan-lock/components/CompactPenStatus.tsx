@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 import type { PlanPen } from '../api/use-plan-edit-lock';
 import { lockCopy } from '../lib/lock-copy';
 import { type LockTone } from '../lib/lock-view';
@@ -5,6 +7,7 @@ import { usePenLockView } from '../lib/use-pen-lock-view';
 
 import { EditLockControls } from './EditLockControls';
 
+import { PenStatusHost } from '@/components/layout/workspace/plan-slot-host';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -27,10 +30,46 @@ const TONE_TINT: Record<LockTone, string> = {
 /**
  * The **compact** "who holds the pen" surface for the canvas-first workspace header (ADR-0031),
  * replacing {@link EditLockBanner}'s full card so the toolbar row stays slim. It renders from the
- * same {@link usePenLockView} orchestration, so **every ADR-0028 hand-off action stays reachable**
+ * {@link usePenLockView} orchestration, so **every ADR-0028 hand-off action stays reachable**
  * (Start / Stop / Request / Take-over / Override / Keep / Dismiss) and every transition is announced
  * — it is still a polite `role="status"` live region, just tighter chrome. Renders nothing when the
  * pen layer is off; a terse loading chip while status resolves.
+ *
+ * ## The sentence is a fact and lives in the status bar; the controls are actions and stay here
+ *
+ * The one-row header (2026-08-26) splits this surface across two places without splitting its
+ * state. `usePenLockView` is called **once**; the badge and the hand-off controls render here on
+ * the plan's identity row, and the live-region sentence portals into the plan status bar through
+ * {@link PenStatusHost}. That is ADR-0093's discriminator — an action belongs on its object, a fact
+ * belongs where facts are read — applied to a model rather than to a command.
+ *
+ * It is also what makes the merged header fit. Measured
+ * (`docs/specs/one-row-header/falsification.md`): the pen cluster is **320 px** with the sentence
+ * on screen during the harness run and **165 px** without it, and the widest of the ten lock
+ * sentences is **432 px** — an Org Admin viewing a plan someone else holds. The identity row had
+ * **four pixels** of headroom at 1280 before this change, so that state was already truncating the
+ * plan name.
+ *
+ * ### Three things the split has to get right, each of which has a test
+ *
+ * - **`containerRef` stays here, on the element holding the controls.** It does two jobs in
+ *   `use-pen-lock-view.ts`: it pulls focus back after the user's own action unmounts the button
+ *   they pressed (WCAG 2.4.3), and it scrolls the surface into view when the pen is lost. Attached
+ *   to the *moved* sentence, both would fire against the status bar — throwing focus to the other
+ *   end of the screen after every Start/Stop, and a test asserting only "focus is not on `<body>`"
+ *   would pass.
+ * - **The announcement stays complete.** `aria-atomic` announces the whole region, and the region
+ *   is now the sentence alone — so the state word the badge carries visually is repeated as an
+ *   `sr-only` first child rather than being silently dropped from the announcement.
+ * - **Focus return still says what happened.** The controls container is `aria-describedby` the
+ *   sentence region, which works across the portal because a description is resolved by id
+ *   anywhere in the document. So landing on the controls after a hand-off still reads the full
+ *   state, exactly as it did when the two were one element.
+ *
+ * With no {@link PenStatusHost} outlet registered — every unit test, and any future host outside a
+ * plan workspace — the sentence renders **in place, in its original position between the badge and
+ * the controls**. `CompactPenStatus.test.tsx` therefore passes unedited, which is the evidence that
+ * the split changed no behaviour rather than the belief that it did not.
  */
 export function CompactPenStatus({
   pen,
@@ -38,6 +77,7 @@ export function CompactPenStatus({
   now,
 }: CompactPenStatusProps): React.ReactElement | null {
   const { penManaged, view, containerRef, controlsProps } = usePenLockView(pen, currentUserId, now);
+  const sentenceId = useId();
 
   if (!penManaged) return null;
 
@@ -45,8 +85,12 @@ export function CompactPenStatus({
 
   if (!view) {
     return (
-      <div ref={containerRef} role="status" aria-busy="true" tabIndex={-1} className={base}>
-        <span className="text-muted-foreground">{lockCopy.loading}</span>
+      <div ref={containerRef} tabIndex={-1} className={base}>
+        <PenStatusHost>
+          <div role="status" aria-busy="true" className={base}>
+            <span className="text-muted-foreground">{lockCopy.loading}</span>
+          </div>
+        </PenStatusHost>
       </div>
     );
   }
@@ -55,9 +99,14 @@ export function CompactPenStatus({
     <div
       ref={containerRef}
       tabIndex={-1}
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
+      // A stable hook for the measurement harness and the journey, and it earned its keep
+      // immediately: `m1-merged-probe` located the pen cluster by searching for one of the ten lock
+      // sentences, so the moment the sentence portalled away the probe started measuring the
+      // sentence's new home in the facts row and reported the merged row **without the pen controls
+      // in it at all** — an instrument that silently changed subject at exactly the change it was
+      // built to measure. `data-plan-identity` beside it exists for the same reason.
+      data-plan-pen=""
+      aria-describedby={sentenceId}
       className={cn(
         base,
         'focus-visible:ring-ring rounded-md focus-visible:outline-none',
@@ -67,16 +116,30 @@ export function CompactPenStatus({
       <Badge variant={view.tone === 'locked' || view.tone === 'lost' ? 'warning' : 'neutral'}>
         {view.badge}
       </Badge>
-      {/* The message stays in the live region (announced) but is visually truncated to keep the
-          header slim; the aria-hidden aside (active …/countdown) never re-announces on its tick. */}
-      <span className="max-w-[22ch] truncate sm:max-w-none">
-        {view.message}
-        {view.aside ? (
-          <span aria-hidden="true" className="text-muted-foreground ml-1">
-            ({view.aside})
+      <PenStatusHost>
+        <div
+          id={sentenceId}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={cn(base, TONE_TINT[view.tone])}
+        >
+          {/* The state word, which the badge carries visually and this region would otherwise drop:
+              `aria-atomic` announces the whole region, and the region no longer contains the badge
+              once the sentence has portalled away from it. */}
+          <span className="sr-only">{view.badge}.</span>
+          {/* The message is visually truncated to keep the row slim and stays whole in the live
+              region; the aria-hidden aside (active …/countdown) never re-announces on its tick. */}
+          <span className="max-w-[22ch] truncate sm:max-w-none">
+            {view.message}
+            {view.aside ? (
+              <span aria-hidden="true" className="text-muted-foreground ml-1">
+                ({view.aside})
+              </span>
+            ) : null}
           </span>
-        ) : null}
-      </span>
+        </div>
+      </PenStatusHost>
       <EditLockControls {...controlsProps} />
     </div>
   );
