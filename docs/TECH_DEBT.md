@@ -4854,3 +4854,89 @@ it is while the change is still uncommitted — exactly when this class of check
 today. The cheap fix is for the script to notice a dirty working tree and either include it or say
 loudly that it cannot see it; the silent green is the defect, not the scope of the diff. Grouped
 with `#194` because both are about this gate, and both should be settled in one spec.
+
+---
+
+## #196 — Two primitive keyboard defects the ADR-0111 sweep found, one of them a data-loss path
+
+_Filed and **FIXED** 2026-08-26. Found by the first sweep run under ADR-0111, which the product owner
+approved the same morning; both verified by **executing** code — one in real Chromium, one against
+the real primitive — rather than by reading it. Neither was introduced by recent work._
+
+### a. Escape inside a `Menu` or `Combobox` also closed the enclosing modal `<dialog>`
+
+Both primitives owned a capture-phase Escape listener calling `stopPropagation()` and **not**
+`preventDefault()`. `stopPropagation` withholds the key from other **listeners**; a modal
+`<dialog>`'s Escape-to-close is a **default action**, evaluated against `defaultPrevented` once the
+whole dispatch completes — so propagation was never relevant to it. Confirmed in Chromium: with
+`stopPropagation` alone the dialog's `cancel` and `close` both fired and the dialog closed; adding
+`preventDefault` left it open.
+
+One Escape therefore did two things wherever either popup was opened inside a `Dialog` or `Sheet`:
+
+- **`ResourceFormDialog` and `AddCrossPlanLinkDialog` set no `confirmBeforeClose`** — Escape to
+  dismiss a dropdown discarded the whole half-typed form, silently. That is the data-loss half.
+- `ActivityEditorDialog` sets one, so Escape either closed the editor or raised the discard
+  confirmation over it — not destructive, but not what the reader asked for either.
+- The mobile Project Explorer `Sheet`: Escape in a node's row menu closed the whole drawer.
+
+**`combobox.tsx`'s docblock asserted the opposite** — _"so it closes the popup WITHOUT also closing
+a surrounding Dialog"_ — and read as verified because `combobox.test.tsx`'s stand-in for a
+surrounding dialog is a plain `<div onKeyDown>`, whose own comment admits it is "never a real
+control". No jsdom test could have done better: `src/test/setup.ts` stubs `showModal`/`close` as
+property flips that never fire `cancel`, so a real `<dialog>`'s Escape default action is
+**unreachable in this repository's unit environment**. That is ADR-0111's argument, arrived at
+independently by the instrument the ADR mandates, hours after it was written.
+
+### b. A portalled `MenuItem` click also fired a React-tree ancestor's `onClick`
+
+`Menu` renders through a portal, and React dispatches along the **React tree**, not the DOM one — so
+an item's click reached whatever JSX encloses `<Menu>`. In the Gantt, `GanttRowMenu` is a React
+child of the row, so **choosing any row-menu action also re-selected the row underneath it**.
+
+`GanttRowMenu`'s trigger already stops propagation, with a comment giving the exact reason ("the row
+itself selects on click; a menu press must not also change the selection out from under the
+planner"). `GanttPanel` had applied the same insight to `onKeyDown` via `rowOwnsKey`. Neither was
+extended to **choosing an item from** the menu the trigger opens — the rule applied to one control
+and not its neighbour, twice over, in the same feature.
+
+**Both fixed in the primitives** rather than at the call sites, since both are properties of what a
+portalled popup owes its host. Regression tests verified red against the shipped code, with the
+failure messages naming the defects. They assert the **mechanism** (`defaultPrevented`,
+`stopPropagation`) rather than the outcome, because jsdom cannot reach the outcome — stated in the
+tests rather than implied.
+
+**Still open, non-blocking, from the same sweep:** `Combobox` filters disabled options out of its
+arrow-key set while `Menu` (post-ADR-0082) keeps them focusable with a reason, and nothing records
+why the two disagree — latent, since no production caller sets `ComboboxOption.disabled` today.
+`Menu`'s outside-pointerdown listener does not exclude its own trigger, which can race a
+toggle-to-close (mouse only).
+
+---
+
+## #197 — Three rules with two or three implementations each, agreeing by discipline
+
+_Filed 2026-08-26 by the ADR-0111 sweep's component half. None divergent enough to block; one
+already asymmetric._
+
+1. **`Dialog` and `Sheet` each carry a private `closeIfSelf`** — the guard that stops a nested
+   `<dialog>`'s non-bubbling `close`/`cancel` from tearing down its parent through React's
+   capture-phase root dispatch (`#50`'s fix). The two docblocks point at each other rather than
+   sharing code, **and they have already diverged**: `dialog.tsx` grew a `confirmBeforeClose` clause
+   for ADR-0108's unsaved-work guard that `sheet.tsx` never received. Nothing breaks today — no
+   `Sheet` consumer holds unsaved editable state — but the next confirm-before-close drawer either
+   duplicates the clause a third time or discovers the gap the hard way. **The closest to blocking,
+   and the one worth extracting first.**
+2. **`MenuItem` and `ToolbarButton` each hand-roll the reason-first `aria-describedby` composition**
+   — reason before standing description, because "why you cannot use it outranks what it would tell
+   you", plus the guard against a dangling `aria-describedby`. `form.tsx` has a third textually
+   identical `mergeDescribedBy`. Currently in agreement, by matching comments rather than by
+   construction.
+3. **Three copies of the capture-phase Escape + outside-pointerdown contract** — `Menu`,
+   `Combobox`, and `usePopoverPanel`. The irony is on the record: `usePopoverPanel` was extracted
+   **specifically** to stop this drift and cites ADR-0062's extraction argument, but only
+   `ToolbarPopover` was migrated onto it. `#196a` is what that costs: the `preventDefault` fix had
+   to be made in two files, and a third implementation sat one directory away.
+
+All three are ADR-0105 public-contract changes, so each wants a spec note rather than a quiet edit.
+Take them in the order above.

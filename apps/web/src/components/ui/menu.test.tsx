@@ -289,3 +289,72 @@ describe('Menu — portal target', () => {
     expect(menu.parentElement).toBe(document.body);
   });
 });
+
+/**
+ * **Two defects found by the ADR-0111 primitive sweep, both verified by executing code rather than
+ * reading it** (`docs/TECH_DEBT.md` #196).
+ *
+ * Neither could be caught by the suite above, and the reasons are worth keeping: jsdom stubs
+ * `HTMLDialogElement.prototype.showModal`/`close` as bare property flips that never fire `cancel`
+ * (`src/test/setup.ts`), so a real `<dialog>`'s Escape default action is unreachable here at all —
+ * which is why these assert the **mechanism** (`defaultPrevented`, `stopPropagation`) rather than
+ * the outcome, and say so instead of implying more coverage than they have.
+ */
+describe('Menu — the contracts the ADR-0111 sweep found broken', () => {
+  /**
+   * `stopPropagation` withholds the key from other LISTENERS. A modal `<dialog>`'s Escape-to-close
+   * is a **default action**, checked against `defaultPrevented` once the whole dispatch finishes,
+   * so propagation never mattered to it. Without `preventDefault`, one Escape closed the menu and
+   * asked the surrounding dialog to close too — discarding a half-typed form in the two dialogs
+   * that set no `confirmBeforeClose`.
+   *
+   * Verified red against the pre-fix handler: `defaultPrevented` was `false`.
+   */
+  it('marks Escape handled, so a surrounding modal dialog does not also close', () => {
+    const onClose = vi.fn();
+    render(
+      <Menu open onClose={onClose} anchor={{ x: 40, y: 40 }} label="Node actions">
+        <MenuItem onSelect={() => {}}>Only item</MenuItem>
+      </Menu>,
+    );
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.dispatchEvent(event);
+    expect(onClose).toHaveBeenCalled();
+    expect(
+      event.defaultPrevented,
+      'Escape was not marked handled — a surrounding <dialog> will still close',
+    ).toBe(true);
+  });
+
+  /**
+   * The menu is a **portal**, and React dispatches along the React tree rather than the DOM one, so
+   * an item's click reaches whatever JSX encloses `<Menu>` — a Gantt row's `onClick`, for instance
+   * — even though the item's DOM node was never inside it. `GanttRowMenu`'s trigger already stops
+   * propagation for exactly this reason; the rule had never been extended to choosing an item.
+   *
+   * Verified red against the pre-fix `onClick`: the ancestor handler fired once.
+   */
+  it('a portalled item click does not reach a React-tree ancestor', () => {
+    const onSelect = vi.fn();
+    const ancestorClick = vi.fn();
+    render(
+      // Shaped like the real host: a Gantt row selects on click and owns its own keyboard, and
+      // `GanttRowMenu` is a React child of that row while its DOM lives in a portal.
+      <div role="row" tabIndex={-1} onClick={ancestorClick} onKeyDown={() => {}}>
+        <Menu open onClose={() => {}} anchor={{ x: 40, y: 40 }} label="Node actions">
+          <MenuItem onSelect={onSelect}>Duplicate</MenuItem>
+        </Menu>
+      </div>,
+    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(
+      ancestorClick,
+      'the click reached the enclosing JSX — a row underneath would re-select',
+    ).not.toHaveBeenCalled();
+  });
+});

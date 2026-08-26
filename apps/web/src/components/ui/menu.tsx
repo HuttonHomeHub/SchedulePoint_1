@@ -138,6 +138,13 @@ export function Menu({
     if (!open) return;
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // **Both, and `preventDefault` is the load-bearing one.** `stopPropagation` keeps the key
+        // from other LISTENERS; a modal `<dialog>`'s Escape-to-close is a **default action**,
+        // checked against `defaultPrevented` after the whole dispatch finishes, so propagation is
+        // irrelevant to it. Without this line one Escape closed the menu AND fired the surrounding
+        // dialog's close request — discarding a half-typed form in `ResourceFormDialog` and
+        // `AddCrossPlanLinkDialog`, which set no `confirmBeforeClose` (`docs/TECH_DEBT.md` #196).
+        event.preventDefault();
         event.stopPropagation();
         restoreFocusRef?.current?.focus();
         onClose();
@@ -404,7 +411,14 @@ export function MenuItem({
       {...(itemId ? { 'data-toolbar-item': itemId } : {})}
       {...(describedBy ? { 'aria-describedby': describedBy } : {})}
       tabIndex={-1}
-      onClick={() => {
+      onClick={(event) => {
+        // **A portalled click bubbles through the REACT tree, not the DOM one.** The menu is a
+        // portal, so this click reaches whatever JSX encloses `<Menu>` — a Gantt row's `onClick`,
+        // for instance — even though the item's DOM node was never inside it. `GanttRowMenu`'s
+        // trigger already stops propagation for exactly this reason, and the rule was never
+        // extended to CHOOSING an item from the menu it opens, so picking a row action also
+        // re-selected the row underneath (`docs/TECH_DEBT.md` #196).
+        event.stopPropagation();
         // `busy` guards too, not only `disabled`. Today's one consumer always pairs them, so this
         // is defence for the next one: `aria-busy` says "a write is in flight", and a primitive
         // that announces that while still firing its action on a second click is telling the
