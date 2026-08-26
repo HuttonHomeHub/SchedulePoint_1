@@ -529,6 +529,28 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **Canvas maximisation** — **shipped** (ADR-0113, 2026-08-26), and **two of its four items did not
+  exist**. The product owner asked to maximise the canvas: default the activities panel collapsed,
+  re-section the header, fold the command deck onto one line, and trim the armed-tool tips.
+
+  Measured first. **The panel already defaults collapsed** — it was ranked the biggest lever at
+  ~205 px from a screenshot in which the product owner had expanded it, and two of the three
+  screenshots they sent showed it collapsed. **There is no hidden space below the canvas either**: in
+  the default state the diagram is **776 px of a 1080 px screen at 1920, 72 %**, with 209 px of chrome
+  above and a 25 px status bar below. And **the one-line deck is withdrawn**, because it needed the
+  Author group to leave the command band and the canvas foot cannot hold it — that row is ADR-0092's
+  dock, 650 px at 1646 against Author's 608.
+
+  What shipped is the header in **three sections** with the free width split between them (202 px
+  gaps at 1920), and armed-tool statements that name their mode and their exit and explain nothing
+  else. True centring was rejected on measurement: it caps the outer sections at equal shares, cutting
+  **110 px of the plan name** at 1646.
+
+  Its transferable finding is the one it is named for. Every previous instance of this register's
+  _verify the claim_ rule is a document describing the code wrongly. Here the problem statement came
+  from a person looking at their own screen — and it was still stale, because the state they were
+  looking at was one they had put the product into.
+
 - **The one-row header** — **shipped** (ADR-0112, 2026-08-26). The complaint ADR-0110 left unfixed,
   costed a fifth time and this time delivered. The header row now carries the plan's breadcrumb,
   name, status, Edit-plan pencil, four mode controls and pen controls beside the brand and the

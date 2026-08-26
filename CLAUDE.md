@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1077 web
 > source files with 39 Playwright suites beside the base journey, and
-> 112 ADRs.
+> 113 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3261,6 +3261,47 @@ progress` off the command surface because **an object action belongs on the obje
   including the one measuring WCAG 2.5.8. Its list is derived now. Accessibility passed with nothing
   blocking, having worked the flex-wrap arithmetic by hand. No `VITE_` flag (ADR-0088 D1). **The CPM
   engine is not imported and no migration runs.**
+
+- **ADR-0113** _(Accepted; landed 2026-08-26)_ — Measure the problem, not just the remedy. The
+  product owner asked to maximise the canvas and brought four ideas: default the activities panel
+  collapsed, re-section the header, fold the command deck onto one line by moving Author to the
+  canvas foot, and trim the armed-tool tips. They were ranked by estimate — the panel first at
+  ~205 px, the deck second at 58 px, the header third at nothing — and **that ranking was wrong at
+  the top and the bottom**. Two of the four did not exist as work.
+  **The panel already defaults collapsed** (`useState(true)`, session-local, only its height
+  persisted). It was ranked the biggest lever from a screenshot in which the product owner had
+  expanded it — and **two of the three screenshots they sent show it collapsed**. Expanding costs a
+  measured **265 px**, constant at both widths, which is a planner's choice. **There is no hidden
+  space below the canvas either**: in the default state the pane reaches the viewport bottom, and at
+  1920 the chrome above is **209 px** against a **776 px canvas — 72 % of the screen**. The ~283 px
+  suspected below it was the panel, because the vertical harness expands it to measure — **which is
+  also why ADR-0112's headline "+9.3 %" described a state the product never starts in**; the 45 px
+  delta was measured correctly and the denominator was the expanded canvas, so the honest figure is
+  **+6.0 %**, and both are now given with the state named.
+  **The one-line deck is withdrawn on measurement, not deferred.** It needed Author to leave the
+  command band, and the canvas foot cannot hold it: that row is ADR-0092's dock, whose region is
+  924 px at 1920 and **650 px at 1646** against Author's **608** — 42 px left, less than the shortest
+  transient strip, so arming a tool or selecting an activity would grow the row to two lines
+  (`min-h-9`, not `h-9`). All four cards on one line need 2618 px against 1862. **The route named for
+  finding the width was the wrong component**: ADR-0090 M2-T6's caption gutters were **row** captions
+  in the two-row `Toolbar` that ADR-0109 D1 deleted, while the deck's captions are focusable
+  disclosure buttons that fold their group and hold roving tab stops — a register entry cited from
+  memory and told to the product owner as owed work, which is ADR-0076 Class 2 inside a
+  recommendation rather than a document.
+  **What shipped** is the header in **three sections** on `justify-between` — 582 / 620 / 256 px of
+  content, so the gaps are 202 px at 1920 and 65 at 1646 and nothing truncates above a 1458 container
+  — and armed-tool statements that keep their mode word and their `Esc` and drop the explanation,
+  while **keeping two clauses against the brief** (`or click for a day`, `Ctrl to add`) because their
+  own comments record them as undocumented shortcuts rather than explanations. **True centring was
+  rejected on measurement**: it caps the outer sections at equal shares, so section 1 gets 472 px
+  against the 582 it needs at 1646 — **110 px of the plan name**, against an estimate of ~10 that had
+  been put to the product owner. The accepted cost is written down: on a **wrapped** line
+  `justify-between` places a lone item at flex-start, and no CSS has both, since `ml-auto` restores
+  the crammed look on a full line.
+  Every previous instance of this register's _verify the claim_ rule is a document describing the code
+  wrongly. This one is different: **the problem statement came from a person looking at their own
+  screen, and it was still stale — because the state they were looking at was one they had put the
+  product into.** **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
