@@ -1,5 +1,43 @@
 # @repo/web
 
+## 0.106.1
+
+### Patch Changes
+
+- [#390](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/390) [`23497ca`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23497ca242f5040965ad51e15cef46604553b8ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add `--cache --cache-strategy content` to every workspace lint script. Measured on `@repo/web`:
+  114,951 ms cold to 8,032 ms with one file changed — a 14x win and 107 seconds off the local
+  pre-push gate, with no change to what is linted. CI is unaffected in either direction, since a
+  fresh runner has no cache file and always performs the full lint.
+
+- [#390](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/390) [`23497ca`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23497ca242f5040965ad51e15cef46604553b8ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix two keyboard defects in the shared `Menu` and `Combobox` primitives, found by the first review
+  run under ADR-0111.
+  
+  Escape inside either popup also closed the enclosing modal dialog, because both handlers called
+  `stopPropagation()` without `preventDefault()` — and a dialog's Escape-to-close is a default action,
+  which propagation does not suppress. In `ResourceFormDialog` and `AddCrossPlanLinkDialog`, which set
+  no confirm-before-close, dismissing a dropdown discarded the whole half-typed form.
+  
+  And a portalled menu item's click reached the JSX that encloses the menu, because React dispatches
+  along the React tree rather than the DOM: choosing an action from a Gantt row's menu also
+  re-selected the row underneath it.
+
+- [#390](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/390) [`23497ca`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23497ca242f5040965ad51e15cef46604553b8ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Fix a regression in the plan command deck's keyboard handling that shipped in `web-v0.106.0`.
+  
+  Narrowing the deck's navigation-key veto to "a single-line input claims its caret keys" was right
+  for a text field and wrong for every other kind: the shipped `Go to date` control renders
+  `<input type="date">` inside the deck, and a date input steps its focused segment with the vertical
+  arrows. Pressing ArrowUp there changed no date and threw focus onto an unrelated command.
+  
+  The rule now discriminates by input type, and lives in one `toolbar-keyboard.ts` shared by `Deck`
+  and `Toolbar` — the latter had been carrying a byte-for-byte copy that the previous fix missed. Both
+  containers also now stand down when a descendant has already handled the key, which restores the
+  keyboard route to a disabled split-button caret's reason.
+
+- [#390](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/390) [`23497ca`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23497ca242f5040965ad51e15cef46604553b8ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Delete `Toolbar`'s vertical variant. ADR-0109 removed the 48px mode rail that was its only consumer,
+  leaving the `orientation` prop with no caller while `DESIGN_SYSTEM.md` went on documenting the rule
+  that governed it. The prop, its branches and the standard were removed in one commit so the two
+  could not disagree about which existed.
+
 ## 0.106.0
 
 ### Minor Changes

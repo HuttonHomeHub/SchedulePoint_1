@@ -1,5 +1,14 @@
 # @repo/api
 
+## 0.53.1
+
+### Patch Changes
+
+- [#390](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/390) [`23497ca`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/23497ca242f5040965ad51e15cef46604553b8ad) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add `--cache --cache-strategy content` to every workspace lint script. Measured on `@repo/web`:
+  114,951 ms cold to 8,032 ms with one file changed — a 14x win and 107 seconds off the local
+  pre-push gate, with no change to what is linted. CI is unaffected in either direction, since a
+  fresh runner has no cache file and always performs the full lint.
+
 ## 0.53.0
 
 ### Minor Changes
