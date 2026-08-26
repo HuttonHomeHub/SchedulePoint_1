@@ -23,39 +23,33 @@ import { cn } from '@/lib/utils';
  * callback ref feeding `useState` re-renders consumers exactly once, when the node mounts.
  */
 /**
- * **Two slots, named** (ADR-0097 Landing D1b). `rows` has always held the plan's toolbar rows;
- * `identity` is new and sits **inside the app header row**, so a plan's identity line merges into
- * the header instead of taking a row of its own — the merge ADR-0092 M5 withdrew at "134 px short
- * at 1646" and D1a paid for by moving the organisation nav to the rail (+250 px of slack at 1440,
- * `m0-landing-d1-measurement.md`).
+ * **The names, and what each one carries.** A name rather than a second parallel API: one context,
+ * one provider, one portal component, and another slot costs a string. `ChromeIdentitySlotProvider`
+ * beside `ChromeSlotProvider` would be two of everything that has to stay in step, which this
+ * register keeps recording as how things drift.
  *
- * A **name** rather than a second parallel API: one context, one provider, one portal component,
- * and a third slot costs a string. `ChromeIdentitySlotProvider` beside `ChromeSlotProvider` would
- * be two of everything that has to stay in step, which this register keeps recording as how things
- * drift.
- */
-/**
- * `rows` is the command band; `rail` is the tool rail's mode cluster (Graphite M5).
+ * - **`rows`** — the plan's command band. The original, and the only one that has never moved.
+ * - **`drawer`** — the trailing context drawer's body (Graphite M6-T2). An activity editor belongs
+ *   *visually* to the drawer, which the shell owns, and *logically* to the plan workspace, which
+ *   owns `usePlanWorkspaceModel`, the ADR-0060 per-scope gating and the mutation hooks it reads.
+ * - **`status`** — the plan status bar's row (Graphite M7), the mirror of the command band's row 1.
+ * - **`identity`** — the plan's identity, its four mode controls and its pen controls, carried into
+ *   the app header row (the one-row header, 2026-08-26).
  *
- * A second name came back here for a better reason than the one that took it away. ADR-0097 D1b's
- * `identity` slot existed to carry a plan's identity line across the shell boundary, and M3 removed
- * it because the identity and the modes ended up in the same component. This one carries the mode
- * cluster into the RAIL, which the shell renders and which must stay plan-unaware (ADR-0029) — the
- * same problem the band solved in ADR-0055 §3, one column along.
+ * **This block replaced five stacked docblocks, two of which were describing slots that no longer
+ * exist** — one announced "two slots, named" beside a union of four, and one documented a `rail`
+ * name ADR-0109 D2 deleted with the rail itself. Each was correct when written and none was removed
+ * when its subject was, because a comment above a union is nobody's when the union changes. Recorded
+ * rather than quietly tidied: it is `docs/TECH_DEBT.md`'s most-repeated shape, in the file whose own
+ * job is to keep two halves of the app from learning about each other.
+ *
+ * `identity` is a **return**, not a new idea. ADR-0097 D1b created it to carry a plan's identity line
+ * into the header; Graphite M3 deleted it, correctly, because the identity and the modes ended up in
+ * one component and there was nothing left for a slot to carry across the shell boundary. It comes
+ * back for the original reason, now that the row it feeds **wraps** — so the merge ADR-0092 M5 and
+ * ADR-0110 D3 each withdrew on width has a shape that fits.
  */
-/**
- * `drawer` is the trailing context drawer's body (Graphite M6-T2) — the third name, and taken on
- * exactly the terms the paragraph above sets. An activity editor belongs *visually* to the drawer,
- * which the shell owns, and *logically* to the plan workspace, which owns `usePlanWorkspaceModel`,
- * the ADR-0060 per-scope gating and the mutation hooks it reads. Lifting any of that into the shell
- * is the thing ADR-0029 forbids; a portal moves the DOM node and leaves the React tree alone.
- */
-/**
- * `status` is the plan status bar's row (Graphite M7) — grid row 3, the mirror of the command
- * band's row 1. Same argument as every other name here: the facts it shows belong to the plan, the
- * row belongs to the shell, and a portal is what keeps the shell from learning the difference.
- */
-export type ChromeSlotName = 'rows' | 'drawer' | 'status';
+export type ChromeSlotName = 'rows' | 'drawer' | 'status' | 'identity';
 
 const ChromeSlotContext = createContext<Partial<Record<ChromeSlotName, HTMLElement | null>>>({});
 
@@ -97,9 +91,9 @@ export function ChromeSlot({
     <div
       ref={slotRef}
       data-chrome-slot={name}
-      // The rows slot stacks; the identity slot is one item in a flex row and must be able to
-      // shrink, or a long plan name pushes the account chip off the header.
       className={cn(
+        // The rows slot stacks: it holds the command band, which is a column of one row today and
+        // was two until ADR-0109 D1.
         name === 'rows' && 'flex flex-col',
         // The drawer body is a COLUMN that must be able to shrink and scroll — the editor inside it
         // is a tab rail beside a pane, and a row layout would lay them side by side in 224–420 px.
@@ -107,6 +101,14 @@ export function ChromeSlot({
         // A status bar with nothing in it is a ZERO-HEIGHT row, which is what lets grid row 3 stay
         // `auto` and keeps the twelve screens that are not a plan exactly as they were.
         name === 'status' && 'flex min-w-0 items-center empty:hidden',
+        // **`min-w-0` and `empty:hidden`, and both are load-bearing.** This slot is one item on a
+        // wrapping flex line, so it must be able to shrink below its content width or a long plan
+        // name pushes the account chip off the row instead of wrapping — and it must occupy nothing
+        // at all on the twelve `_authed` routes that are not a plan, or every one of them gains a
+        // phantom flex item and a `gap` beside it. `flex-1` is deliberately ABSENT: an item that
+        // absorbs the line's slack never lets anything wrap, which is the single defect this row's
+        // design turns on (`docs/specs/one-row-header/falsification.md`, third result).
+        name === 'identity' && 'flex min-w-0 shrink items-center empty:hidden',
         className,
       )}
     />

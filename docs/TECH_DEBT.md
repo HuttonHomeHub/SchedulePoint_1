@@ -5000,3 +5000,46 @@ survive it (hypothesis 3 in that document).
 **The aggregate `headerInk` remains a poor question badly asked.** Equal to the container at every
 width, it tells a reader nothing, and it is the field ADR-0110 D3 was priced from. Sum the occupants
 instead. Left in place rather than deleted so the next reader can see why it is useless.
+
+---
+
+## #199 — `shoot.mjs` cannot photograph three of its own shots, and has not been able to for some time
+
+**Filed 2026-08-26** (the one-row header, M2-T5). **Pre-existing — verified against the stashed
+pre-change tree, where it fails identically.**
+
+`node scripts/shoot.mjs --width 1646` runs 21 shots and then **throws**, killing the process before
+the remaining ones are taken. The failure is in `toggleViewSwitch`, which every shot needing a
+`View ▾` switch goes through — `gantt-arrows` (logic links), the minimap shot, and the lens shot
+that toggles float & drift, link slack and the late-start overlay:
+
+```
+locator.waitFor: Timeout 5000ms exceeded.
+  - waiting for getByRole('dialog').last().getByRole('checkbox', { name: /logic links/i }).first()
+    at toggleViewSwitch (apps/web/scripts/shoot.mjs:461)
+```
+
+**Two things are wrong and only one of them is the locator.**
+
+1. The helper opens `getByRole('button', { name: /^View/ }).first()`. Since ADR-0109 D1 the deck
+   renders foldable **group cards**, and the first group's caption is `VIEW` — a button, matching
+   `/^View/` case-insensitively, and earlier in the DOM than the `View ▾` command it means. So the
+   helper very likely folds a group card and then looks for a checkbox in a dialog that never opened.
+   The docblock immediately above it records the previous version of this same helper timing out
+   "against a perfectly correct control" for an analogous reason, which is why this is filed rather
+   than fixed on a guess: **the next fix must be established by probing the live DOM**, not by
+   reading, exactly as that docblock says its own correction was.
+2. **A throw kills the run.** One unreachable control costs every shot after it, and the shot list is
+   ordered, so the loss is silent unless somebody counts the files. A harness whose job is to put a
+   screen in front of a reviewer should record "could not reach this control" against that shot and
+   carry on — the ADR-0100 lesson that an instrument which produces nothing must say so.
+
+**Why it matters more than a harness bug normally would.** ADR-0102 records two defects that _only_
+photographs found, with every automated gate green, and ADR-0101 records the one surface the shot
+list did not cover being exactly where a four-scrollbar panel reached a user. The three shots this
+kills are the canvas lens states — the ones a contrast matrix and an axe scan structurally cannot
+judge.
+
+**Not fixed here** because it is unrelated to the one-row header and its fix needs a probe rather
+than a reading; the 21 shots it did take were enough to judge M2-T5's question (what the merged
+header did to the twelve screens that are not a plan).

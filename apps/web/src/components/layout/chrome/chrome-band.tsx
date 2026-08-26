@@ -21,11 +21,12 @@ import { Surface } from '@/components/ui/surface';
  */
 export function ChromeBand({ children }: { children: React.ReactNode }): React.ReactElement {
   const rows = useChromeSlot();
+  const identity = useChromeSlot();
 
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider nodes={{ rows: rows.node }}>
-        <ChromeBandRow rowsSlotRef={rows.slotRef} />
+      <ChromeSlotProvider nodes={{ rows: rows.node, identity: identity.node }}>
+        <ChromeBandRow rowsSlotRef={rows.slotRef} identitySlotRef={identity.slotRef} />
         {children}
       </ChromeSlotProvider>
     </HelpActionProvider>
@@ -59,9 +60,11 @@ export function ChromeBand({ children }: { children: React.ReactNode }): React.R
  */
 export function ChromeBandRow({
   rowsSlotRef,
+  identitySlotRef,
   className,
 }: {
   rowsSlotRef: (node: HTMLDivElement | null) => void;
+  identitySlotRef: (node: HTMLDivElement | null) => void;
   className?: string;
 }): React.ReactElement {
   return (
@@ -78,7 +81,7 @@ export function ChromeBandRow({
           plan identity line, and that content moves INTO this row's centre cell — which is the
           fold ADR-0092 M5 withdrew for want of exactly the width the destinations' departure
           (ADR-0097 Landing D1, a measured 540 px) had already freed. */}
-      <AppHeaderRow />
+      <AppHeaderRow identitySlotRef={identitySlotRef} />
       <ChromeSlot slotRef={rowsSlotRef} />
     </Surface>
   );
@@ -93,11 +96,15 @@ export function ChromeSlotHost({
 }: {
   children: (slots: {
     rowsSlotRef: (node: HTMLDivElement | null) => void;
+    identitySlotRef: (node: HTMLDivElement | null) => void;
     drawerSlotRef: (node: HTMLDivElement | null) => void;
     statusSlotRef: (node: HTMLDivElement | null) => void;
   }) => React.ReactNode;
 }): React.ReactElement {
   const rows = useChromeSlot();
+  // The plan's identity, modes and pen controls, carried into the app header row (the one-row
+  // header). A name rather than a second API — `chrome-slot.tsx` makes that argument in full.
+  const identity = useChromeSlot();
   // The trailing drawer's body (Graphite M6-T2). Mounted only while the drawer shows the registered
   // `'context'` subject, so a route's portal renders `null` the rest of the time rather than
   // painting into a hidden node — `ChromePortal`'s existing "no slot, no children" contract.
@@ -105,9 +112,17 @@ export function ChromeSlotHost({
   const status = useChromeSlot();
   return (
     <HelpActionProvider>
-      <ChromeSlotProvider nodes={{ rows: rows.node, drawer: drawer.node, status: status.node }}>
+      <ChromeSlotProvider
+        nodes={{
+          rows: rows.node,
+          identity: identity.node,
+          drawer: drawer.node,
+          status: status.node,
+        }}
+      >
         {children({
           rowsSlotRef: rows.slotRef,
+          identitySlotRef: identity.slotRef,
           drawerSlotRef: drawer.slotRef,
           statusSlotRef: status.slotRef,
         })}

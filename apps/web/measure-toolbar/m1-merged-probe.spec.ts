@@ -140,46 +140,22 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
         };
 
         const headerCells = [...headerGrid.children];
-        // The merged row's occupants, in the order a merged row would carry them.
-        const occupants = [
-          ...headerCells.slice(0, 1), // brand (+ the below-`lg` drawer trigger)
-          identityBlock, // breadcrumb, status badge, Edit-plan pencil
-          modeCluster, // `Mode` caption + the four mode buttons
-          ...(penCluster ? [penCluster] : []), // pen badge + sentence + hand-off controls
-          ...headerCells.slice(1), // organisation switcher, account chip
-        ];
-
-        // The same row with the pen's sentence removed and its badge and controls kept. **After M1
-        // the shipped cluster already has no sentence in it**, so this clone and `penCluster` are
-        // the same width and `withSentence`/`withoutSentence` converge — which is the correct
-        // reading of a product where the sentence has already moved, not a bug. Kept so the
-        // pre-M1 and post-M1 runs are comparable.
-        const penWithoutSentence = penCluster?.cloneNode(true) as HTMLElement | null;
-        if (penWithoutSentence && penSentence) {
-          const clonedSentence = [...penWithoutSentence.querySelectorAll('span,p,div')]
-            .filter((el) => el.children.length === 0 || el.querySelector('span[aria-hidden]'))
-            .find((el) =>
-              /(editing this plan|take over|hand over|current editor|was editing)/.test(
-                (el.textContent ?? '').trim(),
-              ),
-            );
-          // The sentence's own element is the `max-w-[22ch] truncate` wrapper, which is the
-          // parent of the text node and the aria-hidden aside. Remove that whole wrapper.
-          const wrapper = clonedSentence?.closest('span.truncate') ?? clonedSentence;
-          wrapper?.remove();
-        }
-        const occupantsNoSentence = [
-          ...headerCells.slice(0, 1),
-          identityBlock,
-          modeCluster,
-          ...(penWithoutSentence ? [penWithoutSentence] : []),
-          ...headerCells.slice(1),
-        ];
-
-        // The band's own row gaps: the header grid is `gap-4` (16), the identity row `gap-3` (12).
-        // A merged row has to pick one; both are reported so the choice is priced rather than
-        // assumed.
         const container = round(header.getBoundingClientRect().width);
+
+        /**
+         * **The composed hypothetical row is GONE, and its removal is the honest move.**
+         *
+         * Until M2 this probe built a merged row out of occupants that lived on two different rows,
+         * because there was no merged row to measure. There is one now — and the composition became
+         * a **double count** the moment there was: `headerCells[1]` is the identity slot, and the
+         * identity block, the mode cluster and the pen cluster are all *inside* it, so adding them
+         * beside it counted each one twice. It still returned a plausible number (1482, four pixels
+         * off the truth by luck), which is exactly the kind of reading that gets quoted.
+         *
+         * What is measured instead is the row itself: what it requires, and what it is doing.
+         */
+        const headerRowRequired = requiredWidth(headerCells, 12);
+
         const ctx = document.createElement('canvas').getContext('2d');
         let sentenceOnScreen: number | null = null;
         let widestSentence: number | null = null;
@@ -190,19 +166,9 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
           widestSentence = round(ctx.measureText(widest).width);
         }
 
-        const at = (gap: number) => ({
-          gap,
-          withSentence: requiredWidth(occupants, gap),
-          withoutSentence: requiredWidth(occupantsNoSentence, gap),
-        });
-
-        // **Two controls, and they are what makes the merged figure believable.** A probe that
-        // reports only the number under test cannot be checked: 1482 px is either the truth or an
-        // over-count, and nothing in the reading says which. So the same instrument is pointed at
-        // the two rows that are ON SCREEN RIGHT NOW. Their required widths can be compared against
-        // the same container by a reader who can see whether those rows are truncating.
+        // **The control that makes the figure checkable.** The identity block's own required width,
+        // against the same container, by a reader who can see whether the plan name is truncating.
         const controls = {
-          headerRowToday: requiredWidth(headerCells, 16),
           identityRowToday: requiredWidth(
             [identityBlock, modeCluster, ...(penCluster ? [penCluster] : [])],
             12,
@@ -210,15 +176,54 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
         };
 
         // Per-occupant, so a trim can be priced against the thing it would cut rather than guessed.
+        //
+        // **The header row's children are listed by position and labelled with their own text**,
+        // not mapped to fixed names. The first version named them `brand` / `orgSwitcher` /
+        // `account` for the `1fr auto 1fr` grid that used to be here — and when M2 replaced that
+        // grid with a wrapping flex row of `[brand] [identity slot] [org + account]`, the same
+        // indices came back under the same names and reported the **identity slot** as
+        // `orgSwitcher: 1063`. Plausible, wrong, and nothing in the reading said so. Third time
+        // this harness has been caught measuring one thing under another thing's name.
         const perOccupant = {
-          brand: requiredWidth(headerCells.slice(0, 1), 0),
+          headerChildren: headerCells.map((c, i) => ({
+            index: i,
+            text: (c.textContent ?? '').trim().slice(0, 24),
+            required: requiredWidth([c], 0),
+          })),
           identity: requiredWidth([identityBlock], 0),
           mode: requiredWidth([modeCluster], 0),
           pen: penCluster ? requiredWidth([penCluster], 0) : null,
-          penNoSentence: penWithoutSentence ? requiredWidth([penWithoutSentence], 0) : null,
-          orgSwitcher: headerCells[1] ? requiredWidth([headerCells[1]], 0) : null,
-          account: headerCells[2] ? requiredWidth([headerCells[2]], 0) : null,
         };
+
+        /**
+         * **The LIVE row, not a clone.** Everything above prices what the row would need; this reads
+         * what the shipped row is doing right now — its height, and how many lines that is. It is
+         * the reading the journey asserts and the only one that can catch a wrap that does not
+         * happen (a surviving `flex-1`) or one that happens where it should not.
+         *
+         * A line is the row's own `items-center` line box, so the count is derived from the
+         * tallest child rather than from a constant: a fixed 56 would be an assumption about
+         * padding that the `min-h-14 py-1` on the band makes false.
+         */
+        const headerRow = header.firstElementChild as HTMLElement | null;
+        const tallestChild = headerRow
+          ? Math.max(
+              0,
+              ...[...headerRow.children].map(
+                (c) => (c as HTMLElement).getBoundingClientRect().height,
+              ),
+            )
+          : 0;
+        const live = headerRow
+          ? {
+              height: round(headerRow.getBoundingClientRect().height),
+              tallestChild: round(tallestChild),
+              lines:
+                tallestChild > 0
+                  ? Math.round(headerRow.getBoundingClientRect().height / tallestChild)
+                  : null,
+            }
+          : null;
 
         /**
          * **Where a wrapping merged row actually breaks to two lines.**
@@ -259,18 +264,14 @@ test('M0-T3: the merged row, probed shrink-to-fit at four widths', async ({ page
 
         return {
           container,
-          occupantCount: occupants.length,
-          /** The widest box at which the wrapping row is still TALLER than one line. */
-          wrapBreaksBelow: {
-            gap12: wrapBreakWidth(occupantsNoSentence, 12),
-            gap16: wrapBreakWidth(occupantsNoSentence, 16),
-          },
+          headerChildCount: headerCells.length,
           sentenceOnScreen,
           widestSentence,
-          gap12: at(12),
-          gap16: at(16),
+          headerRowRequired,
+          wrapPoint: wrapBreakWidth(headerCells, 12),
           controls,
           perOccupant,
+          live,
         };
       },
       [WIDEST_SENTENCE] as const,

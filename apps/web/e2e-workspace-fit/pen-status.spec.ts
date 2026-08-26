@@ -113,3 +113,98 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
     await ensurePen(page);
   });
 });
+
+/**
+ * **M2 — the merged header row: one line at 1646, two at 1440.**
+ *
+ * The epic's headline acceptance condition, and it is asserted in a browser because nothing else can
+ * ask it. The row's shape is a flex-wrap outcome — no breakpoint, no `matchMedia`, no observer — so
+ * there is no value to unit-test and jsdom has no layout to measure. Written before the merge was
+ * built and **verified red against both wrong states**: a surviving `flex-1` on the identity block
+ * (one line at every width, plan name truncating towards nothing) and a shrinkable mode cluster
+ * (two ragged lines where one clean one was expected).
+ *
+ * Measured with the same instrument the design was chosen on: the row requires 1482 px, its wrap
+ * point is a container of 1480, and the containers at these two viewports are 1588 and 1382
+ * (`docs/specs/one-row-header/m2-measurement.md`).
+ */
+test.describe('the merged header row', () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage({ viewport: { width: 1646, height: 1097 } });
+    const orgSlug = await onboard(page, Date.now());
+    await createHierarchy(page);
+    // A long-but-plausible construction plan name. A short one is how three prior costings of this
+    // row reported slack that a real plan did not have (ADR-0091 M7).
+    await newPlan(page, 'Riverside Quarter — Phase 2 Substructure');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+    await expect(page.getByRole('toolbar', { name: 'Plan mode' })).toBeVisible();
+  });
+
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  /** The row's height in line boxes, derived from its tallest child rather than from a constant. */
+  const lines = async (p: Page): Promise<number> =>
+    p.evaluate(() => {
+      const row = document.querySelector('header')?.firstElementChild as HTMLElement | null;
+      if (!row) return 0;
+      const tallest = Math.max(
+        0,
+        ...[...row.children].map((c) => (c as HTMLElement).getBoundingClientRect().height),
+      );
+      return tallest > 0 ? Math.round(row.getBoundingClientRect().height / tallest) : 0;
+    });
+
+  test('is one line at 1646 and two at 1440, with the plan name readable in both', async () => {
+    for (const [width, expected] of [
+      [1646, 1],
+      [1440, 2],
+    ] as const) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.waitForTimeout(400);
+
+      expect(await lines(page), `line count at ${width}`).toBe(expected);
+
+      // **Readable, not merely present.** A `flex-1` identity block keeps the row one line by
+      // shrinking the plan name towards nothing — which passes a "the row is one line" assertion
+      // and is the exact failure the design turns on. So the name's own box is measured.
+      const name = page.locator('[data-plan-identity]').getByText('Riverside Quarter', {
+        exact: false,
+      });
+      await expect(name).toBeVisible();
+      const box = await name.boundingBox();
+      expect(box?.width ?? 0, `plan name width at ${width}`).toBeGreaterThan(80);
+
+      // The four modes stay on one line inside the row: a mode cluster that folds turns one clean
+      // row into two ragged ones, which is the hazard ADR-0109 D1 left behind when it replaced
+      // demotion with wrapping.
+      const modes = page.getByRole('toolbar', { name: 'Plan mode' });
+      const modeBox = await modes.boundingBox();
+      const firstMode = await modes.getByRole('button').first().boundingBox();
+      expect(
+        Math.round((modeBox?.height ?? 0) / (firstMode?.height ?? 1)),
+        `mode cluster lines at ${width}`,
+      ).toBe(1);
+    }
+  });
+
+  test('keeps the account chip as the row trailing control on both shapes', async () => {
+    for (const width of [1646, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.waitForTimeout(400);
+      const account = await page.getByRole('banner').getByRole('button').last().boundingBox();
+      const row = await page.getByRole('banner').boundingBox();
+      // ADR-0091 M7 records a flex line splitting free space equally between every auto margin,
+      // leaving a trailing group 281 px adrift. There is exactly one `ml-auto` here; this asserts it.
+      expect(
+        (row?.x ?? 0) + (row?.width ?? 0) - ((account?.x ?? 0) + (account?.width ?? 0)),
+      ).toBeLessThan(40);
+    }
+  });
+});

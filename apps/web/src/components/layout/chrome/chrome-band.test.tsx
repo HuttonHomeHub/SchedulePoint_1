@@ -44,10 +44,17 @@ describe('ChromeBand', () => {
     expect(band).not.toBeNull();
     expect(band).toContainElement(screen.getByRole('banner'));
     expect(band!.querySelector('[data-chrome-slot="rows"]')).not.toBeNull();
-    // ONE slot again. ADR-0097 D1b added an `identity` slot so a plan's identity line could reach
-    // the app header row; Graphite M3 deleted that row and merged the line into the mode row,
-    // which the workspace renders itself — so there is no shell boundary left to portal across.
-    expect(band!.querySelector('[data-chrome-slot="identity"]')).toBeNull();
+    // **Two slots again** (the one-row header, 2026-08-26). ADR-0097 D1b added an `identity` slot so
+    // a plan's identity line could reach the app header row; Graphite M3 deleted that row and merged
+    // the line into the mode row, which the workspace rendered itself, so this assertion read
+    // `toBeNull()` from then until now. The header row exists at every width again and it wraps, so
+    // the identity is portalled back into it and the band no longer carries a row of its own for it.
+    expect(band!.querySelector('[data-chrome-slot="identity"]')).not.toBeNull();
+    // And it is INSIDE the header landmark, not merely inside the band — which is what makes it one
+    // row rather than two.
+    expect(screen.getByRole('banner')).toContainElement(
+      band!.querySelector('[data-chrome-slot="identity"]'),
+    );
     // Everything else is BELOW the band, not inside it.
     expect(band).not.toContainElement(screen.getByTestId('below'));
   });

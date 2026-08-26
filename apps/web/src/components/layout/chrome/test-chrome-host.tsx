@@ -1,4 +1,4 @@
-import { ChromeSlot, ChromeSlotProvider, useChromeSlot } from './chrome-slot';
+import { ChromeSlot, ChromeSlotProvider, useChromeSlot, type ChromeSlotName } from './chrome-slot';
 
 /**
  * Test-only stand-in for the production shell's portal targets — every slot a plan portals into,
@@ -10,31 +10,59 @@ import { ChromeSlot, ChromeSlotProvider, useChromeSlot } from './chrome-slot';
  * failing. The cost is that a screen mounted OUTSIDE the shell, as these unit tests do, has
  * nowhere for its chrome to land, so the test supplies the host the shell normally is.
  *
- * **All four slots, since Graphite M7 — and the reason it is all of them is a gap this host had
- * already grown.** It offered `rows` alone. M5 added `rail` and portalled the plan's four mode
- * segments into it; M6 added `drawer`; M7 adds `status`. Each time, a portal with no target in
- * these tests renders nothing and the suite passes on a screen missing a piece — which is how the
- * mode cluster went two milestones with no coverage in the file whose own assertion says
+ * **Every slot, and the reason it is every one is a gap this host had already grown.** It offered
+ * `rows` alone. M5 added `rail` and portalled the plan's four mode segments into it; M6 added
+ * `drawer`; M7 added `status`; the one-row header adds `identity`. Each time, a portal with no
+ * target in these tests renders nothing and the suite passes on a screen missing a piece — which is
+ * how the mode cluster went two milestones with no coverage in the file whose own assertion says
  * "one command strip and the rail's mode cluster".
  *
  * A slot costs one `useChromeSlot()` here, so the standing rule is simply: **every name in
- * `ChromeSlotName` has a target in this host**. `chrome-slot.test.tsx` pins that, so adding a
- * fifth name fails here rather than silently in whichever suite renders it.
+ * `ChromeSlotName` has a target in this host**.
+ *
+ * **That rule is now a test, and until 2026-08-26 this docblock said it already was one.** It read
+ * "`chrome-slot.test.tsx` pins that, so adding a fifth name fails here rather than silently" — and
+ * nothing in the repository referenced `ChromeSlotName` from a test at all. The claim was disproved
+ * the first time it mattered: adding `identity` produced exactly the silent gap the paragraph
+ * promises to prevent, and two suites then failed somewhere else entirely, on a screen missing a
+ * piece. `TEST_CHROME_SLOTS` below is exported so the gate can compare it against the union, and the union
+ * against what this component actually renders.
  *
  * Deliberately not `ChromeBand` itself: that would drag in `AppHeaderRow`, the session query and
  * the router, none of which these tests are about. What is reproduced is the portal targets, not
  * the band.
  */
+/**
+ * Every name this host mounts a target for. Exported so `chrome-slot.test.tsx` can hold it against
+ * `ChromeSlotName` — a `satisfies` would only prove these are valid names, never that none is
+ * missing, which is the direction that actually fails.
+ */
+export const TEST_CHROME_SLOTS = [
+  'rows',
+  'identity',
+  'drawer',
+  'status',
+] as const satisfies readonly ChromeSlotName[];
+
 export function TestChromeHost({ children }: { children: React.ReactNode }): React.ReactElement {
   const rows = useChromeSlot();
+  const identity = useChromeSlot();
   const drawer = useChromeSlot();
   const status = useChromeSlot();
   return (
     <>
       <ChromeSlot slotRef={rows.slotRef} />
+      <ChromeSlot slotRef={identity.slotRef} name="identity" />
       <ChromeSlot slotRef={drawer.slotRef} name="drawer" />
       <ChromeSlot slotRef={status.slotRef} name="status" />
-      <ChromeSlotProvider nodes={{ rows: rows.node, drawer: drawer.node, status: status.node }}>
+      <ChromeSlotProvider
+        nodes={{
+          rows: rows.node,
+          identity: identity.node,
+          drawer: drawer.node,
+          status: status.node,
+        }}
+      >
         {children}
       </ChromeSlotProvider>
     </>

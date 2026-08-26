@@ -98,7 +98,7 @@ beforeEach(() => {
 function renderHeader(): void {
   render(
     <ThemeProvider>
-      <AppHeaderRow />
+      <AppHeaderRow identitySlotRef={() => undefined} />
     </ThemeProvider>,
   );
 }
