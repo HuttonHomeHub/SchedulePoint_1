@@ -3559,6 +3559,23 @@ When operating in this repo, Claude Code should:
    This is not a defect to fix; it is what the signal means. `get_check_runs` on
    the PR is the cheap check, and it caught all six.
 
+   **And `get_check_runs` is itself not the last word when a job sits `queued`.**
+   On 2026-08-26 PR #394's three CI jobs read `queued` there for **53 minutes**
+   while the run holding them had already finished: the run itself reported
+   `completed` / `conclusion: failure`, updated four seconds after it was created.
+   `get_workflow_run_usage` settled which was true — **0 billable ms on all three
+   jobs, `run_duration_ms` 4000** — so nothing had executed and the queue was a
+   display of jobs that would never start. The
+   two APIs disagreed and the more reassuring one was wrong.
+
+   So when a job has been `queued` for longer than a runner normally takes, ask
+   the **run**, not the check: `get_workflow_run` for its status and conclusion,
+   and `get_workflow_run_usage` for billable milliseconds, which is the reading
+   that cannot be misread — 0 ms means no job body ran, whatever the check says.
+   Zero billable time is also what distinguishes a runner-allocation failure from
+   a real one, and therefore what makes a single re-run the right response rather
+   than a way of not reading a log.
+
 10. **Use Conventional Commits** and add a changeset for user-visible change.
     Meet the Feature Completion Criteria (§21) before calling work done.
 11. **A claim that decides something must carry its evidence** (ADR-0076). When a
