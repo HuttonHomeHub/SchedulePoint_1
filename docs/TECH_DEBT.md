@@ -4543,33 +4543,47 @@ read from `distinctControlHeights` rather than from the label tops.
 
 ## #188 — Eight of fourteen measurement harnesses cannot run
 
-_Filed 2026-08-25 with ADR-0110. **Not a product defect** — these are instruments, and the product
-they measure is fine. The risk is that they are quotable._
+_Filed 2026-08-25 with ADR-0110 M4. **CLOSED 2026-08-26** — seven deleted, one repaired, estate
+green. **And the row's own inventory was wrong in three ways**, which is worth more than the fix._
 
-`apps/web/measure-toolbar/` holds fourteen specs. **Eight fail in ~8 seconds each**: `header-fit`,
-both `item-widths` specs, `loaded-plan`, `measure`, `menu-band`, `reachability`, `search-icon`. The
-uniform, fast failure says stale locators — almost certainly from ADR-0109 deleting the tool rail,
-moving the organisation destinations and reshaping the command surface.
+**What it claimed, and what the tree holds.** The title says "eight of fourteen". The directory held
+**16 spec files and 17 test cases**, of which **9 cases across 8 files** failed — established by
+running `pnpm measure:toolbar`, which nobody had done. The row also named "both `item-widths`
+specs"; there is **one** file with **two cases**, so its list of eight names only seven files, and it
+**omitted `attribution` entirely**. A register row about instruments that mislead, itself
+miscounting its subject, written the day before by the same hand — the failure mode is not
+ignorance, it is that a list assembled by reading is not a list derived by running.
 
-These are the instruments that priced **four consecutive command-surface epics**.
+**Predicting which to delete was also wrong.** Classified by subject, `graphite-strip` looked like a
+clear delete — it is the densest of all of them in references to the width ladder and the overflow
+ADR-0109 D1 removed. **It passes.** It was deleted and restored in the same minute, and only because
+the estate was run first.
 
-**A broken harness is worse than a deleted one.** A deleted gate is absent and a reader notices; a
-broken harness is present, reads as authoritative, and its last successful output is still sitting in
-`apps/web/measure-output/` with nothing marking it as pre-redesign. Someone reaching for `header-fit`
-to settle a width question finds a file that looks like the answer and cannot execute — or worse,
-finds its stale JSON and does not check the date. That is `#186`'s shape (a gate whose subject moved)
-crossed with ADR-0076 Class 1 (a number nobody re-derived).
+**What shipped.** Seven deleted, because their subject no longer exists and repairing them would
+mean maintaining a measurement of a mechanism the product does not have:
 
-**Not fixed here deliberately.** Repairing eight harnesses does not belong inside a milestone about
-label baselines, and folding it in is how scope gets away. It is filed with the decision recorded
-rather than done quietly or forgotten.
+| Harness        | Subject, and why it went                                                                |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `measure`      | ADR-0090 M0, "the two toolbar rows" — merged by ADR-0099 M5, ladder deleted by ADR-0109 |
+| `loaded-plan`  | M0c, a correction to `measure`                                                          |
+| `reachability` | M0b, clipped controls — clipping was the ladder's failure mode                          |
+| `attribution`  | M1-T1, attributing a row overshoot that ADR-0090 M1 fixed                               |
+| `item-widths`  | M2-T0, sizing the ADR-0090 M2 consolidation, which shipped                              |
+| `menu-band`    | ADR-0097 Landing C — **withdrawn on its own falsification condition**, never built      |
+| `search-icon`  | ADR-0091 M0-T2 — answered (COVERED, geometry already correct)                           |
 
-**When it is picked up**, the cheap first move is to decide per harness whether its _subject_ still
-exists. Several measure the width ladder and the overflow menu, which ADR-0109 D1 deleted — those
-should go the way `e2e-toolbar-fit` went, not be repaired. The rest want their locators updated.
-`m0-repaired.spec.ts`, `m0-bands.spec.ts`, `m0-merged-row.spec.ts` and `busy-band.spec.ts` are the
-working examples to copy from, and `m0-measurement.md` records the eight instrument defects found
-writing them — worth reading before writing a ninth.
+One repaired: **`header-fit`**, whose subject — does the app header row fit its container, and is
+every control in it pointer-reachable — is exactly the question the one-row header work asks next.
+It waited on a toolbar named `View and navigate`, a name **ADR-0099 M5 removed**, so it had been
+dead since then while still reading as the authority on header fit. One locator.
+
+**The remaining nine all pass** (`busy-band`, `combobox-coarse`, `graphite-strip`, `header-fit`,
+`m0-bands`, `m0-header-and-treatment`, `m0-merged-row`, `m0-repaired`, `vertical-stack`).
+
+**The stale JSON this row worried about is still in `apps/web/measure-output/`** and is not
+addressed here: outputs from deleted harnesses now describe mechanisms with no code behind them.
+Deleting those files is the obvious follow-up and was left deliberately, because some are cited by
+name in ADR-0090/0091's own reasoning and removing them would break those citations.
 
 ---
 
