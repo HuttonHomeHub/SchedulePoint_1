@@ -1,7 +1,19 @@
 {
-  "active": true,
-  "epic": "workspace-redesign",
-  "spec": "docs/specs/workspace-redesign/",
-  "reason": "ADR-0109's parity argument is that the CPM engine, the REST API and the database are untouched — apps/web only, which is what makes the whole redesign revertible by one commit. That claim was made in four commit messages, an ADR and this repository's operating manual before anybody armed the gate that proves it; it was verified by hand at M5 (`git diff --name-only origin/main...HEAD -- apps/api packages` is empty) and armed here so the remaining milestones cannot quietly break it. A hand-verified claim is exactly the kind ADR-0058 says to replace with a check. Remove it in this epic's closing pass — the previous declaration outlived its epic by weeks and went wrong about a different one.",
-  "guarded": ["apps/api/", "packages/"]
+  "active": false,
+  "epic": null,
+  "spec": null,
+  "reason": "No frontend-only epic is in flight. DEACTIVATED 2026-08-26 by the reconciliation pass, on the third occasion this declaration outlived its epic — which its own docblock predicts and its own reason field instructed against: `workspace-redesign` (ADR-0109) released as web-v0.103.0 on 2026-08-24, its successor epic closed and released on 2026-08-25, and the declaration stayed armed. It then did exactly what the docblock says a stale declaration does: it went wrong about a DIFFERENT change, blocking a repo-tooling commit that added `eslint --cache` to every workspace's lint script — nine package.json files, no product code, no possible effect on the engine's input — with a message about ADR-0109's parity argument. The previous instance blocked ADR-0096 the same way. Deactivating is the honest response; reasoning about a shipped milestone is not.",
+  "guarded": ["apps/api/", "packages/"],
+  "history": [
+    {
+      "epic": "gantt-editing",
+      "deactivated": "2026-08-18",
+      "note": "Outlived its epic; blocked ADR-0096, which legitimately changes apps/api/."
+    },
+    {
+      "epic": "workspace-redesign",
+      "deactivated": "2026-08-26",
+      "note": "Outlived its epic by two days; blocked a lint-script change across nine package.json files. See docs/TECH_DEBT.md #194 — 'the epic's own gate pass removes it' has now failed twice as a written instruction, and wants a mechanism rather than a third sentence."
+    }
+  ]
 }

@@ -39,8 +39,24 @@ add one is —
 
 ## Async processing & queueing (ADR-0009) — _not yet built_
 
-There is no queue and no worker; all work is synchronous. The candidate first
-consumer is schedule-interchange import. The standard for when it lands:
+**There is no queue and no worker. That is not the same as "all work is
+synchronous", and this section said so until the 2026-08-25 reconciliation
+pass** — the identical sentence was corrected in `ARCHITECTURE.md` §10 on
+2026-08-18 and left standing here, which is the "patch the gate in front of you
+and leave its siblings" failure this repository's runbook warns about.
+
+Since ADR-0087 the API runs **scheduled work**: a retention sweep on one
+`setInterval`, `.unref()`'d, with no timer when disabled and no Redis, queue or
+new dependency. Its costs are stated rather than hidden — **per replica,
+non-durable, no retry** — and each is accepted _because of what that job is_:
+idempotent and time-predicated, so a second run finds nothing and a restart is
+repaired by the next tick. ADR-0009 is **narrowed, not superseded**; ADR-0087 D2
+names the triggers that reopen it (durability, retries, exactly-once, fan-out,
+enqueue-from-a-request, visible progress) so "we have a scheduler" does not
+become the answer to every future background need.
+
+The candidate first consumer for a real queue is schedule-interchange import.
+The standard for when it lands:
 
 - **Move slow / retriable / scheduled work off the request path** into BullMQ
   jobs (notifications, exports, recurring generation). Requests stay fast.

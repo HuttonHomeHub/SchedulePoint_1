@@ -192,8 +192,13 @@ So, for any command surface:
 - **`showLabel` is presentation and it means what it says.** `'auto'` now means _yes_: under the
   ladder it meant "if the row can afford it", and a row that wraps can always afford it. `'never'`
   is for the handful of icons that are genuinely universal (zoom ±, fit, undo, redo, print).
-- **The vertical variant is always icon-only.** A 48 px rail cannot hold a label without wrapping,
-  clipping, or widening the leading edge of the application.
+- **A command surface is horizontal.** `Toolbar` carried an `orientation` prop for Graphite's 48 px
+  mode rail; ADR-0109 D2 deleted that rail, and the prop sat with **no consumer at all** while this
+  clause went on documenting the rule that governed it — dead code kept alive by a standard
+  (`docs/TECH_DEBT.md` #190). Both were removed together on 2026-08-26, so the code and the standard
+  could not disagree about which existed. If a vertical surface is wanted again, the branch is a few
+  lines; the part to get right is the **announcement**, since a stack that tells assistive technology
+  it is horizontal is wrong about the only thing `aria-orientation` exists to say.
 
 **What this costs, stated:** a surface that wraps has a height that is a function of its width, so a
 narrow window buys its commands with vertical space the content would otherwise have. That is the
@@ -617,12 +622,29 @@ link`; sizes `sm | md | lg | icon | icon-lg | icon-sm`; icon buttons require `ar
   colour; sizes `sm | md`.
 - **Breadcrumbs** — for depth ≥ 2; last item is current page (`aria-current`);
   collapse middle items on small screens.
-- **Tabs** — **_(not built)_**. The app has deliberately avoided tabs so far:
-  the workspace uses `SegmentedControl` for a mutually-exclusive pane choice and
-  the toolbar's grouped rows for command surfacing. If a genuine tab pattern is
-  needed, hand-roll the APG `tablist` (roving focus, arrow-key navigation,
-  panels labelled by their tab) — do not reach for a component library. Never
-  use tabs to hide critical primary actions.
+- **Tabs** — `components/ui/tabs.tsx`. Hand-rolled on the APG `tablist` in the
+  lineage of `Menu` and `Combobox`: roving `tabindex`, Arrow/Home/End,
+  `aria-selected`, automatic activation (every panel's data is already in
+  memory, so revealing one is cheap), and one panel rendered from a render prop.
+  `orientation="vertical"` renders the list as a rail beside the panel
+  (ADR-0061 §3); markers are a discriminated `TabMarker`, never colour alone
+  (WCAG 1.4.1). The panel carries `tabIndex={0}` — an APG deviation recorded in
+  ADR-0060 rather than left silent, because a scrollable region that is not
+  focusable cannot be scrolled by keyboard at all and 2.1.1 wins.
+  Use `SegmentedControl`, not tabs, for a mutually-exclusive **pane** choice.
+  **Never use tabs to hide critical primary actions** — the tabbed activity
+  editor saves **per write scope**, not per dialog, precisely because its scopes
+  do not share a permission (ADR-0060).
+
+  <!-- This entry read "(not built) — the app has deliberately avoided tabs so
+  far" until the 2026-08-25 reconciliation pass, and instructed the reader to
+  hand-roll the APG tablist if one were ever needed. Somebody had: ADR-0060
+  shipped the tabbed activity editor on 2026-07-29 and ADR-0061 gave it a
+  vertical orientation. Four weeks stale on the governing document for
+  components, in the paragraph telling an author what to build — the exact
+  archetype ADR-0058 was written for. Found only because this pass was widened
+  past the epic that triggered it. -->
+
 - **Surface scopes** — `Surface` (`components/ui/surface.tsx`) marks a region as `chrome`
   (the top band) or `panel` (the Project Explorer). Inside a scope the ordinary semantic
   names resolve to that surface's own validated family, so descendants need no change. A

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+import { containerShouldStandDown, vetoesKey } from './toolbar-keyboard';
 import {
   groupRank,
   resolveItems,
@@ -36,36 +37,7 @@ export interface ToolbarProps<Ctx> {
    * owner reported (ADR-0091 M7 S10). There is now only one caller and one such margin.
    */
   alignEndGroup?: ToolbarGroupId;
-  /**
-   * `'horizontal'` (default) is a row. `'vertical'` stacks the items — the mode rail.
-   *
-   * **One prop, not a second primitive.** The keyboard already answers both axes (`ArrowDown` is
-   * treated as `ArrowRight` below), so what was actually hard-coded was the ANNOUNCEMENT: a
-   * vertical stack that tells assistive technology it is horizontal is wrong about the only thing
-   * `aria-orientation` exists to say.
-   */
-  orientation?: 'horizontal' | 'vertical';
   className?: string;
-}
-
-/**
- * Does this keystroke belong to a form field rather than to the roving toolbar?
- *
- * **Load-bearing, and re-derived rather than inherited.** A `render` item may be an `<input>` — the
- * deck's own activity search is one — and a toolbar that treats every ArrowLeft as "move to the
- * previous control" takes the caret keys away from the field a planner is typing in. Home and End
- * are worse: in a text field they mean start-of-line and end-of-line, and stealing them moves focus
- * to the far end of the surface instead.
- *
- * This guard was dropped when the width ladder was deleted and the test caught it immediately,
- * which is the gate working: the assertion is about the contract, not about the machinery that was
- * removed around it.
- */
-function isTextEntry(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
 const DEFAULT_GROUP_LABELS: Record<ToolbarGroupId, string> = {
@@ -102,10 +74,17 @@ const DEFAULT_GROUP_LABELS: Record<ToolbarGroupId, string> = {
  * ladder existed to decide — what to hide, what to unlabel, in what order — is a question that only
  * arises if hiding is on the table.
  *
- * What is left here serves the two surfaces that never needed a ladder in the first place: the
- * **vertical mode rail**, whose items stack so there is no row to overflow, and the floating
- * **selection bar**, which carries a handful of object actions. Both were paying for machinery they
- * could not use.
+ * What is left here serves the surfaces that never needed a ladder in the first place — chiefly
+ * the floating **selection bar**, which carries a handful of object actions and was paying for
+ * machinery it could not use.
+ *
+ * **This toolbar is horizontal, full stop.** It carried an `orientation` prop for the 48 px mode
+ * rail until 2026-08-26; ADR-0109 D2 deleted that rail and left the prop with **no consumer at
+ * all**, while `DESIGN_SYSTEM.md` went on documenting the rule that governed it — dead code kept
+ * alive by documentation (`docs/TECH_DEBT.md` #190). Both went in one commit, so the standard and
+ * the code could not disagree. If a vertical surface is wanted again, the branch is a few lines and
+ * the ANNOUNCEMENT is the part to get right: a stack that tells assistive technology it is
+ * horizontal is wrong about the only thing `aria-orientation` exists to say.
  *
  * `render` items (segmented controls, chips, popover triggers) manage their own width and must
  * spread `api.itemProps` on their single focusable control.
@@ -117,7 +96,6 @@ export function Toolbar<Ctx>({
   authoringEnabled = true,
   groupLabels,
   alignEndGroup,
-  orientation = 'horizontal',
   className,
 }: ToolbarProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -143,11 +121,16 @@ export function Toolbar<Ctx>({
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (isTextEntry(event.target)) return;
       const key = event.key;
       const isNext = key === 'ArrowRight' || key === 'ArrowDown';
       const isPrev = key === 'ArrowLeft' || key === 'ArrowUp';
       if (!isNext && !isPrev && key !== 'Home' && key !== 'End') return;
+      // A descendant that already handled the key wins; then the focused control's own claim.
+      // Both rules live in `toolbar-keyboard.ts` and are shared with `Deck` — this primitive used
+      // to carry its own copy, and when the copy in `Deck` was fixed this one was not, which is
+      // exactly the drift the shared module exists to make impossible.
+      if (containerShouldStandDown(event)) return;
+      if (vetoesKey(event.target, key)) return;
       const ids = focusableIds;
       if (ids.length === 0) return;
       const current = effectiveActiveId ? ids.indexOf(effectiveActiveId) : -1;
@@ -193,17 +176,15 @@ export function Toolbar<Ctx>({
       ref={containerRef}
       role="toolbar"
       aria-label={label}
-      aria-orientation={orientation}
+      aria-orientation="horizontal"
       onKeyDown={onKeyDown}
       className={cn(
         'flex gap-1',
-        orientation === 'vertical'
-          ? 'flex-col items-center'
-          : // A horizontal toolbar WRAPS rather than scrolls. Under the ladder this was
-            // `overflow-x-auto`, which was the least-bad answer once hiding had been ruled out and
-            // demotion had run out of things to demote. With no ladder there is nothing to run out
-            // of: a line that cannot fit becomes two lines.
-            'flex-wrap items-center',
+        // A toolbar WRAPS rather than scrolls. Under the ladder this was `overflow-x-auto`, the
+        // least-bad answer once hiding had been ruled out and demotion had run out of things to
+        // demote. With no ladder there is nothing to run out of: a line that cannot fit becomes
+        // two lines.
+        'flex-wrap items-center',
         className,
       )}
     >
@@ -213,15 +194,9 @@ export function Toolbar<Ctx>({
           role="group"
           aria-label={labels[group]}
           className={cn(
-            'flex gap-1',
-            orientation === 'vertical' ? 'flex-col items-center' : 'flex-wrap items-center',
-            // A hairline separates groups along the axis the toolbar actually runs. A vertical rail
-            // with a left border draws a line down the SIDE of a group rather than between two,
-            // which reads as a container and not as a division.
-            i > 0 &&
-              (orientation === 'vertical'
-                ? 'border-border mt-1 w-full border-t pt-2'
-                : 'border-border ml-1 border-l pl-2'),
+            'flex flex-wrap items-center gap-1',
+            // A hairline separates groups along the axis the toolbar runs.
+            i > 0 && 'border-border ml-1 border-l pl-2',
             group === alignEndGroup && 'ml-auto',
           )}
         >
@@ -251,12 +226,10 @@ export function Toolbar<Ctx>({
                 {...(r.item.description ? { description: r.item.description } : {})}
                 icon={r.icon}
                 {...(r.busy ? { busy: true } : {})}
-                // **A vertical toolbar is always icon-only.** The rail is 48 px; a label there
-                // either wraps, clips or widens the leading edge of the whole application.
-                // Horizontally the item's own policy decides, with `'auto'` now meaning "yes":
-                // under the ladder `'auto'` meant "if the row can afford it", and a row that wraps
-                // can always afford it.
-                showLabel={orientation === 'horizontal' && (r.item.showLabel ?? 'auto') !== 'never'}
+                // The item's own policy decides, with `'auto'` now meaning "yes": under the
+                // ladder `'auto'` meant "if the row can afford it", and a row that wraps can
+                // always afford it.
+                showLabel={(r.item.showLabel ?? 'auto') !== 'never'}
                 {...(r.item.isActive ? { pressed: r.active } : {})}
                 disabled={!r.enabled}
                 disabledReason={r.disabledReason}

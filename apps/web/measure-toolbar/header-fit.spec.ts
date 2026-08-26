@@ -57,7 +57,11 @@ test('the app header row, measured for fit and pointer reachability', async ({ p
     .fill('2026-01-05');
   await page.getByRole('dialog').getByRole('button', { name: 'Create plan' }).click();
   await page.getByRole('link', { name: 'Riverside — Phase 2 Substructure' }).click();
-  await expect(page.getByRole('toolbar', { name: 'View and navigate' })).toBeVisible();
+  // `Plan commands` is the deck. This line waited for a toolbar named `View and navigate` until the
+  // 2026-08-26 repair (`docs/TECH_DEBT.md` #188) — a name ADR-0099 M5 removed when it merged the two
+  // rows, so this harness had been dead since then while still reading as the authority on whether
+  // the header fits.
+  await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
   await page.getByRole('button', { name: 'Start editing' }).click();
   await expect(page.getByRole('button', { name: 'Stop editing' })).toBeVisible();
 

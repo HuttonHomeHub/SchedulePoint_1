@@ -112,6 +112,14 @@ The dotted edges are **decided, not built**. Everything solid is live.
 
 ## Background processing (ADR-0009) — _not yet built_
 
+> **Scheduled work exists; a queue does not.** ADR-0087 gave the API one
+> `setInterval`-based retention sweep (`.unref()`'d, no Redis, no queue, no new
+> dependency), deliberately shaped like `HeartbeatService` rather than like a job
+> system. It is **per replica, non-durable and unretried**, which is acceptable
+> only because that job is idempotent and time-predicated. ADR-0009 is narrowed,
+> not superseded — see ADR-0087 D2 for the triggers that reopen it. Everything
+> below is the standard for the queue itself, which is still unbuilt.
+
 - **BullMQ + Redis** for async/scheduled work. Producers enqueue from services;
   **processors live in the owning module** and delegate to services.
 - Jobs are **durable, retried with backoff, and idempotent**; terminal failures

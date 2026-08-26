@@ -9,9 +9,13 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
  * | question                                  | honest input      | consumer                      |
  * | ----------------------------------------- | ----------------- | ----------------------------- |
  * | *how much room does this surface have?*   | the **band**      | `resolveLayoutMode`           |
- * | *does my content fit my box?*             | the **container** | `computeLadder`               |
+ * | *does my content fit my box?*             | the **container** | (nothing, since ADR-0109 D1)  |
  *
- * The first is a property of the window; the second is a property of the row. Conflating them is
+ * The first is a property of the window; the second is a property of the row. **The second question
+ * has no consumer today**: a command surface wraps, so `computeLadder` — which this row named until
+ * the 2026-08-25 pass — was deleted with the width ladder, and `resolveLayoutMode` has no
+ * production caller either (`docs/TECH_DEBT.md` #193). The distinction is kept because it is the
+ * thing three withdrawn decisions turned on, not because either side is currently wired. Conflating them is
  * honest only while a toolbar IS the full-width row — and this register has now recorded that
  * assumption failing **three times**:
  *

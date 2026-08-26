@@ -274,12 +274,20 @@ export function Combobox({
     announce(message);
   }, [open, loading, noResults, selectableCount, emptyMessage, announce]);
 
-  // Close on a pointer press outside, and on Escape. Escape is a capture-phase document listener
-  // (the `Menu` precedent) so it closes the popup WITHOUT also closing a surrounding Dialog.
+  // Close on a pointer press outside, and on Escape.
+  //
+  // **This comment claimed the capture-phase listener alone kept a surrounding Dialog open. It was
+  // false** (`docs/TECH_DEBT.md` #196). `stopPropagation` withholds the key from other listeners;
+  // a modal `<dialog>`'s Escape-to-close is a **default action** gated on `defaultPrevented`, which
+  // propagation does not set — so one Escape closed this popup and asked the dialog to close too.
+  // The claim read as verified because `combobox.test.tsx`'s stand-in for "a surrounding Dialog" is
+  // a plain `<div onKeyDown>`, and jsdom stubs `showModal`/`close` as property flips that never
+  // fire `cancel`, so the real behaviour is unreachable in this repository's unit environment.
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
+      event.preventDefault();
       event.stopPropagation();
       setOpen(false);
       setActiveIndex(-1);

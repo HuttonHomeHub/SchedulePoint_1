@@ -43,6 +43,44 @@ function renderDeck(): void {
   render(<Deck items={items} context={{}} label="Plan commands" />);
 }
 
+/**
+ * A separate fixture, because a date field legitimately **traps** the vertical arrows and would
+ * therefore falsify the "every command is reachable by repeated ArrowDown" case above. In the real
+ * product this input only exists inside an **open, portalled popover** — the deck's permanent stop
+ * is the trigger button — so a bare date item in the shared fixture would not model anything.
+ */
+const claimingItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
+  { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
+  {
+    id: 'claims-arrows',
+    group: 'output',
+    order: 1,
+    tier: 1,
+    label: 'Claims arrows',
+    render: (_ctx, { itemProps }) => (
+      <button
+        aria-label="Claims arrows"
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') e.preventDefault();
+        }}
+        {...itemProps}
+      />
+    ),
+  },
+]);
+
+const dateItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
+  { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
+  {
+    id: 'go-to-date',
+    group: 'frame',
+    order: 2,
+    tier: 1,
+    label: 'Go to date',
+    render: (_ctx, { itemProps }) => <input type="date" aria-label="Go to date" {...itemProps} />,
+  },
+]);
+
 /** Which registry item currently holds focus, by id — never by copy. */
 function focusedItemId(): string | null {
   return (
@@ -113,5 +151,39 @@ describe('Deck — the roving keyboard model', () => {
     for (const id of ['today', 'fit', 'search', 'filter', 'add-activity', 'export']) {
       expect(reached, `${id} is unreachable by keyboard from the search field`).toContain(id);
     }
+  });
+
+  /**
+   * **The regression the shared module was extracted for** (`docs/TECH_DEBT.md` #192), asserted
+   * through the real primitive rather than only against the pure function.
+   *
+   * The shipped `Go to date` control is a `render` item supplying `<input type="date">`, and a date
+   * input steps its focused segment with the vertical arrows. Verified red against the guard
+   * released in `web-v0.106.0`: focus moved to the next command and the date never changed.
+   */
+  it('a date render-item keeps the vertical arrows the toolbar would otherwise take', () => {
+    render(<Deck items={dateItems} context={{}} label="Plan commands" />);
+    // A `<input type="date">` maps to no ARIA textbox role — by label, not by role.
+    const field = screen.getByLabelText('Go to date');
+    field.focus();
+    for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      fireEvent.keyDown(field, { key });
+      expect(focusedItemId(), `${key} was taken from the date field`).toBe('go-to-date');
+    }
+  });
+
+  /**
+   * A descendant that already handled the key wins. `ToolbarSplitButton`'s caret, `Menu` and
+   * `Combobox` all call `preventDefault()` without `stopPropagation()`, so the event still arrives
+   * at the container through the React tree — and when the caret is disabled it has already moved
+   * focus somewhere the roving model cannot see, where a naive `indexOf` returns -1 and throws
+   * focus to the deck's FIRST stop.
+   */
+  it('stands down when a descendant has already handled the key', () => {
+    render(<Deck items={claimingItems} context={{}} label="Plan commands" />);
+    const button = screen.getByRole('button', { name: 'Claims arrows' });
+    button.focus();
+    fireEvent.keyDown(button, { key: 'ArrowDown' });
+    expect(focusedItemId(), 'the deck moved focus over a handled key').toBe('claims-arrows');
   });
 });

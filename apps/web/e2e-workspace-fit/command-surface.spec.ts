@@ -245,31 +245,35 @@ test.describe('The plan command surface', () => {
     await expect(stops).toHaveCount(1);
     await expect(stops.first()).toBeVisible();
 
-    // **The arrow keys still traverse the whole surface in the state the fold left it, INCLUDING
-    // past the search field.** `ArrowDown` rather than `ArrowRight`, and that is the assertion
-    // rather than an implementation detail: the deck's Find group holds an `<input>`, which owns
-    // the horizontal keys and Home/End for its caret. Vetoing the vertical ones too — which is
-    // what shipped until this test ran — made every command after the field unreachable from it,
-    // and the deck's single Tab entry point is the roving stop, which focusing the field had just
-    // moved to the field. WCAG 2.2 §2.1.1, level A. `Deck.test.tsx` pins the mechanism; this
-    // proves it with a real caret and a real focus ring.
+    // **The arrow keys traverse the whole surface in the state the fold left it — and the two
+    // families do different jobs, which this walk models rather than assumes.**
+    //
+    // On a horizontal toolbar `ArrowRight`/`ArrowLeft` are the traversal keys. `ArrowUp`/`ArrowDown`
+    // are NOT: they are the escape hatch out of a text field (a single-line input claims the caret
+    // keys and has no use for the vertical ones — `docs/TECH_DEBT.md` #189), and a popover trigger
+    // legitimately claims `ArrowDown` to OPEN its panel, at which point the container stands down on
+    // `defaultPrevented` (#192). An earlier version of this walk pressed `ArrowDown` throughout and
+    // halted on `today`, the Go-to-date trigger — the product was right and the test was wrong about
+    // which key does what.
     await page.keyboard.press('Home');
     const reached: string[] = [];
-    for (let i = 0; i < 40; i += 1) {
-      const id = await page.evaluate(
-        () =>
-          document.activeElement
-            ?.closest('[data-toolbar-item]')
-            ?.getAttribute('data-toolbar-item') ?? null,
-      );
-      if (id !== null && !reached.includes(id)) reached.push(id);
-      await page.keyboard.press('ArrowDown');
+    for (let i = 0; i < 60; i += 1) {
+      const here = await page.evaluate(() => {
+        const active = document.activeElement;
+        return {
+          id: active?.closest('[data-toolbar-item]')?.getAttribute('data-toolbar-item') ?? null,
+          isField: active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA',
+        };
+      });
+      if (here.id !== null && !reached.includes(here.id)) reached.push(here.id);
+      // One ArrowDown to step out of a text field, ArrowRight everywhere else.
+      await page.keyboard.press(here.isField ? 'ArrowDown' : 'ArrowRight');
     }
     expect(reached, "the folded group's caption is not reachable by arrow key").toContain(
       'caption:author',
     );
-    // The search field is IN the lap rather than the end of it — a traversal that stops there is
-    // the defect above, and a lap that never reaches it is a fixture proving nothing.
+    // The search field is IN the lap rather than the end of it — a walk that stops there is #189,
+    // and a lap that never reaches it is a fixture proving nothing.
     expect(reached, 'the search field is not in the roving sequence').toContain('search');
     expect(
       reached.indexOf('caption:author'),

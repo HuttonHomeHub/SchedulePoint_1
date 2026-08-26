@@ -474,7 +474,7 @@ would not exercise the code being budgeted.
    One trap worth recording, because it produced a much prettier and entirely false number first: a
    generated plan laid out nose-to-tail spans **28 years** at 2,000 activities, so the "whole plan"
    zoom culled roughly nine bars in ten and reported 4.6 ms p95. It looked like the budget being met.
-   The layout now runs a phase's bands concurrently (`scripts/scale-scene.ts`), which puts the plan
+   The layout now runs a phase's bands concurrently (`apps/web/scripts/scale-scene.ts`), which puts the plan
    at about two and a half years and fills the viewport — that is what makes the two scenes
    comparable at all.
 
@@ -4543,33 +4543,47 @@ read from `distinctControlHeights` rather than from the label tops.
 
 ## #188 — Eight of fourteen measurement harnesses cannot run
 
-_Filed 2026-08-25 with ADR-0110. **Not a product defect** — these are instruments, and the product
-they measure is fine. The risk is that they are quotable._
+_Filed 2026-08-25 with ADR-0110 M4. **CLOSED 2026-08-26** — seven deleted, one repaired, estate
+green. **And the row's own inventory was wrong in three ways**, which is worth more than the fix._
 
-`apps/web/measure-toolbar/` holds fourteen specs. **Eight fail in ~8 seconds each**: `header-fit`,
-both `item-widths` specs, `loaded-plan`, `measure`, `menu-band`, `reachability`, `search-icon`. The
-uniform, fast failure says stale locators — almost certainly from ADR-0109 deleting the tool rail,
-moving the organisation destinations and reshaping the command surface.
+**What it claimed, and what the tree holds.** The title says "eight of fourteen". The directory held
+**16 spec files and 17 test cases**, of which **9 cases across 8 files** failed — established by
+running `pnpm measure:toolbar`, which nobody had done. The row also named "both `item-widths`
+specs"; there is **one** file with **two cases**, so its list of eight names only seven files, and it
+**omitted `attribution` entirely**. A register row about instruments that mislead, itself
+miscounting its subject, written the day before by the same hand — the failure mode is not
+ignorance, it is that a list assembled by reading is not a list derived by running.
 
-These are the instruments that priced **four consecutive command-surface epics**.
+**Predicting which to delete was also wrong.** Classified by subject, `graphite-strip` looked like a
+clear delete — it is the densest of all of them in references to the width ladder and the overflow
+ADR-0109 D1 removed. **It passes.** It was deleted and restored in the same minute, and only because
+the estate was run first.
 
-**A broken harness is worse than a deleted one.** A deleted gate is absent and a reader notices; a
-broken harness is present, reads as authoritative, and its last successful output is still sitting in
-`apps/web/measure-output/` with nothing marking it as pre-redesign. Someone reaching for `header-fit`
-to settle a width question finds a file that looks like the answer and cannot execute — or worse,
-finds its stale JSON and does not check the date. That is `#186`'s shape (a gate whose subject moved)
-crossed with ADR-0076 Class 1 (a number nobody re-derived).
+**What shipped.** Seven deleted, because their subject no longer exists and repairing them would
+mean maintaining a measurement of a mechanism the product does not have:
 
-**Not fixed here deliberately.** Repairing eight harnesses does not belong inside a milestone about
-label baselines, and folding it in is how scope gets away. It is filed with the decision recorded
-rather than done quietly or forgotten.
+| Harness        | Subject, and why it went                                                                |
+| -------------- | --------------------------------------------------------------------------------------- |
+| `measure`      | ADR-0090 M0, "the two toolbar rows" — merged by ADR-0099 M5, ladder deleted by ADR-0109 |
+| `loaded-plan`  | M0c, a correction to `measure`                                                          |
+| `reachability` | M0b, clipped controls — clipping was the ladder's failure mode                          |
+| `attribution`  | M1-T1, attributing a row overshoot that ADR-0090 M1 fixed                               |
+| `item-widths`  | M2-T0, sizing the ADR-0090 M2 consolidation, which shipped                              |
+| `menu-band`    | ADR-0097 Landing C — **withdrawn on its own falsification condition**, never built      |
+| `search-icon`  | ADR-0091 M0-T2 — answered (COVERED, geometry already correct)                           |
 
-**When it is picked up**, the cheap first move is to decide per harness whether its _subject_ still
-exists. Several measure the width ladder and the overflow menu, which ADR-0109 D1 deleted — those
-should go the way `e2e-toolbar-fit` went, not be repaired. The rest want their locators updated.
-`m0-repaired.spec.ts`, `m0-bands.spec.ts`, `m0-merged-row.spec.ts` and `busy-band.spec.ts` are the
-working examples to copy from, and `m0-measurement.md` records the eight instrument defects found
-writing them — worth reading before writing a ninth.
+One repaired: **`header-fit`**, whose subject — does the app header row fit its container, and is
+every control in it pointer-reachable — is exactly the question the one-row header work asks next.
+It waited on a toolbar named `View and navigate`, a name **ADR-0099 M5 removed**, so it had been
+dead since then while still reading as the authority on header fit. One locator.
+
+**The remaining nine all pass** (`busy-band`, `combobox-coarse`, `graphite-strip`, `header-fit`,
+`m0-bands`, `m0-header-and-treatment`, `m0-merged-row`, `m0-repaired`, `vertical-stack`).
+
+**The stale JSON this row worried about is still in `apps/web/measure-output/`** and is not
+addressed here: outputs from deleted harnesses now describe mechanisms with no code behind them.
+Deleting those files is the obvious follow-up and was left deliberately, because some are cited by
+name in ADR-0090/0091's own reasoning and removing them would break those citations.
 
 ---
 
@@ -4619,7 +4633,12 @@ the caret keys the field must keep, and the vertical ones it must not.
 
 ## #190 — `Toolbar`'s vertical variant has no consumer, and a standard still documents it
 
-_Filed 2026-08-25 by the reconciliation pass._
+_Filed 2026-08-25 by the reconciliation pass. **CLOSED 2026-08-26** — the product owner chose
+deletion over keeping it. The prop, its three branches, its `showLabel` clause and the
+`DESIGN_SYSTEM.md` rule went in **one commit**, which was the point: the standard and the code could
+not then disagree about which existed. `Toolbar` now announces `aria-orientation="horizontal"` as a
+literal. What a future vertical surface would need is recorded in the primitive's own docblock — a
+few lines of branch, and the **announcement** as the part to get right._
 
 `Toolbar` supports `orientation="vertical"` and its docblock (`Toolbar.tsx:106`) calls it "the
 **vertical mode rail**". `docs/DESIGN_SYSTEM.md:195` documents the rule that governs it — _"the
@@ -4683,9 +4702,26 @@ both were mechanical (a missing `order` prop, a stale count).
 fires an ADR-0105 trigger and needs a spec, not a reconciliation-pass edit. Two candidates for that
 spec, in order of confidence:
 
-1. **`eslint --cache`** — no coverage change at all, and the cache file is gitignorable. Near-certain
-   win; the only question is measuring it.
-2. **Scope the local unit run to what changed** (`vitest --changed` or `related`), with CI keeping
+1. ~~**`eslint --cache`**~~ — **DONE 2026-08-25, and measured rather than assumed.** All nine lint
+   scripts take `--cache --cache-strategy content`. For `@repo/web`: **114,951 ms cold → 8,032 ms**
+   with one file changed. A **14×** win, **107 s off the gate**, and **zero coverage change** — the
+   same files are linted by the same rules; a cached result is only reused when the file's content
+   hash is unchanged (`content`, not `metadata`, so a touched-but-identical file is not re-linted and
+   a restored-from-git file is). **CI is unaffected in either direction**: a fresh runner has no
+   `.eslintcache`, so CI always does the full lint it did before. `.eslintcache` was already in
+   `.gitignore`, and turbo's `lint` task declares `outputs: []` with default inputs — gitignored
+   files are outside its input hash, so the cache file cannot invalidate the turbo cache it sits
+   beside. That was checked before the change, not after.
+
+   **What it does not fix, stated so the next reader does not re-measure it:** the gate for a
+   one-line web change goes ~475 s → **~368 s**, and `pnpm test` is now **94%** of what remains.
+
+2. **Scope the local unit run to what changed** — **put to the product owner on 2026-08-25 with the
+   numbers above; they chose option 1 alone.** Recorded as the remaining lever rather than as a
+   recommendation, and the reason they gave it a miss is the reason it is written the way it is
+   below: it is the only one of the two that trades away signal.
+
+   `vitest --changed` or `related`, with CI keeping
    the full 552-file suite. This _is_ a real weakening of the local signal and must be argued rather
    than assumed: it trades "everything still passes" for "what you touched still passes", and the
    thing that makes it defensible is that **CI is the gate that blocks the merge and it does not
@@ -4693,3 +4729,233 @@ spec, in order of confidence:
 
 Do **not** answer this by dropping `check:*` scripts. They are 2.2% of the cost and they are the part
 of the gate that catches what a reviewer cannot see.
+
+---
+
+## #192 — The fix for #189 broke the shipped `Go to date` field, and shipped that way
+
+_Filed and **FIXED** 2026-08-25 by RECONCILE step 7 — two independent specialist reviews reached it
+separately, one reproducing it in real Chromium._
+
+`#189`'s fix narrowed the deck's key veto from "any form field claims all six navigation keys" to
+"a single-line input claims only its caret keys". The narrowing was right for a **text** field and
+wrong for every other kind, and the discriminator was `tagName` alone:
+
+`GoToTodayControl` renders `<Input type="date">` (`tsld-toolbar-items.tsx:533`), its item is
+`row: 'strip'` (`:1930-1940`), so **`Deck` renders it** — and a date input steps its focused segment
+with ArrowUp/ArrowDown. After the fix those keys were no longer vetoed, so the deck called
+`preventDefault()` and moved the roving stop: **pressing ArrowUp in the date field changed no date
+and threw focus onto an unrelated command**, closing the popover on the way.
+
+That is **worse than the defect it replaced**. `#189` meant a command could not be _reached_; this
+destroys an interaction the planner had already opened, and relocates focus with no announcement.
+It was released in `web-v0.106.0` and lived for about ninety minutes.
+
+**A second defect, same shape.** `Deck` did not check `event.defaultPrevented`, so a descendant that
+had already handled the key was overruled. `ToolbarSplitButton`'s caret calls `preventDefault()`
+without `stopPropagation()`; when the caret is **disabled** it moves focus to an element carrying no
+`data-toolbar-focusable`, the roving lookup returns `-1`, and focus is thrown to the deck's **first**
+stop — taking with it the only keyboard route to the caret's shaded reason (ADR-0082). That state is
+routine, not rare: `Add ▾` and `Link ▾` are in it for every Viewer and every Contributor without the
+pen.
+
+**Fixed** by extracting one shared `toolbar-keyboard.ts` consumed by **both** `Deck` and `Toolbar`,
+discriminating by `HTMLInputElement.type` in three cases — text entry claims the caret keys, a
+value-stepping or group-navigating control (`date`, `datetime-local`, `month`, `number`, `radio`,
+`range`, `time`, `week`, plus textarea/select/contenteditable) claims all six, and everything else
+claims none — plus a `containerShouldStandDown` covering `defaultPrevented` and IME composition.
+Verified red against the shipped guard: `date must keep ArrowDown: expected false to be true`.
+
+**The reason it is one module now is the more useful half.** `Toolbar.tsx` carried a **byte-for-byte
+copy** of the pre-#189 guard, still under a docblock describing _the deck's_ search field. The fix
+had been applied to one of two copies — "one correct pattern applied to a control and not its
+neighbour", which this register has recorded in five consecutive epics and which had gone unnoticed
+here for a day. `Toolbar.test.tsx:219-241` names the "Go to date" control **by name** and tests only
+the horizontal keys, on the primitive that has never rendered it.
+
+**Two claims corrected in the process.** "The vertical arrows are the route out of a field" is true
+only of **text** entry; a date field legitimately traps them and the route out is Tab or Escape. And
+the first version of the `Deck` regression tests put a date input in the shared fixture, which
+modelled nothing — in production that input exists only inside an **open, portalled popover**, and
+the deck's permanent stop is the trigger button.
+
+---
+
+## #193 — Four more toolbar docblocks and five exports describe deleted machinery
+
+_Filed 2026-08-25 by RECONCILE step 7 (component review), which swept further than the pass had._
+
+The 2026-08-25 pass corrected two docblocks citing `ToolbarOverflow` and `toolbar-ladder.ts`. It
+stopped at the two it had found. A `grep` for the deleted machinery finds more:
+
+- `toolbar-registry.ts:544-552` — `priorityOf`'s own docblock, **immediately above** one of the two
+  the pass fixed, still describes "the demotion queue below" and `computeLadder` withdrawing labels.
+  `priorityOf` itself has **zero callers**.
+- `toolbar-registry.ts:98-101` — `resolveLayoutMode` says `Toolbar` "holds the previous mode… for
+  the same reason it holds the previous overflow set". `Toolbar` has no mode state and there is no
+  overflow set.
+- `toolbar-registry.ts:40-44` — `ToolbarTier` still describes tier-2 demoting before tier-1.
+- `toolbar-band.tsx:1-33` — cites `computeLadder` as the live consumer.
+
+**Five exports have no production caller**: `priorityOf`, `partitionByTier`, `resolveLayoutMode`,
+`TOOLBAR_LAYOUT_BANDS`, `TOOLBAR_LAYOUT_HYSTERESIS_PX`. Both `Deck` and `Toolbar` now hard-code
+`layout: 'comfortable'` as a literal, so `resolveLayoutMode`'s other three bands are unreachable and
+`triggersAreCompact`/`searchFieldWidth` always take their roomy branch. They are exercised only by
+their own tests — the ADR-0081 shape: tests validating code nothing calls.
+
+**Not deleted here deliberately.** ADR-0110 M5's own decision was to KEEP the ladder machinery
+because the reduced strip does not fit at 1280 or 1440, so `resolveLayoutMode` may yet be needed;
+and removing exports is a public-contract change (ADR-0105). The docblocks, though, are simply wrong
+and should be corrected whether or not the code goes. Decide the two questions separately.
+
+---
+
+## #194 — "The epic's own gate pass removes it" has now failed twice as an instruction
+
+_Filed 2026-08-26 by the reconciliation pass, after the declaration it describes blocked this pass's
+own commit._
+
+`scripts/frontend-only.json` arms an opt-in gate: while an epic declares itself frontend-only, any
+change under `apps/api/` or `packages/` fails CI. It is a good gate and it has now gone stale
+**three times out of three**:
+
+| Epic                 | Released                    | Still armed until | What it then blocked                                  |
+| -------------------- | --------------------------- | ----------------- | ----------------------------------------------------- |
+| `gantt-editing`      | 2026-08-18 (`web-v0.92.0`)  | 2026-08-18        | ADR-0096, which legitimately changes `apps/api/`      |
+| `workspace-redesign` | 2026-08-24 (`web-v0.103.0`) | 2026-08-26        | a lint-script change across nine `package.json` files |
+
+Both times it did what its own docblock says a stale declaration does — **it did not go quiet, it
+went wrong about a different change**, citing a parity argument that was not that change's.
+
+**The remedy in place is a sentence**, in the gate's own docblock: _"the epic's own gate pass removes
+it"_. That sentence has been read by at least two closing passes and acted on by neither, including
+the reconciliation pass of 2026-08-25, whose whole subject was documents that outlive their truth.
+ADR-0058's rule applies to the gate's own lifecycle as much as to prose: **if you find yourself
+writing "remember to remove X", write a mechanism for X instead.**
+
+**Candidate mechanisms, none built** — this is a shared gate, so changing it fires an ADR-0105
+trigger and wants a spec rather than a quiet edit:
+
+1. **Date the declaration** (`declaredOn`), and fail once it is older than a horizon, demanding an
+   explicit renewal. This is `check:flags`' shape (ADR-0084), already accepted here, and the horizon
+   is the natural place to say "an epic lasts about this long".
+2. **Tie it to the ADR**: fail when the named epic's ADR is `Accepted` and its flag/release has
+   shipped. Stronger, but it needs the declaration to name an ADR and the gate to parse ADR status,
+   which is more machinery than the problem deserves.
+3. **Fail on an empty guarded diff**: if the branch touches none of the guarded paths for N days,
+   the epic is probably over. Cheap, but it would fire on a quiet week rather than on a finished
+   epic — the wrong signal.
+
+Option 1 is the one worth costing. Deliberately not built here: this row exists so the third
+instance is not also fixed by writing a fourth sentence.
+
+---
+
+## #195 — `pnpm prepush` cannot see uncommitted work in its diff-based checks
+
+_Filed 2026-08-26 by the reconciliation pass, from a false pass it produced._
+
+`check:frontend-only` diffs `origin/main...HEAD` (`check-frontend-only.mjs:93`) — **committed HEAD,
+not the working tree.** So running `pnpm prepush` on an uncommitted tree asks the question of the
+_previous_ commit, and answers about work that is not the work in hand.
+
+That happened during this pass and is how the failure reached CI: the gate reported green locally
+over a dirty tree, and failed on the same content once pushed. Confirmed both directions —
+re-running it after committing reproduces CI's failure exactly, and `git status --porcelain` shows
+the guarded paths absent from what the diff can see.
+
+**This is not the gate being wrong**; `origin/main...HEAD` is the right question for "what does this
+branch change". It is a mismatch between that and how `pnpm prepush` is documented and used:
+`docs/TESTING.md` presents it as the thing to run _before you push_, and the natural moment to run
+it is while the change is still uncommitted — exactly when this class of check is blind.
+
+`check:frontend-only` is the only current `check:*` that diffs, so the blast radius is one script
+today. The cheap fix is for the script to notice a dirty working tree and either include it or say
+loudly that it cannot see it; the silent green is the defect, not the scope of the diff. Grouped
+with `#194` because both are about this gate, and both should be settled in one spec.
+
+---
+
+## #196 — Two primitive keyboard defects the ADR-0111 sweep found, one of them a data-loss path
+
+_Filed and **FIXED** 2026-08-26. Found by the first sweep run under ADR-0111, which the product owner
+approved the same morning; both verified by **executing** code — one in real Chromium, one against
+the real primitive — rather than by reading it. Neither was introduced by recent work._
+
+### a. Escape inside a `Menu` or `Combobox` also closed the enclosing modal `<dialog>`
+
+Both primitives owned a capture-phase Escape listener calling `stopPropagation()` and **not**
+`preventDefault()`. `stopPropagation` withholds the key from other **listeners**; a modal
+`<dialog>`'s Escape-to-close is a **default action**, evaluated against `defaultPrevented` once the
+whole dispatch completes — so propagation was never relevant to it. Confirmed in Chromium: with
+`stopPropagation` alone the dialog's `cancel` and `close` both fired and the dialog closed; adding
+`preventDefault` left it open.
+
+One Escape therefore did two things wherever either popup was opened inside a `Dialog` or `Sheet`:
+
+- **`ResourceFormDialog` and `AddCrossPlanLinkDialog` set no `confirmBeforeClose`** — Escape to
+  dismiss a dropdown discarded the whole half-typed form, silently. That is the data-loss half.
+- `ActivityEditorDialog` sets one, so Escape either closed the editor or raised the discard
+  confirmation over it — not destructive, but not what the reader asked for either.
+- The mobile Project Explorer `Sheet`: Escape in a node's row menu closed the whole drawer.
+
+**`combobox.tsx`'s docblock asserted the opposite** — _"so it closes the popup WITHOUT also closing
+a surrounding Dialog"_ — and read as verified because `combobox.test.tsx`'s stand-in for a
+surrounding dialog is a plain `<div onKeyDown>`, whose own comment admits it is "never a real
+control". No jsdom test could have done better: `src/test/setup.ts` stubs `showModal`/`close` as
+property flips that never fire `cancel`, so a real `<dialog>`'s Escape default action is
+**unreachable in this repository's unit environment**. That is ADR-0111's argument, arrived at
+independently by the instrument the ADR mandates, hours after it was written.
+
+### b. A portalled `MenuItem` click also fired a React-tree ancestor's `onClick`
+
+`Menu` renders through a portal, and React dispatches along the **React tree**, not the DOM one — so
+an item's click reached whatever JSX encloses `<Menu>`. In the Gantt, `GanttRowMenu` is a React
+child of the row, so **choosing any row-menu action also re-selected the row underneath it**.
+
+`GanttRowMenu`'s trigger already stops propagation, with a comment giving the exact reason ("the row
+itself selects on click; a menu press must not also change the selection out from under the
+planner"). `GanttPanel` had applied the same insight to `onKeyDown` via `rowOwnsKey`. Neither was
+extended to **choosing an item from** the menu the trigger opens — the rule applied to one control
+and not its neighbour, twice over, in the same feature.
+
+**Both fixed in the primitives** rather than at the call sites, since both are properties of what a
+portalled popup owes its host. Regression tests verified red against the shipped code, with the
+failure messages naming the defects. They assert the **mechanism** (`defaultPrevented`,
+`stopPropagation`) rather than the outcome, because jsdom cannot reach the outcome — stated in the
+tests rather than implied.
+
+**Still open, non-blocking, from the same sweep:** `Combobox` filters disabled options out of its
+arrow-key set while `Menu` (post-ADR-0082) keeps them focusable with a reason, and nothing records
+why the two disagree — latent, since no production caller sets `ComboboxOption.disabled` today.
+`Menu`'s outside-pointerdown listener does not exclude its own trigger, which can race a
+toggle-to-close (mouse only).
+
+---
+
+## #197 — Three rules with two or three implementations each, agreeing by discipline
+
+_Filed 2026-08-26 by the ADR-0111 sweep's component half. None divergent enough to block; one
+already asymmetric._
+
+1. **`Dialog` and `Sheet` each carry a private `closeIfSelf`** — the guard that stops a nested
+   `<dialog>`'s non-bubbling `close`/`cancel` from tearing down its parent through React's
+   capture-phase root dispatch (`#50`'s fix). The two docblocks point at each other rather than
+   sharing code, **and they have already diverged**: `dialog.tsx` grew a `confirmBeforeClose` clause
+   for ADR-0108's unsaved-work guard that `sheet.tsx` never received. Nothing breaks today — no
+   `Sheet` consumer holds unsaved editable state — but the next confirm-before-close drawer either
+   duplicates the clause a third time or discovers the gap the hard way. **The closest to blocking,
+   and the one worth extracting first.**
+2. **`MenuItem` and `ToolbarButton` each hand-roll the reason-first `aria-describedby` composition**
+   — reason before standing description, because "why you cannot use it outranks what it would tell
+   you", plus the guard against a dangling `aria-describedby`. `form.tsx` has a third textually
+   identical `mergeDescribedBy`. Currently in agreement, by matching comments rather than by
+   construction.
+3. **Three copies of the capture-phase Escape + outside-pointerdown contract** — `Menu`,
+   `Combobox`, and `usePopoverPanel`. The irony is on the record: `usePopoverPanel` was extracted
+   **specifically** to stop this drift and cites ADR-0062's extraction argument, but only
+   `ToolbarPopover` was migrated onto it. `#196a` is what that costs: the `preventDefault` fix had
+   to be made in two files, and a third implementation sat one directory away.
+
+All three are ADR-0105 public-contract changes, so each wants a spec note rather than a quiet edit.
+Take them in the order above.

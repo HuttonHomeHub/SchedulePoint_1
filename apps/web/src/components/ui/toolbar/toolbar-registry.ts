@@ -40,8 +40,12 @@ export function groupRank(group: ToolbarGroupId): number {
 
 /**
  * Prominence tier. `1` = always-visible inline control; `2` = a labelled popover trigger on the bar
- * (View/Summary/Legend/Filter); `3` = lives in the overflow `⋯` from the start. Tier-1 and tier-2
- * both render inline until width forces a demotion into overflow (tier-2 demote before tier-1).
+ * (View/Summary/Legend/Filter); `3` = admitted last.
+ *
+ * **Nothing demotes on width any more.** ADR-0109 D1 deleted the `⋯`, the demotion pass and the
+ * width ladder: a command surface wraps rather than hiding. Tier is prominence, not a demotion
+ * order — this docblock described tier-2 demoting before tier-1 until the 2026-08-25 pass
+ * (`docs/TECH_DEBT.md` #193).
  */
 export type ToolbarTier = 1 | 2 | 3;
 
@@ -99,8 +103,12 @@ export const TOOLBAR_LAYOUT_HYSTERESIS_PX = 48;
  * rungs denser than its width, which is worse than the jitter the margin is for.
  *
  * Pure; no DOM. `width` of 0 (no layout engine, an unpainted row) resolves to `collapsed` by the
- * bands alone, so callers must not ask before something has been measured — {@link Toolbar} holds
- * the previous mode in that case, for the same reason it holds the previous overflow set.
+ * bands alone, so callers must not ask before something has been measured.
+ *
+ * **No production caller today** (`docs/TECH_DEBT.md` #193): both `Deck` and `Toolbar` pass the
+ * literal `'comfortable'`, so the other three bands are unreachable. This paragraph said `Toolbar`
+ * "holds the previous mode… for the same reason it holds the previous overflow set" until the
+ * 2026-08-25 pass — that primitive has neither a mode state nor an overflow set since ADR-0109 D1.
  */
 export function resolveLayoutMode(width: number, current: ToolbarLayoutMode): ToolbarLayoutMode {
   const rawRung = TOOLBAR_LAYOUT_BANDS.findIndex((b) => width >= b.min);
@@ -544,11 +552,12 @@ export function partitionByTier<Ctx>(resolved: ResolvedToolbarItem<Ctx>[]): {
 /**
  * **How much the row wants to keep an item** — higher survives longer.
  *
- * Exported because two decisions have to agree about it and previously did not have to: the
- * demotion queue below, and the order in which {@link computeLadder} withdraws labels, which is
- * this comparator reversed. Two copies of "least wanted" would eventually let a row demote a
- * command into the `⋯` while keeping a label on one it values less — visibly incoherent, and
- * invisible to any test that does not exercise both at once.
+ * **It has no production caller today** (`docs/TECH_DEBT.md` #193). It was exported because two
+ * decisions had to agree about it — the demotion queue and the order in which the ladder withdrew
+ * labels, which is this comparator reversed — and ADR-0109 D1 deleted both. Kept rather than
+ * removed because ADR-0110 M5 deliberately kept the ladder machinery (the reduced strip does not
+ * fit at 1280 or 1440), so this may yet be needed; removing it is a public-contract change and is
+ * a separate decision from correcting this paragraph, which was simply wrong.
  *
  * The `-order` default is exact rather than approximate, which is what keeps every item that does
  * not declare a priority behaving as it always has (see {@link ToolbarItem.priority}).

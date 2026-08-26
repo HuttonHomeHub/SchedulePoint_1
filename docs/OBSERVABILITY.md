@@ -77,7 +77,29 @@ durationMs }` — enough to watch the performance NFR (`durationMs` vs plan size
 - Sampling is configurable (head/tail) to control volume while keeping error
   traces.
 
-## Monitoring & alerting — standard, not yet implemented
+## Monitoring & alerting — **partly built, and shipped unwired**
+
+**Two alert producers exist** and neither is a dashboard. Both post a JSON body
+to an operator-supplied webhook via `postAlert`
+(`common/operational/`), and both are **dormant by default**:
+
+- `mail.send_failed` (ADR-0075) — one alertable event naming which of the three
+  messages failed, to `MAIL_ALERT_URL`. Deliberately operator-facing rather than
+  request-path: sending from application code before handing off to Better Auth
+  would create an enumeration oracle.
+- The **retention sweep** (ADR-0087 M4) — alerts after **three consecutive**
+  failed runs, to `HEARTBEAT_URL`. Three, not one, because the next tick is the
+  retry and a channel that cries wolf gets muted. It cannot detect a sweep that
+  never armed; the staff console's derived `overdue` is the primary detector for
+  that, because it reads the age of the oldest surviving row rather than a
+  last-run timestamp that resets on restart.
+
+**Both URLs are empty by default** — compose edits on the host — so until an
+operator sets them, a broken relay and a failing sweep both reach nobody
+(`docs/TECH_DEBT.md` #100, open on the operator half). Do not read "built" as
+"in use" here.
+
+Still **not built**: dashboards, SLOs and symptom-based alerting.
 
 - Dashboards for the golden signals (latency, traffic, errors, saturation) per
   service.
