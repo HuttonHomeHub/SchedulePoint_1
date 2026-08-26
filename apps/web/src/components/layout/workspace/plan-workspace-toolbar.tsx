@@ -1208,12 +1208,16 @@ export function ToolbarPlanWorkspace({
           caller at all (`docs/TECH_DEBT.md` #193), and that module's own latent case 3 records this
           mode toolbar already resolving `collapsed` at every viewport under the old arrangement,
           harmlessly, because all four of its items are `showLabel: 'always'`. */}
+            {/* **The plan's identity — section 1 of the header row, beside the brand.** Split from the
+          mode cluster below (2026-08-26): the header places the two in different sections of a
+          `justify-between` row, and one slot cannot put its contents in two places.
+          `chrome-slot.tsx` argues the naming.
+
+          `ChromePortal` moves the DOM node and leaves the React tree alone, so every piece of state
+          this block reads — `model`, `ctx`, the ADR-0031 registry, the workspace key scope — stays
+          exactly where it was and the shell stays plan-unaware (ADR-0029). */}
             <ChromePortal name="identity">
-              {/* `flex-wrap` here as well as on the header row: below the wrap point this block IS the
-            second line, and its three clusters then have to be able to fold in turn rather than
-            overflow. `min-w-0` so the header row can shrink it — see `chrome-slot.tsx`. */}
-              <div className="flex min-w-0 flex-wrap items-center gap-3">
-                {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
+              {/* **The plan identity line, merged into the mode row** (Graphite M3). It reached the
                 app header through a portal until then (ADR-0097 D1b), and Graphite deleted that
                 header — so without a home it would have taken a 44 px row of its own inside the
                 band, and MEASUREMENT said so: deleting a 56 px bar bought 12 px, which is ADR-0092
@@ -1229,8 +1233,8 @@ export function ToolbarPlanWorkspace({
 
                 No portal any more: the identity and the modes are rendered by the same component,
                 so the slot that carried it across the shell boundary has nothing left to carry. */}
-                <div data-plan-identity className="flex min-w-0 shrink items-center gap-3">
-                  {/* **`shrink` rather than `flex-1`, and this comment used to claim it was the line
+              <div data-plan-identity className="flex min-w-0 shrink items-center gap-3">
+                {/* **`shrink` rather than `flex-1`, and this comment used to claim it was the line
               the one-row header turns on. It is not, and the correction is worth more than the
               claim was.** The journey's headline assertion — one line at 1646, two at 1440 — was run
               against a build with `flex-1` restored *here*, and it **passed**. The wrap is decided
@@ -1262,8 +1266,8 @@ export function ToolbarPlanWorkspace({
               **void**: ADR-0109 D1 deleted the width ladder and the overflow menu, and `Toolbar`
               wraps instead (`Toolbar.tsx:183-187`). The hazard is real but different, and it is
               named above. */}
-                  <div className="flex min-w-0 shrink items-center gap-2">
-                    {/* **Two crumbs: the project, then this plan.**
+                <div className="flex min-w-0 shrink items-center gap-2">
+                  {/* **Two crumbs: the project, then this plan.**
                 D1b first shipped the plan name alone, on the measurement that the four-crumb trail
                 cost 455 px and that the Project Explorer already answers "where am I". Right about
                 orientation, wrong about navigation, and **three Playwright suites failed on one
@@ -1281,19 +1285,19 @@ export function ToolbarPlanWorkspace({
                 duplicate of the rail that the tidy was right about. `variant="nowrap"` because this
                 is a fixed-height band — a wrapped crumb grows it and hands back the 45 px the merge
                 was measured to win. */}
-                    <Breadcrumbs
-                      variant="nowrap"
-                      items={[
-                        {
-                          label: model.project.data?.name ?? 'Project',
-                          to: '/orgs/$orgSlug/projects/$projectId',
-                          params: { orgSlug: model.orgSlug, projectId: plan.projectId },
-                        },
-                        { label: plan.name },
-                      ]}
-                    />
-                    <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
-                    {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
+                  <Breadcrumbs
+                    variant="nowrap"
+                    items={[
+                      {
+                        label: model.project.data?.name ?? 'Project',
+                        to: '/orgs/$orgSlug/projects/$projectId',
+                        params: { orgSlug: model.orgSlug, projectId: plan.projectId },
+                      },
+                      { label: plan.name },
+                    ]}
+                  />
+                  <Badge variant="neutral">{PLAN_STATUS_LABELS[plan.status]}</Badge>
+                  {/* **The project-finish read-out, moved out of the command strip** (Graphite M5).
                 ADR-0090 M2-T3 took it off the toolbar; ADR-0091 M7-S4 put it back as a
                 `presentational` registry item, so the `⋯` could stay the row's rightmost control.
                 It came here in M5 because M5-T1 measured the reduced strip **not fitting** at 768,
@@ -1301,20 +1305,33 @@ export function ToolbarPlanWorkspace({
                 decision". **M7 is the decision**: a finish date is a fact, the status bar carries
                 facts, and it has gone there. This comment is kept rather than deleted so the two
                 moves read as one argument reaching its end. */}
-                    {model.canWrite ? (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => model.setEditing(true)}
-                        title="Edit plan…"
-                        aria-label="Edit plan"
-                        className="text-muted-foreground shrink-0"
-                      >
-                        <SquarePen aria-hidden="true" className="size-4" />
-                      </Button>
-                    ) : null}
-                  </div>
+                  {model.canWrite ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => model.setEditing(true)}
+                      title="Edit plan…"
+                      aria-label="Edit plan"
+                      className="text-muted-foreground shrink-0"
+                    >
+                      <SquarePen aria-hidden="true" className="size-4" />
+                    </Button>
+                  ) : null}
                 </div>
+              </div>
+            </ChromePortal>
+
+            {/* **The plan's modes and pen — section 2, the middle of the header row.**
+          Deliberately NOT wrapped in a `ToolbarBandProvider`, and that is a reading rather than an
+          omission. That provider renders a `<div>` and publishes ITS width as the band width; here
+          that div would be this section, whose width is whatever the row's `justify-between` leaves
+          — which is precisely the conflation `toolbar-band.tsx` exists to prevent and which shipped
+          once in `web-v0.86.0`. Nothing is lost: `resolveLayoutMode` has no production caller at all
+          (`docs/TECH_DEBT.md` #193), and that module's own latent case 3 records this mode toolbar
+          already resolving `collapsed` at every viewport, harmlessly, because all four of its items
+          are `showLabel: 'always'`. */}
+            <ChromePortal name="mode">
+              <div className="flex shrink-0 items-center gap-3">
                 {/* **The mode cluster is back on the identity line, beside the pen** (workspace
                 redesign, 2026-08-24) — where ADR-0091 D1 argued a mode belongs in the first place:
                 a mode is not a command, it sets how every command behaves, which is exactly the

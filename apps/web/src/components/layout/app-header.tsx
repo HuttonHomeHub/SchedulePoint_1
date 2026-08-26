@@ -41,6 +41,31 @@ import { OrgSwitcher } from '@/features/organizations';
  * behaviour and the border. Keeping the split explicit means neither path branches on a flag
  * inside its own markup.
  *
+ * ## THREE SECTIONS, space split between them
+ *
+ * The product owner's report on the merged row was that it looked **crammed**: brand, breadcrumb,
+ * mode and pen all packed against the leading edge, a void, then the organisation and the account.
+ * That is what two clusters pinned to two edges looks like. It is now three:
+ *
+ * | section                                  | flex        |
+ * | ---------------------------------------- | ----------- |
+ * | 1. brand + the plan's identity           | `shrink`, `min-w-0` |
+ * | 2. the plan's modes + pen                | `shrink-0`  |
+ * | 3. organisation + account                | `shrink-0`  |
+ *
+ * with `justify-between`, so the free width is split **between** them rather than all landing in
+ * one gap. Measured (`docs/specs/canvas-maximisation/m0-measurement.md`): the sections need 582,
+ * 620 and 256 px, so at 1920 the two gaps are **202 px each** and at 1646 they are **65 px** —
+ * separation at the width this is judged on, and nothing truncates until the container falls below
+ * 1458 px.
+ *
+ * **Space-between rather than a truly centred middle, and that was a measured decision.** Centring
+ * the middle means the outer sections get **equal** shares, because that is what centring is — so
+ * section 1 is capped at whatever section 3's share is. At 1646 that is 472 px against the 582 px
+ * section 1 needs, cutting **110 px of the plan name** on the machine this product is used on. The
+ * middle sits 163 px right of true centre at 1920 instead, which is a look; the alternative was a
+ * truncated plan name, which is information.
+ *
  * ## A WRAPPING FLEX ROW, and the grid it replaced
  *
  * This was a `1fr auto 1fr` grid, chosen so the organisation switcher sat at the true midpoint
@@ -87,8 +112,10 @@ import { OrgSwitcher } from '@/features/organizations';
  */
 function HeaderContents({
   identitySlotRef,
+  modeSlotRef,
 }: {
   identitySlotRef: (node: HTMLDivElement | null) => void;
+  modeSlotRef: (node: HTMLDivElement | null) => void;
 }): React.ReactElement {
   const params = useParams({ strict: false });
   const orgSlug = 'orgSlug' in params ? params.orgSlug : undefined;
@@ -97,25 +124,37 @@ function HeaderContents({
   const shell = useShell();
 
   return (
-    <div className="flex w-full flex-wrap items-center gap-3">
-      <div className="flex shrink-0 items-center gap-2">
-        {shell && orgSlug ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="-ml-2 lg:hidden"
-            aria-label="Show Project Explorer"
-            onClick={shell.openDrawer}
-          >
-            <Menu aria-hidden="true" className="size-5" />
-          </Button>
-        ) : null}
-        <BrandLink orgSlug={orgSlug} />
+    <div className="flex w-full flex-wrap items-center justify-between gap-3">
+      {/* **Section 1 — the brand and the plan's identity, as one group.** They belong together:
+          `SchedulePoint / Project1 / best` reads as one path from the product to the thing in front
+          of you, and splitting them would put a gap in the middle of a sentence. `min-w-0` and
+          `shrink` because this is the section that gives way — it is text with a `title`. */}
+      <div className="flex min-w-0 shrink items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
+          {shell && orgSlug ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="-ml-2 lg:hidden"
+              aria-label="Show Project Explorer"
+              onClick={shell.openDrawer}
+            >
+              <Menu aria-hidden="true" className="size-5" />
+            </Button>
+          ) : null}
+          <BrandLink orgSlug={orgSlug} />
+        </div>
+        {/* The plan's breadcrumb, status and Edit control — empty, and occupying nothing, on the
+            twelve `_authed` routes that are not a plan (`empty:hidden` lives on the slot). */}
+        <ChromeSlot slotRef={identitySlotRef} name="identity" />
       </div>
-      {/* The plan's identity, modes and pen controls — empty, and occupying nothing, on the twelve
-          `_authed` routes that are not a plan (`empty:hidden` lives on the slot itself). */}
-      <ChromeSlot slotRef={identitySlotRef} name="identity" />
-      <div className="ml-auto flex shrink-0 items-center gap-3">
+      {/* **Section 2 — the plan's modes and pen.** Also `empty:hidden`, so on a non-plan route the
+          row is brand … organisation + account, exactly as it was before three sections existed. */}
+      <ChromeSlot slotRef={modeSlotRef} name="mode" />
+      {/* **Section 3.** No `ml-auto` any more: `justify-between` on the row does that job for all
+          three sections at once, and ADR-0091 M7 records a flex line splitting free space *equally*
+          between every auto margin — which is what we now want, and want the row to own. */}
+      <div className="flex shrink-0 items-center gap-3">
         <OrgSwitcher className="max-w-[12rem] truncate" />
         <AccountChip />
       </div>
@@ -143,8 +182,10 @@ function HeaderContents({
  */
 export function AppHeaderRow({
   identitySlotRef,
+  modeSlotRef,
 }: {
   identitySlotRef: (node: HTMLDivElement | null) => void;
+  modeSlotRef: (node: HTMLDivElement | null) => void;
 }): React.ReactElement {
   return (
     // **`ToolbarBandProvider` wraps the row, and the reason is a reading rather than a caution**
@@ -163,7 +204,7 @@ export function AppHeaderRow({
     // surface is and never answers whether a row's content fits.
     <ToolbarBandProvider className="min-h-14 px-4 py-1">
       <header className="flex min-h-full items-center">
-        <HeaderContents identitySlotRef={identitySlotRef} />
+        <HeaderContents identitySlotRef={identitySlotRef} modeSlotRef={modeSlotRef} />
       </header>
     </ToolbarBandProvider>
   );

@@ -136,7 +136,7 @@ describe('TsldPanel — the marquee tool mode', () => {
   it('announces arming and closing through the one polite region', () => {
     announceSpy.mockClear();
     render(<Harness canEdit={false} />);
-    expect(announceSpy).toHaveBeenCalledWith(expect.stringMatching(/^Marquee select — drag/));
+    expect(announceSpy).toHaveBeenCalledWith(expect.stringMatching(/^Marquee select · drag/));
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(announceSpy).toHaveBeenCalledWith('Tool closed. Select mode.');
   });
@@ -145,6 +145,6 @@ describe('TsldPanel — the marquee tool mode', () => {
     // Naming Ctrl/Cmd in the band is the only place a planner can learn that a sweep does not need
     // the tool at all — an affordance that is otherwise reachable only by guessing.
     render(<Harness canEdit={false} />);
-    expect(screen.getByTestId('canvas-mode-band').textContent).toMatch(/Hold Ctrl \(Cmd\) to add/);
+    expect(screen.getByTestId('canvas-mode-band').textContent).toMatch(/Ctrl to add/);
   });
 });

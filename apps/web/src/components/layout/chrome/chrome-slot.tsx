@@ -33,8 +33,13 @@ import { cn } from '@/lib/utils';
  *   *visually* to the drawer, which the shell owns, and *logically* to the plan workspace, which
  *   owns `usePlanWorkspaceModel`, the ADR-0060 per-scope gating and the mutation hooks it reads.
  * - **`status`** — the plan status bar's row (Graphite M7), the mirror of the command band's row 1.
- * - **`identity`** — the plan's identity, its four mode controls and its pen controls, carried into
- *   the app header row (the one-row header, 2026-08-26).
+ * - **`identity`** — the plan's breadcrumb, status badge and Edit-plan control, carried into the app
+ *   header row (the one-row header, 2026-08-26).
+ * - **`mode`** — the plan's four mode controls and its pen controls, carried into the **middle** of
+ *   that row. A second name rather than one slot holding both, because the header places them in
+ *   different sections: the identity belongs beside the brand, and the modes belong between the
+ *   brand and the account. One slot could not put its contents in two places. (`mode` also names
+ *   what Graphite M5's `rail` slot carried, before ADR-0109 D2 deleted the rail.)
  *
  * **This block replaced five stacked docblocks, two of which were describing slots that no longer
  * exist** — one announced "two slots, named" beside a union of four, and one documented a `rail`
@@ -49,7 +54,7 @@ import { cn } from '@/lib/utils';
  * back for the original reason, now that the row it feeds **wraps** — so the merge ADR-0092 M5 and
  * ADR-0110 D3 each withdrew on width has a shape that fits.
  */
-export const CHROME_SLOT_NAMES = ['rows', 'identity', 'drawer', 'status'] as const;
+export const CHROME_SLOT_NAMES = ['rows', 'identity', 'mode', 'drawer', 'status'] as const;
 
 /**
  * **One list, and the type derives from it.** The roster was written out three times — this union,
@@ -119,6 +124,11 @@ export function ChromeSlot({
         // absorbs the line's slack never lets anything wrap, which is the single defect this row's
         // design turns on (`docs/specs/one-row-header/falsification.md`, third result).
         name === 'identity' && 'flex min-w-0 shrink items-center empty:hidden',
+        // The mode cluster is the row's middle section. `shrink-0`: it is four segmented controls
+        // and a pen badge, and squeezing it folds `Early | Visual | Diagram | Gantt` onto a second
+        // line INSIDE the row, turning one clean row into two ragged ones (ADR-0112 D4). The
+        // identity slot beside it is the one that gives way.
+        name === 'mode' && 'flex shrink-0 items-center empty:hidden',
         className,
       )}
     />

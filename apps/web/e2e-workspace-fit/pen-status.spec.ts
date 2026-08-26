@@ -81,13 +81,18 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
    * the controls never left, and there is one live region either way. It is a pinned invariant, not
    * a discriminator, and its discriminating sibling is the first case above.
    */
-  test('the badge and Stop editing stay on the identity row', async () => {
-    const identityRow = page.locator('[data-plan-identity]').locator('..');
-    await expect(identityRow.getByRole('button', { name: 'Stop editing' })).toBeVisible();
+  test('the badge and Stop editing stay in the header, beside the plan', async () => {
+    // **Scoped to the banner, not to `[data-plan-identity]`'s parent.** The header became three
+    // sections on 2026-08-26 and the pen moved out of the identity section into the mode section,
+    // so the old locator asserted the pen was somewhere it deliberately no longer is. The claim
+    // that matters is unchanged and is what this now says: the controls are in the header row and
+    // — per the case above — not in the facts row.
+    const header = page.getByRole('banner');
+    await expect(header.getByRole('button', { name: 'Stop editing' })).toBeVisible();
 
     // The state word stays visible beside the plan even though the sentence has moved, which is
-    // what keeps the identity row self-explanatory at a glance.
-    await expect(identityRow).toContainText('Editing');
+    // what keeps the header self-explanatory at a glance.
+    await expect(header).toContainText('Editing');
 
     // And the sentence is not ALSO here — one subject, one place. A host that portalled and kept
     // its in-place copy would put two live regions in the document, which a screen-reader user
@@ -97,11 +102,7 @@ test.describe('the pen sentence is a fact and the controls are actions', () => {
 
   test('releasing the pen updates the sentence in place, in the facts row', async () => {
     const factsRow = page.locator('[data-schedule-state]');
-    await page
-      .locator('[data-plan-identity]')
-      .locator('..')
-      .getByRole('button', { name: 'Stop editing' })
-      .click();
+    await page.getByRole('banner').getByRole('button', { name: 'Stop editing' }).click();
 
     await expect(factsRow.getByRole('status')).toHaveText(/no one is editing this plan/i, {
       timeout: 15_000,
@@ -201,16 +202,33 @@ test.describe('the merged header row', () => {
     }
   });
 
-  test('keeps the account chip as the row trailing control at every width', async () => {
-    for (const width of [1646, 1440, 1280]) {
+  /**
+   * **On the widths where the row is one line**, and the qualifier is the finding rather than a
+   * hedge.
+   *
+   * The row was `ml-auto` on its trailing group until the three sections landed; it is now
+   * `justify-between`, which splits the free width between all three rather than banking it in one
+   * gap. **A lone item on a WRAPPED line is placed at flex-start by `justify-between`**, so at 1440
+   * and 1280 — where section 3 is the only thing on line 2 — the organisation and account sit at the
+   * left of that line, measured 1126 px from the row's trailing edge. This case asserted "at every
+   * width" and caught it.
+   *
+   * It is a consequence rather than a defect, and there is no CSS that has both: `ml-auto` on
+   * section 3 right-aligns the wrapped line and, on a full line, absorbs all the free space before
+   * `justify-content` sees any — which collapses the two gaps and restores exactly the crammed look
+   * this change was made to fix. Those widths are below the stated fallback (1646), so the one-line
+   * states are what this pins, and the wrapped behaviour is written down here rather than left for
+   * someone to rediscover.
+   */
+  test('keeps the account chip as the row trailing control while the row is one line', async () => {
+    for (const width of [1920, 1646]) {
       await page.setViewportSize({ width, height: 1000 });
       await page.waitForTimeout(400);
       const account = await page.getByRole('banner').getByRole('button').last().boundingBox();
       const row = await page.getByRole('banner').boundingBox();
-      // ADR-0091 M7 records a flex line splitting free space equally between every auto margin,
-      // leaving a trailing group 281 px adrift. There is exactly one `ml-auto` here; this asserts it.
       expect(
         (row?.x ?? 0) + (row?.width ?? 0) - ((account?.x ?? 0) + (account?.width ?? 0)),
+        `account chip inset from the trailing edge at ${width}`,
       ).toBeLessThan(40);
     }
   });

@@ -136,3 +136,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0110](0110-a-gate-is-verified-against-the-defect-it-names.md)              | A gate is verified against the defect it names                          | Accepted           |
 | [0111](0111-a-primitives-keyboard-contract-is-reviewed-before-release.md)   | A shared primitive's keyboard contract is reviewed before release       | Accepted           |
 | [0112](0112-a-header-row-wraps-and-a-pen-sentence-is-a-fact.md)             | A header row wraps, and a pen sentence is a fact                        | Accepted           |
+| [0113](0113-measure-the-problem-before-designing-the-remedy.md)             | Measure the problem, not just the remedy                                | Accepted           |

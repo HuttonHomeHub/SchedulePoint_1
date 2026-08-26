@@ -18,7 +18,8 @@ import {
  *
  * **Every slot, and the reason it is every one is a gap this host had already grown.** It offered
  * `rows` alone. M5 added `rail` and portalled the plan's four mode segments into it; M6 added
- * `drawer`; M7 added `status`; the one-row header adds `identity`. Each time, a portal with no
+ * `drawer`; M7 added `status`; the one-row header added `identity`, and splitting that header into three sections added
+ * `mode`. Each time, a portal with no
  * target in these tests renders nothing and the suite passes on a screen missing a piece — which is
  * how the mode cluster went two milestones with no coverage in the file whose own assertion says
  * "one command strip and the rail's mode cluster".
@@ -50,18 +51,21 @@ export const TEST_CHROME_SLOTS: readonly ChromeSlotName[] = CHROME_SLOT_NAMES;
 export function TestChromeHost({ children }: { children: React.ReactNode }): React.ReactElement {
   const rows = useChromeSlot();
   const identity = useChromeSlot();
+  const mode = useChromeSlot();
   const drawer = useChromeSlot();
   const status = useChromeSlot();
   return (
     <>
       <ChromeSlot slotRef={rows.slotRef} />
       <ChromeSlot slotRef={identity.slotRef} name="identity" />
+      <ChromeSlot slotRef={mode.slotRef} name="mode" />
       <ChromeSlot slotRef={drawer.slotRef} name="drawer" />
       <ChromeSlot slotRef={status.slotRef} name="status" />
       <ChromeSlotProvider
         nodes={{
           rows: rows.node,
           identity: identity.node,
+          mode: mode.node,
           drawer: drawer.node,
           status: status.node,
         }}

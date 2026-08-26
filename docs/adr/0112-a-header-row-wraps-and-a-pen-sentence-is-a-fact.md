@@ -218,10 +218,20 @@ size, i.e. the one a layout change is most likely to break. Its list is now deri
 
 ## Consequences
 
-- The canvas gains **45 px at 1646 (+9.3 %)** and 45 px at 1920; 1440 and 1280 gain 9 px each. No
-  width regresses. The 45 px comes out of the **command band**, not the header — ADR-0092 M4's
+- The canvas gains **45 px at 1646** and 45 px at 1920; 1440 and 1280 gain 9 px each. No width
+  regresses.
+
+  **This entry said "+9.3 %" until 2026-08-26, and that percentage describes a state the product
+  does not start in.** `m4-vertical-stack` expands the activities panel to measure, so its canvas
+  figures (483 → 528) are the **expanded** canvas. The panel is `useState(true)` — collapsed on
+  every load (`plan-workspace-toolbar.tsx`) — and in that default state the canvas measures **793 px
+  at 1646 and 776 px at 1920**, so the same 45 px is **+6.0 %**. The delta was measured correctly
+  before and after; only the denominator was the wrong state, and a reader takes a percentage as the
+  gain they will see. Both figures are given now, with the state named
+  (`docs/specs/one-row-header/m3-below-canvas.md`). The 45 px comes out of the **command band**, not the header — ADR-0092 M4's
   _"relocating a row inside one column removes nothing"_ did not happen here, which is exactly why it
   was measured rather than assumed.
+
 - **A wrapping row's height is a function of its width.** That is the accepted cost, and it is why
   the band is `min-h-14` rather than `h-14`: a fixed height would clip the second line instead of
   showing it, which is the ADR-0090 defect one more time.

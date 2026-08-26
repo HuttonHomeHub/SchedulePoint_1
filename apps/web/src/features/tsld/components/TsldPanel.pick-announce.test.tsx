@@ -161,7 +161,7 @@ describe('TsldPanel — the canvas link-pick step is announced', () => {
     // The same sentence `modeStatementText` gives the keyboard path and the visible band — one
     // source, so the spoken and printed forms cannot drift.
     expect(announceSpy).toHaveBeenCalledWith(
-      'Linking FS from “Set out” — click the successor. Esc to drop the pick.',
+      'Linking FS from “Set out” · click the successor · Esc to drop the pick',
     );
   });
 

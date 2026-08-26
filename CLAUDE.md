@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1077 web
 > source files with 39 Playwright suites beside the base journey, and
-> 112 ADRs.
+> 113 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3262,6 +3262,47 @@ progress` off the command surface because **an object action belongs on the obje
   blocking, having worked the flex-wrap arithmetic by hand. No `VITE_` flag (ADR-0088 D1). **The CPM
   engine is not imported and no migration runs.**
 
+- **ADR-0113** _(Accepted; landed 2026-08-26)_ — Measure the problem, not just the remedy. The
+  product owner asked to maximise the canvas and brought four ideas: default the activities panel
+  collapsed, re-section the header, fold the command deck onto one line by moving Author to the
+  canvas foot, and trim the armed-tool tips. They were ranked by estimate — the panel first at
+  ~205 px, the deck second at 58 px, the header third at nothing — and **that ranking was wrong at
+  the top and the bottom**. Two of the four did not exist as work.
+  **The panel already defaults collapsed** (`useState(true)`, session-local, only its height
+  persisted). It was ranked the biggest lever from a screenshot in which the product owner had
+  expanded it — and **two of the three screenshots they sent show it collapsed**. Expanding costs a
+  measured **265 px**, constant at both widths, which is a planner's choice. **There is no hidden
+  space below the canvas either**: in the default state the pane reaches the viewport bottom, and at
+  1920 the chrome above is **209 px** against a **776 px canvas — 72 % of the screen**. The ~283 px
+  suspected below it was the panel, because the vertical harness expands it to measure — **which is
+  also why ADR-0112's headline "+9.3 %" described a state the product never starts in**; the 45 px
+  delta was measured correctly and the denominator was the expanded canvas, so the honest figure is
+  **+6.0 %**, and both are now given with the state named.
+  **The one-line deck is withdrawn on measurement, not deferred.** It needed Author to leave the
+  command band, and the canvas foot cannot hold it: that row is ADR-0092's dock, whose region is
+  924 px at 1920 and **650 px at 1646** against Author's **608** — 42 px left, less than the shortest
+  transient strip, so arming a tool or selecting an activity would grow the row to two lines
+  (`min-h-9`, not `h-9`). All four cards on one line need 2618 px against 1862. **The route named for
+  finding the width was the wrong component**: ADR-0090 M2-T6's caption gutters were **row** captions
+  in the two-row `Toolbar` that ADR-0109 D1 deleted, while the deck's captions are focusable
+  disclosure buttons that fold their group and hold roving tab stops — a register entry cited from
+  memory and told to the product owner as owed work, which is ADR-0076 Class 2 inside a
+  recommendation rather than a document.
+  **What shipped** is the header in **three sections** on `justify-between` — 582 / 620 / 256 px of
+  content, so the gaps are 202 px at 1920 and 65 at 1646 and nothing truncates above a 1458 container
+  — and armed-tool statements that keep their mode word and their `Esc` and drop the explanation,
+  while **keeping two clauses against the brief** (`or click for a day`, `Ctrl to add`) because their
+  own comments record them as undocumented shortcuts rather than explanations. **True centring was
+  rejected on measurement**: it caps the outer sections at equal shares, so section 1 gets 472 px
+  against the 582 it needs at 1646 — **110 px of the plan name**, against an estimate of ~10 that had
+  been put to the product owner. The accepted cost is written down: on a **wrapped** line
+  `justify-between` places a lone item at flex-start, and no CSS has both, since `ml-auto` restores
+  the crammed look on a full line.
+  Every previous instance of this register's _verify the claim_ rule is a document describing the code
+  wrongly. This one is different: **the problem statement came from a person looking at their own
+  screen, and it was still stale — because the state they were looking at was one they had put the
+  product into.** **The CPM engine is not imported and no migration runs.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -3518,6 +3559,23 @@ When operating in this repo, Claude Code should:
    This is not a defect to fix; it is what the signal means. `get_check_runs` on
    the PR is the cheap check, and it caught all six.
 
+   **And `get_check_runs` is itself not the last word when a job sits `queued`.**
+   On 2026-08-26 PR #394's three CI jobs read `queued` there for **53 minutes**
+   while the run holding them had already finished: the run itself reported
+   `completed` / `conclusion: failure`, updated four seconds after it was created.
+   `get_workflow_run_usage` settled which was true — **0 billable ms on all three
+   jobs, `run_duration_ms` 4000** — so nothing had executed and the queue was a
+   display of jobs that would never start. The
+   two APIs disagreed and the more reassuring one was wrong.
+
+   So when a job has been `queued` for longer than a runner normally takes, ask
+   the **run**, not the check: `get_workflow_run` for its status and conclusion,
+   and `get_workflow_run_usage` for billable milliseconds, which is the reading
+   that cannot be misread — 0 ms means no job body ran, whatever the check says.
+   Zero billable time is also what distinguishes a runner-allocation failure from
+   a real one, and therefore what makes a single re-run the right response rather
+   than a way of not reading a log.
+
 10. **Use Conventional Commits** and add a changeset for user-visible change.
     Meet the Feature Completion Criteria (§21) before calling work done.
 11. **A claim that decides something must carry its evidence** (ADR-0076). When a
@@ -3599,6 +3657,19 @@ When operating in this repo, Claude Code should:
       weak instrument §19.11's last bullet describes, and give the message a
       written **terminal condition** so "stop" is a fact it can check rather than
       a judgement it has to make.
+    - **Re-arm in RESPONSE TO A FIRING, not whenever progress happens — and if you
+      arm one out of band, delete the outstanding trigger first.** On 2026-08-26
+      two were live at once: one armed at 11:16 in response to a firing, and a
+      second armed at 11:33 mid-turn after a pull request was opened, without the
+      first having fired. The older was due at 11:39 carrying **"Branch is pushed;
+      no PR opened yet"** and a milestone listed as remaining that had already
+      landed. Had it fired it would have sent the session to write an ADR that
+      existed and open a pull request that was open. The bullet above puts the
+      re-arming instruction inside the fired message precisely so the mechanism
+      cannot go stale — and this is the mechanism going stale anyway, by being
+      duplicated, which no amount of care inside one message can prevent. Found
+      only because the product owner asked whether the wake-ups were working.
+      `list_triggers` shows what is outstanding; `delete_trigger` removes it.
     - **And check the terminal condition is reachable before arming it.** One
       written the same day as this bullet required the work to be "merged and
       released, tag and publish job confirmed" — for a documentation change with

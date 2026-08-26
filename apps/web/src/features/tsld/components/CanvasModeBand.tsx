@@ -38,25 +38,47 @@ export type CanvasModeStatement =
  * Build the band's sentence for a statement. **Pure and exported**, so the same words reach the
  * screen and the live region from one place — the alternative is two strings that agree on the day
  * they are written and diverge on the day one is edited.
+ *
+ * ## Shortened 2026-08-26, and what deliberately survived
+ *
+ * The product owner reported these as adding little. They cost **no canvas height** — ADR-0092 docks
+ * them into a row the workspace pays for either way — so this was a copy decision, not a layout one,
+ * and it splits each sentence into three parts: the **mode**, the **gesture**, and the **exit**.
+ *
+ * - The **mode** stays. ADR-0064 was opened on a planner who could not tell which tool was armed —
+ *   six link attempts producing zero dependencies — so the leading words are the reason this band
+ *   exists at all.
+ * - The **exit** stays. ADR-0064 records Escape's behaviour being specified wrongly and found only
+ *   by testing; `Esc to stop` is the only place the product says it.
+ * - The **explanation** goes: `— drag on the diagram to draw its length` becomes `· drag to set
+ *   length`. Em-dash-and-full-stop prose becomes middot-separated clauses, which reads as a status
+ *   line rather than a paragraph.
+ *
+ * **Two clauses were kept against the brief, and this is why.** `or click for a day` and `Ctrl to
+ * add` are not explanations — the comments beside them record each as an **undocumented shortcut
+ * nobody could discover from the copy**, added deliberately for that reason. Cutting them would
+ * re-hide a capability rather than trim a sentence, so they are compressed instead: the drag
+ * statement is 66 characters against 88, the marquee 58 against 99. Going shorter is a one-line
+ * edit if the product owner would rather have the brevity than the discovery.
  */
 export function modeStatementText(statement: CanvasModeStatement): string {
   switch (statement.kind) {
     case 'adding':
       return statement.gesture === 'click'
-        ? `Adding ${statement.typeLabel.toLowerCase()} — click the diagram to place it. Esc to stop.`
-        : `Adding ${statement.typeLabel.toLowerCase()} — drag on the diagram to draw its length, or click for one day. Esc to stop.`;
+        ? `Adding ${statement.typeLabel.toLowerCase()} · click to place · Esc to stop`
+        : `Adding ${statement.typeLabel.toLowerCase()} · drag to set length, or click for a day · Esc to stop`;
     case 'linking':
-      return `Linking ${statement.linkType} — click the predecessor. Esc to stop.`;
+      return `Linking ${statement.linkType} · click the predecessor · Esc to stop`;
     case 'marquee':
       // Names the modifier as well as the tool: holding Ctrl/Cmd sweeps without arming anything, and
       // a planner who never finds that is left toggling a tool for every rectangle they draw.
-      return 'Marquee select — drag on the diagram to select what it covers. Hold Ctrl (Cmd) to add. Esc to stop.';
+      return 'Marquee select · drag to select, Ctrl to add · Esc to stop';
     case 'linkPicking':
-      return `Linking ${statement.linkType} from “${statement.predecessorName}” — click the successor. Esc to drop the pick.`;
+      return `Linking ${statement.linkType} from “${statement.predecessorName}” · click the successor · Esc to drop the pick`;
     case 'loe':
       return statement.startPicked
-        ? 'Level of effort — click the finish driver. Esc to stop.'
-        : 'Level of effort — click the start driver. Esc to stop.';
+        ? 'Level of effort · click the finish driver · Esc to stop'
+        : 'Level of effort · click the start driver · Esc to stop';
     case 'linked':
       return `Linked “${statement.predecessorName}” → “${statement.successorName}” (${statement.linkType}).`;
   }
