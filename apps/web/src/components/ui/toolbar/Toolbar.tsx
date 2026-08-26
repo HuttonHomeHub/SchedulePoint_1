@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
+import { containerShouldStandDown, vetoesKey } from './toolbar-keyboard';
 import {
   groupRank,
   resolveItems,
@@ -46,26 +47,6 @@ export interface ToolbarProps<Ctx> {
    */
   orientation?: 'horizontal' | 'vertical';
   className?: string;
-}
-
-/**
- * Does this keystroke belong to a form field rather than to the roving toolbar?
- *
- * **Load-bearing, and re-derived rather than inherited.** A `render` item may be an `<input>` — the
- * deck's own activity search is one — and a toolbar that treats every ArrowLeft as "move to the
- * previous control" takes the caret keys away from the field a planner is typing in. Home and End
- * are worse: in a text field they mean start-of-line and end-of-line, and stealing them moves focus
- * to the far end of the surface instead.
- *
- * This guard was dropped when the width ladder was deleted and the test caught it immediately,
- * which is the gate working: the assertion is about the contract, not about the machinery that was
- * removed around it.
- */
-function isTextEntry(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
 const DEFAULT_GROUP_LABELS: Record<ToolbarGroupId, string> = {
@@ -143,11 +124,16 @@ export function Toolbar<Ctx>({
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (isTextEntry(event.target)) return;
       const key = event.key;
       const isNext = key === 'ArrowRight' || key === 'ArrowDown';
       const isPrev = key === 'ArrowLeft' || key === 'ArrowUp';
       if (!isNext && !isPrev && key !== 'Home' && key !== 'End') return;
+      // A descendant that already handled the key wins; then the focused control's own claim.
+      // Both rules live in `toolbar-keyboard.ts` and are shared with `Deck` — this primitive used
+      // to carry its own copy, and when the copy in `Deck` was fixed this one was not, which is
+      // exactly the drift the shared module exists to make impossible.
+      if (containerShouldStandDown(event)) return;
+      if (vetoesKey(event.target, key)) return;
       const ids = focusableIds;
       if (ids.length === 0) return;
       const current = effectiveActiveId ? ids.indexOf(effectiveActiveId) : -1;

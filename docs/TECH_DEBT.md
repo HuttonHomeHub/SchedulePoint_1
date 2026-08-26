@@ -474,7 +474,7 @@ would not exercise the code being budgeted.
    One trap worth recording, because it produced a much prettier and entirely false number first: a
    generated plan laid out nose-to-tail spans **28 years** at 2,000 activities, so the "whole plan"
    zoom culled roughly nine bars in ten and reported 4.6 ms p95. It looked like the budget being met.
-   The layout now runs a phase's bands concurrently (`scripts/scale-scene.ts`), which puts the plan
+   The layout now runs a phase's bands concurrently (`apps/web/scripts/scale-scene.ts`), which puts the plan
    at about two and a half years and fills the viewport — that is what makes the two scenes
    comparable at all.
 
@@ -4683,9 +4683,26 @@ both were mechanical (a missing `order` prop, a stale count).
 fires an ADR-0105 trigger and needs a spec, not a reconciliation-pass edit. Two candidates for that
 spec, in order of confidence:
 
-1. **`eslint --cache`** — no coverage change at all, and the cache file is gitignorable. Near-certain
-   win; the only question is measuring it.
-2. **Scope the local unit run to what changed** (`vitest --changed` or `related`), with CI keeping
+1. ~~**`eslint --cache`**~~ — **DONE 2026-08-25, and measured rather than assumed.** All nine lint
+   scripts take `--cache --cache-strategy content`. For `@repo/web`: **114,951 ms cold → 8,032 ms**
+   with one file changed. A **14×** win, **107 s off the gate**, and **zero coverage change** — the
+   same files are linted by the same rules; a cached result is only reused when the file's content
+   hash is unchanged (`content`, not `metadata`, so a touched-but-identical file is not re-linted and
+   a restored-from-git file is). **CI is unaffected in either direction**: a fresh runner has no
+   `.eslintcache`, so CI always does the full lint it did before. `.eslintcache` was already in
+   `.gitignore`, and turbo's `lint` task declares `outputs: []` with default inputs — gitignored
+   files are outside its input hash, so the cache file cannot invalidate the turbo cache it sits
+   beside. That was checked before the change, not after.
+
+   **What it does not fix, stated so the next reader does not re-measure it:** the gate for a
+   one-line web change goes ~475 s → **~368 s**, and `pnpm test` is now **94%** of what remains.
+
+2. **Scope the local unit run to what changed** — **put to the product owner on 2026-08-25 with the
+   numbers above; they chose option 1 alone.** Recorded as the remaining lever rather than as a
+   recommendation, and the reason they gave it a miss is the reason it is written the way it is
+   below: it is the only one of the two that trades away signal.
+
+   `vitest --changed` or `related`, with CI keeping
    the full 552-file suite. This _is_ a real weakening of the local signal and must be argued rather
    than assumed: it trades "everything still passes" for "what you touched still passes", and the
    thing that makes it defensible is that **CI is the gate that blocks the merge and it does not
@@ -4693,3 +4710,81 @@ spec, in order of confidence:
 
 Do **not** answer this by dropping `check:*` scripts. They are 2.2% of the cost and they are the part
 of the gate that catches what a reviewer cannot see.
+
+---
+
+## #192 — The fix for #189 broke the shipped `Go to date` field, and shipped that way
+
+_Filed and **FIXED** 2026-08-25 by RECONCILE step 7 — two independent specialist reviews reached it
+separately, one reproducing it in real Chromium._
+
+`#189`'s fix narrowed the deck's key veto from "any form field claims all six navigation keys" to
+"a single-line input claims only its caret keys". The narrowing was right for a **text** field and
+wrong for every other kind, and the discriminator was `tagName` alone:
+
+`GoToTodayControl` renders `<Input type="date">` (`tsld-toolbar-items.tsx:533`), its item is
+`row: 'strip'` (`:1930-1940`), so **`Deck` renders it** — and a date input steps its focused segment
+with ArrowUp/ArrowDown. After the fix those keys were no longer vetoed, so the deck called
+`preventDefault()` and moved the roving stop: **pressing ArrowUp in the date field changed no date
+and threw focus onto an unrelated command**, closing the popover on the way.
+
+That is **worse than the defect it replaced**. `#189` meant a command could not be _reached_; this
+destroys an interaction the planner had already opened, and relocates focus with no announcement.
+It was released in `web-v0.106.0` and lived for about ninety minutes.
+
+**A second defect, same shape.** `Deck` did not check `event.defaultPrevented`, so a descendant that
+had already handled the key was overruled. `ToolbarSplitButton`'s caret calls `preventDefault()`
+without `stopPropagation()`; when the caret is **disabled** it moves focus to an element carrying no
+`data-toolbar-focusable`, the roving lookup returns `-1`, and focus is thrown to the deck's **first**
+stop — taking with it the only keyboard route to the caret's shaded reason (ADR-0082). That state is
+routine, not rare: `Add ▾` and `Link ▾` are in it for every Viewer and every Contributor without the
+pen.
+
+**Fixed** by extracting one shared `toolbar-keyboard.ts` consumed by **both** `Deck` and `Toolbar`,
+discriminating by `HTMLInputElement.type` in three cases — text entry claims the caret keys, a
+value-stepping or group-navigating control (`date`, `datetime-local`, `month`, `number`, `radio`,
+`range`, `time`, `week`, plus textarea/select/contenteditable) claims all six, and everything else
+claims none — plus a `containerShouldStandDown` covering `defaultPrevented` and IME composition.
+Verified red against the shipped guard: `date must keep ArrowDown: expected false to be true`.
+
+**The reason it is one module now is the more useful half.** `Toolbar.tsx` carried a **byte-for-byte
+copy** of the pre-#189 guard, still under a docblock describing _the deck's_ search field. The fix
+had been applied to one of two copies — "one correct pattern applied to a control and not its
+neighbour", which this register has recorded in five consecutive epics and which had gone unnoticed
+here for a day. `Toolbar.test.tsx:219-241` names the "Go to date" control **by name** and tests only
+the horizontal keys, on the primitive that has never rendered it.
+
+**Two claims corrected in the process.** "The vertical arrows are the route out of a field" is true
+only of **text** entry; a date field legitimately traps them and the route out is Tab or Escape. And
+the first version of the `Deck` regression tests put a date input in the shared fixture, which
+modelled nothing — in production that input exists only inside an **open, portalled popover**, and
+the deck's permanent stop is the trigger button.
+
+---
+
+## #193 — Four more toolbar docblocks and five exports describe deleted machinery
+
+_Filed 2026-08-25 by RECONCILE step 7 (component review), which swept further than the pass had._
+
+The 2026-08-25 pass corrected two docblocks citing `ToolbarOverflow` and `toolbar-ladder.ts`. It
+stopped at the two it had found. A `grep` for the deleted machinery finds more:
+
+- `toolbar-registry.ts:544-552` — `priorityOf`'s own docblock, **immediately above** one of the two
+  the pass fixed, still describes "the demotion queue below" and `computeLadder` withdrawing labels.
+  `priorityOf` itself has **zero callers**.
+- `toolbar-registry.ts:98-101` — `resolveLayoutMode` says `Toolbar` "holds the previous mode… for
+  the same reason it holds the previous overflow set". `Toolbar` has no mode state and there is no
+  overflow set.
+- `toolbar-registry.ts:40-44` — `ToolbarTier` still describes tier-2 demoting before tier-1.
+- `toolbar-band.tsx:1-33` — cites `computeLadder` as the live consumer.
+
+**Five exports have no production caller**: `priorityOf`, `partitionByTier`, `resolveLayoutMode`,
+`TOOLBAR_LAYOUT_BANDS`, `TOOLBAR_LAYOUT_HYSTERESIS_PX`. Both `Deck` and `Toolbar` now hard-code
+`layout: 'comfortable'` as a literal, so `resolveLayoutMode`'s other three bands are unreachable and
+`triggersAreCompact`/`searchFieldWidth` always take their roomy branch. They are exercised only by
+their own tests — the ADR-0081 shape: tests validating code nothing calls.
+
+**Not deleted here deliberately.** ADR-0110 M5's own decision was to KEEP the ladder machinery
+because the reduced strip does not fit at 1280 or 1440, so `resolveLayoutMode` may yet be needed;
+and removing exports is a public-contract change (ADR-0105). The docblocks, though, are simply wrong
+and should be corrected whether or not the code goes. Decide the two questions separately.

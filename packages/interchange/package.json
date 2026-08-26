@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "lint": "eslint .",
+    "lint": "eslint . --cache --cache-strategy content",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "clean": "rimraf dist .turbo coverage *.tsbuildinfo"
