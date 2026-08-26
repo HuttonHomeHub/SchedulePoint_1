@@ -160,3 +160,93 @@ measurement's.
 "If the shortfall is constant across widths, the expectation that it varies is wrong." The shortfall
 does vary — but only because the container grows while the content does not, which is arithmetic
 rather than insight. Recorded so the next reader does not mistake it for a finding.
+
+---
+
+# Second result — the shrink-to-fit probe, 2026-08-26T09:47Z
+
+## Hypothesis 3 was named in advance and it is CONFIRMED
+
+> _"If measured gaps turn out to dominate the occupant ink, then this whole per-occupant approach is
+> the wrong frame and the honest instrument is a shrink-to-fit probe instead."_
+
+The gaps did not merely dominate. **The per-occupant frame under-counted the merged row by 266 px**,
+which is more than twice the whole +120 px bar the decision turns on.
+
+`apps/web/measure-toolbar/m1-merged-probe.spec.ts` builds the merged row from the **real occupant
+nodes**, cloned out of the live page and mounted back inside the band so every ancestor-dependent
+style resolves as it does in the product, then sets it to `width: max-content` and reads
+`offsetWidth`. That is the width the row **requires**: every child at its natural width, every flex
+gap counted once, nothing shrunk and nothing truncated. It is the fit question asked directly rather
+than reconstructed from parts.
+
+## The instrument checks out, and the controls are why that can be said
+
+A probe that reports only the number under test cannot be checked — 1482 px is either the truth or
+an over-count and nothing in the reading says which. So the same instrument was pointed at the two
+rows **that are on screen right now**:
+
+| control                                       | required | container at 1280 |
+| --------------------------------------------- | -------- | ----------------- |
+| today's header row (brand, switcher, account) | 415      | 1222              |
+| today's identity row (identity, modes, pen)   | **1218** | **1222**          |
+
+The identity row needs 1218 px and is given 1222. **Four pixels.** That is exactly what ships — the
+row just fits at 1280 and truncates the plan name on anything longer — so the instrument agrees with
+observable behaviour at the one width where the answer is already known. The per-occupant figures
+also sum to the composed figure exactly (139 + 431 + 443 + 320 + 192 + 52 = 1577, plus five 12 px
+gaps = 1637 = `gap12.withSentence`), so the composition is arithmetic-clean.
+
+## Where the 266 px went
+
+`inkOf` sums **leaf** rectangles. A `<button>`'s leaf is its icon or its text, so the button's own
+padding is not counted; nor is padding on any non-leaf wrapper. Five flex gaps at 12 px are 60 px of
+it and **the other ~206 px is padding the leaf measure cannot see**. The instrument was not
+mis-implemented — it was answering a different question from the one being asked of it, which is the
+same track-vs-ink confusion `#198` records, one level further in.
+
+## The verdict against the condition
+
+Per-occupant, at 12 px gaps, with the pen's live-region sentence removed and its badge and
+`EditLockControls` kept:
+
+| occupant                                       | required |
+| ---------------------------------------------- | -------- |
+| brand (+ below-`lg` drawer trigger)            | 139      |
+| identity (project crumb, plan name, status, ✎) | 431      |
+| mode cluster (`Mode` + four buttons)           | 443      |
+| pen — badge + sentence + controls              | 320      |
+| pen — badge + controls, **sentence removed**   | **165**  |
+| organisation switcher                          | 192      |
+| account chip                                   | 52       |
+
+**Merged row required: 1482 px** (`gap12.withoutSentence`), constant across widths because the
+content is.
+
+| width | container | required | slack    | bar  | verdict  |
+| ----- | --------- | -------- | -------- | ---- | -------- |
+| 1280  | 1222      | 1482     | **−260** | +120 | **FAIL** |
+| 1440  | 1382      | 1482     | **−100** | +120 | **FAIL** |
+| 1646  | 1588      | 1482     | **+106** | +120 | **FAIL** |
+| 1920  | 1862      | 1482     | +380     | +120 | pass     |
+
+**The approved re-scope does not deliver what it was approved on.** The arithmetic put 1440 at
+**+166**; the probe puts it at **−100**. 1646 — the width this product is judged at — misses the bar
+by **14 px**. Only 1920 passes.
+
+This is the **fifth** consecutive width expectation in this register contradicted by its own
+measurement, and the fifth in the same direction.
+
+## What the reading does NOT say
+
+- The sentence on screen during the run was 147 px, not the 432 px worst state. `withSentence`
+  therefore understates the un-rescoped row: its worst case is 1637 − 147 + 432 = **1922 px**, which
+  fails at every width including 1920. The `withoutSentence` column is unaffected — removing a node
+  removes whatever width it had.
+- The fixture's project crumb reads `Project`. A real project name makes the 431 px identity block
+  larger, so that figure is optimistic.
+- **Truncation is not overflow.** The identity block carries `flex-1 min-w-0` and a `title`, so a row
+  over its container truncates the plan name rather than breaking — which is precisely what the
+  shipped identity row does at 1280 today. The +120 px bar treats truncation as failure; the product
+  already treats it as normal. That tension is a product decision, not a measurement, and is put to
+  the product owner rather than resolved here.
