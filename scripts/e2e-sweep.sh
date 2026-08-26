@@ -16,8 +16,21 @@
 # and the sweep ran thirty-three suites green over it twice. ADR-0096 added `web` as a target to
 # `e2e-local.sh` for exactly this reason and stopped one line short of here.
 #
-# **Not a per-change step.** Thirty-four suites is about forty minutes. It belongs to a change that
-# replaces a screen every journey signs in through, or moves a control every journey clicks.
+# **Not a per-change step.** Forty-odd suites is the best part of an hour. It belongs to a change
+# that replaces a screen every journey signs in through, or moves a control every journey clicks.
+#
+# **The list is DERIVED from `apps/web/package.json`, and it used to be typed out here.** That is
+# ADR-0058's rule applied to this file: the hand-written list was wrong in both directions at once
+# and had been for some time. It named `toolbar-fit`, for which there is no script and no directory
+# — `e2e-local.sh` maps `web:<name>` to `test:e2e:<name>`, so that entry resolved to nothing and the
+# sweep carried on — and it OMITTED seven suites that do exist: `workspace-fit` (which measures
+# WCAG 2.5.8 target size, i.e. the one thing a layout change is most likely to break),
+# `axis-markers`, `csp`, `export`, `minimap`, `shell` and `unsaved-work`. A sweep whose whole
+# argument is "a search is scoped by whichever directories you remember" was itself scoped by
+# whichever suites somebody remembered.
+#
+# So the default is now every `test:e2e:*` script the package declares. A suite added tomorrow is
+# swept tomorrow, and a suite deleted stops being named the same day.
 #
 # **The servers are killed between suites and that is load-bearing**, not tidiness: the `VITE_`
 # flags bake at `webServer` start and `reuseExistingServer` is true outside CI, so a suite that
@@ -29,7 +42,19 @@
 #
 # Per-suite output lands in /tmp/sweep-<name>.log; this prints one line per suite.
 set -u
-SUITES="${*:-web staff edit toolbar toolbar-fit workspace-chrome authoring authoring-flow programme notes undo loe multi-select copy-paste resource-view interchange share library calendar-shifts sub-day assignment-lag float-paths search-nav designed-ui designed-chrome gantt activity-editor wbs recently-deleted audit account account-verify public overview gantt-editing}"
+# `web` leads explicitly: it is the BASE journey (`test:e2e`, no suffix), so it cannot be derived
+# from the `test:e2e:*` names and would silently drop out of a derived list — which is the failure
+# ADR-0096 fixed one file over and this line exists to stop repeating.
+DERIVED="$(node -e '
+  const pkg = require("./apps/web/package.json");
+  const names = Object.keys(pkg.scripts)
+    .map((s) => /^test:e2e:(.+)$/.exec(s))
+    .filter(Boolean)
+    .map((m) => m[1])
+    .sort();
+  process.stdout.write(names.join(" "));
+')"
+SUITES="${*:-web $DERIVED}"
 for s in $SUITES; do
   # Fresh servers per suite: the flags bake at webServer start, so reusing one is how a suite
   # silently runs against another's configuration.

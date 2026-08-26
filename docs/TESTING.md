@@ -358,7 +358,18 @@ sweep for the changed _label_ found nothing; the changed _screen_ had a journey 
 nobody could run. Change a screen, run the base journey.
 
 **Step 4c — when the change is under every journey, sweep every journey.** `scripts/e2e-sweep.sh`
-runs all thirty-three flag-on suites in series, each against its own freshly-started servers.
+runs every flag-on suite in series, each against its own freshly-started servers.
+
+**Its list is derived from `apps/web/package.json`, and this paragraph deliberately does not say how
+many there are.** It used to be typed into the script, and on 2026-08-26 that list was found wrong in
+both directions at once: it named `toolbar-fit`, which has had no script and no directory since
+ADR-0109 D1 deleted that journey — `e2e-local.sh` maps `web:<name>` to `test:e2e:<name>`, so the
+entry resolved to nothing and the sweep carried on past it — and it omitted **seven** suites that do
+exist, `workspace-fit` among them, which is the one measuring WCAG 2.5.8 target size and therefore
+the one a layout change is most likely to break. A sweep whose whole argument is that a search is
+scoped by whichever directories you remember was itself scoped by whichever suites somebody
+remembered. The default is now every `test:e2e:*` script the package declares, so a suite added
+tomorrow is swept tomorrow. A count in prose is the same defect one file along (ADR-0076 Class 1).
 Restarting between suites is load-bearing rather than tidy: the `VITE_` flags bake at `webServer`
 start and `reuseExistingServer` is true outside CI, so a suite that inherits the previous one's
 servers silently runs against the previous one's configuration.
