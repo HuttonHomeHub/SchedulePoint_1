@@ -81,3 +81,47 @@ that state. So **moving Author to the canvas foot is still unpriced**, and the q
 raises — that the row is reserved for transient strips, which a permanent 10-item toolbar would
 compete with — is unanswered. Stated rather than glossed: no plan should assume Author fits there
 until it is measured.
+
+---
+
+## 6. The canvas foot cannot hold Author — measured, and it settles the one-line deck
+
+The Activities handle row, collapsed (the default), measured in the shipped product:
+
+| viewport | row width | facts | **dock region** | expand |
+| -------- | --------- | ----- | --------------- | ------ |
+| 1920     | 1619      | 607   | **924**         | 40     |
+| 1646     | 1345      | 607   | **650**         | 40     |
+
+The dock region is `flex-1`, so it always fills whatever is left — which is why the first reading of
+"free width" came back as 0 at every state and was the wrong question. The right one is what the
+dock has to give: **924 px at 1920 and 650 px at 1646.**
+
+**The Author card needs 608 px.** So at 1646 it would leave the dock **42 px**.
+
+That is not enough for anything. The dock is not decoration — ADR-0092 put the diagram's transient
+strips there deliberately (the armed-tool statement, the selection bars, the conflict banner, the
+empty-plan notice), on the argument that the row was "a gap the workspace was paying for either
+way". **The shortest strip in that set is longer than 42 px**, so the exact widths do not need
+measuring to settle it: with Author in the row, arming a tool or selecting an activity pushes the
+row to two lines — and `min-h-9` rather than `h-9` means it grows rather than clipping, which is
+precisely the height this exercise exists to save.
+
+Even with the shortened statement the product owner approved (`Adding task · drag to set length ·
+Esc to stop`, roughly 290 px), Author plus a strip needs ~898 px: it clears 924 at 1920 by 26 px and
+misses 650 at 1646 by 248.
+
+### What that settles
+
+**The one-line deck is not viable.** It required Author to leave the band; Author has nowhere to go.
+All four cards on one line need 2618 px against an 1862 px container — 756 over — so the two-row
+deck stands.
+
+Recorded as a measured withdrawal rather than a deferral: there is no width to find, and no
+milestone owes this work.
+
+### Unmeasured, and stated
+
+The **selection bar's** width was not captured — the probe's listbox click found no option, so that
+state never rendered. It does not change the conclusion (Author already fails against the armed
+statement, and the selection bar is the wider strip of the two), but it is not a number I have.
