@@ -91,6 +91,33 @@ leave the deck and buy a one-line command band on its own. The earlier reading b
 this at ~136; the figure moves, the conclusion does not. Collapsing the deck to one row would be
 worth **~50 px** of canvas.
 
+## C1d — focus does NOT scroll a clipped control into view, and 2.4.11 is not cited
+
+This record first said the clipped controls stay keyboard-reachable "because a browser scrolls a
+focused element into view". **Measured, that is false.** The pre-fix state was reproduced in the
+browser (restoring `shrink-0` on the wrapper), the clipped control focused, and its rect read before
+and after:
+
+| viewport | control                  | right before focus | right after focus | fully revealed | centre reachable |
+| -------- | ------------------------ | ------------------ | ----------------- | -------------- | ---------------- |
+| 1920     | `Clear visual placement` | 2042               | **2042**          | no             | **no**           |
+| 1646     | `Edit`                   | 1667               | **1667**          | no             | yes              |
+
+The rect is **identical** before and after: nothing scrolled, because the clip comes from an
+ancestor with `overflow-hidden` and there is no scrollable ancestor to move. So the control can be
+focused and still not be brought fully into view.
+
+**SC 2.4.11 Focus Not Obscured (Minimum) is nevertheless NOT cited**, and that is a deliberate
+restraint rather than an oversight. 2.4.11 triggers when the focused component is _entirely_ hidden;
+at 1920 the control spans 1858–2042 against a 1920 viewport, so part of it remains within the
+viewport, and whether any of that part is actually painted (rather than clipped by the row's own
+box) was **not measured**. The enhanced criterion **2.4.12** — no part obscured — would fail, but it
+is AAA and not this product's bar.
+
+So the ADR states the defect as **pointer-operability with a focused control never fully revealed**,
+without a WCAG number. This follows the accessibility review's instruction not to assert the citation
+from prose, and ADR-0082's record of an overstated citation being corrected.
+
 ## C1b — the row clips because one wrapper cannot shrink, not because it is too wide
 
 Added after the architecture review, which raised this as its headline finding and **explicitly

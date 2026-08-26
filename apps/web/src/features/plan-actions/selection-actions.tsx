@@ -842,7 +842,22 @@ export function SelectionActionsBar({
       // own box makes the row 6 px taller than the 36 px it already occupied — measured, and the
       // reason the journey's "costs the canvas no height" assertion is an equality rather than a
       // bound. Floating, all three were load-bearing (a card over the diagram needs an edge).
-      className="flex shrink-0 items-center"
+      //
+      // **`min-w-0`, never `shrink-0` — this line was the clipping defect.** `Toolbar` wraps
+      // unconditionally (`Toolbar.tsx:181-189`) and the dock outlet is `flex min-w-0 flex-1
+      // flex-wrap` (`canvas-dock.tsx:104`), but a `shrink-0` item between them takes `max-content`
+      // and never shrinks — so the outlet's width was never imposed on this wrapper and the
+      // wrapping toolbar inside was never asked to break a line. The surplus painted past the row
+      // and was clipped by the workspace body's `overflow-hidden`, putting `Clear visual placement`
+      // off-screen at 1920 and `Edit`/`Duplicate`/`Delete` with it at 1646 — pointer-unreachable,
+      // keyboard-reachable only because focus scrolls into view, which is why it shipped and stayed
+      // unreported. Measured both ways in `docs/specs/foot-row/m0-measurement.md` §C1b: content
+      // 1753 px against containers of 1619 and 1345 before, exactly the container width after.
+      //
+      // The cost is height — the row wraps to 77 px at 1920 and 117 px at 1646 with a selection —
+      // which is what the streamlining beside this exists to reduce. A row that is too tall is a
+      // trade; a row that hides a command is not.
+      className="flex min-w-0 items-center"
     >
       <Toolbar
         items={selectionActionItems}

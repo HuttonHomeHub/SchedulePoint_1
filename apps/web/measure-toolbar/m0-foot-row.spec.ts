@@ -301,6 +301,64 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
       return { before, after };
     });
 
+  /**
+   * **Does focusing a clipped control fully reveal it? (SC 2.4.11 Focus Not Obscured, AA)**
+   *
+   * The accessibility review declined to let the ADR cite 2.4.11 from the measurement's prose: the
+   * record *asserts* "a browser scrolls a focused element into view" without showing that the
+   * control fully clears the clip rather than being scrolled toward. If it does not fully clear,
+   * 2.4.11 is the citable failure; if it does, the defect is pointer-operability with no WCAG
+   * number attached, and the ADR must say so rather than reach for one.
+   *
+   * The fix has already landed, so the defect is reproduced **in the browser** by restoring
+   * `shrink-0` on the wrapper — no stash, and the pre-fix behaviour stays documented here for good.
+   */
+  const probeFocusReveal = (): Promise<unknown> =>
+    page.evaluate(() => {
+      const round = (n: number): number => Math.round(n);
+      const bar = document.querySelector<HTMLElement>(
+        '[role="toolbar"][aria-label^="Actions for"]',
+      );
+      const wrapper = bar?.parentElement;
+      if (!bar || !wrapper) return { error: 'selection bar not found' };
+
+      wrapper.classList.add('shrink-0');
+      wrapper.classList.remove('min-w-0');
+      void bar.offsetWidth;
+
+      const controls = [...bar.querySelectorAll<HTMLElement>('button,[role="button"]')];
+      const clipped = controls.find((c) => c.getBoundingClientRect().right > window.innerWidth);
+      if (!clipped) {
+        wrapper.classList.remove('shrink-0');
+        wrapper.classList.add('min-w-0');
+        return { note: 'nothing clipped past the viewport in this state' };
+      }
+
+      const before = clipped.getBoundingClientRect();
+      clipped.focus();
+      const after = clipped.getBoundingClientRect();
+      const hit = document.elementFromPoint(
+        after.left + after.width / 2,
+        after.top + after.height / 2,
+      );
+
+      const result = {
+        label: (clipped.textContent ?? '').trim().slice(0, 40),
+        viewportWidth: window.innerWidth,
+        rightBeforeFocus: round(before.right),
+        rightAfterFocus: round(after.right),
+        leftAfterFocus: round(after.left),
+        // The 2.4.11 question in one field: is the whole control inside the viewport after focus?
+        fullyRevealed: after.left >= 0 && after.right <= window.innerWidth,
+        reachableAfterFocus:
+          hit !== null && (hit === clipped || clipped.contains(hit) || hit.contains(clipped)),
+      };
+
+      wrapper.classList.remove('shrink-0');
+      wrapper.classList.add('min-w-0');
+      return result;
+    });
+
   const report: Record<string, unknown> = { planName: PLAN_NAME };
 
   for (const viewport of VIEWPORTS) {
@@ -351,6 +409,7 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
     await listbox.focus();
     await page.waitForTimeout(500);
     const shrinkHypothesis = await probeShrinkHypothesis();
+    const focusReveal = await probeFocusReveal();
 
     report[`${viewport.width}`] = {
       deck,
@@ -358,6 +417,7 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
       footSelected,
       dockStrip,
       shrinkHypothesis,
+      focusReveal,
     };
   }
 

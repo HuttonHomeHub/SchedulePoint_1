@@ -60,12 +60,14 @@ interface Target {
  * pointer target even though it is out of the tab sequence — and it is the half that shipped
  * undersized.
  */
-async function sweep(page: Page): Promise<Target[]> {
+async function sweep(
+  page: Page,
+  root = '[role="toolbar"][aria-label="Plan commands"]',
+): Promise<Target[]> {
   return page.evaluate(
-    ({ minTarget }) => {
-      const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
-      if (!deck)
-        throw new Error('command-surface: no deck — [aria-label="Plan commands"] is absent');
+    ({ minTarget, root: rootSelector }) => {
+      const deck = document.querySelector(rootSelector);
+      if (!deck) throw new Error(`command-surface: no surface matched ${rootSelector}`);
 
       const out: Target[] = [];
       // **Every pointer target in the deck, in one pass — never per-`[data-toolbar-item]`.**
@@ -102,11 +104,12 @@ async function sweep(page: Page): Promise<Target[]> {
           });
         }
       }
-      if (out.length === 0) throw new Error('command-surface: the deck reported no controls');
+      if (out.length === 0)
+        throw new Error(`command-surface: ${rootSelector} reported no controls`);
       void minTarget;
       return out;
     },
-    { minTarget: MIN_TARGET },
+    { minTarget: MIN_TARGET, root },
   );
 }
 
@@ -285,5 +288,52 @@ test.describe('The plan command surface', () => {
     await page.keyboard.press('Enter');
     await expect(caption).toHaveAttribute('aria-expanded', 'true');
     await expect(deck.locator('[data-toolbar-item]')).toHaveCount(before);
+  });
+
+  /**
+   * **The object-action bar, which this gate did not cover until now.**
+   *
+   * `docs/TECH_DEBT.md` #124 put the selection bar outside this sweep's scope **by decision**, and
+   * `selection-actions.tsx:286-288` cites that. The decision has cost: measured
+   * (`docs/specs/foot-row/m0-measurement.md`), the bar's content is 1753 px at every width against
+   * containers of 1619 and 1345, and it neither wraps nor scrolls — so `Clear visual placement`
+   * renders off-screen at 1920 and `Edit`, `Duplicate` and `Delete` join it at 1646. A pointer
+   * cannot reach any of them; a keyboard can, because focus scrolls into view, which is why this
+   * shipped and stayed unreported.
+   *
+   * Widening the existing sweep rather than writing a second one is deliberate: two gates with one
+   * job disagree about what "reachable" means. This closes the open half of #124.
+   *
+   * **Verified red before the fix**, naming exactly those controls.
+   */
+  test('every object action a pointer can see, it can also reach', async () => {
+    test.setTimeout(240_000);
+
+    // Select through the canvas's own parallel listbox (ADR-0026 D7): focusing it default-selects,
+    // which is a real keyboard route and needs no bar coordinates. Clicking an option does not
+    // work — the listbox is `sr-only`, and that is what made an earlier probe silently skip.
+    await page.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
+    await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+
+    for (const viewport of WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      const targets = await sweep(page, '[role="toolbar"][aria-label^="Actions for"]');
+
+      // The pinned positive — without it this passes equally against a bar rendering nothing.
+      expect(targets.length, `no object actions swept at ${viewport.width}`).toBeGreaterThan(5);
+
+      const undersized = targets.filter((t) => t.visible && (t.w < MIN_TARGET || t.h < MIN_TARGET));
+      expect(
+        undersized,
+        `object actions below ${MIN_TARGET}×${MIN_TARGET} at ${viewport.width}: ${JSON.stringify(undersized)}`,
+      ).toEqual([]);
+
+      const unreachable = targets.filter((t) => t.visible && !t.reachable);
+      expect(
+        unreachable,
+        `object actions a pointer cannot reach at ${viewport.width}: ${JSON.stringify(unreachable)}`,
+      ).toEqual([]);
+    }
   });
 });

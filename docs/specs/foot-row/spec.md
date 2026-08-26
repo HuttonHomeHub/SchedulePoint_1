@@ -167,7 +167,7 @@ would only prove it. `canvas-dock.tsx:87` already does this once — the plural 
 the singular one at source. Generalised: **at most one transient strip plus at most one selection
 bar**, decided in `TsldPanel`. Bounded by construction, testable as an invariant.
 
-### D8 — The responsive fold is DEFERRED to a product-owner decision
+### D8 — The responsive fold is DROPPED (product-owner decision, 2026-08-26)
 
 The first draft folded four editor doors into `Edit ▾` below a threshold. It was approved when it
 was needed to make the row **fit**. D1 removes that need. What remains argues against it:
@@ -181,13 +181,16 @@ was needed to make the row **fit**. D1 removes that need. What remains argues ag
 - `Edit ▾` shares its label with its own child item;
 - `Steps` is **omitted** today, not shaded, so a parity test must cover `isVisible` for all four.
 
-**Not decided here.** The question goes back to the product owner with the height it buys.
+**Dropped.** Put back to the product owner with the height it buys against those five costs, they
+chose to drop it: five buttons at every width, and the row wraps instead. The accepted cost is one
+extra line at 1646 in some states.
 
 ## 5. Declined suggestions, recorded
 
 - **The IA critique** (ux): fold the four editor doors into the editor's own tabs and move the rarer
   actions behind a `⋯`, mirroring the activities table. It is probably right and it is a **different
-  epic** — it changes what the bar is for, not how it fits. Recorded in the ADR, not built here.
+  epic** — it changes what the bar is for, not how it fits. **Product-owner decision 2026-08-26:
+  record it, do not act on it.** It goes in the ADR as a live question.
 - **TECH_DEBT #200's registry consolidation** — see D2.
 - **Citing SC 1.4.10 for the clipping** — wrong scope (not a zoom condition; toolbars are commonly
   exempt). **SC 2.4.11** is cited only if a real-browser screenshot shows focus does not fully
