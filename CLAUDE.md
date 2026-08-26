@@ -3563,18 +3563,25 @@ When operating in this repo, Claude Code should:
    On 2026-08-26 PR #394's three CI jobs read `queued` there for **53 minutes**
    while the run holding them had already finished: the run itself reported
    `completed` / `conclusion: failure`, updated four seconds after it was created.
-   `get_workflow_run_usage` settled which was true — **0 billable ms on all three
-   jobs, `run_duration_ms` 4000** — so nothing had executed and the queue was a
-   display of jobs that would never start. The
-   two APIs disagreed and the more reassuring one was wrong.
+   `get_workflow_run_usage` settled which was true — **`run_duration_ms` 4000** —
+   so nothing had executed and the queue was a display of jobs that would never
+   start. The two APIs disagreed and the more reassuring one was wrong.
 
    So when a job has been `queued` for longer than a runner normally takes, ask
    the **run**, not the check: `get_workflow_run` for its status and conclusion,
-   and `get_workflow_run_usage` for billable milliseconds, which is the reading
-   that cannot be misread — 0 ms means no job body ran, whatever the check says.
-   Zero billable time is also what distinguishes a runner-allocation failure from
-   a real one, and therefore what makes a single re-run the right response rather
-   than a way of not reading a log.
+   and `get_workflow_run_usage` for **`run_duration_ms`** — a run that reports
+   seconds cannot have executed a job body, whatever the check says. That is also
+   what distinguishes a runner-allocation failure from a real one, and therefore
+   what makes a single re-run the right response rather than a way of not reading
+   a log.
+
+   **Not `billable`.** That field reads `0` for every job in this repository —
+   it is **public**, so Actions minutes are free and nothing is ever billed. This
+   paragraph said "0 ms means no job body ran" for one commit, which was **false
+   the moment it was written**: the very next run, 37 minutes of real work with
+   every job green, reported `total_ms: 0` beside `run_duration_ms: 2245000`. A
+   decision-bearing claim asserted without checking (ADR-0076 Class 3), inside the
+   commit whose subject was checking claims.
 
 10. **Use Conventional Commits** and add a changeset for user-visible change.
     Meet the Feature Completion Criteria (§21) before calling work done.
