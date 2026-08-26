@@ -148,9 +148,9 @@ describe('TsldPanel — mode statement band (flag on)', () => {
   });
 
   it.each([
-    ['add-activity', /^Adding task — drag on the diagram to draw its length, or click for one day/],
-    ['link', /^Linking FS — click the predecessor/],
-    ['loe', /^Level of effort — click the start driver/],
+    ['add-activity', /^Adding task · drag to set length, or click for a day/],
+    ['link', /^Linking FS · click the predecessor/],
+    ['loe', /^Level of effort · click the start driver/],
   ] as const)('states the %s tool', (arm, text) => {
     render(<Harness arm={arm} />);
     expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(text);
@@ -174,7 +174,7 @@ describe('TsldPanel — keyboard pick parity for the Link tool (T6)', () => {
     fireEvent.keyDown(listbox, { key: 'Enter' }); // picks A as predecessor
     expect(onLink, 'the first Enter picks; it must not commit').not.toHaveBeenCalled();
     expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(
-      'Linking FS from “Set out” — click the successor.',
+      'Linking FS from “Set out” · click the successor',
     );
 
     fireEvent.keyDown(listbox, { key: 'ArrowDown' }); // → B
@@ -314,7 +314,7 @@ describe('TsldPanel — the Add statement is gesture-accurate', () => {
     render(<Harness arm="add-activity" activities={[]} />);
     const band = screen.getByTestId('canvas-mode-band');
     expect(band).toHaveTextContent(
-      'Adding task — drag on the diagram to draw its length, or click for one day. Esc to stop.',
+      'Adding task · drag to set length, or click for a day · Esc to stop',
     );
     expect(announceSpy).toHaveBeenCalledWith(band.textContent);
   });
@@ -341,7 +341,7 @@ describe('TsldPanel — the link confirmation names the direction and undoes it 
     // The direction is the whole point of the sentence — "linked" without it is what the planner
     // could not verify in the driving session that opened this epic.
     // `findByTestId` is the WRONG wait here and it flaked in CI: the band is already on screen
-    // saying "Linking FS — click the predecessor", so the query resolves on the first tick and the
+    // saying "Linking FS · click the predecessor", so the query resolves on the first tick and the
     // text assertion then runs synchronously — before `onLink`'s promise has flushed. The thing to
     // wait for is the SENTENCE, not the element, so the wait must wrap the assertion.
     const band = screen.getByTestId('canvas-mode-band');
@@ -375,7 +375,7 @@ describe('TsldPanel — the link confirmation names the direction and undoes it 
     // Re-arm: a fresh session, so the band must prompt rather than congratulate.
     fireEvent.click(screen.getByRole('button', { name: 're-arm link' }));
     const band = screen.getByTestId('canvas-mode-band');
-    expect(band).toHaveTextContent('Linking FS — click the predecessor');
+    expect(band).toHaveTextContent('Linking FS · click the predecessor');
     expect(band).not.toHaveTextContent('Linked');
     // …and no Undo, which is the half that could have discarded the wrong edit.
     expect(within(band).queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();

@@ -340,7 +340,7 @@ function ShellFrame(): React.ReactElement {
     <ShellContext.Provider value={shell}>
       <NavigatorCrud orgSlug={orgSlug} canWrite={canWrite} expansion={expansion}>
         <ChromeSlotHost>
-          {({ rowsSlotRef, identitySlotRef, drawerSlotRef, statusSlotRef }) => (
+          {({ rowsSlotRef, identitySlotRef, modeSlotRef, drawerSlotRef, statusSlotRef }) => (
             <>
               {/* **The shell is ONE grid** (Graphite M2). It replaces nested flex columns, and the
                   reason is §4a: the command band spans the columns the drawer sits inside, so
@@ -430,6 +430,7 @@ function ShellFrame(): React.ReactElement {
                 <ChromeBandRow
                   rowsSlotRef={rowsSlotRef}
                   identitySlotRef={identitySlotRef}
+                  modeSlotRef={modeSlotRef}
                   className="col-span-3 col-start-1 row-start-1 mt-3 mr-3 mb-2 ml-3"
                 />
 

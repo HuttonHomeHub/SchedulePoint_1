@@ -154,8 +154,8 @@ describe('TsldPanel — the tool arm/disarm contract', () => {
    * changed when the band landed, and why they will not change independently again.
    */
   it.each([
-    ['add-activity', /^Adding task — drag on the diagram to draw its length, or click for one day/],
-    ['link', /^Linking FS — click the predecessor/],
+    ['add-activity', /^Adding task · drag to set length, or click for a day/],
+    ['link', /^Linking FS · click the predecessor/],
   ] as const)('announces the %s tool arming and closing', (arm, armed) => {
     announceSpy.mockClear();
     render(<Harness arm={arm} />);

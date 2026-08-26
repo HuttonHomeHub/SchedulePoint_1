@@ -22,18 +22,22 @@ describe('CanvasModeBand', () => {
     );
     // A milestone has no length to drag, so "place it" is the whole gesture.
     expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(
-      'Adding start milestone — click the diagram to place it. Esc to stop.',
+      'Adding start milestone · click to place · Esc to stop',
     );
   });
 
   it('names BOTH gestures for a type that has a length', () => {
     render(<CanvasModeBand statement={{ kind: 'adding', typeLabel: 'Task', gesture: 'drag' }} />);
+    // **The shortcut clause survives the 2026-08-26 shortening deliberately.** The copy was cut
+    // from prose to a middot status line, but `or click for a day` is not an explanation — it is an
+    // undocumented shortcut the sentence exists to surface, which is why the assertion still names
+    // both gestures. See `modeStatementText`'s docblock.
     // The old copy said "click the diagram to draw" for every type. For a task that under-describes
     // the tool: dragging sizes the bar, and the click is a one-day shortcut nobody could discover
     // from a sentence that never mentioned dragging. Naming the click as a shortcut, not a mistake,
     // is the point — it commits through the naming popover exactly like a drag does.
     expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(
-      'Adding task — drag on the diagram to draw its length, or click for one day. Esc to stop.',
+      'Adding task · drag to set length, or click for a day · Esc to stop',
     );
   });
 
@@ -44,7 +48,7 @@ describe('CanvasModeBand', () => {
       />,
     );
     expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(
-      'Linking FS from “Set out” — click the successor. Esc to drop the pick.',
+      'Linking FS from “Set out” · click the successor · Esc to drop the pick',
     );
   });
 
@@ -95,7 +99,7 @@ describe('CanvasModeBand', () => {
   it('exports the sentence so the screen and the live region cannot drift', () => {
     // The panel calls this for its announcement; the band calls it for its text. One string.
     expect(modeStatementText({ kind: 'loe', startPicked: true })).toBe(
-      'Level of effort — click the finish driver. Esc to stop.',
+      'Level of effort · click the finish driver · Esc to stop',
     );
   });
 });

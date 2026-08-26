@@ -78,11 +78,11 @@ test.describe('the canvas says what it is doing', () => {
 
     await clearSelection(page);
     await armLink(page);
-    await expect(band()).toContainText('Linking FS — click the predecessor');
+    await expect(band()).toContainText('Linking FS · click the predecessor');
 
     await canvas(page).click({ position: first });
     // The whole point: after ONE click, the surface can answer "which one did I pick?".
-    await expect(band()).toContainText('Linking FS from “Set out” — click the successor');
+    await expect(band()).toContainText('Linking FS from “Set out” · click the successor');
 
     await canvas(page).click({ position: second });
     await expect(band()).toContainText('Linked “Set out” → “Reinforce” (FS).');
