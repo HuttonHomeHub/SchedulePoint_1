@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import * as React from 'react';
 import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -193,5 +194,79 @@ describe('ToolbarSplitButton — a shaded half says why (ADR-0082)', () => {
     cleanup();
     const both = renderSplit({ disabled: true });
     expect(both.primary.parentElement?.className).toMatch(/opacity-50/);
+  });
+});
+
+/**
+ * **A description for an ENABLED primary** (`docs/specs/foot-row/spec.md` D3).
+ *
+ * The primitive had a channel for a reason on a shut control and none for a hint on a live one —
+ * the gap ADR-0094 M5 found in `MenuItem` and fixed there. It exists because withdrawing the armed
+ * mode statements had to give their two undocumented shortcuts somewhere to go, and `title` is not
+ * that place: no mainstream browser shows a tooltip on keyboard focus, which this file's own
+ * `disabledReason` docblock records as the house failure pattern caught four times.
+ */
+describe('ToolbarSplitButton — a description on a live primary', () => {
+  // **Not `Partial<ToolbarSplitButtonProps>` spread in.** `exactOptionalPropertyTypes` is on, so a
+  // partial's `foo?: string` is `string | undefined` and will not assign to a target `foo?: string`.
+  // Naming the three fields this harness varies keeps the spread honest.
+  function Harness({
+    primaryDescription,
+    primaryDisabledReason,
+    disabled,
+  }: {
+    primaryDescription?: string;
+    primaryDisabledReason?: string;
+    disabled?: boolean;
+  } = {}): React.ReactElement {
+    const primaryRef = React.useRef<HTMLButtonElement>(null);
+    const caretRef = React.useRef<HTMLButtonElement>(null);
+    return (
+      <ToolbarSplitButton
+        itemProps={{}}
+        primaryRef={primaryRef}
+        caretRef={caretRef}
+        pressed
+        open={false}
+        label="Adding Task"
+        caretLabel="Activity type"
+        title="Add an activity"
+        icon={<span aria-hidden="true">+</span>}
+        onPrimary={() => {}}
+        onOpenMenu={() => {}}
+        {...(primaryDescription !== undefined ? { primaryDescription } : {})}
+        {...(primaryDisabledReason !== undefined ? { primaryDisabledReason } : {})}
+        {...(disabled !== undefined ? { disabled } : {})}
+      />
+    );
+  }
+
+  it('announces it after the name, without joining it', () => {
+    render(<Harness primaryDescription="Drag to set its length. Esc to stop." />);
+    const primary = screen.getByRole('button', { name: 'Adding Task' });
+
+    // The NAME is exactly the label — a planner scanning a control list is not read a sentence.
+    expect(primary).toHaveAccessibleName('Adding Task');
+    expect(primary).toHaveAccessibleDescription('Drag to set its length. Esc to stop.');
+  });
+
+  it('yields to a reason when the control is shut, because a hint about the unusable is noise', () => {
+    render(
+      <Harness
+        disabled
+        primaryDescription="Drag to set its length. Esc to stop."
+        primaryDisabledReason="Start editing to add activities."
+      />,
+    );
+    const primary = screen.getByRole('button', { name: 'Adding Task' });
+    expect(primary).toHaveAccessibleDescription('Start editing to add activities.');
+  });
+
+  it('leaves the description off entirely when none is given', () => {
+    render(<Harness />);
+    const primary = screen.getByRole('button', { name: 'Adding Task' });
+    // Not an empty description: a dangling `aria-describedby` reads as one, which is why the
+    // primitive only sets the attribute when there is something to point at.
+    expect(primary).not.toHaveAttribute('aria-describedby');
   });
 });

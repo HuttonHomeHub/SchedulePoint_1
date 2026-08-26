@@ -35,6 +35,25 @@ export interface ToolbarSplitButtonProps {
    * removed by a layout change, which is the ADR-0081 dead-end shape.
    */
   disabled?: boolean;
+  /**
+   * A description for the **enabled** primary — announced after its name, never part of it.
+   *
+   * The primitive had a channel for a reason on a SHUT control and none for a hint on a live one,
+   * which is the gap ADR-0094 M5 found in `MenuItem` and fixed there. It is added here because the
+   * armed-tool statements the mode band used to paint (`docs/specs/foot-row/spec.md` D3) carried
+   * two shortcuts nothing else in the product documents — `or click for a day` and `Ctrl to add` —
+   * and `CanvasModeBand.tsx:57-62` argues in as many words that cutting them re-hides a capability
+   * rather than trimming a sentence. Withdrawing the statement had to give them somewhere to go.
+   *
+   * **Deliberately not `title`.** A tooltip is not shown on keyboard focus by any mainstream
+   * browser, which `ToolbarButton.tsx:7-23` and this file's own `disabledReason` docblock both
+   * record as the house failure pattern caught four times. A described `sr-only` sibling is the
+   * pattern that works, so it is the pattern used.
+   *
+   * A shut control's reason takes precedence: a hint about how to use something you cannot use is
+   * noise.
+   */
+  primaryDescription?: string;
   /** Overrides {@link disabled} for the primary half alone. */
   primaryDisabled?: boolean;
   /**
@@ -107,6 +126,7 @@ export function ToolbarSplitButton({
   icon,
   label,
   caretLabel,
+  primaryDescription,
   onPrimary,
   onOpenMenu,
 }: ToolbarSplitButtonProps): React.ReactElement {
@@ -116,6 +136,9 @@ export function ToolbarSplitButton({
   // Only when there IS a reason: an `aria-describedby` pointing at nothing is a dangling reference,
   // which some AT reads as an empty description rather than as absence.
   const primaryReasonId = primaryOff && primaryDisabledReason ? `${reasonIds}-p` : undefined;
+  // The hint only when the control is live AND unshaded — see `primaryDescription`.
+  const primaryDescriptionId = !primaryOff && primaryDescription ? `${reasonIds}-pd` : undefined;
+  const primaryDescribedBy = primaryReasonId ?? primaryDescriptionId;
   const caretReasonId = caretOff && caretDisabledReason ? `${reasonIds}-c` : undefined;
   return (
     <span
@@ -135,8 +158,8 @@ export function ToolbarSplitButton({
         // The name is pinned whenever a reason span is rendered, for the same reason
         // `ToolbarButton` pins it: the span lives inside the button, and a button's name comes from
         // its content, so without this the reason would join the name as well as the description.
-        {...(compact || primaryReasonId ? { 'aria-label': label } : {})}
-        {...(primaryReasonId ? { 'aria-describedby': primaryReasonId } : {})}
+        {...(compact || primaryDescribedBy ? { 'aria-label': label } : {})}
+        {...(primaryDescribedBy ? { 'aria-describedby': primaryDescribedBy } : {})}
         title={primaryOff ? (primaryDisabledReason ?? title) : title}
         onClick={() => {
           if (!primaryOff) onPrimary();
@@ -176,6 +199,11 @@ export function ToolbarSplitButton({
         {primaryReasonId ? (
           <span id={primaryReasonId} className="sr-only">
             {primaryDisabledReason}
+          </span>
+        ) : null}
+        {primaryDescriptionId ? (
+          <span id={primaryDescriptionId} className="sr-only">
+            {primaryDescription}
           </span>
         ) : null}
       </button>
