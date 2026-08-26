@@ -3,6 +3,7 @@ import { createContext } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import {
+  CHROME_SLOT_NAMES,
   ChromePortal,
   ChromeSlot,
   ChromeSlotProvider,
@@ -107,9 +108,11 @@ describe('ChromeSlot / ChromePortal (flag on)', () => {
  * component is the defect one layer along (ADR-0073 C4).
  */
 describe('TestChromeHost covers every chrome slot', () => {
-  // The union's members, written out because TypeScript erases a union at runtime. A name added to
-  // `ChromeSlotName` and not to this list makes the SECOND assertion fail, which is the reminder.
-  const EVERY_NAME: readonly ChromeSlotName[] = ['rows', 'identity', 'drawer', 'status'];
+  // `CHROME_SLOT_NAMES` is the single roster the union itself derives from, so there is nothing to
+  // keep in step here. The third hand-written copy that used to sit on this line was the component
+  // review's finding: a `readonly ChromeSlotName[]` annotation accepts a SUBSET, so omitting a name
+  // from it type-checks and silently narrows the gate written to catch that exact omission.
+  const EVERY_NAME: readonly ChromeSlotName[] = CHROME_SLOT_NAMES;
 
   it('mounts a target for every name', () => {
     expect([...TEST_CHROME_SLOTS].sort()).toEqual([...EVERY_NAME].sort());

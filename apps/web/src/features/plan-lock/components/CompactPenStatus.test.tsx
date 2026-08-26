@@ -111,19 +111,22 @@ describe('CompactPenStatus (ADR-0031 — compact pen surface)', () => {
       expect(regions[0]).toHaveTextContent('No one is editing this plan.');
     });
 
-    it('carries the state word into the announcement the badge used to supply', () => {
+    it('announces a complete sentence, and does not repeat the badge word', () => {
       render(
         <CompactPenStatus
           pen={makePen({ status: status({ state: 'HELD_BY_ME', holder: JANE }), holdsPen: true })}
         />,
       );
 
-      // `aria-atomic` announces the whole region, and the region is now the sentence alone — so the
-      // word the badge carries visually has to be repeated inside it or the announcement loses the
-      // state. Verified red against a version without the `sr-only` span.
+      // Every sentence in `lock-copy.ts` is self-contained, so the region needs nothing added to be
+      // complete. An `sr-only` copy of the badge word shipped here for one commit and was wrong
+      // twice: the container announces its own contents AND its description on focus return, so the
+      // word was read twice — and `e2e-edit/pen-smoke.spec.ts` went red on `getByText('Available')`
+      // resolving to two elements, a journey written for something else catching a duplication no
+      // unit test had reason to look for. This pins the absence.
       const region = screen.getByRole('status');
-      expect(region).toHaveTextContent('Editing');
       expect(region).toHaveTextContent(/editing this plan/i);
+      expect(screen.getAllByText('Editing')).toHaveLength(1);
     });
 
     it('describes the controls container by the sentence, so focus return still says what happened', () => {

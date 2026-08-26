@@ -1,4 +1,10 @@
-import { ChromeSlot, ChromeSlotProvider, useChromeSlot, type ChromeSlotName } from './chrome-slot';
+import {
+  CHROME_SLOT_NAMES,
+  ChromeSlot,
+  ChromeSlotProvider,
+  useChromeSlot,
+  type ChromeSlotName,
+} from './chrome-slot';
 
 /**
  * Test-only stand-in for the production shell's portal targets — every slot a plan portals into,
@@ -33,16 +39,13 @@ import { ChromeSlot, ChromeSlotProvider, useChromeSlot, type ChromeSlotName } fr
  * the band.
  */
 /**
- * Every name this host mounts a target for. Exported so `chrome-slot.test.tsx` can hold it against
- * `ChromeSlotName` — a `satisfies` would only prove these are valid names, never that none is
- * missing, which is the direction that actually fails.
+ * Every name this host mounts a target for — **the union's own list**, not a copy of it. A separate
+ * hand-written array would only prove the names are valid, never that none is missing, and a
+ * `readonly ChromeSlotName[]` annotation happily accepts a subset. So the roster is the single
+ * `CHROME_SLOT_NAMES`, and the gate's remaining job is proving this component renders one target per
+ * name — the half a type cannot check.
  */
-export const TEST_CHROME_SLOTS = [
-  'rows',
-  'identity',
-  'drawer',
-  'status',
-] as const satisfies readonly ChromeSlotName[];
+export const TEST_CHROME_SLOTS: readonly ChromeSlotName[] = CHROME_SLOT_NAMES;
 
 export function TestChromeHost({ children }: { children: React.ReactNode }): React.ReactElement {
   const rows = useChromeSlot();

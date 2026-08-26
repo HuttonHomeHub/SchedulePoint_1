@@ -49,7 +49,17 @@ import { cn } from '@/lib/utils';
  * back for the original reason, now that the row it feeds **wraps** — so the merge ADR-0092 M5 and
  * ADR-0110 D3 each withdrew on width has a shape that fits.
  */
-export type ChromeSlotName = 'rows' | 'drawer' | 'status' | 'identity';
+export const CHROME_SLOT_NAMES = ['rows', 'identity', 'drawer', 'status'] as const;
+
+/**
+ * **One list, and the type derives from it.** The roster was written out three times — this union,
+ * `TEST_CHROME_SLOTS`, and a third copy in `chrome-slot.test.tsx` — each hand-maintained, and a
+ * `readonly ChromeSlotName[]` annotation accepts a **subset**, so a name omitted from one of them
+ * type-checks and quietly narrows the gate that was supposed to catch exactly that. Deriving the
+ * union from the array makes the array the single source and leaves the gate one job: proving the
+ * component renders a target for each.
+ */
+export type ChromeSlotName = (typeof CHROME_SLOT_NAMES)[number];
 
 const ChromeSlotContext = createContext<Partial<Record<ChromeSlotName, HTMLElement | null>>>({});
 

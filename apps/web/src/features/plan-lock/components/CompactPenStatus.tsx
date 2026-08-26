@@ -58,9 +58,19 @@ const TONE_TINT: Record<LockTone, string> = {
  *   to the *moved* sentence, both would fire against the status bar — throwing focus to the other
  *   end of the screen after every Start/Stop, and a test asserting only "focus is not on `<body>`"
  *   would pass.
- * - **The announcement stays complete.** `aria-atomic` announces the whole region, and the region
- *   is now the sentence alone — so the state word the badge carries visually is repeated as an
- *   `sr-only` first child rather than being silently dropped from the announcement.
+ * - **The announcement stays complete, and it needs nothing added to make it so.** `aria-atomic`
+ *   announces the whole region, and the region is now the sentence alone — but every one of the ten
+ *   sentences in `lock-copy.ts` is self-contained ("No one is editing this plan.", "Alexandra is
+ *   editing this plan.", "Editing control was taken over — you're now read-only."). The badge is a
+ *   one-word **summary** of the sentence, not extra information, so nothing is lost by the region
+ *   no longer containing it.
+ *
+ *   This shipped for one commit with an `sr-only` copy of the badge word inside the region, added
+ *   out of caution. It was wrong twice over: on focus return the container announces its own
+ *   contents (the visible badge) **and** its description (the region), so the word was read twice;
+ *   and `e2e-edit/pen-smoke.spec.ts` went red on `getByText('Available')` resolving to two elements
+ *   — a journey written for something else catching a duplication a unit test had no reason to
+ *   look for.
  * - **Focus return still says what happened.** The controls container is `aria-describedby` the
  *   sentence region, which works across the portal because a description is resolved by id
  *   anywhere in the document. So landing on the controls after a hand-off still reads the full
@@ -124,10 +134,6 @@ export function CompactPenStatus({
           aria-atomic="true"
           className={cn(base, TONE_TINT[view.tone])}
         >
-          {/* The state word, which the badge carries visually and this region would otherwise drop:
-              `aria-atomic` announces the whole region, and the region no longer contains the badge
-              once the sentence has portalled away from it. */}
-          <span className="sr-only">{view.badge}.</span>
           {/* The message is visually truncated to keep the row slim and stays whole in the live
               region; the aria-hidden aside (active …/countdown) never re-announces on its tick. */}
           <span className="max-w-[22ch] truncate sm:max-w-none">

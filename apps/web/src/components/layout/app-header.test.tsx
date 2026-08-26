@@ -6,9 +6,17 @@ import { AppHeaderRow } from '@/components/layout/app-header';
 import { ThemeProvider } from '@/hooks/use-theme';
 
 /**
- * The header's `1fr auto 1fr` grid (feature-spec.md §4.9, ADR-0056 M6). These tests pin the
- * one thing the grid must never break: the DOM order (drawer → brand → org switcher → nav →
- * account), which is what the `e2e-designed-chrome` tab-order journey depends on.
+ * The header's **layout** (feature-spec.md §4.9, ADR-0056 M6). These tests pin the one thing it must
+ * never break: the DOM order (drawer → brand → identity → org switcher → account), which is what the
+ * `e2e-designed-chrome` tab-order journey depends on.
+ *
+ * **This docblock said "the header's `1fr auto 1fr` grid" until 2026-08-26, and there has been no
+ * grid there since the one-row header.** That change rewrote the component's own docblock to say so
+ * in as many words, edited every line inside the `describe` below to add a prop, and left the block
+ * name, this paragraph and one test title all still asserting a grid — a comment above working code
+ * describing what used to be true, which is this repository's most-recorded drift shape, committed
+ * in the diff that removed the thing. Found by the component review, not by a gate; it is checkable
+ * in one grep, since `grid-cols-[minmax` no longer appears in `app-header.tsx` at all.
  *
  * There used to be two shell variants and a case pinning that both rendered the identical inner
  * `HeaderContents`. `AppHeader` was the `VITE_DESIGNED_CHROME` flag-off header and went with the
@@ -82,10 +90,12 @@ function renderWithTheme(ui: React.ReactElement): void {
   render(<ThemeProvider>{ui}</ThemeProvider>);
 }
 
-describe('header grid (feature-spec.md §4.9)', () => {
+describe('header layout (feature-spec.md §4.9)', () => {
   it('keeps the brand → org switcher → account DOM order', () => {
     // The nav used to sit between the switcher and the account chip. It moved to the Project
-    // Explorer rail in ADR-0097 Landing D1; what remains is identity and account.
+    // Explorer rail in ADR-0097 Landing D1; what remains is identity and account — plus, since the
+    // one-row header, the plan's identity slot between the brand and the trailing group. The slot is
+    // `empty:hidden` and nothing portals into it here, which is why this assertion is unchanged.
     renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     const header = screen.getByRole('banner');
     const brand = screen.getByText('SchedulePoint');
@@ -103,7 +113,7 @@ describe('header grid (feature-spec.md §4.9)', () => {
     expect(header).toContainElement(account);
   });
 
-  it('AppHeaderRow renders the identical inner structure (same grid, same order)', () => {
+  it('AppHeaderRow renders the identical inner structure (same children, same order)', () => {
     renderWithTheme(<AppHeaderRow identitySlotRef={() => undefined} />);
     expect(screen.getByText('SchedulePoint')).toBeInTheDocument();
     expect(screen.getByLabelText('Active organisation')).toBeInTheDocument();
