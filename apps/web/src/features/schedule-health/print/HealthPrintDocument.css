@@ -1,0 +1,62 @@
+/**
+ * Print styles for the health report. Colours are hard-coded dark-on-white — the documented print
+ * exception (the GanttPrintSurface precedent): a `@media print` sheet cannot read a runtime token,
+ * and paper wants ink whatever theme the app is in.
+ */
+.health-print {
+  color: #111;
+  background: #fff;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.health-print h1 {
+  font-size: 16px;
+  margin: 0 0 2px;
+}
+
+.health-print h2 {
+  font-size: 12px;
+  margin: 10px 0 2px;
+}
+
+.health-print-meta {
+  margin: 0 0 2px;
+  color: #333;
+}
+
+.health-print table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.health-print th,
+.health-print td {
+  border: 1px solid #999;
+  padding: 2px 6px;
+  text-align: left;
+}
+
+.health-print thead {
+  /* Browsers repeat a table head on every printed page natively — the pagination rule the
+     printed programme established (ADR-0059 M4). */
+  display: table-header-group;
+}
+
+.health-print-cap {
+  font-style: italic;
+  margin: 0 0 2px;
+}
+
+.health-print ul {
+  margin: 2px 0 6px;
+  padding-left: 16px;
+}
+
+.health-print footer {
+  margin-top: 10px;
+  border-top: 1px solid #999;
+  padding-top: 4px;
+  color: #333;
+}

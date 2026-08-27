@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, CircleCheck, CircleHelp, CircleX, Info } fro
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { buildHealthRows, healthAnnouncement, type HealthRowView } from '../model/health-rows';
+import { printHealthReport } from '../print/HealthPrintDocument';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -121,6 +122,18 @@ export function ScheduleHealthPanel({
         titleClassName="text-sm font-medium"
         onClose={onClose}
         closeLabel="Close health check"
+        actions={
+          report === null ? null : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => printHealthReport(report)}
+              className="h-7 px-2 text-xs"
+            >
+              Print report
+            </Button>
+          )
+        }
       />
       <h2 id={headingId} className="sr-only">
         Health check

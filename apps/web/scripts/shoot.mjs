@@ -410,6 +410,47 @@ const SHOTS = [
       await toggleViewSwitch(p, /late-start overlay/i);
     },
   },
+  // **The health check panel, and the printed report it hands over** (health M4-T1 step 7). The
+  // register records a four-scrollbar editor reaching a user because the shot list stopped at the
+  // route (ADR-0101), and a printed document is exactly the artefact nobody looks at until a
+  // client does. Two shots: the docked panel over the programme (the reading surface), and the
+  // print DOCUMENT — captured by stubbing `window.print` and revealing the detached container,
+  // because the file-shaped deliverable here IS that DOM (the export-diagram rule, one medium
+  // over). The programme plan fails several metrics honestly, so both shots carry real verdicts
+  // and a real offender list rather than fourteen green rows.
+  {
+    name: 'plan-workspace-health',
+    programme: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+    after: openHealthPanel,
+  },
+  {
+    name: 'health-print-document',
+    programme: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+    after: async (p) => {
+      await openHealthPanel(p);
+      // Stub print so the dialog never opens; the detached container stays mounted (teardown waits
+      // on `afterprint`, which a stub never fires) long enough to reveal and photograph.
+      await p.evaluate(() => {
+        globalThis.print = () => {};
+      });
+      await p.getByRole('button', { name: 'Print report' }).click();
+      await p.evaluate(() => {
+        const node = globalThis.document.querySelector('.tsld-print-container');
+        if (!(node instanceof globalThis.HTMLElement))
+          throw new Error('no print container mounted');
+        // Reveal what the print stylesheet only shows on paper, and hide the app behind it.
+        node.style.display = 'block';
+        node.style.background = '#fff';
+        node.style.position = 'fixed';
+        node.style.inset = '0';
+        node.style.overflow = 'auto';
+        node.style.zIndex = '99999';
+      });
+      await p.waitForTimeout(400);
+    },
+  },
   // **The guest share view** — the only screen in the product a person outside the organisation
   // ever sees, and the only authenticated-adjacent surface with no session at all. Session-less by
   // construction (ADR-0051), so it takes its own anonymous context like the public screens, but it
@@ -450,6 +491,19 @@ const SHOTS = [
  * (ADR-0091 M7 shortened three labels outright), and a harness that fails on a label change reports
  * a design problem it does not have.
  */
+/** Open the Analysis menu and the Health check dock, waiting for the report to settle. */
+async function openHealthPanel(page) {
+  await page.locator('[data-toolbar-item="analysis"]').first().click();
+  await page.getByRole('menuitem', { name: 'Health check…' }).click();
+  const panel = page.getByRole('region', { name: 'Health check' });
+  await panel.waitFor({ timeout: 10_000 });
+  await panel
+    .getByText(/failed · /)
+    .first()
+    .waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+}
+
 async function toggleViewSwitch(page, pattern) {
   await page.getByRole('button', { name: /^View/ }).first().click();
   // **A `checkbox` inside a `dialog`, not a `menuitemcheckbox` inside a `menu`.** `View` is

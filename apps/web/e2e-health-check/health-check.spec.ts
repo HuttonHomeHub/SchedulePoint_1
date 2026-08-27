@@ -116,4 +116,25 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   const revealedRow = grid.getByRole('row').filter({ hasText: danglerName }).first();
   await expect(revealedRow).toBeVisible();
   await expect(revealedRow).toBeInViewport();
+
+  // ── 7 · The printed report (M4): all fourteen rows, sentences not codes, offenders + the cap ──
+  // `window.print` stubbed; the detached container stays mounted (teardown waits on `afterprint`,
+  // which a stub never fires), so its DOM can be read even though the screen stylesheet hides it.
+  await page.evaluate(() => {
+    window.print = () => {};
+  });
+  await healthPanel.getByRole('button', { name: 'Print report' }).click();
+  const printed = await page.evaluate(() => {
+    const doc = document.querySelector('.tsld-print-container .health-print');
+    return {
+      rows: doc?.querySelectorAll('tbody tr').length ?? 0,
+      text: doc?.textContent ?? '',
+    };
+  });
+  expect(printed.rows).toBe(14);
+  // The dangler's offender line reached paper, with its note.
+  expect(printed.text).toContain('Loose end');
+  // A reason prints as a sentence, never a code (the M4-T1 grep, run against the REAL document).
+  expect(printed.text).toContain('No active baseline exists to compare against.');
+  expect(printed.text).not.toMatch(/NO_ACTIVE_BASELINE|PLAN_NOT_SCHEDULED/);
 });
