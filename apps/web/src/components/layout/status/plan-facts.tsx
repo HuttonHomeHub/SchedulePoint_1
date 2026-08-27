@@ -69,7 +69,42 @@ export function PlanFacts({
   return (
     <div
       data-schedule-state={scheduleStateAttr(scheduleState)}
-      className="text-muted-foreground flex min-h-6 shrink-0 items-center gap-4 px-3 text-xs"
+      /*
+       * **`flex-wrap` with a ZERO row gap** (foot-row-and-deck M4).
+       *
+       * The product owner asked whether the facts could be "two lines keeping the same height of
+       * the toolbar still". Measured, the answer is yes and the whole cost was one character of the
+       * gap utility: `gap-4` sets `row-gap: 16px` as well as `column-gap: 16px`, so a wrapped row
+       * measured **64 px** (24 + 16 + 24) and grew the foot row from 41 px to 65 px. At
+       * `row-gap: 0` two 16 px lines are **32 px**, which is under the 40 px collapse button that
+       * already sets this row's floor — so the row does not move and the diagram pays nothing.
+       * Measured at rest: foot row 41 px, canvas unchanged, at 1920, 1646 and 1440.
+       *
+       * The first M0 pass concluded the opposite ("never free"). It had measured the cost of
+       * today's row-gap and generalised it into a property of the layout — corrected in
+       * `docs/specs/workspace-foot-and-deck/m0-measurement.md` C2.
+       *
+       * **`max-w-64` is what makes any of it happen, and the first version shipped without it.**
+       * `flex-wrap` only *permits* wrapping. This row is `shrink-0` with `basis: auto`, and the
+       * dock beside it is `flex-1` with `basis: 0%` — so the dock GROWS into whatever is left and
+       * absorbs the whole deficit by wrapping its own items. The facts are never squeezed, whatever
+       * their shrink factor: measured, making the row and its wrapper shrinkable changed nothing at
+       * any width (`m4-shrink.spec.ts` candidates A and B, 481.4 × 24 in all six readings). A
+       * capability with no way to be reached is ADR-0081's defect, and the class alone was exactly
+       * that. They wrap only if they are explicitly bounded.
+       *
+       * **Bounded, it also finishes the job M1 could not.** M1 took the object bar to one line at
+       * 1920 and 1646 and left 1440 wrapped at 117 px, because seven controls still exceeded the
+       * 569.6 px there. Handing back the 231 px the facts were holding takes the dock to 801 px
+       * against the 763 px it needs: measured, **1440 goes 117 → 41 px and the canvas 484 → 560**,
+       * which is the entire loss recovered. 300 px was measured too and only reaches 77 px, so the
+       * bound is doing real work rather than being a round number.
+       *
+       * **What it does NOT do is fix 1646** — that was M1's, and wrapping the facts there buys
+       * nothing, because a wrapping row breaks between ITEMS rather than by total width (ADR-0114
+       * M2 recorded the same thing freeing 164 px and gaining zero).
+       */
+      className="text-muted-foreground flex min-h-6 max-w-64 shrink-0 flex-wrap items-center gap-x-4 gap-y-0 px-3 text-xs"
     >
       {/* **The collapse is WITHDRAWN, on its own measurement** (M2-T3, reversed at M2-T4).
           Tailwind's `@container` sets `container-type: inline-size`, which applies
