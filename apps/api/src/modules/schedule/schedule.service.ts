@@ -685,19 +685,17 @@ export class ScheduleService {
     ]);
 
     // Each activity's OWN day↔minute factor (ADR-0068) in one batched lookup — metric 8's
-    // conversion, never a constant and never a per-row query.
-    const withFactors = await attachDayFactors(
-      this.calendars,
-      activityRows,
-      new Map([[planId, plan.calendarId]]),
-    );
-
-    // CPLI's working-day arithmetic on the PLAN's calendar — the `variance.ts` shape (ADR-0025):
-    // the minute-granular port divided by the plan's own day factor. Signed, `to` later = positive.
-    const planFactor = await resolveDayFactorMinutes(this.calendars, {
-      activityCalendarId: null,
-      planCalendarId: plan.calendarId,
-    });
+    // conversion, never a constant and never a per-row query — beside the plan's own factor for
+    // CPLI's working-day arithmetic (the `variance.ts` shape, ADR-0025). The two lookups are
+    // independent PK reads against the same small table, so they share one round trip rather than
+    // running sequentially (the M5 backend-performance review's one suggestion, folded).
+    const [withFactors, planFactor] = await Promise.all([
+      attachDayFactors(this.calendars, activityRows, new Map([[planId, plan.calendarId]])),
+      resolveDayFactorMinutes(this.calendars, {
+        activityCalendarId: null,
+        planCalendarId: plan.calendarId,
+      }),
+    ]);
     const workingDaysBetween = (from: string, to: string): number =>
       Math.round(planCalendar.workingTimeBetween(from, to) / planFactor);
 
