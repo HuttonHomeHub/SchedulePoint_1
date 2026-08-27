@@ -110,6 +110,7 @@ function renderTable(
         planId="pl1"
         canEditSchedule={canEditSchedule}
         canReportProgress={canReportProgress}
+        canWriteNotes
         editorGating={gatingFor(canEditSchedule, canReportProgress)}
       />
     </QueryClientProvider>,
@@ -168,23 +169,33 @@ describe('ActivitiesTable', () => {
   });
 
   /**
-   * **Steps shades too**, and the fact this needed a test is the finding. It was left omitted while
-   * its four neighbours were converted — in the same menu, on the same row, off the same gate
-   * (`deriveActivityEditorGating` makes `steps` the *same object* as `general`), inside the change
-   * that fixed them. Two independent reviewers caught it; nothing in the suite would have, because
-   * the old `expect(items).not.toContain('Steps')` assertion was dropped rather than inverted.
+   * **`Steps` has left this menu** (`docs/specs/object-bar-defects/` M1) — it opened the same dialog
+   * on the same tab as `Progress`, differing only in where focus landed.
+   *
+   * This case used to assert that it SHADED, and its docblock recorded why that needed a test:
+   * `Steps` had been left omitted while its four neighbours were converted, in the same menu, on
+   * the same row, off the same gate — a correct pattern applied to a control and not the one beside
+   * it, caught by two independent reviewers.
+   *
+   * **That finding is not about `Steps`; it is about the gate**, and it still governs everything
+   * left here. So the assertion is kept and re-pointed rather than deleted: `Progress` and `Edit`
+   * must still shade off one object, with one reason and not two that drift apart — plus the
+   * pinned absence, so a green run cannot mean the item vanished by accident.
    */
-  it('SHADES Steps for a non-writer, on the same gate as its neighbours', () => {
+  it('offers no Steps, and shades what remains off one gate object', () => {
     renderTable(false);
     openRowMenu('Excavate');
-    const steps = screen.getByRole('menuitem', { name: 'Steps' });
-    expect(steps).toHaveAttribute('aria-disabled', 'true');
-    // The same sentence as Edit — one gate object, so one reason, not two that drift apart.
+    expect(screen.queryByRole('menuitem', { name: 'Steps' })).not.toBeInTheDocument();
+
     const edit = screen.getByRole('menuitem', { name: 'Edit' });
+    // `Delete` rather than `Duplicate`: that one needs an `onDuplicate` prop this fixture does not
+    // pass, so it would have asserted a gate on an item that is absent for an unrelated reason.
+    const del = screen.getByRole('menuitem', { name: 'Delete' });
+    expect(edit).toHaveAttribute('aria-disabled', 'true');
     const textOf = (el: HTMLElement) =>
       document.getElementById(el.getAttribute('aria-describedby') ?? '')?.textContent;
-    expect(textOf(steps)).toBeTruthy();
-    expect(textOf(steps)).toBe(textOf(edit));
+    expect(textOf(edit)).toBeTruthy();
+    expect(textOf(del)).toBe(textOf(edit));
   });
 
   it('shows progress plus edit/delete for a writer who can also report progress', () => {

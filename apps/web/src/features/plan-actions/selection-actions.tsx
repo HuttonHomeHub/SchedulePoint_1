@@ -5,9 +5,9 @@ import {
   Copy,
   Crosshair,
   Eraser,
-  ListChecks,
   Route,
   SquarePen,
+  StickyNote,
   Trash2,
   TriangleAlert,
   Ungroup,
@@ -34,9 +34,8 @@ import {
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
-  ACTIVITY_STEPS_ENABLED,
-  EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
+  NOTES_ENABLED,
   RESOURCES_ENABLED,
   SCHEDULING_MODES_ENABLED,
   TOOLBAR_QUICK_WINS_ENABLED,
@@ -67,10 +66,13 @@ export interface SelectionActionContext {
   /** Whether the viewer may report progress (Contributor upward, role only — NOT pen-gated); gates the
    * `progress` item exactly like the toolbar's Update-progress command (`canProgress`). */
   canReportProgress: boolean;
-  /** Whether the selected activity can carry weighted steps — false for a duration-derived type
-   * (milestone / LOE / WBS summary), matching the activities-table Steps row action. Gates the `steps`
-   * item's visibility (with `canEditSchedule`), mirroring the table's `!isDurationDerivedType`. */
-  stepsEligible: boolean;
+  /**
+   * Whether the viewer may write notes (Contributor upward) — gates the `notes` item.
+   *
+   * Deliberately a **separate** right from {@link canEditSchedule}: ADR-0046 does not pen-gate
+   * notes, so a Contributor annotates a plan somebody else is editing.
+   */
+  canWriteNotes: boolean;
   /**
    * The selection is a `WBS_SUMMARY` — the only kind of activity that can be dissolved. A context
    * fact rather than a check inside the handler, so a non-summary selection cannot reach an action
@@ -98,6 +100,8 @@ export interface SelectionActionContext {
    * root maps this the way it already maps the bar's other editor callbacks. */
   onOpenEditorAt: (at: 'constraint' | 'resources') => void;
   onOpenLogic: () => void;
+  /** Open the selected activity's **Notes** tab (ADR-0062 gave notes a tab of their own). */
+  onNotes: () => void;
   onEdit: () => void;
   onDelete: () => void;
   /** Dissolve the selected summary — remove the grouping, keep the work (`VITE_WBS_IMPROVEMENTS`). */
@@ -122,10 +126,6 @@ export interface SelectionActionContext {
   /** Open the progress editor (`ActivityProgressDialog`) for the selected activity. Wired regardless of
    * the flag; the `progress` item that calls it is only registered when `VITE_ENTRY_ROUTES` is on. */
   onProgress: () => void;
-  /** Open the weighted-steps editor (`ActivityStepsDialog`) for the selected activity. Wired regardless
-   * of the flag; the `steps` item is only registered when the flag + `VITE_EARNED_VALUE` +
-   * `VITE_ACTIVITY_STEPS` are all on. */
-  onSteps: () => void;
 }
 
 /**
@@ -203,6 +203,9 @@ export type SelectionBarContext = SelectionActionContext & {
  * `ctx.scheduleRefusal` from the live role/pen state — see {@link SelectionActionContext}. */
 const PEN_ACTION = 'change this activity';
 const PROGRESS_REASON = 'You don’t have permission to report progress';
+// The same sentence `add-note` used on the command surface, kept verbatim so a planner who learnt
+// the refusal there meets the identical wording here (`docs/specs/object-bar-defects/` M2).
+const NOTES_REASON = 'You don’t have permission to add notes';
 
 const ISOLATE_MODE_LABELS: Record<LogicPathMode, string> = {
   full: 'Full path',
@@ -492,6 +495,49 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       icon: <Waypoints className="size-4" />,
       onActivate: (ctx) => ctx.onOpenLogic(),
     },
+    /**
+     * **Notes — moved here from the command surface** (`docs/specs/object-bar-defects/` M2).
+     *
+     * It lived on the command deck as `Add note`, and the Gantt hid it there on the stated ground
+     * that "the object bar is docked in the Gantt with a correctly-labelled route". **There was no
+     * such route**: this bar had no notes item, `Logic` opens the Logic tab, and the Gantt row menu
+     * mirrors this roster — so a planner working in the Gantt could not reach an activity's notes
+     * at all. The reasoning described a replacement that did not exist.
+     *
+     * It belongs here rather than in both places. `add-note`'s `isEnabled` consulted the selection,
+     * which is ADR-0093's discriminator verbatim: an action whose subject is the selected object
+     * belongs on the object's surface. That ADR deleted `Report progress` from the command surface
+     * for exactly this, so adding a second copy here would have re-created the defect it removed —
+     * and `selection-duplication.structural.test.ts` could not have caught it, because it compares
+     * ids and labels and `add-note`/"Add note" collides with neither `notes` nor "Notes".
+     *
+     * **Not pen-gated** (ADR-0046 — notes are a Contributor action, like progress), so it takes the
+     * role gate alone. The reason puts the permanent condition BEFORE the transient one, which is
+     * the wording `add-note` arrived at: a reader without the right is told that, not misleadingly
+     * told to select something first.
+     *
+     * Sits next to `Logic` because that is where a planner last reached it — `Add note` opened the
+     * Logic panel and scrolled to a Notes section until ADR-0062 gave notes a tab.
+     */
+    ...(NOTES_ENABLED
+      ? [
+          {
+            id: 'notes',
+            group: 'object',
+            tier: 1,
+            showLabel: 'always',
+            order: 0.5,
+            label: 'Notes',
+            description: 'Add or read notes on this activity.',
+            srDescription: () => 'Add or read notes on this activity.',
+            icon: <StickyNote className="size-4" />,
+            isEnabled: (ctx: SelectionActionContext) => ctx.canWriteNotes,
+            disabledReason: (ctx: SelectionActionContext) =>
+              ctx.canWriteNotes ? undefined : NOTES_REASON,
+            onActivate: (ctx: SelectionActionContext) => ctx.onNotes(),
+          } satisfies ToolbarItem<SelectionActionContext>,
+        ]
+      : []),
     ...(ENTRY_ROUTES_ENABLED
       ? [
           {
@@ -555,23 +601,23 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           } satisfies ToolbarItem<SelectionActionContext>,
         ]
       : []),
-    ...(ENTRY_ROUTES_ENABLED && EARNED_VALUE_ENABLED && ACTIVITY_STEPS_ENABLED
-      ? [
-          {
-            id: 'steps',
-            group: 'object',
-            tier: 1,
-            showLabel: 'always',
-            order: 3,
-            label: 'Steps',
-            icon: <ListChecks className="size-4" />,
-            // Writer authoring surface, hidden for a duration-derived selection — matching the table's
-            // `canWrite && !isDurationDerivedType(...)` row-action gate (present-or-absent, not shaded).
-            isVisible: (ctx: SelectionActionContext) => ctx.canEditSchedule && ctx.stepsEligible,
-            onActivate: (ctx: SelectionActionContext) => ctx.onSteps(),
-          } satisfies ToolbarItem<SelectionActionContext>,
-        ]
-      : []),
+    /*
+     * **`Steps` was here and is gone** (`docs/specs/object-bar-defects/` M1).
+     *
+     * It opened the SAME dialog on the SAME tab as `Progress`: `openActivityEditor` maps
+     * `progress → { tab: 'progress' }` and `steps → { tab: 'progress', focusSteps: true }`, and
+     * `focusSteps` feeds one prop — `autoFocusHeading` on the steps panel. Two controls differing
+     * only in scroll position, with the same subject, permission and effect, which is ADR-0093's
+     * discriminator failing inside one surface rather than between two.
+     *
+     * It was also the only item on this bar that HID rather than shaded without the pen, while
+     * `Edit`, `Duplicate` and `Delete` beside it shade with a reason (ADR-0082). Shading it would
+     * have fixed what a planner sees and kept what caused it.
+     *
+     * `focusSteps` and the `'steps'` purpose deliberately REMAIN: they are how the Progress tab
+     * knows to land focus on the steps panel, and deleting a mapping to remove a button is a wider
+     * change than the defect needs.
+     */
     {
       id: 'edit',
       group: 'object',

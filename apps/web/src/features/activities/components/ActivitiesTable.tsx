@@ -11,7 +11,6 @@ import { formatDurationRead } from '../model/duration-field';
 import {
   ACTIVITY_STATUS_LABELS,
   ACTIVITY_TYPE_LABELS,
-  isDurationDerivedType,
   isMilestoneType,
 } from '../schemas/activity-schemas';
 
@@ -25,10 +24,8 @@ import {
   ACTIVITY_CALENDAR_ENABLED,
   ACTIVITY_EDITOR_CONVERGENCE_ENABLED,
   ACTIVITY_COPY_PASTE_ENABLED,
-  ACTIVITY_STEPS_ENABLED,
   ADVANCED_ACTIVITY_TYPES_ENABLED,
   ADVANCED_CONSTRAINTS_ENABLED,
-  EARNED_VALUE_ENABLED,
   INTER_PROJECT_DATES_ENABLED,
   NOTES_ENABLED,
   RESOURCES_ENABLED,
@@ -133,6 +130,7 @@ export function ActivitiesTable({
   planId,
   canEditSchedule,
   canReportProgress = false,
+  canWriteNotes = false,
   editorGating,
   onOpenEditor,
   onOpenLogic,
@@ -150,6 +148,9 @@ export function ActivitiesTable({
   canEditSchedule: boolean;
   /** May report progress (Contributor upward). Planners also have it. */
   canReportProgress?: boolean;
+  /** Whether the viewer may write notes (Contributor upward) — gates the `Notes` row action. Role
+   * only, never pen-gated (ADR-0046). Default false. */
+  canWriteNotes?: boolean;
   /**
    * The tabbed editor's per-scope gate (ADR-0060 §6), derived once by the plan workspace and passed
    * down. Required in practice, since the editor is the only edit surface; optional in the type so the
@@ -353,6 +354,29 @@ export function ActivitiesTable({
     if (onOpenLogic) {
       actions.push({ key: 'logic', label: 'Logic', onSelect: () => onOpenLogic(activity) });
     }
+    /*
+     * **Notes — added with the object bar's item, in one commit**
+     * (`docs/specs/object-bar-defects/` M2).
+     *
+     * The milestone's subject was the object bar, and stopping there would have left this roster
+     * one item short of it — which is the split-vocabulary defect the same milestone's M1 refused
+     * to create in the other direction, when it removed `Steps` from both surfaces rather than one.
+     * `selection-actions.tsx` states the rule: the two vocabularies must match so the same
+     * operation reads the same in both places.
+     *
+     * It also removes a two-step: the only route to an activity's notes from this menu was `Logic`
+     * followed by a tab click, which `e2e-notes` describes in its own comment as "the row menu's
+     * only route into the editor".
+     *
+     * Role-gated, never pen-gated (ADR-0046) — the same rule `Progress` below follows.
+     */
+    if (canWriteNotes) {
+      actions.push({
+        key: 'notes',
+        label: 'Notes',
+        onSelect: () => openFor(activity, 'notes'),
+      });
+    }
     if (canReportProgress) {
       actions.push({
         key: 'progress',
@@ -404,28 +428,21 @@ export function ActivitiesTable({
       // No gating object and no write right ⇒ nothing to say, so say nothing (above).
       if (gate === null && !canEditSchedule) return actions;
 
-      // Dark surface (ADR-0044 §2): weighted steps are a writer authoring surface whose only effect
-      // is an Earned-Value physical-% input, so gate on BOTH flags (TECH_DEBT #44a). Omitted for a
-      // duration-derived type (milestone / LOE / WBS summary), where steps are inert — matching the
-      // form, and the "does not apply to this object" row of ADR-0082 §3's table.
-      //
-      // The **permission** half is a shade, not an omission, and it took two independent reviewers
-      // to notice: this action shades from `editorGating.steps`, which `deriveActivityEditorGating`
-      // makes the *same object* as `general` (ADR-0060 §5 pen-gated steps and added the server
-      // assertion). Leaving it hidden reproduced the exact defect ADR-0082 exists to close — Edit
-      // shaded and Steps absent, in one menu, on one row, off one gate — inside the change that
-      // fixed its neighbours. The correct pattern applied to a control and not the one beside it.
-      if (ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED && !isDurationDerivedType(activity.type)) {
-        const stepsGate = editorGating?.steps ?? gate;
-        actions.push({
-          key: 'steps',
-          label: 'Steps',
-          ...(stepsGate === null || stepsGate.writable
-            ? {}
-            : { disabledReason: stepsGate.reason ?? 'Not available.' }),
-          onSelect: () => openFor(activity, 'steps'),
-        });
-      }
+      /*
+       * **`Steps` was here and is gone** (`docs/specs/object-bar-defects/` M1), for the reason
+       * recorded beside its twin in `selection-actions.tsx`: it opened the same dialog on the same
+       * tab as `Progress`, differing only in where focus landed.
+       *
+       * It goes from BOTH surfaces in one commit. ADR-0093's whole subject is these two rosters
+       * naming one action the same way; removing it here alone would have split the vocabulary
+       * again, which is the objection that forced `Report progress` → `Progress` to move together.
+       *
+       * Two things this deliberately does NOT undo. The shade-don't-omit fix its old comment
+       * recorded — two reviewers found `Edit` shaded beside `Steps` absent, off one gate — is a
+       * finding about `editorGating`, and it still governs every action left in this menu. And the
+       * steps panel itself is untouched: it lives on the Progress tab, which both remaining entry
+       * points open.
+       */
       actions.push({
         key: 'edit',
         label: 'Edit',

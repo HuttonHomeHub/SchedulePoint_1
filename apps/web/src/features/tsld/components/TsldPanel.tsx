@@ -356,16 +356,15 @@ export interface TsldPanelProps {
   /** Open the progress editor — the selection bar's **Report progress** action (entry-route,
    * `VITE_ENTRY_ROUTES`). Host-owned dialog. The item is role-gated via {@link canReportProgress}. */
   onProgress?: (activity: ActivitySummary) => void;
-  /** Open the weighted-steps editor — the selection bar's **Steps** action (entry-route). Host-owned
-   * dialog; the item is gated on the earned-value/steps flags + {@link isStepsEligible}. */
-  onSteps?: (activity: ActivitySummary) => void;
   /** Whether the viewer may report progress (Contributor upward) — gates the selection bar's Progress
    * action (role only, not pen-gated), mirroring the toolbar's Update-progress command. Default false. */
   canReportProgress?: boolean;
-  /** Predicate: may this activity carry weighted steps? False for a duration-derived type
-   * (milestone / LOE / WBS summary) — gates the Steps action, matching the table's `!isDurationDerivedType`.
-   * The host supplies it so this feature stays free of an activities-feature import (ADR-0026 D8). */
-  isStepsEligible?: (activity: ActivitySummary) => boolean;
+  /** Whether the viewer may write notes (Contributor upward) — gates the selection bar's Notes
+   * action. Role only, never pen-gated (ADR-0046). Default false. */
+  canWriteNotes?: boolean;
+  /** Open the selected activity's Notes tab — the selection bar's **Notes** action, moved here from
+   * the command surface (`docs/specs/object-bar-defects/` M2). Host-owned dialog. */
+  onNotes?: (activity: ActivitySummary) => void;
   /** Report the current canvas selection to the host (toolbar quick-wins F0) — the id of the selected
    * activity, or null when none. Called on every selection transition (select / chain-nav / focus /
    * delete-reconcile) so the main toolbar's selection-aware items can read it. Optional: absent ⇒ no
@@ -534,9 +533,9 @@ export function TsldPanel({
   onDuplicateBand,
   onResources,
   onProgress,
-  onSteps,
   canReportProgress = false,
-  isStepsEligible,
+  canWriteNotes = false,
+  onNotes,
   onSelectionChange,
   onPluralSelectionChange,
   onRefresh,
@@ -1412,9 +1411,10 @@ export function TsldPanel({
         canEditSchedule: canEdit,
         scheduleRefusal,
         canReportProgress,
-        isStepsEligible,
+        canWriteNotes,
         clearPlacement,
         onOpenLogic: (a) => onOpenLogic?.(a),
+        onNotes,
         onEdit: (a) => onEditActivity?.(a),
         onDelete: (a) => onDeleteActivity?.(a),
         onDissolve: onDissolveSummary,
@@ -1422,7 +1422,6 @@ export function TsldPanel({
         onDuplicateBand,
         onResources,
         onProgress,
-        onSteps,
         onClearVisualPlacement,
         onOpenEditorAt,
       }),
@@ -1434,7 +1433,6 @@ export function TsldPanel({
       canEdit,
       scheduleRefusal,
       canReportProgress,
-      isStepsEligible,
       clearPlacement,
       onOpenLogic,
       onEditActivity,
@@ -1444,7 +1442,6 @@ export function TsldPanel({
       onDuplicateBand,
       onResources,
       onProgress,
-      onSteps,
       onClearVisualPlacement,
       onOpenEditorAt,
     ],

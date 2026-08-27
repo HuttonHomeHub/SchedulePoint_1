@@ -88,10 +88,22 @@ test('Report progress and Steps open the same editor on the Progress tab', async
   ).toEqual([]);
   await page.keyboard.press('Escape');
 
-  // Steps lands on the same tab — with focus in the panel, not at the top of it.
-  await openEditor(page, 'Pour slab', 'Steps');
+  /*
+   * **`Steps` used to be driven here, and it is gone** (`docs/specs/object-bar-defects/` M1). It
+   * opened this editor on this tab, differing from `Progress` only in that focus landed on the
+   * Weighted-steps heading rather than the top — two controls, one subject, one permission.
+   *
+   * What replaces the assertion is the one that matters after a removal: the row menu no longer
+   * offers it, AND the panel it used to reach is still on the tab that remains. A suite that only
+   * proved the absence could not tell "the duplicate is gone" from "the capability is gone", which
+   * is the failure ADR-0081 records.
+   */
+  await page.getByRole('button', { name: 'Actions for Pour slab' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Steps' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await openEditor(page, 'Pour slab', 'Progress');
   await expect(editor.getByRole('tab', { name: 'Progress', selected: true })).toBeVisible();
-  await expect(editor.getByRole('heading', { name: 'Weighted steps' })).toBeFocused();
+  await expect(editor.getByRole('heading', { name: 'Weighted steps' })).toBeVisible();
 });
 
 test('weighted steps save, then take over the physical % with a reason', async ({ page }) => {
@@ -102,7 +114,7 @@ test('weighted steps save, then take over the physical % with a reason', async (
   await ensurePen(page);
   await addActivity(page, 'Fit windows');
 
-  await openEditor(page, 'Fit windows', 'Steps');
+  await openEditor(page, 'Fit windows', 'Progress');
   const editor = activityEditor(page);
 
   // Before any steps, the manual physical % is the planner's to set.

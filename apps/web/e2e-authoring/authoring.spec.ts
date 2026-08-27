@@ -33,8 +33,10 @@ test('a planner authors a plan directly on the canvas', async ({ page }) => {
   // data date lives off the toolbar now — set silently on first draw, changed via Edit plan.)
   await startEditing(page);
   const toolbar = page.getByRole('toolbar', { name: 'Plan commands' });
-  // Match the Add split-button ("Add" / "Adding <kind>") without colliding with the inline
-  // "Add note" placeholder that now shares the row (Playwright name matching is substring).
+  // Match the Add split-button ("Add" / "Adding <kind>") exactly. The regex was written to avoid
+  // colliding with an inline "Add note" that shared this row; that item moved to the object bar
+  // (`docs/specs/object-bar-defects/` M2), so the collision is gone and the anchors are kept
+  // because Playwright name matching is substring and "Add" alone would still be loose.
   await expect(toolbar.getByRole('button', { name: /^Add(ing .+)?$/ })).toBeVisible();
 
   // M1 + M3 — draw the first task; the first draw silently sets the plan start to today and the

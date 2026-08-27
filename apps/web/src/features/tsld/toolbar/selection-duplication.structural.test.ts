@@ -64,6 +64,35 @@ describe('selection-gated commands do not duplicate the canvas dock (ADR-0093)',
     ).toEqual([]);
   });
 
+  /**
+   * **`Notes` is offered by the dock and by nothing in the command surface**
+   * (`docs/specs/object-bar-defects/` M2).
+   *
+   * **The general assertion above could not have caught this one, and that is why it is here.** It
+   * compares ids and labels: `add-note` / "Add note" on the command surface collides with neither
+   * `notes` nor "Notes" on the dock, so a build carrying BOTH would have passed it — one action,
+   * two surfaces, exactly the arrangement ADR-0093 removed, invisible to the gate written for it.
+   *
+   * The remedy is deliberately NOT to loosen the comparison. This file already narrowed one fold
+   * (case-insensitivity) because widening what counts as a duplicate raises the chance of blocking
+   * a future PR on a coincidental collision between two unrelated commands. A pinned case names the
+   * pair instead, which is precise and costs nothing.
+   *
+   * Its second half is the ADR-0081 guard: without it, a green run could not tell "the duplicate is
+   * gone" from "notes are unreachable again", which is the defect this milestone exists to fix.
+   */
+  it('`Notes` is offered by the dock and by nothing in the command surface', () => {
+    expect(
+      [...dockLabels],
+      "the object bar is where an activity's notes live now — the Gantt has no other route, " +
+        'which is the defect this replaced',
+    ).toContain('Notes');
+
+    const surfaceIds = toolbarItems.map((item) => item.id);
+    expect(surfaceIds).not.toContain('add-note');
+    expect(toolbarItems.map((item) => item.label)).not.toContain('Add note');
+  });
+
   it('`Report progress` is offered by the dock and by nothing in the command surface', () => {
     // The specific case the rule was written for, pinned by name as well as by the general
     // assertion above. Kept separate deliberately: the general test would still pass if BOTH copies

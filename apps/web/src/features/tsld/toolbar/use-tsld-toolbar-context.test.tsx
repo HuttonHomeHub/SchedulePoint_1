@@ -146,11 +146,12 @@ function build(lateOverlay = false) {
 describe('useTsldToolbarContext — quick-wins glue', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('openActivityNotes reveals the selected activity notes (F4/U4 intent)', () => {
-    const ctx = build();
-    ctx.current.openActivityNotes();
-    expect(spies.revealActivityNotes).toHaveBeenCalledWith(SELECTED);
-  });
+  /*
+   * **`openActivityNotes` was the subject here and no longer exists**
+   * (`docs/specs/object-bar-defects/` M2). The command surface's Add note moved to the object bar
+   * as `Notes`, so this hook stopped assembling a notes opener; `revealActivityNotes` is passed to
+   * the bar directly by `plan-workspace-toolbar`, and what it does is covered where it is defined.
+   */
 
   it('lateOverlayActive tracks the Late-start overlay view toggle (A1)', () => {
     expect(build(false).current.lateOverlayActive).toBe(false);

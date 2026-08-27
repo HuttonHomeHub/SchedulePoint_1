@@ -48,7 +48,10 @@ function renderRows(context: TsldToolbarContext) {
 describe('TSLD toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS off — rollback)', () => {
   it('keeps the command-surface quick-win ids as "Coming soon" placeholders, byte-for-byte', () => {
     renderRows(ctx());
-    for (const name of ['Go to today', 'Comments', 'Add note']) {
+    // `'Add note'` was in this list until it moved to the object bar
+    // (`docs/specs/object-bar-defects/` M2), so the command surface has no placeholder to keep for
+    // it any more. The two that remain are the ones this flag still governs here.
+    for (const name of ['Go to today', 'Comments']) {
       const btn = screen.getByRole('button', { name });
       expect(btn).toHaveAttribute('aria-disabled', 'true');
       // The title repeats the label ONLY when the button is icon-only, because then it is the

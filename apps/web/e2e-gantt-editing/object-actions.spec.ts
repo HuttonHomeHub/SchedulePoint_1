@@ -108,24 +108,61 @@ test('the Gantt offers no canvas-only action, and no longer offers Add note', as
     await expect(bar.getByRole('button', { name: label })).toHaveCount(0);
   }
 
-  // **`Add note` is retired from the Gantt** (M1). Spec F4 found it was the only route a Contributor
-  // had to progress here — a button labelled "Add note" plus a tab change, which is the
-  // discoverability failure this milestone exists to fix. Leaving it beside the correctly-labelled
-  // route would be a third entry point rather than a replacement: ADR-0093's own defect reproduced
-  // inside the milestone meant to discharge it.
+  // **`Add note` is gone from the command surface in BOTH views**
+  // (`docs/specs/object-bar-defects/` M2), where it used to be hidden in the Gantt alone.
+  //
+  // That hiding was reasoned from a route that did not exist — "the object bar is docked in the
+  // Gantt with a correctly-labelled route", and the bar had no notes item at all — so a planner
+  // working here could not reach an activity's notes by any means. The item moved to the object bar
+  // as `Notes` instead, which is where an action whose subject is the selected activity belongs
+  // (ADR-0093), and it is present in both views rather than absent from one.
   //
   // **Asked of the whole command strip, not of the row** (Graphite M8). This was
   // `getByRole('button', { name: 'Add note' })`, which asks only whether the command is *inline* —
-  // so it answered "retired" the moment M5's merge demoted `add-note` into the `⋯`, and the
-  // positive assertion below answered "gone" for the same reason. Both were wrong about the same
-  // fact, in the one suite a sweep never finished.
+  // so it answered "retired" the moment M5's merge demoted `add-note` into the `⋯`. Kept in that
+  // shape, because the question is still "does this surface offer it anywhere".
   expect(await toolbarOffers(page, 'add-note')).toBe(false);
-
-  // It is still the canvas's route into the Logic panel, so the retirement is scoped to this view
-  // rather than a deletion. Switching back must bring it home — on the row or in the `⋯`, which is
-  // the ladder's business and not this journey's.
   await page.getByRole('button', { name: 'Diagram', exact: true }).click();
-  expect(await toolbarOffers(page, 'add-note')).toBe(true);
+  expect(await toolbarOffers(page, 'add-note')).toBe(false);
+});
+
+/**
+ * **An activity's notes are reachable from the Gantt** — the defect this milestone exists to fix.
+ *
+ * Before `docs/specs/object-bar-defects/` M2 there was **no route at all** in this view: `add-note`
+ * was hidden here deliberately, the object bar carried no notes item, `Logic` opens the Logic tab,
+ * and the row menu mirrors the bar. The reasoning that removed the command described a replacement
+ * nobody had built.
+ *
+ * A unit suite cannot stand in for this. It would mount a registry and assert an item exists; what
+ * was wrong was **which surface carried the item in which view**, which only a real product in a
+ * real browser can answer.
+ *
+ * It asserts the TAB that opens, not merely that a dialog did — the previous arrangement also
+ * opened a dialog, just not on notes.
+ */
+test('a planner reaches an activity’s notes from a Gantt selection', async ({ page }) => {
+  test.setTimeout(120_000);
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await createClient(page, 'Northgate');
+  await createProject(page, 'Riverside');
+  await createPlan(page, 'Programme');
+  await startEditing(page);
+  await seedActivities(page, orgSlug, 3);
+  await recalculate(page);
+  await showGantt(page);
+  await ganttRow(page, 'Seeded 0').click();
+
+  const bar = page.getByRole('toolbar', { name: /Actions for/ });
+  await expect(bar).toBeVisible();
+
+  await bar.getByRole('button', { name: 'Notes', exact: true }).click();
+  const editor = activityEditor(page);
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('tab', { name: /Notes/ })).toHaveAttribute('aria-selected', 'true');
+  await editor.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(editor).toBeHidden();
 });
 
 test('the docked bar in the Gantt is accessible', async ({ page }) => {

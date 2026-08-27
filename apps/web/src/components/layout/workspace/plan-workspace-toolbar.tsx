@@ -58,7 +58,6 @@ import {
   SCHEDULING_MODES_ENABLED,
   UNDO_REDO_ENABLED,
 } from '@/config/env';
-import { isDurationDerivedType } from '@/features/activities';
 import { useUpdateActivityParents } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
 import {
@@ -682,9 +681,9 @@ export function ToolbarPlanWorkspace({
       // `canReportProgress`; Steps hides for a duration-derived selection via `isStepsEligible`.
       onResources={model.onResourcesActivity}
       onProgress={model.onProgressActivity}
-      onSteps={model.onStepsActivity}
       canReportProgress={model.canProgress}
-      isStepsEligible={(a) => !isDurationDerivedType(a.type)}
+      canWriteNotes={model.canWriteNotes}
+      onNotes={model.revealActivityNotes}
       // The conflict remedies (ADR-0094 M4), and the `clear-visual-placement` action M4-T1 moved off
       // the command surface onto the selection bar. The gate is computed HERE because it reads the
       // plan's `schedulingMode` and the Late-start overlay, neither of which `TsldPanel` owns — and
@@ -826,7 +825,7 @@ export function ToolbarPlanWorkspace({
     canEditSchedule: model.canEditSchedule,
     scheduleRefusal: model.scheduleRefusal,
     canReportProgress: model.canProgress,
-    isStepsEligible: (a) => !isDurationDerivedType(a.type),
+    canWriteNotes: model.canWriteNotes,
     clearPlacement: clearVisualPlacementGate({
       schedulingMode: plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
       canEditSchedule: model.canEditSchedule,
@@ -842,7 +841,7 @@ export function ToolbarPlanWorkspace({
     onDuplicateBand: model.onDuplicateBand,
     onResources: model.onResourcesActivity,
     onProgress: model.onProgressActivity,
-    onSteps: model.onStepsActivity,
+    onNotes: model.revealActivityNotes,
     onClearVisualPlacement: (a) => void model.clearVisualPlacement(a.id, a.version),
     onOpenEditorAt: model.onOpenActivityEditorAt,
   };

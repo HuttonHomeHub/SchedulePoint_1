@@ -149,6 +149,70 @@ test.describe('The plan command surface', () => {
     await page.close();
   });
 
+  /**
+   * **Every command label on the deck resolves to ONE computed size**
+   * (`docs/specs/object-bar-defects/` M3).
+   *
+   * `Deck` used to override a plain command's label to `text-micro`, and it produced two scales on
+   * one row by **two** mechanisms — only one of which was known when the fix was proposed:
+   *
+   *  1. Eight `render` items (every `▾` trigger) never reached that branch and kept the shared
+   *     CVA's `text-sm`.
+   *  2. The override targeted `> span:last-of-type`, and `ToolbarButton` renders
+   *     icon → label → `sr-only` reason → `sr-only` description. So a control carrying a reason or
+   *     an `srDescription` had the override land on an **invisible** span, and its visible label
+   *     fell through to `text-sm` — meaning **a label grew from 10 px to 14 px the moment it was
+   *     shaded**. Three were live in that state on the measured screen.
+   *
+   * **This asserts the invariant, not the value.** A gate pinned to `14px` would go red on a
+   * deliberate ramp change and say nothing about the defect; what must hold is that the deck does
+   * not paint two sizes at once. Captions are excluded on purpose — `text-micro` is their own rule
+   * (`Deck.tsx`), and a caption and a command being different sizes is a ramp rather than a mix.
+   *
+   * **It has to run in a browser.** jsdom computes no Tailwind, so `getComputedStyle` there returns
+   * nothing to compare — which is exactly why this shipped and stayed shipped.
+   *
+   * **Verified red** against the pre-M3 code: two sizes, naming the shaded items.
+   */
+  test('the deck paints one type scale across every command label', async () => {
+    test.setTimeout(240_000);
+    for (const viewport of WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(400);
+
+      const labels = await page.evaluate(() => {
+        const deck = document.querySelector('[role="toolbar"][aria-label="Plan commands"]');
+        if (!deck) throw new Error('the command deck was not found — nothing to assert about');
+        const out: { item: string; text: string; px: string }[] = [];
+        for (const el of deck.querySelectorAll('[data-toolbar-item]')) {
+          const item = el.getAttribute('data-toolbar-item') ?? '?';
+          if (item.startsWith('caption:')) continue;
+          const label = [...el.querySelectorAll('span')]
+            .filter(
+              (sp) => (sp.textContent ?? '').trim() !== '' && !sp.className.includes('sr-only'),
+            )
+            .pop();
+          if (!label) continue;
+          out.push({
+            item,
+            text: (label.textContent ?? '').trim().slice(0, 24),
+            px: getComputedStyle(label).fontSize,
+          });
+        }
+        return out;
+      });
+
+      // The pinned positive: a deck rendering no labels would satisfy "one distinct size" trivially.
+      expect(labels.length, `no command labels found at ${viewport.width}`).toBeGreaterThan(10);
+
+      const sizes = [...new Set(labels.map((l) => l.px))];
+      expect(
+        sizes,
+        `the deck paints ${sizes.length} label sizes at ${viewport.width}: ${JSON.stringify(labels)}`,
+      ).toHaveLength(1);
+    }
+  });
+
   test('every command clears 24 × 24 and a pointer can reach it, at every width', async () => {
     test.setTimeout(240_000);
     for (const viewport of WIDTHS) {

@@ -106,7 +106,9 @@ export async function addActivity(page: Page, name: string): Promise<void> {
 export async function openEditor(
   page: Page,
   activityName: string,
-  action: 'Edit' | 'Progress' | 'Steps' | 'Logic' | 'Resources',
+  // `'Steps'` was a member until it was removed as a duplicate entry point
+  // (`docs/specs/object-bar-defects/` M1) — it opened this same editor on the Progress tab.
+  action: 'Edit' | 'Progress' | 'Logic' | 'Resources',
 ): Promise<void> {
   await page.getByRole('button', { name: `Actions for ${activityName}` }).click();
   await page.getByRole('menuitem', { name: action }).click();
