@@ -46,7 +46,13 @@ import { clearMeasurement, writeMeasurement } from './output';
 const CASES = [
   { width: 1920, height: 1080, expectFoot: 41, note: 'was already one line' },
   { width: 1646, height: 1097, expectFoot: 41, note: 'M1 — was 77' },
-  { width: 1440, height: 900, expectFoot: 41, note: 'M4 — was 117, unreachable by M1 alone' },
+  // **1440 wraps again, and that is a decision rather than a regression.** M1 reached one line at
+  // every width by making `Zoom to selection` icon-only. M4 then widened the dock by 231 px, which
+  // made the label affordable at 1920 and 1646 — and the product owner chose the label over 36 px
+  // of canvas at a width neither of their machines uses. The equality is kept where it holds and
+  // the number is stated where it does not, rather than the case being deleted or loosened to a
+  // bound that would stop discriminating (the `dock.spec.ts` lesson, one file over).
+  { width: 1440, height: 900, expectFoot: 77, note: 'labelled — 41 at rest, 77 with a selection' },
 ];
 
 test('M1: the object bar on one line at 1646, and honest about 1440', async ({ page }) => {

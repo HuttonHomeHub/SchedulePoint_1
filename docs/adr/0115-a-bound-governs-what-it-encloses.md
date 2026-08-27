@@ -30,8 +30,18 @@ ADR-0092's 0 px dock guarantee was recorded while the number never was.
 ## Decision
 
 **D1 — The wrap is fixed on the object bar, not by moving work to the deck.** `Clear visual start`
-is **omitted** outside Visual mode rather than shaded, and `Zoom to selection` becomes icon-only.
+is **omitted** outside Visual mode rather than shaded, and `Zoom to selection` was made icon-only.
 Both stay where they are.
+
+**`Zoom to selection` then got its label back, and that round trip is the clearest instance of this
+ADR's own rule.** M1 chose icon-only against a 775.6 px container; **D5 then widened that container
+by 231 px and nobody re-asked**. The architecture review caught it — ADR-0113's rule (re-verify the
+_problem_, not only the design) failing _inside_ one epic, between two of its own milestones.
+Re-measured with the label restored: **41 px in both states at 1920 and 1646**, the two widths the
+product owner uses, and **77 px at 1440 with a selection**. Put to them with that number, they chose
+the label. So the object bar's own rule — every item carries its name, because on a bar of nine
+commands the name _is_ the affordance — survives intact, and `Deck.tsx`'s `ICON_ONLY` set stays what
+it is: glyphs a stranger cannot guess wrong, which a crosshair is not.
 
 Omission is ADR-0082's own discriminator rather than a width convenience: a plan scheduled Early
 has no hand-placed start anywhere in it, so the action does not _apply_ — there is nothing for a
@@ -142,7 +152,16 @@ commit.
 
 ## Consequences
 
-- The foot row is **41 px in both states at 1920, 1646 and 1440**. At 1440 it was 117 px.
+- The foot row is **41 px in both states at 1920 and 1646**, and 41 px at rest at 1440 with a
+  selection costing 36 px there (the label's price, chosen deliberately — D1).
+- **At 1440 this epic is a net LOSS at rest, and that is stated here rather than left in two
+  paragraphs that each read as a win.** D7's promotion costs 58 px at that width whether or not
+  anything is selected; D1 and D5 win 76 px there only _while something is selected_. Netted
+  against the pre-epic measurements: **1440 at rest 560 → 502 px of canvas (−58)**, 1440 selected
+  484 → 466 (−18 with the label restored). 1920 and 1646 are unaffected by D7 and improved by
+  D1/D5. The architecture review found this by netting two measurements nobody had put side by
+  side; the product owner was shown the figures and kept the promotion, because neither of their
+  machines is 1440.
 - **`docs/TECH_DEBT.md` #124's premise changes**: that row says the selection bar cannot overflow.
   It could, it did, and it now does not — but the reason is the two omissions, not a structural
   guarantee. A tenth item would re-open it.

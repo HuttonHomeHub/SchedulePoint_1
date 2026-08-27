@@ -151,15 +151,19 @@ describe('Clear visual start on the selection bar', () => {
   });
 
   /**
-   * **M1: `Zoom to selection` is icon-only, and its name must survive the label going.**
+   * **`Zoom to selection` keeps its label, and this case asserted the opposite for a while.**
    *
-   * `showLabel: 'never'` is exactly what ADR-0090 M3-T2 tried and reverted — but that revert
-   * happened to four items carrying **no `icon`**, which rendered as blank 16 px buttons and failed
-   * WCAG 2.5.8. This item has `Crosshair`, and `ToolbarButton` pins the accessible name to
-   * `aria-label` when the label is hidden. Asserting the NAME rather than the absence of text is
-   * the point: a button that is merely unlabelled passes any check that looks for missing copy.
+   * M1 made it `showLabel: 'never'` because the bar needed 1037.4 px against 775.6 px at 1646 and
+   * wrapped, costing the diagram 36 px. M4 then bounded the plan's facts and handed 231 px back to
+   * the dock — so the container M1 chose against no longer existed, and nobody re-asked until an
+   * architecture review did. Re-measured, the label fits at 1920 and 1646 (41 px in both states);
+   * it costs 36 px at 1440 with a selection, and the product owner chose the label knowing that.
+   *
+   * The assertion is inverted rather than deleted: this control's name and its painted text are
+   * both load-bearing, and an epic that moved it twice should leave something behind that fails if
+   * it moves a third time by accident.
    */
-  it('renders Zoom to selection icon-only, and keeps its accessible name', () => {
+  it('renders Zoom to selection with its label, and keeps its accessible name', () => {
     render(
       <SelectionActionsBar
         context={ctx({
@@ -174,12 +178,10 @@ describe('Clear visual start on the selection bar', () => {
       />,
     );
     const btn = screen.getByRole('button', { name: 'Zoom to selection' });
-    // **The name assertion alone proves nothing** — it is identical whether the label is rendered
-    // beside the icon or supplied through `aria-label`, so it passed against the old
-    // `showLabel: 'always'` when this case was first written. Verified red only once the VISIBLE
-    // text is asserted absent as well. That is the pairing the whole case turns on: the width comes
-    // from the painted label going, and the reachability comes from the name staying.
+    // Both halves, for the reason the icon-only version needed both: the accessible name is
+    // identical whether the label is painted or supplied through `aria-label`, so asserting the
+    // name alone cannot tell the two apart. It passed against the wrong code once already.
     expect(btn).toHaveAccessibleName('Zoom to selection');
-    expect(btn.textContent ?? '').not.toContain('Zoom to selection');
+    expect(btn.textContent ?? '').toContain('Zoom to selection');
   });
 });

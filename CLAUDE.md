@@ -3371,7 +3371,12 @@ progress` off the command surface because **an object action belongs on the obje
   1440**. That is ADR-0114 M1's own consequence followed one step further than that ADR followed
   it; `shrink-0` → `min-w-0` stopped clipping four unreachable controls and started eating the
   diagram, and the abstract loss of ADR-0092's 0 px dock guarantee was recorded while the number
-  never was. **It is now 41 px in both states at 1920, 1646 and 1440.**
+  never was. **It is now 41 px in both states at 1920 and 1646**, and `dock.spec.ts` asserts that as
+  an **equality** — its old `<= 120 px` bound could not tell the fixed state from the broken one,
+  because the pre-epic worst case was 117.
+  **At 1440 the epic is a net loss at rest and the ADR says so**, rather than leaving the 58 px D7
+  costs and the 76 px D1/D5 win in separate paragraphs that each read as a gain: 560 → 502 px of
+  canvas at rest. Both of the product owner's screens are unaffected, which is why they kept it.
   **Four of the five answered differently from how they were asked.** The foot row had **no surface
   scope at all** — `(page)`, transparent, one grey hairline — rather than a different colour, and
   joins `chrome` as a **scope rather than a card**, which is what makes it free: `Surface`

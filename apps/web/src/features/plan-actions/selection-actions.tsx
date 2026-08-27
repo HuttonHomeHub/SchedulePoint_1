@@ -797,16 +797,21 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // about how many items it governs is the drift class this repository keeps filing, and it was
     // sitting in the block being edited.
     //
-    // **`zoom-to-selection` is `showLabel: 'never'` as of the foot-row-and-deck epic, and that
-    // reverses the rule above for exactly one control.** The surface argument is still right, and
-    // it is why every other item here keeps its label. What changed is that the bar stopped being
-    // compact: at ten items it needs 1037.4 px and is given 775.6 px at 1646, so it wraps onto a
-    // second line and the diagram pays 36 px for it. Measured, dropping this one label plus
-    // omitting `clear-visual-placement` is the whole fix — `m1-icon-only.spec.ts` variant F, foot
-    // row 77 → 41 px, canvas 757 → 793. `Crosshair` carries it, and `ToolbarButton` pins the
-    // accessible name to `aria-label` when the label is hidden; the ADR-0090 M3-T2 revert this
-    // warns about happened to four items that had **no icon at all**, which is a different case
-    // and the reason that check was worth making rather than assuming.
+    // **`zoom-to-selection` KEEPS its label, and the round trip is worth recording.** M1 made it
+    // `showLabel: 'never'`: at ten items the bar needed 1037.4 px against 775.6 px at 1646, so it
+    // wrapped and the diagram paid 36 px, and dropping this one label plus omitting
+    // `clear-visual-placement` was the measured fix.
+    //
+    // **M4 then widened the container by 231 px and nobody re-asked.** Bounding the plan's facts
+    // handed that width to the dock, so the arithmetic M1 chose against no longer held — the
+    // architecture review caught it, and it is the ADR-0113 rule (re-verify the PROBLEM, not only
+    // the design) applied inside one epic. Re-measured with the label restored: **41 px in both
+    // states at 1920 AND 1646**, the two widths the product owner actually uses, and 77 px at 1440
+    // with a selection. They chose the label, with that cost stated.
+    //
+    // So the surface rule this file states one paragraph up survives intact: every item on this
+    // bar carries its name, because the name IS the affordance here. `Deck.tsx`'s `ICON_ONLY` set
+    // exists for glyphs a stranger cannot guess wrong, and a crosshair is not one of them.
     //
     // Moving these two to the command deck instead was approved and then **withdrawn on its own
     // measurement**: the deck goes two lines → three at 1646, costing 58 px to save 36. See
@@ -835,7 +840,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'zoom-to-selection',
             group: 'find',
             tier: 1,
-            showLabel: 'never',
+            showLabel: 'always',
             order: 7,
             // 'Zoom to selection', not the shorter 'Zoom to' this first shipped with. The bar is
             // named "Actions for <activity>", so in context the short form reads fine — but an
