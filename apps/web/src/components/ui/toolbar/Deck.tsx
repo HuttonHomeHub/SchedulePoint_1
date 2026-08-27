@@ -450,15 +450,30 @@ export function Deck<Ctx>({
                           // two-valued `layout` variant with no second consumer would be dead code
                           // pretending to be a choice.
                           //
-                          // Deliberately kept: `min-w-*` and the label's `text-micro`. The M0 probe
-                          // that priced this change altered flex-direction, height, gap and
-                          // alignment and NOTHING else, so its +198 px is the cost of the geometry
-                          // alone. Changing the type scale here as well would make the shipped
-                          // width unattributable to the number that justified the change.
-                          className={cn(
-                            ICON_ONLY.has(r.item.id) ? 'min-w-9' : 'min-w-12',
-                            '[&>span:last-of-type]:text-micro [&>span:last-of-type]:font-medium',
-                          )}
+                          // **The label's `text-micro` override is GONE**
+                          // (`docs/specs/object-bar-defects/` M3). It was kept here deliberately:
+                          // the M0 probe that priced the geometry change altered flex-direction,
+                          // height, gap and alignment and nothing else, so changing the type scale
+                          // in the same commit "would make the shipped width unattributable to the
+                          // number that justified the change". That was right, and the reason
+                          // lapsed the moment the geometry shipped and was measured.
+                          //
+                          // **It produced two type scales on one row, by two separate mechanisms,
+                          // and only the first was known.** Measured
+                          // (`m3-deck-type-scale.spec.ts`): eight `render` items — every `▾`
+                          // trigger — never reached this branch at all and kept the shared CVA's
+                          // `text-sm`. And `> span:last-of-type` is fragile in a way nobody had
+                          // costed: `ToolbarButton` renders icon → label → `sr-only` reason →
+                          // `sr-only` description, so the moment a control carries a reason or an
+                          // `srDescription` the override lands on an **invisible** span and the
+                          // visible label falls through to `text-sm`. Three items were live in that
+                          // state on the measured screen — `Next conflict`, `Float paths` and
+                          // `Add note`, all shaded — which means **a plain command's label grew
+                          // from 10 px to 14 px the moment it was disabled**.
+                          //
+                          // Deleting it leaves one scale declared in one place, by the primitive.
+                          // `min-w-*` is kept: it is geometry, and it was never the problem.
+                          className={cn(ICON_ONLY.has(r.item.id) ? 'min-w-9' : 'min-w-12')}
                         />
                       ),
                     )}
