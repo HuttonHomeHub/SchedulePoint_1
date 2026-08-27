@@ -522,6 +522,19 @@ discriminators. Each becomes a spec/plan before build:
   answer rather than a deferral: the admissible window is under two points wide and the rule would
   enforce halation, which does not occur on the ground it would guard.
 
+- **The schedule health check** — **shipped** (ADR-0116, 2026-08-28). The DCMA 14-point
+  assessment as a pure read model: `GET …/schedule/health-check` computes all fourteen metrics from
+  persisted rows (no engine import, no lock, no schema change), a docked panel off
+  `Analysis ▾ → Health check…` joins the workspace's one-dock-at-a-time set, pressing an offender
+  selects and reveals it in whichever view is showing (the Gantt reveal needed its own channel —
+  selection alone scrolls nothing there, the review's blocker), and a printed handover carries the
+  full offender lists with the cap in words. A metric that cannot be computed reports **not
+  assessed with its reason** — never omitted, never faked; a health finding is deliberately NOT a
+  conflict (ADR-0094 removed negative float from the conflict set for reasons that are right for a
+  navigation cycle and wrong for an assessment, so the two vocabularies are provably disjoint and
+  the panel says so in a planner's words). Metric 12's real what-if test follows as its own slice
+  (M6), measurement first.
+
 ## Guiding constraints
 
 - Keep `main` releasable; ship thin vertical slices.

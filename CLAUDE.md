@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1090 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1092 web
 > source files with 40 Playwright suites beside the base journey, and
-> 115 ADRs.
+> 116 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3418,6 +3418,32 @@ progress` off the command surface because **an object action belongs on the obje
   was already on the deck and one is not a lens at all — which is Class 3 one step upstream of a
   document, in a choice put to somebody else (`docs/TECH_DEBT.md` #204). **The CPM engine is not
   imported and no migration runs.**
+
+- **ADR-0116** _(Accepted; M0–M4 landed 2026-08-28, M6 follows as its own slice)_ — A health
+  finding is not a conflict, and a report never omits a check. The DCMA 14-point assessment as a
+  **pure read model** — `GET …/schedule/health-check`, `schedule:read`, computed from persisted
+  rows: **the CPM engine is not imported and the ADR-0034 parity gate is untouched by
+  construction**, pinned by an import ban verified red, and the read takes no lock, no transaction
+  and no pen, which is an advantage over both benchmark endpoints rather than a resemblance. The
+  load-bearing vocabulary call: a health finding is structural (how the plan is built) and a
+  conflict is engine-owned (what this recalculation hit) — ADR-0094 removed negative float from the
+  conflict set for reasons right for a navigation cycle and wrong for an assessment, so the same
+  fact lives in one vocabulary and not the other, the two are provably disjoint (G1/G2), and the
+  panel explains the disagreement in a planner's words. **Nothing is omitted or faked**: the
+  response is total over a closed 14-member union and "cannot assess" is a 200 with a typed reason
+  rendered as a sentence — `PLAN_NOT_SCHEDULED` is the seed catalogue's own resting state, not an
+  edge case (M0-T1). Thresholds and the offender cap travel **in the payload** (G3, comment-stripped
+  scan — which caught its own docblock on first run, the fourth scan-matching-prose gate here); the
+  report is role-invariant with **G4** rejecting any cost-shaped field name, so one URL produces one
+  document, which is what makes it a handover artefact. The docked panel joins the right edge's
+  one-dock rule **as a set** (`right-docks.ts` — a third participant needs six pair statements and
+  the failure is that five get written); the printed report carries full offender lists with the
+  cap in words (paper has no "load more"). **The spec's own Gantt-reveal claim was wrong and a
+  reviewer found it**: selection alone scrolls nothing in the Gantt, so offender activation got its
+  own reveal channel with the precedence written beside the existing two. Metric 12's real what-if
+  test is M6, measurement first, carrying its own weaker parity sentence (computes read-only,
+  persists nothing — proved, not asserted) that must never be swapped with D1's. **No schema change
+  and no `VITE_` flag**; two out-of-scope defects found on the way are filed as #205.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
