@@ -2532,6 +2532,32 @@ export function TsldPanel({
         always been. That is the parity contract, not a convenience.
       */}
       <CanvasDock>
+        {/* ── The dock's precedence policy (foot-row epic M5) ─────────────────────────────────────
+            **At most ONE transient strip, plus at most one selection bar.**
+
+            The dock hosts five things and, until now, three of them could paint at once — a
+            conflict banner, an armed-tool statement and the empty-plan notice were each guarded
+            only against their own absence. `canvas-dock.tsx:87` already records the one exception
+            somebody had noticed and fixed at source: the plural selection bar replaces the
+            singular one, because ADR-0080 always said it does. This generalises that rather than
+            adding a fourth guard.
+
+            The alternative — a WIDTH budget, asking whether the strips fit the row's leftover —
+            was the spec's first draft and is withdrawn: a confirmation carries two activity names
+            and a conflict banner grows to its message, so the answer is unbounded and measuring it
+            could only ever have proved it. A precedence decided at source is bounded by
+            construction and testable as an invariant.
+
+            **The order, and what it costs.** A conflict outranks everything: it reports a write
+            that failed and needs dismissing, and it is the only strip carrying a consequence rather
+            than an instruction. Below it the mode band, whose surviving statements are the ones
+            the toolbar cannot restate. Below that the empty-plan notice, which already yielded to
+            an armed tool.
+
+            The accepted cost is that a conflict arriving mid-pick hides `linkPicking`'s predecessor
+            name. It is accepted rather than special-cased because the two barely co-occur — a
+            refused link resolves `applied: false` and produces no confirmation — and a rule with
+            an exception in it is how the three-at-once state arose in the first place. */}
         {conflict ? (
           <EditConflictBanner
             message={conflict.message}
@@ -2553,7 +2579,7 @@ export function TsldPanel({
             (nothing overlays the diagram) is intact either way; what changed is that the band now
             costs no canvas height at all, which is why withdrawing three of its six statements is a
             decluttering decision and NOT a height saving. See `docs/specs/foot-row/spec.md` D3. */}
-        <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
+        {conflict ? null : <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />}
 
         {/*
           The object-actions bar for the SINGLE selected activity (ADR-0031, Fork-2) — in the same
@@ -2636,7 +2662,11 @@ export function TsldPanel({
         {CANVAS_AUTHORING_FLOW_ENABLED &&
         showDiagram &&
         activities.length === 0 &&
-        mode === 'select' ? (
+        mode === 'select' &&
+        // Only `!conflict`. `!modeStatement` was written here too and is DEAD: `modeStatement` is
+        // null for every mode except the four tool modes, so inside `mode === 'select'` it can
+        // never be truthy.
+        !conflict ? (
           <NoticeStrip
             data-testid="canvas-empty-state"
             emphasis="dashed"

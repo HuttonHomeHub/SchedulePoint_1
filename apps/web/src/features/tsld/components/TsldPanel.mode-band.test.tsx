@@ -124,6 +124,12 @@ function Harness({
       <button type="button" onClick={() => canvasUi.setMode('link')}>
         re-arm link
       </button>
+      {/* Arms the ONE tool whose statement survives M2's withdrawal, from outside the panel. It is
+          what makes the dock's precedence testable at all: a conflict has to compete with a strip
+          that actually paints, and `adding` / `loe` / `linking` no longer do. */}
+      <button type="button" onClick={() => canvasUi.setMode('marquee')}>
+        arm marquee
+      </button>
       <TsldPanel
         activities={activities}
         dependencies={NO_DEPS}
@@ -494,5 +500,72 @@ describe('TsldPanel — recalculation quiescence while a pick is open (T7)', () 
     expect(recalcHold.hold).toHaveBeenCalledOnce();
     unmount();
     expect(recalcHold.release).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * **The dock's precedence policy** (`docs/specs/foot-row/spec.md` D7, foot-row epic M5).
+ *
+ * At most one transient strip. The dock hosts five things and three of them — the conflict banner,
+ * the armed-tool statement and the empty-plan notice — were each guarded only against their own
+ * absence, so all three could paint at once. `canvas-dock.tsx:87` had already fixed the one
+ * exception somebody noticed (the plural selection bar replaces the singular one); this
+ * generalises it.
+ *
+ * The withdrawn alternative was a WIDTH budget. It could not have worked: a confirmation carries
+ * two activity names and a conflict banner grows to its message, so "do they fit" is unbounded.
+ * A precedence decided at source is bounded by construction, which is why it can be asserted here
+ * at all.
+ */
+describe('TsldPanel — the dock shows at most one transient strip', () => {
+  it('yields the empty-plan notice to an armed tool, and takes it back', () => {
+    render(<Harness arm="select" activities={[]} />);
+    expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw the first activity' }));
+    expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
+  });
+
+  /**
+   * **A conflict outranks the mode band, and this is the case that discriminates.**
+   *
+   * The first version of this suite drove `marquee` on an empty plan and asserted the notice was
+   * suppressed — and it passed with the policy removed, because `mode === 'select'` had already
+   * excluded the notice one line above. A test of a guard that the guard's absence cannot fail is
+   * no test at all, and finding it also found dead code: `!modeStatement` inside a
+   * `mode === 'select'` branch can never be false.
+   *
+   * A refused link is the cheapest real conflict — `onLink` resolving `applied: false` sets the
+   * banner — and it leaves the Link tool armed, so both strips genuinely compete for the row.
+   */
+  it('shows a conflict banner and withdraws the mode band', async () => {
+    const onLink = vi
+      .fn()
+      .mockResolvedValue({ applied: false, conflict: 'That would make a loop.' });
+    render(<Harness arm="link" onLink={onLink} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // picks A — `linkPicking`, which KEEPS its band
+    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/click the successor/);
+
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // commits, and is refused
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('That would make a loop.'),
+    );
+
+    // **Now arm the one tool whose statement survives.** Without this the case is vacuous — a
+    // refused link leaves `linking`, which M2 withdrew, so the band is absent for a reason that
+    // has nothing to do with precedence. Two earlier versions of this case passed with the guard
+    // removed for exactly that reason, which is how the dead `!modeStatement` condition beside it
+    // was found. This assertion is the only one in the suite that goes red without the guard.
+    fireEvent.click(screen.getByRole('button', { name: 'arm marquee' }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
   });
 });
