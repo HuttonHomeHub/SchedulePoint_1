@@ -1,8 +1,9 @@
 # Feature Spec: Schedule Health Check (DCMA 14-point assessment)
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Reviewed (4 specialist passes folded, §3.7) · **all 5 critical questions answered
+  2026-08-27** · **awaiting approval before implementation**
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
-- **Date:** 2026-08-27
+- **Date:** 2026-08-27 (revised the same day: review findings + product-owner decisions)
 - **Tracking issue / epic:** _(to be created)_
 - **Roadmap link:** _not currently on `docs/ROADMAP.md` or `docs/BACKLOG.md`_ — verified by
   `Grep "DCMA|health check|14-point|quality check" docs/ -i`, which returns five hits, none of them a
@@ -30,6 +31,13 @@ Every decision-bearing claim below names the command, the file and line, or the 
 it (`docs/PROCESS.md` "Decision-bearing claims carry their evidence"; ADR-0076). **Claims inherited
 from the brief that started this work were checked like any other, and two of them were wrong** —
 see §3.6. Where a claim is reasoned from specification rather than observed, it says so.
+
+**And one of this document's _own_ claims was wrong**, found by the UX specialist review rather than
+by its author: an earlier draft asserted that lifting the workspace selection reveals an offender in
+both views, which is false for the Gantt. It is corrected in **§4.6a** and left visible there, with the
+reason it was made, rather than silently rewritten — a spec that quietly edits its mistakes teaches
+its next reader that it has never had any. §3.7 records every review finding, including the two that
+**confirmed** a decision, so those are not re-litigated later.
 
 ---
 
@@ -133,24 +141,46 @@ would read as a clean bill of health for a plan that does not exist.
 | `computeSchedule` is byte-identical                                   | **Structural, not observational** — the module cannot import it, pinned by a test (§4.1).                      |
 | No metric is ever silently omitted or faked                           | The response is total over a closed `HealthMetricId` union; a totality test plus a pinned not-assessable case. |
 
-### Open questions
+### Open questions — all **ANSWERED** (product owner, 2026-08-27)
 
-**Critical (answers change design or scope) — see §6 for the full statement:**
+Five critical questions were raised; all five are decided. Full statements, options and reasoning are
+in §6, which now records each **DECIDED** rather than asking it.
 
-- **CQ-1 — Metric 12 (Critical Path Test).** Compute it, approximate it, or report it not assessed?
-- **CQ-2 — Is the report a live read or a capturable snapshot?** _This is the only question whose
-  answer forces a schema change_, and therefore the mandatory `database-architect` engagement
-  (CLAUDE.md §19.3).
-- **CQ-3 — Metric 1's exclusion rule** (which activities are allowed to dangle).
-- **CQ-4 — Surface shape and handover artefact.**
+| #        | Question                                       | **Decision (2026-08-27)**                                                                                                                                                                                               |
+| -------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CQ-1** | Metric 12, the Critical Path Test              | **(b) Build the real test.** M6 is **in scope**: a separate route running a read-only what-if recomputation. Until M6 lands, metric 12 reports `NOT_ASSESSABLE` — so the M1 shape is unchanged and M6 upgrades one row. |
+| **CQ-2** | Live read or capturable snapshot               | **(a) Live read.** Computed fresh per open, stamped with `schedule_computed_at`. **No schema change anywhere in this epic** — the `database-architect` trigger never fires (§4.8).                                      |
+| **CQ-3** | Metric 1's exclusion rule                      | **The typed rule.** Exclude `WBS_SUMMARY`, plus a `START_MILESTONE` with no predecessor and a `FINISH_MILESTONE` with no successor. **Every exclusion counted and printed — never silent.**                             |
+| **CQ-4** | Surface shape and handover artefact            | **(a) Docked column + printed report.** Confirmed by the UX review as compatible with ADR-0101 (§4.6).                                                                                                                  |
+| **CQ-5** | Printed report: offender lists or counts only? | **(b) Full offender lists, capped** at the same cap the screen uses, **with the cap printed on the page.**                                                                                                              |
+
+**The two that changed the plan's shape:** CQ-2 (a) **removes** the snapshot milestone entirely — it
+is not deferred with a milestone, it is out of scope and recorded below as a possible future epic —
+and CQ-1 (b) **adds** M6 and, with it, promotes the backend-performance review's conditional blocker
+into a hard requirement (M6-T0, the measurement task, is mandatory and is M6's first task).
 
 **Non-critical — defaults stated, work proceeds on them:**
 
 - Thresholds are **fixed to DCMA defaults in v1**, owned by the server and carried in the payload;
   per-organisation configurability is deferred (§4.5).
-- The report is **not** in the External-Guest `SCHEDULE_READ` scope (ADR-0051) in v1.
-- No CSV/JSON download in v1; the handover artefact is the printed document (subject to CQ-4).
+- The report is **not** in the External-Guest `SCHEDULE_READ` scope (ADR-0051) in v1 — and by §2.5
+  that is structural rather than a choice to enforce.
+- No CSV/JSON download in v1; the handover artefact is the printed document.
 - The report covers **one plan**. A programme-wide (cross-plan, ADR-0045) roll-up is out of scope.
+
+### Out of scope, and named rather than left implicit
+
+- **A capturable health-check snapshot** (CQ-2 (b), declined for v1). Freezing a report as a durable
+  record is genuinely useful for a submission pack and is how baselines already work (ADR-0025). It is
+  **a possible future epic, not a follow-up task**, because it is a **new table** and therefore forces
+  three things this epic deliberately does not carry: the unconditional `database-architect` design
+  step (CLAUDE.md §19.3), **an audit action** — a frozen artefact handed to a client is durable, so it
+  passes ADR-0073's Test 1 where the live read fails it — and a **retention decision** (ADR-0087),
+  plus a restore / recycle-bin question. Naming all four now means the next person meets the cost
+  rather than discovering it after starting.
+- Threshold configurability; guest-share exposure; CSV/PDF download; programme-wide roll-up;
+  redundant-logic detection (ADR-0035 §16 names it beside the DCMA set, but it is not one of the
+  fourteen).
 
 ---
 
@@ -181,7 +211,12 @@ would read as a clean bill of health for a plan that does not exist.
 >   activities by `code` and `name`, ordered deterministically.
 > - **Given** an offender **when** I press it **then** the workspace selection moves to that activity
 >   and the **currently showing view** brings it into view — the Diagram centres its bar, the Gantt
->   scrolls its row (the existing seam, `apps/web/src/components/layout/workspace/plan-workspace-toolbar.tsx:1118-1121`).
+>   scrolls its row **and expands any collapsed WBS ancestor** so the row exists to scroll to.
+>   **The Gantt half needs new wiring and does not come free** — see §4.6a, which corrects an earlier
+>   draft of this criterion that claimed it did.
+> - **Given** an offender in the Gantt whose WBS parent is collapsed **when** I press it **then** the
+>   ancestor chain expands and the row is scrolled to centre — asserted explicitly by the M3 journey,
+>   because it is the case that silently does nothing if the wiring is missed.
 > - **Given** more offenders than the response cap **when** the list renders **then** it says how many
 >   were withheld, and the **count is always the true total** (ADR-0100's rule).
 > - **Given** a relationship-scoped metric (2, 3, 4) **when** I expand it **then** offenders are named
@@ -197,8 +232,11 @@ would read as a clean bill of health for a plan that does not exist.
 >   14 read `NOT_ASSESSABLE` with the reason `NO_ACTIVE_BASELINE` and a route to capture one.
 > - **Given** a plan that has never been calculated **when** the report renders **then** every metric
 >   depending on computed dates reads `NOT_ASSESSABLE` with the reason `PLAN_NOT_SCHEDULED`.
-> - **Given** metric 12 **when** the report renders **then** it reads `NOT_ASSESSABLE` with the reason
->   `REQUIRES_WHAT_IF_ANALYSIS` and an explanation of what the check is _(subject to CQ-1)_.
+> - **Given** metric 12 **when** the report renders **before M6 lands** **then** it reads
+>   `NOT_ASSESSABLE` with the reason `REQUIRES_WHAT_IF_ANALYSIS` and an explanation of what the check
+>   is. **After M6** (CQ-1 = (b), decided) that row carries a **Run critical path test** control and,
+>   once run, a real verdict. The report **shape** does not change between the two — M6 upgrades one
+>   row's content, which is why M1 can ship without waiting for it.
 > - **Given** any `NOT_ASSESSABLE` metric **when** the report is printed **then** the printed document
 >   carries the row and its reason. **A metric is never dropped from the document.**
 
@@ -224,6 +262,13 @@ would read as a clean bill of health for a plan that does not exist.
 > - **Given** the report **when** I print it **then** the printed document renders **every** metric —
 >   not the rows currently scrolled into view — carrying the plan name, data date, computed-at,
 >   verdicts, values, thresholds and offender counts.
+> - **Given** a **failing** metric **when** the report is printed **then** the document carries its
+>   **offender list**, up to the same cap the screen uses (CQ-5, decided) — a QS reading
+>   "Missing logic — 41" on paper has nothing to act on.
+> - **Given** a truncated offender list **when** it is printed **then** the **cap is printed on the
+>   page** in words ("Showing the first 50 of 412 — open the plan for the full list"). Paper has no
+>   "load more", so a list that simply stops at 50 is indistinguishable from a complete one — ADR-0100's
+>   rule, which matters more here than on screen.
 > - **Given** the printed document **when** a metric is not assessable **then** its reason is printed
 >   in words, not as a code.
 
@@ -249,8 +294,18 @@ would read as a clean bill of health for a plan that does not exist.
 5. The panel renders rows; the live region announces the headline ("11 of 14 checks passed, 2 failed,
    1 not assessable").
 
-**W2 — Navigate to an offender.** Expand a metric → press an offender → host calls
-`canvasUi.requestSelectActivity(id)` then `model.onSelectionChange(id)` → the showing view reveals it.
+**W2 — Navigate to an offender.** Expand a metric → press an offender → the host lifts the selection
+(`canvasUi.requestSelectActivity(id)` + `model.onSelectionChange(id)`) **and supplies the Gantt's
+bring-into-view channel** → the showing view reveals it. **Those are two seams, not one** — see §4.6a.
+
+**W2 does not clear an active lens filter, and that is a decision.** If a Filter lens is engaged, an
+offender outside the lens is still selected and centred, but the canvas renders it **dimmed**. Clearing
+the lens was considered and rejected: a lens is a deliberate act of the planner's, the report is not
+the only thing on screen, and silently undoing a filter to satisfy a jump would be a control changing
+another control's state without being asked — the failure ADR-0093/ADR-0094 keep finding. Instead the
+panel states it: when a lens is active, the offender list carries the note **"A filter is on — some
+offenders will appear dimmed."** _(Raised by the UX review as an unstated interaction; recorded here
+with the reasoning rather than left to be discovered.)_
 
 **W3 — Fix and re-check.** Any structural edit triggers the ADR-0032 coalesced auto-recalculation;
 the recalculation invalidates the health-check query key, so the panel refreshes without a manual
@@ -296,8 +351,10 @@ The endpoint takes **no body and no query parameter** in v1 beyond the path para
 validated (`ParseUuidPipe` on `:planId`). Thresholds are server-owned constants, not inputs — which
 removes a whole class of validation and is one reason configurability is deferred (§4.5).
 
-If CQ-1 is answered "compute metric 12", that adds one optional query parameter; if CQ-2 is answered
-"snapshot", that adds a POST with a name field. Both are specified in their milestones, not here.
+**M6's critical-path-test route (CQ-1 = (b)) is a separate endpoint with its own validation**, not a
+query parameter on this one — so this route's "no input at all" property survives the whole epic. Its
+inputs are specified in M6, not here. **CQ-2 = (a) means no write endpoint is added anywhere**, so
+there is no request body to validate in this feature at all.
 
 ### Error scenarios
 
@@ -317,21 +374,50 @@ whole report unavailable because one metric could not be answered — which is t
 honesty rule this feature is built on. (Contrast `floatPaths`, which 422s on a missing plan start
 because that route has exactly one thing to return; this route has fourteen.)
 
+**The 429 row is conditional on M0-T2's measurement** and both outcomes are documented, not just the
+expected one — see §4.5, which carries the `@ApiTooManyRequestsResponse` text for each.
+
+### 2.5 External Guests are out of scope — by construction, not by omission
+
+_(Raised by the security review; this subsection was cross-referenced from the Users table before it
+existed. Written rather than the reference deleted.)_
+
+An External Guest (ADR-0051) reaches a plan through a session-less `PlanShare` bearer token, and
+**cannot reach this endpoint even if someone tried to route them to it.** Three independent reasons,
+in increasing order of strength:
+
+1. **Scope.** `GuestScope` is the single literal `'SCHEDULE_READ'`
+   (`apps/api/src/common/auth/guest-principal.ts:16`), and that scope is a **fixed list of surfaces** —
+   the plan header, calendar, activities + progress, logic and summary (ADR-0051 F-M3's
+   `ShareGuestController`). An analysis report is not on that list, and widening the list is an
+   ADR-level decision about what an outsider may see, not a routing detail.
+2. **Permission.** The route asserts `schedule:read`. A guest holds **no permission codes at all**.
+3. **The type system, which is the one that actually holds.** `GuestPrincipal` "has no `memberships`
+   and no `can()`… Member service methods take a `Principal`, so a `GuestPrincipal` can never flow
+   into them — a guest reaching a member surface is a **compile error**, not a runtime check we could
+   forget" (`guest-principal.ts:3-9`). `getHealthCheck` takes a `Principal`. There is therefore
+   nothing to enforce, remember or test here: the exclusion is structural.
+
+**What this means for a future decision.** Exposing the report to a guest would be a deliberate
+widening of `GuestScope` with its own ADR — and it is a real product question, because a client's
+assessor is exactly the sort of person who receives a share link. It is **deferred, not refused**, and
+noted here so the next person meets the argument rather than the absence of one.
+
 ---
 
 ## 3. Technical analysis
 
-| Area           | Impact   | Notes                                                                                                                                                                                                                                              |
-| -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend       | **med**  | One new feature folder `features/schedule-health/`, one registry menu item, one docked panel, one print document. No new route. No change to the canvas painter.                                                                                   |
-| Backend        | **med**  | One pure module + one repository loader + one service method + one controller `@Get` in the existing `modules/schedule`. No new Nest module ⇒ `pnpm check:counts` module figure unchanged.                                                         |
-| Database       | **none** | **No schema change** — every column the fourteen metrics read already exists (§3.1, enumerated). _Unless CQ-2 is answered "snapshot", which makes `database-architect` mandatory and non-negotiable._                                              |
-| API            | **low**  | One new GET under the existing `/organizations/:orgSlug/plans/:planId/schedule` controller; standard `{ data }` envelope; OpenAPI via `@nestjs/swagger`.                                                                                           |
-| Security       | **low**  | Existing `schedule:read` + org scoping. No new egress: every number is derived from rows the caller can already read one at a time. **Metric 10 is deliberately narrowed so the report cannot vary by `cost:read`** (§3.2).                        |
-| Performance    | **med**  | Whole-plan read: all active activities + all active dependencies + the active baseline snapshot. Same shape and same indexes as the EV read. **Must be measured at M0, not asserted.**                                                             |
-| Infrastructure | **none** | No new service, env var, container or secret.                                                                                                                                                                                                      |
-| Observability  | **low**  | Nothing new. It is a read; the existing request log line suffices. **No audit event** — classification and reasoning in §3.4.                                                                                                                      |
-| Testing        | **high** | Pure unit suite per metric; API e2e against the **seeded catalogue** (ADR-0066); one flag-on-equivalent Playwright journey with its own config and CI step (which **does** change the suite count `pnpm check:counts` re-derives — a task, §Plan). |
+| Area           | Impact   | Notes                                                                                                                                                                                                                                                                                                                                        |
+| -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | **med**  | One new feature folder `features/schedule-health/`, one registry menu item, one docked panel, one print document. No new route. No change to the canvas painter.                                                                                                                                                                             |
+| Backend        | **med**  | One pure module + one repository loader + one service method + one controller `@Get` in the existing `modules/schedule`. No new Nest module ⇒ `pnpm check:counts` module figure unchanged.                                                                                                                                                   |
+| Database       | **none** | **No schema change, anywhere in the epic** — every column the fourteen metrics read already exists (§3.1, enumerated), and CQ-2 = (a) removed the one thing that would have added a table. The `database-architect` trigger never fires here (§4.8), and that is because there is nothing to design — not because a change was judged small. |
+| API            | **low**  | One new GET under the existing `/organizations/:orgSlug/plans/:planId/schedule` controller; standard `{ data }` envelope; OpenAPI via `@nestjs/swagger`.                                                                                                                                                                                     |
+| Security       | **low**  | Existing `schedule:read` + org scoping. No new egress: every number is derived from rows the caller can already read one at a time. **Metric 10 is deliberately narrowed so the report cannot vary by `cost:read`** (§3.2).                                                                                                                  |
+| Performance    | **med**  | Whole-plan read: all active activities + all active dependencies + the active baseline snapshot. Same shape and same indexes as the EV read. **Must be measured at M0, not asserted.**                                                                                                                                                       |
+| Infrastructure | **none** | No new service, env var, container or secret.                                                                                                                                                                                                                                                                                                |
+| Observability  | **low**  | Nothing new. It is a read; the existing request log line suffices. **No audit event** — classification and reasoning in §3.4.                                                                                                                                                                                                                |
+| Testing        | **high** | Pure unit suite per metric; API e2e against the **seeded catalogue** (ADR-0066); one flag-on-equivalent Playwright journey with its own config and CI step (which **does** change the suite count `pnpm check:counts` re-derives — a task, §Plan).                                                                                           |
 
 ### 3.1 Metric-by-metric column mapping — the honest table
 
@@ -348,27 +434,28 @@ makes "a summary carries no logic — never a dependency endpoint" a **service i
 construction. `LEVEL_OF_EFFORT` and `HAMMOCK` are **included** — they do carry logic, and an LOE with
 no span is already a real defect the engine flags (`loeNoSpan`).
 
-| #   | DCMA metric              | Threshold       | Reads (persisted)                                                                                                                                                                             | Computable today?                    | Semantic mismatch / decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Not-assessable when                        |
-| --- | ------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| 1   | **Missing logic**        | ≤ 5 %           | `dependencies.predecessor_id`, `.successor_id`, `.deleted_at`; `activities.id`, `.type`, `.deleted_at`                                                                                        | **Yes**                              | Exclusion rule is **CQ-3**. Default: exclude `WBS_SUMMARY`; exclude at most one open-start `START_MILESTONE` and one open-end `FINISH_MILESTONE` (a **typed**, checkable rule rather than a positional guess). `missingPredecessorCount` and `missingSuccessorCount` reported separately so a reader can audit the exclusion.                                                                                                                                                                                                                                           | No activities                              |
-| 2   | **Leads (negative lag)** | 0               | `dependencies.lag_minutes`                                                                                                                                                                    | **Yes**                              | Read **minutes**, not `lagDays` — a 2-hour lead rounds to `lagDays: 0` (`packages/types/src/index.ts:665-676`). This is ADR-0070's finding applied before it can become a defect.                                                                                                                                                                                                                                                                                                                                                                                       | No relationships                           |
-| 3   | **Lags**                 | ≤ 5 %           | `dependencies.lag_minutes`                                                                                                                                                                    | **Yes**                              | Denominator = active relationships. Same minutes rule.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | No relationships                           |
-| 4   | **Relationship types**   | FS ≥ 90 %       | `dependencies.type`                                                                                                                                                                           | **Yes**                              | Report the full FS/SS/FF/SF breakdown, not just the FS share — a planner fixing this needs to know which type dominates. **SF is called out separately** in the copy: the playbook records it as "the least-used type and the easiest to get silently wrong" (`docs/TEST_PLAYBOOK.md:57`).                                                                                                                                                                                                                                                                              | No relationships                           |
-| 5   | **Hard constraints**     | ≤ 5 %           | `activities.constraint_type`, `.secondary_constraint_type`                                                                                                                                    | **Yes**                              | **"Hard" is defined explicitly**, because SchedulePoint's enum is richer than DCMA's vocabulary: `MSO`, `MFO`, `MANDATORY_START`, `MANDATORY_FINISH`, `SNLT`, `FNLT`. `SNET`/`FNET` are **soft** and excluded. The **secondary** constraint counts (ADR-0035 §10) — an FNLT hidden in the secondary slot is exactly as hard. An activity carrying two hard constraints counts **once**.                                                                                                                                                                                 | No activities                              |
-| 6   | **High float**           | ≤ 5 %           | `activities.total_float`                                                                                                                                                                      | **Yes, with no conversion**          | **The key finding.** `total_float` is stored in **whole working days on the activity's own calendar** — `schedule.repository.ts:662-670` converts from engine minutes using that activity's day factor. So "> 44 working days" is a direct integer comparison and the ADR-0036/ADR-0068 unit hazard **does not arise here**. Denominator excludes complete activities (a finished activity's float is not a planning risk).                                                                                                                                             | Plan never calculated (`total_float` null) |
-| 7   | **Negative float**       | 0               | `activities.total_float`                                                                                                                                                                      | **Yes**                              | Same direct comparison. Note the report **does not** re-derive criticality: `criticalPathDefinition` / `criticalFloatThresholdMinutes` are plan options (`schema.prisma:675-699`) and the metric is about the sign of float, not about the critical set.                                                                                                                                                                                                                                                                                                                | Plan never calculated                      |
-| 8   | **High duration**        | ≤ 5 %           | `activities.duration_minutes`, `.remaining_duration_minutes`, `.percent_complete`, `.actual_start`, `.actual_finish`; `calendars.hours_per_day_minutes` via the activity's effective calendar | **Yes**                              | Two decisions. (a) DCMA measures **remaining** duration on incomplete work: reuse the engine's own rule by **exporting** `resolveRemainingMinutes` (`schedule.service.ts:1149-1158`, currently a private function) rather than writing a second copy — the ADR-0065 `routeOrthogonal` argument. (b) Minutes → days uses the activity's **effective calendar** factor via the existing `attachDayFactors` (`apps/api/src/modules/activities/day-factor.ts:65-85`). Milestones (duration 0) and `WBS_SUMMARY` excluded.                                                   | No incomplete activities                   |
-| 9   | **Invalid dates**        | 0               | `activities.early_start`, `.early_finish`, `.actual_start`, `.actual_finish`, `.status`; `plans.planned_start`                                                                                | **Yes**                              | Two sub-checks reported with separate counts: **forecast before the data date** (an incomplete activity whose `early_start` < `planned_start`) and **actual after the data date** (`actual_start` or `actual_finish` > `planned_start`). `plans.planned_start` **is** the data date and is `NOT NULL` since ADR-0033 M1 (`schema.prisma:756-762`), so there is no "no data date" branch.                                                                                                                                                                                | Plan never calculated (forecast half only) |
-| 10  | **Resources**            | _informational_ | `resource_assignments.activity_id`, `.deleted_at`; `activities.duration_minutes`, `.type`                                                                                                     | **Yes, narrowed**                    | **Deliberate narrowing, stated rather than discovered.** DCMA 10 is "duration but no resource **or cost**". `activities.budgeted_expense` is **conditionally nulled for a caller without `cost:read`** (`packages/types/src/index.ts:475-484`), so including the cost half would make a handed-over report say different things to different readers. v1 reads **assignment existence only** — schedule data, the histogram precedent (`schedule.service.ts:754-758`) — and the report **says so in words**. `INFORMATIONAL`: reported with a count, never a pass/fail. | No activities with duration                |
-| 11  | **Missed activities**    | ≤ 5 %           | `baseline_activities.baseline_finish`, `.source_activity_id`; `activities.actual_finish`, `.early_finish`, `.status`                                                                          | **Yes, with an active baseline**     | An activity is "missed" when its **actual finish** is later than its baseline finish, or (incomplete) its **forecast finish** is. Denominator = activities present in the baseline snapshot **and** baselined to finish on or before the data date. Activities absent from the snapshot are excluded and **counted** (`notInBaselineCount`), because a stale baseline is itself the finding.                                                                                                                                                                            | No active baseline; plan never calculated  |
-| 12  | **Critical Path Test**   | _integrity_     | —                                                                                                                                                                                             | **No — see CQ-1**                    | Classically interactive: inject a large delay into a critical activity and confirm the project finish moves by the same amount. It cannot be answered from persisted rows at all. **v1 default: `NOT_ASSESSABLE` / `REQUIRES_WHAT_IF_ANALYSIS`, with the check explained in the report.** A computed version needs a live `computeSchedule` call — see CQ-1 for how that is done without touching the parity gate.                                                                                                                                                      | Always, in v1 (by decision, stated)        |
-| 13  | **CPLI** ≥ 0.95          | ≥ 0.95          | `plans.planned_start`; project finish (max `early_finish` over active activities); a **target finish**                                                                                        | **Only when a target finish exists** | `CPLI = (CPL + TF_to_target) / CPL`, where `CPL` = working days from the data date to the project finish. The **target** comes, in order: (1) the active baseline's `captured_project_finish` (`schema.prisma:1751-1753`); (2) an `FNLT`/`MFO`/`MANDATORY_FINISH` constraint on a `FINISH_MILESTONE`. If neither exists, **`NOT_ASSESSABLE` / `NO_TARGET_FINISH` — a target is never invented.** The source used is named in the payload so the reader knows which.                                                                                                     | No target finish; plan never calculated    |
-| 14  | **BEI** ≥ 0.95           | ≥ 0.95          | `baseline_activities.baseline_finish`, `.source_activity_id`; `activities.actual_finish`; `plans.planned_start`                                                                               | **Yes, with an active baseline**     | `BEI = (activities actually complete) / (activities the baseline said would be complete by the data date)`. Zero denominator (nothing was due yet) ⇒ `NOT_ASSESSABLE` / `NOTHING_DUE`, **not** a division producing `Infinity`.                                                                                                                                                                                                                                                                                                                                         | No active baseline                         |
+| #   | DCMA metric              | Threshold       | Reads (persisted)                                                                                                                                                                             | Computable today?                          | Semantic mismatch / decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Not-assessable when                                                  |
+| --- | ------------------------ | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 1   | **Missing logic**        | ≤ 5 %           | `dependencies.predecessor_id`, `.successor_id`, `.deleted_at`; `activities.id`, `.type`, `.deleted_at`                                                                                        | **Yes**                                    | **Exclusion rule DECIDED (CQ-3, 2026-08-27): the typed rule.** Exclude `WBS_SUMMARY` (the ADR-0038 no-logic invariant), plus a `START_MILESTONE` that has no predecessor and a `FINISH_MILESTONE` that has no successor — checkable in the data, not a positional guess, and matching DCMA's own carve-out for the project start and finish milestones. **Every exclusion is counted and printed, never silent**: `excludedSummaries`, the excluded milestone ids, and `missingPredecessorCount` / `missingSuccessorCount` separately, so a reader who disagrees can re-add them.                                                           | No activities                                                        |
+| 2   | **Leads (negative lag)** | 0               | `dependencies.lag_minutes`                                                                                                                                                                    | **Yes**                                    | Read **minutes**, not `lagDays` — a 2-hour lead rounds to `lagDays: 0` (`packages/types/src/index.ts:665-676`). This is ADR-0070's finding applied before it can become a defect.                                                                                                                                                                                                                                                                                                                                                                                                                                                           | No relationships                                                     |
+| 3   | **Lags**                 | ≤ 5 %           | `dependencies.lag_minutes`                                                                                                                                                                    | **Yes**                                    | Denominator = active relationships. Same minutes rule.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | No relationships                                                     |
+| 4   | **Relationship types**   | FS ≥ 90 %       | `dependencies.type`                                                                                                                                                                           | **Yes**                                    | Report the full FS/SS/FF/SF breakdown, not just the FS share — a planner fixing this needs to know which type dominates. **SF is called out separately** in the copy: the playbook records it as "the least-used type and the easiest to get silently wrong" (`docs/TEST_PLAYBOOK.md:57`).                                                                                                                                                                                                                                                                                                                                                  | No relationships                                                     |
+| 5   | **Hard constraints**     | ≤ 5 %           | `activities.constraint_type`, `.secondary_constraint_type`                                                                                                                                    | **Yes**                                    | **"Hard" is defined explicitly**, because SchedulePoint's enum is richer than DCMA's vocabulary: `MSO`, `MFO`, `MANDATORY_START`, `MANDATORY_FINISH`, `SNLT`, `FNLT`. `SNET`/`FNET` are **soft** and excluded. The **secondary** constraint counts (ADR-0035 §10) — an FNLT hidden in the secondary slot is exactly as hard. An activity carrying two hard constraints counts **once**.                                                                                                                                                                                                                                                     | No activities                                                        |
+| 6   | **High float**           | ≤ 5 %           | `activities.total_float`                                                                                                                                                                      | **Yes, with no conversion**                | **The key finding.** `total_float` is stored in **whole working days on the activity's own calendar** — `schedule.repository.ts:662-670` converts from engine minutes using that activity's day factor. So "> 44 working days" is a direct integer comparison and the ADR-0036/ADR-0068 unit hazard **does not arise here**. Denominator excludes complete activities (a finished activity's float is not a planning risk).                                                                                                                                                                                                                 | Plan never calculated (`total_float` null)                           |
+| 7   | **Negative float**       | 0               | `activities.total_float`                                                                                                                                                                      | **Yes**                                    | Same direct comparison. Note the report **does not** re-derive criticality: `criticalPathDefinition` / `criticalFloatThresholdMinutes` are plan options (`schema.prisma:675-699`) and the metric is about the sign of float, not about the critical set.                                                                                                                                                                                                                                                                                                                                                                                    | Plan never calculated                                                |
+| 8   | **High duration**        | ≤ 5 %           | `activities.duration_minutes`, `.remaining_duration_minutes`, `.percent_complete`, `.actual_start`, `.actual_finish`; `calendars.hours_per_day_minutes` via the activity's effective calendar | **Yes**                                    | Two decisions. (a) DCMA measures **remaining** duration on incomplete work: reuse the engine's own rule by **exporting** `resolveRemainingMinutes` (`schedule.service.ts:1149-1158`, currently a private function) rather than writing a second copy — the ADR-0065 `routeOrthogonal` argument. (b) Minutes → days uses the activity's **effective calendar** factor via the existing `attachDayFactors` (`apps/api/src/modules/activities/day-factor.ts:65-85`). Milestones (duration 0) and `WBS_SUMMARY` excluded.                                                                                                                       | No incomplete activities                                             |
+| 9   | **Invalid dates**        | 0               | `activities.early_start`, `.early_finish`, `.actual_start`, `.actual_finish`, `.status`; `plans.planned_start`                                                                                | **Yes**                                    | Two sub-checks reported with separate counts: **forecast before the data date** (an incomplete activity whose `early_start` < `planned_start`) and **actual after the data date** (`actual_start` or `actual_finish` > `planned_start`). `plans.planned_start` **is** the data date and is `NOT NULL` since ADR-0033 M1 (`schema.prisma:756-762`), so there is no "no data date" branch.                                                                                                                                                                                                                                                    | Plan never calculated (forecast half only)                           |
+| 10  | **Resources**            | _informational_ | `resource_assignments.activity_id`, `.deleted_at`; `activities.duration_minutes`, `.type`                                                                                                     | **Yes, narrowed**                          | **Deliberate narrowing, stated rather than discovered.** DCMA 10 is "duration but no resource **or cost**". `activities.budgeted_expense` is **conditionally nulled for a caller without `cost:read`** (`packages/types/src/index.ts:475-484`), so including the cost half would make a handed-over report say different things to different readers. v1 reads **assignment existence only** — schedule data, the histogram precedent (`schedule.service.ts:754-758`) — and the report **says so in words**. `INFORMATIONAL`: reported with a count, never a pass/fail.                                                                     | No activities with duration                                          |
+| 11  | **Missed activities**    | ≤ 5 %           | `baseline_activities.baseline_finish`, `.source_activity_id`; `activities.actual_finish`, `.early_finish`, `.status`                                                                          | **Yes, with an active baseline**           | An activity is "missed" when its **actual finish** is later than its baseline finish, or (incomplete) its **forecast finish** is. Denominator = activities present in the baseline snapshot **and** baselined to finish on or before the data date. Activities absent from the snapshot are excluded and **counted** (`notInBaselineCount`), because a stale baseline is itself the finding.                                                                                                                                                                                                                                                | No active baseline; plan never calculated                            |
+| 12  | **Critical Path Test**   | _integrity_     | — (nothing persisted can answer it)                                                                                                                                                           | **Not from persisted rows — M6 builds it** | Classically interactive: inject a large delay into a critical activity and confirm the project finish moves by the same amount. **DECIDED (CQ-1, 2026-08-27): build the real test** as a separate M6 route running a read-only what-if recomputation (§3.3). **Until M6 lands it reports `NOT_ASSESSABLE` / `REQUIRES_WHAT_IF_ANALYSIS` with the check explained** — so M1's report shape is final and M6 upgrades one row's content, not the contract. Approximating it from persisted state was rejected: an approximation is a different check wearing DCMA 12's name, and a planner would hand a client a "pass" that was never tested. | Until M6 lands, then only if the plan has a critical path to perturb |
+| 13  | **CPLI** ≥ 0.95          | ≥ 0.95          | `plans.planned_start`; project finish (max `early_finish` over active activities); a **target finish**                                                                                        | **Only when a target finish exists**       | `CPLI = (CPL + TF_to_target) / CPL`, where `CPL` = working days from the data date to the project finish. The **target** comes, in order: (1) the active baseline's `captured_project_finish` (`schema.prisma:1751-1753`); (2) an `FNLT`/`MFO`/`MANDATORY_FINISH` constraint on a `FINISH_MILESTONE`. If neither exists, **`NOT_ASSESSABLE` / `NO_TARGET_FINISH` — a target is never invented.** The source used is named in the payload so the reader knows which.                                                                                                                                                                         | No target finish; plan never calculated                              |
+| 14  | **BEI** ≥ 0.95           | ≥ 0.95          | `baseline_activities.baseline_finish`, `.source_activity_id`; `activities.actual_finish`; `plans.planned_start`                                                                               | **Yes, with an active baseline**           | `BEI = (activities actually complete) / (activities the baseline said would be complete by the data date)`. Zero denominator (nothing was due yet) ⇒ `NOT_ASSESSABLE` / `NOTHING_DUE`, **not** a division producing `Infinity`.                                                                                                                                                                                                                                                                                                                                                                                                             | No active baseline                                                   |
 
 **Conclusion: 11 of 14 metrics are fully computable from existing persisted columns today. Two more
 (11, 14 — and 13's preferred target) require an active baseline, which is an existing capability the
 planner controls, not a gap. One (12) is structurally uncomputable from persisted state and is
-reported as such. No schema change is needed for any of them.**
+reported as such until M6 computes it from a read-only what-if pass. No schema change is needed for
+any of them — and after CQ-2 (a), no schema change is needed anywhere in this epic.**
 
 ### 3.2 The two decisions that keep the report role-invariant
 
@@ -378,6 +465,15 @@ reported as such. No schema change is needed for any of them.**
 2. **The endpoint is `schedule:read`, matching `summary` / `float-paths` / `resource-histogram`**, and
    returns no money, no rate and no budget field at all. There is therefore no `cost:read` branch in
    the payload and no conditional-nulling to get wrong.
+
+**Both of those are currently enforced only _by construction_ — i.e. by nobody adding a cost field —
+and the security review was right that construction is not a gate.** So role-invariance gets one:
+**G4** (§4.3), a structural test over `ScheduleHealthReportDto` rejecting any field name matching
+`/cost|budget|rate|expense/i`, verified red by injecting one first. It is deliberately a **name**
+check rather than a type check, because the failure it guards against is somebody adding
+`budgetedExpenseTotal` to metric 10 "for completeness" during a later milestone — which is a
+plausible, well-meant edit that no existing test would notice and that would silently make the report
+role-dependent.
 
 ### 3.3 The recalculation parity gate — why it is untouched **by construction**
 
@@ -391,13 +487,38 @@ rows. Concretely:
   and is **verified red first** (M1-T2).
 - `computeSchedule`'s signature does not change; no new input reaches it; no persisted engine-owned
   column is written. There is nothing for the golden suites to diverge on.
-- The read takes **no plan write lock** and no pen (ADR-0028), matching `getEarnedValue`.
+- The read takes **no plan write lock, no advisory lock, no transaction** and no pen (ADR-0028).
+  **The backend-performance review's finding is that this is an advantage over both benchmark
+  endpoints, not merely a resemblance to one**, and it is stated rather than undersold: `floatPaths`
+  runs a full `computeSchedule` per call, and `recalculate` additionally takes the plan advisory lock
+  and writes every activity's engine columns in one batched `unnest`. This route does neither. It
+  cannot block a planner's recalculation, cannot be blocked by one, and cannot contend on anything —
+  so the only concurrency question it raises is staleness, which `computedAt` makes visible on the
+  face of the report (the edge-case table's "concurrent recalculation mid-read" row).
 
-_If CQ-1 is answered "compute metric 12", the honest form changes and the ADR must say so:_ that
-milestone **calls** `computeSchedule` read-only in a separate route, exactly as `floatPaths` already
-does (`schedule.service.ts:580-645`) — it still does not **modify** it, still persists nothing, and
-still passes no new input, so parity holds; but "the engine is not imported" would become false for
-that route and must not be repeated there.
+**CQ-1 was answered (b) on 2026-08-27, so the sentence above needs its exception stated plainly rather
+than hypothetically — and this is the most important honesty clause in the epic.**
+
+**On the M6 critical-path-test route, "the engine is not imported" STOPS BEING TRUE, and that sentence
+must not be repeated for it.** M6 **calls** `computeSchedule` read-only, exactly as `floatPaths`
+already does (`schedule.service.ts:580-645`). Its parity argument is therefore a **different**
+argument, and it is stated in its own words rather than borrowed:
+
+> **M6's parity argument:** the route computes **read-only** and **persists nothing** — no engine-owned
+> column is written, no plan lock is taken, no transaction is opened — and it passes **no new input**
+> to `computeSchedule`. The function's signature, behaviour and golden suites are untouched; what is
+> perturbed is a **copy of the input graph held in memory for one request**. The plan's stored schedule
+> is unchanged, and M6 proves that by reading every engine-owned column back after the call and
+> asserting equality, rather than by asserting it in prose.
+
+The distinction matters because the two sentences protect different things. "The engine is not
+imported" is a claim about the **module graph** and is checkable by a structural test (M1-T2, which
+covers `health/` and continues to). "It computes read-only and persists nothing" is a claim about
+**behaviour** and needs a test that runs the thing. Using the first sentence where only the second is
+true would be a false claim in exactly the register's Class 2 shape — a reassuring sentence copied one
+route along, where nobody re-checks it because it was true where it came from.
+
+M1–M5 are unaffected: the health-check read itself never imports the engine, and that remains gated.
 
 ### 3.4 Audit classification — ADR-0073's two tests, applied and stated
 
@@ -459,6 +580,42 @@ says _"The one seam both views share is `ctx.goToActivity`"_ — and a repositor
 `canvasUi.requestSelectActivity` + `model.onSelectionChange`
 (`plan-workspace-toolbar.tsx:1118-1121`). This spec uses the real one; correcting the comment is a
 one-line task in M3 and a `docs/TECH_DEBT.md` row if it is not taken.
+
+### 3.7 What the specialist reviews of this spec found — including where the spec was wrong
+
+Four specialist reviews ran over this document before approval. Recorded here in full, because a
+review that finds nothing and a review whose findings vanish into a diff read identically afterwards.
+
+**One claim in this spec was wrong, and it was a decision-bearing one.** An earlier draft of US-2 and
+W2 asserted that lifting the selection is sufficient to reveal an offender in **both** views. It is
+not: the Gantt's scroll-into-view and collapsed-WBS auto-expand hang off a different prop supplied in
+only two circumstances, neither of which a health-check activation satisfies
+(`plan-workspace-toolbar.tsx:1000-1006`, `GanttPanel.tsx:608-631`). §4.6a carries the correction and
+M3 carries the task. **The claim was made from reading the seam's _call site_ and not its
+_consumers_** — the same one-level-too-shallow reading this register keeps recording, arriving in the
+document written to warn about it.
+
+**One thing the spec had committed to neither way** and was therefore going to be decided by whoever
+built it: what the printed report does with offender lists. Now **CQ-5**.
+
+**Two interactions were unstated** and are now decided with their reasoning: whether a jump clears an
+active lens filter (it does not — §4.2 W2), and how Health check composes with the two docks that
+already close each other (§4.6, named as the "third participant in a two-participant state machine"
+risk).
+
+**Two claims were confirmed rather than corrected**, and both are recorded so they are not
+re-litigated:
+
+- **The docked-panel choice does not conflict with ADR-0101.** That decision (_"an editing surface
+  belongs in a dialog"_) governs surfaces that **write**; this is a read-only report reusing
+  `FloatPathsPanel`'s proven read-only shape. CQ-4 is a preference question, not a re-opening of
+  ADR-0101.
+- **The no-lock / no-transaction property is an _advantage_ over both benchmark endpoints**, not
+  merely a resemblance to one — §3.3 now says so in those terms rather than underselling it.
+
+**Two gaps were structural rather than factual**, and both became gates: role-invariance was enforced
+only by nobody adding a cost field (now **G4**, §4.3), and the per-metric response shape was a flat
+bag whose empty-state semantics were left to the implementer (now the discriminator table in §4.5).
 
 ### Dependencies
 
@@ -603,7 +760,8 @@ navigation cycle** and wrong for an assessment: a client's assessor wants the co
 legitimately appears in one vocabulary and not the other — which is exactly the situation that
 produces two disagreeing numbers if nobody writes it down.
 
-**Therefore, three gates, each verified red first:**
+**Therefore, four gates, each verified red first** (G1–G3 keep the vocabularies apart; G4 keeps the
+report role-invariant, §3.2)**:**
 
 - **G1 — disjoint vocabularies.** `HealthMetricId ∩ ConflictKey = ∅`, asserted structurally.
 - **G2 — no import in either direction.** `features/schedule-health/` may not import
@@ -613,10 +771,28 @@ produces two disagreeing numbers if nobody writes it down.
   screen came from the payload. Pinned with a **positive case** as well as the ban, so a green run
   cannot mean "there were no thresholds to check" (the ADR-0093 / ADR-0108 lesson: an assertion that
   passes against an empty set is not an assertion).
+- **G4 — no cost egress.** No field of `ScheduleHealthReportDto` (at any nesting depth) has a name
+  matching `/cost|budget|rate|expense/i`. This is what turns §3.2's role-invariance from a property of
+  the current code into a property the next milestone cannot remove by accident. Verified red by
+  injecting such a field first; a positive case asserts the walker actually visited fields, so it
+  cannot pass by traversing nothing.
 
 The report **links** to the conflict review rather than restating it: a footer row reading
 "This plan also has N unresolved recalculation conflicts — **Next conflict**", where N comes from the
 already-shipped schedule summary, not from a second count.
+
+**And it explains the distinction in one sentence, on the panel, in the planner's words.** A design
+rule that lives only in a structural test is a rule the planner meets as a puzzle: metric 7 can read
+**Fail — 12 activities with negative float** while `Next conflict` says there is nothing to review,
+because ADR-0094 deliberately stopped counting negative float there. Two numbers about one plan,
+apparently disagreeing, with the reasoning buried in a source comment. So the footer carries the
+explainer verbatim:
+
+> **This checks how the plan is built. It is separate from issues found while calculating — see Next
+> conflict for those.**
+
+_(Raised by the UX review. It is the smallest possible mitigation for the one place two honest
+vocabularies look like a contradiction, and it costs a sentence.)_
 
 ### 4.4 User flow
 
@@ -656,9 +832,24 @@ GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/health-check
 - **Throttle:** the **global** 100/60 s budget, _not_ a tighter one. `float-paths` earns its
   `@Throttle(FLOAT_PATHS_THROTTLE)` because it runs a full `computeSchedule` per call
   (`schedule.controller.ts:38-47`); this route is a persisted read like `earned-value`, which shares
-  the global budget. **This is conditional on the M0 measurement** — if the read lands materially
+  the global budget. **This is conditional on the M0-T2 measurement** — if the read lands materially
   above its siblings, it takes its own budget and the reason is written down.
 - **Response:** `200` with the standard `{ data }` envelope.
+
+**The 429 is documented for both outcomes of that measurement, now, at the float-paths precedent's
+density** — so whichever way M0-T2 goes, the OpenAPI is written rather than improvised
+_(API review B2)_:
+
+- **If the global budget stands:**
+  `@ApiTooManyRequestsResponse({ description: 'Rate limited by the global budget (100 requests / 60 s per IP). This route is a persisted read — it runs no CPM computation — so it shares the generic read budget with the schedule summary and the Earned-Value read rather than earning a tighter one. Measured at M0-T2: see docs/specs/schedule-health-check/m0-measurement.md.' })`
+- **If M0-T2 warrants a dedicated budget:** a `HEALTH_CHECK_THROTTLE` constant sitting beside
+  `FLOAT_PATHS_THROTTLE`, with a docblock in that constant's own style — naming the **measured**
+  number, the plan it was measured on, what the panel can generate (one request per open, per
+  refresh), and what a loop would want — and
+  `@ApiTooManyRequestsResponse({ description: 'Rate limited: N requests / 60 s, tighter than the global 100/60 s. This route reads the whole plan (every activity, every relationship, the active baseline snapshot), measured at X ms p95 on a 2,000-activity plan, so sharing the generic read budget would let one member spend it on N whole-plan scans a minute.' })`
+
+Whichever lands, the constant carries the measurement and **the number in the description is copied
+from the constant, never restated independently** — the G3 rule applied to prose.
 
 ```jsonc
 // ScheduleHealthReportDto (shape; field names final at M1)
@@ -672,16 +863,28 @@ GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/health-check
   "relationshipCount": 731,
   "baseline": { "id": "…", "name": "Rev C", "capturedAt": "…" }, // or null
   "summary": { "passed": 9, "failed": 2, "notAssessable": 2, "informational": 1 },
+  // The offender cap, in the payload for the same reason a threshold is (G3): a client that
+  // hard-codes 50 to render "showing 50 of 412" is a second source for a number the server owns.
+  "offenderCap": 50,
   "metrics": [
+    // --- a FAIL row: `measured`, `detail` and `offenders` are all populated ---
     {
       "id": "MISSING_LOGIC",
       "ordinal": 1,
       "name": "Missing logic",
       "verdict": "FAIL", // PASS | FAIL | NOT_ASSESSABLE | INFORMATIONAL
-      "reason": null, // set only when NOT_ASSESSABLE
+      "reason": null, // NON-NULL if and only if verdict === 'NOT_ASSESSABLE'
       "measured": { "count": 41, "denominator": 512, "percent": 8.0 },
       "threshold": { "kind": "MAX_PERCENT", "value": 5 }, // the ONLY place a number is stated
-      "detail": { "missingPredecessor": 22, "missingSuccessor": 19, "excludedSummaries": 8 },
+      "detail": {
+        "missingPredecessor": 22,
+        "missingSuccessor": 19,
+        "excludedSummaries": 8,
+        // CQ-3's rule made auditable rather than hidden: which rule ran, and exactly which
+        // activities it excused. A reader who disagrees with the exclusion can re-add them.
+        "exclusionRule": "SUMMARIES_AND_TERMINAL_MILESTONES",
+        "excludedActivityIds": ["…", "…"],
+      },
       "offenderCount": 41,
       "offendersTruncated": false,
       "offenders": [
@@ -694,23 +897,107 @@ GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/health-check
         },
       ],
     },
-    // … 13 more, ALWAYS 14, ALWAYS in ordinal order
+    // --- a NOT_ASSESSABLE row: every result-bearing field is EMPTY, not stale, not absent ---
+    {
+      "id": "BASELINE_EXECUTION_INDEX",
+      "ordinal": 14,
+      "name": "Baseline Execution Index",
+      "verdict": "NOT_ASSESSABLE",
+      "reason": "NO_ACTIVE_BASELINE",
+      "measured": null,
+      "threshold": { "kind": "MIN_RATIO", "value": 0.95 }, // what it WOULD have been judged against
+      "detail": null,
+      "offenderCount": 0,
+      "offendersTruncated": false,
+      "offenders": [],
+    },
+    // --- the INFORMATIONAL row: it judges against nothing, so it carries no threshold ---
+    {
+      "id": "RESOURCES",
+      "ordinal": 10,
+      "name": "Resources",
+      "verdict": "INFORMATIONAL",
+      "reason": null,
+      "measured": { "count": 118, "denominator": 512, "percent": 23.0 },
+      "threshold": null, // NOT {kind:'NONE'} — see the discriminator table below
+      "detail": {
+        // The §3.2 narrowing, carried by the payload so the panel and the printed document
+        // cannot describe it differently — and so a reader of the raw JSON meets it too.
+        "narrowing": "RESOURCE_ASSIGNMENT_ONLY",
+      },
+      "offenderCount": 118,
+      "offendersTruncated": true,
+      "offenders": [/* first 50 */],
+    },
+    // … ALWAYS 14 entries, ALWAYS in ordinal order, NEVER sparse
   ],
 }
 ```
 
+**The per-metric shape is a documented discriminator on `verdict`, not a flat bag** _(API review B1)_.
+An earlier draft left "what does `measured` hold when nothing was measured?" to the implementer, which
+is how one milestone returns `null`, the next returns `{count: 0}`, and a printed report eventually
+says a plan has **zero** missing-logic findings when the truth is that nobody could count them. The
+contract:
+
+| `verdict`        | `measured` | `threshold`    | `detail`       | `reason`     | `offenders` | `offenderCount` | `offendersTruncated` |
+| ---------------- | ---------- | -------------- | -------------- | ------------ | ----------- | --------------- | -------------------- |
+| `PASS`           | object     | object         | object\|`null` | `null`       | `[]`        | `0`             | `false`              |
+| `FAIL`           | object     | object         | object\|`null` | `null`       | array       | true total      | boolean              |
+| `NOT_ASSESSABLE` | **`null`** | object\|`null` | **`null`**     | **non-null** | **`[]`**    | **`0`**         | **`false`**          |
+| `INFORMATIONAL`  | object     | **`null`**     | object\|`null` | `null`       | array       | true total      | boolean              |
+
+Three of those cells are decisions rather than defaults, and each is stated because the alternative is
+plausible:
+
+- **`NOT_ASSESSABLE` keeps its `threshold`** (where one exists) but empties everything else. A reader
+  is owed "this would have been judged against ≥ 0.95" — that is what makes the row informative rather
+  than a shrug. Metric 12 has no threshold at all and carries `null`.
+- **`INFORMATIONAL` carries `threshold: null`, not `{ kind: 'NONE' }`.** A threshold object on screen
+  reads as a real threshold; rendering "judged against: none" would be worse than rendering nothing.
+  This is G3's spirit — the payload must not hand the client a number-shaped thing that is not a number.
+- **`reason` is redundant with `verdict` and that is deliberate — defence in depth for the printed
+  document.** A `reason` non-null while `verdict` is `PASS` is a contradiction, and typing it as
+  `NotAssessableReason | null` rather than folding it into a discriminated union keeps the printed
+  document's renderer simple: it prints the sentence for whatever `reason` holds, and cannot print a
+  reason for a passing row because there is none to print. **The redundancy is asserted, not assumed**
+  — the M1-T1 totality test checks the whole table above, row by row, for every metric.
+
+`ThresholdKind` is a **closed union, named now** so the client needs no default case and a new kind is
+a typecheck failure rather than an unrendered row. Derived from §3.1's fourteen thresholds:
+
+| Kind          | Meaning                    | Metrics                |
+| ------------- | -------------------------- | ---------------------- |
+| `MAX_PERCENT` | measured percent ≤ value   | 1, 3, 5, 6, 8, 11      |
+| `MAX_COUNT`   | measured count ≤ value (0) | 2, 7, 9                |
+| `MIN_PERCENT` | measured percent ≥ value   | 4 (FS ≥ 90 %)          |
+| `MIN_RATIO`   | measured ratio ≥ value     | 13, 14                 |
+| _(none)_      | `threshold: null`          | 10 (informational), 12 |
+
+`MAX_COUNT` rather than a `ZERO` kind: "must be zero" is the value `0` of a general rule, and a
+dedicated kind would need a second renderer for a case the general one already covers. **`NONE` is
+deliberately not a kind** — see the `INFORMATIONAL` bullet above.
+
 Design notes, each deliberate:
 
-- **`metrics` is a total, ordered array of exactly 14** — never a sparse map. "Metric absent" and
-  "metric passed" must not be representable as the same thing (the ADR-0098 "omit vs zero" rule,
-  inverted: here **nothing is ever omitted**).
+- **`metrics` is a total, ordered array of exactly 14** — never a sparse map. Stated as one sentence
+  in the OpenAPI field description: _"Always exactly 14 entries, one per `HealthMetricId`, in ordinal
+  order — never sparse. A metric that could not be computed is present with `verdict:
+NOT_ASSESSABLE` and a `reason`; it is never omitted."_ "Metric absent" and "metric passed" must not
+  be representable as the same thing (the ADR-0098 "omit vs zero" rule, inverted: here **nothing is
+  ever omitted**).
 - **`threshold` is in the payload**, so the client cannot state a number of its own (G3).
-- **`offenders` is capped, `offenderCount` is the truth**, with `offendersTruncated` (ADR-0100).
-- **`reason` is a closed union of codes**; the client owns the sentence, so the wording can be fixed
-  without an API change and a printed document never shows a code (US-3).
+- **`offenders` is capped, `offenderCount` is the truth**, with `offendersTruncated` (ADR-0100), and
+  **the cap itself travels in the payload** for the same reason the thresholds do.
 - **No pagination.** The response is bounded by 14 × cap. Offender paging is a follow-on if a real
   plan proves the cap too small.
-- **OpenAPI**: `@ApiOperation` + `@ApiOkResponse` + `@ApiForbiddenResponse`, and `docs/API.md` updated.
+- **OpenAPI**: `@ApiOperation` + `@ApiOkResponse` + `@ApiForbiddenResponse` +
+  `@ApiTooManyRequestsResponse` (both variants above), and `docs/API.md` updated. The
+  `@ApiOperation.description` is written to EV/histogram density — it names the three things a reader
+  of the spec alone would otherwise have to infer: **that the CPM engine is not invoked** (this is a
+  persisted read, not a recomputation — contrast `float-paths`), **that the response does not vary by
+  role** (no cost field at any depth, so `cost:read` changes nothing), and **that metric 10 is
+  narrowed to resource-assignment existence** with the reason.
 
 ### 4.6 Component changes
 
@@ -723,7 +1010,7 @@ New feature folder `apps/web/src/features/schedule-health/`, mirroring `features
 | `components/ScheduleHealthPanel.tsx`               | The docked column: 14 rows, disclosure per row, offender lists, states.                                       |
 | `components/ScheduleHealthPrintDocument.tsx`       | The handover document, built from the same report object.                                                     |
 | `schedule-health-view-agnostic.structural.test.ts` | Imports nothing from `features/tsld` or `features/gantt` (copied from the float-paths gate).                  |
-| `schedule-health-vocabulary.structural.test.ts`    | G1 + G2 + G3 (§4.3).                                                                                          |
+| `schedule-health-vocabulary.structural.test.ts`    | G1 + G2 + G3 (§4.3). **G4 is server-side** — it walks the DTO, so it lives beside it in `apps/api` (M1-T6).   |
 
 **Entry point:** one `MenuItem` in `PlanAnalysisControl`
 (`apps/web/src/features/tsld/toolbar/tsld-toolbar-items.tsx:1297-1312`), reading **`Health check…`**,
@@ -740,6 +1027,49 @@ item that closes it out of reach." US-2 requires the planner to press an offende
 reveal it**; a modal makes that impossible. The alternative (a `PlanChromeDialog` entry beside
 `earned-value` at `plan-chrome-dialogs.tsx:31-32`) is cheaper to build and is rejected on exactly this
 point — see CQ-4, where it is put to the product owner anyway because it is a visible product choice.
+**The UX review examined this choice against ADR-0101 (_"an editing surface belongs in a dialog"_) and
+settled it: that ruling is about surfaces that _write_, and this is a read-only report reusing a proven
+read-only shape.** Recorded as reviewed-and-settled so CQ-4 is a preference question, not a
+re-litigation of ADR-0101.
+
+**Health check joins the one-dock-at-a-time set, and this is the finding to take seriously.** The
+right edge already holds two docks that close each other, and the invariant is codified in the
+workspace rather than in either feature:
+
+> _"**The right edge holds one dock at a time** (audit F4). Notes and Float paths are both docked
+> right columns… two of them plus the Project Explorer rail on a 1280 px screen leaves the picture
+> unreadable, which is the half of the analysis that needs the pixels. So opening one closes the
+> other, here in the workspace that lays them out rather than in either feature, which would have to
+> know about a column it does not render."_
+> — `apps/web/src/components/layout/workspace/plan-workspace-toolbar.tsx:193-198`
+
+So: **opening Health check closes Float paths and Notes; opening either of those closes Health check**
+— wired in `plan-workspace-toolbar.tsx` beside the existing pair (`:181-184` shows the Comments half),
+never inside `features/schedule-health/`, which does not know the other columns exist.
+
+**Named as a risk, because this is the register's "third participant in a two-participant state
+machine" shape.** A rule written for two mutually-exclusive things is usually expressed as
+_"opening A closes B"_ and _"opening B closes A"_ — two statements. A third participant needs
+**six**, and the way this fails is that five get written: one pair is missed, two docks open together,
+and the diagram is crushed on exactly the narrow screen the invariant exists to protect. The mitigation
+is to express it as **one closure over a set** rather than as pairs, with a unit test asserting that
+opening each of the three leaves the other two closed — three assertions that cannot be five-sixths
+written.
+
+The measured constants it must respect, read rather than assumed:
+`FLOAT_PATHS_PANEL_MIN_WIDTH = 300` (`apps/web/src/features/float-paths/use-float-paths-panel-prefs.ts:20`),
+`NOTES_PANEL_MIN_WIDTH = 280` and `CANVAS_MIN_WIDTH = 360`
+(`apps/web/src/components/layout/workspace/use-notes-panel-prefs.ts:19-24`), with the effective max
+computed as `min(NOTES_PANEL_MAX_WIDTH, max(minWidth, bodyWidth − CANVAS_MIN_WIDTH))`
+(`plan-workspace-toolbar.tsx:435-438`). Health check takes its own `HEALTH_PANEL_MIN_WIDTH` — a
+**derived** figure, not a copied one: it renders a metric name, a verdict badge, a measured value and a
+threshold on one line, which is wider than a float-path chain row, so M2-T2 sets it from the rendered
+content and says so.
+
+**Below the `isWide` breakpoint the workspace is single-pane** (`plan-workspace-toolbar.tsx:1554`
+selects the horizontal split only when `isWide`), so Health check follows the existing narrow-viewport
+fallback rather than inventing one. That branch is where a dock that "works" on a laptop becomes a
+column with no diagram beside it.
 
 **Design system:** no one-off styling. `Badge` for verdicts (word + icon, never colour alone —
 WCAG 2.2 §1.4.1, the `EarnedValuePanel` `IndexValue` precedent at
@@ -763,6 +1093,35 @@ The panel's own heading structure nests under the workspace's, like `SettingsSec
 - **`accessibility-reviewer` and `component-reviewer` run before the panel ships**, not at the gate
   pass, if any shared primitive's keyboard contract is touched (CLAUDE.md §19.13 / ADR-0111).
 
+### 4.6a The Gantt reveal seam — a correction to an earlier draft of this spec
+
+**An earlier draft of US-2 claimed that `requestSelectActivity` + `onSelectionChange` brings the
+activity into view in both views. That is false for the Gantt, and the UX review caught it.** It is
+recorded here rather than quietly fixed, because it is precisely the class of claim this spec's §0
+promises to carry evidence for, and it did not.
+
+What those two calls actually do is move the **selection**. The Gantt's scroll-into-view and
+collapsed-ancestor expansion hang off a **different prop**, `bringIntoViewActivityId`, and that prop is
+supplied only in two cases (`plan-workspace-toolbar.tsx:1000-1006`):
+
+- search navigation is active **and** there is a current match (`searchNavActive`, derived at `:772`); or
+- float paths has a non-empty emphasis set **and** something is selected (`:1003-1004`).
+
+A health-check offender activation satisfies **neither**, so with the naive wiring a planner in the
+Gantt would press an offender, watch the selection change, and **see nothing move** — and if the
+offender's WBS parent were collapsed, the row would not even exist to look at. The auto-expand is
+likewise driven only by that prop: `GanttPanel.tsx:608-631` returns immediately when
+`bringIntoViewActivityId === undefined`, and it is the branch at `:614-630` that walks the ancestor
+chain and expands it.
+
+**So M3 has a task for it** (M3-T2 in the plan): extend the `bringIntoViewActivityId` computation to
+include health-check offender activation — or give the panel its own emphasis channel — and decide
+deliberately how it composes with the existing two (the comment at `:996-999` warns that _"whichever
+is set" is not a rule, it is an accident that only shows up when both are on at once_, which is
+exactly the trap a third source walks into). **The M3 journey asserts the Gantt scroll and the
+collapsed-WBS auto-expand explicitly**, because both fail silently and neither is visible to a unit
+test: jsdom has no scrolling and no virtualizer.
+
 ### 4.7 Feature flag posture
 
 **No new `VITE_` flag.** ADR-0088 D1 established that a `VITE_` constant is inlined at build time,
@@ -776,19 +1135,27 @@ as another. This is stated as the rollback contract rather than implied.
 
 ### 4.8 Database changes
 
-**None.** §3.1 enumerates every column each metric reads and every one exists today. No model, no
-column, no index, no constraint, no data migration.
+**None — and after CQ-2 (a), none anywhere in this epic.** §3.1 enumerates every column each metric
+reads and every one exists today. No model, no column, no index, no constraint, no data migration, in
+any of M0–M6.
 
-> ⚠️ **If CQ-2 is answered "the report is a capturable snapshot", this changes and the change is
-> mandatory-gated.** A `schedule_health_snapshots` table (org-scoped, plan-scoped, soft-deleted,
-> audited, holding a frozen report) is a schema change, and **every schema change goes through the
-> `database-architect` agent without exception — including the judgement that a change is too small
-> to need it, which is the judgement the agent exists to make** (CLAUDE.md §19.3 / §20, product-owner
-> instruction 2026-08-09). If the agent returns nothing, fails or is slow, **re-run it**; waiting is
-> cheap, a migration is not. That work would also earn its own audit action (a snapshot is durable
-> and is the thing a client is handed — it passes ADR-0073's Test 1) and its own retention question
-> (ADR-0087). It is scoped as a **separate milestone that does not start until the agent has designed
-> it**, and this spec deliberately does not pre-design it.
+**The `database-architect` conditional trigger therefore never fires in this epic, and that is stated
+explicitly rather than left as an absence.** CLAUDE.md §19.3 requires that agent for _every_ schema
+change without exception — a model, a column, an index, a constraint, a data migration — and the
+judgement that a change is too small to need it is itself the judgement the agent exists to make. The
+correct reading of "no engagement" here is **"there is no schema change to design"**, not "we assessed
+one as small". The moment any milestone proposes a column, that changes and the agent runs first; the
+one thing that would have proposed one (the snapshot table) was declined at CQ-2 and is recorded in
+§1's out-of-scope list as a **possible future epic** carrying that agent, an audit action and a
+retention decision with it.
+
+**One consequence of the live-read answer is worth stating on its own**, because it is the property
+the printed document rests on: a report is only ever as current as the last recalculation, so
+`computedAt` (the plan's `schedule_computed_at`) is on the face of every rendering — screen and paper.
+A snapshot would have made that instant a stored fact; a live read makes it a **displayed** one, which
+is weaker in exactly one way (nobody can prove afterwards what the report said) and stronger in
+another (it can never be silently stale, because the instant it was computed from is beside the
+numbers).
 
 **One index question is asked and answered now**, so it is not discovered in production: the read is
 two plan-scoped scans plus a baseline join, all served by indexes that already exist —
@@ -840,15 +1207,30 @@ plans whose defects are already documented.
 > - **D5.** **The report does not vary by role.** Metric 10 is narrowed to resource-assignment
 >   existence precisely so `cost:read` cannot change what a handed-over document says.
 > - **D6.** **No schema change**, and the enumeration that proves it is part of the record.
-> - **D7.** Metric 12 (Critical Path Test) is _(per CQ-1)_.
+> - **D7.** **Metric 12 is computed by a read-only what-if pass on a separate route** (CQ-1 = (b)),
+>   and **that route does not inherit D1's sentence.** "The engine is not imported" is a claim about
+>   the module graph and stays true of the report; the M6 route's claim is the different and weaker
+>   one — it **computes read-only and persists nothing**, proved by reading every engine-owned column
+>   back and asserting equality. The ADR states both, side by side, so neither is copied onto the
+>   other. Until M6 lands the metric reports `NOT_ASSESSABLE` with its reason, so the report's shape
+>   never changes.
 > - **D8.** No `VITE_` flag (ADR-0088 D1); the rollback is a commit boundary.
+> - **D9.** **The report is a live read, not a snapshot** (CQ-2 = (a)). `computedAt` is displayed
+>   rather than stored, which is weaker in one way (nobody can prove afterwards what a report said)
+>   and stronger in another (it can never be silently stale). A snapshot table is named as a possible
+>   future epic together with the three things it forces — `database-architect`, an audit action, and
+>   a retention decision — so the cost is met before the work starts rather than during it.
 >
 > **Consequences.** Positive: a client-grade assessment without leaving the product; a second, honest
-> use of the seeded catalogue as an oracle. Negative: fourteen evaluators are fourteen places a
-> definition can drift from DCMA's, mitigated by a per-metric unit suite and a catalogue-backed API
-> e2e; and the report is only as good as the last recalculation, mitigated by putting `computedAt` on
-> its face. Follow-ups: threshold configurability, guest-share exposure, redundant-logic detection,
-> and (if CQ-2) a snapshot table with its own audit action and retention period.
+> use of the seeded catalogue as an oracle; and **no schema change at all**, so the epic carries no
+> migration risk in any environment. Negative: fourteen evaluators are fourteen places a definition
+> can drift from DCMA's, mitigated by a per-metric unit suite and a catalogue-backed API e2e; the
+> report is only as good as the last recalculation, mitigated by putting `computedAt` on its face;
+> and the estate now holds **two routes with two different parity arguments**, which is a standing
+> invitation to copy the stronger sentence onto the weaker route — mitigated by D7 stating both
+> together and by M6's non-mutation proof being a test rather than a claim. Follow-ups: threshold
+> configurability, guest-share exposure, redundant-logic detection, and a snapshot table (a **future
+> epic**, carrying `database-architect`, an audit action and a retention decision).
 
 ---
 
@@ -863,78 +1245,127 @@ plans whose defects are already documented.
 
 ---
 
-## 6. Critical questions — for the product owner
+## 6. Critical questions — **all answered by the product owner, 2026-08-27**
 
-> Only the questions whose answers change design or scope. Everything else has a stated default above
-> and work proceeds on it.
+> Five questions were raised, each because its answer changed design or scope. All five are decided.
+> The options are kept below rather than deleted: the rejected ones are the reasoning, and a decision
+> recorded without its alternatives becomes an assumption within a milestone or two.
 
-### CQ-1 — Metric 12, the Critical Path Test: compute it, or report it not assessed?
+### CQ-1 — Metric 12, the Critical Path Test — **DECIDED (b): build the real test. 2026-08-27**
 
 DCMA 12 is an **interactive integrity test**: add a large delay to an activity on the critical path
 and confirm the project finish moves by the same amount. It cannot be answered from persisted rows —
 it needs a what-if recalculation.
 
-- **(a) Report `NOT_ASSESSABLE` in v1 _(recommended default)_.** Thirteen metrics ship sooner; the
-  report explains what the check is and that it was not run. Honest, and consistent with the standing
-  rule that an unanswerable metric says so.
-- **(b) Add it as a separate route in a later milestone.** A `GET …/schedule/health-check/critical-path-test`
-  that calls `computeSchedule` **read-only**, twice, in memory, persisting nothing — precisely what
-  `floatPaths` already does (`schedule.service.ts:580-645`), with its own tighter throttle
-  (`schedule.controller.ts:38-47`). Parity still holds (no new input, nothing persisted), **but the
-  phrase "the engine is not imported" stops being true for that route** and must not be repeated
-  there. Cost: one milestone, plus a decision about which activity to perturb and by how much.
-- **(c) Approximate it** from the persisted network. **Recommended against**: any approximation is a
-  different check wearing DCMA 12's name, and a planner would hand a client a "pass" that was never
-  tested.
+- (a) Report `NOT_ASSESSABLE` in v1. _Not taken._ Thirteen metrics would ship sooner, but a
+  fourteen-point assessment that permanently answers thirteen is a thirteen-point assessment.
+- **(b) A separate route, in scope as M6 — CHOSEN.**
+  `GET …/schedule/health-check/critical-path-test` calls `computeSchedule` **read-only**, in memory,
+  persisting nothing — precisely what `floatPaths` already does (`schedule.service.ts:580-645`).
+- (c) Approximate it from the persisted network. _Rejected._ Any approximation is a different check
+  wearing DCMA 12's name, and a planner would hand a client a "pass" that was never tested.
 
-### CQ-2 — Is the report a live read, or a capturable snapshot? _(the only schema-change trigger)_
+**Three consequences, all now binding:**
 
-- **(a) Live read only _(recommended default)_.** Every open recomputes from current rows; the
-  handover artefact is the printed document, stamped with the data date and `computedAt`. **No schema
-  change; no `database-architect` engagement needed.**
-- **(b) Capturable snapshot.** "Capture health check" freezes a report as a record — genuinely useful
-  for a submission pack, and how baselines already work (ADR-0025). But it is a **new table**, and
-  therefore triggers the unconditional `database-architect` design step (CLAUDE.md §19.3), plus an
-  audit action (a durable artefact passes ADR-0073's Test 1), a retention period (ADR-0087) and a
-  restore/recycle-bin question. **Scoped as its own milestone that does not start until the agent has
-  designed the schema.** Please answer this one first — it is the only thing in the epic that changes
-  what must be gated.
+1. **M6-T0, the measurement, is mandatory and is M6's first task.** The backend-performance review
+   raised it as a conditional blocker; choosing (b) fires the condition. M6 **derives its own throttle
+   number** rather than copying `FLOAT_PATHS_THROTTLE`, which was sized for **one** compute pass at
+   540 activities — and the evidence says that is not the same order of cost: float-paths measured
+   **100.4 ms p95** against a recalculate's **165.3 ms** on that plan
+   (`docs/specs/float-paths-surface/implementation-plan.md:181-190`), so two passes are plausibly at
+   or above a full recalculate, and `docs/TECH_DEBT.md` #74 records recalculate's own 2,000-activity
+   cost as **unmeasured**. Copying a constant across that gap would be the register's Class 2 shape.
+2. **The honesty rule (§3.3) is now load-bearing rather than hypothetical.** On the M6 route **"the
+   engine is not imported" stops being true and must not be repeated**. Its parity argument is the
+   different one: it computes read-only and persists nothing, proved by reading every engine-owned
+   column back and asserting equality.
+3. **M1's report shape does not change.** Until M6 lands, metric 12 reports `NOT_ASSESSABLE` with its
+   reason; M6 upgrades one row's **content**. That is what lets M1–M5 ship without waiting for it.
 
-### CQ-3 — Metric 1: which activities are allowed to have no predecessor or no successor?
+### CQ-2 — Live read or capturable snapshot — **DECIDED (a): live read. 2026-08-27**
 
-Every real programme has legitimate open ends. The choice changes the number a client sees.
+- **(a) Live read — CHOSEN.** Computed fresh on every open from current rows, stamped with the plan's
+  `schedule_computed_at`. **No schema change anywhere in the epic**; the handover artefact is the
+  printed document, which carries the data date and the computed-at instant on its face.
+- (b) Capturable snapshot. _Not taken for this epic, and **not** deferred as a milestone._ It is a
+  **new table**, which forces the unconditional `database-architect` design step (CLAUDE.md §19.3),
+  **an audit action** (a frozen artefact handed to a client is durable — it passes ADR-0073's Test 1
+  where this live read fails it), a **retention decision** (ADR-0087), and a restore / recycle-bin
+  question. That is a **possible future epic**, recorded in §1's out-of-scope list with all four costs
+  named, so the next person meets them before starting rather than during.
 
-- **(a) Exclude `WBS_SUMMARY` only.** Strictest; a well-built plan still shows 2 findings for its
-  start and finish milestones, which a reader must know to discount.
-- **(b) Exclude `WBS_SUMMARY`, plus one open-start `START_MILESTONE` and one open-end
-  `FINISH_MILESTONE` _(recommended default)_.** A **typed** rule, checkable in the data, matching DCMA's
-  own carve-out for the project start and finish milestones. Reported transparently: the payload
-  carries `excludedSummaries` and the excluded milestone ids so the exclusion is auditable rather
-  than hidden.
-- **(c) Exclude the earliest and latest activity whatever their type.** A positional guess; rejected —
-  it silently excuses a real dangler that happens to sort first.
+**Consequence: the `database-architect` conditional trigger never fires in this epic** (§4.8). The
+honest reading of that is _"there is no schema change to design"_ — **not** _"a change was assessed as
+too small"_, which is the assessment CLAUDE.md §19.3 exists to forbid.
 
-### CQ-4 — Surface shape and handover artefact
+### CQ-3 — Metric 1's exclusion rule — **DECIDED: the typed rule. 2026-08-27**
 
-- **(a) Docked column beside the view + printed report _(recommended default)_.** Keeps "press an
-  offender, watch the view reveal it", which is the workflow half. Follows `FloatPathsPanel`
-  (`FloatPathsPanel.tsx:58-66`), whose reasoning applies verbatim.
-- **(b) Modal dialog beside Earned value.** Cheapest to build (one line in `plan-chrome-dialogs.tsx:31-32`),
-  reads more like a document — but a modal `<dialog>` blacks out the diagram, so offender navigation
-  becomes "close the report, then look". Recommended against for that reason alone.
-- **(c) A route of its own** (`/…/plans/:planId/health`). Best for reading and printing, worst for
-  fixing; also a new route in the shell, which is more surface than the feature needs.
-- Sub-question: is **printing** enough as the handover artefact for v1, or is a **CSV/PDF download**
-  required? Default: printing only (the `lib/print-document.ts` precedent, ADR-0059 M4); a download
-  is additive later.
+Every real programme has legitimate open ends, and the choice changes the number a client sees.
+
+- (a) Exclude `WBS_SUMMARY` only. _Not taken._ A well-built plan would still show two findings for its
+  own start and finish milestones, which a reader has to know to discount — a report that needs a
+  footnote to be read correctly.
+- **(b) The typed rule — CHOSEN.** Exclude `WBS_SUMMARY` (the ADR-0038 no-logic invariant), **plus a
+  `START_MILESTONE` that has no predecessor and a `FINISH_MILESTONE` that has no successor.** Typed
+  and checkable in the data, matching DCMA's own carve-out for the project start and finish
+  milestones.
+- (c) Exclude the earliest and latest activity whatever their type. _Rejected._ A positional guess that
+  silently excuses a real dangler which happens to sort first.
+
+**Every exclusion is counted and printed on the report, never silent** — `excludedSummaries`, the
+excluded milestone ids, and `missingPredecessorCount` / `missingSuccessorCount` reported separately
+(§4.5's `detail` sketch). A reader who disagrees with the carve-out can see exactly what it excused
+and add it back mentally; an exclusion nobody can see is indistinguishable from a bug in the count.
+
+### CQ-4 — Surface shape and handover artefact — **DECIDED (a): docked column + printed report. 2026-08-27**
+
+- **(a) Docked column beside the view, plus a printed report — CHOSEN.** Keeps "press an offender,
+  watch the view reveal it", which is the workflow half. Follows `FloatPathsPanel`
+  (`FloatPathsPanel.tsx:58-66`), whose reasoning applies verbatim, and the UX review confirmed it does
+  **not** conflict with ADR-0101 — that ruling governs surfaces that _write_ (§4.6). It joins the
+  one-dock-at-a-time set.
+- (b) Modal dialog beside Earned value. _Rejected._ A modal `<dialog>` blacks out the diagram, so
+  offender navigation becomes "close the report, then look".
+- (c) A route of its own. _Rejected._ Best for reading, worst for fixing, and more shell surface than
+  the feature needs.
+- Sub-question, **decided**: printing only for v1 (the `lib/print-document.ts` precedent, ADR-0059
+  M4). A CSV/PDF download is additive later and is in §1's out-of-scope list.
+
+### CQ-5 — Printed report: offender lists or counts only — **DECIDED (b): full lists, capped. 2026-08-27**
+
+_(Raised by the UX review, which found this to be an unstated decision the spec had committed to
+neither way.)_
+
+- (a) Counts and verdicts only. _Rejected._ A QS handed a page saying **"Missing logic — Fail — 41"**
+  has nothing to act on and no way to ask a narrower question: the document proves a problem exists
+  and withholds every fact about it. That is the shape of a report that gets sent back.
+- **(b) Counts, verdicts **and the offender lists**, up to the same cap the screen uses, with the cap
+  printed on the page — CHOSEN.** The document is longer, potentially several pages on a poor
+  programme, which is honest. It **must print the cap in words** — "Showing the first 50 of 412 — open
+  the plan for the full list" — rather than silently ending at 50: ADR-0100's rule, which matters more
+  on paper than on screen, because paper has no "load more" and a truncated list is otherwise
+  indistinguishable from a complete one.
+- (c) Counts on page 1, offenders in an appendix. _Not taken._ It needs a pagination decision the print
+  document does not currently have; (b) delivers the same information without one.
 
 ---
 
 ## Approval gate
 
 Per [`docs/PROCESS.md`](../../PROCESS.md), stages 1–4 are complete and **no application code has been
-written**. The Definition of Ready is met except for the four critical questions above.
+written**. Four specialist reviews have run over this document and their findings are folded in
+(§3.7). **All five critical questions are answered** (product owner, 2026-08-27), so the Definition of
+Ready is met in full:
 
-**Awaiting approval before implementation.** Please answer **CQ-2 first** — it is the only answer that
-changes what must be gated (a "yes" makes `database-architect` mandatory before any of that milestone
-starts).
+- [x] Problem, users and success criteria are clear (Stage 1)
+- [x] User stories carry acceptance criteria; edge and error cases listed (Stage 2)
+- [x] Technical impact and dependencies assessed (Stage 3)
+- [x] Solution designed; ADR outlined (§4.10) for filing at M5 (Stage 4)
+- [x] Work broken into tasks with complexity, risks and tests
+      ([`./implementation-plan.md`](./implementation-plan.md))
+- [x] Critical questions answered
+- [x] Every decision-bearing claim names its evidence — including the one that was **wrong** and is
+      corrected in place (§4.6a)
+
+**Awaiting approval of the spec and plan before implementation.** Nothing in M0–M6 begins until that
+approval is given.
