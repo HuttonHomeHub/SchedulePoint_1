@@ -3738,6 +3738,24 @@ When operating in this repo, Claude Code should:
       duplicated, which no amount of care inside one message can prevent. Found
       only because the product owner asked whether the wake-ups were working.
       `list_triggers` shows what is outstanding; `delete_trigger` removes it.
+    - **And if the chain looks dead, re-arm anyway — a firing that is never
+      observed cannot be responded to.** On 2026-08-27 a wake-up fired at
+      16:06:24 (`trig_016ak7uGrZ3n9Tn7z2ebCLr8`, `ended_reason:
+run_once_fired`) and its notification never surfaced: the session was
+      mid-turn, a real user message arrived next, and nothing re-armed. The loop
+      ended silently with the epic half-built — found, again, only because the
+      product owner asked. That is the previous bullet's own failure one day
+      later and in the opposite direction: it guards against **two** live
+      triggers, and this was **none**.
+      The bullet above puts the re-arming instruction inside the fired message
+      so the mechanism cannot go stale, and that is exactly why it cannot cover
+      this case — the instruction is _in the message that was never read_. So
+      the rule gains its second half: **whenever you touch an epic whose
+      terminal condition is unmet and `list_triggers` comes back empty, arm
+      one.** That is a state you can check, rather than an event you have to
+      have noticed. It is still not a gate and cannot be: nothing in CI can
+      observe whether a session is armed. Weak instrument, per §19.11's last
+      bullet — but a checkable state beats a remembered event.
     - **And check the terminal condition is reachable before arming it.** One
       written the same day as this bullet required the work to be "merged and
       released, tag and publish job confirmed" — for a documentation change with
