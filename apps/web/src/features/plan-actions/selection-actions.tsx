@@ -812,6 +812,19 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // measurement**: the deck goes two lines → three at 1646, costing 58 px to save 36. See
     // `docs/specs/workspace-foot-and-deck/m0-measurement.md`.
     //
+    // **Two things a future reader will reach for, and neither works here.**
+    //
+    // `showLabel: { atLeast: 'comfortable' }` — the band form (ADR-0091 D3a) — is **inert on this
+    // bar**. `Toolbar.tsx` pins `layout: 'comfortable'` and then resolves the policy as
+    // `(showLabel ?? 'auto') !== 'never'`, so an object literal is never equal to `'never'` and
+    // labels unconditionally. The docked selection bar sits outside any band by design
+    // (`toolbar-band.tsx`), so a width-conditional label here would read as conditional and not be
+    // one. `'never'` is the only lever that exists.
+    //
+    // And this is **not** a reversal of ADR-0114 D7, which declined to shorten this item's label
+    // text on WCAG 2.4.6 grounds. The accessible name is unchanged — `ToolbarButton` pins it to
+    // `aria-label` exactly when the visible label is withheld. Only the painted text goes.
+    //
     // Both stay behind the flags their Row-1 originals carried, so flag-off is byte-for-byte the
     // pre-M2 surface on BOTH surfaces. Their Row-1 "Coming soon" placeholders are deliberately NOT
     // reproduced: a placeholder earns its place on a persistent row a planner scans, and this is a
