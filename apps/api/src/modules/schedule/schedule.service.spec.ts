@@ -803,6 +803,94 @@ describe('ScheduleService.summary', () => {
 
 const COST: Permission[] = ['cost:read'];
 
+describe('ScheduleService.getHealthCheck', () => {
+  let organizations: { resolveScope: ReturnType<typeof vi.fn> };
+  let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let schedule: {
+    loadHealthActivities: ReturnType<typeof vi.fn>;
+    loadEdges: ReturnType<typeof vi.fn>;
+    loadActiveBaselineHealthSnapshot: ReturnType<typeof vi.fn>;
+    loadHealthAssignedActivityIds: ReturnType<typeof vi.fn>;
+    loadPlanCalendar: ReturnType<typeof vi.fn>;
+  };
+  let service: ScheduleService;
+
+  beforeEach(() => {
+    organizations = {
+      resolveScope: vi.fn().mockResolvedValue({ organization: { id: ORG_ID }, role: 'VIEWER' }),
+    };
+    plans = { findActiveByIdInOrg: vi.fn().mockResolvedValue(plan()) };
+    schedule = {
+      loadHealthActivities: vi.fn().mockResolvedValue([
+        {
+          id: 'act-1',
+          planId: PLAN_ID,
+          code: 'A100',
+          name: 'Task one',
+          type: 'TASK',
+          status: 'NOT_STARTED',
+          constraintType: null,
+          constraintDate: null,
+          secondaryConstraintType: null,
+          secondaryConstraintDate: null,
+          totalFloat: 3,
+          durationMinutes: 480,
+          remainingDurationMinutes: null,
+          percentComplete: 0,
+          actualStart: null,
+          actualFinish: null,
+          earlyStart: new Date('2026-01-01'),
+          earlyFinish: new Date('2026-01-02'),
+          calendarId: null,
+        },
+      ]),
+      loadEdges: vi.fn().mockResolvedValue([]),
+      loadActiveBaselineHealthSnapshot: vi.fn().mockResolvedValue(null),
+      loadHealthAssignedActivityIds: vi.fn().mockResolvedValue(new Set()),
+      loadPlanCalendar: vi.fn().mockResolvedValue(null),
+    };
+    const logger = { info: vi.fn(), warn: vi.fn() } as unknown as PinoLogger;
+    service = new ScheduleService(
+      organizations as unknown as OrganizationsService,
+      plans as unknown as PlanRepository,
+      schedule as unknown as ScheduleRepository,
+      { findHoursPerDayMinutes: () => Promise.resolve(new Map()) } as unknown as CalendarRepository,
+      { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
+      { $transaction: vi.fn() } as unknown as PrismaService,
+      crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
+      logger,
+    );
+  });
+
+  it('denies a caller without schedule:read (403) before any load', async () => {
+    await expect(service.getHealthCheck(principalWith([]), 'acme', PLAN_ID)).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    expect(schedule.loadHealthActivities).not.toHaveBeenCalled();
+  });
+
+  it('404s when the plan is not in the caller’s org', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(null);
+    await expect(
+      service.getHealthCheck(principalWith(READ), 'acme', PLAN_ID),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(schedule.loadHealthActivities).not.toHaveBeenCalled();
+  });
+
+  it('assembles the inputs and returns a total fourteen-row report — with no lock, no pen and no transaction', async () => {
+    const result = await service.getHealthCheck(principalWith(READ), 'acme', PLAN_ID);
+    expect(result.metrics).toHaveLength(14);
+    expect(result.planId).toBe(PLAN_ID);
+    expect(result.activityCount).toBe(1);
+    // All four parallel loads ran (the plan has no calendar in this fixture, so the calendar
+    // resolve legitimately skips its load — the existing "uses all-days-work" rule).
+    expect(schedule.loadHealthActivities).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
+    expect(schedule.loadEdges).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
+    expect(schedule.loadActiveBaselineHealthSnapshot).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
+    expect(schedule.loadHealthAssignedActivityIds).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
+  });
+});
+
 describe('ScheduleService.getEarnedValue', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };

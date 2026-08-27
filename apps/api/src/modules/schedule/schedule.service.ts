@@ -8,6 +8,7 @@ import type {
   ProgrammeScheduleLockedDetails,
   ProgrammeScheduleResult,
   ResourceHistogramSeries,
+  ScheduleHealthReport,
 } from '@repo/types';
 import { DEFAULT_HOURS_PER_DAY_MINUTES } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
@@ -21,6 +22,7 @@ import {
 } from '../../common/errors/domain-errors';
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
+import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -55,12 +57,15 @@ import {
   type HistogramAssignmentInput,
   type WorkingTimeCalendar,
 } from './engine';
+import { computeHealthReport } from './health/compute-health';
+import type { HealthActivityInput } from './health/compute-health';
 import {
   buildPlanCalendar,
   buildPlanCalendarOrReject,
   CALENDAR_HAS_NO_WORKING_TIME,
 } from './plan-calendar';
 import { ProgrammeCycleError, resolveProgrammeOrder } from './programme-order';
+import { resolveRemainingMinutes } from './remaining-duration';
 import {
   ScheduleRepository,
   type EarnedValueCostSnapshot,
@@ -645,6 +650,114 @@ export class ScheduleService {
   }
 
   /**
+   * The plan's **DCMA 14-point health check** (health M1) — a pure READ over the persisted
+   * definition and CPM columns, gated on `schedule:read` (any member). Resolves the org from the
+   * caller's memberships (anti-IDOR) and asserts the permission BEFORE any load; 404s if the plan
+   * is not in the caller's org.
+   *
+   * **No plan write lock, no advisory lock, no transaction, no pen (ADR-0028), and no
+   * `computeSchedule`.** The absences are an ADVANTAGE over both benchmark endpoints, not a
+   * resemblance (spec §3.3): `floatPaths` runs a full CPM computation per call and `recalculate`
+   * additionally locks and writes — this route can neither block a planner's recalculation nor be
+   * blocked by one. The only concurrency question it raises is staleness, which `computedAt` makes
+   * visible on the face of the report.
+   *
+   * The response carries no cost, rate or budget field at any depth (G4 pins it), so it cannot
+   * vary by `cost:read` — one URL produces one document, whoever reads it (spec §3.2).
+   */
+  async getHealthCheck(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<ScheduleHealthReport> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'schedule:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+
+    const [activityRows, edges, baselineSnapshot, assignedIds, planCalendar] = await Promise.all([
+      this.schedule.loadHealthActivities(organization.id, planId),
+      this.schedule.loadEdges(organization.id, planId),
+      this.schedule.loadActiveBaselineHealthSnapshot(organization.id, planId),
+      this.schedule.loadHealthAssignedActivityIds(organization.id, planId),
+      this.resolveCalendar(organization.id, plan.calendarId),
+    ]);
+
+    // Each activity's OWN day↔minute factor (ADR-0068) in one batched lookup — metric 8's
+    // conversion, never a constant and never a per-row query.
+    const withFactors = await attachDayFactors(
+      this.calendars,
+      activityRows,
+      new Map([[planId, plan.calendarId]]),
+    );
+
+    // CPLI's working-day arithmetic on the PLAN's calendar — the `variance.ts` shape (ADR-0025):
+    // the minute-granular port divided by the plan's own day factor. Signed, `to` later = positive.
+    const planFactor = await resolveDayFactorMinutes(this.calendars, {
+      activityCalendarId: null,
+      planCalendarId: plan.calendarId,
+    });
+    const workingDaysBetween = (from: string, to: string): number =>
+      Math.round(planCalendar.workingTimeBetween(from, to) / planFactor);
+
+    const date = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
+
+    const activities: HealthActivityInput[] = withFactors.map((r) => ({
+      id: r.id,
+      code: r.code,
+      name: r.name,
+      type: r.type,
+      status: r.status,
+      constraintType: r.constraintType,
+      constraintDate: date(r.constraintDate),
+      secondaryConstraintType: r.secondaryConstraintType,
+      secondaryConstraintDate: date(r.secondaryConstraintDate),
+      totalFloat: r.totalFloat,
+      durationMinutes: r.durationMinutes,
+      remainingDurationMinutes: r.remainingDurationMinutes,
+      percentComplete: r.percentComplete,
+      actualStart: date(r.actualStart),
+      actualFinish: date(r.actualFinish),
+      earlyStart: date(r.earlyStart),
+      earlyFinish: date(r.earlyFinish),
+      dayFactorMinutes: r.dayFactorMinutes,
+      hasAssignment: assignedIds.has(r.id),
+    }));
+
+    return computeHealthReport({
+      plan: {
+        id: plan.id,
+        name: plan.name,
+        dataDate: formatCalendarDate(plan.plannedStart),
+        computedAt: plan.scheduleComputedAt?.toISOString() ?? null,
+        schedulingMode: plan.schedulingMode,
+      },
+      activities,
+      dependencies: edges.map((e) => ({
+        id: e.id,
+        predecessorId: e.predecessorId,
+        successorId: e.successorId,
+        type: e.type,
+        lagMinutes: e.lagMinutes,
+      })),
+      baseline: baselineSnapshot
+        ? {
+            id: baselineSnapshot.id,
+            name: baselineSnapshot.name,
+            capturedAt: baselineSnapshot.capturedAt.toISOString(),
+            capturedProjectFinish: date(baselineSnapshot.capturedProjectFinish),
+            activities: baselineSnapshot.activities.map((b) => ({
+              sourceActivityId: b.sourceActivityId,
+              baselineFinish: date(b.baselineFinish),
+            })),
+          }
+        : null,
+      workingDaysBetween,
+    });
+  }
+
+  /**
    * The plan's **Earned-Value analysis** (EV2b, ADR-0042 §2) — a pure READ over the persisted CPM
    * dates plus the cost / %-complete inputs, gated on `cost:read` (Planner + Org Admin only, so a
    * Viewer/Contributor never reads commercially sensitive money). Resolves the org from the caller's
@@ -1144,18 +1257,6 @@ export class ScheduleService {
       throw new ForbiddenError('You do not have permission to perform this action.');
     }
   }
-}
-
-/**
- * The engine's remaining working minutes for an **in-progress** activity (M2, ADR-0035 §1): the
- * explicit `remainingDurationMinutes` when set, else derived from `durationMinutes × (1 −
- * percentComplete)` (rounded, floored at 0). Undefined for a not-started or complete activity — the
- * engine ignores it there (a complete activity uses its actual finish; not-started, its full duration).
- */
-function resolveRemainingMinutes(row: ScheduleActivityRow): number | undefined {
-  if (row.actualStart == null || row.actualFinish != null) return undefined;
-  if (row.remainingDurationMinutes != null) return row.remainingDurationMinutes;
-  return Math.max(0, Math.round(row.durationMinutes * (1 - row.percentComplete / 100)));
 }
 
 /**

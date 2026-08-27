@@ -2398,3 +2398,164 @@ export interface OrganisationOverview {
 }
 
 export {};
+
+// ---------------------------------------------------------------------------
+// Schedule health check (DCMA 14-point) — the report contract (health M1).
+// ---------------------------------------------------------------------------
+
+/**
+ * The fourteen DCMA metrics, in report (ordinal) order. A closed tuple so the report array can be
+ * asserted **total**: the M1 totality test checks `report.metrics` has exactly one row per member,
+ * in this order — the ADR-0094 `ConflictKey` move (an open `string` id lets a result set silently
+ * miss a metric).
+ */
+export const HEALTH_METRIC_IDS = [
+  'MISSING_LOGIC',
+  'LEADS',
+  'LAGS',
+  'RELATIONSHIP_TYPES',
+  'HARD_CONSTRAINTS',
+  'HIGH_FLOAT',
+  'NEGATIVE_FLOAT',
+  'HIGH_DURATION',
+  'INVALID_DATES',
+  'RESOURCES',
+  'MISSED_ACTIVITIES',
+  'CRITICAL_PATH_TEST',
+  'CPLI',
+  'BEI',
+] as const;
+
+export type HealthMetricId = (typeof HEALTH_METRIC_IDS)[number];
+
+export type HealthVerdict = 'PASS' | 'FAIL' | 'NOT_ASSESSABLE' | 'INFORMATIONAL';
+
+/**
+ * Why a metric could not be assessed. Redundant with `verdict === 'NOT_ASSESSABLE'` **deliberately**
+ * (defence in depth for the printed document — its renderer prints the sentence `reason` names and
+ * structurally cannot print one for a passing row).
+ *
+ * `NO_INCOMPLETE_ACTIVITIES` and `NOTHING_REMAINING` were added at M1: the spec's §3.1 table names
+ * both states ("no incomplete activities" for metric 8; a plan whose finish is not after the data
+ * date for metric 13's divisor) but its reason list omitted them — an inconsistency found by
+ * implementing the table, resolved toward the table.
+ */
+export type HealthNotAssessableReason =
+  | 'EMPTY_PLAN'
+  | 'NO_RELATIONSHIPS'
+  | 'PLAN_NOT_SCHEDULED'
+  | 'NO_ACTIVE_BASELINE'
+  | 'NO_TARGET_FINISH'
+  | 'NOTHING_DUE'
+  | 'NO_INCOMPLETE_ACTIVITIES'
+  | 'NOTHING_REMAINING'
+  | 'REQUIRES_WHAT_IF_ANALYSIS';
+
+/**
+ * How a threshold judges its measurement. A **closed** union so the client needs no default case —
+ * a new kind is a typecheck failure, never an unrendered row. There is deliberately no `NONE`:
+ * metric 10 (informational) and metric 12 carry `threshold: null`, because a threshold object on
+ * screen reads as a real threshold and "judged against: none" is worse than nothing.
+ */
+export type HealthThresholdKind = 'MAX_PERCENT' | 'MAX_COUNT' | 'MIN_PERCENT' | 'MIN_RATIO';
+
+export interface HealthThreshold {
+  kind: HealthThresholdKind;
+  /** The number judged against — the ONLY place it is stated (the G3 rule: no client literal). */
+  value: number;
+}
+
+/**
+ * What a metric measured. All four fields always present; the ones a metric does not use are
+ * `null` (a percent metric fills count/denominator/percent; a count metric fills count alone; the
+ * two index metrics fill ratio). On a `NOT_ASSESSABLE` row the whole object is `null`, never a
+ * zero-filled shape — `{count: 0}` is indistinguishable from a real (degenerate) measurement.
+ */
+export interface HealthMeasured {
+  count: number | null;
+  denominator: number | null;
+  /** 1-dp percentage of `count / denominator`; null when the metric is not percent-shaped. */
+  percent: number | null;
+  /** 4-dp index ratio (metrics 13/14); null elsewhere. */
+  ratio: number | null;
+}
+
+/**
+ * One offending row, capped per metric ({@link ScheduleHealthReport.offenderCap}) with the true
+ * total always in `offenderCount`. `activityId` is the id the **jump seam** selects (M3): the
+ * activity itself for an `ACTIVITY` offender, the successor for a `RELATIONSHIP` one — carried here
+ * so the panel never re-derives which endpoint a relationship finding "belongs" to.
+ */
+export interface HealthOffender {
+  kind: 'ACTIVITY' | 'RELATIONSHIP';
+  /** The offending row's own id (activity id, or dependency id for a RELATIONSHIP). */
+  id: string;
+  code: string | null;
+  name: string;
+  /** The one-line why — "no predecessor", "lead of −120 min (SS)", "float 61 d". */
+  note: string;
+  /** The activity the jump-to-offender seam selects. */
+  activityId: string;
+}
+
+/**
+ * One metric row. The shape is a **documented discriminator on `verdict`** (spec §4.5's table):
+ * `NOT_ASSESSABLE` ⇒ `measured: null`, `detail: null`, `offenders: []`, `offenderCount: 0`,
+ * `offendersTruncated: false`, `reason` non-null (threshold kept where one exists — the reader is
+ * owed "this would have been judged against ≥ 0.95"); `INFORMATIONAL` ⇒ `threshold: null`;
+ * `PASS` ⇒ empty offenders. Asserted row by row by the M1 totality test, never left to each
+ * evaluator to answer differently.
+ */
+export interface HealthMetricResult {
+  id: HealthMetricId;
+  /** 1-based DCMA ordinal; the array is always sorted by it. */
+  ordinal: number;
+  name: string;
+  verdict: HealthVerdict;
+  reason: HealthNotAssessableReason | null;
+  measured: HealthMeasured | null;
+  threshold: HealthThreshold | null;
+  /** Per-metric extra facts (exclusion rules, sub-counts, narrowings); null when there are none. */
+  detail: Record<string, unknown> | null;
+  /** The TRUE total of offenders, never the capped length. */
+  offenderCount: number;
+  offendersTruncated: boolean;
+  offenders: HealthOffender[];
+}
+
+export interface HealthBaselineRef {
+  id: string;
+  name: string;
+  capturedAt: string;
+}
+
+export interface HealthSummary {
+  passed: number;
+  failed: number;
+  notAssessable: number;
+  informational: number;
+}
+
+/**
+ * The whole report — always exactly 14 metric rows, one per {@link HealthMetricId}, in ordinal
+ * order, never sparse. A metric that could not be computed is PRESENT with
+ * `verdict: NOT_ASSESSABLE` and a `reason`; it is never omitted. `offenderCap` travels in the
+ * payload for the same reason thresholds do (G3): a client hard-coding 50 to render
+ * "showing 50 of 412" is a second source for a number the server owns.
+ */
+export interface ScheduleHealthReport {
+  planId: string;
+  planName: string;
+  /** The data date (`plans.planned_start`, `YYYY-MM-DD`) — NOT NULL since ADR-0033 M1. */
+  dataDate: string;
+  /** When the persisted schedule was computed; null = never calculated. */
+  computedAt: string | null;
+  schedulingMode: 'EARLY' | 'VISUAL';
+  /** Active non-summary activities — the §3.1 denominator convention, made visible. */
+  activityCount: number;
+  relationshipCount: number;
+  baseline: HealthBaselineRef | null;
+  summary: HealthSummary;
+  offenderCap: number;
+  metrics: HealthMetricResult[];
+}

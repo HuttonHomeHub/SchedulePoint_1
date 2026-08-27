@@ -503,6 +503,99 @@ export class ScheduleRepository {
    * resource) joined to its resource's cost rate. Org + plan scoped (anti-IDOR), soft-deletes
    * excluded. A pure read — never taken under a write lock or a recompute.
    */
+  /**
+   * A plan's active activities projected to the HEALTH-CHECK read inputs (health M1) — definition
+   * columns, the persisted CPM outputs, and each activity's calendar id so the caller can attach
+   * day factors in one batched lookup (`attachDayFactors`, ADR-0068). Org + plan scoped
+   * (anti-IDOR), soft-deletes excluded. A pure read — never taken under a write lock, a
+   * transaction or a recompute (spec §3.3: the absence is an advantage, not a resemblance).
+   */
+  loadHealthActivities(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ) {
+    return db.activity.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        planId: true,
+        code: true,
+        name: true,
+        type: true,
+        status: true,
+        constraintType: true,
+        constraintDate: true,
+        secondaryConstraintType: true,
+        secondaryConstraintDate: true,
+        totalFloat: true,
+        durationMinutes: true,
+        remainingDurationMinutes: true,
+        percentComplete: true,
+        actualStart: true,
+        actualFinish: true,
+        earlyStart: true,
+        earlyFinish: true,
+        calendarId: true,
+      },
+    });
+  }
+
+  /**
+   * The ids of this plan's activities that hold at least one ACTIVE resource assignment — metric
+   * 10's whole read (assignment EXISTENCE only, spec §3.2's narrowing: no cost column is selected,
+   * so the report structurally cannot vary by `cost:read`). The `loadResourceAssignments` shape
+   * (`:295-309`) narrowed to the one column the metric needs; filters through the activity
+   * relation because `resource_assignments` carries no plan id, riding
+   * `idx_resource_assignments_activity_id_fk` (measured at M0-T2).
+   */
+  async loadHealthAssignedActivityIds(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<Set<string>> {
+    const rows = await db.resourceAssignment.findMany({
+      where: {
+        organizationId,
+        deletedAt: null,
+        activity: { planId, deletedAt: null },
+        resource: { deletedAt: null },
+      },
+      select: { activityId: true },
+    });
+    return new Set(rows.map((r) => r.activityId));
+  }
+
+  /**
+   * The active baseline's identity + finish snapshot for the three baseline-relative health
+   * metrics (11/13/14). Null when the plan has no active baseline — a first-class outcome the
+   * report states (`NO_ACTIVE_BASELINE`), never an empty array a metric could mistake for "nothing
+   * was due". The join rides `baseline_activities(baseline_id, source_activity_id)`.
+   */
+  async loadActiveBaselineHealthSnapshot(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{
+    id: string;
+    name: string;
+    capturedAt: Date;
+    capturedProjectFinish: Date | null;
+    activities: { sourceActivityId: string; baselineFinish: Date | null }[];
+  } | null> {
+    const active = await db.baseline.findFirst({
+      where: { organizationId, planId, isActive: true, deletedAt: null },
+      select: { id: true, name: true, capturedAt: true, capturedProjectFinish: true },
+    });
+    if (!active) return null;
+    const activities = await db.baselineActivity.findMany({
+      where: { baselineId: active.id, deletedAt: null },
+      select: { sourceActivityId: true, baselineFinish: true },
+    });
+    return { ...active, activities };
+  }
+
   loadEarnedValueActivities(
     organizationId: string,
     planId: string,
