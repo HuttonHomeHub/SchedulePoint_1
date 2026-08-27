@@ -529,6 +529,25 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **The foot row's band, the two-line facts, and the wrap at every width** — **shipped**
+  (ADR-0115, 2026-08-27). Five layout observations the product owner made about the released
+  workspace, and one thing nobody had reported that outranked all five: selecting a single activity
+  made the foot row wrap, costing the diagram **36 px at 1646 and 76 px at 1440**. It is now 41 px
+  in both states at every width measured.
+
+  Four of the five answered differently from how they were asked. The foot row had **no surface
+  scope at all** rather than a different colour, and now paints the header band's exact ground at
+  no height. Swapping its two halves moves nothing, because the dock is `flex-1 basis-0%` — which
+  makes ADR-0114's stated reason for the previous order false as implemented. Two-line facts cost
+  **nothing**, because the whole price was `gap-4` setting a row gap as well as a column gap — and
+  bounding them is what finished the wrap at 1440. And of 48 controls behind the eight `▾` menus
+  only 13 are commands, so the deck's genuine 1,176 px of spare line at 1920 had almost nothing
+  worth putting in it.
+
+  Two things were withdrawn on their own measurement: the approved fix (move two viewport commands
+  to the deck) cost 58 px to save 36, and always-showing the object bar would have made the wrap
+  permanent. Four findings are recorded rather than fixed (`docs/TECH_DEBT.md` #204).
+
 - **The stable foot row** — **shipped** (ADR-0114, 2026-08-27). The product owner sent four
   screenshots of the released workspace and described the foot as **juggling**: the plan's facts and
   the object-action bar swapped sides every time the activities panel opened, and the object bar

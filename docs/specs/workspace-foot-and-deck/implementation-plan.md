@@ -2,7 +2,7 @@
 
 - **Feature spec:** [`./spec.md`](./spec.md)
 - **Measurement:** [`./m0-measurement.md`](./m0-measurement.md) — every number below traces to it
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** **SHIPPED, with three milestones differing from this plan.** See the reconciliation in [`spec.md`](./spec.md) and ADR-0115; this document records what was _planned_.
 - **Owner:** unassigned
 
 ---

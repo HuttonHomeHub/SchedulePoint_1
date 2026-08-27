@@ -1,15 +1,16 @@
 # Feature Spec: The workspace foot and the command deck
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** **SUPERSEDED IN PART BY WHAT SHIPPED — read the reconciliation at the foot of this
+  file before relying on any decision here.** Filed as ADR-0115 on 2026-08-27.
 - **Author:** feature-analyst
 - **Date:** 2026-08-27
 - **Measurement pass:** [`m0-measurement.md`](./m0-measurement.md) — the source of truth for every
   number in this document
 - **Related ADRs:** ADR-0031, ADR-0033, ADR-0055, ADR-0064, ADR-0082, ADR-0088, ADR-0091, ADR-0092,
   ADR-0093, ADR-0094, ADR-0110, ADR-0112, ADR-0113, ADR-0114
-- **Proposed ADR:** **ADR-0115 — A control is paid for in every state and earns in one**
-  (0115 was free at 2026-08-27; re-check at filing — ADR-0071 and ADR-0079 both record a number
-  being taken between the plan and the milestone)
+- **Filed as:** [ADR-0115 — A bound governs what it encloses, and the wrap was measured from one
+  state](../../adr/0115-a-bound-governs-what-it-encloses.md). The number was still free at filing;
+  the title changed because the decision did.
 
 ---
 
@@ -749,3 +750,54 @@ never-both mechanism. M0's contrary inference is corrected.
 - Docs to update on landing: `docs/adr/README.md` (ADR-0115 index row — gated by
   `check:adr-coverage` since ADR-0110 D6), `CLAUDE.md` §16, `docs/TECH_DEBT.md` (file the missing
   #202; open a row for anything deferred here), `docs/DESIGN_SYSTEM.md` if M2 adds a variant
+
+---
+
+# Reconciliation — what shipped, and where this document is now wrong
+
+**Added 2026-08-27, after the epic landed.** This spec was written from the M0 measurement and was
+right about the problem. It is **stale about three decisions**, because measurement contradicted it
+during the build — which is the epic's own thesis landing on its own spec, and is recorded here
+rather than by editing the sections above, so a reader can see what was proposed against what
+survived.
+
+`m0-measurement.md`'s "Corrections" and "The decisive measurement" sections, and ADR-0115, are
+authoritative wherever they disagree with anything above.
+
+## 1. The M1 shape was withdrawn on measurement
+
+**This spec proposed** omitting `clear-visual-placement` and then choosing between an icon-only
+`Zoom to selection` and two-line facts for the remaining ~108 px. The product owner separately
+approved **moving** `Zoom to selection` and `Isolate` to the command deck.
+
+**Measured, both are wrong.** Moving the two commands takes the deck from two lines to three at
+1646 — **58 px of canvas to save 36**, a net loss at the width the epic exists to serve. And
+two-line facts free 231.4 px and buy **nothing** at 1646: the bar is still two lines and the canvas
+still 757, because a wrapping row breaks between _items_.
+
+**What shipped**: omit `clear-visual-placement` outside Visual mode **and** make `Zoom to selection`
+icon-only, both staying on the object bar. Measured necessary and neither sufficient.
+
+## 2. Two-line facts are free, and they finished 1440
+
+**This spec inherited M0's "never free"**, which was wrong: the cost was `gap-4` setting a 16 px row
+gap, and at `row-gap: 0` two lines are 32 px, under the 40 px floor.
+
+**And the bound is on the facts, not the row.** The first implementation bounded the container that
+also holds `ScheduleStateRegion` and `PenStatusOutlet`; in a stale state that grew the foot row
+41 → 53 px with no selection. Re-scoped, it hands 231 px to the dock and takes **1440 from 117 px to
+41** — which this spec expected no milestone to achieve.
+
+## 3. Two of the three promotable lens toggles do not exist
+
+The deck-promotion milestone was specified around three toggles named in a question to the product
+owner. `Float paths` is **already** a deck item and `Critical path` is not a lens toggle at all.
+Only `Baseline overlay` was promotable, and it is what shipped. `docs/TECH_DEBT.md` #204(d).
+
+## 4. What the spec got right and is worth keeping
+
+- The problem statement, which came from M0 and holds.
+- Declining always-visible-and-shaded (§D8 in the ADR), on ADR-0082 and on the measured cost.
+- Sequencing the wrap first and alone.
+- The falsification conditions, written before each milestone — **two of them fired**, which is the
+  point of writing them down.

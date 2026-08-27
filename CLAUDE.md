@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1079 web
 > source files with 39 Playwright suites beside the base journey, and
-> 114 ADRs.
+> 115 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3363,6 +3363,56 @@ progress` off the command surface because **an object action belongs on the obje
   carries. One of the architecture review's claims was itself wrong and is corrected rather than
   absorbed. Every fix carries a regression test verified red first.
   **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0115** _(Accepted; M0–M7 landed 2026-08-27)_ — A bound governs what it encloses, and the
+  wrap was measured from one state. Five layout observations about the released workspace, and a
+  sixth thing nobody reported that outranked all of them: selecting a single activity made the foot
+  row **wrap**, costing the diagram **36 px at 1646 — the product owner's own screen — and 76 px at
+  1440**. That is ADR-0114 M1's own consequence followed one step further than that ADR followed
+  it; `shrink-0` → `min-w-0` stopped clipping four unreachable controls and started eating the
+  diagram, and the abstract loss of ADR-0092's 0 px dock guarantee was recorded while the number
+  never was. **It is now 41 px in both states at 1920, 1646 and 1440.**
+  **Four of the five answered differently from how they were asked.** The foot row had **no surface
+  scope at all** — `(page)`, transparent, one grey hairline — rather than a different colour, and
+  joins `chrome` as a **scope rather than a card**, which is what makes it free: `Surface`
+  contributes a background, a foreground and an attribute and **no geometry**, so the band's radius
+  and amber edge are deliberately not copied. Swapping the two halves moves nothing, because the
+  dock is `flex-1 basis-0%` — making ADR-0114's stated reason for the previous order **false as
+  implemented** (ADR-0076 Class 3, in a document three days old), so the order now rests on the
+  argument that survives: the object bar gets a fixed leading edge where every button used to shift
+  by however wide the facts happened to be. Two-line facts cost **nothing**, the whole price being
+  `gap-4` setting a 16 px **row** gap as well as a column gap. And of the 48 controls behind the
+  eight `▾` triggers only **13 are commands** — 24 are `View ▾` checkboxes — so the deck's genuine
+  1,176 px of spare line at 1920 had almost nothing worth putting in it.
+  **The load-bearing correction is that a bound governs what it encloses.** `max-w-64` first sat on
+  the row that also carries `ScheduleStateRegion` and `PenStatusOutlet`, and **every measurement ran
+  after a recalculation — the one state where the schedule region renders nothing**, so the readings
+  never contained two of the row's five content sources. Two independent reviews caught it and the
+  browser settled it: injecting the real stale sentence took the facts to three lines and the row
+  from 41 px to **53 px at every width, with no selection at all** — a strictly worse version of the
+  defect the epic exists to close. Re-scoped onto the facts alone it also **finishes what M1 could
+  not**, handing 231 px back and taking 1440 from 117 px to 41.
+  **Two decisions were withdrawn on their own measurement.** The approved fix — moving two viewport
+  commands to the deck, correct by ADR-0093's subject test — takes the deck from two lines to three
+  at 1646: **58 px to save 36**, the seventh consecutive contradicted width expectation here and the
+  first where the arithmetic was right and the **model** was wrong, because a wrapping row breaks
+  between _items_. And always-showing the object bar (ADR-0082's clause: a surface every item of
+  which would be shaded renders no trigger) would make the wrap permanent.
+  `Clear visual start` is **omitted** outside Visual mode on ADR-0082's own discriminator — an Early
+  plan has no hand-placed start, so there is nothing for a reason to say — with the applicability
+  test a separate predicate the existing gate calls, since `BulkActionGate` is shared with the
+  plural bar. `Edit plan` stops being rendered twice from one memo, which ADR-0093's structural gate
+  **cannot see** because it compares two registries and neither copy is a registry item.
+  **The ADR keeps five things it got wrong**, because the corrections are the useful part: that
+  two-line facts were "never free" (one Tailwind class); that the pen sentence was 126 px of the
+  facts (a phantom, clipped to 1 × 1); that `docs/TECH_DEBT.md` #202 and #203 did not exist (they do
+  — the register writes modern rows as `## 202.` and the grep, and the `git show` used to "confirm"
+  it, shared one defect, with **both** reviewing agents reporting the same absence); that deck slack
+  was the constraint on promotion; and **six instrument defects**, each recorded where it happened.
+  Two of the three lens toggles offered to the product owner for promotion **did not exist** — one
+  was already on the deck and one is not a lens at all — which is Class 3 one step upstream of a
+  document, in a choice put to somebody else (`docs/TECH_DEBT.md` #204). **The CPM engine is not
+  imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
