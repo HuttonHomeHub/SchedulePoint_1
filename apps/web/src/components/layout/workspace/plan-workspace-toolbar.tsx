@@ -85,7 +85,10 @@ import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildColourLegend } from '@/features/tsld/render/lenses';
 import { lensLegendVarPalette } from '@/features/tsld/render/palette';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
-import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
+import {
+  clearVisualPlacementApplies,
+  clearVisualPlacementGate,
+} from '@/features/tsld/toolbar/conflict-remedy';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useMinimapPanelPrefs } from '@/features/tsld/toolbar/use-minimap-panel-prefs';
@@ -697,6 +700,11 @@ export function ToolbarPlanWorkspace({
         hasSelection: true,
         scheduleRefusal: model.scheduleRefusal,
       })}
+      clearPlacementApplies={clearVisualPlacementApplies({
+        // Omit rather than shade outside Visual mode (ADR-0082) — the same predicate the gate above
+        // consults, so `schedulingMode` is still read in one place.
+        schedulingMode: plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
+      })}
       onClearVisualPlacement={(a) => void model.clearVisualPlacement(a.id, a.version)}
       onOpenEditorAt={model.onOpenActivityEditorAt}
       onSelectionChange={model.onSelectionChange}
@@ -832,6 +840,9 @@ export function ToolbarPlanWorkspace({
       lateOverlayActive,
       hasSelection: true,
       scheduleRefusal: model.scheduleRefusal,
+    }),
+    clearPlacementApplies: clearVisualPlacementApplies({
+      schedulingMode: plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
     }),
     onOpenLogic: model.onOpenLogic,
     onEdit: model.onEditActivity,

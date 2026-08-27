@@ -321,17 +321,37 @@ row"_ — both are deck items today, and `lensTogglesIn` (`:322`) excludes anyth
 row so it can never appear twice. The mechanism exists, the precedent exists, and it was set by the
 same person asking the question. §5's _count_ stands; its inference does not.
 
-## C6. `docs/TECH_DEBT.md` #202 and #203 do not exist — and both citations are mine
+## C6. **WITHDRAWN — #202 and #203 both exist, and my "verification" was pattern-blind**
 
-**Upheld, and it is worse than the review found.** The register's highest row is **#201**.
-`docs/adr/0114-…md:346` ends _"Six non-blocking findings are `docs/TECH_DEBT.md` #202."_ and the
-body of merged PR #400 says two menu-clamp gaps are _"filed rather than smuggled in
-(`docs/TECH_DEBT.md` #203)"_. Neither row was ever written; `git show 06a7f6ec -- docs/TECH_DEBT.md`
-adds no `## #` heading at all.
+This section previously read _"`docs/TECH_DEBT.md` #202 and #203 do not exist — and both citations
+are mine"_, and called it ADR-0076 Class 1 committed twice in three days. **It is wrong, and the way
+it is wrong is worth more than the finding would have been.**
 
-This is ADR-0076 Class 1 committed twice by me in three days, in an ADR and in a merged pull
-request, each time in a sentence whose whole purpose was to claim something had been recorded
-rather than dropped. The rows are written in this epic's first commit.
+Both rows exist and are properly written: `## 202. Six non-blocking findings from the foot-row gate
+pass` at line 5138, and `## 203. Two menu-positioning clamps, one now measured and one still
+guessing` at line 5185.
+
+**The register uses two heading styles.** Twenty-three older rows are `## #201 — title`; more than
+seventy modern ones, including every row above #185, are `## 202. title`. I searched for `^## #`,
+found the highest match at #201, and concluded the register stopped there. I then "confirmed" it
+with `git show 06a7f6ec -- docs/TECH_DEBT.md | grep -E '^\+## #'`, which missed `+## 202.` for
+**exactly the same reason** — so the check that was supposed to be independent shared the defect of
+the claim it was checking.
+
+Both reviewing agents reported the same absence independently, which is why it read as
+corroborated. Three readers agreeing does not make a grep pattern correct.
+
+**This is ADR-0076 Class 3 — a decision-bearing claim asserted without checking — committed inside a
+document whose subject is Class 1, and asserted about myself in a passage congratulating a
+different instrument for catching something.** It is corrected in place rather than deleted, because
+the correction is the useful artefact: the sentence in the commit message for `a66b36a0` that says
+"#202 and #203 do not exist in the debt register — both citations are mine" is **false**, and this
+paragraph is where a reader who follows that commit will land.
+
+**The real finding underneath it is the heading inconsistency**, which is now known to have produced
+three independent false readings in one session. It is not repaired here — rewriting ninety-odd
+headings is drive-by churn across a file every epic touches, and the risk of a bad sed over the
+register is worse than the inconsistency. Recorded so the next reader greps for both forms.
 
 ---
 

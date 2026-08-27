@@ -9,6 +9,7 @@ import {
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
+
 import { clearMeasurement, writeMeasurement } from './output';
 
 /**
@@ -118,7 +119,10 @@ test('M0 verify: the pen phantom, the row-gap, the Explorer range, the duplicate
   const setRow = (styles: Record<string, string>, clear = false) =>
     page.evaluate(
       ({ s, c }: { s: Record<string, string>; c: boolean }) => {
-        const row = document.querySelector('[data-probe-facts-row]') as HTMLElement | null;
+        // `querySelector<HTMLElement>` rather than a cast: `--fix` removed the cast as
+        // "unnecessary" and typecheck then failed on `.style`, because the lint rule and the
+        // compiler disagree about what `querySelector` returns here. The generic satisfies both.
+        const row = document.querySelector<HTMLElement>('[data-probe-facts-row]');
         if (!row) return;
         if (c) {
           row.style.cssText = '';

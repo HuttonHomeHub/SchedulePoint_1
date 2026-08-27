@@ -93,6 +93,15 @@ export interface SelectionActionContext {
    * `BulkActionGate` type the plural bar uses, imported rather than re-typed: a third structurally
    * identical gate object is how two of them end up disagreeing about what `reason: null` means. */
   clearPlacement: BulkActionGate;
+  /**
+   * Whether `Clear visual start` **exists for this plan** — `clearVisualPlacementApplies`, computed
+   * once by the host from the same input as `clearPlacement` above, never re-derived here.
+   *
+   * ADR-0082's omit-vs-shade line: in Early mode there is no hand-placed start to clear, so the
+   * control is omitted rather than shaded. Measured, that is also 154 px of a row whose wrap costs
+   * the diagram 36 px at 1646 — see `docs/specs/workspace-foot-and-deck/m0-measurement.md`.
+   */
+  clearPlacementApplies: boolean;
   /** Withdraw the selected activity's hand-placed `visualStart`. */
   onClearVisualPlacement: () => void;
   /** Open the activity editor where a conflict actually lives. Opaque on purpose: `features/tsld`
@@ -735,6 +744,14 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             showLabel: 'always' as const,
             order: 6.5,
             label: 'Clear visual start',
+            // **Omitted outside Visual mode, not shaded** (foot-row-and-deck M1). ADR-0082's own
+            // discriminator: the action does not APPLY to a plan scheduled Early, so there is
+            // nothing for a reason sentence to say beyond "this does not exist here". It was the
+            // only permanently-shaded control on the bar, and at 146 px the second-widest of the
+            // ten — measured, omitting it is a necessary half of the fix for a wrap that costs the
+            // diagram 36 px at 1646 (and it is NOT sufficient: `m0-candidates.spec.ts` shows the
+            // bar still wraps at 819.4 px against 775.6 px available).
+            isVisible: (ctx: SelectionActionContext) => ctx.clearPlacementApplies,
             /**
              * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
              *
@@ -769,21 +786,31 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
     // ---------------------------------------------------------------- canvas commands (M2-T1)
     //
     // A separate `find` group, so the primitive draws its rule between "what to do with this
-    // activity" and "how to look at it". None is pen-gated: looking is not editing, and none of the
-    // three writes anything.
-    //
-    // `showLabel: 'always'` matches the object actions above rather than the Row-1 registrations
-    // these replace, and the reason is the surface: this is a compact bar of a handful of commands
-    // where the name IS the affordance, not a 25-item row rationing width (`selectionActionItems`'
-    // own docblock). It is also why they are `tier: 1` — demote last.
-    // ---------------------------------------------------------------- canvas commands (M2-T1)
-    //
-    // A separate `find` group, so the primitive draws its rule between "what to do with this
     // activity" and "how to look at it". Neither is pen-gated: looking is not editing.
     //
     // `showLabel: 'always'` matches the object actions above rather than the Row-1 registrations
     // these replace, and the reason is the surface: this is a compact bar of a handful of commands
     // where the name IS the affordance, not a 25-item row rationing width. Same for `tier: 1`.
+    //
+    // **This paragraph was here TWICE**, in near-identical copies, and the deleted one still said
+    // "none of the three" after `float-paths` left. A comment that disagrees with its neighbour
+    // about how many items it governs is the drift class this repository keeps filing, and it was
+    // sitting in the block being edited.
+    //
+    // **`zoom-to-selection` is `showLabel: 'never'` as of the foot-row-and-deck epic, and that
+    // reverses the rule above for exactly one control.** The surface argument is still right, and
+    // it is why every other item here keeps its label. What changed is that the bar stopped being
+    // compact: at ten items it needs 1037.4 px and is given 775.6 px at 1646, so it wraps onto a
+    // second line and the diagram pays 36 px for it. Measured, dropping this one label plus
+    // omitting `clear-visual-placement` is the whole fix — `m1-icon-only.spec.ts` variant F, foot
+    // row 77 → 41 px, canvas 757 → 793. `Crosshair` carries it, and `ToolbarButton` pins the
+    // accessible name to `aria-label` when the label is hidden; the ADR-0090 M3-T2 revert this
+    // warns about happened to four items that had **no icon at all**, which is a different case
+    // and the reason that check was worth making rather than assuming.
+    //
+    // Moving these two to the command deck instead was approved and then **withdrawn on its own
+    // measurement**: the deck goes two lines → three at 1646, costing 58 px to save 36. See
+    // `docs/specs/workspace-foot-and-deck/m0-measurement.md`.
     //
     // Both stay behind the flags their Row-1 originals carried, so flag-off is byte-for-byte the
     // pre-M2 surface on BOTH surfaces. Their Row-1 "Coming soon" placeholders are deliberately NOT
@@ -795,7 +822,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             id: 'zoom-to-selection',
             group: 'find',
             tier: 1,
-            showLabel: 'always',
+            showLabel: 'never',
             order: 7,
             // 'Zoom to selection', not the shorter 'Zoom to' this first shipped with. The bar is
             // named "Actions for <activity>", so in context the short form reads fine — but an

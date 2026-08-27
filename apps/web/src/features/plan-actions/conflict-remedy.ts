@@ -96,6 +96,25 @@ export interface ClearVisualPlacementInput {
 }
 
 /**
+ * Whether this action **exists for this plan at all** — as opposed to existing and being shut.
+ *
+ * ADR-0082 draws that line and it is not a shade of the same thing: *omit* when the action does not
+ * apply to the object, *shade with a reason* when it is shut by a state the reader can change or by
+ * their role. A plan in Early mode has no hand-placed `visualStart` to clear, so there is nothing
+ * here to refuse — and the control was holding 146 px of a row that wraps, to say so.
+ *
+ * **It is a separate predicate rather than a third field on the gate's return**, because
+ * `BulkActionGate` is shared with the plural bar where `applicable` would be meaningless for `link`
+ * and `remove`. The gate calls it, so `schedulingMode` is still read in exactly one place — which
+ * is the property the gate's own docblock was extracted to protect.
+ */
+export function clearVisualPlacementApplies(
+  input: Pick<ClearVisualPlacementInput, 'schedulingMode'>,
+): boolean {
+  return input.schedulingMode === 'VISUAL';
+}
+
+/**
  * Whether clearing a hand-placed `visualStart` is actionable, and why not when it is not.
  *
  * **Extracted because it now has two call sites** (ADR-0094 M4-T1): the command surface item and the
@@ -109,7 +128,7 @@ export function clearVisualPlacementGate(input: ClearVisualPlacementInput): {
   enabled: boolean;
   reason: string | null;
 } {
-  if (input.schedulingMode !== 'VISUAL') {
+  if (!clearVisualPlacementApplies(input)) {
     return { enabled: false, reason: 'Only available in Visual mode' };
   }
   if (!input.canEditSchedule) {

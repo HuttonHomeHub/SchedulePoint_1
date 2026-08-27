@@ -46,6 +46,17 @@ export interface SelectionContextInput {
   /** `reason` is required and present exactly when `enabled` is false — `BulkActionGate` never
    * invents one, so a host that cannot offer this must say why. */
   clearPlacement?: { enabled: boolean; reason: string | null } | undefined;
+  /**
+   * Whether `Clear visual start` **applies to this plan at all** — `clearVisualPlacementApplies`.
+   *
+   * **Defaults to `true`, and the direction of that default is the decision.** A host that forgets
+   * to wire it gets exactly today's behaviour (the control renders, shaded, with its reason), which
+   * is a no-op rather than a regression. Defaulting to `false` would mean a host that wires
+   * `clearPlacement` enabled but forgets this one renders a capability with **no entry point** —
+   * ADR-0081's defect, and one this repository has now recorded five times. Forgetting must fail
+   * towards the status quo, never towards a vanished control.
+   */
+  clearPlacementApplies?: boolean | undefined;
   onOpenLogic: (activity: ActivitySummary) => void;
   onEdit: (activity: ActivitySummary) => void;
   onDelete: (activity: ActivitySummary) => void;
@@ -106,6 +117,7 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
       enabled: false,
       reason: 'Clearing a placement is unavailable here',
     },
+    clearPlacementApplies: input.clearPlacementApplies ?? true,
     onClearVisualPlacement: () => input.onClearVisualPlacement?.(activity),
     onOpenEditorAt: (at) => input.onOpenEditorAt?.(activity, at),
   };
