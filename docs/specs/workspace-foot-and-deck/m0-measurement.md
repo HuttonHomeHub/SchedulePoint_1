@@ -254,3 +254,128 @@ Recorded because each looked right, and because ADR-0058's rule is _verify the c
 - **§1's cost.** Giving the foot row a `chrome` treatment is a token and structure change whose
   height cost depends on the treatment chosen. The contrast matrix already covers the `chrome`
   scope's 31 tokens, so the pairs exist; what is unmeasured is whether the row keeps 41 px.
+
+---
+
+# Corrections — what a second reading and a verification pass changed
+
+`ui-architect` reviewed this document (`design-review.md`) and challenged four decision-bearing
+numbers; `feature-analyst` challenged one inference. **Every challenge was re-measured against the
+running product rather than folded on the strength of a citation** —
+`apps/web/measure-toolbar/m0-verify.spec.ts` and `m0-candidates.spec.ts`. Four of the five stand
+against me, and one of my conclusions is reversed outright.
+
+## C1. `You're editing this plan.` is a phantom — §3's leaf table was wrong
+
+**Upheld.** Measured: the element's own rect is 125.9 × 15, and it is clipped by an ancestor
+`DIV.sr-only` whose rect is **1 × 1** with `clip-path: inset(50%)`.
+
+`CompactPenStatus.tsx:179` applies `sr-only` unless `LockView.messageVisible`, which
+`lock-view.ts` sets on exactly two branches — the pen being **lost**, and an incoming request. In
+the state measured the reader **holds** the pen, so the sentence is announced and not painted.
+
+**How the probe fooled me, because the mechanism is worth knowing.** `sr-only` sits on the OUTER
+span; the message lives in an inner `truncate` span. My "deepest text leaf" rule therefore measured
+the inner element, and `getBoundingClientRect` on a child of a 1 px clipped ancestor still returns
+the child's own intrinsic box — 125.9 px of text nobody can see. A milestone removing this sentence
+"to free 126 px" would have freed **zero**. The visible facts are the other four leaves, 381.3 px.
+
+## C2. Two-line facts ARE free — §3's conclusion is reversed
+
+**Upheld, and this is a correction to my conclusion rather than to a number.** The row is
+`gap-4`, which sets `row-gap: 16px` as well as `column-gap: 16px`. Measured at 1646, at rest:
+
+| facts row                 | row height | foot row      | canvas         |
+| ------------------------- | ---------- | ------------- | -------------- |
+| one line (today)          | 24         | 41            | 793            |
+| wrapped, `row-gap: 16px`  | 64         | **65 (+24)**  | 769 (−24)      |
+| wrapped, **`row-gap: 0`** | **32**     | **41 (same)** | **793 (same)** |
+
+So the product owner's Q3 — _"two lines keeping the same height of the toolbar still"_ — **is
+achievable exactly as asked, at zero cost**, because two 16 px lines are 32 px and the row's floor
+is the 40 px collapse button. §3's "never free" was true only of today's row-gap, and I generalised
+it into a property of the layout. It is one Tailwind class.
+
+## C3. The dock's width is not a viewport property
+
+**Upheld.** The Project Explorer carries a resize separator reporting
+`aria-valuemin="200"`, `aria-valuenow="276"`, `aria-valuemax="420"`. Every reading in this document
+was taken at the 276 px default. The **220 px of user-controlled range is comparable to the
+261.8 px shortfall**, so the same viewport can be inside or outside §0's defect depending on a drag
+the reader has already made. Any gate written for §0 must pin the Explorer's width or it will be
+flaky for a reason that has nothing to do with the code.
+
+## C4. One fact renders twice on one screen
+
+**Upheld in part — two confirmed, not three.** `Data date` renders in the foot row (52 × 16,
+visible) and once more elsewhere (60 × 14, visible) with no popover open. The review's third
+instance is inside `Summary ▾`; this probe's trigger click did not reliably open that popover, so
+**three is not confirmed here and two is**. Worth its own row rather than a claim in this one.
+
+## C5. My §5 inference was wrong — a lens toggle on the deck has precedent
+
+**`feature-analyst` is right and I was wrong.** §5 argued from ADR-0091's "a mode is not a command"
+that promoting a switch onto the deck is what that decision forbade. `tsld-toolbar-items.tsx:227`
+records the opposite: _"The product owner asked for the Legend and the Resource view back on the
+row"_ — both are deck items today, and `lensTogglesIn` (`:322`) excludes anything already on the
+row so it can never appear twice. The mechanism exists, the precedent exists, and it was set by the
+same person asking the question. §5's _count_ stands; its inference does not.
+
+## C6. `docs/TECH_DEBT.md` #202 and #203 do not exist — and both citations are mine
+
+**Upheld, and it is worse than the review found.** The register's highest row is **#201**.
+`docs/adr/0114-…md:346` ends _"Six non-blocking findings are `docs/TECH_DEBT.md` #202."_ and the
+body of merged PR #400 says two menu-clamp gaps are _"filed rather than smuggled in
+(`docs/TECH_DEBT.md` #203)"_. Neither row was ever written; `git show 06a7f6ec -- docs/TECH_DEBT.md`
+adds no `## #` heading at all.
+
+This is ADR-0076 Class 1 committed twice by me in three days, in an ADR and in a merged pull
+request, each time in a sentence whose whole purpose was to claim something had been recorded
+rather than dropped. The rows are written in this epic's first commit.
+
+---
+
+# The decisive measurement — and it falsifies the cheap fix
+
+C2 makes a two-line facts row free and takes it from 481.4 px to 250 px. That frees 231.4 px
+against §0's 261.8 px shortfall, which looks close enough to try. **It buys nothing.**
+
+| viewport | selected, facts 1 line | selected, facts 2 lines @ `row-gap: 0`  |
+| -------- | ---------------------- | --------------------------------------- |
+| 1646     | foot 77, canvas 757    | foot **77**, canvas **757** — unchanged |
+| 1440     | foot 117, canvas 484   | foot **77**, canvas **524 (+40)**       |
+
+**A wrapping row breaks between items, not by total width** — ADR-0114 M2 recorded exactly this,
+freeing 164 px and buying zero height, and it is now the seventh consecutive width expectation in
+this repository contradicted by its own measurement. Two-line facts help at 1440 and do **nothing**
+at 1646, which is the width the product owner actually uses.
+
+So the fix must reduce the **dock's own** width. Each candidate was applied by hiding the real
+controls in the real row (`m0-candidates.spec.ts`) rather than by adding up their widths:
+
+| candidate                                                   | items | items width | **1920** | **1646** | **1440** |
+| ----------------------------------------------------------- | ----- | ----------- | -------- | -------- | -------- |
+| today                                                       | 10    | 965.4       | 41       | 77       | 117      |
+| **A** omit `clear-visual-placement` (shaded outside Visual) | 9     | 819.4       | 41       | **77**   | 117      |
+| **B** A + `zoom-to-selection` to the deck                   | 8     | 667.1       | 41       | **41** ✓ | 117      |
+| **C** B + `isolate-logic` to the deck                       | 7     | 588.1       | 41       | **41** ✓ | 117      |
+| **D** move both, but keep `clear-visual-placement`          | 8     | 734.2       | 41       | **77**   | 117      |
+
+Read `footH`, not the line count — see the instrument note below.
+
+1. **A alone does not fix 1646.** Omitting the shaded control leaves 819.4 px plus 64 px of gaps
+   against 775.6 px available. The plan that begins "omit `clear-visual-placement`, then decide the
+   remaining 108 px" is right that it is insufficient and the residue is not 108 px of free choice —
+   at 1646 nothing short of taking a second control off the bar closes it.
+2. **D does not fix it either**, so omitting `clear-visual-placement` is _necessary_ as well as
+   insufficient. Both halves of B are load-bearing.
+3. **B is the minimum that fixes 1646**, and returns the 36 px: canvas 757 → 793. C buys margin.
+4. **Nothing measured fixes 1440.** Even C's 588.1 px exceeds the 569.6 px available. A milestone
+   claiming to fix "the wrap" must say it fixes 1920 and 1646 and not 1440, or it is claiming
+   something the measurement does not support.
+
+**Instrument note — a sixth defect, in this document's own table.** The `lines` column counts
+distinct `y` values among `[data-toolbar-item]`s, and the object bar carries content that is not an
+item (its own selection sentence). At 1646 candidate D reports `lines: 1` beside `footH: 77`: the
+eight controls do sit on one line, and the bar is still two lines tall because its label wrapped.
+**`footH` is the criterion and `lines` is not**, which is why the table above is read the way it is.
