@@ -359,6 +359,12 @@ export interface TsldPanelProps {
   /** Whether the viewer may report progress (Contributor upward) — gates the selection bar's Progress
    * action (role only, not pen-gated), mirroring the toolbar's Update-progress command. Default false. */
   canReportProgress?: boolean;
+  /** Whether the viewer may write notes (Contributor upward) — gates the selection bar's Notes
+   * action. Role only, never pen-gated (ADR-0046). Default false. */
+  canWriteNotes?: boolean;
+  /** Open the selected activity's Notes tab — the selection bar's **Notes** action, moved here from
+   * the command surface (`docs/specs/object-bar-defects/` M2). Host-owned dialog. */
+  onNotes?: (activity: ActivitySummary) => void;
   /** Report the current canvas selection to the host (toolbar quick-wins F0) — the id of the selected
    * activity, or null when none. Called on every selection transition (select / chain-nav / focus /
    * delete-reconcile) so the main toolbar's selection-aware items can read it. Optional: absent ⇒ no
@@ -528,6 +534,8 @@ export function TsldPanel({
   onResources,
   onProgress,
   canReportProgress = false,
+  canWriteNotes = false,
+  onNotes,
   onSelectionChange,
   onPluralSelectionChange,
   onRefresh,
@@ -1403,8 +1411,10 @@ export function TsldPanel({
         canEditSchedule: canEdit,
         scheduleRefusal,
         canReportProgress,
+        canWriteNotes,
         clearPlacement,
         onOpenLogic: (a) => onOpenLogic?.(a),
+        onNotes,
         onEdit: (a) => onEditActivity?.(a),
         onDelete: (a) => onDeleteActivity?.(a),
         onDissolve: onDissolveSummary,

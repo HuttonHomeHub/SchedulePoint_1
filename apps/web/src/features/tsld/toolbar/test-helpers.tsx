@@ -94,8 +94,6 @@ export function makeTsldToolbarContext(
     selectedActivity: undefined,
     revealComments: vi.fn(),
     notesOpen: false,
-    canWriteNotes: true,
-    openActivityNotes: vi.fn(),
     canEditSchedule: true,
     lateOverlayActive: false,
     // Insight lenses

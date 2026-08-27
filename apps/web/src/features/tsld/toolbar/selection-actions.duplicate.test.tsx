@@ -50,6 +50,8 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
+    canWriteNotes: true,
+    onNotes: vi.fn(),
     isSummary: false,
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.

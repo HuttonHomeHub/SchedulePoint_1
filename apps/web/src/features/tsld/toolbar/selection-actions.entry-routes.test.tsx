@@ -39,6 +39,8 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
+    canWriteNotes: true,
+    onNotes: vi.fn(),
     onOpenLogic: spies.onOpenLogic,
     onEdit: spies.onEdit,
     onDelete: spies.onDelete,
@@ -68,10 +70,14 @@ function buttonNames(): (string | null)[] {
 beforeEach(() => vi.clearAllMocks());
 
 describe('SelectionActionsBar — entry-route actions (flag on)', () => {
-  it('orders the bar Logic → Progress → Resources → Edit → Duplicate → Delete → Clear placement', () => {
+  it('orders the bar Logic → Notes → Progress → Resources → Edit → Duplicate → Delete → Clear placement', () => {
     render(<SelectionActionsBar context={ctx()} />);
     expect(buttonNames()).toEqual([
       'Logic',
+      // Notes arrived from the command surface (`docs/specs/object-bar-defects/` M2) and sits
+      // beside Logic, where a planner last reached it — Add note opened the Logic panel and
+      // scrolled to a Notes section until ADR-0062 gave notes a tab.
+      'Notes',
       'Progress',
       'Resources',
       // `Steps` sat here until it was removed as a duplicate entry point

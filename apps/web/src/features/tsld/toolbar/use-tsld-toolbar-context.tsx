@@ -530,13 +530,6 @@ export function useTsldToolbarContext({
       revealComments,
       // Comments toggle pressed state (entry-route win 1) — the docked notes panel's open flag.
       notesOpen: model.notesOpen,
-      canWriteNotes,
-      // Add note (F4/U4): open the selected activity's Logic panel AND reveal + focus its Notes section
-      // (parity with Comments for plan notes), so the user lands on notes rather than Predecessors. A
-      // no-op when nothing is selected.
-      openActivityNotes: () => {
-        if (selectedActivity) revealActivityNotes(selectedActivity);
-      },
       canEditSchedule,
       lateOverlayActive,
 

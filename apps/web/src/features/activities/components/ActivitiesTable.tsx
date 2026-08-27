@@ -130,6 +130,7 @@ export function ActivitiesTable({
   planId,
   canEditSchedule,
   canReportProgress = false,
+  canWriteNotes = false,
   editorGating,
   onOpenEditor,
   onOpenLogic,
@@ -147,6 +148,9 @@ export function ActivitiesTable({
   canEditSchedule: boolean;
   /** May report progress (Contributor upward). Planners also have it. */
   canReportProgress?: boolean;
+  /** Whether the viewer may write notes (Contributor upward) — gates the `Notes` row action. Role
+   * only, never pen-gated (ADR-0046). Default false. */
+  canWriteNotes?: boolean;
   /**
    * The tabbed editor's per-scope gate (ADR-0060 §6), derived once by the plan workspace and passed
    * down. Required in practice, since the editor is the only edit surface; optional in the type so the
@@ -349,6 +353,29 @@ export function ActivitiesTable({
     const actions: RowAction[] = [];
     if (onOpenLogic) {
       actions.push({ key: 'logic', label: 'Logic', onSelect: () => onOpenLogic(activity) });
+    }
+    /*
+     * **Notes — added with the object bar's item, in one commit**
+     * (`docs/specs/object-bar-defects/` M2).
+     *
+     * The milestone's subject was the object bar, and stopping there would have left this roster
+     * one item short of it — which is the split-vocabulary defect the same milestone's M1 refused
+     * to create in the other direction, when it removed `Steps` from both surfaces rather than one.
+     * `selection-actions.tsx` states the rule: the two vocabularies must match so the same
+     * operation reads the same in both places.
+     *
+     * It also removes a two-step: the only route to an activity's notes from this menu was `Logic`
+     * followed by a tab click, which `e2e-notes` describes in its own comment as "the row menu's
+     * only route into the editor".
+     *
+     * Role-gated, never pen-gated (ADR-0046) — the same rule `Progress` below follows.
+     */
+    if (canWriteNotes) {
+      actions.push({
+        key: 'notes',
+        label: 'Notes',
+        onSelect: () => openFor(activity, 'notes'),
+      });
     }
     if (canReportProgress) {
       actions.push({

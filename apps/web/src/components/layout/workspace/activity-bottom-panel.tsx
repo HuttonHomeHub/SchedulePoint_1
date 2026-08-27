@@ -110,6 +110,7 @@ export function ActivityBottomPanel({
           planId={model.planId}
           canEditSchedule={model.canEditSchedule}
           canReportProgress={model.canProgress}
+          canWriteNotes={model.canWriteNotes}
           editorGating={model.activityEditorGating}
           /*
            * **One editor for the plan** (Graphite M6-T4). The table used to mount its own beside

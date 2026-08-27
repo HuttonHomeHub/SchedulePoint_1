@@ -50,6 +50,8 @@ const rowContext = (): SelectionBarContext => ({
   canEditSchedule: true,
   scheduleRefusal: () => null,
   canReportProgress: true,
+  canWriteNotes: true,
+  onNotes: vi.fn(),
   isSummary: false,
   conflictKey: null,
   clearPlacement: { enabled: false, reason: 'Nothing to clear' },

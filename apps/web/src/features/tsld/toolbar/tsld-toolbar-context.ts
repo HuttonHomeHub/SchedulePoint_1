@@ -263,12 +263,14 @@ export interface TsldToolbarContext {
   /** Whether the docked notes panel is open — drives the Comments toggle's pressed state (entry-route
    * win 1). Always `false` flag-off (Comments is a scroll action there, not a toggle). */
   notesOpen: boolean;
-  /** Whether the viewer may write notes (`canWriteNotes`, Contributor+; NOT pen-gated). Gates the
-   * **Add note** item (F4). */
-  canWriteNotes: boolean;
-  /** Open the selected activity's Logic panel at its Notes section (F4) — the same path as the canvas
-   * "Open logic". A no-op when nothing is selected. */
-  openActivityNotes: () => void;
+  /* **`canWriteNotes` and `openActivityNotes` were here and are gone**
+     (`docs/specs/object-bar-defects/` M2). They existed for the **Add note** command, which has
+     moved to the object bar as `Notes` — an action whose subject is the selected activity belongs
+     on the object's surface (ADR-0093). Nothing on this command surface reads them any more.
+
+     `openActivityNotes`'s docblock also described opening "the Logic panel at its Notes section",
+     which stopped being true when ADR-0062 gave notes a tab of their own; it is recorded here
+     rather than carried, because a comment nobody re-read is how the Gantt lost its notes route. */
   /** Whether the viewer may edit the schedule (`canEditSchedule`, Planner+ **and** the pen). Gates the
    * mutating items. (**Clear visual start** cited this until ADR-0094 M4-T1 moved it to the
    * selection bar; {@link lateOverlayActive} below is now read only by that surface's shared gate.) */

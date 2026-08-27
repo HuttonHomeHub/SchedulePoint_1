@@ -31,7 +31,6 @@ const SELECTED = { id: 'a1', version: 7, name: 'Excavate' } as unknown as Activi
 const spies = {
   goToDate: vi.fn(),
   revealComments: vi.fn(),
-  openActivityNotes: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -39,7 +38,6 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     goToDate: spies.goToDate,
     summaryContent: null,
     revealComments: spies.revealComments,
-    openActivityNotes: spies.openActivityNotes,
     ...over,
   });
 }
@@ -125,51 +123,27 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
   // quick-wins items' behaviour, and absence is pinned once, structurally, in
   // `selection-duplication.structural.test.ts`.
 
-  // --- F4 · Add note ------------------------------------------------------------------------
-  it('Add note: enabled with a resolved selection + canWriteNotes; opens the activity notes (not pen-gated)', () => {
-    renderRows(
-      ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canWriteNotes: true }),
-      false,
-    );
-    const btn = screen.getByRole('button', { name: 'Add note' });
-    expect(btn).not.toHaveAttribute('aria-disabled', 'true');
-    // Logic discoverability (entry-route gap #6): the hover tooltip points a toolbar-only user at the
-    // Logic panel, without changing the accessible name ("Add note").
-    // This one KEEPS its label prefix where the disabled cases below dropped theirs, and the
-    // difference is real rather than an inconsistency: this is an ENABLED button carrying a
-    // `description`, and `ToolbarButton` composes `label — description` for those. The disabled
-    // cases carry a `disabledReason`, which stands alone once the label is visible.
-    expect(btn).toHaveAttribute('title', 'Add note — Opens the Logic panel (links & notes)');
-    fireEvent.click(btn);
-    expect(spies.openActivityNotes).toHaveBeenCalledOnce();
-  });
-
-  it('Add note: disabled when the selected row is gone (U3 — resolved selection)', () => {
-    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: undefined, canWriteNotes: true }));
-    const btn = screen.getByRole('button', { name: 'Add note' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Select an activity first');
-  });
-
-  it('Add note: disabled with "Select an activity first" when nothing is selected', () => {
-    renderRows(ctx({ selectedActivityId: null, selectedActivity: undefined }));
-    const btn = screen.getByRole('button', { name: 'Add note' });
-    expect(btn).toHaveAttribute('aria-disabled', 'true');
-    expect(btn).toHaveAttribute('title', 'Select an activity first');
-  });
-
-  it('Add note: disabled with the role reason for a viewer who cannot write notes', () => {
-    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED, canWriteNotes: false }));
-    const btn = screen.getByRole('button', { name: 'Add note' });
-    expect(btn).toHaveAttribute('title', 'You don’t have permission to add notes');
-  });
-
-  it('Add note: role reason wins over selection for a viewer with nothing selected (U2/A5 precedence)', () => {
-    renderRows(
-      ctx({ selectedActivityId: null, selectedActivity: undefined, canWriteNotes: false }),
-    );
-    const btn = screen.getByRole('button', { name: 'Add note' });
-    expect(btn).toHaveAttribute('title', 'You don’t have permission to add notes');
+  /*
+   * **F4 · Add note — five cases were here, and the item has moved**
+   * (`docs/specs/object-bar-defects/` M2).
+   *
+   * It is `Notes` on the object bar now: its `isEnabled` consulted the selection, which is
+   * ADR-0093's discriminator for an action belonging on the object's surface rather than the
+   * command surface. The gating those cases pinned moved with it — see
+   * `selection-actions.notes.test.tsx`, which covers the role gate and its reason.
+   *
+   * **Three of the five had nothing left to assert**, and that is the move's clearest dividend: the
+   * object bar renders only WITH a selection (`TsldPanel`), so "select an activity first", "the
+   * selected row is gone" and "the role reason wins over the selection reason" are states the new
+   * item cannot be in. A two-clause reason becomes one clause because the surface guarantees the
+   * other.
+   *
+   * The absence itself is pinned by the sweep below (`does not register Add note`), not left to
+   * this comment.
+   */
+  it('does not register Add note on the command surface', () => {
+    renderRows(ctx({ selectedActivityId: 'a1', selectedActivity: SELECTED }));
+    expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument();
   });
 
   // --- F5 · Clear visual start -----------------------------------------------------------

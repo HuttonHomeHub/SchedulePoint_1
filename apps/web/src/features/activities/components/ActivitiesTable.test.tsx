@@ -110,6 +110,7 @@ function renderTable(
         planId="pl1"
         canEditSchedule={canEditSchedule}
         canReportProgress={canReportProgress}
+        canWriteNotes
         editorGating={gatingFor(canEditSchedule, canReportProgress)}
       />
     </QueryClientProvider>,

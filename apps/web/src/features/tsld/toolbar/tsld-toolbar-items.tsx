@@ -38,7 +38,6 @@ import {
   Spline,
   Split,
   SquareDashedMousePointer,
-  StickyNote,
   TriangleAlert,
   Undo2,
   Users,
@@ -1968,19 +1967,6 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     label: 'Go to today',
     icon: <LocateFixed className="size-4" />,
   };
-  const addNoteShape = {
-    id: 'add-note',
-    group: 'tools' as const,
-    row: 'strip' as const,
-    tier: 2 as const,
-    order: 4,
-    label: 'Add note',
-    // Toolbar-only users have no other route into the dependency/logic panel (entry-route gap #6): a
-    // tooltip clause makes it discoverable without renaming the visible "Add note" affordance. Appended
-    // to the hover `title` only (the accessible name stays "Add note").
-    description: 'Opens the Logic panel (links & notes)',
-    icon: <StickyNote className="size-4" />,
-  };
   const commentsShape = {
     id: 'comments',
     group: 'object' as const,
@@ -2640,39 +2626,19 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       isEnabled: (ctx) => ctx.canAutoArrange,
       onActivate: (ctx) => ctx.requestAutoArrange(),
     },
-    // Add note — opens the selected activity's Logic panel at its Notes section (toolbar quick-wins F4,
-    // the same path as the canvas "Open logic"). Role-gated (`canWriteNotes`, Contributor+) + a
-    // selection; NOT pen-gated (the notes precedent, ADR-0046). Absent when `VITE_NOTES` is off (there
-    // is no notes section to open). Flag-off it is the "Coming soon" placeholder, byte-for-byte.
-    TOOLBAR_QUICK_WINS_ENABLED
-      ? {
-          ...addNoteShape,
-          // **Not in the Gantt (M1).** Spec F4 found this was the ONLY way a Contributor reached
-          // progress from a Gantt selection — via a button labelled "Add note" plus a tab change,
-          // which is the discoverability failure that milestone exists to fix. Now that the object
-          // bar is docked in the Gantt with a correctly-labelled route, leaving this here would add
-          // a third entry point beside two bad ones rather than replacing them: ADR-0093's defect
-          // reproduced inside the milestone meant to discharge it, which is exactly how the ux
-          // review put it.
-          //
-          // It stays on the canvas, where it is the toolbar's own route into the Logic panel for a
-          // planner working from the command surface (entry-route gap #6, in `addNoteShape`'s own
-          // description).
-          isVisible: (ctx) => NOTES_ENABLED && ctx.planView !== 'gantt',
-          // Gate on the RESOLVED row (U3): an id whose row was deleted elsewhere resolves to undefined,
-          // so an enabled button always has a real target for `openActivityNotes`.
-          isEnabled: (ctx) => ctx.canWriteNotes && ctx.selectedActivity != null,
-          // Permanent role gate BEFORE the transient selection (U2/A5): a Contributor-lacking user is
-          // told they can't add notes, not (misleadingly) to select something first.
-          disabledReason: (ctx) =>
-            !ctx.canWriteNotes
-              ? 'You don’t have permission to add notes'
-              : ctx.selectedActivity == null
-                ? 'Select an activity first'
-                : undefined,
-          onActivate: (ctx) => ctx.openActivityNotes(),
-        }
-      : placeholderItem(addNoteShape),
+    // **`add-note` MOVED to the object bar** (`docs/specs/object-bar-defects/` M2), as `Notes`.
+    //
+    // Its `isEnabled` consulted `ctx.selectedActivity`, which is ADR-0093's discriminator verbatim:
+    // an action whose subject is the selected object belongs on the object's surface. That decision
+    // deleted `Report progress` from this registry for exactly the same reason, so keeping this one
+    // beside a new `notes` item on the bar would have re-created the defect it removed.
+    //
+    // **The Gantt exclusion goes with it, and it is the reason the move was needed.** It read
+    // `ctx.planView !== 'gantt'`, on the stated ground that "the object bar is docked in the Gantt
+    // with a correctly-labelled route" — and there was no such route: the bar had no notes item,
+    // `Logic` opens the Logic tab, and the Gantt row menu mirrors the bar. So a planner working in
+    // the Gantt could not reach an activity's notes at all. On the object bar the item is present
+    // in both views, which is what that sentence described and did not deliver.
     // **`snap-to-grid` was deleted (workspace-chrome M2).** Its toggle never decided whether a
     // placement snapped — the engine rolls every `visualStart` forward to a working instant
     // unconditionally (`compute.ts:335-338` → `instants.ts:18-22`) — only which way a tie broke

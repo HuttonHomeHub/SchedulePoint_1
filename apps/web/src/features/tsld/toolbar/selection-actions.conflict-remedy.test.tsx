@@ -38,6 +38,8 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
+    canWriteNotes: true,
+    onNotes: vi.fn(),
     isSummary: false,
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },

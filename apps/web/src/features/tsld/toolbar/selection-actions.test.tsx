@@ -33,6 +33,8 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
+    canWriteNotes: true,
+    onNotes: vi.fn(),
     onOpenLogic: spies.onOpenLogic,
     onEdit: spies.onEdit,
     onDelete: spies.onDelete,
@@ -92,8 +94,16 @@ describe('SelectionActionsBar (floating selection actions)', () => {
     expect(
       within(bar)
         .getAllByRole('button')
-        .map((b) => b.textContent),
-    ).toEqual(['Logic', 'Edit', 'Duplicate', 'Delete', 'Clear visual start']);
+        // Accessible name first, `textContent` as the fallback: `Notes` carries an `srDescription`
+        // (as `Progress` does), which renders an `sr-only` span INSIDE the button, so raw text
+        // reads "NotesAdd or read notes…". The entry-routes suite next door reads it the same way.
+        .map((b) => b.getAttribute('aria-label') ?? b.textContent),
+      // `Notes` is here in the base set on purpose: it rides `VITE_NOTES` alone, not
+      // `VITE_ENTRY_ROUTES`. It came from the command surface, where it was gated on the
+      // quick-wins BATCH flag as well — a gate that meant "was this command added in that batch"
+      // and says nothing about an object action. `VITE_NOTES` is the one that means what it needs:
+      // is there a notes surface to open at all.
+    ).toEqual(['Logic', 'Notes', 'Edit', 'Duplicate', 'Delete', 'Clear visual start']);
   });
 
   it('runs the read action (logic) even in read-only', () => {

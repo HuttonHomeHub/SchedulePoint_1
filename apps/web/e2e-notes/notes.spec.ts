@@ -30,13 +30,17 @@ test('a member adds, edits and deletes a note and the row badge tracks it', asyn
   await createAndOpenPlan(page, 'Tower');
   await addActivity(page, 'Erect frame');
 
-  // The row menu's only route into the editor is "Logic" — it opens on the Logic tab, so switch
-  // to Notes (ADR-0062: Notes is its own tab of the tabbed editor, not a section under Logic).
+  // **The row menu has a `Notes` route now** (`docs/specs/object-bar-defects/` M2), so this is one
+  // press rather than "open Logic, then find the Notes tab" — which is what this comment used to
+  // describe as "the row menu's only route into the editor".
+  //
+  // The tab is asserted rather than assumed: the previous arrangement also opened this editor, just
+  // not on notes, so "a dialog appeared" would pass either way.
   await page.getByRole('button', { name: 'Actions for Erect frame' }).click();
-  await page.getByRole('menuitem', { name: 'Logic' }).click();
+  await page.getByRole('menuitem', { name: 'Notes' }).click();
   const logic = activityEditor(page);
   await expect(logic.getByRole('heading', { name: 'Erect frame', exact: true })).toBeVisible();
-  await logic.getByRole('tab', { name: 'Notes' }).click();
+  await expect(logic.getByRole('tab', { name: 'Notes' })).toHaveAttribute('aria-selected', 'true');
   await expect(logic.getByRole('heading', { name: 'Notes' })).toBeVisible();
   await expect(logic.getByText('No notes yet.')).toBeVisible();
 

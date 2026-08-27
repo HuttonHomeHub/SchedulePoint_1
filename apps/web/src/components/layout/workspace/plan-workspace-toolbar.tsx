@@ -682,6 +682,8 @@ export function ToolbarPlanWorkspace({
       onResources={model.onResourcesActivity}
       onProgress={model.onProgressActivity}
       canReportProgress={model.canProgress}
+      canWriteNotes={model.canWriteNotes}
+      onNotes={model.revealActivityNotes}
       // The conflict remedies (ADR-0094 M4), and the `clear-visual-placement` action M4-T1 moved off
       // the command surface onto the selection bar. The gate is computed HERE because it reads the
       // plan's `schedulingMode` and the Late-start overlay, neither of which `TsldPanel` owns — and
@@ -823,6 +825,7 @@ export function ToolbarPlanWorkspace({
     canEditSchedule: model.canEditSchedule,
     scheduleRefusal: model.scheduleRefusal,
     canReportProgress: model.canProgress,
+    canWriteNotes: model.canWriteNotes,
     clearPlacement: clearVisualPlacementGate({
       schedulingMode: plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
       canEditSchedule: model.canEditSchedule,
@@ -838,6 +841,7 @@ export function ToolbarPlanWorkspace({
     onDuplicateBand: model.onDuplicateBand,
     onResources: model.onResourcesActivity,
     onProgress: model.onProgressActivity,
+    onNotes: model.revealActivityNotes,
     onClearVisualPlacement: (a) => void model.clearVisualPlacement(a.id, a.version),
     onOpenEditorAt: model.onOpenActivityEditorAt,
   };

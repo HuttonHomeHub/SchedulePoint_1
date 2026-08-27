@@ -10,7 +10,7 @@ import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
 /**
  * Toolbar quick-wins with `VITE_NOTES` OFF but quick-wins ON (T6): the two notes-dependent items —
- * **Comments** and **Add note** — must be absent (not dead controls), since there is no notes surface
+ * **Comments** must be absent (not a dead control), since there is no notes surface
  * to reveal / open. The other three quick-wins (Go-to-today / Update-progress / Clear-visual-placement)
  * are unaffected by `VITE_NOTES`. The flag-on-with-notes matrix lives in `tsld-toolbar-quick-wins.test.tsx`.
  */
@@ -45,10 +45,13 @@ function renderRows(context: TsldToolbarContext) {
 }
 
 describe('TSLD toolbar quick-wins (VITE_NOTES off)', () => {
-  it('hides Comments and Add note when notes are disabled (T6)', () => {
+  it('hides Comments when notes are disabled (T6)', () => {
     renderRows(ctx());
     expect(screen.queryByRole('button', { name: 'Comments' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add note' })).not.toBeInTheDocument();
+    // **`Add note` was asserted here too and has moved** to the object bar
+    // (`docs/specs/object-bar-defects/` M2), where its own `NOTES_ENABLED` gate applies. Asserting
+    // it here now would pass for the wrong reason — the item is absent from this surface in EVERY
+    // flag state, so the case would say nothing about the flag it is named for.
   });
 
   it('still offers the notes-independent quick-win', () => {

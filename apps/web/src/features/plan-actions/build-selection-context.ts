@@ -41,6 +41,8 @@ export interface SelectionContextInput {
    */
   scheduleRefusal: (action: string) => string | null;
   canReportProgress: boolean;
+  /** Whether the viewer may write notes — a Contributor right, NOT pen-gated (ADR-0046). */
+  canWriteNotes: boolean;
   /** `reason` is required and present exactly when `enabled` is false — `BulkActionGate` never
    * invents one, so a host that cannot offer this must say why. */
   clearPlacement?: { enabled: boolean; reason: string | null } | undefined;
@@ -52,6 +54,7 @@ export interface SelectionContextInput {
   onDuplicateBand?: ((activity: ActivitySummary) => void) | undefined;
   onResources?: ((activity: ActivitySummary) => void) | undefined;
   onProgress?: ((activity: ActivitySummary) => void) | undefined;
+  onNotes?: ((activity: ActivitySummary) => void) | undefined;
   onClearVisualPlacement?: ((activity: ActivitySummary) => void) | undefined;
   /** `at` is the editor scope the remedy routes to — a closed union, not a free string
    * (`selection-actions.tsx:98`). Typed loosely here first, which the compiler rejected. */
@@ -82,6 +85,7 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
     canEditSchedule: input.canEditSchedule,
     scheduleRefusal: input.scheduleRefusal,
     canReportProgress: input.canReportProgress,
+    canWriteNotes: input.canWriteNotes,
     // A fact about the activity, not a policy a host could reasonably differ on.
     isSummary: activity.type === 'WBS_SUMMARY',
     onOpenLogic: () => input.onOpenLogic(activity),
@@ -92,6 +96,7 @@ export function buildSelectionBarContext(input: SelectionContextInput): Selectio
     onDuplicateBand: () => input.onDuplicateBand?.(activity),
     onResources: () => input.onResources?.(activity),
     onProgress: () => input.onProgress?.(activity),
+    onNotes: () => input.onNotes?.(activity),
     // Derived through the SAME `CONFLICT_FLAGS` the count and the filter run (ADR-0094 D2), so a
     // planner who arrived by pressing Next conflict and one who simply clicked the bar meet the
     // same remedy.
