@@ -1,5 +1,49 @@
 # @repo/web
 
+## 0.108.2
+
+### Patch Changes
+
+- [#400](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/400) [`06a7f6e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/06a7f6ec837778a4635ec8b820887a4d3b211657) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan command deck now paints every command label at one size. It was painting two: eleven at
+  14 px and six at 10 px, side by side on the same row.
+  
+  Two separate causes, and the second was the one nobody had noticed — a command's label grew from
+  10 px to 14 px **the moment it was shaded**, because the rule that shrank it targeted the last span
+  in the button and a disabled control gains an extra, invisible one. On a screen with Add note and
+  Next conflict unavailable, both were rendering larger than Legend beside them.
+  
+  Measured before and after: the deck stays **two lines and 108 px tall** at 1920 and 1646, so the
+  larger labels cost the diagram nothing.
+
+- [#400](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/400) [`06a7f6e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/06a7f6ec837778a4635ec8b820887a4d3b211657) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Row menus no longer run off the bottom of the window. A menu was positioned as though it were always
+  200 px tall, so a taller one opened low on screen put its last item — **Delete**, on every row —
+  below the fold, where it could be reached by keyboard and not by clicking.
+  
+  The menu is now measured before it is placed, so it stays on screen whatever it contains.
+
+- [#400](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/400) [`06a7f6e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/06a7f6ec837778a4635ec8b820887a4d3b211657) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - **Notes** is now an action on the activity itself, beside Logic — on the canvas, in the Gantt, and
+  in the activities table's row menu.
+  
+  It used to be **Add note** on the command toolbar, and it was hidden in the Gantt on the grounds
+  that the activity's own actions offered a better-labelled route. They did not: there was no notes
+  action there at all, so **in the Gantt view an activity's notes could not be reached by any means**.
+  Logic opens the Logic tab; notes have had a tab of their own since the editor gained tabs.
+  
+  From the activities table it is also one press instead of two — the only route was Logic followed by
+  a tab click.
+  
+  Nobody loses a route: the toolbar button is gone because the same action now sits on every surface
+  that shows you the activity, rather than on one that shows you the plan.
+
+- [#400](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/400) [`06a7f6e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/06a7f6ec837778a4635ec8b820887a4d3b211657) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - **Steps** has been removed from the activity actions bar and the activities table row menu. It
+  opened the same dialog on the same **Progress** tab as the Progress button beside it — the only
+  difference was that it scrolled you to the weighted steps rather than the top.
+  
+  Nothing is lost: the weighted steps are on the Progress tab, which both remaining entry points open.
+  
+  It was also the only action on that bar that vanished without the pen rather than shading with a
+  reason like Edit, Duplicate and Delete, so the control you saw appear and disappear goes with it.
+
 ## 0.108.1
 
 ### Patch Changes
