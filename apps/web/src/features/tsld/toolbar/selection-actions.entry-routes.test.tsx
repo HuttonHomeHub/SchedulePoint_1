@@ -75,7 +75,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
     render(<SelectionActionsBar context={ctx()} />);
     expect(buttonNames()).toEqual([
       'Logic',
-      'Report progress',
+      'Progress',
       'Resources',
       'Steps',
       'Edit',
@@ -86,13 +86,13 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
       'Delete',
       // Last, because it is the rarest action on the bar and the only one inert outside Visual mode
       // — so it is the first to demote to the `⋯` under width pressure (ADR-0094 M4-T1).
-      'Clear visual placement',
+      'Clear visual start',
     ]);
   });
 
   it('calls the entry-route handlers when their actions are clicked', () => {
     render(<SelectionActionsBar context={ctx()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Report progress' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
     fireEvent.click(screen.getByRole('button', { name: 'Resources' }));
     fireEvent.click(screen.getByRole('button', { name: 'Steps' }));
     expect(spies.onProgress).toHaveBeenCalledOnce();
@@ -113,7 +113,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
     render(
       <SelectionActionsBar context={ctx({ canEditSchedule: false, canReportProgress: true })} />,
     );
-    const progress = screen.getByRole('button', { name: 'Report progress' });
+    const progress = screen.getByRole('button', { name: 'Progress' });
     expect(progress).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(progress);
     expect(spies.onProgress).toHaveBeenCalledOnce();
@@ -121,7 +121,7 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
 
   it('Report progress is disabled with a reason when the viewer lacks progress permission', () => {
     render(<SelectionActionsBar context={ctx({ canReportProgress: false })} />);
-    const progress = screen.getByRole('button', { name: 'Report progress' });
+    const progress = screen.getByRole('button', { name: 'Progress' });
     expect(progress).toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(progress);
     expect(spies.onProgress).not.toHaveBeenCalled();

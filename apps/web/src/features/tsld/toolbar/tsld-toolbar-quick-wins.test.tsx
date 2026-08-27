@@ -172,7 +172,7 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     expect(btn).toHaveAttribute('title', 'You don’t have permission to add notes');
   });
 
-  // --- F5 · Clear visual placement -----------------------------------------------------------
+  // --- F5 · Clear visual start -----------------------------------------------------------
   //
   // **Its six cases moved with it** (ADR-0094 M4-T1). The command surface no longer registers this
   // item — its `isEnabled` consulted the selection, which is ADR-0093's discriminator — so the four

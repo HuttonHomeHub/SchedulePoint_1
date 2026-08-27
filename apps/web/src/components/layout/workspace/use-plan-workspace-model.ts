@@ -351,7 +351,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   );
   // The canvas selection lifted to the workspace (toolbar quick-wins F0, spec
   // `docs/specs/toolbar-quick-wins/`): the TSLD panel reports its selection here so the main toolbar's
-  // selection-aware items (Update progress / Add note / Clear visual placement) can read it — mirroring
+  // selection-aware items (Update progress / Add note / Clear visual start) can read it — mirroring
   // the `editActivityId`/`deleteActivityId` precedent. Held as an id; the resolved row is derived below
   // from the live query so it clears when the row is deleted. Inert when nothing reads it (flag off).
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
@@ -1436,7 +1436,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     activitiesRef.current = activities.data;
   });
   // Clear a bar's hand-placed `visualStart` (toolbar quick-wins F5, spec `docs/specs/toolbar-quick-wins/`)
-  // — the **Clear visual placement** command. A faithful subset of the reposition VISUAL branch above:
+  // — the **Clear visual start** command. A faithful subset of the reposition VISUAL branch above:
   // the minimal `visualStart: null` PATCH → (flag-guarded) the `visualStartCommand` inverse restoring the
   // prior placement → announce + `autoRecalc.notify()` so the effective-Visual pass re-plots the bar at
   // its computed date. A stale-version 409 surfaces the (announced) conflict non-destructively, and a

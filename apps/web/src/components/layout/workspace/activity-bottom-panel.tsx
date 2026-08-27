@@ -24,11 +24,12 @@ export function ActivityBottomPanel({
   model,
   onCollapse,
   focusCollapseOnMount = false,
-  hostsDock = true,
+  hostsPlanSlots = true,
 }: {
   model: PlanWorkspaceModel;
   /**
-   * Whether this panel provides the canvas dock's outlet (workspace-chrome M3).
+   * Whether this panel provides the plan's slot outlets — the **facts** and the **canvas dock**
+   * (workspace-chrome M3; widened from `hostsDock` in the foot-row epic's M7).
    *
    * **`false` on the narrow single-pane layout, and that is a correctness fix rather than a
    * preference.** Below `md` the workspace mounts BOTH panes and hides the inactive one with
@@ -40,8 +41,16 @@ export function ActivityBottomPanel({
    * strips were before this epic and is the right answer on a screen with no spare row to dock into.
    * Found by the accessibility gate; no test in the repository exercised the narrow path, and jsdom
    * could not have seen it (it has no layout to make `display: none` mean anything).
+   *
+   * **It covers the facts because the narrower version of it did not, and that broke the same way
+   * one milestone later.** M4 put `PlanFactsOutlet` in the foot row and left it ungated — so on the
+   * narrow layout the plan's facts, its schedule state, its only `Recalculate` button and the pen's
+   * live region all portalled into the hidden pane and disappeared, while three docblocks and the
+   * spec's own edge-case table said they rendered in the shell status bar. One correct rule applied
+   * to a control and not its neighbour, which is the failure this register keeps recording — here
+   * inside the docblock that describes it.
    */
-  hostsDock?: boolean;
+  hostsPlanSlots?: boolean;
   /** Collapse the panel to its handle. Omitted on the mobile single-pane view (the view toggle
    * switches away from Activities instead), where no collapse control is shown. */
   onCollapse?: () => void;
@@ -69,12 +78,15 @@ export function ActivityBottomPanel({
             <BaselineVarianceSummary summary={model.variance.data.summary} />
           ) : null}
         </div>
-        {/* The dock again (workspace-chrome M3) — expanded, this header row is where the strips
-            land, so they do not move to the other end of the screen when the planner opens the
-            activities list. Exactly one outlet is mounted at a time; `CanvasDockProvider` handles
-            the hand-over. */}
-        {hostsDock ? <CanvasDockOutlet /> : null}
-        <div className="flex shrink-0 items-center gap-2">
+        {/* **The dock is NOT here any more** (foot-row epic M4). It lived in this header until
+            2026-08-26, which is precisely what made the foot juggle: expanding the panel moved
+            every transient strip — and the object-action bar with them — from the bottom of the
+            screen up to here, and the plan's facts the other way. Both now live in
+            `PlanActivitiesFootRow` below the table, in the same place in both states.
+
+            What stays here is what belongs to the PANEL rather than to the plan: its heading, its
+            baseline variance, its create button and its collapse control. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {model.canEditSchedule ? (
             <CreateActivityButton
               orgSlug={model.orgSlug}
@@ -89,17 +101,6 @@ export function ActivityBottomPanel({
               planActivitiesLoading={model.activities.isPending}
               planActivitiesError={model.activities.isError}
             />
-          ) : null}
-          {onCollapse ? (
-            <Button
-              ref={collapseRef}
-              variant="ghost"
-              size="icon"
-              aria-label="Collapse activities panel"
-              onClick={onCollapse}
-            >
-              <PanelBottomClose aria-hidden="true" className="size-4" />
-            </Button>
           ) : null}
         </div>
       </div>
@@ -135,29 +136,115 @@ export function ActivityBottomPanel({
             : {})}
         />
       </div>
+      {/* **The foot row, last band, identical to the collapsed state** (foot-row epic M4). The
+          panel expands ABOVE it, so the plan's facts and every docked strip stay exactly where they
+          were — which is the whole subject of this milestone. The collapse control rides here
+          rather than in the header for the same reason: it is the row's own affordance in both
+          states, and a planner should not have to look in two places for it. */}
+      <PlanActivitiesFootRow
+        hostsPlanSlots={hostsPlanSlots}
+        {...(onCollapse
+          ? {
+              toggle: (
+                <Button
+                  ref={collapseRef}
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Collapse activities panel"
+                  onClick={onCollapse}
+                >
+                  <PanelBottomClose aria-hidden="true" className="size-4" />
+                </Button>
+              ),
+            }
+          : {})}
+      />
     </section>
   );
 }
 
 /**
- * The collapsed activity panel: a slim bar pinned to the bottom with a single control to
- * reopen it — so the activity list is never more than one click away (mirrors the collapsed
- * rail's affordance). On a user *collapse* it takes focus so the keyboard user lands on the
- * expand control rather than `<body>`.
+ * **The plan's foot row — one component, rendered in BOTH panel states** (foot-row epic M4).
  *
- * It is also **the canvas dock** (workspace-chrome M3). This row already existed, 36 px tall, with
- * the word "Activities" at one end and an expand button at the other and the entire width between
- * them empty — so the diagram's transient strips (the armed-tool statement, the selection bars, the
- * conflict banner, the empty-plan notice) fill a gap the workspace was paying for either way,
- * rather than pushing the scene down from above. `min-h-9` rather than `h-9`: a strip taller than
- * the row grows it instead of being clipped, which is what a fixed height would do silently.
+ * The product owner's complaint was that the foot "juggles": collapsed, the facts sat left and the
+ * object actions right on one shared row; expanded, the actions moved into the panel's header and
+ * the facts dropped to a full-width strip at the very bottom of the screen. The two swapped sides
+ * every time the panel opened. They no longer can, because there is one row and it is always the
+ * last band.
+ *
+ * **Facts LEAD.** The first draft of the spec put the dock first and the facts after it, which
+ * would have made the facts slide sideways every time a selection appeared — the same juggle one
+ * axis over. An always-present region goes before a transient one.
+ *
+ * `min-h-9` rather than `h-9`: a strip taller than the row grows it instead of being clipped, which
+ * is what a fixed height would do silently. Since the selection bar started wrapping (M1) that is
+ * no longer theoretical — it is how a row of eleven object actions stays reachable at 1646.
+ */
+export function PlanActivitiesFootRow({
+  toggle,
+  hostsPlanSlots = true,
+}: {
+  /** The panel's own expand/collapse control, rendered at the trailing edge. */
+  toggle?: React.ReactNode;
+  /**
+   * Whether this row hosts the **plan's slot outlets** — the facts and the canvas dock. False in
+   * the narrow single-pane layout, where the pane is `display: none` while the planner is on the
+   * diagram, so an outlet inside it would swallow every strip AND the plan's facts. Both fall back
+   * to rendering where they did before this epic.
+   */
+  hostsPlanSlots?: boolean;
+}): React.ReactElement {
+  return (
+    <div
+      // A test hook in this codebase's established shape (`data-toolbar-item`, `data-plan-identity`).
+      // This row IS the `CanvasDockOutlet`'s host (ADR-0092), so the dock journey has to find it —
+      // and it was finding it by the word "Activities", which the status bar's activity-count fact
+      // started matching too (Graphite M7). Locating chrome by its copy is what the standing rule
+      // after ADR-0091 forbids, and this is the third time it has bitten.
+      data-activities-bar
+      className="border-border flex min-h-9 shrink-0 items-center gap-2 border-t px-4"
+    >
+      {/* **The facts, leading** (M2-T4). This row said "Activities" and the status bar said
+          "Activities 5" — the same subject rendered twice, one of them a duplicate that had already
+          broken a test three times by being matched instead of this row. The count fact names the
+          panel AND gives its size, so one control does both jobs and the word appears once **in the
+          collapsed state**. Expanded it appears twice — the panel's own `<h2>` above the table, and
+          this fact below it — which the first version of this comment claimed it did not. That is
+          not a landmark collision (the `<section>` is labelled "Activities panel"), and the two are
+          different subjects at opposite ends of the panel; but the justification as written was
+          false in the state M4 introduced, and is corrected rather than quietly kept.
+
+          **Both outlets take the same gate, and the prop is named for the pair rather than for the
+          dock — because naming it for one outlet is how the other one got missed.** It shipped as
+          `hostsDock`, guarding the dock while `PlanFactsOutlet` registered unconditionally forty
+          lines below its own docblock explaining why that is fatal. Below `md` the whole panel sits
+          in a `display: none` pane by default, so the facts outlet registered, `PlanStatusBar`
+          portalled the facts, the schedule state, the only `Recalculate` control and the pen's
+          `role="status"` region into a hidden node, and the shell's status row — `empty:hidden` —
+          collapsed. The plan's facts vanished entirely on the narrowest screens, and a live region
+          sat somewhere it could never announce. Found by the architecture gate. */}
+      {hostsPlanSlots ? <PlanFactsOutlet /> : null}
+      {hostsPlanSlots ? <CanvasDockOutlet /> : null}
+      {toggle}
+    </div>
+  );
+}
+
+/**
+ * The collapsed state: the foot row alone, with an Expand control.
+ *
+ * Kept as a named component rather than inlined at the call site so the two states are obviously
+ * the same row — and so the focus-on-mount behaviour, which exists because collapsing unmounts the
+ * button the planner just pressed, lives beside the control it moves focus to.
  */
 export function ActivityPanelCollapsedBar({
   onExpand,
   focusExpandOnMount = false,
+  hostsPlanSlots = true,
 }: {
   onExpand: () => void;
   focusExpandOnMount?: boolean;
+  hostsPlanSlots?: boolean;
 }): React.ReactElement {
   const expandRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -165,34 +252,19 @@ export function ActivityPanelCollapsedBar({
   }, [focusExpandOnMount]);
 
   return (
-    <div
-      // A test hook in this codebase's established shape (`data-toolbar-item`, `data-plan-identity`,
-      // `data-plan-identity`). This row IS the `CanvasDockOutlet`'s host (ADR-0092), so the dock journey
-      // has to find it — and it was finding it by the word "Activities", which the status bar's
-      // activity-count fact started matching too (Graphite M7). Locating chrome by its copy is what
-      // the standing rule after ADR-0091 forbids, and this is the third time it has bitten.
-      data-activities-bar
-      className="border-border flex min-h-9 shrink-0 items-center gap-2 border-t px-4"
-    >
-      {/* **The facts land here, and the standalone heading goes with them** (M2-T4). This row said
-          "Activities" and the status bar said "Activities 5" — the same subject rendered twice, one
-          of them a duplicate that had already broken a test three times by being matched instead of
-          this row. The count fact names the panel AND gives its size, so one control does both jobs
-          and the word appears once.
-
-          Leading, where the heading was: the facts are what this row is about when nothing is
-          docked, and a reader's eye should not have to travel to find them. */}
-      <PlanFactsOutlet />
-      <CanvasDockOutlet />
-      <Button
-        ref={expandRef}
-        variant="ghost"
-        size="icon"
-        aria-label="Expand activities panel"
-        onClick={onExpand}
-      >
-        <PanelBottomOpen aria-hidden="true" className="size-4" />
-      </Button>
-    </div>
+    <PlanActivitiesFootRow
+      hostsPlanSlots={hostsPlanSlots}
+      toggle={
+        <Button
+          ref={expandRef}
+          variant="ghost"
+          size="icon"
+          aria-label="Expand activities panel"
+          onClick={onExpand}
+        >
+          <PanelBottomOpen aria-hidden="true" className="size-4" />
+        </Button>
+      }
+    />
   );
 }

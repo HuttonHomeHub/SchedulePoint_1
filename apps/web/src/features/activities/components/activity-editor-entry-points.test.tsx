@@ -148,7 +148,7 @@ describe('activity editor entry points (flag on)', () => {
 
   it('opens that same editor from Report progress, on Progress', () => {
     renderTable();
-    rowAction('Report progress');
+    rowAction('Progress');
     expect(screen.getByRole('tablist', { name: 'Activity sections' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Progress', selected: true })).toBeInTheDocument();
   });
@@ -165,17 +165,17 @@ describe('activity editor entry points (flag on)', () => {
 
   it('leaves the three superseded dialogs unmounted', () => {
     renderTable();
-    rowAction('Report progress');
+    rowAction('Progress');
     // The old progress dialog's own title. If it were still mounted we would have two surfaces for
     // one action, which is the drift M5 exists to remove.
-    expect(screen.queryByRole('heading', { name: 'Report progress' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Progress' })).not.toBeInTheDocument();
   });
 
   it('gives a Contributor the editor with progress open and the definition shut', () => {
     // Flag-off, a Contributor could only ever reach the progress dialog; Edit was writer-only. Now
     // they reach the editor and the gate — not the entry point — decides what they may change.
     renderTable(CONTRIBUTOR, false);
-    rowAction('Report progress');
+    rowAction('Progress');
     expect(screen.getByLabelText('Percent complete')).toBeEnabled();
     expectInert(screen.getByRole('button', { name: /save measure/i }));
     // …and Cost is not merely disabled but absent, because there is nothing there to read.

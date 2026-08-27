@@ -559,6 +559,13 @@ function GoToTodayControl({
  * the app (e.g. under localisation). */
 const ADD_ACTIVITY_TYPES = ['TASK', 'START_MILESTONE', 'FINISH_MILESTONE'] as const;
 /**
+ * Which of the addable types are placed with a CLICK rather than drawn with a drag — the fact the
+ * armed trigger's hint turns on. Derived from the list above rather than imported from the render
+ * layer's `isMilestone`, which is about geometry: a toolbar has no business reading how a bar is
+ * drawn to decide what to tell a planner.
+ */
+const MILESTONE_ADD_TYPES = new Set<string>(['START_MILESTONE', 'FINISH_MILESTONE']);
+/**
  * The phrase this command completes: "…to add activities". Passed to `ctx.scheduleRefusal`, which
  * decides the FRAME around it — "Start editing to …" when the pen is free, "<Name> is editing this
  * plan. Request control to …" when a peer holds it, "Your role cannot …" for a Viewer. The literal
@@ -635,6 +642,23 @@ function AddActivityControl({
   // `toggleAddActivity` would swap one armed tool for another — a trigger that reads "Pick start
   // driver" and, when pressed, starts drawing bars instead.
   const toggleArmed = ctx.isLoeSpanning ? ctx.toggleLoeSpanMode : ctx.toggleAddActivity;
+  /**
+   * **What the withdrawn mode statement used to say** (`docs/specs/foot-row/spec.md` D3).
+   *
+   * The band stated `Adding task · drag to set length, or click for a day · Esc to stop` and this
+   * trigger already restated the mode half of it, which is why the statement was withdrawn. The
+   * rest had to land somewhere: `or click for a day` is an undocumented shortcut
+   * (`CanvasModeBand.tsx:57-62` says cutting it re-hides a capability), and `Esc to stop` is the
+   * only place the product states how to disarm.
+   *
+   * Announced as a description, never folded into the name — the name stays `Adding Task` so a
+   * planner scanning a control list is not read a sentence.
+   */
+  const armedHint = ctx.isLoeSpanning
+    ? 'Click a bar on the diagram to pick it. Esc to stop.'
+    : MILESTONE_ADD_TYPES.has(ctx.createType)
+      ? 'Click the diagram to place it. Esc to stop.'
+      : 'Drag on the diagram to set its length, or click for a single day. Esc to stop.';
   return (
     <>
       <ToolbarSplitButton
@@ -644,6 +668,7 @@ function AddActivityControl({
         pressed={armed}
         open={open}
         disabled={disabled}
+        {...(armed ? { primaryDescription: armedHint } : {})}
         title={
           disabled
             ? (ctx.scheduleRefusal(ADD_ACTION) ?? '')
@@ -809,6 +834,11 @@ function LinkControl({
         pressed={ctx.isLinking}
         open={open}
         disabled={disabled}
+        // The withdrawn `linking` statement's remainder (D3). `linkPicking` keeps its own band —
+        // this trigger cannot distinguish the two pick phases, which is why that one stayed.
+        {...(ctx.isLinking
+          ? { primaryDescription: 'Click the predecessor on the diagram. Esc to stop.' }
+          : {})}
         title={
           disabled
             ? (ctx.scheduleRefusal(LINK_ACTION) ?? '')
@@ -2515,12 +2545,31 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <Plus className="size-4" />,
       penGated: true,
       disabledReason: (ctx) => ctx.scheduleRefusal(ADD_ACTION) ?? undefined,
+      /**
+       * **`isActive` sits OUTSIDE the flag branch, and that is a fix rather than a tidy-up**
+       * (foot-row epic M7, architecture gate B2).
+       *
+       * It used to live only in the flag-off arm, because only that arm needed it to drive a
+       * `ToolbarButton`'s pressed state — `AddActivityControl` computes `armed` from the same
+       * context and passes its own `pressed`. So with `VITE_CANVAS_AUTHORING` on, which is every
+       * shipped build, **the registry did not know this tool was armed**, and neither did anything
+       * reading `ResolvedToolbarItem.active`.
+       *
+       * That became load-bearing when `Deck` gained "a group holding an armed tool refuses to fold"
+       * (M2): `hasActive` reads exactly this field, so the guard fired for `marquee-select` — the
+       * one tool whose statement M2 **kept** — and for neither of the two it withdrew. A planner
+       * could arm Add, fold `Author`, and be left with a tool armed, no trigger, no statement and
+       * no way out but Escape, which is the founding ADR-0064 defect. The unit test could not see
+       * it: its fixture is a synthetic `onActivate` item with `isActive`, a shape the real registry
+       * does not have (ADR-0081, with the test as the concealer).
+       *
+       * It covers **LOE too**, because that tool is armed from this split-button's own menu and
+       * shows its progress on this trigger's label.
+       */
+      isActive: (ctx) => ctx.isAddingActivity || ctx.isLoeSpanning,
       ...(CANVAS_AUTHORING_ENABLED
         ? { render: (ctx, api) => <AddActivityControl ctx={ctx} api={api} /> }
-        : {
-            isActive: (ctx) => ctx.isAddingActivity,
-            onActivate: (ctx) => ctx.toggleAddActivity(),
-          }),
+        : { onActivate: (ctx) => ctx.toggleAddActivity() }),
     },
     // Link split-button (ADR-0032 M5, ADR-0031 amendment) — one menu-button that arms link-mode and
     // picks FS/SS/FF, mirroring Add. Shown **always** when canvas-first authoring is on
@@ -2535,6 +2584,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       penGated: true,
       disabledReason: (ctx) => ctx.scheduleRefusal(LINK_ACTION) ?? undefined,
       isVisible: () => CANVAS_AUTHORING_ENABLED,
+      // See `add-activity` above: a `render` item that publishes only its own `pressed` leaves the
+      // registry — and therefore `Deck`'s no-fold-while-armed guard — blind to an armed tool.
+      isActive: (ctx) => ctx.isLinking,
       render: (ctx, api) => <LinkControl ctx={ctx} api={api} />,
     },
     /*

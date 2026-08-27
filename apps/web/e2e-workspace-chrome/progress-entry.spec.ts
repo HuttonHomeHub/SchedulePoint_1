@@ -69,7 +69,7 @@ test.describe('Progress entry', () => {
     await expect(dock).toBeVisible();
     await expect(commandCopy, 'still absent with something selected').toHaveCount(0);
 
-    await dock.getByRole('button', { name: 'Report progress' }).click();
+    await dock.getByRole('button', { name: 'Progress' }).click();
     // **The editor lands in a modal dialog** (ADR-0101) — see `activity-editor-chrome.spec.ts`
     // for why it moved back out of the context drawer. The claim here is unchanged across both
     // chromes, and is the one ADR-0093 rests on: the dock route reaches the progress editor for
@@ -94,7 +94,7 @@ test.describe('Progress entry', () => {
     // The selection survives the press, so the dock — and its button — are still there to take it.
     await page.keyboard.press('Escape');
     await expect(editor).toHaveCount(0);
-    await expect(dock.getByRole('button', { name: 'Report progress' })).toBeFocused();
+    await expect(dock.getByRole('button', { name: 'Progress' })).toBeFocused();
 
     // ── A plural selection offers it nowhere. ─────────────────────────────────────────────────
     //
@@ -144,7 +144,7 @@ test.describe('Progress entry', () => {
       .getByRole('button', { name: `Actions for ${dig.name}` })
       .click();
     await expect(
-      page.getByRole('menuitem', { name: 'Report progress' }),
+      page.getByRole('menuitem', { name: 'Progress' }),
       'the activities-table row menu is the Gantt route, and Q1 was answered on it working',
     ).toBeVisible();
   });

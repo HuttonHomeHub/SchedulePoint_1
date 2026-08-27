@@ -868,18 +868,26 @@ export function TsldPanel({
   const modeStatement: CanvasModeStatement | null = !CANVAS_AUTHORING_FLOW_ENABLED
     ? null
     : mode === 'marquee'
-      ? { kind: 'marquee' }
+      ? // **`marquee` is KEPT.** `marquee-select` is a plain `ToolbarButton` whose label stays
+        // `Select` when armed (the `marquee-select` registration in `tsld-toolbar-items.tsx`, whose
+        // `label` is the literal `'Select'`) — only the pressed wash changes.
+        // So unlike Add and Link there is no restated text anywhere, and the band is the only place
+        // a sighted planner learns a sweep is armed rather than plain selection.
+        { kind: 'marquee' }
       : mode === 'add-activity'
-        ? {
-            kind: 'adding',
-            typeLabel: ACTIVITY_TYPE_LABELS[createType],
-            // Derived here, not in the band: the band stays free of `ActivityType` (a pure render
-            // module reads no domain enum), and this is the same `isMilestone` the gesture machine
-            // itself branches on, so the sentence cannot describe a gesture the canvas won't accept.
-            gesture: isMilestone(createType) ? 'click' : 'drag',
-          }
+        ? // **`adding` is WITHDRAWN.** The trigger already says it: `AddActivityControl` swaps its
+          // visible label to `Adding ${type}` and sets `pressed` (`AddActivityControl`'s `triggerLabel`
+          // and `armed` in `tsld-toolbar-items.tsx`), so the band restated a fact the planner could
+          // already read on the control they
+          // had just pressed. The instruction it also carried is not lost — `Esc to stop` and the
+          // undocumented `or click for a day` shortcut move onto that trigger as a described
+          // `sr-only` sibling, which is where a keyboard reader can actually reach them.
+          null
         : mode === 'loe'
-          ? { kind: 'loe', startPicked: loeStartId !== null }
+          ? // **`loe` is WITHDRAWN**, for the same reason and more strongly: the trigger swaps to
+            // `Pick start driver` / `Pick finish driver`, which distinguishes the two phases of the
+            // pick exactly as the band did.
+            null
           : mode === 'link'
             ? linkPickedId
               ? {
@@ -889,13 +897,22 @@ export function TsldPanel({
                     activities.find((a) => a.id === linkPickedId)?.name ?? 'the picked activity',
                 }
               : lastLink?.armGeneration === linkArmGeneration
-                ? {
+                ? // **`linked` is KEPT**, and it is not an armed-tool statement at all — it is
+                  // ADR-0064's link confirmation, which names the direction and carries an Undo
+                  // `<Button>`. Withdrawing it would delete a control; hiding it visually would
+                  // leave that control focusable at zero size, which is WCAG 2.4.7 and the
+                  // ADR-0090 defect this epic exists to remove.
+                  {
                     kind: 'linked',
                     predecessorName: lastLink.predecessorName,
                     successorName: lastLink.successorName,
                     linkType: lastLink.linkType,
                   }
-                : { kind: 'linking', linkType }
+                : // **`linking` is WITHDRAWN**: the trigger reads `Linking · FS` and is pressed.
+                  // Note this is the ARMED state only — `linkPicking` above is kept, because the
+                  // trigger's label is byte-identical across both phases and the band is the only
+                  // place the picked predecessor is named or the two-rung Escape is stated.
+                  null
             : null;
 
   /**
@@ -2517,6 +2534,39 @@ export function TsldPanel({
         always been. That is the parity contract, not a convenience.
       */}
       <CanvasDock>
+        {/* ── The dock's precedence policy (foot-row epic M5) ─────────────────────────────────────
+            **At most ONE transient strip, plus at most one selection bar.**
+
+            The dock hosts five things and, until now, three of them could paint at once — a
+            conflict banner, an armed-tool statement and the empty-plan notice were each guarded
+            only against their own absence. `canvas-dock.tsx:87` already records the one exception
+            somebody had noticed and fixed at source: the plural selection bar replaces the
+            singular one, because ADR-0080 always said it does. This generalises that rather than
+            adding a fourth guard.
+
+            The alternative — a WIDTH budget, asking whether the strips fit the row's leftover —
+            was the spec's first draft and is withdrawn: a confirmation carries two activity names
+            and a conflict banner grows to its message, so the answer is unbounded and measuring it
+            could only ever have proved it. A precedence decided at source is bounded by
+            construction and testable as an invariant.
+
+            **The order, and what it costs.** A conflict outranks everything: it reports a write
+            that failed and needs dismissing, and it is the only strip carrying a consequence rather
+            than an instruction. Below it the mode band, whose surviving statements are the ones
+            the toolbar cannot restate. Below that the empty-plan notice, which already yielded to
+            an armed tool.
+
+            **The accepted cost, stated in full after the component gate found half of it missing.**
+            A conflict arriving mid-pick hides `linkPicking`'s predecessor name — a sentence. It can
+            also hide the `linked` confirmation, which carries a real `Undo` **button**, and the
+            first version of this comment did not say so. Both are accepted rather than
+            special-cased, for three reasons: the two barely co-occur (a refused link resolves
+            `applied: false` and produces no confirmation, so it takes an unrelated write failing
+            while a confirmation is still up); the suppression is **recoverable**, because
+            `modeStatement` is derived rather than stored and the gate is a render-time ternary, so
+            dismissing the banner re-renders the same confirmation with its Undo; and `Ctrl+Z` is
+            bound throughout, so the capability never leaves even while the affordance does. A rule
+            with an exception in it is how the three-at-once state arose in the first place. */}
         {conflict ? (
           <EditConflictBanner
             message={conflict.message}
@@ -2532,10 +2582,13 @@ export function TsldPanel({
           />
         ) : null}
 
-        {/* The mode statement band (ADR-0064 T4/T5) — reserved chrome ABOVE the scene, never an
-            overlay on it. Renders nothing at all when no tool is armed and no link was just made, so
-            it costs no canvas height in the state the canvas is in most of the time. */}
-        <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
+        {/* The mode statement band (ADR-0064 T4/T5). **It is inside `CanvasDock` above** — this
+            comment said "reserved chrome ABOVE the scene" until 2026-08-26, which described the
+            arrangement before ADR-0092 docked every transient strip at the foot. ADR-0064's rule
+            (nothing overlays the diagram) is intact either way; what changed is that the band now
+            costs no canvas height at all, which is why withdrawing three of its six statements is a
+            decluttering decision and NOT a height saving. See `docs/specs/foot-row/spec.md` D3. */}
+        {conflict ? null : <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />}
 
         {/*
           The object-actions bar for the SINGLE selected activity (ADR-0031, Fork-2) — in the same
@@ -2618,7 +2671,11 @@ export function TsldPanel({
         {CANVAS_AUTHORING_FLOW_ENABLED &&
         showDiagram &&
         activities.length === 0 &&
-        mode === 'select' ? (
+        mode === 'select' &&
+        // Only `!conflict`. `!modeStatement` was written here too and is DEAD: `modeStatement` is
+        // null for every mode except the four tool modes, so inside `mode === 'select'` it can
+        // never be truthy.
+        !conflict ? (
           <NoticeStrip
             data-testid="canvas-empty-state"
             emphasis="dashed"

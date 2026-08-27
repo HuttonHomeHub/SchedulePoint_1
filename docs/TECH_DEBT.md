@@ -2105,7 +2105,30 @@ documentation and applies just as well here.
 
 ## 124. The selection bar's `<Toolbar>` has no fit coverage, and its failure mode is a different one
 
-**Status:** open. Opened by ADR-0090 M1.
+**Status:** CLOSED 2026-08-27 by the foot-row epic's M1 — **and the row's own reasoning was wrong
+about why it was safe, in a way that let a live defect ship.**
+
+`e2e-workspace-fit/command-surface.spec.ts` now sweeps the bar at every targeted width with the same
+`elementFromPoint` descent the deck sweep uses, verified red first.
+
+Everything below the line is preserved as written. Two of its claims had stopped being true and
+nobody re-read them:
+
+- **"The floating bar … is clamped to the viewport, not to a container it can overflow. It cannot
+  fail S1/S2/S4 because there is nothing for it to overflow."** The bar has not floated since
+  ADR-0092 docked it. Measured at M0, its content is 1753 px against containers of 1619 px at 1920
+  and 1345 px at 1646, and it overflowed **by 134 and 408 px** — putting one control off-screen on
+  the 24″ monitor and four at 1646.
+- **"this is a coverage gap rather than a correctness one."** It was both, for as long as this row
+  said otherwise.
+
+The lesson is the row's status, not its content: a deferral whose reason has expired reads exactly
+like a deferral whose reason still holds, and nothing re-checks it. This is ADR-0058's rule applied
+to the register itself.
+
+---
+
+**Status (original):** open. Opened by ADR-0090 M1.
 
 `apps/web/e2e-toolbar-fit/` gates the two persistent command rows: at every targeted width, every
 control is a ≥ 24 px target that a pointer can actually land on. `selection-actions.tsx:395` mounts a
@@ -5111,3 +5134,50 @@ label, or split the group name and use the divider the command deck already uses
 groups (`ml-1 border-l pl-2`). **Not done here** because it is a change to the mode cluster's own
 grouping semantics rather than to the header that now hosts it, and because `demotionGroup` acquiring
 a rendering meaning is a `Toolbar` contract change — ADR-0105's trigger, so it wants its own spec.
+
+## 202. Six non-blocking findings from the foot-row gate pass
+
+**Raised:** 2026-08-27 (ADR-0114 M7) · **Size:** S each · **Owner:** unassigned
+
+Four specialist reviews over the foot-row diff; eight blocking findings folded in the milestone (see
+ADR-0114's gate-pass section). These six are recorded rather than rushed.
+
+**(a) The collapse control moved behind the whole table in tab order.** It was in the panel's header
+and is now the last child of `PlanActivitiesFootRow` (M4), which is right visually — the control sits
+at the foot, so DOM order now matches where it is — and means a keyboard planner in the expanded
+panel traverses the heading, **New activity** and every rendered table row to reach **Collapse
+activities panel**. `focusCollapseOnMount` only covers the expand-by-user path. Not a 2.4.3 failure
+(order matches the visual arrangement); it is a distance cost. Raised by the architecture gate.
+
+**(b) The dock's precedence is three independent guards, one of them a conjunct.** `TsldPanel` spells
+it `conflict ?`, `conflict ? null :` and `!conflict` inside a five-term `&&`, and the invariant holds
+partly because `CanvasModeBand` returns `null` for a null statement two hundred lines away. A fourth
+strip has to remember it in a third spelling. One derived
+`const dockStrip: 'conflict' | 'mode' | 'empty' | null` would put the decision in one place and let
+the test assert a value rather than the DOM. Deferred because the behaviour is correct and pinned,
+and the refactor is a `TsldPanel` change with no user-visible half.
+
+**(c) The object-action sweep runs collapsed-only and TSLD-only.** M1-T1 specified widening the fit
+gate "in both panel states, on TSLD and Gantt"; the shipped case covers the collapsed TSLD state.
+That is where the measured defect was, and the expanded state is the one M4 created, so the gap is
+real. This is the ADR-0090 M5 drift class — a plan describing work correctly and the work not
+happening — recorded here so it is a decision rather than an omission.
+
+**(d) `LockView.badgeName` and `messageVisible` are optional fields on a flat interface.** Both are
+governed by rules about the tone ("only on `locked`", "only on `lost` and the incoming-request
+branch") that are held by unit cases rather than by the compiler. A discriminated union split by tone
+would make them type-level facts. The cases exist and are verified red; the invariant is simply not
+structural.
+
+**(e) The foot row's own branching has no unit coverage.** `activity-bottom-panel.tsx` is covered
+transitively through two callers and end to end by `dock.spec.ts`. The positional invariant genuinely
+needs a real layout, so e2e is the right tier for that — but `hostsPlanSlots` toggling both outlets,
+and `toggle` rendering when present and absent, are cheap to pin at the unit level and are not pinned
+anywhere. This is the seam that produced the milestone's largest blocking finding.
+
+**(f) `bg-foreground/5` now paints on the canvas-dock surface scope for the first time.** The token
+pairing is unchanged from `Deck`'s pre-existing use, and the card is decorative grouping with every
+control inside carrying its own boundary, so 1.4.11 does not apply to the card itself. But
+`token-contrast.test.ts` has no pair for this background on that scope, and ADR-0102's finding was
+precisely that a scope can go unreached for a long time without anything reporting it. Worth adding
+the pair rather than reasoning about it. Raised by the accessibility gate as a suggestion.

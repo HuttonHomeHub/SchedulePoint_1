@@ -58,8 +58,16 @@ test.describe('the canvas says what it is doing', () => {
       'This plan has no activities yet.',
     );
     await page.getByRole('button', { name: 'Draw the first activity' }).click();
-    await expect(band()).toContainText('Adding task');
-    await expect(doToolbar(page).getByRole('button', { name: /^Adding/ })).toBeVisible();
+    // **The trigger states the mode; the band no longer does** (`docs/specs/foot-row/spec.md` D3).
+    // This asserted the band said "Adding task" until 2026-08-26 — amended rather than deleted,
+    // because the case's subject is that the affordance ARMS Add, and the trigger's own label is
+    // now where that is legible. The band assertion moved to the pick states below, which the
+    // trigger cannot distinguish and which therefore kept theirs.
+    const trigger = doToolbar(page).getByRole('button', { name: /^Adding/ });
+    await expect(trigger).toBeVisible();
+    // And the withdrawn statement's remainder is reachable rather than lost: the shortcut and the
+    // exit ride the trigger as a description, never a `title` (four times recorded).
+    await expect(trigger).toHaveAccessibleDescription(/Esc to stop/);
   });
 
   test('the band states the open pick, and the confirmation names the direction', async () => {
@@ -78,10 +86,17 @@ test.describe('the canvas says what it is doing', () => {
 
     await clearSelection(page);
     await armLink(page);
-    await expect(band()).toContainText('Linking FS · click the predecessor');
+    // **Armed states nothing in the band now** (`docs/specs/foot-row/spec.md` D3) — `LinkControl`
+    // swaps its own label to `Linking · FS`, so the band was restating the control the planner had
+    // just pressed. Asserted in both directions, because "the band is empty" alone would pass
+    // against a build that had stopped rendering the band at all.
+    await expect(doToolbar(page).getByRole('button', { name: /^Linking/ })).toBeVisible();
+    await expect(band()).toHaveCount(0);
 
     await canvas(page).click({ position: first });
-    // The whole point: after ONE click, the surface can answer "which one did I pick?".
+    // **And the pick state DOES state itself, which is the discriminating half.** The trigger's
+    // label is byte-identical across armed and mid-pick, so this is the only place the picked
+    // predecessor is named — the exact gap ADR-0064 was opened on.
     await expect(band()).toContainText('Linking FS from “Set out” · click the successor');
 
     await canvas(page).click({ position: second });
@@ -128,9 +143,14 @@ test.describe('the canvas says what it is doing', () => {
     await newPlan(page, 'Run');
     await ensurePen(page);
     await armAdd(page, 'Task');
-    await expect(band()).toContainText('Adding task');
+    // Armed is read from the TRIGGER now (D3): its label swaps and it takes `aria-pressed`. The
+    // band assertion this replaces was the withdrawn `adding` statement.
+    const trigger = doToolbar(page).getByRole('button', { name: /^Adding/ });
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveAttribute('aria-pressed', 'true');
+
     await canvas(page).press('Escape');
-    await expect(band()).toBeHidden();
+    // Disarmed: the label goes back, which is what "Escape ends it" means on this surface.
     await expect(doToolbar(page).getByRole('button', { name: 'Add', exact: true })).toBeVisible();
   });
 });

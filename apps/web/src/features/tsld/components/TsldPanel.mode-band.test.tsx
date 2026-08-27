@@ -104,7 +104,7 @@ function Harness({
   onUndoLastEdit,
   recalcHold,
 }: {
-  arm: 'select' | 'add-activity' | 'link' | 'loe';
+  arm: 'select' | 'add-activity' | 'link' | 'loe' | 'marquee';
   activities?: ActivitySummary[];
   canEdit?: boolean;
   onLink?: React.ComponentProps<typeof TsldPanel>['onLink'];
@@ -123,6 +123,12 @@ function Harness({
           regression below is about. Nothing in the panel exposes this from outside. */}
       <button type="button" onClick={() => canvasUi.setMode('link')}>
         re-arm link
+      </button>
+      {/* Arms the ONE tool whose statement survives M2's withdrawal, from outside the panel. It is
+          what makes the dock's precedence testable at all: a conflict has to compete with a strip
+          that actually paints, and `adding` / `loe` / `linking` no longer do. */}
+      <button type="button" onClick={() => canvasUi.setMode('marquee')}>
+        arm marquee
       </button>
       <TsldPanel
         activities={activities}
@@ -147,17 +153,45 @@ describe('TsldPanel — mode statement band (flag on)', () => {
     expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
   });
 
-  it.each([
-    ['add-activity', /^Adding task · drag to set length, or click for a day/],
-    ['link', /^Linking FS · click the predecessor/],
-    ['loe', /^Level of effort · click the start driver/],
-  ] as const)('states the %s tool', (arm, text) => {
-    render(<Harness arm={arm} />);
-    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(text);
+  /**
+   * **The band states a mode only where the trigger does not** (`docs/specs/foot-row/spec.md` D3).
+   *
+   * These three cases asserted the opposite until 2026-08-26 — the band stated all three of these
+   * tools — and the assertions are rewritten rather than deleted, because the change is a decision
+   * about which statements earn their place and not a reduction in what is covered.
+   *
+   * `add-activity`, `loe` and `link` are **withdrawn**: `AddActivityControl` swaps its visible label
+   * to `Adding ${type}` / `Pick start driver` / `Pick finish driver`
+   * (`tsld-toolbar-items.tsx:622-628`) and `LinkControl` to `Linking · FS` (`:820`), both with a
+   * pressed state — so the band restated a fact already on the control the planner had just
+   * pressed. The instruction each also carried moves onto that trigger as a described `sr-only`
+   * sibling.
+   */
+  it.each(['add-activity', 'link', 'loe'] as const)(
+    'withdraws the band for the %s tool, whose trigger already states it',
+    (arm) => {
+      render(<Harness arm={arm} />);
+      expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+    },
+  );
+
+  /**
+   * **`marquee` is KEPT, and it is the discriminating case.** `marquee-select` is a plain
+   * `ToolbarButton` whose label stays `Select` when armed (`tsld-toolbar-items.tsx:2558-2573`) —
+   * only the pressed wash changes. So there is no restated text anywhere, and the band is the only
+   * place a sighted planner learns that a sweep is armed rather than plain selection.
+   *
+   * Without this case the three above would pass equally against a change that deleted the band
+   * outright, which is the ADR-0093 shape: a green suite that cannot tell "the duplication is gone"
+   * from "the capability is gone".
+   */
+  it('keeps the band for the marquee tool, whose trigger does not restate it', () => {
+    render(<Harness arm="marquee" />);
+    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/^Marquee select/);
   });
 
   it('disappears again when the tool disarms', () => {
-    render(<Harness arm="add-activity" />);
+    render(<Harness arm="marquee" />);
     expect(screen.getByTestId('canvas-mode-band')).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
@@ -220,7 +254,11 @@ describe('TsldPanel — canvas empty state (T9)', () => {
       'This plan has no activities yet.',
     );
     fireEvent.click(draw);
-    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/^Adding task/);
+    // The notice yielding IS the feedback here now: with `adding` withdrawn (D3) the band no longer
+    // renders, and what tells the planner the tool armed is the trigger, which this harness does
+    // not mount. Asserting the notice's absence keeps the case about the thing it names — arming —
+    // rather than about a band that is no longer this state's carrier.
+    expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
   });
 
   it('shades the affordance with a reason without the pen, rather than hiding it', () => {
@@ -252,13 +290,11 @@ describe('TsldPanel — canvas empty state (T9)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Draw the first activity' }));
     expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
-    expect(screen.getByTestId('canvas-mode-band')).toBeInTheDocument();
 
     // Both directions: disarming must give the notice back, or an empty plan whose tool was
     // cancelled would offer no way in at all.
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
-    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
   });
 
   /**
@@ -298,7 +334,8 @@ describe('TsldPanel — canvas empty state (T9)', () => {
     elsewhere.focus();
 
     fireEvent.click(elsewhere); // arms `link` from outside the notice
-    expect(screen.getByTestId('canvas-mode-band')).toBeInTheDocument();
+    // Armed is observable here as the notice yielding — `link`'s band is withdrawn (D3).
+    expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
     expect(document.activeElement).toBe(elsewhere);
   });
 });
@@ -309,14 +346,17 @@ describe('TsldPanel — canvas empty state (T9)', () => {
  * proves it at the panel, where the type is resolved — the leaf suite cannot see `ActivityType`.
  */
 describe('TsldPanel — the Add statement is gesture-accurate', () => {
-  it('offers drag-or-click for a task, and says the same thing aloud', () => {
+  it('announces drag-or-click for a task, now that nothing paints it', () => {
     announceSpy.mockClear();
     render(<Harness arm="add-activity" activities={[]} />);
-    const band = screen.getByTestId('canvas-mode-band');
-    expect(band).toHaveTextContent(
+    // **The announcement is now the only carrier, which makes this case matter MORE than before.**
+    // It used to assert the band and the announcement were the same string; with `adding`
+    // withdrawn there is no band, and `TsldPanel.tsx:812-837` — never a live region on the band
+    // itself — is what a screen-reader user hears. If that broke, nothing else would report it.
+    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+    expect(announceSpy).toHaveBeenCalledWith(
       'Adding task · drag to set length, or click for a day · Esc to stop',
     );
-    expect(announceSpy).toHaveBeenCalledWith(band.textContent);
   });
 });
 
@@ -340,12 +380,13 @@ describe('TsldPanel — the link confirmation names the direction and undoes it 
 
     // The direction is the whole point of the sentence — "linked" without it is what the planner
     // could not verify in the driving session that opened this epic.
-    // `findByTestId` is the WRONG wait here and it flaked in CI: the band is already on screen
-    // saying "Linking FS · click the predecessor", so the query resolves on the first tick and the
-    // text assertion then runs synchronously — before `onLink`'s promise has flushed. The thing to
-    // wait for is the SENTENCE, not the element, so the wait must wrap the assertion.
-    const band = screen.getByTestId('canvas-mode-band');
-    await waitFor(() => expect(band).toHaveTextContent('Linked “Set out” → “Reinforce” (FS).'));
+    // **`findByTestId` is the RIGHT wait now, and the comment it replaces explains why.** It used
+    // to read: "`findByTestId` is the WRONG wait here and it flaked in CI: the band is already on
+    // screen saying 'Linking FS · click the predecessor', so the query resolves on the first tick".
+    // That was true, and withdrawing the `linking` statement (D3) removes its cause — the band no
+    // longer exists until the confirmation, so waiting for the element IS waiting for the sentence.
+    const band = await screen.findByTestId('canvas-mode-band');
+    expect(band).toHaveTextContent('Linked “Set out” → “Reinforce” (FS).');
 
     fireEvent.click(within(band).getByRole('button', { name: 'Undo' }));
     expect(onUndoLastEdit).toHaveBeenCalledOnce();
@@ -372,13 +413,15 @@ describe('TsldPanel — the link confirmation names the direction and undoes it 
     fireEvent.keyDown(window, { key: 'Escape' }); // disarm
     expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
 
-    // Re-arm: a fresh session, so the band must prompt rather than congratulate.
+    // Re-arm: a fresh session, so the confirmation must not come back. This asserted that the band
+    // PROMPTED instead ("Linking FS · click the predecessor") until `linking` was withdrawn (D3);
+    // now the correct outcome is no band at all, which is the stronger claim — and it is still
+    // discriminating rather than vacuous, because the `waitFor` above already proved the band
+    // appears for the confirmation and the Escape below proved it goes away.
     fireEvent.click(screen.getByRole('button', { name: 're-arm link' }));
-    const band = screen.getByTestId('canvas-mode-band');
-    expect(band).toHaveTextContent('Linking FS · click the predecessor');
-    expect(band).not.toHaveTextContent('Linked');
-    // …and no Undo, which is the half that could have discarded the wrong edit.
-    expect(within(band).queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+    // …and therefore no Undo, which is the half that could have discarded the wrong edit.
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
   });
 
   it('says nothing when the API rejected the link', async () => {
@@ -394,7 +437,11 @@ describe('TsldPanel — the link confirmation names the direction and undoes it 
     fireEvent.keyDown(listbox, { key: 'ArrowDown' });
     fireEvent.keyDown(listbox, { key: 'Enter' });
     await waitFor(() => expect(onLink).toHaveBeenCalled());
-    expect(screen.queryByTestId('canvas-mode-band')).not.toHaveTextContent('Linked');
+    // No band at all: `linking` is withdrawn (D3) and no confirmation was earned, so there is
+    // nothing to say. This read `queryByTestId(...)).not.toHaveTextContent('Linked')`, which now
+    // passes a null to a matcher that needs an element — a test that would fail for the right
+    // outcome.
+    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
   });
 });
 
@@ -453,5 +500,83 @@ describe('TsldPanel — recalculation quiescence while a pick is open (T7)', () 
     expect(recalcHold.hold).toHaveBeenCalledOnce();
     unmount();
     expect(recalcHold.release).toHaveBeenCalledOnce();
+  });
+});
+
+/**
+ * **The dock's precedence policy** (`docs/specs/foot-row/spec.md` D7, foot-row epic M5).
+ *
+ * At most one transient strip. The dock hosts five things and three of them — the conflict banner,
+ * the armed-tool statement and the empty-plan notice — were each guarded only against their own
+ * absence, so all three could paint at once. `canvas-dock.tsx:87` had already fixed the one
+ * exception somebody noticed (the plural selection bar replaces the singular one); this
+ * generalises it.
+ *
+ * The withdrawn alternative was a WIDTH budget. It could not have worked: a confirmation carries
+ * two activity names and a conflict banner grows to its message, so "do they fit" is unbounded.
+ * A precedence decided at source is bounded by construction, which is why it can be asserted here
+ * at all.
+ */
+describe('TsldPanel — the dock shows at most one transient strip', () => {
+  it('yields the empty-plan notice to an armed tool, and takes it back', () => {
+    render(<Harness arm="select" activities={[]} />);
+    expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draw the first activity' }));
+    expect(screen.queryByTestId('canvas-empty-state')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('canvas-empty-state')).toBeInTheDocument();
+  });
+
+  /**
+   * **A conflict outranks the mode band, and this is the case that discriminates.**
+   *
+   * The first version of this suite drove `marquee` on an empty plan and asserted the notice was
+   * suppressed — and it passed with the policy removed, because `mode === 'select'` had already
+   * excluded the notice one line above. A test of a guard that the guard's absence cannot fail is
+   * no test at all, and finding it also found dead code: `!modeStatement` inside a
+   * `mode === 'select'` branch can never be false.
+   *
+   * A refused link is the cheapest real conflict — `onLink` resolving `applied: false` sets the
+   * banner — and it leaves the Link tool armed, so both strips genuinely compete for the row.
+   */
+  it('shows a conflict banner and withdraws the mode band', async () => {
+    const onLink = vi
+      .fn()
+      .mockResolvedValue({ applied: false, conflict: 'That would make a loop.' });
+    render(<Harness arm="link" onLink={onLink} />);
+    const listbox = screen.getByRole('listbox', { name: 'Activities in the diagram' });
+
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // picks A — `linkPicking`, which KEEPS its band
+    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/click the successor/);
+
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // commits, and is refused
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('That would make a loop.'),
+    );
+
+    // **Now arm the one tool whose statement survives.** Without this the case is vacuous — a
+    // refused link leaves `linking`, which M2 withdrew, so the band is absent for a reason that
+    // has nothing to do with precedence. Two earlier versions of this case passed with the guard
+    // removed for exactly that reason, which is how the dead `!modeStatement` condition beside it
+    // was found. This assertion is the only one in the suite that goes red without the guard.
+    fireEvent.click(screen.getByRole('button', { name: 'arm marquee' }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+
+    // **The suppression is recoverable, and that is a claim the precedence comment makes.** The
+    // component gate pointed out that this policy can also hide the `linked` confirmation, which
+    // carries an `Undo` BUTTON rather than a sentence — a materially worse cost than the one the
+    // comment named. It is accepted partly because nothing is destroyed: `modeStatement` is derived
+    // and the gate is a render-time ternary, so dismissing the banner brings the strip straight
+    // back. Asserted rather than reasoned, because "it is derived" is exactly the kind of sentence
+    // that stays in a file after the derivation moves.
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/Marquee select/);
   });
 });

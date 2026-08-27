@@ -8,6 +8,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
+import { toolbarCardVariants } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 
 import { cn } from '@/lib/utils';
@@ -164,7 +165,40 @@ export function Deck<Ctx>({
       sections: group.members
         .map((member) => byRegistryGroup.get(member) ?? [])
         .filter((section) => section.length > 0),
-    })).filter((group) => group.sections.length > 0);
+    }))
+      .filter((group) => group.sections.length > 0)
+      .map((group) => ({
+        ...group,
+        /**
+         * **A group holding an ACTIVE command cannot be folded away.**
+         *
+         * Folding unmounts a group's items (the `isFolded ? null :` branch below), and the fold set is
+         * persisted globally — so a
+         * planner who arms a tool and then folds `Author` is left with a tool armed, no trigger
+         * rendered to say so, and no trigger to stop it with. That is ADR-0064's founding defect
+         * restored: a planner who believes a tool is armed and is wrong, or worse, one who does not
+         * know a tool is armed at all.
+         *
+         * The rule is general rather than a carve-out for that case, and it is defensible on its
+         * own terms: **you should not be able to hide a control that is currently doing something.**
+         * It reuses `active`, which `resolveItems` already computes for the pressed state, so the
+         * deck learns nothing new about what its items mean.
+         *
+         * **It is a ONE-WAY guard — it refuses a fold and never an unfold — and that is a fix rather
+         * than a restatement.** This paragraph used to argue that it "can only ever refuse to START
+         * a fold", on the premise that arming needs a trigger and a folded group renders none. The
+         * premise is a survey of today's registry, not a property of the primitive: `active` is
+         * whatever a consumer's `isActive` returns, the fold set is global `localStorage` and so is
+         * at least one panel-open flag that drives an `isActive` in one of these cards, so a group
+         * CAN in principle come back folded and active in a later session. The `onClick` did not
+         * distinguish the directions, so in that case the caption would have refused to unfold, its
+         * items would have stayed unmounted, and the reason it announced — "cannot be folded away" —
+         * would have been false. Checking `!isFolded` costs one term and removes the whole class of
+         * argument. Raised by the architecture gate, which could not construct a reachable instance
+         * in today's registry either, and correctly said that is a coincidence and not a guarantee.
+         */
+        hasActive: group.sections.some((section) => section.some((r) => r.active)),
+      }));
   }, [resolved]);
 
   const toggleFold = useCallback((id: string) => {
@@ -277,7 +311,10 @@ export function Deck<Ctx>({
             // This said "the buttons are untouched — stacked, labelled, exactly as approved" until
             // M1 unstacked them. Corrected rather than deleted: turning the card on its side is an
             // argument about the CARD, and is unaffected by what the buttons inside it do.
-            className="border-border/60 bg-foreground/5 flex items-stretch gap-2 rounded-md border px-2 py-1.5"
+            // Shared with the canvas selection bar since the foot-row epic's M6 — see
+            // `toolbarCardVariants` in `toolbar-styles.ts`. It was a literal here, and the second
+            // consumer would have copied it.
+            className={toolbarCardVariants()}
           >
             <button
               type="button"
@@ -297,7 +334,21 @@ export function Deck<Ctx>({
               aria-label={`${group.caption} commands`}
               tabIndex={tabIndexFor(`caption:${group.id}`)}
               onFocus={() => setActiveId(`caption:${group.id}`)}
-              onClick={() => toggleFold(group.id)}
+              onClick={() => {
+                // `!isFolded` is load-bearing: refuse to fold a group holding an armed tool, never
+                // to UNFOLD one. See `hasActive`'s docblock — without it a group that ever came
+                // back folded-and-active would be permanently shut, under a reason that says the
+                // opposite of what happened.
+                if (group.hasActive && !isFolded) return;
+                toggleFold(group.id);
+              }}
+              // Shaded with a reason, never removed (ADR-0082): the caption keeps its roving tab
+              // stop and its reason is reachable, which is the whole point of that decision. Not
+              // the native `disabled` attribute — this control flips as a tool is armed and
+              // disarmed, and `disabled` blurs to `<body>` mid-interaction.
+              {...(group.hasActive && !isFolded
+                ? { 'aria-disabled': true as const, 'aria-describedby': `fold-held-${group.id}` }
+                : {})}
               className={cn(
                 // `text-micro` is the ramp's smallest member and carries its own letter-spacing.
                 // The mockup drew this at 9px with wider tracking; using the ramp's 10px instead is
@@ -311,6 +362,7 @@ export function Deck<Ctx>({
                 // moves WCAG 2.5.8's minor axis in the right direction rather than the wrong one.
                 'text-primary text-micro flex min-h-9 shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
                 'border-primary/25 cursor-pointer',
+                group.hasActive && 'cursor-default opacity-60',
                 // The rule that separated the caption from its buttons was a `border-b` under a
                 // full-width row; on its side it is a `border-r` beside them, doing the same job in
                 // the dimension the deck can afford. Absent when folded: there is nothing left to
@@ -328,6 +380,15 @@ export function Deck<Ctx>({
                 // product, so nothing about it has to be re-learnt.
                 className={cn('size-3 opacity-60', isFolded && '-rotate-90')}
               />
+              {/* `&& !isFolded` matches the guard and the `aria-disabled` above it: the sentence is
+                  only true of a group that is currently open. A described node with no
+                  `aria-describedby` pointing at it is harmless, but the three going out of step is
+                  how one of them ends up describing a state the control is not in. */}
+              {group.hasActive && !isFolded ? (
+                <span id={`fold-held-${group.id}`} className="sr-only">
+                  Cannot be folded away while one of its tools is armed.
+                </span>
+              ) : null}
             </button>
 
             {isFolded ? null : (

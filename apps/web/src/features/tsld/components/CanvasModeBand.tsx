@@ -25,7 +25,6 @@ export type CanvasModeStatement =
    */
   | { kind: 'marquee' }
   | { kind: 'linkPicking'; linkType: string; predecessorName: string }
-  | { kind: 'loe'; startPicked: boolean }
   | {
       /** A link was just created. Names the direction that was recorded, and offers to undo it. */
       kind: 'linked';
@@ -75,10 +74,6 @@ export function modeStatementText(statement: CanvasModeStatement): string {
       return 'Marquee select · drag to select, Ctrl to add · Esc to stop';
     case 'linkPicking':
       return `Linking ${statement.linkType} from “${statement.predecessorName}” · click the successor · Esc to drop the pick`;
-    case 'loe':
-      return statement.startPicked
-        ? 'Level of effort · click the finish driver · Esc to stop'
-        : 'Level of effort · click the start driver · Esc to stop';
     case 'linked':
       return `Linked “${statement.predecessorName}” → “${statement.successorName}” (${statement.linkType}).`;
   }

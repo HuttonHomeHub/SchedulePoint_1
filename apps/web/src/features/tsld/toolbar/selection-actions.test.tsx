@@ -79,21 +79,21 @@ describe('SelectionActionsBar (floating selection actions)', () => {
   it('registers only the base actions when VITE_ENTRY_ROUTES is off', () => {
     // This suite pins ENTRY_ROUTES off, so the Progress/Resources/Steps items are absent. Duplicate
     // is NOT one of those — it rides `VITE_ACTIVITY_COPY_PASTE`, default-on since W5 M5 — and
-    // Clear visual placement is not either: ADR-0094 M4-T1 moved it here from the command surface,
+    // Clear visual start is not either: ADR-0094 M4-T1 moved it here from the command surface,
     // where its `isEnabled` had always consulted the selection (ADR-0093's discriminator). So the
-    // base set is Logic → Edit → Duplicate → Delete → Clear visual placement. Asserting a bare count
+    // base set is Logic → Edit → Duplicate → Delete → Clear visual start. Asserting a bare count
     // here would have gone red on each flip and said nothing about why; naming the members says
     // which item arrived.
     render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
-    for (const name of ['Report progress', 'Resources', 'Steps']) {
+    for (const name of ['Progress', 'Resources', 'Steps']) {
       expect(within(bar).queryByRole('button', { name })).not.toBeInTheDocument();
     }
     expect(
       within(bar)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['Logic', 'Edit', 'Duplicate', 'Delete', 'Clear visual placement']);
+    ).toEqual(['Logic', 'Edit', 'Duplicate', 'Delete', 'Clear visual start']);
   });
 
   it('runs the read action (logic) even in read-only', () => {

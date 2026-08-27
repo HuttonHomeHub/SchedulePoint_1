@@ -98,8 +98,15 @@ describe('CanvasModeBand', () => {
 
   it('exports the sentence so the screen and the live region cannot drift', () => {
     // The panel calls this for its announcement; the band calls it for its text. One string.
-    expect(modeStatementText({ kind: 'loe', startPicked: true })).toBe(
-      'Level of effort · click the finish driver · Esc to stop',
+    //
+    // **This used to assert the `loe` arm, which had no producer at all.** The LOE tool announces
+    // bespoke sentences from its own effect in `TsldPanel` and never called `modeStatementText`, so
+    // the one arm this case exercised was the one arm the claim in its comment was false about —
+    // and the foot-row epic then withdrew that statement, leaving a union member, a switch case and
+    // this assertion with nothing behind them. All three are gone; the case now uses `marquee`,
+    // which the band paints and the panel announces through this exact function.
+    expect(modeStatementText({ kind: 'marquee' })).toBe(
+      'Marquee select · drag to select, Ctrl to add · Esc to stop',
     );
   });
 });

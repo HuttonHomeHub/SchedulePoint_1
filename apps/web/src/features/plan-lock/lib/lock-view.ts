@@ -1,6 +1,6 @@
 import type { PlanEditLockReason, PlanEditLockStatus } from '@repo/types';
 
-import { lockCopy } from './lock-copy';
+import { firstName, lockCopy } from './lock-copy';
 
 /** A control the banner offers, in render order. Each maps to one `PlanPen` intent. */
 export type LockAction =
@@ -20,7 +20,43 @@ export type LockTone = 'neutral' | 'editing' | 'locked' | 'lost';
 export interface LockView {
   tone: LockTone;
   badge: string;
+  /**
+   * The holder's first name, for the compact badge — `Locked · Alexandra`.
+   *
+   * **Only ever set on the `locked` tone**, and that is a rule rather than an accident of which
+   * branches happen to have a holder. The badge vocabulary is four words for ten states, so the
+   * name is the one thing the compact form can add; but on `editing` the actor in scope is a
+   * REQUESTER, not the editor, so `Editing · Alexandra` would tell the reader that Alexandra is
+   * editing when in fact the reader is, and Alexandra is asking. `lost` has no actor at all.
+   *
+   * It is a summary BESIDE the live-region sentence, never a replacement for it: `Locked` alone
+   * covers four states that differ in what the reader can do next (override / take over / waiting /
+   * expired), and only the sentence separates them.
+   */
+  badgeName?: string;
   message: string;
+  /**
+   * Keep {@link message} **painted**, not merely announced.
+   *
+   * The foot-row epic made the sentence `sr-only` and moved its fact onto the badge as
+   * `Locked · Alexandra` — which works for the five `locked` branches and for the two steady
+   * states, and does **not** work for two states where the badge is structurally incapable of
+   * carrying the fact:
+   *
+   * - **`lost`** — the pen was taken from the reader mid-edit, with no gesture of theirs. The badge
+   *   flips to `Read-only` and there is no actor to name, so a sighted planner would be left with a
+   *   changed badge and a bare `Dismiss` button and nothing saying what happened. This is the
+   *   single transition ADR-0028 exists for.
+   * - **`editing` with an incoming request** — the badge says `Editing`, correctly, because the
+   *   reader IS editing; the actor in scope is the person ASKING. `Hand over` and `Keep editing`
+   *   would appear with nothing naming who is asking, and {@link badgeName} deliberately never
+   *   fires on this tone for exactly the reason that would make it wrong here.
+   *
+   * Found by the architecture gate, which noticed that D4's accounting covered the `locked` tone
+   * and neither of these. The width cost is real and is paid only in two rare, consequential
+   * states — which is the opposite trade from paying it in the common one.
+   */
+  messageVisible?: boolean;
   /** Supplementary text rendered **aria-hidden** (the "active …" relative time, or
    *  the row-6 grace countdown) so its frequent updates never re-announce the banner. */
   aside?: string;
@@ -51,6 +87,7 @@ export function resolveLockView(
       tone: 'lost',
       badge: lockCopy.badgeReadOnly,
       message: lockCopy.lost(lostControl),
+      messageVisible: true,
       actions: ['dismiss'],
     };
   }
@@ -83,6 +120,7 @@ export function resolveLockView(
           tone: 'editing',
           badge: lockCopy.badgeEditing,
           message: lockCopy.incomingRequest(pendingOther),
+          messageVisible: true,
           actions: ['handover', 'keep'],
         };
       }
@@ -104,6 +142,7 @@ export function resolveLockView(
         return {
           tone: 'locked',
           badge: lockCopy.badgeLocked,
+          badgeName: firstName(holder),
           message: `${lockCopy.heldByOther(holder)} ${lockCopy.adminNote}`,
           ...(activeAside ? { aside: activeAside } : {}),
           actions: ['override'],
@@ -113,6 +152,7 @@ export function resolveLockView(
         return {
           tone: 'locked',
           badge: lockCopy.badgeLocked,
+          badgeName: firstName(holder),
           message: lockCopy.canTakeOver(holder),
           actions: ['takeover'],
         };
@@ -124,6 +164,7 @@ export function resolveLockView(
           return {
             tone: 'locked',
             badge: lockCopy.badgeLocked,
+            badgeName: firstName(holder),
             message: lockCopy.waitingForHandover(holder),
             ...(countdown ? { aside: countdown } : {}),
             actions: ['waiting'],
@@ -132,6 +173,7 @@ export function resolveLockView(
         return {
           tone: 'locked',
           badge: lockCopy.badgeLocked,
+          badgeName: firstName(holder),
           message: lockCopy.heldByOther(holder),
           ...(activeAside ? { aside: activeAside } : {}),
           actions: ['request'],
@@ -141,6 +183,7 @@ export function resolveLockView(
       return {
         tone: 'locked',
         badge: lockCopy.badgeLocked,
+        badgeName: firstName(holder),
         message: lockCopy.heldByOther(holder),
         ...(activeAside ? { aside: activeAside } : {}),
         actions: [],

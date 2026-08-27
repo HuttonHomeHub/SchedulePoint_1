@@ -74,7 +74,7 @@ test('Report progress and Steps open the same editor on the Progress tab', async
   await ensurePen(page);
   await addActivity(page, 'Pour slab');
 
-  await openEditor(page, 'Pour slab', 'Report progress');
+  await openEditor(page, 'Pour slab', 'Progress');
   const editor = activityEditor(page);
   await expect(editor.getByRole('tab', { name: 'Progress', selected: true })).toBeVisible();
   // The three panels the epic co-located, each headed by what it does to the schedule.
@@ -135,7 +135,7 @@ test('losing the pen shuts the definition scopes and leaves progress open', asyn
   await addActivity(page, 'Strip formwork');
   await releasePen(page);
 
-  await openEditor(page, 'Strip formwork', 'Report progress');
+  await openEditor(page, 'Strip formwork', 'Progress');
   const editor = activityEditor(page);
 
   // Progress is never pen-gated (ADR-0028 Q-C) — and it really saves, against the enforcing API.

@@ -470,7 +470,7 @@ export const NOTES_ENABLED = flagDefaultOn(import.meta.env.VITE_NOTES);
  * - **Go to today** — pans the canvas to today's date line (reuses the `goToDate` left-inset view jump).
  * - **Comments** — reveals + focuses the plan-level notes thread (`PlanNotesSection`, `VITE_NOTES`).
  * - **Add note** — opens the selected activity's Logic panel at its Notes section (`VITE_NOTES`).
- * - **Clear visual placement** — drops the selected bar's hand-placed `visualStart` (Visual mode, pen).
+ * - **Clear visual start** — drops the selected bar's hand-placed `visualStart` (Visual mode, pen).
  *
  * **ON by default** (2026-07-19, product sign-off) now that the commands are wired to already-
  * shipped features and the accessibility / ux / component / performance / security / test reviews are

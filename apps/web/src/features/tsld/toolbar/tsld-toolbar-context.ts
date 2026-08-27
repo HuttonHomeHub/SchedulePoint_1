@@ -270,7 +270,7 @@ export interface TsldToolbarContext {
    * "Open logic". A no-op when nothing is selected. */
   openActivityNotes: () => void;
   /** Whether the viewer may edit the schedule (`canEditSchedule`, Planner+ **and** the pen). Gates the
-   * mutating items. (**Clear visual placement** cited this until ADR-0094 M4-T1 moved it to the
+   * mutating items. (**Clear visual start** cited this until ADR-0094 M4-T1 moved it to the
    * selection bar; {@link lateOverlayActive} below is now read only by that surface's shared gate.) */
   canEditSchedule: boolean;
   /** Whether the read-only Late-start overlay (ADR-0033 M4) is on — the workspace's `authoringEnabled`

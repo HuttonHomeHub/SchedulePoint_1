@@ -32,7 +32,7 @@ import {
  *    sighted planner through the read-out chip, and to an AT user through the button's own
  *    description, because the chip is deliberately `aria-hidden`.
  * 3. **The remedy is on the object.** Landing on a flagged activity offers the fix on the selection
- *    bar — and for a hand-placed conflict that fix is the bar's own `Clear visual placement`, not a
+ *    bar — and for a hand-placed conflict that fix is the bar's own `Clear visual start`, not a
  *    second conflict-flavoured copy of it (ADR-0093's rule applied inside one surface).
  *
  * **Why this suite.** `workspace-chrome` is the only Playwright config in the repository that runs
@@ -205,7 +205,7 @@ test.describe('Conflict review', () => {
     const clearOnBar = dock(page).locator('[data-toolbar-item="clear-visual-placement"]');
     await expect(clearOnBar, 'the remedy for a hand-placed conflict is this item').toBeVisible();
     await expect(
-      dock(page).getByRole('button', { name: /Clear visual placement/ }),
+      dock(page).getByRole('button', { name: /Clear visual start/ }),
       'and there is exactly one of it — the `visualConflict` remedy points AT this item rather ' +
         'than rendering a conflict-flavoured twin beside it (ADR-0094 M4-T2)',
     ).toHaveCount(1);

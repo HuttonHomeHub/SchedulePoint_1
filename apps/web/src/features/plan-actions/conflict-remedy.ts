@@ -58,7 +58,7 @@ export const CONFLICT_REMEDIES: Readonly<Record<ConflictKey, ConflictRemedy>> = 
   visualConflict: {
     kind: 'barAction',
     itemId: 'clear-visual-placement',
-    label: 'Clear visual placement',
+    label: 'Clear visual start',
   },
   // A route, not a fix — which constraint to relax, or by how much, is the planner's judgement, and
   // the copy says so. It read "Fix the constraint…" until the ux gate put the two routes side by

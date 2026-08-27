@@ -137,3 +137,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0111](0111-a-primitives-keyboard-contract-is-reviewed-before-release.md)   | A shared primitive's keyboard contract is reviewed before release       | Accepted           |
 | [0112](0112-a-header-row-wraps-and-a-pen-sentence-is-a-fact.md)             | A header row wraps, and a pen sentence is a fact                        | Accepted           |
 | [0113](0113-measure-the-problem-before-designing-the-remedy.md)             | Measure the problem, not just the remedy                                | Accepted           |
+| [0114](0114-a-row-that-cannot-shrink-never-wraps.md)                        | A row that cannot shrink is never asked to wrap                         | Accepted           |

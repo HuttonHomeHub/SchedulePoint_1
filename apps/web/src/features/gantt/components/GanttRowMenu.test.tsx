@@ -90,7 +90,7 @@ describe('the trigger', () => {
 describe('the items', () => {
   it('offers the dock roster and none of the canvas-only actions', () => {
     openMenu();
-    expect(screen.getByRole('menuitem', { name: /Report progress/ })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /^Progress/ })).toBeInTheDocument();
     // `canvas: null`, so zoom-to-selection and isolate are ABSENT rather than shaded — things the
     // object cannot do in this projection, not things this reader may not do (ADR-0082's omit).
     expect(screen.queryByRole('menuitem', { name: /Zoom to selection/ })).toBeNull();
@@ -99,7 +99,7 @@ describe('the items', () => {
 
   it('invokes the registry action, not a copy of it', () => {
     const ctx = openMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: /Report progress/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Progress/ }));
     expect(ctx.onProgress).toHaveBeenCalledTimes(1);
   });
 

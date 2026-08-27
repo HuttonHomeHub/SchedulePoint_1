@@ -106,8 +106,14 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   // Report progress on the task — the derived status shows in the row afterwards. Row actions
   // live behind an overflow "Actions for …" menu (TECH_DEBT #38): open it, then choose the action.
   //
+  // **The item is called `Progress`** since the foot-row epic (ADR-0114 D7), on this menu and on the
+  // canvas selection bar together — ADR-0093's whole subject is that one action reads the same on
+  // both. This suite still said `Report progress` and **that is how the rename was caught**: the
+  // base journey covers the shipped default, and the standing rule after ADR-0096 is to run it
+  // whenever a screen changes. It was not run when the label moved.
+  //
   // Since ADR-0060 M6 this opens the **tabbed activity editor** on its Progress tab, not a
-  // progress-only dialog — Report progress, Edit and Steps are three doors into one editor. This
+  // progress-only dialog — Progress, Edit and Steps are three doors into one editor. This
   // suite runs at the shipped defaults, so it describes that; the previous surface is pinned by the
   // dedicated flag-off suites, and the tabbed permission model by `e2e-activity-editor/`.
   //
@@ -116,7 +122,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   // The helper filters on the editor's own section tablist, which the create dialog does not have.
   const actionsButton = page.getByRole('button', { name: 'Actions for Excavate' });
   await actionsButton.click();
-  await page.getByRole('menuitem', { name: 'Report progress' }).click();
+  await page.getByRole('menuitem', { name: 'Progress', exact: true }).click();
   const editor = activityEditor(page);
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('tab', { name: 'Progress', selected: true })).toBeVisible();
@@ -141,7 +147,7 @@ test('a user can add activities to a plan (accessible)', async ({ page }) => {
   await expect(actionsButton).toBeFocused();
 
   await actionsButton.click();
-  await page.getByRole('menuitem', { name: 'Report progress' }).click();
+  await page.getByRole('menuitem', { name: 'Progress', exact: true }).click();
   await expect(editor).toBeVisible();
   await editor.getByLabel('Percent complete').fill('40');
   // On/before the plan data date (2026-01-05) — an actual after "now" is rejected by N07 (ADR-0035 §6).

@@ -59,6 +59,73 @@ import { cva } from 'class-variance-authority';
  *
  * `justify-center` goes with it: the floor adds width the icon would otherwise sit left of.
  */
+/**
+ * **The card a group of toolbar commands sits in.**
+ *
+ * Declared once because it is used twice: `Deck` draws each of its four groups in one, and the
+ * canvas selection bar adopts the same treatment so the command surface reads as one system
+ * (foot-row epic M6). It lived as a bare literal inside `Deck.tsx` until 2026-08-27, and copying it
+ * to a second consumer is the hand-copied variant `DESIGN_SYSTEM.md` forbids in as many words.
+ *
+ * **A style, not a component.** The two consumers deliberately want DIFFERENT behaviour — the deck
+ * folds its groups and captions them, the selection bar does neither — so a shared `<DeckCard>`
+ * would recouple two things that should stay apart. ADR-0062 is about not reimplementing
+ * behaviour, which is a different hazard from this one.
+ *
+ * ## What the two variants share, and why they share exactly that
+ *
+ * **The card treatment — background and radius — plus the flex layout every toolbar row needs.**
+ * (This said "background and radius only" for one commit, and the base declares
+ * `flex items-stretch gap-2` beside them: a sentence inaccurate about the four classes below it,
+ * caught by the architecture gate.) Everything else was measured, three times, and each attempt
+ * cost a line of the canvas the foot-row epic exists to give back:
+ *
+ * | selection bar's card | row at 1920 | row at 1646 |
+ * | -------------------- | ----------- | ----------- |
+ * | none (before M6)     | 41 (1 line) | 77 (2)      |
+ * | deck's own geometry  | **79 (2)**  | **119 (3)** |
+ * | border, no padding   | 41 (1)      | **119 (3)** |
+ * | background + radius  | **41 (1)**  | **77 (2)**  |
+ *
+ * The middle two are the interesting ones. The deck's `px-2` consumed exactly the 15 px of margin
+ * M3 had left at 1920 and pushed the row back to two lines; dropping the padding recovered that and
+ * still cost a line at 1646, because content there sits at the container width and a **2 px border**
+ * is enough to wrap it. So the border is `comfortable`'s, not the shared base.
+ *
+ * This is the epic's own rule applied to its own styling: the treatment that reads as shared is
+ * shared, and the geometry that costs canvas is not.
+ */
+export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md', {
+  variants: {
+    /**
+     * **Does this card own its band, or sit inside one somebody else owns?**
+     *
+     * It shipped as `density` for one commit and both the component and the architecture gate said
+     * the same thing about it: `density` in this codebase means spacing and weight
+     * (`notice-strip.tsx`, `form.tsx`), and this variant also turns a **border** on — which is
+     * chrome, not density. Worse, the name invites a third consumer to reason on a scale that does
+     * not exist here. The real discriminator is context, and the measurement table above is about
+     * context: the padding and the border cost a line **because the foot row is already the
+     * container**, not because the card is denser.
+     *
+     * `boxed` is the deck's own: a `border` and `px-2 py-1.5` around `min-h-9` content, right in a
+     * band the deck owns outright.
+     *
+     * `bare` is for a card inside a row that is already the container — the canvas selection bar in
+     * the plan's foot row, where `selection-actions.tsx` records why the docked bar had no box at
+     * all until M6 ("a bar that brings its own box makes the row 6 px taller than the 36 px it
+     * already occupied") and `dock.spec.ts` bounds the row's cost to the canvas. It declares
+     * nothing, because the base declares no padding and no border: `px-0 py-0` was written here
+     * first and is a **no-op**, which made a two-valued variant a boolean wearing a scale's name.
+     */
+    chrome: {
+      boxed: 'border-border/60 border px-2 py-1.5',
+      bare: '',
+    },
+  },
+  defaultVariants: { chrome: 'boxed' },
+});
+
 export const TOOLBAR_CARET_TARGET = 'min-w-6 justify-center pointer-coarse:px-2';
 
 export const toolbarSplitCaretVariants = cva(

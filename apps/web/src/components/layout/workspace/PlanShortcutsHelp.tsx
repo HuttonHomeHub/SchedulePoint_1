@@ -26,7 +26,7 @@ const READ_SHORTCUTS: readonly Shortcut[] = [
       ]),
   { keys: 'Enter', action: 'Open the logic (dependency) editor' },
   { keys: '?', action: 'Show this shortcuts help' },
-  { keys: 'Esc', action: 'Cancel the current gesture / close a popover' },
+  { keys: 'Esc', action: 'Disarm the current tool, cancel a gesture, or close a popover' },
 ];
 
 /**
@@ -48,6 +48,25 @@ const EDIT_SHORTCUTS: readonly Shortcut[] = [
   {
     keys: 'n',
     action: 'Create an activity in the focused lane and start (uses the armed Add type)',
+  },
+  /**
+   * **A pointer gesture in a keyboard sheet, and it is here because withdrawing a statement moved
+   * where a capability lives** (foot-row epic M7, ux gate B2).
+   *
+   * The Add tool's armed statement used to read "drag on the diagram to draw its length, **or click
+   * for one day**". `CanvasModeBand.tsx` records that clause as documenting a shortcut written down
+   * nowhere else — which is why ADR-0113 kept it when it trimmed the rest of that sentence. This
+   * epic then withdrew the whole `adding` statement (the trigger restates the mode), and the
+   * remainder moved onto the trigger as an `sr-only` `primaryDescription`. That is the right channel
+   * for an AT user and reaches **nobody** driving with a mouse and sighted eyes, who is exactly the
+   * planner the gesture is for: strictly less access than before the epic.
+   *
+   * So it lands here instead. A gesture in a shortcuts sheet is a stretch, and a capability
+   * reachable from nowhere is not a trade-off.
+   */
+  {
+    keys: 'Click (Add armed)',
+    action: 'Place a one-day activity instead of dragging out its length',
   },
 ];
 

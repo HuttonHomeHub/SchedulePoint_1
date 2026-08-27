@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/toolbar/toolbar-registry';
 import {
   TOOLBAR_CARET_TARGET,
+  toolbarCardVariants,
   toolbarControlVariants,
 } from '@/components/ui/toolbar/toolbar-styles';
 import {
@@ -284,8 +285,11 @@ function IsolateControl({
           // `TOOLBAR_CARET_TARGET` — the 24 px floor §2.5.8 requires. This caret is the **third**
           // copy of the split-button affordance (`docs/TECH_DEBT.md` #76 asked for an extraction and
           // got two consumers, not three), and at `px-1` around a `size-3.5` chevron it measured
-          // 22 px. The fit gate cannot see it: the selection bar is out of that gate's scope by
-          // decision (#124), so this one is held by the shared constant alone.
+          // 22 px. **The fit gate DOES see it now** — this comment claimed the selection bar was
+          // out of that gate's scope by decision (#124) while the same commit widened the sweep to
+          // cover this bar (`e2e-workspace-fit/command-surface.spec.ts`, "every object action a
+          // pointer can see, it can also reach"). Corrected rather than deleted, because the
+          // constant is still what holds the floor and the gate is what proves it.
           className={cn(
             toolbarControlVariants({ active: open, disabled }),
             'rounded-l-none px-1',
@@ -496,7 +500,35 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             tier: 1,
             showLabel: 'always',
             order: 1,
-            label: 'Report progress',
+            /**
+             * **`Progress`, not `Report progress`, and renamed on BOTH surfaces in one commit.**
+             *
+             * The UX review declined this shortening on a specific ground rather than a stylistic
+             * one: `:423-425` requires this bar's labels to match the activities table's, "so the
+             * same operation reads the same on the canvas and in the table", and renaming here
+             * alone would have split that vocabulary across three surfaces and left the fourth.
+             * `ActivitiesTable.tsx` moved with it, which answers the objection instead of
+             * overriding it.
+             *
+             * It is here because it is worth a LINE: measured, the row was 32 px from fitting on
+             * one line at 1920 and this is 46 (`docs/specs/foot-row/m0-measurement.md`). A bare
+             * noun beside `Logic` / `Resources` / `Steps` also reads consistently — those are the
+             * same editor's tabs — and the verb survives below for anyone whose only channel is the
+             * accessible name.
+             *
+             * **It survives on `srDescription`, and `description` alone would NOT have carried it.**
+             * This first shipped with `description` only, whose docblock says in as many words that
+             * it is "appended to the native hover `title`" (`toolbar-registry.ts:298-303`) — so the
+             * verb reached a sighted mouse user hovering, and nobody else: not a screen-reader user,
+             * not a sighted keyboard user, which is precisely the audience the sentence above
+             * claimed to be covering. `srDescription` is the `aria-describedby` channel
+             * (`toolbar-registry.ts:342-362`). Both are set, because the two audiences are
+             * different and neither is served by the other's mechanism. The gate this fell through
+             * is the one `ToolbarSplitButton.tsx:47-52` records having caught four times.
+             */
+            label: 'Progress',
+            description: 'Report progress on this activity.',
+            srDescription: () => 'Report progress on this activity.',
             icon: <ClipboardCheck className="size-4" />,
             // Role-gated, NOT pen-gated — progress is a Contributor action (the notes/progress
             // precedent), mirroring the toolbar's Update-progress command's `canProgress` gate.
@@ -634,7 +666,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
       disabledReason: (ctx) => ctx.scheduleRefusal(PEN_ACTION) ?? undefined,
       onActivate: (ctx) => ctx.onDelete(),
     },
-    // ── Clear visual placement — MOVED here from the command surface (ADR-0094 M4-T1) ──────────
+    // ── Clear visual start — MOVED here from the command surface (ADR-0094 M4-T1) ──────────
     //
     // Its `isEnabled` consulted `ctx.selectedActivity`, which is ADR-0093's discriminator verbatim:
     // an action whose subject is the selected object belongs on the object's surface. It was one of
@@ -656,7 +688,7 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             tier: 1 as const,
             showLabel: 'always' as const,
             order: 6.5,
-            label: 'Clear visual placement',
+            label: 'Clear visual start',
             /**
              * **A `TriangleAlert` when this IS the conflict's remedy, an `Eraser` otherwise.**
              *
@@ -838,11 +870,43 @@ export function SelectionActionsBar({
         const next = event.relatedTarget as Node | null;
         if (next !== null && !event.currentTarget.contains(next)) heldFocusRef.current = false;
       }}
-      // No border, padding or radius: docked, the ROW is the container, and a bar that brings its
-      // own box makes the row 6 px taller than the 36 px it already occupied — measured, and the
-      // reason the journey's "costs the canvas no height" assertion is an equality rather than a
-      // bound. Floating, all three were load-bearing (a card over the diagram needs an edge).
-      className="flex shrink-0 items-center"
+      // **It has a card now, and the invariant this comment used to assert is not gone — it is a
+      // variant.** It read: "No border, padding or radius: docked, the ROW is the container, and a
+      // bar that brings its own box makes the row 6 px taller than the 36 px it already occupied —
+      // measured, and the reason the journey's 'costs the canvas no height' assertion is an
+      // equality rather than a bound."
+      //
+      // That measurement still holds, and measuring three candidates proved it holds harder than
+      // it reads. The deck's own geometry took this row from ONE line to two at 1920 — its `px-2`
+      // consumed exactly the 15 px of margin M3 had left — and dropping the padding still cost a
+      // line at 1646, where the content sits at the container width and a 2 px border is enough to
+      // wrap it. So what is shared is the background and the radius, which cost nothing; the border
+      // and the padding belong to `boxed`. See `toolbarCardVariants` for the table.
+      //
+      // The rewrite is deliberate: a comment asserting an invariant the code no longer honours is
+      // the defect class this repository keeps recording, and deleting it would have lost the
+      // number that turned out to decide the design.
+      //
+      // **`min-w-0`, never `shrink-0` — this line was the clipping defect.** `Toolbar` wraps
+      // unconditionally (`Toolbar.tsx:181-189`) and the dock outlet is `flex min-w-0 flex-1
+      // flex-wrap` (`canvas-dock.tsx:104`), but a `shrink-0` item between them takes `max-content`
+      // and never shrinks — so the outlet's width was never imposed on this wrapper and the
+      // wrapping toolbar inside was never asked to break a line. The surplus painted past the row
+      // and was clipped by the workspace body's `overflow-hidden`, putting `Clear visual placement`
+      // off-screen at 1920 and `Edit`/`Duplicate`/`Delete` with it at 1646 — pointer-unreachable.
+      // Measured both ways in `docs/specs/foot-row/m0-measurement.md` §C1b: content 1753 px against
+      // containers of 1619 and 1345 before, exactly the container width after.
+      //
+      // **NOT "keyboard-reachable because focus scrolls it into view", which is what this comment
+      // said until §C1d measured it.** Focusing a clipped control moved its rect by zero — the clip
+      // is an ancestor's `overflow-hidden` and there is no scrollable ancestor to move. It shipped
+      // unreported because nothing LOOKED wrong: the row simply ended, and a control that is not
+      // painted looks exactly like a control that does not exist.
+      //
+      // The cost is height — the row wraps to 77 px at 1920 and 117 px at 1646 with a selection —
+      // which is what the streamlining beside this exists to reduce. A row that is too tall is a
+      // trade; a row that hides a command is not.
+      className={cn(toolbarCardVariants({ chrome: 'bare' }), 'min-w-0 items-center')}
     >
       <Toolbar
         items={selectionActionItems}

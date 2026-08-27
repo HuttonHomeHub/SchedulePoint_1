@@ -186,6 +186,14 @@ So, for any command surface:
 - **`flex-wrap`, never `overflow-x-auto` and never a demotion pass.** A line that cannot fit becomes
   two lines. Flex line-breaking cannot place a child outside its container, so "every command is
   reachable" is structural rather than a gate anyone has to keep passing.
+- **And the wrap is defeated by ONE `shrink-0` between the surface and its container** — which is a
+  rule and not a footnote, because it shipped and hid four commands (ADR-0114). A `shrink-0` flex
+  item takes `max-content` and never shrinks, so the container's width is never imposed on it and
+  the wrapping row inside it is never asked to break a line; the surplus paints past the box and an
+  `overflow-hidden` ancestor takes it **silently**. Nothing looks wrong — the row simply ends, and a
+  control that is not painted looks exactly like a control that does not exist. Use `min-w-0`. Note
+  what this shares with the container-query trap in `UX_STANDARDS.md`: both are `shrink-0` on an
+  auto-width item, both are invisible to jsdom, and both were found by measuring a real browser.
 - **Grouping is the affordance.** The plan workspace's `Deck` renders the registry's seven-group
   taxonomy as four captioned groups that a reader can **fold**, which is a decision the reader makes
   about their own screen — not one a `ResizeObserver` makes for them at a width nobody measured.
