@@ -989,9 +989,13 @@ export function SelectionActionsBar({
       // unreported because nothing LOOKED wrong: the row simply ended, and a control that is not
       // painted looks exactly like a control that does not exist.
       //
-      // The cost is height — the row wraps to 77 px at 1920 and 117 px at 1646 with a selection —
-      // which is what the streamlining beside this exists to reduce. A row that is too tall is a
-      // trade; a row that hides a command is not.
+      // **That cost is now zero, and this paragraph was wrong twice before it was stale.** It said
+      // the row "wraps to 77 px at 1920 and 117 px at 1646" — the two figures belong to 1646 and
+      // 1440, and 1920 never wrapped at all. ADR-0115 then removed the wrap entirely: measured, the
+      // foot row is **41 px in both states at 1920, 1646 and 1440**, so a selection costs the canvas
+      // nothing and `dock.spec.ts` asserts that as an equality rather than a bound.
+      // The principle the sentence carried still holds and is worth keeping: a row that is too tall
+      // is a trade; a row that hides a command is not.
       className={cn(toolbarCardVariants({ chrome: 'bare' }), 'min-w-0 items-center')}
     >
       <Toolbar

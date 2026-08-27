@@ -136,15 +136,27 @@ test.describe('The canvas dock', () => {
      * at this viewport with a selection. A row that is too tall is a trade; a row that hides a
      * command is not.
      *
-     * The bound is generous on purpose — the epic's later milestones reduce the row's content, and
-     * a tight bound here would fail on the improvement. What it still forbids is the failure mode
-     * that matters: a strip taking a whole band of canvas rather than a line or two of it.
+     * **The bound was `<= 120` and that is now an equality, because the loose one could not tell the
+     * fixed state from the broken one.** The pre-epic worst case at this viewport was **117 px** —
+     * inside the bound — so the only CI-runnable assertion about the defect the foot-row-and-deck
+     * epic exists to close passed just as happily before the fix as after it. ADR-0110 D5's rule is
+     * that a gate is finished when the defect it names can make it fail, and this one could not.
+     * Raised by the architecture review; the epic quotes that ADR in three places.
+     *
+     * The loose bound was written on the reasoning that "the epic's later milestones reduce the
+     * row's content, and a tight bound would fail on the improvement". They did reduce it — to
+     * **zero**: `m1-result` and `m3m4-result` both measure the foot row at 41 px in BOTH states at
+     * 1920, 1646 and 1440, so a selection now costs the canvas nothing at all. ADR-0092's original
+     * guarantee is restored rather than merely approached, and it is asserted as one.
+     *
+     * If a future milestone genuinely needs to spend canvas on a selection, this number is the
+     * conversation — which is what an equality is for and what `<= 120` quietly prevented.
      */
     const withSelection = await canvasHeight(page);
     expect(
       idle - withSelection,
-      'a selection may cost the canvas a line or two, never a band',
-    ).toBeLessThanOrEqual(120);
+      'a selection costs the canvas nothing — ADR-0092’s guarantee, restored by ADR-0115',
+    ).toBe(0);
 
     // And it is at the foot rather than over the diagram — the complaint that opened this
     // milestone. Asserted as containment in the row, not as "not over the canvas": a bar can sit
