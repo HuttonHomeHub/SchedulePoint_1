@@ -8,6 +8,7 @@ import {
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
+
 import { clearMeasurement, writeMeasurement } from './output';
 
 /**
@@ -57,6 +58,9 @@ test('M4 states: does a stale schedule grow the foot row?', async ({ page }) => 
         const r = (n: number): number => Math.round(n * 10) / 10;
         const foot = document.querySelector('[data-activities-bar]');
         const row = document.querySelector('[data-schedule-state]');
+        // The bound now sits on the facts wrapper INSIDE the row (M4 fix), so report both: the row
+        // is what decides the foot's height, the wrapper is what the two-line treatment governs.
+        const bounded = row?.firstElementChild ?? null;
         const cv = document.querySelector('canvas');
         if (!foot || !row) throw new Error('foot row or facts row missing');
         // Distinct top offsets among the bounded container's own children = how many lines it took.
@@ -74,6 +78,8 @@ test('M4 states: does a stale schedule grow the foot row?', async ({ page }) => 
           factsRowH: r(row.getBoundingClientRect().height),
           factsRowW: r(row.getBoundingClientRect().width),
           factsLines: lines,
+          boundedW: bounded ? r(bounded.getBoundingClientRect().width) : null,
+          boundedH: bounded ? r(bounded.getBoundingClientRect().height) : null,
           text: (row.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 90),
         };
       },
@@ -91,6 +97,8 @@ test('M4 states: does a stale schedule grow the foot row?', async ({ page }) => 
   }
 
   // Make the schedule stale: add an activity and do NOT recalculate.
+  // `ensurePen` first — the reload loop above drops the lease, and a write without it is a 423.
+  await ensurePen(page);
   await seedActivities(page, orgSlug, [
     { name: 'Blind and reinforce', laneIndex: 2, durationDays: 9 },
   ]);
@@ -104,6 +112,48 @@ test('M4 states: does a stale schedule grow the foot row?', async ({ page }) => 
     results.push(await read('STALE — edits not calculated', c.width));
   }
 
-  writeMeasurement('m4-states', results);
+  /* ---------------------------------------------------------------------------------------
+   * **Seeding an activity did not make the plan stale** — `data-schedule-state` stayed `current`
+   * in all six readings above, because `deriveScheduleState`'s `edits` counter comes from the
+   * client's own pending mutations, not from a row appearing via the API. So those readings are
+   * INCONCLUSIVE about the review's finding rather than a disproof of it, and saying so matters:
+   * a green probe that never reached the state it was named for is the ambiguity this epic has
+   * already been bitten by twice.
+   *
+   * The question is answerable without driving the app into that state, because it is a question
+   * about layout: **if this content renders inside the bounded container, does the row grow?** So
+   * the real stale sentence and a Recalculate-sized control are injected into the real container
+   * and the browser is asked. `plan-status-bar.test.tsx:165` gives the longest copy verbatim.
+   * ------------------------------------------------------------------------------------------ */
+  const injected: Array<Record<string, unknown>> = [];
+  for (const c of CASES) {
+    await page.setViewportSize(c);
+    await page.reload();
+    await page.waitForTimeout(1400);
+    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+    await page.waitForTimeout(600);
+    const before = await read('before injection', c.width);
+    await page.evaluate(() => {
+      const row = document.querySelector('[data-schedule-state]');
+      if (!row) throw new Error('facts row missing');
+      // Mirrors `ScheduleStateRegion`'s stale branch: an `ml-auto inline-flex gap-2` wrapper
+      // holding the sentence and an `h-5 px-2 text-xs` button.
+      const region = document.createElement('span');
+      region.setAttribute('data-probe-stale', '');
+      region.className = 'ml-auto inline-flex items-center gap-2';
+      region.innerHTML =
+        '<span class="whitespace-nowrap">Could not calculate — 3 edits still pending</span>' +
+        '<button class="h-5 gap-1 px-2 text-xs border rounded-md inline-flex items-center">Recalculate</button>';
+      row.appendChild(region);
+    });
+    await page.waitForTimeout(300);
+    injected.push({
+      ...(await read('WITH the stale region injected', c.width)),
+      before: before.footH,
+    });
+    await page.evaluate(() => document.querySelector('[data-probe-stale]')?.remove());
+  }
+
+  writeMeasurement('m4-states', [...results, ...injected]);
   expect(results.length).toBe(CASES.length * 2);
 });

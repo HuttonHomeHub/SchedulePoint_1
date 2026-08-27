@@ -104,7 +104,7 @@ export function PlanFacts({
        * nothing, because a wrapping row breaks between ITEMS rather than by total width (ADR-0114
        * M2 recorded the same thing freeing 164 px and gaining zero).
        */
-      className="text-muted-foreground flex min-h-6 max-w-64 shrink-0 flex-wrap items-center gap-x-4 gap-y-0 px-3 text-xs"
+      className="text-muted-foreground flex min-h-6 shrink-0 flex-wrap items-center gap-x-4 gap-y-0 px-3 text-xs"
     >
       {/* **The collapse is WITHDRAWN, on its own measurement** (M2-T3, reversed at M2-T4).
           Tailwind's `@container` sets `container-type: inline-size`, which applies
@@ -125,13 +125,26 @@ export function PlanFacts({
 
           If the row ever does get tight, the container belongs on the row and there are two of
           them, so it wants a decision rather than a class. */}
-      <FactList
-        activityCount={activityCount}
-        criticalCount={criticalCount}
-        dataDate={dataDate}
-        projectFinish={projectFinish}
-        pending={pending}
-      />
+      {/* **The bound is on the FACTS, not on the row** — and the first version got that wrong.
+          `max-w-64` sat on the container above, which also holds `ScheduleStateRegion` and
+          `PenStatusOutlet`. Every measurement behind M4 ran after `recalculate()`, which is the one
+          state where the schedule region renders **nothing**, so the readings never contained two
+          of the row's five content sources. Two independent reviews caught it and the browser
+          settled it: injecting the real stale sentence (`Could not calculate — 3 edits still
+          pending`) plus its Recalculate button took the facts to **three** lines and the foot row
+          from **41 px to 53 px at every width** — a row that grows with no selection at all, which
+          is a worse version of the defect this epic exists to close.
+          Bounding only the facts is the fix: they are the content the two-line treatment is FOR,
+          and the schedule state and the pen sentence are neither facts nor optional. */}
+      <div className="flex max-w-64 flex-wrap items-center gap-x-4 gap-y-0">
+        <FactList
+          activityCount={activityCount}
+          criticalCount={criticalCount}
+          dataDate={dataDate}
+          projectFinish={projectFinish}
+          pending={pending}
+        />
+      </div>
       {/* **Exempt from the collapse, deliberately.** ADR-0082's rule is that a control shut by a
           state the reader can change is shaded with its reason rather than hidden — and the same
           reasoning applies one step earlier: Recalculate is the only thing on this row that DOES
