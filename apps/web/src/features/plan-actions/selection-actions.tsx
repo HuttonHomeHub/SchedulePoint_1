@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/toolbar/toolbar-registry';
 import {
   TOOLBAR_CARET_TARGET,
+  toolbarCardVariants,
   toolbarControlVariants,
 } from '@/components/ui/toolbar/toolbar-styles';
 import {
@@ -855,10 +856,22 @@ export function SelectionActionsBar({
         const next = event.relatedTarget as Node | null;
         if (next !== null && !event.currentTarget.contains(next)) heldFocusRef.current = false;
       }}
-      // No border, padding or radius: docked, the ROW is the container, and a bar that brings its
-      // own box makes the row 6 px taller than the 36 px it already occupied — measured, and the
-      // reason the journey's "costs the canvas no height" assertion is an equality rather than a
-      // bound. Floating, all three were load-bearing (a card over the diagram needs an edge).
+      // **It has a card now, and the invariant this comment used to assert is not gone — it is a
+      // variant.** It read: "No border, padding or radius: docked, the ROW is the container, and a
+      // bar that brings its own box makes the row 6 px taller than the 36 px it already occupied —
+      // measured, and the reason the journey's 'costs the canvas no height' assertion is an
+      // equality rather than a bound."
+      //
+      // That measurement still holds, and measuring three candidates proved it holds harder than
+      // it reads. The deck's own geometry took this row from ONE line to two at 1920 — its `px-2`
+      // consumed exactly the 15 px of margin M3 had left — and dropping the padding still cost a
+      // line at 1646, where the content sits at the container width and a 2 px border is enough to
+      // wrap it. So what is shared is the background and the radius, which cost nothing; the border
+      // and the padding belong to `comfortable`. See `toolbarCardVariants` for the table.
+      //
+      // The rewrite is deliberate: a comment asserting an invariant the code no longer honours is
+      // the defect class this repository keeps recording, and deleting it would have lost the
+      // number that turned out to decide the design.
       //
       // **`min-w-0`, never `shrink-0` — this line was the clipping defect.** `Toolbar` wraps
       // unconditionally (`Toolbar.tsx:181-189`) and the dock outlet is `flex min-w-0 flex-1
@@ -874,7 +887,7 @@ export function SelectionActionsBar({
       // The cost is height — the row wraps to 77 px at 1920 and 117 px at 1646 with a selection —
       // which is what the streamlining beside this exists to reduce. A row that is too tall is a
       // trade; a row that hides a command is not.
-      className="flex min-w-0 items-center"
+      className={cn(toolbarCardVariants({ density: 'flush' }), 'min-w-0 items-center')}
     >
       <Toolbar
         items={selectionActionItems}

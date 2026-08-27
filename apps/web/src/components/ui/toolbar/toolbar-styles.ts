@@ -59,6 +59,62 @@ import { cva } from 'class-variance-authority';
  *
  * `justify-center` goes with it: the floor adds width the icon would otherwise sit left of.
  */
+/**
+ * **The card a group of toolbar commands sits in.**
+ *
+ * Declared once because it is used twice: `Deck` draws each of its four groups in one, and the
+ * canvas selection bar adopts the same treatment so the command surface reads as one system
+ * (foot-row epic M6). It lived as a bare literal inside `Deck.tsx` until 2026-08-27, and copying it
+ * to a second consumer is the hand-copied variant `DESIGN_SYSTEM.md` forbids in as many words.
+ *
+ * **A style, not a component.** The two consumers deliberately want DIFFERENT behaviour — the deck
+ * folds its groups and captions them, the selection bar does neither — so a shared `<DeckCard>`
+ * would recouple two things that should stay apart. ADR-0062 is about not reimplementing
+ * behaviour, which is a different hazard from this one.
+ *
+ * ## What the two densities share, and why they share exactly that
+ *
+ * **Background and radius only.** Everything else was measured, three times, and each attempt cost
+ * a line of the canvas the foot-row epic exists to give back:
+ *
+ * | selection bar's card | row at 1920 | row at 1646 |
+ * | -------------------- | ----------- | ----------- |
+ * | none (before M6)     | 41 (1 line) | 77 (2)      |
+ * | deck's own geometry  | **79 (2)**  | **119 (3)** |
+ * | border, no padding   | 41 (1)      | **119 (3)** |
+ * | background + radius  | **41 (1)**  | **77 (2)**  |
+ *
+ * The middle two are the interesting ones. The deck's `px-2` consumed exactly the 15 px of margin
+ * M3 had left at 1920 and pushed the row back to two lines; dropping the padding recovered that and
+ * still cost a line at 1646, because content there sits at the container width and a **2 px border**
+ * is enough to wrap it. So the border is `comfortable`'s, not the shared base.
+ *
+ * This is the epic's own rule applied to its own styling: the treatment that reads as shared is
+ * shared, and the geometry that costs canvas is not.
+ */
+export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md', {
+  variants: {
+    /**
+     * **Vertical padding, and it is a measurement rather than a taste.**
+     *
+     * `comfortable` is the deck's own: `py-1.5` around `min-h-9` content, so the card is ~50 px.
+     * That is right in a band the deck owns outright.
+     *
+     * `flush` is for a card sitting INSIDE a row that is already the container — the canvas
+     * selection bar in the plan's foot row. `selection-actions.tsx` records the measurement that
+     * made this a variant rather than a reuse: the docked bar had no box at all precisely
+     * because "a bar that brings its own box makes the row 6 px taller than the 36 px it already
+     * occupied", and `dock.spec.ts` asserts the row's cost to the canvas. `py-0` keeps the card
+     * the height of the controls inside it, so the treatment is shared and the geometry is not.
+     */
+    density: {
+      comfortable: 'border-border/60 border px-2 py-1.5',
+      flush: 'px-0 py-0',
+    },
+  },
+  defaultVariants: { density: 'comfortable' },
+});
+
 export const TOOLBAR_CARET_TARGET = 'min-w-6 justify-center pointer-coarse:px-2';
 
 export const toolbarSplitCaretVariants = cva(

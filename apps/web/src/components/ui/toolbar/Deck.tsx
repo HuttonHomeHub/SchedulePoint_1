@@ -8,6 +8,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
+import { toolbarCardVariants } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 
 import { cn } from '@/lib/utils';
@@ -300,7 +301,9 @@ export function Deck<Ctx>({
             // This said "the buttons are untouched — stacked, labelled, exactly as approved" until
             // M1 unstacked them. Corrected rather than deleted: turning the card on its side is an
             // argument about the CARD, and is unaffected by what the buttons inside it do.
-            className="border-border/60 bg-foreground/5 flex items-stretch gap-2 rounded-md border px-2 py-1.5"
+            // Shared with the canvas selection bar since the foot-row epic's M6 — see
+            // `TOOLBAR_CARD`. It was a literal here, and the second consumer would have copied it.
+            className={toolbarCardVariants()}
           >
             <button
               type="button"
