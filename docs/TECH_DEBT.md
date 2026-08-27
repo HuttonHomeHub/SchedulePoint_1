@@ -5258,3 +5258,30 @@ from the M0 enumeration and from memory rather than from `LENS_TOGGLES`, which i
 one step upstream of a document: a decision-bearing claim asserted without checking, inside a
 question put to somebody else. No code defect; recorded because the rule §19.11 states is about
 claims in documents and this was a claim in a **choice**, and nothing currently covers that.
+
+## 205. A double-seeded fixture cannot recalculate, and the engine's horizon guard is an untyped 500
+
+**Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Size:** S + S · **Owner:** api
+
+Two defects sharing one reproduction, found while seeding the catalogue for the health-check
+measurement and filed rather than absorbed, because neither is in that epic's scope.
+
+**Repro:** seed `--tier fixture` twice into the same project (the second run reuses the plan —
+same seed name), then `POST …/schedule/recalculate`. The response is `500 INTERNAL_ERROR`; the log
+shows the engine's working-time horizon guard, `addWorkingTime exceeded the working-time horizon
+(no reachable minute)`, thrown from `engine/working-time` (the ADR-0036 N11/N16 cap). A fresh
+single-seeded fixture recalculates cleanly (200 in 74 ms, 147 activities), so the trigger is
+the second seed pass, not the fixture.
+
+**(a) The fixture seed path is not re-runnable.** The second run's calendar writes leave a
+working-time state the walker cannot traverse. Either the seeder should refuse a plan it already
+seeded, or the second pass should converge to the same state as the first. Until then, "re-run the
+seed" — the obvious recovery for a half-seeded catalogue — can quietly break the one plan the
+playbook calls the realistic-load oracle.
+
+**(b) The horizon guard reaches the client as an unhandled 500.** ADR-0071 set the pattern:
+_"the engine's own guard is a typed error and a 422, not a 500."_ This guard predates that ruling
+and was never converted. A planner who authors a calendar with no reachable working minute — which
+ADR-0067's Window-only preset makes authorable — and then recalculates meets a bare
+`INTERNAL_ERROR` with no words about the calendar. The fix is the ADR-0071 shape: a typed engine
+error mapped to 422 with the calendar named.
