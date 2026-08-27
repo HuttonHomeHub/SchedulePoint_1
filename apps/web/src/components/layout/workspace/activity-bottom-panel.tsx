@@ -6,6 +6,7 @@ import { PlanFactsOutlet } from './plan-facts-host';
 import type { PlanWorkspaceModel } from './use-plan-workspace-model';
 
 import { Button } from '@/components/ui/button';
+import { Surface } from '@/components/ui/surface';
 import { ActivitiesTable, CreateActivityButton, openActivityEditor } from '@/features/activities';
 import { BaselineVarianceSummary } from '@/features/baselines';
 
@@ -173,9 +174,25 @@ export function ActivityBottomPanel({
  * every time the panel opened. They no longer can, because there is one row and it is always the
  * last band.
  *
- * **Facts LEAD.** The first draft of the spec put the dock first and the facts after it, which
- * would have made the facts slide sideways every time a selection appeared — the same juggle one
- * axis over. An always-present region goes before a transient one.
+ * **The ACTIONS lead as of the foot-row-and-deck epic, and the reason this docblock used to give
+ * for the opposite was false.**
+ *
+ * It said: *"The first draft of the spec put the dock first and the facts after it, which would
+ * have made the facts slide sideways every time a selection appeared — the same juggle one axis
+ * over. An always-present region goes before a transient one."* That is a claim about flex sizing
+ * and it does not hold against the code it describes. Measured
+ * (`docs/specs/workspace-foot-and-deck/m0-measurement.md` §2): the dock is
+ * `flex min-w-0 flex-1 flex-wrap` — `flex-grow: 1`, `flex-basis: 0%` — so **its width does not
+ * depend on its contents**; it claims all the free space whether it holds ten controls or none. The
+ * facts are `shrink-0` with `basis: auto`, so their width is constant. At either end, neither
+ * region moves when a selection appears. ADR-0076 Class 3, in a document three days old.
+ *
+ * So the order was a free choice, and it is now made on the ground that survives: the object bar
+ * gets a **fixed leading edge**. The facts block's width varies by over 100 px between states (a
+ * critical count appearing, a schedule state changing), and with the facts leading, every button in
+ * the bar shifted by that difference. Nothing about the flex model prevented that — it is what
+ * `basis: auto` on the leading item means — and it is the juggle the sentence above was reaching
+ * for, one region over from where it looked.
  *
  * `min-h-9` rather than `h-9`: a strip taller than the row grows it instead of being clipped, which
  * is what a fixed height would do silently. Since the selection bar started wrapping (M1) that is
@@ -196,16 +213,38 @@ export function PlanActivitiesFootRow({
   hostsPlanSlots?: boolean;
 }): React.ReactElement {
   return (
-    <div
+    <Surface
+      tone="chrome"
       // A test hook in this codebase's established shape (`data-toolbar-item`, `data-plan-identity`).
       // This row IS the `CanvasDockOutlet`'s host (ADR-0092), so the dock journey has to find it —
       // and it was finding it by the word "Activities", which the status bar's activity-count fact
       // started matching too (Graphite M7). Locating chrome by its copy is what the standing rule
       // after ADR-0091 forbids, and this is the third time it has bitten.
       data-activities-bar
+      /*
+       * **The foot row joins the chrome scope** (foot-row-and-deck M2).
+       *
+       * The product owner asked whether "the bottom toolbar should be the same colour etc as the
+       * others to tie them in". Measured, the answer is stronger than a colour difference: this row
+       * had **no surface scope at all**. It resolved `(page)` — a transparent background and one
+       * 1 px grey `--border` — while the header and command deck are a `<Surface tone="chrome">`
+       * card, navy, 10 px radius, with a 3 px amber bottom edge. They were not two shades of one
+       * treatment; one was a card and the other a hairline.
+       *
+       * **It costs no height, and that is why it is a scope rather than a card.** `Surface` adds
+       * `bg-background text-foreground` and the `data-surface` attribute and nothing else — no
+       * padding, no border, no radius — so every token inside this row rebinds to the chrome family
+       * while the box model is untouched. The row's floor is the 40 px collapse button and stays
+       * there. Giving it the band's radius and amber edge as well was rejected for exactly that
+       * reason: those are geometry, and this row's whole value is that it does not take any.
+       *
+       * `border-t` is kept and now resolves the chrome family's `--border` rather than the page's,
+       * so the seam is drawn in the vocabulary of the surface it belongs to.
+       */
       className="border-border flex min-h-9 shrink-0 items-center gap-2 border-t px-4"
     >
-      {/* **The facts, leading** (M2-T4). This row said "Activities" and the status bar said
+      {/* **The facts, now TRAILING** (foot-row-and-deck M3 — see the docblock above for why the
+          order moved, and why the reason originally given for facts-leading did not hold). This row said "Activities" and the status bar said
           "Activities 5" — the same subject rendered twice, one of them a duplicate that had already
           broken a test three times by being matched instead of this row. The count fact names the
           panel AND gives its size, so one control does both jobs and the word appears once **in the
@@ -224,10 +263,10 @@ export function PlanActivitiesFootRow({
           `role="status"` region into a hidden node, and the shell's status row — `empty:hidden` —
           collapsed. The plan's facts vanished entirely on the narrowest screens, and a live region
           sat somewhere it could never announce. Found by the architecture gate. */}
-      {hostsPlanSlots ? <PlanFactsOutlet /> : null}
       {hostsPlanSlots ? <CanvasDockOutlet /> : null}
+      {hostsPlanSlots ? <PlanFactsOutlet /> : null}
       {toggle}
-    </div>
+    </Surface>
   );
 }
 

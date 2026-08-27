@@ -62,6 +62,8 @@ function ctx(over: Partial<SelectionCanvasContext> | null = {}): SelectionBarCon
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
     conflictKey: null,
     clearPlacement: { enabled: true, reason: null },
+    // Visible unless a case says otherwise — the fixtures' status quo (M1).
+    clearPlacementApplies: true,
     onClearVisualPlacement: vi.fn(),
     onOpenEditorAt: vi.fn(),
     onOpenLogic: vi.fn(),

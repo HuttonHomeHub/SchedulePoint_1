@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { deriveScheduleState, PlanStatusBar, type ScheduleState } from './plan-status-bar';
@@ -338,5 +338,77 @@ describe('deriveScheduleState', () => {
     expect(
       deriveScheduleState({ ...base, pendingEdits: 1, canRecalculate: false, refusalReason: null }),
     ).toMatchObject({ refusal: 'The schedule cannot be recalculated.' });
+  });
+});
+
+/**
+ * **The two-line bound governs the FACTS, and nothing else** (foot-row-and-deck, M4 fix).
+ *
+ * M4 wraps the plan's facts onto two lines and claims the foot row's height is unchanged, because
+ * two 16 px lines are 32 px and the row's floor is a 40 px button. The first version put the bound
+ * on the whole facts ROW — which also carries `ScheduleStateRegion` and `PenStatusOutlet` — and
+ * every measurement behind it ran after a recalculation, the one state where the schedule region
+ * renders nothing. Two independent reviews caught the gap and the browser confirmed it: injecting
+ * the real stale sentence plus its Recalculate button took the facts to three lines and the row
+ * from **41 px to 53 px at every width**, with no selection involved.
+ *
+ * The layout half of that cannot be asserted here — jsdom has no layout, which is exactly why it
+ * shipped. What CAN be pinned here is the structural fact the fix rests on: the bounded element
+ * contains the facts and does **not** contain the schedule state or the pen outlet. That is cheap,
+ * it is the property a future refactor would silently undo, and it is checkable without a browser.
+ *
+ * **Verified red**: with `max-w-*` moved back onto the outer row, the first assertion fails on the
+ * bounded element also containing the Recalculate control.
+ */
+describe('the two-line facts bound', () => {
+  // Its own fixture: `base` above is scoped to the `PlanStatusBar` describe, and reaching for it
+  // from here is what the first version of this suite did — it failed on `base is not defined`
+  // rather than on anything about the bound.
+  const base = {
+    activityCount: 12,
+    criticalCount: 0,
+    dataDate: '2026-03-02',
+    projectFinish: '2026-09-30',
+    scheduleState: { kind: 'current' } as ScheduleState,
+    onRecalculate: () => {},
+    pending: false,
+  };
+
+  const bounded = (): HTMLElement => {
+    const row = document.querySelector('[data-schedule-state]');
+    if (!row) throw new Error('facts row not found');
+    const el = [...row.querySelectorAll('*')].find((c) =>
+      /(?:^|\s)max-w-\S+/.test(c.className.toString()),
+    );
+    if (!el) throw new Error('no bounded element inside the facts row');
+    return el as HTMLElement;
+  };
+
+  it('does not enclose the schedule state or the pen sentence', () => {
+    render(
+      <PlanStatusBar
+        {...base}
+        scheduleState={{ kind: 'stale', edits: 3, failed: true, refusal: null }}
+      />,
+    );
+    const box = bounded();
+    // The stale sentence and its remedy are outside the bound, so they extend the row sideways
+    // rather than pushing the facts onto a third line and growing the row's height.
+    expect(box.textContent ?? '').not.toContain('Could not calculate');
+    expect(within(box).queryByRole('button', { name: /Recalculate/i })).toBeNull();
+  });
+
+  it('does enclose the facts it exists to wrap', () => {
+    render(
+      <PlanStatusBar
+        {...base}
+        scheduleState={{ kind: 'stale', edits: 3, failed: true, refusal: null }}
+      />,
+    );
+    // The pinned positive. Without it, deleting the bound outright would satisfy the case above
+    // just as well — a green suite that cannot tell "correctly scoped" from "gone" (ADR-0093).
+    const text = bounded().textContent ?? '';
+    expect(text).toContain('Data date');
+    expect(text).toContain('Finish');
   });
 });

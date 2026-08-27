@@ -240,6 +240,21 @@ const LENS_TOGGLES: readonly LensToggle[] = [
     id: 'baseline-overlay',
     group: 'insight',
     label: 'Baseline overlay',
+    // **Promoted onto the deck** (foot-row-and-deck M6), and it is the only one of the three the
+    // product owner named that could be. `Float paths` is ALREADY a deck item (`float-paths`,
+    // `group: 'find'`, tier 3) and `Critical path` is not a lens toggle at all — it is a column
+    // header in the activities table and a settings-section title. Those two came from my own
+    // question's options rather than from this registry, which is the ADR-0076 Class 3 shape one
+    // step upstream of a document: a choice offered from memory instead of from the code.
+    //
+    // Measured before promoting (`m1-deck-load.spec.ts`): ONE toggle keeps the deck at two lines
+    // at 1920 and 1646 and costs nothing; THREE labelled take it to three lines at 1646 as well as
+    // 1440, which is 58 px of canvas at the width this epic exists to serve and beyond the risk the
+    // product owner accepted. At 1440 even one costs the line — that IS the risk they accepted,
+    // stated rather than buried.
+    //
+    // `lensTogglesIn` drops it from `View ▾` by construction, so it cannot appear in both.
+    promotion: { icon: <Layers className="size-4" />, order: 23 },
     enabled: CANVAS_LENSES_ENABLED,
     checked: (ctx) => ctx.baselineOverlay,
     toggle: (ctx) => ctx.toggleBaselineOverlay(),

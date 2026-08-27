@@ -85,7 +85,10 @@ import { TsldLegendPanel } from '@/features/tsld/components/TsldLegendPanel';
 import { buildColourLegend } from '@/features/tsld/render/lenses';
 import { lensLegendVarPalette } from '@/features/tsld/render/palette';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
-import { clearVisualPlacementGate } from '@/features/tsld/toolbar/conflict-remedy';
+import {
+  clearVisualPlacementApplies,
+  clearVisualPlacementGate,
+} from '@/features/tsld/toolbar/conflict-remedy';
 import { buildTsldToolbarItems } from '@/features/tsld/toolbar/tsld-toolbar-items';
 import { useLegendPanelPrefs } from '@/features/tsld/toolbar/use-legend-panel-prefs';
 import { useMinimapPanelPrefs } from '@/features/tsld/toolbar/use-minimap-panel-prefs';
@@ -246,6 +249,18 @@ export function ToolbarPlanWorkspace({
   // there would be the second derivation `host-parity.structural.test.ts` exists to prevent —
   // on the one artefact where a disagreement is least visible and most costly.
   const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
+  /**
+   * The plan's scheduling mode, narrowed **once**.
+   *
+   * This ternary was written out four times in this file — twice for `clearVisualPlacementGate` and
+   * twice more for `clearVisualPlacementApplies` when the foot-row-and-deck epic added it. The
+   * predicate's own docblock says `schedulingMode` "is read in one place", and that was true inside
+   * `conflict-remedy.ts` and false here: the gate and the applicability check are the two halves of
+   * one decision, and four hand-copied narrowings are how two halves come to disagree. This
+   * repository files that shape as a defect often enough (ADR-0073 C4, ADR-0094 M0) that a
+   * component review flagged it on sight.
+   */
+  const schedulingMode: 'EARLY' | 'VISUAL' = plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY';
 
   const barDateSource = SCHEDULING_MODES_ENABLED
     ? barDateSourceFor(plan.schedulingMode, canvasUi.viewToggles.lateOverlay)
@@ -691,11 +706,16 @@ export function ToolbarPlanWorkspace({
       // about what "you cannot clear this" means. `hasSelection` is `true` by construction: this bar
       // renders only for a selection (the ADR-0090 M2-T1 argument).
       clearPlacement={clearVisualPlacementGate({
-        schedulingMode: plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
+        schedulingMode,
         canEditSchedule: model.canEditSchedule,
         lateOverlayActive,
         hasSelection: true,
         scheduleRefusal: model.scheduleRefusal,
+      })}
+      clearPlacementApplies={clearVisualPlacementApplies({
+        // Omit rather than shade outside Visual mode (ADR-0082) — the same predicate the gate above
+        // consults, so `schedulingMode` is still read in one place.
+        schedulingMode,
       })}
       onClearVisualPlacement={(a) => void model.clearVisualPlacement(a.id, a.version)}
       onOpenEditorAt={model.onOpenActivityEditorAt}
@@ -827,11 +847,14 @@ export function ToolbarPlanWorkspace({
     canReportProgress: model.canProgress,
     canWriteNotes: model.canWriteNotes,
     clearPlacement: clearVisualPlacementGate({
-      schedulingMode: plan?.schedulingMode === 'VISUAL' ? 'VISUAL' : 'EARLY',
+      schedulingMode,
       canEditSchedule: model.canEditSchedule,
       lateOverlayActive,
       hasSelection: true,
       scheduleRefusal: model.scheduleRefusal,
+    }),
+    clearPlacementApplies: clearVisualPlacementApplies({
+      schedulingMode,
     }),
     onOpenLogic: model.onOpenLogic,
     onEdit: model.onEditActivity,

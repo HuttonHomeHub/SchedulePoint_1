@@ -5212,3 +5212,49 @@ recording (ADR-0064 §7, ADR-0067, ADR-0080, ADR-0111). Not fixed here because i
 and outside the stated scope of the change that found it — but the two clamps should become one.
 
 Both raised by the accessibility gate on the `Menu` fix, which passed it with no blocking finding.
+
+## 204. Four things the foot-row-and-deck epic found and did not fix
+
+**Raised:** 2026-08-27 (foot-row-and-deck M7) · **Size:** S each · **Owner:** unassigned
+
+Five specialist reviews over the epic's diff. Accessibility passed with nothing blocking; ux and
+component blocked on findings that were folded in the milestone. These four are recorded rather
+than rushed.
+
+**(a) An icon-only object action names itself only on hover, and the object bar is a new surface for
+that gap.** `zoom-to-selection` is `showLabel: 'never'` (foot-row-and-deck M1), so a sighted
+touch-only reader gets no visible name: `aria-label` carries it for assistive technology and `title`
+carries it for a pointer, and a tap fires neither. **This is not a WCAG failure** — the accessible
+name is unconditional and independent of `title`, which the accessibility review checked rather than
+assumed — and it is the gap `#131` already documents on the command deck. What is new is the
+surface: `#131`'s scope names the deck and not the docked object bar. Either widen `#131` or give
+`ToolbarButton` an icon-only treatment that survives a touch device; the second is the real fix and
+is a shared-primitive change, so it wants its own spec (ADR-0105).
+
+**(b) `hover:bg-accent/60` now composites against the chrome scope on the object bar, and the
+contrast matrix structurally cannot see it.** `token-contrast.test.ts` computes ratios between
+declared token pairs; an alpha-composited utility (`toolbar-styles.ts`, `Badge`'s
+`bg-warning/15`) is not a pair and is invisible to it — the file's own docblock records that lesson
+from `hover:bg-destructive/90` shipping unchecked. Both classes already rendered on `chrome` via
+`Deck` and the header pen badge before this epic, so nothing here introduced the gap; M2 increases
+how often the object bar's hover state paints on that ground. Wants a real-browser check of the
+composited value, not a matrix entry.
+
+**(c) A scheduling-mode flip while focus sits on `Clear visual start` may drop focus to `<body>`.**
+M1 makes that control `isVisible: false` outside Visual mode, so a mode change unmounts it.
+`Toolbar`'s roving-tabindex repair reassigns which item is `tabIndex=0`; it does not move
+`document.activeElement`. Whether the case is reachable depends on whether a mode change can happen
+without also clearing the selection (which would take the whole bar with it and make the question
+moot), and **that could not be settled from the code** — it needs a browser. Raised by the
+accessibility review and explicitly marked unverified there. If reachable it is WCAG 2.4.3, a class
+this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0096).
+
+**(d) Two of three lens toggles offered to the product owner for promotion did not exist.** The
+`AskUserQuestion` options named `Critical path`, `Float paths` and `Baseline overlay`. Only the
+third is a promotable `LensToggle`: `float-paths` is **already** a deck item
+(`tsld-toolbar-items.tsx`, `group: 'find'`, tier 3) and `Critical path` is not a lens at all — it is
+a column header in the activities table and a settings-section heading. The options were written
+from the M0 enumeration and from memory rather than from `LENS_TOGGLES`, which is ADR-0076 Class 3
+one step upstream of a document: a decision-bearing claim asserted without checking, inside a
+question put to somebody else. No code defect; recorded because the rule §19.11 states is about
+claims in documents and this was a claim in a **choice**, and nothing currently covers that.

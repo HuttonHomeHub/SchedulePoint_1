@@ -431,6 +431,8 @@ export interface TsldPanelProps {
    * a write.
    */
   clearPlacement?: { enabled: boolean; reason: string | null };
+  /** Whether `Clear visual start` applies at all — omitted rather than shaded when false (M1). */
+  clearPlacementApplies?: boolean;
   /** Withdraw the selected activity's hand-placed `visualStart` (ADR-0094 M4). */
   onClearVisualPlacement?: (activity: ActivitySummary) => void;
   /** Open the activity editor where a conflict lives — `constraint` → Scheduling, `resources` →
@@ -547,6 +549,7 @@ export function TsldPanel({
   canvasUi,
   barDateSource = 'early',
   clearPlacement,
+  clearPlacementApplies,
   onClearVisualPlacement,
   onOpenEditorAt,
   varianceRows,
@@ -1413,6 +1416,7 @@ export function TsldPanel({
         canReportProgress,
         canWriteNotes,
         clearPlacement,
+        clearPlacementApplies,
         onOpenLogic: (a) => onOpenLogic?.(a),
         onNotes,
         onEdit: (a) => onEditActivity?.(a),
@@ -1434,6 +1438,7 @@ export function TsldPanel({
       scheduleRefusal,
       canReportProgress,
       clearPlacement,
+      clearPlacementApplies,
       onOpenLogic,
       onEditActivity,
       onDeleteActivity,

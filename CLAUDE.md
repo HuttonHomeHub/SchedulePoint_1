@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1079 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1080 web
 > source files with 39 Playwright suites beside the base journey, and
-> 114 ADRs.
+> 115 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3364,6 +3364,61 @@ progress` off the command surface because **an object action belongs on the obje
   absorbed. Every fix carries a regression test verified red first.
   **The CPM engine is not imported and no migration runs.**
 
+- **ADR-0115** _(Accepted; M0–M7 landed 2026-08-27)_ — A bound governs what it encloses, and the
+  wrap was measured from one state. Five layout observations about the released workspace, and a
+  sixth thing nobody reported that outranked all of them: selecting a single activity made the foot
+  row **wrap**, costing the diagram **36 px at 1646 — the product owner's own screen — and 76 px at
+  1440**. That is ADR-0114 M1's own consequence followed one step further than that ADR followed
+  it; `shrink-0` → `min-w-0` stopped clipping four unreachable controls and started eating the
+  diagram, and the abstract loss of ADR-0092's 0 px dock guarantee was recorded while the number
+  never was. **It is now 41 px in both states at 1920 and 1646**, and `dock.spec.ts` asserts that as
+  an **equality** — its old `<= 120 px` bound could not tell the fixed state from the broken one,
+  because the pre-epic worst case was 117.
+  **At 1440 the epic is a net loss at rest and the ADR says so**, rather than leaving the 58 px D7
+  costs and the 76 px D1/D5 win in separate paragraphs that each read as a gain: 560 → 502 px of
+  canvas at rest. Both of the product owner's screens are unaffected, which is why they kept it.
+  **Four of the five answered differently from how they were asked.** The foot row had **no surface
+  scope at all** — `(page)`, transparent, one grey hairline — rather than a different colour, and
+  joins `chrome` as a **scope rather than a card**, which is what makes it free: `Surface`
+  contributes a background, a foreground and an attribute and **no geometry**, so the band's radius
+  and amber edge are deliberately not copied. Swapping the two halves moves nothing, because the
+  dock is `flex-1 basis-0%` — making ADR-0114's stated reason for the previous order **false as
+  implemented** (ADR-0076 Class 3, in a document three days old), so the order now rests on the
+  argument that survives: the object bar gets a fixed leading edge where every button used to shift
+  by however wide the facts happened to be. Two-line facts cost **nothing**, the whole price being
+  `gap-4` setting a 16 px **row** gap as well as a column gap. And of the 48 controls behind the
+  eight `▾` triggers only **13 are commands** — 24 are `View ▾` checkboxes — so the deck's genuine
+  1,176 px of spare line at 1920 had almost nothing worth putting in it.
+  **The load-bearing correction is that a bound governs what it encloses.** `max-w-64` first sat on
+  the row that also carries `ScheduleStateRegion` and `PenStatusOutlet`, and **every measurement ran
+  after a recalculation — the one state where the schedule region renders nothing**, so the readings
+  never contained two of the row's five content sources. Two independent reviews caught it and the
+  browser settled it: injecting the real stale sentence took the facts to three lines and the row
+  from 41 px to **53 px at every width, with no selection at all** — a strictly worse version of the
+  defect the epic exists to close. Re-scoped onto the facts alone it also **finishes what M1 could
+  not**, handing 231 px back and taking 1440 from 117 px to 41.
+  **Two decisions were withdrawn on their own measurement.** The approved fix — moving two viewport
+  commands to the deck, correct by ADR-0093's subject test — takes the deck from two lines to three
+  at 1646: **58 px to save 36**, the seventh consecutive contradicted width expectation here and the
+  first where the arithmetic was right and the **model** was wrong, because a wrapping row breaks
+  between _items_. And always-showing the object bar (ADR-0082's clause: a surface every item of
+  which would be shaded renders no trigger) would make the wrap permanent.
+  `Clear visual start` is **omitted** outside Visual mode on ADR-0082's own discriminator — an Early
+  plan has no hand-placed start, so there is nothing for a reason to say — with the applicability
+  test a separate predicate the existing gate calls, since `BulkActionGate` is shared with the
+  plural bar. `Edit plan` stops being rendered twice from one memo, which ADR-0093's structural gate
+  **cannot see** because it compares two registries and neither copy is a registry item.
+  **The ADR keeps five things it got wrong**, because the corrections are the useful part: that
+  two-line facts were "never free" (one Tailwind class); that the pen sentence was 126 px of the
+  facts (a phantom, clipped to 1 × 1); that `docs/TECH_DEBT.md` #202 and #203 did not exist (they do
+  — the register writes modern rows as `## 202.` and the grep, and the `git show` used to "confirm"
+  it, shared one defect, with **both** reviewing agents reporting the same absence); that deck slack
+  was the constraint on promotion; and **six instrument defects**, each recorded where it happened.
+  Two of the three lens toggles offered to the product owner for promotion **did not exist** — one
+  was already on the deck and one is not a lens at all — which is Class 3 one step upstream of a
+  document, in a choice put to somebody else (`docs/TECH_DEBT.md` #204). **The CPM engine is not
+  imported and no migration runs.**
+
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
   template job, superseding ADR-0014/0015. With 19 real modules built to the
@@ -3738,6 +3793,32 @@ When operating in this repo, Claude Code should:
       duplicated, which no amount of care inside one message can prevent. Found
       only because the product owner asked whether the wake-ups were working.
       `list_triggers` shows what is outstanding; `delete_trigger` removes it.
+    - **And if the chain looks dead, re-arm anyway — a firing you have not yet
+      been told about cannot be responded to.** On 2026-08-27 a wake-up fired at
+      16:06:24 (`trig_016ak7uGrZ3n9Tn7z2ebCLr8`, `ended_reason:
+run_once_fired`) and its notification was delivered **at 16:47 — about
+      forty-one minutes late**, after the product owner had already asked
+      whether the wake-ups were working. Nothing re-armed in between, so the
+      loop sat dead with the epic half-built. That is the previous bullet's own
+      failure one day later and in the opposite direction: it guards against
+      **two** live triggers, and this was **none**.
+      **The first version of this bullet said the notification "never
+      surfaced", and committed that as fact twenty-five minutes before it
+      arrived.** It was late, not lost — an ADR-0076 Class 3 claim asserted
+      about a delivery channel whose latency nothing here measures, written into
+      the register bullet whose whole subject is not trusting an unobserved
+      event. The remedy below does not change, because it covers both cases;
+      only the diagnosis was wrong, and it is corrected in place rather than
+      quietly edited.
+      The bullet above puts the re-arming instruction inside the fired message
+      so the mechanism cannot go stale, and that is exactly why it cannot cover
+      this case — the instruction is _in the message that was never read_. So
+      the rule gains its second half: **whenever you touch an epic whose
+      terminal condition is unmet and `list_triggers` comes back empty, arm
+      one.** That is a state you can check, rather than an event you have to
+      have noticed. It is still not a gate and cannot be: nothing in CI can
+      observe whether a session is armed. Weak instrument, per §19.11's last
+      bullet — but a checkable state beats a remembered event.
     - **And check the terminal condition is reachable before arming it.** One
       written the same day as this bullet required the work to be "merged and
       released, tag and publish job confirmed" — for a documentation change with

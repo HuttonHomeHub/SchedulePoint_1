@@ -105,21 +105,31 @@ test('Delete asks before removing, and removes on confirm', async ({ page }) => 
     .toBeLessThan(before);
 });
 
-test('Clear visual start is shaded with a reason on an EARLY plan', async ({ page }) => {
+test('Clear visual start is ABSENT on an EARLY plan, and the bar is not', async ({ page }) => {
   test.setTimeout(120_000);
   await ganttPlanWithSelection(page, Date.now());
   const bar = page.getByRole('toolbar', { name: /Actions for/ });
 
-  // `clearVisualPlacementGate`'s first rung: there is nothing to clear on a plan that is not in
-  // VISUAL mode. Shaded **with a reason**, not hidden — the reader is told why rather than left to
-  // wonder whether the control exists (ADR-0082's shade branch, and the distinction ADR-0094 D6
-  // moved this control onto this bar to make).
-  const clear = bar.getByRole('button', { name: 'Clear visual start' });
-  await expect(clear).toBeVisible();
-  await expect(clear).toBeDisabled();
-  // The reason is linked, not merely adjacent — an sr-only sibling via aria-describedby, so a
-  // screen-reader user gets it with the control rather than by hunting for nearby text.
-  await expect(clear).toHaveAttribute('aria-describedby', /.+/);
+  // **This case asserted the opposite until the foot-row-and-deck epic, and the reversal is the
+  // point.** It used to require the control to be present, `toBeDisabled()`, and carry a linked
+  // reason — ADR-0082's SHADE branch, which is right for a control shut by a state the reader can
+  // change. Outside VISUAL mode it is not shut, it does not apply: a plan scheduled Early has no
+  // hand-placed start anywhere in it, so there is nothing for a reason to say beyond "this does not
+  // exist here". That is ADR-0082's OMIT branch, and the control was holding 146 px of a row whose
+  // wrap cost the diagram 36 px at 1646 to say nothing.
+  //
+  // The shade branch is not deleted and still has to hold — the Late-start overlay and a Viewer's
+  // role both shut this control INSIDE Visual mode, with a reason. Those are covered by
+  // `selection-actions.clear-placement.test.tsx`, which can construct all four gate rungs directly;
+  // this journey cannot reach Visual mode without a second fixture, and duplicating one to re-test
+  // a pure function is not what a journey is for.
+  await expect(bar.getByRole('button', { name: 'Clear visual start' })).toHaveCount(0);
+
+  // **The pinned positive**, and it is why this is two assertions rather than one. `toHaveCount(0)`
+  // passes just as well if the bar never rendered, if the selection was lost, or if the whole epic
+  // deleted the control outright — a green result that cannot tell "correctly omitted" from "gone"
+  // is the ADR-0093 defect this repository keeps re-filing.
+  await expect(bar.getByRole('button', { name: 'Edit' })).toBeVisible();
 });
 
 test('Fix this conflict is absent when the selected activity has none', async ({ page }) => {

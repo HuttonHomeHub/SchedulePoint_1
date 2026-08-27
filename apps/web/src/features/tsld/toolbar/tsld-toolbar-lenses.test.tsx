@@ -43,18 +43,6 @@ function renderRows(context: TsldToolbarContext) {
 }
 
 /** Open `View ▾` and return a relocated lens checkbox (ADR-0090 M2-T2). */
-function viewLens(name: string): HTMLElement {
-  const trigger = screen.getByRole('button', { name: /^View/ });
-  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
-  return screen.getByRole('checkbox', { name });
-}
-
-/** The reason text linked to a shut lens checkbox — an `aria-describedby` target now, not a `title`. */
-function lensReason(el: HTMLElement): string | null {
-  const id = el.getAttribute('aria-describedby');
-  return id ? (document.getElementById(id)?.textContent ?? null) : null;
-}
-
 beforeEach(() => vi.clearAllMocks());
 
 describe('TSLD toolbar — insight lenses (flag on)', () => {
@@ -139,9 +127,22 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
     expect(screen.getByRole('radio', { name: 'Colour · WBS group' })).toBeChecked();
   });
 
+  /**
+   * **Baseline overlay is on the deck now** (foot-row-and-deck M6), so these three cases move from
+   * the `View ▾` checkbox vocabulary to the row-button one — the same assertions about the same
+   * control, in the vocabulary of the thing it now is. That is the `Resource view` precedent
+   * (`tsld-toolbar-resource-view.test.tsx`), and the reason the move is cheap: the registry item is
+   * DERIVED from the same `LensToggle` record `View ▾` reads, so the shade reasons travel with it
+   * and a relocation cannot lose one.
+   *
+   * It is the only one of the three toggles the product owner named that could be promoted:
+   * `Float paths` is already a deck item and `Critical path` is not a lens toggle at all.
+   */
+  const rowLens = (name: string): HTMLElement => screen.getByRole('button', { name });
+
   it('toggles the Baseline overlay when an active baseline exists', () => {
     renderRows(ctx());
-    const overlay = viewLens('Baseline overlay');
+    const overlay = rowLens('Baseline overlay');
     expect(overlay).not.toHaveAttribute('aria-disabled', 'true');
     fireEvent.click(overlay);
     expect(spies.toggleBaselineOverlay).toHaveBeenCalledOnce();
@@ -149,18 +150,27 @@ describe('TSLD toolbar — insight lenses (flag on)', () => {
 
   it('disables the Baseline overlay with a reason when there is no active baseline', () => {
     renderRows(ctx({ hasActiveBaseline: false }));
-    const overlay = viewLens('Baseline overlay');
+    const overlay = rowLens('Baseline overlay');
     expect(overlay).toHaveAttribute('aria-disabled', 'true');
-    // The reason is `aria-describedby`-linked now rather than a `title` tooltip — which is why the
-    // move is safe: a `title` on a shut control is not reliably announced (ADR-0083).
-    expect(lensReason(overlay)).toBe('No active baseline');
+    // The reason is `aria-describedby`-linked rather than a `title` tooltip — which is why the move
+    // is safe: a `title` on a shut control is not reliably announced (ADR-0083).
+    expect(overlay).toHaveAccessibleDescription(/No active baseline/);
     fireEvent.click(overlay);
     expect(spies.toggleBaselineOverlay).not.toHaveBeenCalled();
   });
 
   it('disables the Baseline overlay while variance is loading / errored', () => {
     renderRows(ctx({ varianceLoading: true }));
-    expect(lensReason(viewLens('Baseline overlay'))).toBe('Loading baseline…');
+    expect(rowLens('Baseline overlay')).toHaveAccessibleDescription(/Loading baseline…/);
+  });
+
+  it('is no longer offered inside View — on the row OR in the popover, never both', () => {
+    // `lensTogglesIn` excludes anything promoted, so the invariant holds by construction. Pinned
+    // because two copies of one control drift invisibly: each looks right alone, and only a planner
+    // who reaches it both ways ever sees one is a version behind (the `Resource view` precedent).
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: /^View/ }));
+    expect(screen.queryByRole('checkbox', { name: 'Baseline overlay' })).not.toBeInTheDocument();
   });
 
   // U4 — the pinned Look-row lens render controls (search / Filter / View) never demote into `⋯`
