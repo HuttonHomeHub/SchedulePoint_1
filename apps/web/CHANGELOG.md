@@ -1,5 +1,48 @@
 # @repo/web
 
+## 0.108.1
+
+### Patch Changes
+
+- [#397](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/397) [`3fd5404`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3fd5404eca68d3fba3d27ae78e2268d0ec0fdcda) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan's foot no longer rearranges itself when the activities panel opens. The facts, the activity
+  actions and the panel's own toggle are one row, in one place, in both states — expanding the panel
+  grows it upward instead of moving them.
+  
+  Alongside that:
+  
+  - Arming **Add**, **Level of effort** or **Link** no longer restates the tool's name below the
+    diagram; the trigger you just pressed already says it. The gestures those sentences carried are on
+    the trigger for screen readers, and **Click (Add armed) — place a one-day activity instead of
+    dragging out its length** is now in the keyboard shortcuts sheet, where it had never been listed.
+  - The diagram shows one transient strip at a time. An edit conflict outranks an armed tool, which
+    outranks the empty-plan prompt.
+  - The activity actions wear the same card as the command deck above them.
+  - The "who is editing this plan" sentence stays visible in the two states nothing else explains: when
+    the pen is taken from you, and when somebody is asking you for it.
+  - Below 768 px the plan's facts, its finish date and its Recalculate button are back — they had gone
+    missing on the narrowest screens.
+
+- [#397](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/397) [`3fd5404`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3fd5404eca68d3fba3d27ae78e2268d0ec0fdcda) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activity actions row now fits on one line on a 1920 px display, giving the diagram 36 px back —
+  and two lines instead of three at 1646 px, giving it 40 px. **Report progress** is now **Progress**,
+  on both the canvas selection bar and the activities table, so the same action reads the same in both
+  places.
+  
+  The pen's "who is editing this plan" sentence is no longer painted beside the plan's facts. Its
+  information moves onto the badge, which now names the holder — **Locked · Alexandra** — while the
+  sentence itself stays available to screen readers, where it remains the only announcement a planner
+  gets when the pen changes hands without them touching anything.
+  
+  **Clear visual placement** is now **Clear visual start**, keeping the word that separates Visual
+  mode from Early.
+
+- [#397](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/397) [`3fd5404`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3fd5404eca68d3fba3d27ae78e2268d0ec0fdcda) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The activity actions at the foot of the plan workspace no longer run off the right-hand edge. On a
+  1920 px display **Clear visual placement** was rendered off-screen; at 1646 px **Edit**, **Duplicate**
+  and **Delete** went with it. The row now wraps to a second line instead of hiding controls.
+  
+  Measured before and after: the row's content was 1753 px wide at every width, against 1619 px of
+  space at 1920 and 1345 px at 1646. Focusing a hidden control did not bring it into view — its
+  position was identical before and after — so it could be reached by keyboard and never seen.
+
 ## 0.108.0
 
 ### Minor Changes
