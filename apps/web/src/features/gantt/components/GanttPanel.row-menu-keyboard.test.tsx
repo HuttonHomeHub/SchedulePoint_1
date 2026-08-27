@@ -50,7 +50,6 @@ const rowContext = (): SelectionBarContext => ({
   canEditSchedule: true,
   scheduleRefusal: () => null,
   canReportProgress: true,
-  stepsEligible: false,
   isSummary: false,
   conflictKey: null,
   clearPlacement: { enabled: false, reason: 'Nothing to clear' },
@@ -62,7 +61,6 @@ const rowContext = (): SelectionBarContext => ({
   onDuplicateBand: vi.fn(),
   onResources: vi.fn(),
   onProgress: vi.fn(),
-  onSteps: vi.fn(),
   onClearVisualPlacement: vi.fn(),
   onOpenEditorAt: vi.fn(),
 });

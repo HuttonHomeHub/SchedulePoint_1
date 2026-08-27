@@ -55,7 +55,6 @@ function ctx(over: Partial<SelectionCanvasContext> | null = {}): SelectionBarCon
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
-    stepsEligible: true,
     isSummary: false,
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
@@ -71,7 +70,6 @@ function ctx(over: Partial<SelectionCanvasContext> | null = {}): SelectionBarCon
     onDuplicateBand: vi.fn(),
     onResources: vi.fn(),
     onProgress: vi.fn(),
-    onSteps: vi.fn(),
     ...(over === null ? {} : {}),
   };
 }

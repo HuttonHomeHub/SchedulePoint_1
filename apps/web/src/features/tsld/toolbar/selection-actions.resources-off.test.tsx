@@ -28,13 +28,11 @@ function ctx(): SelectionBarContext {
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
-    stepsEligible: true,
     onOpenLogic: vi.fn(),
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     onResources: vi.fn(),
     onProgress: vi.fn(),
-    onSteps: vi.fn(),
     isSummary: false,
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
@@ -49,11 +47,13 @@ function ctx(): SelectionBarContext {
 }
 
 describe('SelectionActionsBar — Resources gated on VITE_RESOURCES', () => {
-  it('omits Resources when RESOURCES_ENABLED=false, keeping Progress and Steps', () => {
+  it('omits Resources when RESOURCES_ENABLED=false, keeping Progress', () => {
     render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     expect(within(bar).queryByRole('button', { name: 'Resources' })).not.toBeInTheDocument();
+    // `Steps` was asserted here too until it was removed as a duplicate entry point
+    // (`docs/specs/object-bar-defects/` M1). `Progress` is what carries the flag-independence
+    // claim: one item gone, its neighbour on a different flag untouched.
     expect(within(bar).getByRole('button', { name: 'Progress' })).toBeInTheDocument();
-    expect(within(bar).getByRole('button', { name: 'Steps' })).toBeInTheDocument();
   });
 });

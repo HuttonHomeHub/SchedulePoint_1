@@ -153,14 +153,24 @@ describe('activity editor entry points (flag on)', () => {
     expect(screen.getByRole('tab', { name: 'Progress', selected: true })).toBeInTheDocument();
   });
 
-  it('opens it from Steps too, focused on the Weighted steps panel', async () => {
+  /**
+   * **The capability did not leave with the button** (`docs/specs/object-bar-defects/` M1).
+   *
+   * This case used to drive `rowAction('Steps')` and assert the Weighted-steps heading took focus.
+   * `Steps` is gone — it opened this very tab, differing from `Progress` only in where focus landed
+   * — so the assertion moves to what a planner must still be able to do: open Progress and find the
+   * weighted steps on it.
+   *
+   * Focus is deliberately NOT asserted here any more. It was `Steps`'s contribution, and claiming
+   * it of `Progress` would pin behaviour nothing produces. The `focusSteps` mapping itself is still
+   * covered by `activity-editor-intent.test.ts`, which is where a pure mapping belongs.
+   */
+  it('reaches the Weighted steps panel through Progress, now that Steps is gone', () => {
     renderTable();
-    rowAction('Steps');
+    expect(screen.queryByRole('menuitem', { name: 'Steps' })).not.toBeInTheDocument();
+    rowAction('Progress');
     expect(screen.getByRole('tab', { name: 'Progress', selected: true })).toBeInTheDocument();
-    // Not merely the right tab: the right place within it. Landing at the top of a three-panel tab
-    // would make Steps feel like it opened the wrong thing.
-    const heading = await screen.findByRole('heading', { name: 'Weighted steps' });
-    expect(document.activeElement).toBe(heading);
+    expect(screen.getByRole('heading', { name: 'Weighted steps' })).toBeInTheDocument();
   });
 
   it('leaves the three superseded dialogs unmounted', () => {

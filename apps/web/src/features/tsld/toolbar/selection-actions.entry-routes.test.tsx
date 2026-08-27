@@ -24,7 +24,6 @@ const spies = {
   onDelete: vi.fn(),
   onResources: vi.fn(),
   onProgress: vi.fn(),
-  onSteps: vi.fn(),
   onDissolve: vi.fn(),
   onDuplicate: vi.fn(),
   onDuplicateBand: vi.fn(),
@@ -40,13 +39,11 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
-    stepsEligible: true,
     onOpenLogic: spies.onOpenLogic,
     onEdit: spies.onEdit,
     onDelete: spies.onDelete,
     onResources: spies.onResources,
     onProgress: spies.onProgress,
-    onSteps: spies.onSteps,
     isSummary: false,
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
@@ -71,13 +68,15 @@ function buttonNames(): (string | null)[] {
 beforeEach(() => vi.clearAllMocks());
 
 describe('SelectionActionsBar — entry-route actions (flag on)', () => {
-  it('orders the bar Logic → Progress → Resources → Steps → Edit → Duplicate → Delete → Clear placement', () => {
+  it('orders the bar Logic → Progress → Resources → Edit → Duplicate → Delete → Clear placement', () => {
     render(<SelectionActionsBar context={ctx()} />);
     expect(buttonNames()).toEqual([
       'Logic',
       'Progress',
       'Resources',
-      'Steps',
+      // `Steps` sat here until it was removed as a duplicate entry point
+      // (`docs/specs/object-bar-defects/` M1) — it opened the same dialog on the same tab as
+      // `Progress` two buttons back.
       'Edit',
       // Duplicate sits after Edit — both act on the row as it stands, and a copy is the edit a
       // planner reaches for when the row is nearly right. Present since VITE_ACTIVITY_COPY_PASTE
@@ -94,10 +93,8 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
     render(<SelectionActionsBar context={ctx()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Progress' }));
     fireEvent.click(screen.getByRole('button', { name: 'Resources' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Steps' }));
     expect(spies.onProgress).toHaveBeenCalledOnce();
     expect(spies.onResources).toHaveBeenCalledOnce();
-    expect(spies.onSteps).toHaveBeenCalledOnce();
   });
 
   it('Resources is NOT pen-gated — it runs even in read-only', () => {
@@ -127,13 +124,23 @@ describe('SelectionActionsBar — entry-route actions (flag on)', () => {
     expect(spies.onProgress).not.toHaveBeenCalled();
   });
 
-  it('hides Steps for a duration-derived (milestone/LOE/WBS) selection', () => {
-    render(<SelectionActionsBar context={ctx({ stepsEligible: false })} />);
-    expect(screen.queryByRole('button', { name: 'Steps' })).not.toBeInTheDocument();
-  });
-
-  it('hides Steps for a non-writer (writer authoring surface, like the table)', () => {
-    render(<SelectionActionsBar context={ctx({ canEditSchedule: false })} />);
-    expect(screen.queryByRole('button', { name: 'Steps' })).not.toBeInTheDocument();
+  /**
+   * **`Steps` is gone from this bar** (`docs/specs/object-bar-defects/` M1), and this is the pinned
+   * negative that says so rather than three cases about when it hides.
+   *
+   * The two cases here before asserted it was hidden for a duration-derived selection and for a
+   * non-writer — both true, and both about a control that opened the same dialog on the same tab as
+   * `Progress` two buttons along. Deleting them without replacement would leave a suite that passes
+   * whether the item is absent by decision or absent by accident.
+   */
+  it('offers no Steps item, in any state', () => {
+    for (const overrides of [{}, { canEditSchedule: false }, { canReportProgress: false }]) {
+      const { unmount } = render(<SelectionActionsBar context={ctx(overrides)} />);
+      expect(screen.queryByRole('button', { name: 'Steps' })).not.toBeInTheDocument();
+      // The pinned positive beside it: the tab that carries the steps panel is still reachable, so
+      // a green run cannot mean the capability left with the button (ADR-0093's rule, ADR-0081's).
+      expect(screen.getByRole('button', { name: 'Progress' })).toBeInTheDocument();
+      unmount();
+    }
   });
 });

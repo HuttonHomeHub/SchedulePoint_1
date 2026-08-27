@@ -5,7 +5,6 @@ import {
   Copy,
   Crosshair,
   Eraser,
-  ListChecks,
   Route,
   SquarePen,
   Trash2,
@@ -34,8 +33,6 @@ import {
   ACTIVITY_COPY_PASTE_ENABLED,
   CANVAS_NAV_ENABLED,
   CANVAS_SEARCH_NAV_ENABLED,
-  ACTIVITY_STEPS_ENABLED,
-  EARNED_VALUE_ENABLED,
   ENTRY_ROUTES_ENABLED,
   RESOURCES_ENABLED,
   SCHEDULING_MODES_ENABLED,
@@ -67,10 +64,6 @@ export interface SelectionActionContext {
   /** Whether the viewer may report progress (Contributor upward, role only — NOT pen-gated); gates the
    * `progress` item exactly like the toolbar's Update-progress command (`canProgress`). */
   canReportProgress: boolean;
-  /** Whether the selected activity can carry weighted steps — false for a duration-derived type
-   * (milestone / LOE / WBS summary), matching the activities-table Steps row action. Gates the `steps`
-   * item's visibility (with `canEditSchedule`), mirroring the table's `!isDurationDerivedType`. */
-  stepsEligible: boolean;
   /**
    * The selection is a `WBS_SUMMARY` — the only kind of activity that can be dissolved. A context
    * fact rather than a check inside the handler, so a non-summary selection cannot reach an action
@@ -122,10 +115,6 @@ export interface SelectionActionContext {
   /** Open the progress editor (`ActivityProgressDialog`) for the selected activity. Wired regardless of
    * the flag; the `progress` item that calls it is only registered when `VITE_ENTRY_ROUTES` is on. */
   onProgress: () => void;
-  /** Open the weighted-steps editor (`ActivityStepsDialog`) for the selected activity. Wired regardless
-   * of the flag; the `steps` item is only registered when the flag + `VITE_EARNED_VALUE` +
-   * `VITE_ACTIVITY_STEPS` are all on. */
-  onSteps: () => void;
 }
 
 /**
@@ -555,23 +544,23 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
           } satisfies ToolbarItem<SelectionActionContext>,
         ]
       : []),
-    ...(ENTRY_ROUTES_ENABLED && EARNED_VALUE_ENABLED && ACTIVITY_STEPS_ENABLED
-      ? [
-          {
-            id: 'steps',
-            group: 'object',
-            tier: 1,
-            showLabel: 'always',
-            order: 3,
-            label: 'Steps',
-            icon: <ListChecks className="size-4" />,
-            // Writer authoring surface, hidden for a duration-derived selection — matching the table's
-            // `canWrite && !isDurationDerivedType(...)` row-action gate (present-or-absent, not shaded).
-            isVisible: (ctx: SelectionActionContext) => ctx.canEditSchedule && ctx.stepsEligible,
-            onActivate: (ctx: SelectionActionContext) => ctx.onSteps(),
-          } satisfies ToolbarItem<SelectionActionContext>,
-        ]
-      : []),
+    /*
+     * **`Steps` was here and is gone** (`docs/specs/object-bar-defects/` M1).
+     *
+     * It opened the SAME dialog on the SAME tab as `Progress`: `openActivityEditor` maps
+     * `progress → { tab: 'progress' }` and `steps → { tab: 'progress', focusSteps: true }`, and
+     * `focusSteps` feeds one prop — `autoFocusHeading` on the steps panel. Two controls differing
+     * only in scroll position, with the same subject, permission and effect, which is ADR-0093's
+     * discriminator failing inside one surface rather than between two.
+     *
+     * It was also the only item on this bar that HID rather than shaded without the pen, while
+     * `Edit`, `Duplicate` and `Delete` beside it shade with a reason (ADR-0082). Shading it would
+     * have fixed what a planner sees and kept what caused it.
+     *
+     * `focusSteps` and the `'steps'` purpose deliberately REMAIN: they are how the Progress tab
+     * knows to land focus on the steps panel, and deleting a mapping to remove a button is a wider
+     * change than the defect needs.
+     */
     {
       id: 'edit',
       group: 'object',

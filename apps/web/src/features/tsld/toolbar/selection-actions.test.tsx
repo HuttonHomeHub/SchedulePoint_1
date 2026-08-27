@@ -18,7 +18,6 @@ const spies = {
   onDelete: vi.fn(),
   onResources: vi.fn(),
   onProgress: vi.fn(),
-  onSteps: vi.fn(),
   onDissolve: vi.fn(),
   onDuplicate: vi.fn(),
   onDuplicateBand: vi.fn(),
@@ -34,13 +33,11 @@ function ctx(over: Partial<SelectionBarContext> = {}): SelectionBarContext {
     canEditSchedule: true,
     scheduleRefusal: (action: string) => `Start editing to ${action}.`,
     canReportProgress: true,
-    stepsEligible: true,
     onOpenLogic: spies.onOpenLogic,
     onEdit: spies.onEdit,
     onDelete: spies.onDelete,
     onResources: spies.onResources,
     onProgress: spies.onProgress,
-    onSteps: spies.onSteps,
     isSummary: false,
     // ADR-0094 M4: unflagged by default, so these suites stay the before/after oracle for the bar
     // they were written against — the remedy item is `isVisible`-gated on `conflictKey`.
@@ -86,7 +83,10 @@ describe('SelectionActionsBar (floating selection actions)', () => {
     // which item arrived.
     render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
-    for (const name of ['Progress', 'Resources', 'Steps']) {
+    // `'Steps'` was in this list and is not any more: it is absent unconditionally now
+    // (`docs/specs/object-bar-defects/` M1), so asserting it here would read as a flag gate on an
+    // item that no longer has one — true, and about the wrong thing.
+    for (const name of ['Progress', 'Resources']) {
       expect(within(bar).queryByRole('button', { name })).not.toBeInTheDocument();
     }
     expect(

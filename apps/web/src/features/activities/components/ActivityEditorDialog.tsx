@@ -861,9 +861,14 @@ export function ActivityEditor({
                       onSave={(patch, reset) => saveScope('progress', patch, 'Measure', reset)}
                       onDirtyChange={onMeasureDirty}
                     />
-                    {/* Same flag pair the Steps entry points check (`ActivitiesTable`,
-                      `selection-actions`). Without it the tab would show a checklist that no menu
-                      offers a way to reach — a flag-parity gap the security review caught. */}
+                    {/* The flag pair that decides whether weighted steps exist at all.
+                      **It used to be described as matching "the Steps entry points" in
+                      `ActivitiesTable` and `selection-actions`, and those are gone**
+                      (`docs/specs/object-bar-defects/` M1) — both opened this tab, so the panel is
+                      now reached only through `Progress`. The pair still belongs here for the
+                      reason the security review gave: without it the tab would show a checklist the
+                      product has no business offering. What changed is that this is now the ONLY
+                      place the flags are read for steps, so there is no parity left to keep. */}
                     {ACTIVITY_STEPS_ENABLED && EARNED_VALUE_ENABLED ? (
                       <WeightedStepsPanel
                         orgSlug={orgSlug}
