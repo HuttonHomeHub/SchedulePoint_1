@@ -198,6 +198,31 @@ describe('ScheduleHealthPanel', () => {
     expect(props.onClose).toHaveBeenCalled();
   });
 
+  it('says why offenders may render dimmed when a lens filter is on — and does not when off', () => {
+    const rows = fullReport();
+    rows.metrics[0] = metric({
+      verdict: 'FAIL',
+      measured: { count: 1, denominator: 10, percent: 10, ratio: null },
+      offenderCount: 1,
+      offenders: [
+        {
+          kind: 'ACTIVITY',
+          id: 'a1',
+          code: null,
+          name: 'Task 1',
+          note: 'no predecessor',
+          activityId: 'a1',
+        },
+      ],
+    });
+    renderPanel({ report: rows, filterActive: true });
+    fireEvent.click(screen.getByRole('button', { name: /missing logic/i, expanded: false }));
+    // The jump deliberately does NOT clear the lens; the list says why a bar may look dimmed.
+    expect(
+      screen.getByText('A filter is on — some offenders will appear dimmed.'),
+    ).toBeInTheDocument();
+  });
+
   it('has no axe violations with a full report rendered', async () => {
     const { container } = render(
       <ScheduleHealthPanel

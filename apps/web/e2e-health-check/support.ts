@@ -63,7 +63,8 @@ export interface SeededDefects {
  *
  * ```
  *   Groundworks (5 d) ──FS──▶ Frame (5 d) ──SS −1 d──▶ Fit out (5 d)   ← ONE lead (metric 2 FAIL)
- *   Loose end   (3 d)                                                  ← dangles (metric 1 offender)
+ *   Phase 2 (WBS) ▸ Loose end (3 d)                                    ← dangles (metric 1 offender),
+ *                                                                        under a collapsible parent
  * ```
  */
 export async function seedDefects(
@@ -82,12 +83,16 @@ export async function seedDefects(
         if (!res.ok) throw new Error(`POST ${path} ${String(res.status)}`);
         return ((await res.json()) as { data: { id: string } }).data;
       };
-      const act = (name: string, durationDays: number) =>
-        post(`/plans/${planId}/activities`, { name, durationDays });
+      const act = (name: string, durationDays: number, extra: object = {}) =>
+        post(`/plans/${planId}/activities`, { name, durationDays, ...extra });
       const a = await act('Groundworks', 5);
       const b = await act('Frame', 5);
       const c = await act('Fit out', 5);
-      await act('Loose end', 3);
+      // The dangler lives UNDER a WBS summary, so the Gantt claim can collapse its parent and
+      // prove the offender jump auto-expands the ancestor chain (M3-T2 — the UX review's blocker:
+      // selection alone reveals nothing in the Gantt).
+      const phase = await act('Phase 2', 0, { type: 'WBS_SUMMARY' });
+      await act('Loose end', 3, { parentId: phase.id });
       const link = (predecessorId: string, successorId: string, extra: object = {}) =>
         post(`/plans/${planId}/dependencies`, { predecessorId, successorId, ...extra });
       await link(a.id, b.id);

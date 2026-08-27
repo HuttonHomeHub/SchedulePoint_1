@@ -1,4 +1,4 @@
-import type { ScheduleHealthReport } from '@repo/types';
+import type { HealthOffender, ScheduleHealthReport } from '@repo/types';
 import { ChevronDown, ChevronRight, CircleCheck, CircleHelp, CircleX, Info } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
@@ -31,10 +31,18 @@ export interface ScheduleHealthPanelProps {
   onOpenBaselines?: (() => void) | undefined;
   /**
    * Select an offending activity in the workspace and bring it into view. One prop for both
-   * views — the host lifts the selection and each view reveals it its own way (the Float-paths
-   * shape; the Gantt half of the seam is M3's subject).
+   * views — the host lifts the selection and each view reveals it its own way: the canvas pans the
+   * selected bar in through the selection seam, and the Gantt through the host's reveal channel
+   * (M3-T2), because selection alone scrolls nothing there.
    */
   onActivateActivity: (activityId: string) => void;
+  /**
+   * True while a lens filter (search text or attribute filter) is dimming the diagram. The jump
+   * deliberately does NOT clear the lens — a lens is the planner's own act, and silently undoing
+   * it to satisfy a jump is a control changing another control's state without being asked — so
+   * the offender list says why a jumped-to bar may render dimmed.
+   */
+  filterActive?: boolean;
 }
 
 const TONE_ICONS = {
@@ -76,6 +84,7 @@ export function ScheduleHealthPanel({
   onRecalculate,
   onOpenBaselines,
   onActivateActivity,
+  filterActive = false,
 }: ScheduleHealthPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const headingId = useId();
@@ -153,7 +162,13 @@ export function ScheduleHealthPanel({
                   key={row.metric.id}
                   row={row}
                   offenderCap={report.offenderCap}
-                  onActivateActivity={onActivateActivity}
+                  filterActive={filterActive}
+                  onActivateActivity={(offender) => {
+                    onActivateActivity(offender.activityId);
+                    // Spoken from HERE, inside the focus frame — focus stays on the offender
+                    // button, so nothing else announces over it (the ADR-0080 lesson).
+                    announce(`${offender.name} selected in the plan.`);
+                  }}
                   onRecalculate={onRecalculate}
                   onOpenBaselines={onOpenBaselines}
                 />
@@ -175,13 +190,15 @@ export function ScheduleHealthPanel({
 function HealthMetricRow({
   row,
   offenderCap,
+  filterActive,
   onActivateActivity,
   onRecalculate,
   onOpenBaselines,
 }: {
   row: HealthRowView;
   offenderCap: number;
-  onActivateActivity: (activityId: string) => void;
+  filterActive: boolean;
+  onActivateActivity: (offender: HealthOffender) => void;
   onRecalculate?: (() => void) | undefined;
   onOpenBaselines?: (() => void) | undefined;
 }): React.ReactElement {
@@ -260,12 +277,17 @@ function HealthMetricRow({
               Showing {Math.min(offenderCap, metric.offenders.length)} of {metric.offenderCount}.
             </p>
           ) : null}
+          {filterActive ? (
+            <p className="text-muted-foreground text-xs">
+              A filter is on — some offenders will appear dimmed.
+            </p>
+          ) : null}
           <ul className="space-y-0.5">
             {metric.offenders.map((offender) => (
               <li key={`${offender.kind}-${offender.id}`}>
                 <button
                   type="button"
-                  onClick={() => onActivateActivity(offender.activityId)}
+                  onClick={() => onActivateActivity(offender)}
                   className="hover:bg-accent/60 flex w-full min-w-0 items-baseline gap-2 rounded px-1 text-left text-xs"
                 >
                   <span className="min-w-0 flex-1 truncate">

@@ -93,4 +93,27 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   await page.getByRole('menuitem', { name: 'Health check…' }).click();
   await expect(page.getByRole('region', { name: 'Health check' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Float paths' })).not.toBeVisible();
+
+  // ── 6 · The Gantt reveal (M3-T2, the UX review's blocker): selection alone scrolls nothing ──
+  // Switch views with the panel still open (a dock is workspace-level, so it survives the switch),
+  // collapse the offender's WBS parent, and prove the jump expands the ancestor and reveals the
+  // row. jsdom has no virtualizer and no scrolling, so ONLY this suite can see either half fail.
+  await page.getByRole('button', { name: 'Gantt', exact: true }).click();
+  const grid = page.getByRole('treegrid');
+  await expect(grid).toBeVisible();
+  const phaseRow = grid.getByRole('row').filter({ hasText: 'Phase 2' }).first();
+  await phaseRow.click();
+  // Bare ArrowLeft is treegrid disclosure (ADR-0095 D4) — collapse the parent.
+  await page.keyboard.press('ArrowLeft');
+  await expect(phaseRow).toHaveAttribute('aria-expanded', 'false');
+  await expect(grid.getByRole('row').filter({ hasText: danglerName })).toHaveCount(0);
+
+  const healthPanel = page.getByRole('region', { name: 'Health check' });
+  await healthPanel.getByRole('button', { name: /missing logic/i, expanded: false }).click();
+  await healthPanel.getByRole('button', { name: new RegExp(danglerName) }).click();
+  // The ancestor was expanded by the activation, and the revealed row is scrolled into view.
+  await expect(phaseRow).toHaveAttribute('aria-expanded', 'true');
+  const revealedRow = grid.getByRole('row').filter({ hasText: danglerName }).first();
+  await expect(revealedRow).toBeVisible();
+  await expect(revealedRow).toBeInViewport();
 });

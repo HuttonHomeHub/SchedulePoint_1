@@ -182,6 +182,13 @@ export function ToolbarPlanWorkspace({
   // The docked Health check panel (health M2) — ephemeral open state, owned here like the other
   // right docks. No VITE_ flag (ADR-0088 D1): the rollback is a commit boundary.
   const [healthOpen, setHealthOpen] = useState(false);
+  // The health panel's Gantt reveal channel (M3-T2): the offender the planner last pressed. An
+  // EVENT lifted into state, because the Gantt's scroll + ancestor-expand hang off
+  // `bringIntoViewActivityId` and the two existing sources (search nav, float paths) are standing
+  // states a health activation satisfies neither of — without this, pressing an offender in the
+  // Gantt moves the selection and reveals nothing. Cleared when the dock closes, so the standing
+  // sources resume.
+  const [healthRevealId, setHealthRevealId] = useState<string | null>(null);
   // **One closure over the set** (health M2-T2 step 7): each dock's closer, keyed by the member
   // name, and `closeOtherDocks` derives what to close from `docksToClose` — so a fourth dock is one
   // map entry, never six hand-written statements of which five get written. Defined above every
@@ -191,7 +198,10 @@ export function ToolbarPlanWorkspace({
     () => ({
       notes: () => setNotesOpen(false),
       floatPaths: modelFloatPathsClose,
-      health: () => setHealthOpen(false),
+      health: () => {
+        setHealthOpen(false);
+        setHealthRevealId(null);
+      },
     }),
     [setNotesOpen, modelFloatPathsClose],
   );
@@ -274,6 +284,7 @@ export function ToolbarPlanWorkspace({
   // is the honest destination (WCAG 2.4.3).
   const closeHealthAndFocus = useCallback(() => {
     setHealthOpen(false);
+    setHealthRevealId(null);
     const target =
       document.querySelector<HTMLElement>('[data-toolbar-item="analysis"]') ??
       document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
@@ -1070,11 +1081,18 @@ export function ToolbarPlanWorkspace({
           // because "whichever is set" is not a rule, it is an accident that only shows up when both
           // are on at once.
           emphasisIds={ganttEmphasisIds}
-          {...(searchNavActive && ctx.currentMatchId !== null
-            ? { bringIntoViewActivityId: ctx.currentMatchId }
-            : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
-              ? { bringIntoViewActivityId: model.selectedActivityId }
-              : {})}
+          {...(healthDockActive && healthRevealId !== null
+            ? // A health-offender press outranks both standing sources while its dock is open: it
+              // is the planner's NEWEST explicit instruction, where search nav and float paths are
+              // standing states that may have been set minutes ago. Cleared when the dock closes,
+              // so this cannot go stale over the other two — the "whichever is set is an accident"
+              // trap the comment above warns about, answered in writing for the third source.
+              { bringIntoViewActivityId: healthRevealId }
+            : searchNavActive && ctx.currentMatchId !== null
+              ? { bringIntoViewActivityId: ctx.currentMatchId }
+              : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
+                ? { bringIntoViewActivityId: model.selectedActivityId }
+                : {})}
         />
         {/*
           The object-action bar, in the Gantt (M1). `CanvasDock` portals it into the Activities
@@ -1210,7 +1228,12 @@ export function ToolbarPlanWorkspace({
       onActivateActivity={(activityId) => {
         canvasUi.requestSelectActivity(activityId);
         model.onSelectionChange(activityId);
+        // The Gantt half of the reveal (M3-T2) — selection alone scrolls nothing there.
+        setHealthRevealId(activityId);
       }}
+      filterActive={
+        canvasUi.lensState.filterQuery !== '' || canvasUi.lensState.filterAttrs.size > 0
+      }
     />
   ) : null;
 
