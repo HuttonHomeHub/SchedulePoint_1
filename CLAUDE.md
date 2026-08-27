@@ -3738,15 +3738,23 @@ When operating in this repo, Claude Code should:
       duplicated, which no amount of care inside one message can prevent. Found
       only because the product owner asked whether the wake-ups were working.
       `list_triggers` shows what is outstanding; `delete_trigger` removes it.
-    - **And if the chain looks dead, re-arm anyway — a firing that is never
-      observed cannot be responded to.** On 2026-08-27 a wake-up fired at
+    - **And if the chain looks dead, re-arm anyway — a firing you have not yet
+      been told about cannot be responded to.** On 2026-08-27 a wake-up fired at
       16:06:24 (`trig_016ak7uGrZ3n9Tn7z2ebCLr8`, `ended_reason:
-run_once_fired`) and its notification never surfaced: the session was
-      mid-turn, a real user message arrived next, and nothing re-armed. The loop
-      ended silently with the epic half-built — found, again, only because the
-      product owner asked. That is the previous bullet's own failure one day
-      later and in the opposite direction: it guards against **two** live
-      triggers, and this was **none**.
+run_once_fired`) and its notification was delivered **at 16:47 — about
+      forty-one minutes late**, after the product owner had already asked
+      whether the wake-ups were working. Nothing re-armed in between, so the
+      loop sat dead with the epic half-built. That is the previous bullet's own
+      failure one day later and in the opposite direction: it guards against
+      **two** live triggers, and this was **none**.
+      **The first version of this bullet said the notification "never
+      surfaced", and committed that as fact twenty-five minutes before it
+      arrived.** It was late, not lost — an ADR-0076 Class 3 claim asserted
+      about a delivery channel whose latency nothing here measures, written into
+      the register bullet whose whole subject is not trusting an unobserved
+      event. The remedy below does not change, because it covers both cases;
+      only the diagnosis was wrong, and it is corrected in place rather than
+      quietly edited.
       The bullet above puts the re-arming instruction inside the fired message
       so the mechanism cannot go stale, and that is exactly why it cannot cover
       this case — the instruction is _in the message that was never read_. So
