@@ -151,3 +151,54 @@ test.describe('The canvas dock', () => {
     await expect(activitiesRow(page).getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
   });
 });
+
+/**
+ * **Expanding the activities panel moves neither the facts nor the object actions** (foot-row epic
+ * M4).
+ *
+ * The product owner's original complaint, asserted rather than described. Until 2026-08-26 the
+ * facts sat left of the collapsed row and the object actions right of it; expanding moved the
+ * actions up into the panel's header and dropped the facts to a full-width strip at the very bottom
+ * of the screen. They swapped sides. There is one row now and it is the last band in both states.
+ *
+ * **Asserted as a position, not as presence.** "The facts are somewhere on screen" is true in both
+ * the broken and the fixed arrangement — it was true the whole time the row was juggling. What has
+ * to hold is that the row containing them is the same row, in the same place, before and after.
+ */
+test('expanding the panel leaves the facts and the actions where they were', async ({ page }) => {
+  test.setTimeout(240_000);
+  const orgSlug = await onboard(page, Date.now() + 7);
+  await createHierarchy(page);
+  await newPlan(page, 'Foot row');
+  await ensurePen(page);
+  const [dig] = await seedActivities(page, orgSlug, [{ name: 'Dig', laneIndex: 0 }]);
+  if (!dig) throw new Error('seeding returned no activity');
+  await recalculate(page, orgSlug);
+  await ensurePen(page);
+
+  const row = activitiesRow(page);
+  await expect(row).toBeVisible();
+  const collapsedBox = await row.boundingBox();
+  const factsCollapsed = await page.locator('[data-schedule-state]').boundingBox();
+
+  await page.getByRole('button', { name: 'Expand activities panel' }).click();
+  await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeVisible();
+
+  // The row still exists, still holds the facts, and still sits at the foot.
+  await expect(row).toBeVisible();
+  const expandedBox = await row.boundingBox();
+  const factsExpanded = await page.locator('[data-schedule-state]').boundingBox();
+
+  expect(
+    Math.abs((expandedBox?.y ?? 0) - (collapsedBox?.y ?? 0)),
+    'the foot row must not move vertically when the panel opens',
+  ).toBeLessThanOrEqual(2);
+  expect(
+    Math.abs((factsExpanded?.x ?? 0) - (factsCollapsed?.x ?? 0)),
+    'the facts must not slide sideways when the panel opens',
+  ).toBeLessThanOrEqual(2);
+
+  // And exactly one facts region exists — the failure mode where the shell status bar keeps its own
+  // copy would satisfy every assertion above while showing the reader two.
+  await expect(page.locator('[data-schedule-state]')).toHaveCount(1);
+});
