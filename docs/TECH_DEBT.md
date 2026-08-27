@@ -5181,3 +5181,34 @@ control inside carrying its own boundary, so 1.4.11 does not apply to the card i
 `token-contrast.test.ts` has no pair for this background on that scope, and ADR-0102's finding was
 precisely that a scope can go unreached for a long time without anything reporting it. Worth adding
 the pair rather than reasoning about it. Raised by the accessibility gate as a suggestion.
+
+## 203. Two menu-positioning clamps, one now measured and one still guessing
+
+**Raised:** 2026-08-27 (`docs/specs/object-bar-defects/` M2) · **Size:** S · **Owner:** unassigned
+
+`Menu` positioned its portalled panel from a hard-coded `ESTIMATED_HEIGHT = 200` and never measured
+the real box, so a taller menu opened low in the window ran off the viewport and its last item was
+**present, focusable and unclickable** — WCAG 2.4.11 for the item that was entirely below the fold.
+Fixed by measuring (`useClampedPosition`), with an `elementFromPoint` gate in `e2e-wbs` verified red
+first. Two things that fix does **not** cover, recorded rather than carried:
+
+**(a) A menu taller than the viewport still overflows, with no scroll.** When the measured height
+exceeds `window.innerHeight - 2 × CLAMP_MARGIN`, `maxTop` collapses to the margin: the top pins at
+8 px and the bottom is still off-screen, and the panel has no `max-height`/`overflow-y`. Reachable
+today at a short viewport or under browser zoom — 200% roughly halves `innerHeight` in CSS px, which
+is exactly the population 2.4.11 protects. The two tallest menus in the product are the activities
+table's `WBS_SUMMARY` row menu (8 items, ≈300–320 px) and `Share & export` (up to 10 items across
+four captioned sections, ≈450–500 px). **What to do:** a `max-height` clamped to the available space
+plus `overflow-y: auto`, so the panel scrolls instead of running off. Worth a unit test on
+`clampAnchor` at the same time — it is a pure function and the boundary arithmetic currently has no
+coverage but the browser gate.
+
+**(b) `ToolbarPopover` is the same defect, unfixed.** `use-popover-panel.tsx` carries a **second,
+duplicated** estimated-height clamp that also never measures. Its own known-tall case — `View ▾`'s
+grouped checkbox panel — is worked around locally with `max-h-[60vh] overflow-y-auto`, and the
+comment doing so names `ToolbarPopover`'s `ESTIMATED_HEIGHT` as the cause it is routing around. That
+is the "one correct pattern applied to a control and not its neighbour" shape this register keeps
+recording (ADR-0064 §7, ADR-0067, ADR-0080, ADR-0111). Not fixed here because it is a different file
+and outside the stated scope of the change that found it — but the two clamps should become one.
+
+Both raised by the accessibility gate on the `Menu` fix, which passed it with no blocking finding.

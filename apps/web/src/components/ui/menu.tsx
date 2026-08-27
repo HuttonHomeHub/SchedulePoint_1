@@ -1,4 +1,12 @@
-import { createContext, useContext, useId, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useId,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
@@ -34,18 +42,76 @@ interface MenuAnchor {
 
 const MenuCloseContext = createContext<(() => void) | null>(null);
 
-/** Estimated menu box used to clamp the anchor before the real size is known. */
+/**
+ * The box used to clamp the anchor **before the menu has been measured** — the first paint only.
+ *
+ * **These were the only numbers this menu ever used, and that was a defect** with the shape this
+ * codebase keeps recording: a control present in the DOM and unreachable by pointer. A row menu
+ * opened near the bottom of the window was positioned as though it were 200 px tall; a taller one
+ * ran off the viewport, and its last item — `Delete`, on every row — could be focused but not
+ * clicked. That is **WCAG 2.4.11 Focus Not Obscured (Minimum, AA)**, and precisely for `Delete`
+ * alone: measured, its top was already past the fold, so it was *entirely* hidden, which 2.4.11
+ * prohibits. `Dissolve` above it was only partly clipped — permitted at AA, caught only by 2.4.12
+ * (AAA). Stated that narrowly because this repository has recorded overstating an SC once
+ * (ADR-0082) and correcting it. Found when the activities table gained a `Notes` item
+ * (`docs/specs/object-bar-defects/` M2) and pushed a WBS summary's menu past 200 px, which made
+ * `e2e-wbs` time out on a locator that **resolved**. Raising the constant was tried first and is
+ * exactly the wrong fix: it moves the threshold and leaves the class.
+ *
+ * They remain as the pre-measurement estimate because the first render has nothing to measure, and
+ * a menu that paints at the wrong place for one frame and jumps is worse than one that starts
+ * close. {@link useClampedPosition} corrects them before the browser paints.
+ */
 const CLAMP_MARGIN = 8;
 const ESTIMATED_WIDTH = 208;
 const ESTIMATED_HEIGHT = 200;
 
-function clampAnchor({ x, y }: MenuAnchor): { left: number; top: number } {
-  const maxLeft = Math.max(CLAMP_MARGIN, window.innerWidth - ESTIMATED_WIDTH - CLAMP_MARGIN);
-  const maxTop = Math.max(CLAMP_MARGIN, window.innerHeight - ESTIMATED_HEIGHT - CLAMP_MARGIN);
+function clampAnchor(
+  { x, y }: MenuAnchor,
+  width = ESTIMATED_WIDTH,
+  height = ESTIMATED_HEIGHT,
+): { left: number; top: number } {
+  const maxLeft = Math.max(CLAMP_MARGIN, window.innerWidth - width - CLAMP_MARGIN);
+  const maxTop = Math.max(CLAMP_MARGIN, window.innerHeight - height - CLAMP_MARGIN);
   return {
     left: Math.min(Math.max(CLAMP_MARGIN, x), maxLeft),
     top: Math.min(Math.max(CLAMP_MARGIN, y), maxTop),
   };
+}
+
+/**
+ * Clamp the menu against its **own measured box**, not an assumed one.
+ *
+ * `useLayoutEffect` rather than `useEffect`: it runs after the DOM is written and **before the
+ * browser paints**, so a menu that would have overflowed is repositioned in the same frame rather
+ * than appearing in the wrong place and moving.
+ *
+ * The dependency on `anchor` is what makes a re-open at a different row re-measure; the panel is
+ * unmounted while closed (`if (!open) return null`), so there is no stale measurement to carry.
+ */
+function useClampedPosition(
+  panelRef: React.RefObject<HTMLDivElement | null>,
+  anchor: MenuAnchor,
+  open: boolean,
+): { left: number; top: number } {
+  const [box, setBox] = useState<{ width: number; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setBox(null);
+      return;
+    }
+    const el = panelRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setBox((prev) =>
+      prev && prev.width === rect.width && prev.height === rect.height
+        ? prev
+        : { width: rect.width, height: rect.height },
+    );
+  }, [panelRef, anchor, open]);
+
+  return clampAnchor(anchor, box?.width, box?.height);
 }
 
 /**
@@ -118,6 +184,20 @@ export function Menu({
   children: React.ReactNode;
 }): React.ReactElement | null {
   const ref = useRef<HTMLDivElement>(null);
+  /**
+   * Before `if (!open) return null` — a hook cannot sit after an early return, and the panel is
+   * unmounted while closed, so this measures a freshly mounted box on every open.
+   *
+   * **Its position relative to the focus-on-open effect below is load-bearing, and a reorder would
+   * break it silently.** React runs every layout effect for a commit — and flushes the state update
+   * one triggers — before any passive effect and before paint. Declared here, the sequence is:
+   * render at the estimate → measure → re-render at the corrected position → paint → *then* focus
+   * moves into the first item. Move this after that `useEffect`, or add an early return between
+   * them, and focus lands first and the panel slides out from under it — which a magnifier or
+   * screen-reader user meets and jsdom cannot see. Raised by the accessibility gate, which
+   * confirmed the current order is correct by construction rather than by luck.
+   */
+  const { left, top } = useClampedPosition(ref, anchor, open);
 
   // Move focus to the first item on open (APG: opening with the pointer or the
   // menu key places focus on the first item).
@@ -197,7 +277,6 @@ export function Menu({
 
   if (!open) return null;
 
-  const { left, top } = clampAnchor(anchor);
   return createPortal(
     <div
       ref={ref}

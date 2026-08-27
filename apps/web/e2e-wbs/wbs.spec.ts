@@ -201,3 +201,70 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   expect(describedBy).not.toBeNull();
   await expect(page.locator(`[id="${describedBy ?? ''}"]`)).toContainText('Start editing');
 });
+
+/**
+ * **Every item in a row menu can be clicked, not merely focused** — including the last one, on the
+ * tallest menu the product renders, opened as low in the window as a row can sit.
+ *
+ * This exists because the defect it guards was found by accident. Adding a `Notes` item to the
+ * activities table (`docs/specs/object-bar-defects/` M2) pushed a WBS summary's menu past 200 px,
+ * and `Menu` positioned every menu as though it were exactly that tall: `clampAnchor` used a
+ * **hard-coded `ESTIMATED_HEIGHT` and never measured the real box**, so a taller menu opened low ran
+ * off the bottom of the viewport. `Delete` — the last item, present on every row — could be reached
+ * by keyboard and not by pointer.
+ *
+ * It surfaced as a Playwright timeout on a locator that **resolved**, which is the signature worth
+ * remembering: the element was in the DOM and in the accessibility tree, and the click never landed.
+ * Raising the constant was tried first and made this pass; it was rejected, because it moves the
+ * threshold and leaves the class. The fix measures the panel.
+ *
+ * `elementFromPoint` at each item's centre is the assertion, for the reason
+ * `e2e-workspace-fit/command-surface.spec.ts` gives: a bounding box says where a control claims to
+ * be, and only a hit test says whether a pointer arriving there reaches it.
+ *
+ * **Verified red** against the unmeasured clamp, naming the item.
+ */
+test('every item in the tallest row menu is reachable by pointer, not just present', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const org = await onboard(page, Date.now() + 11);
+  await createPlan(page, 'Menu reach');
+  await ensurePen(page);
+  await seedActivities(page, org, [
+    { name: 'Substructure', type: 'WBS_SUMMARY' },
+    { name: 'Excavate' },
+  ]);
+  await recalculate(page, org);
+  await ensurePen(page);
+  await openActivitiesPanel(page);
+
+  // A **summary** carries the most items — Logic, Notes, Progress, Members, Resources, Edit,
+  // Dissolve, Delete — so it is the menu that overflows first. A plain activity's menu is shorter
+  // and would pass against the defect, which is why the subject is named rather than "any row".
+  await openRowMenu(page, 'Substructure');
+
+  const unreachable = await page.evaluate(() => {
+    const menu = document.querySelector('[role="menu"]');
+    if (!menu) throw new Error('no row menu is open — the probe has no subject');
+    const items = [...menu.querySelectorAll('[role="menuitem"]')];
+    if (items.length < 4) throw new Error(`only ${items.length} menu items — expected a full menu`);
+    return items
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return {
+          label: (el.textContent ?? '').trim().slice(0, 24),
+          bottom: Math.round(r.bottom),
+          viewportHeight: window.innerHeight,
+          reachable: hit != null && (hit === el || el.contains(hit)),
+        };
+      })
+      .filter((t) => !t.reachable);
+  });
+
+  expect(
+    unreachable,
+    `row-menu items a pointer cannot reach: ${JSON.stringify(unreachable)}`,
+  ).toEqual([]);
+});
