@@ -496,7 +496,24 @@ export const selectionActionItems: ToolbarItem<SelectionBarContext>[] =
             tier: 1,
             showLabel: 'always',
             order: 1,
-            label: 'Report progress',
+            /**
+             * **`Progress`, not `Report progress`, and renamed on BOTH surfaces in one commit.**
+             *
+             * The UX review declined this shortening on a specific ground rather than a stylistic
+             * one: `:423-425` requires this bar's labels to match the activities table's, "so the
+             * same operation reads the same on the canvas and in the table", and renaming here
+             * alone would have split that vocabulary across three surfaces and left the fourth.
+             * `ActivitiesTable.tsx` moved with it, which answers the objection instead of
+             * overriding it.
+             *
+             * It is here because it is worth a LINE: measured, the row was 32 px from fitting on
+             * one line at 1920 and this is 46 (`docs/specs/foot-row/m0-measurement.md`). A bare
+             * noun beside `Logic` / `Resources` / `Steps` also reads consistently — those are the
+             * same editor's tabs — and the verb survives in the description below for anyone whose
+             * only channel is the accessible name.
+             */
+            label: 'Progress',
+            description: 'Report progress on this activity.',
             icon: <ClipboardCheck className="size-4" />,
             // Role-gated, NOT pen-gated — progress is a Contributor action (the notes/progress
             // precedent), mirroring the toolbar's Update-progress command's `canProgress` gate.

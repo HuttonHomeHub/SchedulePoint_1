@@ -356,7 +356,10 @@ export function ActivitiesTable({
     if (canReportProgress) {
       actions.push({
         key: 'progress',
-        label: 'Report progress',
+        // Renamed with the canvas selection bar in one commit, never on its own: `:423-425` of
+        // `selection-actions.tsx` requires the two vocabularies to match so the same operation
+        // reads the same in both places, and that is exactly what a one-sided rename breaks.
+        label: 'Progress',
         onSelect: () => openFor(activity, 'progress'),
       });
     }

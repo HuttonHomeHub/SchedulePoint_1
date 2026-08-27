@@ -53,7 +53,7 @@ describe('SelectionActionsBar — Resources gated on VITE_RESOURCES', () => {
     render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
     expect(within(bar).queryByRole('button', { name: 'Resources' })).not.toBeInTheDocument();
-    expect(within(bar).getByRole('button', { name: 'Report progress' })).toBeInTheDocument();
+    expect(within(bar).getByRole('button', { name: 'Progress' })).toBeInTheDocument();
     expect(within(bar).getByRole('button', { name: 'Steps' })).toBeInTheDocument();
   });
 });

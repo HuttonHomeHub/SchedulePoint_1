@@ -71,7 +71,7 @@ test('a planner acts on a Gantt selection from the docked object bar', async ({ 
 
   // **The promise itself.** Report progress is reachable from a Gantt selection, and it opens the
   // editor on the Progress scope rather than somewhere the planner must then navigate from.
-  await bar.getByRole('button', { name: 'Report progress' }).click();
+  await bar.getByRole('button', { name: 'Progress' }).click();
   const editor = activityEditor(page);
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('tab', { name: /Progress/ })).toHaveAttribute(

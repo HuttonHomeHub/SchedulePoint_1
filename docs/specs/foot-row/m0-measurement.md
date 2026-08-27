@@ -192,6 +192,33 @@ At 1646 the same row needs to lose **306 px** to reach one line. Nothing remaini
 approaches that; the withdrawn responsive fold (226 px) was the only candidate and would still not
 have been enough on its own.
 
+## M3b — the `Progress` rename bought a line at BOTH widths
+
+Re-measured after renaming `Report progress` → `Progress` on the selection bar **and** the
+activities table together:
+
+| viewport | content | container | row height before | after              |
+| -------- | ------- | --------- | ----------------- | ------------------ |
+| 1920     | 1604    | 1619      | 77 (two lines)    | **41 — one line**  |
+| 1646     | 1604    | 1345      | 117 (three lines) | **77 — two lines** |
+
+Content is `facts 481 + controls 1027 + twelve gaps 96`. The canvas gains **36 px at 1920 and 40 px
+at 1646** — the 1646 figure was not predicted at all, because the prediction was made about the
+width where the line boundary was known to be near.
+
+**Two honest qualifications, because this is the row's NARROWEST state.**
+
+1. **The margin at 1920 is 15 px**, not a comfortable fit. A longer plan name does not affect this
+   row, but a **summary** selection adds `Dissolve` and `Duplicate band`, and a **stale** schedule
+   adds a sentence plus a `Recalculate` button (`plan-facts.tsx:229` renders nothing while
+   `current`). Either pushes it back to two lines. The one-line result is real and it is not robust.
+2. The architecture review's B6 finding applies to every figure in this file: the fixture is three
+   unlinked activities, freshly recalculated, pen held, plain task selected, isolate inactive —
+   every variable-width term at its minimum or at zero.
+
+So the claim is: **at 1920, in the common state, the row is one line.** It is not "the row is one
+line".
+
 ## What the instrument got wrong
 
 Three runs, two of them wasted on the harness rather than the product — and both mis-picks were

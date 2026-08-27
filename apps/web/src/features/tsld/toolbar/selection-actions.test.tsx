@@ -86,7 +86,7 @@ describe('SelectionActionsBar (floating selection actions)', () => {
     // which item arrived.
     render(<SelectionActionsBar context={ctx()} />);
     const bar = screen.getByRole('toolbar', { name: 'Actions for Excavate' });
-    for (const name of ['Report progress', 'Resources', 'Steps']) {
+    for (const name of ['Progress', 'Resources', 'Steps']) {
       expect(within(bar).queryByRole('button', { name })).not.toBeInTheDocument();
     }
     expect(

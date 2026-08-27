@@ -74,7 +74,7 @@ describe('selection-gated commands do not duplicate the canvas dock (ADR-0093)',
       [...dockLabels],
       'the dock is where reporting progress lives now — if this fails the capability has moved ' +
         'or been lost, which is a different (and worse) change than the one this file guards',
-    ).toContain('Report progress');
+    ).toContain('Progress');
 
     expect(toolbarItems.map((item) => item.id)).not.toContain('update-progress');
   });

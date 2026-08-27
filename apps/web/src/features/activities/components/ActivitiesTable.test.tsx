@@ -161,11 +161,9 @@ describe('ActivitiesTable', () => {
   it('shades write actions for a progress-reporter, keeping progress actionable', () => {
     renderTable(false, [ACTIVITY], true);
     const items = openRowMenu('Excavate');
-    expect(items).toContain('Report progress');
+    expect(items).toContain('Progress');
     // Actionable, because progress is deliberately NOT pen-gated (ADR-0060 Q-C).
-    expect(screen.getByRole('menuitem', { name: 'Report progress' })).not.toHaveAttribute(
-      'aria-disabled',
-    );
+    expect(screen.getByRole('menuitem', { name: 'Progress' })).not.toHaveAttribute('aria-disabled');
     expect(screen.getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('aria-disabled', 'true');
   });
 
@@ -192,7 +190,7 @@ describe('ActivitiesTable', () => {
   it('shows progress plus edit/delete for a writer who can also report progress', () => {
     renderTable(true, [ACTIVITY], true);
     const items = openRowMenu('Excavate');
-    expect(items).toContain('Report progress');
+    expect(items).toContain('Progress');
     expect(items).toContain('Edit');
   });
 

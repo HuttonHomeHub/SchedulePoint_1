@@ -79,8 +79,6 @@ describe('ActivitiesTable — the row menu gates on the editor’s own object', 
     // shut it too. This is what proves the row menu reads per-scope gates rather than one flag.
     renderTable();
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Excavate' }));
-    expect(screen.getByRole('menuitem', { name: 'Report progress' })).not.toHaveAttribute(
-      'aria-disabled',
-    );
+    expect(screen.getByRole('menuitem', { name: 'Progress' })).not.toHaveAttribute('aria-disabled');
   });
 });

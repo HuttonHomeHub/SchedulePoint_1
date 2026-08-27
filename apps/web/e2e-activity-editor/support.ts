@@ -106,7 +106,7 @@ export async function addActivity(page: Page, name: string): Promise<void> {
 export async function openEditor(
   page: Page,
   activityName: string,
-  action: 'Edit' | 'Report progress' | 'Steps' | 'Logic' | 'Resources',
+  action: 'Edit' | 'Progress' | 'Steps' | 'Logic' | 'Resources',
 ): Promise<void> {
   await page.getByRole('button', { name: `Actions for ${activityName}` }).click();
   await page.getByRole('menuitem', { name: action }).click();
