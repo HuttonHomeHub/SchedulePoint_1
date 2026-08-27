@@ -97,10 +97,17 @@ function useClampedPosition(
   const [box, setBox] = useState<{ width: number; height: number } | null>(null);
 
   useLayoutEffect(() => {
-    if (!open) {
-      setBox(null);
-      return;
-    }
+    // **No reset on close, deliberately.** `setBox(null)` was here and `react-hooks/set-state-in-effect`
+    // refused it — rightly, and the honest fix was to delete it rather than suppress the rule,
+    // because it was redundant: the panel unmounts while closed, and the next open re-measures in
+    // this same layout effect BEFORE paint. A carried-over box can therefore only ever be the
+    // pre-measurement estimate for one commit that nobody sees — and a warm one at that.
+    //
+    // The `setBox` below stays, and is the case the rule's own text describes as legitimate:
+    // reading from an external system (layout) and syncing it into React. The updater returns
+    // `prev` unchanged when the box has not moved, so it costs one extra render per open and does
+    // not cascade.
+    if (!open) return;
     const el = panelRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
