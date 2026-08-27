@@ -395,6 +395,17 @@ jobs:
       - name: Web end-to-end tests (float paths flag on)
         run: pnpm --filter @repo/web test:e2e:float-paths
 
+      # The Health check panel (health M2-T4) against a real API. No VITE_ flag exists for it
+      # (ADR-0088 D1) — this is the flag-on-equivalent journey ADR-0081 requires, landing with the
+      # first user-facing milestone. What a mocked fetch and a mounted-in-isolation panel
+      # structurally cannot prove: that the Analysis menu item exists in the SHIPPED layout and
+      # opens the dock (the register's most-repeated defect — one host wired, its neighbour not);
+      # that the fourteen rows carry a REAL report's verdicts; that pressing an offender reaches
+      # the workspace selection through the canvas's parallel listbox; and that opening it closes
+      # the Float paths dock — one dock at a time, proven against the real sibling.
+      - name: Web end-to-end tests (health check)
+        run: pnpm --filter @repo/web test:e2e:health-check
+
       # Search that navigates (`VITE_CANVAS_SEARCH_NAV`) against a real API with the pen enforced.
       # What a mocked fetch and a mounted-in-isolation toolbar structurally cannot prove: that Enter
       # reaches the handler through the PORTALLED chrome band (React events follow the React tree,
@@ -738,6 +749,7 @@ jobs:
             apps/web/playwright-report-sub-day/
             apps/web/playwright-report-assignment-lag/
             apps/web/playwright-report-float-paths/
+            apps/web/playwright-report-health-check/
             apps/web/playwright-report-search-nav/
             apps/web/playwright-report-multi-select/
             apps/web/playwright-report-copy-paste/
