@@ -188,8 +188,14 @@ export function useTsldToolbarContext({
   // overlay (not by role/pen) can still explain why (toolbar quick-wins A1) — `canEditSchedule` stays
   // true under the overlay, so without this the button would disable with no reason.
   const lateOverlayActive = SCHEDULING_MODES_ENABLED && canvasUi.viewToggles.lateOverlay;
-  // Edit-plan opens the plan form (writer only). Shared by the Summary popover's shortcut and the
-  // header edit-pencil. Memoised so it doesn't re-identify the toolbar context each render.
+  // Edit-plan opens the plan form (writer only). **One caller now — the header's edit-pencil.**
+  // It used to have two, and that was the whole of foot-row-and-deck M5: the Summary popover
+  // rendered a labelled `Edit plan…` shortcut from this same memo, so one callback reached a
+  // planner through two controls with the same gate, the same effect and the same subject
+  // (ADR-0093). The comment here said "shared by the Summary popover's shortcut and the header
+  // edit-pencil" and was the clearest statement of the duplication in the codebase; it is kept as
+  // history rather than deleted, because it is how the duplication was found.
+  // Memoised so it doesn't re-identify the toolbar context each render.
   const editPlan = useMemo(
     () => (canWrite ? () => setEditing(true) : null),
     [canWrite, setEditing],
@@ -211,10 +217,9 @@ export function useTsldToolbarContext({
         }
         orgSlug={orgSlug}
         planId={planId}
-        onEdit={editPlan}
       />
     ),
-    [orgSlug, planId, plan.status, plan.plannedStart, plan.schedulingMode, editPlan],
+    [orgSlug, planId, plan.status, plan.plannedStart, plan.schedulingMode],
   );
 
   const { open: legendOpen, toggle: toggleLegend } = legend;

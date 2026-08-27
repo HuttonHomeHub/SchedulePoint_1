@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 // Stub the computed schedule strip — its data-fetching isn't the subject here.
@@ -16,7 +16,6 @@ function renderPanel(over: Partial<Parameters<typeof PlanSummaryPanel>[0]> = {})
       dataDate="2026-01-01"
       orgSlug="acme"
       planId="p1"
-      onEdit={null}
       {...over}
     />,
   );
@@ -47,27 +46,31 @@ describe('PlanSummaryPanel', () => {
         schedulingModeLabel="Visual"
         orgSlug="acme"
         planId="p1"
-        onEdit={null}
       />,
     );
     expect(screen.getByText('Mode')).toBeInTheDocument();
     expect(screen.getByText('Visual')).toBeInTheDocument();
   });
 
-  it('offers Edit plan only to writers (onEdit present) and wires it', () => {
-    const onEdit = vi.fn();
-    const { rerender } = renderPanel();
-    expect(screen.queryByRole('button', { name: /Edit plan/ })).not.toBeInTheDocument();
-    rerender(
-      <PlanSummaryPanel
-        statusLabel="Active"
-        dataDate="2026-01-01"
-        orgSlug="acme"
-        planId="p1"
-        onEdit={onEdit}
-      />,
+  /**
+   * **The panel no longer offers `Edit plan…` at all** (foot-row-and-deck M5).
+   *
+   * This case used to assert the writer/viewer split: absent for `onEdit: null`, present and wired
+   * for a writer. Both halves are now wrong, because the control is gone from this surface for
+   * everyone — it was rendered twice from ONE `editPlan` memo, here and on the header's
+   * edit-pencil, and the product owner chose the pencil.
+   *
+   * Replaced rather than deleted. A suite that simply loses its Edit-plan case leaves nothing
+   * saying the absence is deliberate, and the next reader adding a shortcut back to this popover
+   * would meet no resistance at all.
+   */
+  it('offers no Edit plan control — the header pencil is the one route', () => {
+    render(
+      <PlanSummaryPanel statusLabel="Active" dataDate="2026-01-01" orgSlug="acme" planId="p1" />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /Edit plan/ }));
-    expect(onEdit).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: /Edit plan/ })).not.toBeInTheDocument();
+    // The pinned positive: the panel still renders its facts, so the assertion above cannot pass
+    // by the panel having failed to render at all.
+    expect(screen.getByText('Data date')).toBeInTheDocument();
   });
 });
