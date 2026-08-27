@@ -60,7 +60,10 @@ _Complexity:_ M. _Tests:_ one per kind; a case proving the fold hole is closed.
 **M3-T2 — measure the pill** before building it. The 60–80 px figure is an estimate in a header
 ADR-0112 measured at four pixels of headroom.
 **M3-T3 — `Clear visual placement` → `Clear visual start`**, long form in `description` (WCAG 2.5.3).
-The other three relabels are **declined** (spec D5).
+The other relabels: `Report progress` → `Progress` was **taken** after the product owner chose to
+rename the activities table with it (M3b — it bought a whole line at both widths); `Zoom to
+selection` and `Clear placement` stay **declined** (spec D5, which this line contradicted until
+the M7 architecture gate read the two side by side).
 **M3-T4 — re-measure the wrapped row's line count** at both widths. This is the milestone's actual
 acceptance: one line at 1920, at most two at 1646.
 _Complexity:_ M.

@@ -72,10 +72,13 @@ import { cva } from 'class-variance-authority';
  * would recouple two things that should stay apart. ADR-0062 is about not reimplementing
  * behaviour, which is a different hazard from this one.
  *
- * ## What the two densities share, and why they share exactly that
+ * ## What the two variants share, and why they share exactly that
  *
- * **Background and radius only.** Everything else was measured, three times, and each attempt cost
- * a line of the canvas the foot-row epic exists to give back:
+ * **The card treatment — background and radius — plus the flex layout every toolbar row needs.**
+ * (This said "background and radius only" for one commit, and the base declares
+ * `flex items-stretch gap-2` beside them: a sentence inaccurate about the four classes below it,
+ * caught by the architecture gate.) Everything else was measured, three times, and each attempt
+ * cost a line of the canvas the foot-row epic exists to give back:
  *
  * | selection bar's card | row at 1920 | row at 1646 |
  * | -------------------- | ----------- | ----------- |
@@ -95,24 +98,32 @@ import { cva } from 'class-variance-authority';
 export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md', {
   variants: {
     /**
-     * **Vertical padding, and it is a measurement rather than a taste.**
+     * **Does this card own its band, or sit inside one somebody else owns?**
      *
-     * `comfortable` is the deck's own: `py-1.5` around `min-h-9` content, so the card is ~50 px.
-     * That is right in a band the deck owns outright.
+     * It shipped as `density` for one commit and both the component and the architecture gate said
+     * the same thing about it: `density` in this codebase means spacing and weight
+     * (`notice-strip.tsx`, `form.tsx`), and this variant also turns a **border** on — which is
+     * chrome, not density. Worse, the name invites a third consumer to reason on a scale that does
+     * not exist here. The real discriminator is context, and the measurement table above is about
+     * context: the padding and the border cost a line **because the foot row is already the
+     * container**, not because the card is denser.
      *
-     * `flush` is for a card sitting INSIDE a row that is already the container — the canvas
-     * selection bar in the plan's foot row. `selection-actions.tsx` records the measurement that
-     * made this a variant rather than a reuse: the docked bar had no box at all precisely
-     * because "a bar that brings its own box makes the row 6 px taller than the 36 px it already
-     * occupied", and `dock.spec.ts` asserts the row's cost to the canvas. `py-0` keeps the card
-     * the height of the controls inside it, so the treatment is shared and the geometry is not.
+     * `boxed` is the deck's own: a `border` and `px-2 py-1.5` around `min-h-9` content, right in a
+     * band the deck owns outright.
+     *
+     * `bare` is for a card inside a row that is already the container — the canvas selection bar in
+     * the plan's foot row, where `selection-actions.tsx` records why the docked bar had no box at
+     * all until M6 ("a bar that brings its own box makes the row 6 px taller than the 36 px it
+     * already occupied") and `dock.spec.ts` bounds the row's cost to the canvas. It declares
+     * nothing, because the base declares no padding and no border: `px-0 py-0` was written here
+     * first and is a **no-op**, which made a two-valued variant a boolean wearing a scale's name.
      */
-    density: {
-      comfortable: 'border-border/60 border px-2 py-1.5',
-      flush: 'px-0 py-0',
+    chrome: {
+      boxed: 'border-border/60 border px-2 py-1.5',
+      bare: '',
     },
   },
-  defaultVariants: { density: 'comfortable' },
+  defaultVariants: { chrome: 'boxed' },
 });
 
 export const TOOLBAR_CARET_TARGET = 'min-w-6 justify-center pointer-coarse:px-2';

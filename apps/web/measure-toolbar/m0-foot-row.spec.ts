@@ -57,7 +57,22 @@ const VIEWPORTS = [
 
 const PLAN_NAME = 'Riverside Quarter — Phase 2 Substructure';
 
-/** The three relabels the product owner asked for, plus the one I proposed. */
+/**
+ * The three relabels the product owner asked for, plus the one I proposed.
+ *
+ * **Two of these keys no longer exist, and that is deliberate — it is a HISTORICAL map.** M3 took
+ * `Report progress` → `Progress` and `Clear visual placement` → `Clear visual start`, so re-running
+ * this probe finds neither string. Left as written because the numbers in
+ * `docs/specs/foot-row/m0-measurement.md` were taken against the pre-M3 row and a map edited to
+ * match today's labels would make that record unreproducible.
+ *
+ * **The signal for a key that matches nothing is now explicit.** The architecture gate reported that
+ * such a key "silently measures zero saving", which is **not what the code does** — `relabelSaving`
+ * returns `null`, not `0`, so the two are already distinguishable. But a `null` inside a JSON dump of
+ * four rows is easy to read past, and this file's own §"What the instrument got wrong" is entirely
+ * about mis-picks that looked plausible. So each row now carries `missing`, and anyone re-running
+ * this against the shipped bar should expect it `true` on those two.
+ */
 const RELABELS: Record<string, string> = {
   'Zoom to selection': 'Zoom selection',
   'Report progress': 'Progress',
@@ -144,11 +159,13 @@ test('M0: the foot row, the deck, and what streamlining would buy', async ({ pag
           return round(before - after);
         };
 
-        const relabelSavings = Object.entries(rl).map(([from, to]) => ({
-          from,
-          to,
-          saved: relabelSaving(from, to),
-        }));
+        const relabelSavings = Object.entries(rl).map(([from, to]) => {
+          const saved = relabelSaving(from, to);
+          // `missing` rather than a bare `null`: this map is historical (see its docblock) and two
+          // of its four keys have since been renamed in the product, so "no such control" is the
+          // EXPECTED answer for them and must not read as "renaming it saves nothing".
+          return { from, to, saved, missing: saved === null };
+        });
 
         const foldedWidths = fd.map((label) => {
           const el = [...row.querySelectorAll('button, [role="button"]')].find(

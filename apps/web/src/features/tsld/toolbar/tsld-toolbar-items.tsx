@@ -2545,12 +2545,31 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       icon: <Plus className="size-4" />,
       penGated: true,
       disabledReason: (ctx) => ctx.scheduleRefusal(ADD_ACTION) ?? undefined,
+      /**
+       * **`isActive` sits OUTSIDE the flag branch, and that is a fix rather than a tidy-up**
+       * (foot-row epic M7, architecture gate B2).
+       *
+       * It used to live only in the flag-off arm, because only that arm needed it to drive a
+       * `ToolbarButton`'s pressed state — `AddActivityControl` computes `armed` from the same
+       * context and passes its own `pressed`. So with `VITE_CANVAS_AUTHORING` on, which is every
+       * shipped build, **the registry did not know this tool was armed**, and neither did anything
+       * reading `ResolvedToolbarItem.active`.
+       *
+       * That became load-bearing when `Deck` gained "a group holding an armed tool refuses to fold"
+       * (M2): `hasActive` reads exactly this field, so the guard fired for `marquee-select` — the
+       * one tool whose statement M2 **kept** — and for neither of the two it withdrew. A planner
+       * could arm Add, fold `Author`, and be left with a tool armed, no trigger, no statement and
+       * no way out but Escape, which is the founding ADR-0064 defect. The unit test could not see
+       * it: its fixture is a synthetic `onActivate` item with `isActive`, a shape the real registry
+       * does not have (ADR-0081, with the test as the concealer).
+       *
+       * It covers **LOE too**, because that tool is armed from this split-button's own menu and
+       * shows its progress on this trigger's label.
+       */
+      isActive: (ctx) => ctx.isAddingActivity || ctx.isLoeSpanning,
       ...(CANVAS_AUTHORING_ENABLED
         ? { render: (ctx, api) => <AddActivityControl ctx={ctx} api={api} /> }
-        : {
-            isActive: (ctx) => ctx.isAddingActivity,
-            onActivate: (ctx) => ctx.toggleAddActivity(),
-          }),
+        : { onActivate: (ctx) => ctx.toggleAddActivity() }),
     },
     // Link split-button (ADR-0032 M5, ADR-0031 amendment) — one menu-button that arms link-mode and
     // picks FS/SS/FF, mirroring Add. Shown **always** when canvas-first authoring is on
@@ -2565,6 +2584,9 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       penGated: true,
       disabledReason: (ctx) => ctx.scheduleRefusal(LINK_ACTION) ?? undefined,
       isVisible: () => CANVAS_AUTHORING_ENABLED,
+      // See `add-activity` above: a `render` item that publishes only its own `pressed` leaves the
+      // registry — and therefore `Deck`'s no-fold-while-armed guard — blind to an armed tool.
+      isActive: (ctx) => ctx.isLinking,
       render: (ctx, api) => <LinkControl ctx={ctx} api={api} />,
     },
     /*

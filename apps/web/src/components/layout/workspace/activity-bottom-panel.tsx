@@ -24,11 +24,12 @@ export function ActivityBottomPanel({
   model,
   onCollapse,
   focusCollapseOnMount = false,
-  hostsDock = true,
+  hostsPlanSlots = true,
 }: {
   model: PlanWorkspaceModel;
   /**
-   * Whether this panel provides the canvas dock's outlet (workspace-chrome M3).
+   * Whether this panel provides the plan's slot outlets — the **facts** and the **canvas dock**
+   * (workspace-chrome M3; widened from `hostsDock` in the foot-row epic's M7).
    *
    * **`false` on the narrow single-pane layout, and that is a correctness fix rather than a
    * preference.** Below `md` the workspace mounts BOTH panes and hides the inactive one with
@@ -40,8 +41,16 @@ export function ActivityBottomPanel({
    * strips were before this epic and is the right answer on a screen with no spare row to dock into.
    * Found by the accessibility gate; no test in the repository exercised the narrow path, and jsdom
    * could not have seen it (it has no layout to make `display: none` mean anything).
+   *
+   * **It covers the facts because the narrower version of it did not, and that broke the same way
+   * one milestone later.** M4 put `PlanFactsOutlet` in the foot row and left it ungated — so on the
+   * narrow layout the plan's facts, its schedule state, its only `Recalculate` button and the pen's
+   * live region all portalled into the hidden pane and disappeared, while three docblocks and the
+   * spec's own edge-case table said they rendered in the shell status bar. One correct rule applied
+   * to a control and not its neighbour, which is the failure this register keeps recording — here
+   * inside the docblock that describes it.
    */
-  hostsDock?: boolean;
+  hostsPlanSlots?: boolean;
   /** Collapse the panel to its handle. Omitted on the mobile single-pane view (the view toggle
    * switches away from Activities instead), where no collapse control is shown. */
   onCollapse?: () => void;
@@ -133,7 +142,7 @@ export function ActivityBottomPanel({
           rather than in the header for the same reason: it is the row's own affordance in both
           states, and a planner should not have to look in two places for it. */}
       <PlanActivitiesFootRow
-        hostsDock={hostsDock}
+        hostsPlanSlots={hostsPlanSlots}
         {...(onCollapse
           ? {
               toggle: (
@@ -155,19 +164,6 @@ export function ActivityBottomPanel({
 }
 
 /**
- * The collapsed activity panel: a slim bar pinned to the bottom with a single control to
- * reopen it — so the activity list is never more than one click away (mirrors the collapsed
- * rail's affordance). On a user *collapse* it takes focus so the keyboard user lands on the
- * expand control rather than `<body>`.
- *
- * It is also **the canvas dock** (workspace-chrome M3). This row already existed, 36 px tall, with
- * the word "Activities" at one end and an expand button at the other and the entire width between
- * them empty — so the diagram's transient strips (the armed-tool statement, the selection bars, the
- * conflict banner, the empty-plan notice) fill a gap the workspace was paying for either way,
- * rather than pushing the scene down from above. `min-h-9` rather than `h-9`: a strip taller than
- * the row grows it instead of being clipped, which is what a fixed height would do silently.
- */
-/**
  * **The plan's foot row — one component, rendered in BOTH panel states** (foot-row epic M4).
  *
  * The product owner's complaint was that the foot "juggles": collapsed, the facts sat left and the
@@ -186,16 +182,17 @@ export function ActivityBottomPanel({
  */
 export function PlanActivitiesFootRow({
   toggle,
-  hostsDock = true,
+  hostsPlanSlots = true,
 }: {
   /** The panel's own expand/collapse control, rendered at the trailing edge. */
   toggle?: React.ReactNode;
   /**
-   * Whether this row hosts the canvas dock. False in the narrow single-pane layout, where the pane
-   * is `display: none` while the planner is on the diagram and an outlet inside it would swallow
-   * every strip.
+   * Whether this row hosts the **plan's slot outlets** — the facts and the canvas dock. False in
+   * the narrow single-pane layout, where the pane is `display: none` while the planner is on the
+   * diagram, so an outlet inside it would swallow every strip AND the plan's facts. Both fall back
+   * to rendering where they did before this epic.
    */
-  hostsDock?: boolean;
+  hostsPlanSlots?: boolean;
 }): React.ReactElement {
   return (
     <div
@@ -210,9 +207,24 @@ export function PlanActivitiesFootRow({
       {/* **The facts, leading** (M2-T4). This row said "Activities" and the status bar said
           "Activities 5" — the same subject rendered twice, one of them a duplicate that had already
           broken a test three times by being matched instead of this row. The count fact names the
-          panel AND gives its size, so one control does both jobs and the word appears once. */}
-      <PlanFactsOutlet />
-      {hostsDock ? <CanvasDockOutlet /> : null}
+          panel AND gives its size, so one control does both jobs and the word appears once **in the
+          collapsed state**. Expanded it appears twice — the panel's own `<h2>` above the table, and
+          this fact below it — which the first version of this comment claimed it did not. That is
+          not a landmark collision (the `<section>` is labelled "Activities panel"), and the two are
+          different subjects at opposite ends of the panel; but the justification as written was
+          false in the state M4 introduced, and is corrected rather than quietly kept.
+
+          **Both outlets take the same gate, and the prop is named for the pair rather than for the
+          dock — because naming it for one outlet is how the other one got missed.** It shipped as
+          `hostsDock`, guarding the dock while `PlanFactsOutlet` registered unconditionally forty
+          lines below its own docblock explaining why that is fatal. Below `md` the whole panel sits
+          in a `display: none` pane by default, so the facts outlet registered, `PlanStatusBar`
+          portalled the facts, the schedule state, the only `Recalculate` control and the pen's
+          `role="status"` region into a hidden node, and the shell's status row — `empty:hidden` —
+          collapsed. The plan's facts vanished entirely on the narrowest screens, and a live region
+          sat somewhere it could never announce. Found by the architecture gate. */}
+      {hostsPlanSlots ? <PlanFactsOutlet /> : null}
+      {hostsPlanSlots ? <CanvasDockOutlet /> : null}
       {toggle}
     </div>
   );
@@ -228,11 +240,11 @@ export function PlanActivitiesFootRow({
 export function ActivityPanelCollapsedBar({
   onExpand,
   focusExpandOnMount = false,
-  hostsDock = true,
+  hostsPlanSlots = true,
 }: {
   onExpand: () => void;
   focusExpandOnMount?: boolean;
-  hostsDock?: boolean;
+  hostsPlanSlots?: boolean;
 }): React.ReactElement {
   const expandRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -241,7 +253,7 @@ export function ActivityPanelCollapsedBar({
 
   return (
     <PlanActivitiesFootRow
-      hostsDock={hostsDock}
+      hostsPlanSlots={hostsPlanSlots}
       toggle={
         <Button
           ref={expandRef}

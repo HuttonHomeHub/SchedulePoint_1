@@ -171,7 +171,12 @@ export function CompactPenStatus({
           // being there. That is a real loss, recorded rather than glossed.
           //
           // It frees 126 px measured from the plan's facts row, which is what M3 is for.
-          className={cn('sr-only', TONE_TINT[view.tone])}
+          //
+          // **`sr-only` is the DEFAULT, not the rule** — two states keep the sentence painted, and
+          // `LockView.messageVisible` says which and why. The first version of this hid it in all
+          // ten, which silently left a planner whose pen had just been taken with a changed badge,
+          // a bare `Dismiss` and no explanation; that is the one transition ADR-0028 exists for.
+          className={cn(view.messageVisible ? undefined : 'sr-only', TONE_TINT[view.tone])}
         >
           {/* The message is visually truncated to keep the row slim and stays whole in the live
               region; the aria-hidden aside (active …/countdown) never re-announces on its tick. */}

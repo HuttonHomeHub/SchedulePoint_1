@@ -251,6 +251,31 @@ describe('Deck — a group with an active command cannot be folded', () => {
     );
   });
 
+  /**
+   * **The guard is one-way**, and this is the case that says so.
+   *
+   * `hasActive`'s docblock used to argue the guard could only ever refuse to START a fold, on a
+   * premise about today's registry rather than about the primitive. The `onClick` did not
+   * distinguish the directions, so a group that came back folded AND active — the fold set is
+   * global `localStorage`, and so is at least one panel-open flag that drives an `isActive` in one
+   * of these cards — would have been permanently shut, announcing "cannot be folded away" about a
+   * group that was already folded.
+   *
+   * **Verified red** against the direction-blind guard.
+   */
+  it('still unfolds a group that comes back folded with a tool armed', () => {
+    window.localStorage.setItem('schedulepoint-deck-folds', JSON.stringify(['author']));
+    render(<Deck items={armedItems} context={{}} label="Plan commands" />);
+    const caption = screen.getByRole('button', { name: /^Author commands/ });
+
+    expect(caption).toHaveAttribute('aria-expanded', 'false');
+    expect(caption).not.toHaveAttribute('aria-disabled');
+
+    fireEvent.click(caption);
+    expect(caption).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
+  });
+
   it('folds normally when nothing in the group is active', () => {
     render(<Deck items={items} context={{}} label="Plan commands" />);
     const caption = screen.getByRole('button', { name: /^Author commands/ });

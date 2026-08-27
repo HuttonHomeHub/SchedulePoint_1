@@ -172,7 +172,8 @@ export function Deck<Ctx>({
         /**
          * **A group holding an ACTIVE command cannot be folded away.**
          *
-         * Folding unmounts a group's items (`:333`), and the fold set is persisted globally — so a
+         * Folding unmounts a group's items (the `isFolded ? null :` branch below), and the fold set is
+         * persisted globally — so a
          * planner who arms a tool and then folds `Author` is left with a tool armed, no trigger
          * rendered to say so, and no trigger to stop it with. That is ADR-0064's founding defect
          * restored: a planner who believes a tool is armed and is wrong, or worse, one who does not
@@ -183,9 +184,18 @@ export function Deck<Ctx>({
          * It reuses `active`, which `resolveItems` already computes for the pressed state, so the
          * deck learns nothing new about what its items mean.
          *
-         * It cannot deadlock. Arming requires the trigger, and a folded group renders none — so a
-         * group can never become active *while* folded, and this can only ever refuse to START a
-         * fold.
+         * **It is a ONE-WAY guard — it refuses a fold and never an unfold — and that is a fix rather
+         * than a restatement.** This paragraph used to argue that it "can only ever refuse to START
+         * a fold", on the premise that arming needs a trigger and a folded group renders none. The
+         * premise is a survey of today's registry, not a property of the primitive: `active` is
+         * whatever a consumer's `isActive` returns, the fold set is global `localStorage` and so is
+         * at least one panel-open flag that drives an `isActive` in one of these cards, so a group
+         * CAN in principle come back folded and active in a later session. The `onClick` did not
+         * distinguish the directions, so in that case the caption would have refused to unfold, its
+         * items would have stayed unmounted, and the reason it announced — "cannot be folded away" —
+         * would have been false. Checking `!isFolded` costs one term and removes the whole class of
+         * argument. Raised by the architecture gate, which could not construct a reachable instance
+         * in today's registry either, and correctly said that is a coincidence and not a guarantee.
          */
         hasActive: group.sections.some((section) => section.some((r) => r.active)),
       }));
@@ -302,7 +312,8 @@ export function Deck<Ctx>({
             // M1 unstacked them. Corrected rather than deleted: turning the card on its side is an
             // argument about the CARD, and is unaffected by what the buttons inside it do.
             // Shared with the canvas selection bar since the foot-row epic's M6 — see
-            // `TOOLBAR_CARD`. It was a literal here, and the second consumer would have copied it.
+            // `toolbarCardVariants` in `toolbar-styles.ts`. It was a literal here, and the second
+            // consumer would have copied it.
             className={toolbarCardVariants()}
           >
             <button
@@ -324,14 +335,18 @@ export function Deck<Ctx>({
               tabIndex={tabIndexFor(`caption:${group.id}`)}
               onFocus={() => setActiveId(`caption:${group.id}`)}
               onClick={() => {
-                if (group.hasActive) return;
+                // `!isFolded` is load-bearing: refuse to fold a group holding an armed tool, never
+                // to UNFOLD one. See `hasActive`'s docblock — without it a group that ever came
+                // back folded-and-active would be permanently shut, under a reason that says the
+                // opposite of what happened.
+                if (group.hasActive && !isFolded) return;
                 toggleFold(group.id);
               }}
               // Shaded with a reason, never removed (ADR-0082): the caption keeps its roving tab
               // stop and its reason is reachable, which is the whole point of that decision. Not
               // the native `disabled` attribute — this control flips as a tool is armed and
               // disarmed, and `disabled` blurs to `<body>` mid-interaction.
-              {...(group.hasActive
+              {...(group.hasActive && !isFolded
                 ? { 'aria-disabled': true as const, 'aria-describedby': `fold-held-${group.id}` }
                 : {})}
               className={cn(
@@ -365,7 +380,11 @@ export function Deck<Ctx>({
                 // product, so nothing about it has to be re-learnt.
                 className={cn('size-3 opacity-60', isFolded && '-rotate-90')}
               />
-              {group.hasActive ? (
+              {/* `&& !isFolded` matches the guard and the `aria-disabled` above it: the sentence is
+                  only true of a group that is currently open. A described node with no
+                  `aria-describedby` pointing at it is harmless, but the three going out of step is
+                  how one of them ends up describing a state the control is not in. */}
+              {group.hasActive && !isFolded ? (
                 <span id={`fold-held-${group.id}`} className="sr-only">
                   Cannot be folded away while one of its tools is armed.
                 </span>

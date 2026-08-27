@@ -567,5 +567,16 @@ describe('TsldPanel — the dock shows at most one transient strip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'arm marquee' }));
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.queryByTestId('canvas-mode-band')).not.toBeInTheDocument();
+
+    // **The suppression is recoverable, and that is a claim the precedence comment makes.** The
+    // component gate pointed out that this policy can also hide the `linked` confirmation, which
+    // carries an `Undo` BUTTON rather than a sentence — a materially worse cost than the one the
+    // comment named. It is accepted partly because nothing is destroyed: `modeStatement` is derived
+    // and the gate is a render-time ternary, so dismissing the banner brings the strip straight
+    // back. Asserted rather than reasoned, because "it is derived" is exactly the kind of sentence
+    // that stays in a file after the derivation moves.
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('canvas-mode-band')).toHaveTextContent(/Marquee select/);
   });
 });

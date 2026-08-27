@@ -869,14 +869,16 @@ export function TsldPanel({
     ? null
     : mode === 'marquee'
       ? // **`marquee` is KEPT.** `marquee-select` is a plain `ToolbarButton` whose label stays
-        // `Select` when armed (`tsld-toolbar-items.tsx:2558-2573`) — only the pressed wash changes.
+        // `Select` when armed (the `marquee-select` registration in `tsld-toolbar-items.tsx`, whose
+        // `label` is the literal `'Select'`) — only the pressed wash changes.
         // So unlike Add and Link there is no restated text anywhere, and the band is the only place
         // a sighted planner learns a sweep is armed rather than plain selection.
         { kind: 'marquee' }
       : mode === 'add-activity'
         ? // **`adding` is WITHDRAWN.** The trigger already says it: `AddActivityControl` swaps its
-          // visible label to `Adding ${type}` and sets `pressed` (`tsld-toolbar-items.tsx:622-628`,
-          // `:644`), so the band restated a fact the planner could already read on the control they
+          // visible label to `Adding ${type}` and sets `pressed` (`AddActivityControl`'s `triggerLabel`
+          // and `armed` in `tsld-toolbar-items.tsx`), so the band restated a fact the planner could
+          // already read on the control they
           // had just pressed. The instruction it also carried is not lost — `Esc to stop` and the
           // undocumented `or click for a day` shortcut move onto that trigger as a described
           // `sr-only` sibling, which is where a keyboard reader can actually reach them.
@@ -2554,10 +2556,17 @@ export function TsldPanel({
             the toolbar cannot restate. Below that the empty-plan notice, which already yielded to
             an armed tool.
 
-            The accepted cost is that a conflict arriving mid-pick hides `linkPicking`'s predecessor
-            name. It is accepted rather than special-cased because the two barely co-occur — a
-            refused link resolves `applied: false` and produces no confirmation — and a rule with
-            an exception in it is how the three-at-once state arose in the first place. */}
+            **The accepted cost, stated in full after the component gate found half of it missing.**
+            A conflict arriving mid-pick hides `linkPicking`'s predecessor name — a sentence. It can
+            also hide the `linked` confirmation, which carries a real `Undo` **button**, and the
+            first version of this comment did not say so. Both are accepted rather than
+            special-cased, for three reasons: the two barely co-occur (a refused link resolves
+            `applied: false` and produces no confirmation, so it takes an unrelated write failing
+            while a confirmation is still up); the suppression is **recoverable**, because
+            `modeStatement` is derived rather than stored and the gate is a render-time ternary, so
+            dismissing the banner re-renders the same confirmation with its Undo; and `Ctrl+Z` is
+            bound throughout, so the capability never leaves even while the affordance does. A rule
+            with an exception in it is how the three-at-once state arose in the first place. */}
         {conflict ? (
           <EditConflictBanner
             message={conflict.message}

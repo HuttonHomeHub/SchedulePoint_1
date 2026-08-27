@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1077 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1078 web
 > source files with 39 Playwright suites beside the base journey, and
-> 113 ADRs.
+> 114 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3302,6 +3302,67 @@ progress` off the command surface because **an object action belongs on the obje
   wrongly. This one is different: **the problem statement came from a person looking at their own
   screen, and it was still stale — because the state they were looking at was one they had put the
   product into.** **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0114** _(Accepted; M0–M7 landed 2026-08-27)_ — A row that cannot shrink is never asked to
+  wrap. The product owner sent four screenshots of `web-v0.108.0` and called the foot **juggling**:
+  the plan's facts and the object-action bar swapped sides every time the activities panel opened.
+  Measuring first found what no screenshot showed and nobody had reported — the bar was not moving,
+  it was **clipped**. `Clear visual placement` was already off-screen on the 24" monitor and `Edit`,
+  `Duplicate` and `Delete` were pointer-unreachable at 1646; content measured **1753 px at both
+  widths**, so the row neither wrapped nor scrolled. **Both mechanisms that should have prevented it
+  were live and neither could reach the other**: `Toolbar` wraps unconditionally, the dock outlet is
+  `flex min-w-0 flex-1 flex-wrap`, and the bar between them carried `shrink-0` — which takes
+  `max-content` and never shrinks, so the outlet's width was never imposed on it and the wrapping
+  toolbar inside was never asked to break a line. The workspace body's `overflow-hidden` took the
+  surplus silently. **And the obvious explanation for why it went unreported is one this epic's own
+  measurement disproved**: focusing a clipped control moves its rect by **zero**, because the clip is
+  an ancestor's `overflow-hidden` with nothing scrollable to move, so "keyboard-reachable" was never
+  true. It shipped because nothing LOOKED wrong — a control that is not painted looks exactly like a
+  control that does not exist. One word (`shrink-0` → `min-w-0`) fixed it, shipped **first and
+  alone**, with an `elementFromPoint` sweep verified red naming all four controls. It costs ADR-0092
+  its **0 px equality**, stated rather than absorbed: that guarantee held only because the bar could
+  not wrap, i.e. it was being paid for by hiding controls.
+  **The rest is the juggle removed at its cause rather than tuned.** One `PlanActivitiesFootRow`
+  renders in **both** states with the **facts leading** — the spec's first draft had them the other
+  way, which would have slid the facts sideways on every selection, the same juggle one axis over. A
+  mode statement is withheld **per kind** where the armed trigger already says the word (three of
+  six), amending ADR-0064, which was right about reserved chrome and never costed the 410 px it takes.
+  The pen's sentence keeps its live region and stops painting, with the holder's name on the pill. The
+  dock shows **at most one** transient strip.
+  **The measurements contradicted the plan twice, in opposite directions.** Freeing 164 px bought
+  **zero** height — a wrapping row breaks between **items**, not by total width — the sixth
+  consecutive width expectation on this surface contradicted by its own measurement, and the first
+  where the arithmetic was right and the **model** was wrong. Then one 46 px rename bought a line at
+  **both** widths (41 px at 1920, 77 at 1646; canvas **+36 / +40**), the 1646 result unpredicted. The
+  deck's card geometry then cost that line straight back — its `px-2` consumed exactly the 15 px of
+  margin left — so the shared variant carries background and radius only. Two qualifications are
+  recorded rather than smoothed: the 1920 margin is 15 px, and every figure is the row's **narrowest**
+  state. The two largest savings were **declined by the product owner** as a different epic: folding
+  four editor doors into one `Edit ▾` (226 px) and the IA critique behind it.
+  **The gate pass blocked on eight defects, two of them reached independently by two reviewers.** The
+  largest is this epic's own correct rule applied one milestone late: `hostsDock` exists because an
+  outlet inside a `display: none` pane portals its contents where nobody can reach them, and M4 added
+  `PlanFactsOutlet` to the same row **ungated**, forty lines below that docblock — so below `md` the
+  plan's facts, its schedule state, its only `Recalculate` and the pen's `role="status"` region all
+  vanished, while three docblocks said they moved to the shell. jsdom could not see it (no layout,
+  `useMediaQuery` defaults wide); the journey now needs one `setViewportSize` call. Second, the new
+  `Deck` fold-guard reads `isActive` and **Add and Link never published it** — Add's lived in the
+  flag-OFF arm of a ternary — so the guard protected the one tool whose statement this epic KEPT and
+  neither it withdrew, and `Deck.test.tsx` could not see it because its fixture is a shape the real
+  registry does not contain: ADR-0081 **with the test as the concealer**. Third, D4's accounting
+  stopped at the `locked` tone, leaving a planner whose pen was taken with a changed badge, a bare
+  Dismiss and no words. Fourth, the shortcuts sheet the spec named as the mitigation for withdrawing
+  three statements was never touched — and **both reviewers corrected my framing**: the old band was
+  plain visible DOM, so the loss is to every sighted planner, not to keyboard users. Fifth, **this ADR
+  contradicted the measurement it cites**, the disproved keyboard sentence surviving in three places
+  including two lines above a citation of the section refuting it (ADR-0076 Class 3, one hand, one
+  epic). Plus a comment claiming the fit gate cannot see the bar in the commit that widened it;
+  `docs/TECH_DEBT.md` #124 still `open` and still calling the bar unable to overflow four days after
+  it was measured overflowing by 408 px — **a deferral whose reason has lapsed reads exactly like one
+  whose reason still holds**; and the new sweep shipped without the zero-size filter its own model
+  carries. One of the architecture review's claims was itself wrong and is corrected rather than
+  absorbed. Every fix carries a regression test verified red first.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

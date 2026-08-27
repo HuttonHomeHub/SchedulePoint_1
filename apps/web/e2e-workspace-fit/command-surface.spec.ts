@@ -298,8 +298,10 @@ test.describe('The plan command surface', () => {
    * (`docs/specs/foot-row/m0-measurement.md`), the bar's content is 1753 px at every width against
    * containers of 1619 and 1345, and it neither wraps nor scrolls — so `Clear visual start`
    * renders off-screen at 1920 and `Edit`, `Duplicate` and `Delete` join it at 1646. A pointer
-   * cannot reach any of them; a keyboard can, because focus scrolls into view, which is why this
-   * shipped and stayed unreported.
+   * cannot reach any of them, and **a keyboard does not rescue them either**: §C1d focused a
+   * clipped control and read its rect before and after — identical, because the clip is an
+   * ancestor's `overflow-hidden` with nothing scrollable to move. It shipped unreported because
+   * nothing looked wrong; the row simply ended.
    *
    * Widening the existing sweep rather than writing a second one is deliberate: two gates with one
    * job disagree about what "reachable" means. This closes the open half of #124.
@@ -327,6 +329,16 @@ test.describe('The plan command surface', () => {
       expect(
         undersized,
         `object actions below ${MIN_TARGET}×${MIN_TARGET} at ${viewport.width}: ${JSON.stringify(undersized)}`,
+      ).toEqual([]);
+
+      // **The zero-size filter, which this case shipped without** (M7, architecture gate B7). Both
+      // assertions above are guarded by `t.visible`, so a control painted at 0 px passes them
+      // silently — which is trap 2 at the top of this file, and this defect class's exact shape.
+      // The deck sweep has carried it since ADR-0110; the sweep modelled on it did not.
+      const invisible = targets.filter((t) => !t.visible);
+      expect(
+        invisible,
+        `object actions painted at zero size at ${viewport.width}: ${JSON.stringify(invisible)}`,
       ).toEqual([]);
 
       const unreachable = targets.filter((t) => t.visible && !t.reachable);

@@ -141,14 +141,14 @@ _you_ hold it, and the name in scope would be a _requester's_.
 (`canOverride` / `canTakeOver` / `waitingForHandover` / `expired`), and `lost` has **no name at all**.
 So the compact form is a **summary beside** the live region, not a replacement for it.
 
-### D5 — Relabels: one taken, three declined
+### D5 — Relabels: two taken, two declined
 
-| proposed                                     | verdict                                                                                                                                                          |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Report progress` → `Progress`               | **declined** — `selection-actions.tsx:423-425` requires this vocabulary to match the activities table, and renaming here renames three surfaces and not that one |
-| `Zoom to selection` → `Zoom selection`       | **declined** — `:721-726` records `Zoom to` shipping, failing WCAG 2.4.6 and being reverted. 16 px is not worth reopening it                                     |
-| `Clear visual placement` → `Clear placement` | **amended to `Clear visual start`** — keeps the word separating Visual from Early mode and matches the `visualStart` field                                       |
-| `Isolate logic path` → `Isolate`             | **already done** for the inactive state; the active state reads `Isolating · Driving path` and is untouched                                                      |
+| proposed                                     | verdict                                                                                                                                                                                                                                                                                                                                                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Report progress` → `Progress`               | **TAKEN — this row is stale.** Declined here on the ground that the vocabulary must match the activities table; the product owner's answer (2026-08-26) was to rename **both**, which answers the objection instead of overriding it, and the ux gate found the row menu is otherwise entirely noun-labelled. Worth a whole LINE at both widths (M3b). Recorded as ADR-0114 D7 |
+| `Zoom to selection` → `Zoom selection`       | **declined** — `:721-726` records `Zoom to` shipping, failing WCAG 2.4.6 and being reverted. 16 px is not worth reopening it                                                                                                                                                                                                                                                   |
+| `Clear visual placement` → `Clear placement` | **amended to `Clear visual start`** — keeps the word separating Visual from Early mode and matches the `visualStart` field                                                                                                                                                                                                                                                     |
+| `Isolate logic path` → `Isolate`             | **already done** for the inactive state; the active state reads `Isolating · Driving path` and is untouched                                                                                                                                                                                                                                                                    |
 
 ### D6 — Card styling: the class moves to `toolbar-styles.ts`, and the height is re-derived
 

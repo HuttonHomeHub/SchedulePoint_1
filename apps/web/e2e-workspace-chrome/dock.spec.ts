@@ -83,7 +83,8 @@ test.describe('The canvas dock', () => {
     // now withdrawn (`docs/specs/foot-row/spec.md` D3) because `LinkControl` swaps its own label to
     // `Linking · FS` and restates it — so the assertion was amended rather than deleted, and it
     // drives `Select` instead, whose statement is KEPT precisely because its trigger's label does
-    // NOT change when armed (`tsld-toolbar-items.tsx:2558-2573`). The subject of the case is
+    // NOT change when armed (the `marquee-select` registration in `tsld-toolbar-items.tsx`). The
+    // subject of the case is
     // unchanged: a docked strip costs the canvas no height.
     await page
       .getByRole('toolbar', { name: 'Plan commands' })
@@ -200,5 +201,29 @@ test('expanding the panel leaves the facts and the actions where they were', asy
 
   // And exactly one facts region exists — the failure mode where the shell status bar keeps its own
   // copy would satisfy every assertion above while showing the reader two.
+  await expect(page.locator('[data-schedule-state]')).toHaveCount(1);
+
+  /**
+   * **Below `md` the facts must still exist somewhere, and M4 made them vanish.**
+   *
+   * The narrow layout mounts both panes and hides the inactive one with `display: none`, defaulting
+   * to the diagram. M4 put `PlanFactsOutlet` in the foot row and gated only its neighbour, so on
+   * that layout the outlet registered inside the hidden pane, `PlanStatusBar` portalled the facts,
+   * the schedule state, the only `Recalculate` control and the pen's `role="status"` region into a
+   * node nobody could see, and the shell's `empty:hidden` status row collapsed. The plan's facts
+   * disappeared entirely on the smallest screens while three docblocks said they moved to the shell.
+   *
+   * Nothing could have caught it: every unit suite runs in jsdom, where `useMediaQuery` defaults
+   * wide and `display: none` means nothing because there is no layout. This assertion is the whole
+   * reason it is here rather than in a unit test — and it is exactly one `setViewportSize` call.
+   *
+   * **Verified red** against the ungated outlet: `toBeVisible()` fails, the facts having been
+   * portalled into the hidden pane.
+   */
+  await page.setViewportSize({ width: 700, height: 900 });
+  await expect(
+    page.locator('[data-schedule-state]'),
+    'the plan facts must survive the narrow single-pane layout',
+  ).toBeVisible();
   await expect(page.locator('[data-schedule-state]')).toHaveCount(1);
 });

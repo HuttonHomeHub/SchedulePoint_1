@@ -1651,12 +1651,12 @@ export function ToolbarPlanWorkspace({
                   {resourceStripPanel}
                 </div>
                 <div className={cn('min-h-0 flex-1', pane === 'activities' ? 'block' : 'hidden')}>
-                  {/* `hostsDock={false}`: this pane is `display: none` whenever the planner is on the
+                  {/* `hostsPlanSlots={false}`: this pane is `display: none` whenever the planner is on the
                     diagram, which is the default, so an outlet here would register while invisible
                     and take every docked strip out of the accessibility tree. Without one,
                     `CanvasDock` renders in place — where those strips were before this epic, and
                     the right answer on a screen with no spare row to dock into. */}
-                  <ActivityBottomPanel model={model} hostsDock={false} />
+                  <ActivityBottomPanel model={model} hostsPlanSlots={false} />
                 </div>
               </>
             )}

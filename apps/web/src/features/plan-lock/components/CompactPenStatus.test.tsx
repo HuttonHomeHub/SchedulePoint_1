@@ -129,6 +129,47 @@ describe('CompactPenStatus (ADR-0031 — compact pen surface)', () => {
       expect(screen.getAllByText('Editing')).toHaveLength(1);
     });
 
+    /**
+     * **Two states keep the sentence painted** (foot-row epic M7, architecture gate B3).
+     *
+     * The class is the assertion, and it has to be, because `sr-only` is visually hidden and jsdom
+     * has no layout: `toBeVisible()` passes for both states. Asserting the class is asserting the
+     * mechanism, which is what regressed — the sentence was made `sr-only` unconditionally, leaving
+     * a planner whose pen had just been taken with a flipped badge, a bare Dismiss and no words.
+     *
+     * **Verified red** against the unconditional `sr-only`.
+     */
+    it('paints the sentence when the pen is taken from the reader, and hides it otherwise', () => {
+      const { unmount } = render(
+        <CompactPenStatus
+          pen={makePen({
+            status: status({ state: 'HELD_BY_ME' }),
+            lostControl: 'PLAN_EDIT_LOCK_LOST',
+          })}
+        />,
+      );
+      expect(screen.getByRole('status')).not.toHaveClass('sr-only');
+      unmount();
+
+      // The pinned negative: the common state still pays nothing, which is the whole of M3.
+      render(<CompactPenStatus pen={makePen({ status: status({ state: 'FREE' }) })} />);
+      expect(screen.getByRole('status')).toHaveClass('sr-only');
+    });
+
+    it('paints it for an incoming request, whose actor the badge may not name', () => {
+      render(
+        <CompactPenStatus
+          pen={makePen({
+            status: status({ state: 'HELD_BY_ME', requestedBy: JANE }),
+            holdsPen: true,
+          })}
+        />,
+      );
+      const region = screen.getByRole('status');
+      expect(region).not.toHaveClass('sr-only');
+      expect(region).toHaveTextContent(/Jane/);
+    });
+
     it('describes the controls container by the sentence, so focus return still says what happened', () => {
       const { container } = render(
         <CompactPenStatus pen={makePen({ status: status({ state: 'FREE', canAcquire: true }) })} />,

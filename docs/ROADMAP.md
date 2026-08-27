@@ -529,6 +529,33 @@ discriminators. Each becomes a spec/plan before build:
 - Follow the delivery process ([`PROCESS.md`](PROCESS.md)) for new features; record
   architecturally significant decisions as ADRs.
 
+- **The stable foot row** — **shipped** (ADR-0114, 2026-08-27). The product owner sent four
+  screenshots of the released workspace and described the foot as **juggling**: the plan's facts and
+  the object-action bar swapped sides every time the activities panel opened, and the object bar
+  "moves about" rather than staying put.
+
+  Measuring it first found something nobody had reported. The bar was not merely moving, it was
+  **clipped** — `Clear visual placement` was already off-screen on the 24" monitor and `Edit`,
+  `Duplicate` and `Delete` were pointer-unreachable at 1646. The row's ancestor carried `flex-wrap`
+  and the bar carried `shrink-0`, so the wrap was live and inert: a `shrink-0` item takes
+  `max-content` and never asks its line to break, and an `overflow-hidden` ancestor took the surplus
+  silently. Nothing on screen looked wrong — the row simply ended. One word fixed it, and the gate
+  that pins it was verified red first.
+
+  What shipped besides: **one foot row rendered in both panel states** with the facts leading, so
+  nothing in it moves when the panel opens; armed-tool statements withheld for the three modes whose
+  trigger already says the word (their undocumented shortcuts moving onto that trigger); the pen's
+  sentence made `sr-only` with the holder's name on the pill; at most one transient strip in the
+  dock; and the object bar wearing the deck's card. The canvas gains **36 px at 1920 and 40 px at
+  1646 in the common state** — and gives it back on a summary selection or a stale schedule, which is
+  recorded rather than smoothed over.
+
+  Its measurement finding is the useful one: **freeing 164 px bought zero height**, because a
+  wrapping row breaks between items and not by total width, and then a single 46 px rename
+  (`Report progress` → `Progress`, on both surfaces) bought a line at both widths. Folding the four
+  editor doors into one menu is worth more than everything shipped here and was **dropped by the
+  product owner** — it changes what the bar is for, which is a different epic.
+
 - **Canvas maximisation** — **shipped** (ADR-0113, 2026-08-26), and **two of its four items did not
   exist**. The product owner asked to maximise the canvas: default the activities panel collapsed,
   re-section the header, fold the command deck onto one line, and trim the armed-tool tips.

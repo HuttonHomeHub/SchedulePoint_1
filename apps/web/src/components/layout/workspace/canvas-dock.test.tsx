@@ -133,13 +133,13 @@ describe('CanvasDock', () => {
  * the edit-conflict banner into a node that is in no accessibility tree at all. A WCAG 4.1.3 failure
  * that looks like nothing on screen, because the strips are simply absent.
  *
- * jsdom cannot see the CSS, so this asserts the seam rather than the symptom: `hostsDock={false}`
+ * jsdom cannot see the CSS, so this asserts the seam rather than the symptom: `hostsPlanSlots={false}`
  * renders no outlet, which is what lets `CanvasDock` fall back to rendering in place — where those
  * strips were before this epic, and the right answer on a screen with no spare row to dock into.
  * Found by the accessibility gate; nothing in the repository exercised the narrow path.
  */
 describe('the activities panel only hosts the dock when it is asked to', () => {
-  it('renders no outlet with hostsDock=false, so the dock falls back to rendering in place', () => {
+  it('renders no outlet with hostsPlanSlots=false, so the dock falls back to rendering in place', () => {
     render(
       <CanvasDockProvider>
         <div data-testid="scene">

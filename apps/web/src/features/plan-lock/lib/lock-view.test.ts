@@ -184,3 +184,49 @@ describe('resolveLockView — the compact badge name', () => {
     ).toBeUndefined();
   });
 });
+
+/**
+ * **Which states keep the sentence painted** (foot-row epic M7, architecture gate B3).
+ *
+ * D4 hid the sentence and put its fact on the badge, and accounted only for the `locked` tone. Two
+ * states cannot be covered that way — `lost` has no actor to name, and `editing`-with-a-request has
+ * an actor the badge is forbidden from naming by the suite above. Both would otherwise show a
+ * changed badge, a pair of buttons and no visible statement of what happened or who is asking.
+ *
+ * **Verified red**: without `messageVisible` on either branch the matching case fails.
+ */
+describe('resolveLockView — the sentence stays visible where the badge cannot carry it', () => {
+  it('keeps it for a pen taken from the reader', () => {
+    const view = resolveLockView(status({ state: 'HELD_BY_ME' }), 'PLAN_EDIT_LOCK_LOST', ME, null);
+    expect(view?.tone).toBe('lost');
+    expect(view?.messageVisible).toBe(true);
+  });
+
+  it('keeps it for an incoming request, whose actor the badge may not name', () => {
+    const view = resolveLockView(
+      status({ state: 'HELD_BY_ME', requestedBy: JANE }),
+      null,
+      ME,
+      null,
+    );
+    expect(view?.badgeName).toBeUndefined();
+    expect(view?.messageVisible).toBe(true);
+  });
+
+  /**
+   * The pinned negative. Without it both cases above would pass equally against `messageVisible`
+   * hard-wired true, which would restore the 126 px M3 removed and undo the milestone.
+   */
+  it('withholds it everywhere the badge does carry the fact', () => {
+    for (const [label, view] of [
+      ['free', resolveLockView(status({ state: 'FREE' }), null, ME, null)],
+      ['holding', resolveLockView(status({ state: 'HELD_BY_ME' }), null, ME, null)],
+      [
+        'held by other',
+        resolveLockView(status({ state: 'HELD_BY_OTHER', holder: JANE }), null, ME, null),
+      ],
+    ] as const) {
+      expect(view?.messageVisible, label).toBeUndefined();
+    }
+  });
+});

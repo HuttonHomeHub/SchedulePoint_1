@@ -35,6 +35,28 @@ export interface LockView {
    */
   badgeName?: string;
   message: string;
+  /**
+   * Keep {@link message} **painted**, not merely announced.
+   *
+   * The foot-row epic made the sentence `sr-only` and moved its fact onto the badge as
+   * `Locked · Alexandra` — which works for the five `locked` branches and for the two steady
+   * states, and does **not** work for two states where the badge is structurally incapable of
+   * carrying the fact:
+   *
+   * - **`lost`** — the pen was taken from the reader mid-edit, with no gesture of theirs. The badge
+   *   flips to `Read-only` and there is no actor to name, so a sighted planner would be left with a
+   *   changed badge and a bare `Dismiss` button and nothing saying what happened. This is the
+   *   single transition ADR-0028 exists for.
+   * - **`editing` with an incoming request** — the badge says `Editing`, correctly, because the
+   *   reader IS editing; the actor in scope is the person ASKING. `Hand over` and `Keep editing`
+   *   would appear with nothing naming who is asking, and {@link badgeName} deliberately never
+   *   fires on this tone for exactly the reason that would make it wrong here.
+   *
+   * Found by the architecture gate, which noticed that D4's accounting covered the `locked` tone
+   * and neither of these. The width cost is real and is paid only in two rare, consequential
+   * states — which is the opposite trade from paying it in the common one.
+   */
+  messageVisible?: boolean;
   /** Supplementary text rendered **aria-hidden** (the "active …" relative time, or
    *  the row-6 grace countdown) so its frequent updates never re-announce the banner. */
   aside?: string;
@@ -65,6 +87,7 @@ export function resolveLockView(
       tone: 'lost',
       badge: lockCopy.badgeReadOnly,
       message: lockCopy.lost(lostControl),
+      messageVisible: true,
       actions: ['dismiss'],
     };
   }
@@ -97,6 +120,7 @@ export function resolveLockView(
           tone: 'editing',
           badge: lockCopy.badgeEditing,
           message: lockCopy.incomingRequest(pendingOther),
+          messageVisible: true,
           actions: ['handover', 'keep'],
         };
       }
