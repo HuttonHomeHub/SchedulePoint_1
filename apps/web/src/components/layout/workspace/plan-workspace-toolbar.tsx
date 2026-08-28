@@ -716,7 +716,7 @@ export function ToolbarPlanWorkspace({
     <div
       role="status"
       aria-label="Loading the plan…"
-      className="bg-muted/40 h-full min-h-0 flex-1 animate-pulse rounded-md"
+      className="bg-muted/40 h-full min-h-0 flex-1 animate-pulse"
     />
   ) : (
     <TsldPanel
@@ -1668,14 +1668,10 @@ export function ToolbarPlanWorkspace({
           the strips are produced by the first and land in the second. Provider here rather than at
           the shell, so the shell stays plan-unaware (ADR-0029). */}
         <CanvasDockProvider>
-          {/* `px-3 pb-3` — the workspace's own inset, so the stage and the docked panels read as
-            CARDS FLOATING on the gradient ground rather than as the window's inner walls
-            (workspace redesign, 2026-08-24). It lives here, on the workspace body, and
-            deliberately NOT on the shell's `<main>`: `<main>` carries every route, and the
-            content screens already bring their own container padding, so putting it there would
-            double the inset on a dozen screens to fix one. The chrome band above supplies the
-            matching top and side gutters from the shell, because it is the shell that places it. */}
-          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3">
+          {/* **No inset** (workspace visual polish, 2026-08-28): the `px-3 pb-3` that floated the
+            stage as a card on the gradient is removed with the card itself — the fully-flush
+            steer. The workspace body IS the window's inner wall now, deliberately. */}
+          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {isWide ? (
               // Wide: a HORIZONTAL split — the canvas+activities vertical stack (left) beside the docked
               // notes panel (right, when open). Opening notes narrows the canvas; closing restores it.
@@ -1684,12 +1680,10 @@ export function ToolbarPlanWorkspace({
                   {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                   panel (when open) is overlaid via the `relative` container. */}
                   {/* No padding — see the single-pane branch below for why. */}
-                  {/* The stage is a CARD (workspace redesign, 2026-08-24): a radius, a hairline
-                    and a shadow, so the diagram reads as a sheet of paper laid on the gradient
-                    rather than as the window's own white. `overflow-hidden` is what makes the
-                    radius real — the canvas paints to its own bounds and would otherwise square
-                    off the corners it sits under. */}
-                  <div className="border-border relative flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-lg border shadow-md">
+                  {/* The stage was a CARD from the 2026-08-24 redesign to the 2026-08-28 polish
+                    pass; it is FULLY FLUSH now on the product owner's explicit steer — no radius,
+                    no hairline, no shadow, the diagram runs to the surfaces around it. */}
+                  <div className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
                     {surface}
                     {legendPanel}
                     {resourceStripPanel}

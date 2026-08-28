@@ -421,17 +421,15 @@ function ShellFrame(): React.ReactElement {
                     be `2–3` and rely on column 1 being a fixed 48 px; the docked Explorer is
                     resizable, so the span widened rather than the argument getting a caveat.
 
-                    The margin is what makes the band read as a card FLOATING on the gradient rather
-                    than a bar welded to the top of the window, and it lives here rather than in the
-                    component for the reason that component's docblock gives: it has no opinion
-                    about what sits beneath it. `mb-2` is smaller than the other three deliberately —
-                    the gap to the content below wants to be tighter than the gap to the window edge,
-                    or the band floats away from the thing it commands. */}
+                    **Full-bleed** (workspace visual polish, 2026-08-28): the `mt-3 mr-3 mb-2 ml-3`
+                    that floated the band as a card on the gradient is a knowing reversal — the
+                    product owner who approved the frame asked for it back, edge to edge. The 12 px
+                    the margins spent on ground now belongs to the surfaces. */}
                 <ChromeBandRow
                   rowsSlotRef={rowsSlotRef}
                   identitySlotRef={identitySlotRef}
                   modeSlotRef={modeSlotRef}
-                  className="col-span-3 col-start-1 row-start-1 mt-3 mr-3 mb-2 ml-3"
+                  className="col-span-3 col-start-1 row-start-1"
                 />
 
                 {/* Row 2, column 2 — the one `<main>` for the page. `min-h-0` lets it shrink to the
