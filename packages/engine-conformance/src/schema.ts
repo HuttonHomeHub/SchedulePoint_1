@@ -229,6 +229,15 @@ export const fixtureMetaSchema = z.object({
   id: z.string(),
   name: z.string(),
   purpose: z.string(),
+  /**
+   * Content revision within a `schema_version`: the shape is pinned by `schema_version`, the
+   * VALUES by this. It exists because the fixture's content was amended once (revision 2 —
+   * CAL-05's window, fix-slice M-E / TECH_DEBT #205a) and nothing before this field recorded
+   * that the file a reader audited was not the file first vendored. `revision_note` says what
+   * changed and why; both are required so an amendment cannot land undeclared.
+   */
+  revision: z.number().int().positive(),
+  revision_note: z.string(),
   duration_unit: z.string(),
   currency: z.string(),
   datetime_format: z.string(),

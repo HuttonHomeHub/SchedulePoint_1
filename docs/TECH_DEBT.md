@@ -5588,7 +5588,8 @@ claims in documents and this was a claim in a **choice**, and nothing currently 
 ## 205. The fixture plan is unschedulable as seeded, and the horizon guard was an untyped 500
 
 **Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Re-diagnosed:** 2026-08-28 ·
-**Size:** S (done) + decision · **Owner:** api / product owner
+**Closed:** 2026-08-28 (both halves — (b) `7aaf155c`, (a) fix-slice M-E fixture revision 2) ·
+**Size:** S (done) + decision (taken) · **Owner:** api / product owner
 
 **(b) is FIXED and proven live** (2026-08-28, `7aaf155c`). The engine's horizon guard is now a
 typed `WorkingTimeHorizonExceededError` mapped to `422 VALIDATION_FAILED` reason
@@ -5627,13 +5628,25 @@ the catalogue was dropped as a 422 finding**, and the Night Shift and Heavy Lift
 silently lost their non-working seasons. It now sends `isWorking: false`
 (`packages/seed-http/src/runner.ts`, regression in `runner.spec.ts`, verified red).
 
-**What remains is a decision, not code.** The catalogue's flagship plan cannot recalculate when
-freshly seeded, which strands `docs/TEST_PLAYBOOK.md` Tier 1 ("recalculate and read the row")
-and the ADR-0116 DCMA rows in any fresh environment. The options are ADR-0034-shaped: amend the
-versioned fixture (widen CAL-05's window or shorten the chain — a benchmark edit), or mark the
-fixture plan **expected-unschedulable** in the playbook and give the tiers a recalculable
-stand-in. In-window placement work does not help — the capacity is genuinely insufficient.
-Playbook annotated 2026-08-28; the decision goes to the product owner.
+**(a) is CLOSED — the product owner chose the amendment, and the measurement changed its shape**
+(2026-08-28, fix-slice M-E; the full campaign is
+`docs/specs/fix-slice-2026-08/m-e0-measurement.md`). CAL-05's window is now
+**2026-10-01 → 2026-10-30** as fixture **revision 2** (`fixture.revision` + `revision_note` are
+now required schema fields, so a content amendment cannot land undeclared). The spec's proposed
+end-only widening was **disproved by running it**: with the end at 30-Oct the recalculation
+still answered 422, because the **backward** pass starves independently — A10500's
+`MANDATORY_FINISH 2026-10-16T18:00` needs the chain's 9,360 working minutes at-or-before the
+pin and a window opening 05-Oct holds 8,610; on a window-only calendar there is no
+representable late date before the window exists. Widening the start to 01-Oct gives the late
+pass 11,490 minutes while **moving no forward date** (A10100's `MANDATORY_START` still pins the
+chain to 05-Oct), so the breaks-logic case lands exactly as the fixture intended: fresh seed +
+recalculate → **200**, A10400 EF 2026-10-17 past the pin, A10500 the plan's one flagged
+violation, −1 float on the chain. Zero conformance/golden changes (the §4.8 audit's right-hand
+column did not move — and could not, since the pure harness substitutes window-only calendars);
+the generator, JSON, CSVs and the orphan `.xer` mirror moved together, with
+`fixture-csv-consistency.spec.ts` now gating JSON↔CSV drift. Playbook Tier 1 and the ADR-0116
+DCMA rows re-read fresh: every structural metric held to the digit; metric 7 moved 65 → 67 (the
+chain's now-reachable negative float).
 
 ## 206. Health-check review suggestions consciously not folded at the M5 gate pass
 

@@ -19,6 +19,23 @@ Authored by the product owner (developed with the help of a Claude chat) as a fo
 benchmark for SchedulePoint's CPM/PDM engine. `schema_version`: **1.0**. Durations are stored in
 **hours** (not days) — with calendars from 8 h/day to 24 h/day, "days" is not a viable storage unit.
 
+## Revisions
+
+`schema_version` pins the **shape**; `fixture.revision` (+ `revision_note`, both required by
+`../src/schema.ts`) pins the **content**. The filename never changes for a content revision.
+
+- **Revision 2** (2026-08-28): CAL-05's window widened to 01-Oct → 30-Oct-2026 (was 05 → 16 Oct).
+  The original window starved the TT.10 chain in both passes — 144 h against 156 h forward, and
+  8,610 working minutes at-or-before A10500's `MANDATORY_FINISH` against the 9,360 the backward
+  pass needs — so the fixture could not be scheduled by the engine it exists to test
+  (`docs/TECH_DEBT.md` #205a; measurement in `docs/specs/fix-slice-2026-08/m-e0-measurement.md`).
+  Every change flows generator → vendored JSON → CSVs, and
+  `../src/fixture-csv-consistency.spec.ts` gates the JSON and `csv/calendars.csv` against
+  drifting apart. The `.xer` mirror (which the generator does not emit and nothing in this
+  repository reads) was hand-amended in step: CAL-05's name and its daily exception serials
+  (46296–46325).
+- **Revision 1**: the fixture as first vendored.
+
 ## No golden dates — by design
 
 The fixture deliberately ships **no expected output dates**. It specifies *inputs and intended

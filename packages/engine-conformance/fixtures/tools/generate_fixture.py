@@ -97,13 +97,13 @@ CALENDARS = [
         "test_tags": ["cal_night_crosses_midnight", "cal_asymmetric_week"],
     },
     {
-        "id": "CAL-05", "name": "Turnaround Window (12h, 05-Oct to 16-Oct-2026 only)", "type": "GLOBAL",
+        "id": "CAL-05", "name": "Turnaround Window (12h, 01-Oct to 30-Oct-2026 only)", "type": "GLOBAL",
         "hours_per_day": 12, "hours_per_week": 84, "hours_per_month": 360, "hours_per_year": 0,
         # BASE WEEK IS ENTIRELY NON-WORK. Work exists ONLY via a positive exception.
         # Engines that can only *subtract* exceptions from a base week will fail here.
         "workweek": {d: [] for d in DAYS},
         "exceptions": [
-            {"date_range": ["2026-10-05", "2026-10-16"],
+            {"date_range": ["2026-10-01", "2026-10-30"],
              "work": [["06:00", "12:00"], ["12:30", "18:30"]],
              "note": "Turnaround execution window - the ONLY working time on this calendar"}
         ],
@@ -1468,6 +1468,16 @@ FIXTURE = {
     "fixture": {
         "id": "P6-TORTURE-01",
         "name": "CPM/PDM Engine Conformance Fixture - Process Plant Construction",
+        # Content revision within schema_version 1.0: the SHAPE is unchanged (same schema, same
+        # filename), the VALUES have been amended once. Bump this and state why on any future
+        # content amendment (ADR-0034; fix-slice M-E CQ-1b).
+        "revision": 2,
+        "revision_note": "CAL-05 window widened to 2026-10-01..2026-10-30 (was 05..16 Oct): the "
+                         "TT.10 chain needs 156h forward and 9,360 working minutes at-or-before "
+                         "A10500's MANDATORY_FINISH backward; the original window held 144h/8,610. "
+                         "On a window-only calendar the backward pass has no representable late "
+                         "date before the window exists, so the fixture could not be scheduled by "
+                         "the engine it exists to test (TECH_DEBT #205a).",
         "purpose": "A realistic but deliberately pathological construction schedule that exercises every "
                    "relationship type, lag sign, constraint type, activity type, duration type, percent-complete "
                    "type, calendar pattern, progress state and scheduling option found in a P6-class engine.",

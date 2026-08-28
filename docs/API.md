@@ -495,9 +495,12 @@ changes what the same stored minutes are reported as.
 ### `CALENDAR_WORKING_TIME_UNREACHABLE` (422)
 
 The engine's walk-time sibling of the build-time reject below (`docs/TECH_DEBT.md` #205(b)): a
-calendar can hold SOME working time that the schedule still cannot reach — a window-only calendar
-whose only working exception sits outside the span the walk needs (the conformance fixture's
-CAL-05 is the canonical case), or a dated blackout longer than the engine's horizon. The walk
+calendar that HAS working time, placed where the schedule cannot reach it within the engine's
+horizon — a blackout longer than the cap, or a window-only calendar whose one working exception
+sits years from the dates being walked. (The conformance fixture's CAL-05 was the canonical
+case until fixture revision 2 amended its window — `#205(a)`; a fresh catalogue seed now
+recalculates. The backward pass reaches this error as readily as the forward one: a window-only
+calendar has no representable late date before its window opens.) The walk
 throws a typed `WorkingTimeHorizonExceededError`, mapped to 422 `CALENDAR_WORKING_TIME_UNREACHABLE`
 at **every** service seam that reaches the working-time walk — five today: **recalculate** (and
 the programme variant, via the shared per-plan recalculation), the **critical-path test**,

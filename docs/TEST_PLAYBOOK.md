@@ -38,19 +38,9 @@ looks like" column, which a description cannot carry.
 One plan, 129 activities, every capability at once. Use it to see the product under a realistic
 load; use the capability plans below to diagnose anything that looks wrong in it.
 
-> **A freshly seeded fixture plan does not recalculate — by construction, not by defect**
-> (`docs/TECH_DEBT.md` #205, measured 2026-08-28). CAL-05 "Turnaround Window" holds 144 h of
-> working time that will ever exist, and its TT.10 FS chain needs 156 h in sequence, so
-> Recalculate answers `422 CALENDAR_WORKING_TIME_UNREACHABLE`. Catalogue plans seeded **before
-> 2026-08-02** predate window-only calendar support, so their TT.10 activities sit on the plan
-> default and recalculate fine — which is why this table's "after Recalculate" readings (and the
-> ADR-0116 DCMA rows below) were obtainable at all. Until the fixture is amended or declared
-> expected-unschedulable (the open half of #205), read those rows against a pre-2026-08-02
-> catalogue plan, and treat the 422 on a fresh seed as **correct**.
-
-| Capability           | Plan                         | Look at                          | Correct                                                                         | Wrong                                                                                                                                         |
-| -------------------- | ---------------------------- | -------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Everything, together | `plan:fixture-p6-torture-v1` | The whole plan after Recalculate | 129 activities, a visible critical path, WBS summaries that span their children | Any summary collapsed to a point at the data date; any LOE drawn as a zero-length bar. **Both of these shipped**, and are why ADR-0066 exists |
+| Capability           | Plan                         | Look at                          | Correct                                                                                                                                                                                                                                                                                | Wrong                                                                                                                                                                                          |
+| -------------------- | ---------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Everything, together | `plan:fixture-p6-torture-v1` | The whole plan after Recalculate | Recalculate answers **200** (fixture revision 2, 2026-08-28 — CAL-05's window was widened so a fresh seed schedules; `#205a`): 147 activities, project finish 2027-03-12, 87 critical, exactly **one** flagged constraint violation (A10500's Mandatory Finish, the breaks-logic case) | A 422 on a fresh seed (the pre-revision-2 state); any summary collapsed to a point at the data date; any LOE drawn as a zero-length bar. **All of these shipped**, and are why ADR-0066 exists |
 
 ---
 
@@ -185,7 +175,10 @@ product finding, not a test to relax.**
 rows. The catalogue is its oracle for eleven of them; the numbers below were measured at M0-T1
 (2026-08-27, `docs/specs/schedule-health-check/m0-measurement.md`) against a freshly seeded,
 API-recalculated database, so a change to either the catalogue or an evaluator shows up as a
-disagreement with this table.
+disagreement with this table. **Re-read 2026-08-28 against fixture revision 2** (the CAL-05
+amendment, `#205a`): every structural metric held to the digit; metric 7 moved 65 → 67, which is
+the amendment's own signature — the TT.10 chain now schedules on CAL-05 and carries the negative
+float A10500's Mandatory Finish produces.
 
 | Metric                       | Plan                                                | Correct                                                                                                                                        | Wrong                                                                                                                                                      |
 | ---------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -195,7 +188,7 @@ disagreement with this table.
 | 4 Types                      | `plan:fixture-p6-torture-v1`                        | FS 143 / SS 25 / FF 17 / SF 3, FS 76 % FAIL, SF named in its offender note                                                                     | Only the FS share reported — a planner fixing this needs to know which type dominates                                                                      |
 | 5 Hard constraints           | `plan:fixture-p6-torture-v1`                        | 7 of 126 (5.6 % — FAIL by 0.6 pp, a real boundary case)                                                                                        | `SNET`/`FNET` counted (they are soft), or a secondary-slot `FNLT` missed                                                                                   |
 | 6 High float                 | `plan:scale-500`                                    | 248 of 500 (49.6 %, FAIL) — a **direct integer comparison**, no unit conversion                                                                | Any conversion applied: `total_float` is already whole working days on the activity's own calendar                                                         |
-| 7 Negative float             | `plan:fixture-p6-torture-v1`                        | 65                                                                                                                                             | —                                                                                                                                                          |
+| 7 Negative float             | `plan:fixture-p6-torture-v1`                        | 67 (was 65 before fixture revision 2 — the TT.10 chain's Mandatory-Finish float, now reachable)                                                | —                                                                                                                                                          |
 | 9 Invalid dates              | `plan:fixture-p6-torture-v1`                        | 8 forecast-before-data-date, 0 actual-after — two counts, never one                                                                            | The two halves collapsed into one number                                                                                                                   |
 | 10 Resources                 | `plan:scale-500`                                    | 478 of 478 unassigned, `INFORMATIONAL`, `threshold: null`, narrowing named                                                                     | A pass/fail verdict, or a threshold object on an informational row                                                                                         |
 | 6/7/9 on an unseeded recalc  | `plan:fixture-p6-torture-v1` **before** Recalculate | `NOT_ASSESSABLE / PLAN_NOT_SCHEDULED` — the fixture/scale tiers land **uncalculated** (M0-T1 F-M0-1), so this is the catalogue's resting state | A vacuous PASS on a plan whose engine columns are all NULL                                                                                                 |

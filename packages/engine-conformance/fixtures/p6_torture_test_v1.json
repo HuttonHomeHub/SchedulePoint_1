@@ -3,6 +3,8 @@
   "fixture": {
     "id": "P6-TORTURE-01",
     "name": "CPM/PDM Engine Conformance Fixture - Process Plant Construction",
+    "revision": 2,
+    "revision_note": "CAL-05 window widened to 2026-10-01..2026-10-30 (was 05..16 Oct): the TT.10 chain needs 156h forward and 9,360 working minutes at-or-before A10500's MANDATORY_FINISH backward; the original window held 144h/8,610. On a window-only calendar the backward pass has no representable late date before the window exists, so the fixture could not be scheduled by the engine it exists to test (TECH_DEBT #205a).",
     "purpose": "A realistic but deliberately pathological construction schedule that exercises every relationship type, lag sign, constraint type, activity type, duration type, percent-complete type, calendar pattern, progress state and scheduling option found in a P6-class engine.",
     "duration_unit": "hours",
     "currency": "GBP",
@@ -461,7 +463,7 @@
     },
     {
       "id": "CAL-05",
-      "name": "Turnaround Window (12h, 05-Oct to 16-Oct-2026 only)",
+      "name": "Turnaround Window (12h, 01-Oct to 30-Oct-2026 only)",
       "type": "GLOBAL",
       "hours_per_day": 12,
       "hours_per_week": 84,
@@ -479,8 +481,8 @@
       "exceptions": [
         {
           "date_range": [
-            "2026-10-05",
-            "2026-10-16"
+            "2026-10-01",
+            "2026-10-30"
           ],
           "work": [
             [
