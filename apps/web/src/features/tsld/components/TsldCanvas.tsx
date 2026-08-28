@@ -59,6 +59,7 @@ import {
   hitTest,
   idsIntersecting,
   rectFromCorners,
+  revealOffset,
   MIN_CONTEXT_DAYS,
   withMinimumSpan,
   lagAnchorDay,
@@ -1251,6 +1252,22 @@ export function TsldCanvas({
           sceneRef.current.dataDate,
           Math.min(RESOLVED_MAX_PX_PER_DAY, pxPerDayForPreset('day', size.width)),
         );
+        // **The lane axis is repaired after the fit** (`docs/TECH_DEBT.md` #152). `fitToContent`
+        // frames the TIME axis and pins `originY` to the padding — right for whole-plan Fit at
+        // lane 0, wrong for one activity in lane 273: proven live, the command announced "Zoomed
+        // to A01928" while scrolling it OUT of view (topLane −1.1, visible: false). The
+        // selection-reveal effect below cannot repair it, because it runs on selection CHANGE and
+        // this command fires with the selection already set. Same `revealOffset` as that effect —
+        // one arithmetic, never a second opinion.
+        {
+          // `activityRect` is null only for an undrawn activity, and the `earlyStart === null`
+          // guard above already returned false for that — the check satisfies the type.
+          const rect = activityRect(activity, viewRef.current, sceneRef.current.dataDate);
+          if (rect) {
+            const dy = revealOffset(rect.y, rect.h, size.height, LANE_HEIGHT);
+            if (dy !== 0) viewRef.current = pan(viewRef.current, 0, dy);
+          }
+        }
         // The command owns the scale from here — a later resize preserves it (ADR-0056 M2).
         fittedRef.current = true;
         dirtyRef.current = true;
@@ -1295,17 +1312,11 @@ export function TsldCanvas({
         : null;
     if (!rect) return;
     const margin = LANE_HEIGHT;
-    const reveal = (start: number, span: number, extent: number): number => {
-      if (start < margin) return margin - start;
-      if (start + span > extent - margin) {
-        // If it's larger than the viewport, align its start; else pan just enough to fit the end.
-        return span > extent - 2 * margin ? margin - start : extent - margin - (start + span);
-      }
-      return 0;
-    };
-    const dx = reveal(rect.x, rect.w, size.width);
+    // The shared `revealOffset` (render/viewport.ts) — extracted for #152 so `zoomToActivity`
+    // repairs the lane axis with the SAME arithmetic rather than a second opinion.
+    const dx = revealOffset(rect.x, rect.w, size.width, margin);
     // A band bar has no vertical position in the scene, so only the horizontal pan applies.
-    const dy = bandBar ? 0 : reveal(rect.y, rect.h, size.height);
+    const dy = bandBar ? 0 : revealOffset(rect.y, rect.h, size.height, margin);
     if (dx !== 0 || dy !== 0) {
       viewRef.current = pan(viewRef.current, dx, dy);
       dirtyRef.current = true;

@@ -1693,7 +1693,11 @@ against ADR-0062 M6, which is a real reason to close them and not an urgent one.
 > this entry did not cover. The verb stayed per-site, because the nine never said the same thing:
 > a shared constant could not have fixed it and a shared builder could.
 
-**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (found by the ADR-0082 journey step)
+**Status:** CLOSED (the line above said so since 2026-08-09; this line said `open` until the
+2026-08-28 correctness pass verified the closure against the code — `penReason(action, holder)`
+exists, is exported from `features/plan-lock`, and `plan-gating.ts:75` routes the pen branch
+through it — and removed the contradiction. Two status lines disagreeing is worse than either.)
+· **Owner:** web · **Raised:** 2026-08-08 (found by the ADR-0082 journey step)
 
 `deriveActivityEditorGating`'s `NO_PEN` sentence is **"Start editing to change this activity."**, and
 the TSLD toolbar shades its pen-gated commands with the same form in eight places
@@ -2845,6 +2849,14 @@ the ADR-0058 rule doing its job on a document written about instruments not bein
 
 ## 150. The drawer overloads "Close", and the editor's Close leaves an empty panel open
 
+**CLOSED 2026-08-28 (correctness programme, Phase 1) — overtaken, verified rather than assumed.**
+ADR-0101 (2026-08-21, the day after this was raised) returned the activity editor to `modalShell`,
+so the state this row describes — an editor in the drawer with its own second "Close" — is
+unreachable: the editor's drawer chrome and its "Select an activity to see its details here" empty
+state have **zero** matches in `apps/web/src`, `registerDrawerSubject` has no production caller
+(#156), and the only surviving control is the chrome's `Close context drawer` ✕, which has nothing
+left to be confused with. Closed on those greps, not on the ADR's say-so.
+
 **Raised 2026-08-20** (reconciliation pass, step 7 — ux review of the post-M10 diff). **Size:** S.
 
 The context drawer carries two controls whose names both begin with "Close", in one panel, doing
@@ -2893,6 +2905,18 @@ browser-level proof "belongs to `e2e-gantt`", which reads as coverage held elsew
 checked when written.
 
 ## 152. `zoomToSelection` frames the time axis and discards the lane axis
+
+**CLOSED 2026-08-28 (correctness programme, Phase 1) — candidate fix (a), command-local.** The
+reveal arithmetic is extracted from the selection-reveal effect to a pure `revealOffset` in
+`render/viewport.ts` (one implementation, the ADR-0065 rule — the row's fix (b) would have touched
+`fitToContent`, which is also Fit-to-plan and the export framing), and `zoomToActivity` repairs the
+lane axis after the fit with the same function the effect uses. Pinned by
+`viewport.reveal.test.ts`, whose last case composes `fitToContent` + `revealOffset` on the row's
+own numbers — a lane-273 bar in a 900 px viewport lands inside the margins after the repair, where
+the unfixed command left it ~6,800 px below the window. One correction to this row itself: it says
+the probe is "kept with this row", and `m0-t5-zoom-probe.mjs` no longer exists anywhere in the
+repository — the claim was stale when re-read, so the closure proof is the composed unit case
+rather than a probe re-run.
 
 **Raised 2026-08-20** (minimap epic, M0-T5 — filed rather than absorbed). **Size:** S.
 

@@ -148,6 +148,25 @@ export const MIN_CONTEXT_DAYS = 14;
  * returns a **synthetic** activity rather than mutating: the widened span is a framing decision, and
  * nothing downstream should be able to mistake it for the activity's real dates.
  */
+/**
+ * The pan (along one axis) that brings a `[start, start+span)` interval fully into a `[0, extent)`
+ * viewport with a `margin` off each edge — `0` when it is already in. An interval larger than the
+ * usable window aligns its START (reading a too-big thing from its beginning beats fitting its
+ * end); otherwise the pan is the minimum distance, so an already-visible target does not jump.
+ *
+ * **Extracted from the selection-reveal effect for `docs/TECH_DEBT.md` #152**, so `zoomToActivity`
+ * can repair the lane axis with the SAME arithmetic rather than a second opinion — the ADR-0065
+ * `routeOrthogonal` rule: two implementations of "make this visible" would drift, and the drift
+ * would be visible only to someone using both on the same plan.
+ */
+export function revealOffset(start: number, span: number, extent: number, margin: number): number {
+  if (start < margin) return margin - start;
+  if (start + span > extent - margin) {
+    return span > extent - 2 * margin ? margin - start : extent - margin - (start + span);
+  }
+  return 0;
+}
+
 export function withMinimumSpan(
   activity: RenderActivity,
   dataDateIso: string,
