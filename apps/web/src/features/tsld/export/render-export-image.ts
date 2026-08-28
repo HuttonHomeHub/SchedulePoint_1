@@ -1,7 +1,16 @@
-import { paintScene, paintWbsBand, type TsldScene, type WbsBandPalette } from '../render/paint';
+import { axisMarkers } from '../render/axis-markers';
+import {
+  DEFAULT_VIEW_TOGGLES,
+  paintScene,
+  paintWbsBand,
+  type TsldScene,
+  type WbsBandPalette,
+} from '../render/paint';
 import type { PrintPalette } from '../render/palette';
 import type { Size, Viewport } from '../render/render-model';
 import type { WbsBandBar } from '../render/wbs-band';
+
+import { EXPORT_MARKER_ROW } from './export-image';
 
 import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
 
@@ -53,6 +62,10 @@ export interface RenderExportImageInput {
   dpr: number;
   /** The reserved title/legend band height (CSS px), matching the export viewport's band offset. */
   topBand: number;
+  /** The reserved axis-marker row height (CSS px) under the title band, matching what
+   * `buildExportViewport` reserved. Defaults to {@link EXPORT_MARKER_ROW} — one constant, imported
+   * at both seams, so the geometry and the drawing cannot disagree about the row's height. */
+  markerRow?: number;
   palette: PrintPalette;
   /** Whether the raster was scaled to fit the cap — the band notes it. */
   scaledToFit: boolean;
@@ -112,6 +125,7 @@ export async function renderExportImage(
   deps: RenderExportImageDeps = {},
 ): Promise<Blob> {
   const { scene, viewport, size, dpr, topBand, palette, scaledToFit, meta, wbsBand } = input;
+  const markerRow = input.markerRow ?? EXPORT_MARKER_ROW;
   const createCanvas = deps.createCanvas ?? (() => document.createElement('canvas'));
   const paint = deps.paint ?? paintScene;
 
@@ -150,7 +164,10 @@ export async function renderExportImage(
       { width: size.width, height: wbsBand.height },
       wbsBand.palette,
       dpr,
-      topBand,
+      // Below the title band AND the marker row — the screen's vertical order (labels in the
+      // ruler above, band under it, scene below), which is also what `buildExportViewport`
+      // reserved.
+      topBand + markerRow,
     );
     // `paintWbsBand` left the transform offset at the band; restore the surface's own frame so the
     // ground fill and the title band author in page coordinates.
@@ -163,6 +180,7 @@ export async function renderExportImage(
   ctx.globalCompositeOperation = 'source-over';
 
   drawTitleBand(ctx, size, topBand, palette, scaledToFit, meta);
+  drawAxisMarkerRow(ctx, viewport, size, topBand, markerRow, palette, scene);
 
   return canvasToPngBlob(canvas);
 }
@@ -205,6 +223,79 @@ function drawTitleBand(
   ctx.fillText(subtitle, BAND_PAD, 48);
 
   drawLegend(ctx, palette, size.width);
+}
+
+/** Marker-chip typography + geometry, matching the ruler's marker rows (`h-3.5` = 14 px, `px-1`). */
+const MARKER_FONT = "11px system-ui, -apple-system, 'Segoe UI', sans-serif";
+const MARKER_CHIP_H = 14;
+const MARKER_CHIP_PAD_X = 4;
+
+/**
+ * Draw the reserved **axis-marker row** under the title band (`#175`, ADR-0106 one surface along):
+ * the exported picture's two persistent rules — the data date and Today — get the labels the
+ * screen's ruler gives them, from **the same `axisMarkers` model**, so the export and the screen
+ * cannot disagree about culling, coincidence (`Data date · today`), clamping or which label
+ * survives a collision (the ADR-0065 one-implementation argument, which is that module's whole
+ * reason to exist — see its docblock).
+ *
+ * The row is filled opaque first (the scene's rules were painted full-height under it, exactly as
+ * they are under the title band), then one chip per mark: the data-date chip in the
+ * `dataDate`/`dataDateInk` pair and the Today chip in `today`/`todayInk` — both pairs gated by
+ * `print-palette.structural.test.ts`. With both marks off (or both rules off-screen in a `view`
+ * crop) nothing is drawn and the strip stays paper — the parity case.
+ */
+function drawAxisMarkerRow(
+  ctx: CanvasRenderingContext2D,
+  viewport: Viewport,
+  size: Size,
+  topBand: number,
+  markerRow: number,
+  palette: PrintPalette,
+  scene: TsldScene,
+): void {
+  if (markerRow <= 0) return;
+  // Opaque row ground (the title band's own treatment, one strip down).
+  ctx.fillStyle = palette.ground;
+  ctx.fillRect(0, topBand, size.width, markerRow);
+
+  ctx.font = MARKER_FONT;
+  // The mark's box is the CHIP, not the bare text — clamping and the collision test must run on
+  // what is actually painted, or two chips could kiss while their texts were judged apart.
+  const measure = (label: string): number => {
+    const measured = ctx.measureText(label) as TextMetrics | undefined;
+    const textWidth = (measured && measured.width) || label.length * 6.5;
+    return textWidth + MARKER_CHIP_PAD_X * 2;
+  };
+
+  // The same facts the painter derived its lines from (`paint.ts` layer 3.5) — the model is the
+  // single answer to "where are the rules and which labels survive".
+  const model = axisMarkers(
+    viewport,
+    size,
+    {
+      dataDateLine: scene.dataDateLine,
+      todayOffset: scene.todayOffset,
+      todayFraction: scene.todayFraction,
+      todayToggle: scene.view?.today ?? DEFAULT_VIEW_TOGGLES.today,
+    },
+    measure,
+  );
+
+  const chipTop = topBand + (markerRow - MARKER_CHIP_H) / 2;
+  for (const mark of model.marks) {
+    const width = mark.width ?? measure(mark.label);
+    const left = mark.left ?? Math.max(0, Math.min(mark.x - width / 2, size.width - width));
+    const fill = mark.kind === 'dataDate' ? palette.dataDate : palette.today;
+    const ink = mark.kind === 'dataDate' ? palette.dataDateInk : palette.todayInk;
+    // A plain rect rather than `roundRect` — the 2 px radius the screen's chips wear is not worth
+    // an API the test's fake context (and older canvas impls) may not have.
+    ctx.fillStyle = fill;
+    ctx.fillRect(left, chipTop, width, MARKER_CHIP_H);
+    ctx.fillStyle = ink;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(mark.label, left + MARKER_CHIP_PAD_X, chipTop + MARKER_CHIP_H - 3.5);
+  }
 }
 
 /** Draw the compact legend row inside the band. Uses `measureText` when available, falling back to a

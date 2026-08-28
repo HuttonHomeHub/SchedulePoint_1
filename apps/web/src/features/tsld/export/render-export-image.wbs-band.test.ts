@@ -5,6 +5,7 @@ import { resolvePrintPalette } from '../render/palette';
 import type { Viewport } from '../render/render-model';
 import type { WbsBandBar } from '../render/wbs-band';
 
+import { EXPORT_MARKER_ROW } from './export-image';
 import { renderExportImage, type RenderExportImageInput } from './render-export-image';
 
 /**
@@ -101,8 +102,10 @@ describe('renderExportImage — the WBS band', () => {
       { createCanvas: () => canvas, paint: vi.fn() },
     );
 
-    // Drawn at `topBand` — not at 0, which would put the phases over the plan's name.
-    expect(translatesY(calls)).toContain(TOP_BAND);
+    // Drawn below the title strip AND the axis-marker row (fix-slice M-F) — not at 0, which
+    // would put the phases over the plan's name, and not at the bare `topBand`, which would put
+    // them over the date marks the row exists to carry.
+    expect(translatesY(calls)).toContain(TOP_BAND + EXPORT_MARKER_ROW);
     // …and its strip is the band's height, not the whole surface.
     expect(calls).toContainEqual({ method: 'clearRect', args: [0, 0, 400, BAND_HEIGHT] });
   });

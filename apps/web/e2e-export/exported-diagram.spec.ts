@@ -9,7 +9,7 @@ import {
   recalculate,
   seedActivities,
 } from '../e2e-workspace-chrome/support';
-import { EXPORT_TOP_BAND } from '../src/features/tsld/export/export-image';
+import { EXPORT_MARKER_ROW, EXPORT_TOP_BAND } from '../src/features/tsld/export/export-image';
 
 /**
  * **The exported diagram, decoded and measured** (TECH_DEBT #164, W3-M2).
@@ -42,15 +42,18 @@ test.describe.configure({ mode: 'serial' });
 const STAMP = Date.now() + 7300;
 
 /**
- * The reserved title strip, which carries a generated date and the plan's name. Never sampled.
+ * The reserved chrome above the diagram: the title strip (name + generated date + legend) and,
+ * since fix-slice M-F, the axis-marker row under it. The DIAGRAM sampling starts below both; the
+ * marker row itself is sampled separately for its own assertion.
  *
  * **Imported rather than restated**, and scaled by the device pixel ratio the export rasterises
- * at. It was a literal 110 against a real `EXPORT_TOP_BAND` of 96 — safe only because this
- * config runs at `deviceScaleFactor: 1`, and at dpr 2 the band is 192 raster rows while 110 would
- * have sampled title text into the colour counts. A second copy of a constant, wrong by 14 and
- * silently right for one reason.
+ * at. The title constant was once a literal 110 against a real `EXPORT_TOP_BAND` of 96 — safe
+ * only because this config runs at `deviceScaleFactor: 1`, and at dpr 2 the band is 192 raster
+ * rows while 110 would have sampled title text into the colour counts. A second copy of a
+ * constant, wrong by 14 and silently right for one reason.
  */
 const TITLE_BAND_PX = EXPORT_TOP_BAND;
+const RESERVED_PX = EXPORT_TOP_BAND + EXPORT_MARKER_ROW;
 
 test.describe('The exported diagram', () => {
   test('is painted on light paper and carries the ground layers the screen shows', async ({
@@ -119,7 +122,7 @@ test.describe('The exported diagram', () => {
     // engine that produced them.
     const bytes = (await import('node:fs')).readFileSync(path);
     const stats = await page.evaluate(
-      async ({ base64, bandPx }) => {
+      async ({ base64, titlePx, bandPx }) => {
         const binary = atob(base64);
         const buf = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i += 1) buf[i] = binary.charCodeAt(i);
@@ -132,6 +135,15 @@ test.describe('The exported diagram', () => {
         const counts = new Map<string, number>();
         let total = 0;
         let luminanceSum = 0;
+        // The axis-marker row, sampled on its own: dark chip pixels (the data-date chip fills in
+        // the print foreground) against its paper ground.
+        let markerDark = 0;
+        for (let y = titlePx; y < bandPx; y += 1) {
+          for (let x = 0; x < bitmap.width; x += 1) {
+            const i = (y * bitmap.width + x) * 4;
+            if ((data[i]! + data[i + 1]! + data[i + 2]!) / 3 < 128) markerDark += 1;
+          }
+        }
         for (let y = bandPx; y < bitmap.height; y += 1) {
           for (let x = 0; x < bitmap.width; x += 1) {
             const i = (y * bitmap.width + x) * 4;
@@ -145,6 +157,7 @@ test.describe('The exported diagram', () => {
         return {
           width: bitmap.width,
           height: bitmap.height,
+          markerDark,
           total,
           meanChannel: luminanceSum / total,
           white: counts.get('255,255,255') ?? 0,
@@ -152,11 +165,24 @@ test.describe('The exported diagram', () => {
           distinct: counts.size,
         };
       },
-      { base64: bytes.toString('base64'), bandPx: TITLE_BAND_PX },
+      { base64: bytes.toString('base64'), titlePx: TITLE_BAND_PX, bandPx: RESERVED_PX },
     );
 
     await testInfo.attach('exported-diagram.png', { path: path, contentType: 'image/png' });
     testInfo.annotations.push({ type: 'measured', description: JSON.stringify(stats.top) });
+
+    // ── The marker row names the rules (fix-slice M-F, #175). Before it, the data-date and
+    // Today verticals always reached the export and their labels never did — two unexplained
+    // rules in the deliverable. The chip is the print foreground on paper, so "dark pixels exist
+    // in the reserved row" is the treatment's signature; on this fixture the data date IS today
+    // (a new plan pins plannedStart to today), so the single merged chip is what should print,
+    // and ~1,000+ dark pixels is its measured footprint (chip fill + ink). The printed diagram
+    // inherits this by construction — PrintSurface embeds the SAME blob (PrintSurface.tsx) — so
+    // there is deliberately no second assertion for it.
+    expect(
+      stats.markerDark,
+      'no marker chip in the reserved axis-marker row — the export axis marks are missing',
+    ).toBeGreaterThan(200);
 
     // ── Paper is light. The defect this whole thread began with was a near-black diagram panel
     // inside white paper chrome, because the print ground resolved from the app's live theme.

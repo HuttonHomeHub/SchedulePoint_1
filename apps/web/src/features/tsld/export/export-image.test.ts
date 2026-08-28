@@ -6,6 +6,7 @@ import { screenXOfDay, type RenderActivity, type Viewport } from '../render/rend
 import {
   buildExportViewport,
   EXPORT_DPR_CAP,
+  EXPORT_MARKER_ROW,
   EXPORT_MAX_PX,
   type LiveViewport,
 } from './export-image';
@@ -45,6 +46,7 @@ describe('buildExportViewport — whole extent', () => {
       liveViewport: live({ pxPerDay: 10 }),
       padding: 0,
       topBand: 0,
+      markerRow: 0,
       dpr: 1,
     });
     // Span is day 0 … day 5 (finish+1) = 5 days at 10px → 50px wide; 3 lanes (0..2) × 28px tall.
@@ -63,6 +65,7 @@ describe('buildExportViewport — whole extent', () => {
       liveViewport: live({ pxPerDay: 10 }),
       padding: 8,
       topBand: 40,
+      markerRow: 0,
       dpr: 1,
     });
     expect(result.viewport.originY).toBe(48); // topBand + padding
@@ -75,6 +78,7 @@ describe('buildExportViewport — whole extent', () => {
       liveViewport: live({ pxPerDay: 10 }),
       padding: 0,
       topBand: 0,
+      markerRow: 0,
       dpr: 5,
       maxPx: 100_000,
     });
@@ -92,6 +96,7 @@ describe('buildExportViewport — whole extent', () => {
       liveViewport: live({ pxPerDay: 20 }),
       padding: 0,
       topBand: 0,
+      markerRow: 0,
       dpr: 2,
       maxPx: 100,
     });
@@ -112,6 +117,7 @@ describe('buildExportViewport — whole extent', () => {
       liveViewport: live({ pxPerDay: 10 }),
       padding: 0,
       topBand: 0,
+      markerRow: 0,
       dpr: 1,
     };
     // Exactly at the cap → not scaled.
@@ -141,6 +147,7 @@ describe('buildExportViewport — view extent', () => {
       extent: 'view',
       liveViewport: live({ pxPerDay: 12, originX: 5, originY: 7 }, 300, 200),
       topBand: 40,
+      markerRow: 0,
       dpr: 1,
     });
     expect(result.size).toEqual({ width: 300, height: 240 }); // band added on top
@@ -154,6 +161,7 @@ describe('buildExportViewport — view extent', () => {
       extent: 'whole',
       liveViewport: live({ pxPerDay: 9, originX: 3, originY: 4 }, 320, 180),
       topBand: 20,
+      markerRow: 0,
       dpr: 1,
     });
     expect(result.size).toEqual({ width: 320, height: 200 });
@@ -269,5 +277,38 @@ describe('buildExportViewport — WBS band reservation', () => {
       wbsBandHeight: 0,
     });
     expect(omitted).toEqual(zero);
+  });
+});
+
+describe('buildExportViewport — the axis-marker row (fix-slice M-F, #175)', () => {
+  const LIVE = live({ pxPerDay: 10, originX: 5, originY: 7 }, 300, 200);
+
+  it('reserves EXPORT_MARKER_ROW by default, in both extents', () => {
+    for (const extent of ['whole', 'view'] as const) {
+      const activities = extent === 'whole' ? [activity({ id: 'a' })] : [];
+      const defaulted = buildExportViewport(activities, DATA_DATE, {
+        extent,
+        liveViewport: LIVE,
+      });
+      const zero = buildExportViewport(activities, DATA_DATE, {
+        extent,
+        liveViewport: LIVE,
+        markerRow: 0,
+      });
+      expect(defaulted.size.height).toBe(zero.size.height + EXPORT_MARKER_ROW);
+      expect(defaulted.viewport.originY).toBe(zero.viewport.originY + EXPORT_MARKER_ROW);
+    }
+  });
+
+  it('stacks under the title band and above the WBS band (reserved = band + row + wbs)', () => {
+    const result = buildExportViewport([], DATA_DATE, {
+      extent: 'view',
+      liveViewport: LIVE,
+      topBand: 40,
+      wbsBandHeight: 30,
+    });
+    // 40 (title) + EXPORT_MARKER_ROW + 30 (wbs) above the live crop.
+    expect(result.viewport.originY).toBe(7 + 40 + EXPORT_MARKER_ROW + 30);
+    expect(result.size.height).toBe(200 + 40 + EXPORT_MARKER_ROW + 30);
   });
 });

@@ -4070,7 +4070,20 @@ during a gate pass.
 
 ## 175. The exported diagram has never carried the date marks, and nobody decided that
 
-**Raised 2026-08-22**, established while fixing #148 rather than reported.
+**Raised 2026-08-22**, established while fixing #148 rather than reported. **Closed 2026-08-28**
+(fix-slice M-F): the product owner chose **marks on the axis** over legend-only. The export now
+reserves a marker row under the title band (`EXPORT_MARKER_ROW`, unconditional so the geometry
+never depends on which marks are on) and draws the chips from **the same `axisMarkers` model the
+screen's ruler renders from** — one implementation of culling, coincidence (`Data date · today`),
+clamping and the collision rule, per the ADR-0065 argument that module's docblock makes. The
+legend keeps naming both marks (also the product owner's call). The WBS band moves down with the
+row; `render-export-image.wbs-band.test.ts`'s offset expectation was the one existing assertion
+that legitimately changed, audited rather than accepted. The journey samples the reserved row of
+the decoded PNG and was verified red against a row-reserved-but-undrawn mutation; the printed
+diagram inherits by construction (PrintSurface embeds the same blob). **One correction to this
+row's own framing (spec F9):** the _rules_ always reached the export — what never appeared were
+the _labels_, and there was no axis band for them to sit on; "has never carried the date marks"
+over-read the defect by half a channel.
 
 `export/render-export-image.ts:127` calls `paint(...)`, and `:153` `drawTitleBand` then fills
 `palette.ground` **opaquely** over `(0, 0, width, EXPORT_TOP_BAND)` with `EXPORT_TOP_BAND = 96`

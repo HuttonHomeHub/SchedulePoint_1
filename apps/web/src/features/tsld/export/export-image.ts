@@ -41,6 +41,18 @@ export const EXPORT_PADDING = 32;
  * diagram. `render-export-image.ts` draws into it and the export viewport offsets the diagram below it. */
 export const EXPORT_TOP_BAND = 96;
 
+/**
+ * Reserved marker row (CSS px) under the title band, where the exported picture names its two
+ * persistent date rules — `Data date` and `Today` — the way the screen's ruler does (ADR-0106:
+ * a rule is a scene mark; its label is chrome). 14 px of chip (matching the ruler rows' `h-3.5`)
+ * plus 4 px of breathing space each side. The row is reserved **unconditionally** so the export
+ * geometry does not depend on which marks happen to be on; with both off it is an empty strip
+ * and `drawAxisMarkerRow` draws nothing (the parity case, `render-export-image.test.ts`).
+ * `#175`: before this row the rules always reached the export and their labels never did — the
+ * deliverable asserted two unexplained verticals.
+ */
+export const EXPORT_MARKER_ROW = 22;
+
 /** The live canvas viewport transform + measured surface size, read (never mutated) from the canvas
  * control handle. The `whole` extent reuses only its `pxPerDay`; the `view` extent reuses all of it. */
 export interface LiveViewport {
@@ -60,6 +72,8 @@ export interface BuildExportViewportOptions {
   padding?: number;
   /** Reserved title/legend band height (defaults to {@link EXPORT_TOP_BAND}). */
   topBand?: number;
+  /** Reserved axis-marker row height under the title band (defaults to {@link EXPORT_MARKER_ROW}). */
+  markerRow?: number;
   /**
    * Extra reserved height (CSS px) for the **WBS band** (ADR-0063), when it is on. Reserved here
    * rather than folded into `topBand` because the two strips are different things drawn by
@@ -101,8 +115,11 @@ export function buildExportViewport(
   const maxPx = options.maxPx ?? EXPORT_MAX_PX;
   const padding = options.padding ?? EXPORT_PADDING;
   const topBand = options.topBand ?? EXPORT_TOP_BAND;
-  // Everything reserved above the diagram: the title strip, then the WBS band under it.
-  const reserved = topBand + (options.wbsBandHeight ?? 0);
+  // Everything reserved above the diagram: the title strip, the axis-marker row, then the WBS
+  // band under it — mirroring the screen's vertical order (ruler labels above the band, band
+  // above the scene, ADR-0063/ADR-0106).
+  const reserved =
+    topBand + (options.markerRow ?? EXPORT_MARKER_ROW) + (options.wbsBandHeight ?? 0);
   const { view: liveView, size: liveSize } = options.liveViewport;
 
   let viewport: Viewport;
@@ -122,8 +139,8 @@ export function buildExportViewport(
       originY: reserved + padding,
     };
   } else {
-    // VIEW (and the degenerate WHOLE-with-nothing-placeable case): crop to the live viewport, with the
-    // band reserved above it (the diagram shifts down by `topBand`, preserving the live framing).
+    // VIEW (and the degenerate WHOLE-with-nothing-placeable case): crop to the live viewport, with
+    // everything reserved above it (the diagram shifts down by `reserved`, preserving the framing).
     size = {
       width: Math.max(1, liveSize.width),
       height: reserved + Math.max(1, liveSize.height),
