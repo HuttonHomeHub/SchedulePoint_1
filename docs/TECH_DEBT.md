@@ -5150,6 +5150,13 @@ the real primitive — rather than by reading it. Neither was introduced by rece
 
 ### a. Escape inside a `Menu` or `Combobox` also closed the enclosing modal `<dialog>`
 
+_2026-08-28 (fix-slice M-C): the fix's **third copy** landed. `usePopoverPanel` carried the same
+capture-phase Escape listener with `stopPropagation()` alone — one directory from the two files
+fixed below, unfound because the contract existed three times (#197 item 3's exact argument). It
+now calls `preventDefault()` first, with a unit case red-verified against the stopPropagation-only
+version; the clamp consolidation that fixed it also makes a fourth copy fail
+`overlay-position.structural.test.ts`._
+
 Both primitives owned a capture-phase Escape listener calling `stopPropagation()` and **not**
 `preventDefault()`. `stopPropagation` withholds the key from other **listeners**; a modal
 `<dialog>`'s Escape-to-close is a **default action**, evaluated against `defaultPrevented` once the
@@ -5224,7 +5231,11 @@ is closed by the same epic's M-C._
    `Combobox`, and `usePopoverPanel`. The irony is on the record: `usePopoverPanel` was extracted
    **specifically** to stop this drift and cites ADR-0062's extraction argument, but only
    `ToolbarPopover` was migrated onto it. `#196a` is what that costs: the `preventDefault` fix had
-   to be made in two files, and a third implementation sat one directory away.
+   to be made in two files, and a third implementation sat one directory away. _2026-08-28
+   (fix-slice M-C): the `usePopoverPanel` copy's cost is paid — its Escape handler gained the
+   missing `preventDefault` and its positioning moved onto the shared `overlay-position` leaf. The
+   listener contract itself still exists three times; extracting IT stays this item's remaining
+   half._
 
 All three are ADR-0105 public-contract changes, so each wants a spec note rather than a quiet edit.
 Take them in the order above.
@@ -5453,6 +5464,19 @@ the pair rather than reasoning about it. Raised by the accessibility gate as a s
 ## 203. Two menu-positioning clamps, one now measured and one still guessing
 
 **Raised:** 2026-08-27 (`docs/specs/object-bar-defects/` M2) · **Size:** S · **Owner:** unassigned
+
+_**CLOSED 2026-08-28** (fix-slice M-C, `docs/specs/fix-slice-2026-08/`), both halves. The clamp,
+the measured correction and the top-layer portal target moved verbatim to
+`components/ui/overlay-position.ts` — ONE implementation, with `menu.test.tsx` and
+`ToolbarPopover.test.tsx` passing untouched as the move's oracle and a structural gate (verified
+red naming both old hosts) against the next copy. **(a)**: both `Menu` and the popover now cap
+their height to the space below the clamped top and scroll inside it, `clampAnchor`'s boundary
+arithmetic gained the unit coverage this row asked for (red-verified against two deliberate
+breaks), and the short-viewport pointer sweep in `e2e-toolbar` was verified red against the
+estimate-only clamp. **(b)**: `usePopoverPanel` measures via the shared leaf; `View ▾`'s local
+`max-h-[60vh]` workaround is deleted with its docblock (the arbitrary-value ratchet fell 18 → 17),
+and the adoption also surfaced and fixed #196a's third copy — the Escape handler there still
+lacked `preventDefault`._
 
 `Menu` positioned its portalled panel from a hard-coded `ESTIMATED_HEIGHT = 200` and never measured
 the real box, so a taller menu opened low in the window ran off the viewport and its last item was

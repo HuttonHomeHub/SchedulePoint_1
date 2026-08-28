@@ -1656,10 +1656,10 @@ function CurrentConflictStatus({
 }
 
 /** The checkbox body of the `View▾` popover — grouped into Structure / Markers / Insight overlays
- * (feature-spec.md §4.8), one `<fieldset>` + `<legend>` per non-empty group. `max-h-[60vh]
- * overflow-y-auto` is fixed locally here (not in `ToolbarPopover`, whose `ESTIMATED_HEIGHT` anchor
- * assumed a shorter, ungrouped panel) since the primitive is shared with `Summary` and `Legend`
- * and has no reason to change for this panel's height alone. */
+ * (feature-spec.md §4.8), one `<fieldset>` + `<legend>` per non-empty group. The panel's height
+ * cap and scroll live in `usePopoverPanel` itself since fix-slice M-C (#203) — the local
+ * `max-h-[60vh]` workaround this block used to carry named the estimate-only clamp as its cause,
+ * which stopped being true in the same commit that deleted it. */
 /**
  * The default colour mode (`use-tsld-canvas-ui-state.ts:149`). Named here rather than compared
  * against a literal so the two cannot drift apart silently — a drift that would show up only as the
@@ -1687,7 +1687,7 @@ function viewTriggerLabel(ctx: TsldToolbarContext): string {
 
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   return (
-    <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
+    <div className="flex flex-col gap-3">
       {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
         const keys = viewToggleKeysFor(id, ctx.planView);
         const lenses = lensTogglesIn(id);

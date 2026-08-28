@@ -1,0 +1,59 @@
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+/**
+ * The viewport clamp and the top-layer portal target exist ONCE, in `overlay-position.ts`
+ * (TECH_DEBT #203(b), fix-slice M-C).
+ *
+ * `usePopoverPanel` carried a second, estimate-only copy of the clamp — and #196a's Escape fix
+ * had to be made per copy, with the third copy missed for two days. This gate fails the next
+ * copy: outside the leaf, no source file may declare a `CLAMP_MARGIN` of its own or compute the
+ * viewport-minus-box clamp arithmetic. Comments are stripped before scanning (the recurring
+ * scan-matching-prose hole), and the pinned positive asserts both adopters import the leaf, so
+ * the gate cannot pass vacuously against a world where the leaf vanished (ADR-0093's shape).
+ *
+ * Verified red 2026-08-28 against the pre-extraction tree, where it named `menu.tsx` and
+ * `toolbar/use-popover-panel.tsx`.
+ */
+const WEB_SRC = join(__dirname, '..', '..');
+const LEAF = 'components/ui/overlay-position.ts';
+
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+}
+
+function trackedSourceFiles(): string[] {
+  const out = execFileSync('git', ['ls-files', '--', '*.ts', '*.tsx'], {
+    cwd: WEB_SRC,
+    encoding: 'utf8',
+  });
+  return out.split('\n').filter((f) => f && !f.includes('.test.') && f !== LEAF);
+}
+
+describe('overlay-position owns the viewport clamp', () => {
+  it('no file outside the leaf declares its own clamp', () => {
+    const offenders: string[] = [];
+    for (const file of trackedSourceFiles()) {
+      const source = stripComments(readFileSync(join(WEB_SRC, file), 'utf8'));
+      if (
+        /const CLAMP_MARGIN\s*=/.test(source) ||
+        /window\.innerWidth\s*-\s*\w+\s*-\s*CLAMP_MARGIN/.test(source)
+      ) {
+        offenders.push(file);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('pinned positive: both overlay hosts import the leaf', () => {
+    for (const host of ['components/ui/menu.tsx', 'components/ui/toolbar/use-popover-panel.tsx']) {
+      const source = readFileSync(join(WEB_SRC, host), 'utf8');
+      expect(source, `${host} must import from overlay-position`).toMatch(
+        /from '@\/components\/ui\/overlay-position'/,
+      );
+    }
+  });
+});

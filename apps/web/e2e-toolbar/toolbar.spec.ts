@@ -12,11 +12,12 @@ import { addActivity, onboard, openNewPlan, startEditing } from './support';
  * layout or ADR-0030's, and ADR-0088 D3 retired the flag and deleted the alternative — so this
  * suite now drives the surface every planner gets, unconditionally.
  *
- * Proves the toolbar layout runs end-to-end in a real browser: opening a plan mounts a one-line header + **two** command
- * `role="toolbar"` rows (Look / Do) over a **chromeless, full-height canvas**, with the activities
- * panel **collapsed by default**. Every former chrome band is inline on the two rows (plan actions as
- * icon buttons on Row 2, display toggles in the `View▾` popover) and each row is a roving-tabindex APG
- * widget. It then populates the plan so the frame controls + Project-finish chip light up, exercises an
+ * Proves the toolbar layout runs end-to-end in a real browser: opening a plan mounts the header +
+ * **one** merged command `role="toolbar"` strip (ADR-0109 D1 deleted the two-row Look/Do split this
+ * docblock described until fix-slice M-C corrected it) over a **chromeless, full-height canvas**,
+ * with the activities panel **collapsed by default**. Every former chrome band is inline on the
+ * strip (plan actions as icon buttons, display toggles in the `View▾` popover), which is a
+ * roving-tabindex APG widget. It then populates the plan so the frame controls + Project-finish chip light up, exercises an
  * inline plan action + a popover, drives the collapse/expand focus hand-off, and runs an a11y scan.
  *
  * Wide (desktop) viewport only: the below-`md` single-pane toggle is covered by the component tests;
@@ -146,4 +147,69 @@ test('a planner works a plan in the canvas-maximal toolbar workspace', async ({ 
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);
+});
+
+/**
+ * **Every control in the tallest popover is reachable by pointer at a short viewport** (fix-slice
+ * M-C, TECH_DEBT #203). `usePopoverPanel` clamped against a 320 px ESTIMATE and never measured, so
+ * the grouped `View ▾` panel — far taller than 320 px with a diagram mounted — overflowed the
+ * viewport bottom with its lower checkboxes present in the DOM and pointer-unreachable: the exact
+ * class the row-menu gate in `e2e-wbs` pins one primitive over. The panel now measures itself,
+ * clamps, caps its height to the space below the trigger and scrolls inside — so every control is
+ * reachable after an in-panel `scrollIntoView`, which is what this asserts (a bounding box says
+ * where a control claims to be; only a hit test says whether a pointer arriving there reaches it).
+ *
+ * **Verified red** against the estimate-only clamp (the pre-M-C hook): the sweep named the
+ * Insight-group controls below the fold.
+ */
+test('every control in the View popover is pointer-reachable at a short viewport', async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1280, height: 520 });
+  await onboard(page, Date.now() + 7);
+  await openNewPlan(page);
+  await startEditing(page);
+  await addActivity(page, 'Excavate');
+  await addActivity(page, 'Pour slab');
+  await recalculate(page);
+
+  const lookRow = page.getByRole('toolbar', { name: 'Plan commands' });
+  await lookRow.getByRole('button', { name: 'View', exact: true }).click();
+  const viewPanel = page.getByRole('dialog', { name: 'View' });
+  await expect(viewPanel).toBeVisible();
+
+  const unreachable = await viewPanel.evaluate((panel) => {
+    const controls = [
+      ...panel.querySelectorAll<HTMLElement>('input[type="checkbox"], input[type="radio"]'),
+    ];
+    if (controls.length < 8) {
+      throw new Error(`only ${controls.length} controls — expected the full grouped panel`);
+    }
+    const misses: { label: string; bottom: number; viewportHeight: number }[] = [];
+    for (const el of controls) {
+      el.scrollIntoView({ block: 'nearest' });
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (!(hit != null && (hit === el || el.contains(hit) || hit.contains(el)))) {
+        misses.push({
+          label: el.closest('label')?.textContent?.trim().slice(0, 32) ?? el.id,
+          bottom: Math.round(r.bottom),
+          viewportHeight: window.innerHeight,
+        });
+      }
+    }
+    return misses;
+  });
+
+  expect(
+    unreachable,
+    `controls a pointer cannot reach at 520 px:\n${JSON.stringify(unreachable, null, 2)}`,
+  ).toEqual([]);
+
+  // And the panel itself stayed inside the viewport rather than hanging past it.
+  const box = await viewPanel.boundingBox();
+  if (!box) throw new Error('View panel has no box');
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(520 + 1);
 });

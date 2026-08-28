@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-/** Estimated panel box, to clamp the anchor before the real size is known (mirrors `Menu`). */
-const CLAMP_MARGIN = 8;
+import {
+  CLAMP_MARGIN,
+  clampAnchor,
+  portalTarget,
+  useMeasuredBox,
+} from '@/components/ui/overlay-position';
+
+/** Estimated panel box for the first paint only — the measured correction lands before paint. */
 const ESTIMATED_WIDTH = 288;
 const ESTIMATED_HEIGHT = 320;
 
@@ -18,6 +24,13 @@ const ESTIMATED_HEIGHT = 320;
  * drift **invisibly**: each looks right alone, and only a reader who opens both would ever see one
  * is a version behind (ADR-0062's extraction argument; ADR-0065's `routeOrthogonal`).
  *
+ * **Positioning is the shared `overlay-position` leaf** (fix-slice M-C, TECH_DEBT #203(b)): this
+ * hook used to clamp against an estimate ONLY — it never measured, so a panel taller than 320 px
+ * overflowed the viewport with its lower controls pointer-unreachable, and `View ▾` carried a
+ * local `max-h-[60vh]` workaround naming the estimate as the cause. The panel now measures itself,
+ * clamps against its real box, and caps its height to the space below the clamped top with its own
+ * scroll — so the workaround is deleted and the next tall panel needs none.
+ *
  * **`ToolbarPopover`'s public props are unchanged by the extraction**, which is what makes
  * `ToolbarPopover.test.tsx` the before/after oracle: it passes untouched, or the move was not a move.
  *
@@ -32,7 +45,7 @@ export interface PopoverPanel {
   openPanel: () => void;
   /** Close it; `restoreFocus` returns focus to the trigger (never to a `tabIndex={-1}` caret). */
   close: (restoreFocus: boolean) => void;
-  /** The panel element, portalled to `document.body`, or `null` while closed. */
+  /** The panel element, portalled past any clipping ancestor, or `null` while closed. */
   panel: (label: string, children: React.ReactNode) => React.ReactNode;
 }
 
@@ -50,18 +63,17 @@ export function usePopoverPanel({
 }): PopoverPanel {
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState({ left: 0, top: 0 });
+  /** The trigger's box at open time — position derives from it plus the panel's measured box. */
+  const [triggerBox, setTriggerBox] = useState<{ left: number; right: number; bottom: number }>({
+    left: 0,
+    right: 0,
+    bottom: 0,
+  });
 
   const openPanel = (): void => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const left = align === 'end' ? rect.right - ESTIMATED_WIDTH : rect.left;
-    const maxLeft = Math.max(CLAMP_MARGIN, window.innerWidth - ESTIMATED_WIDTH - CLAMP_MARGIN);
-    const maxTop = Math.max(CLAMP_MARGIN, window.innerHeight - ESTIMATED_HEIGHT - CLAMP_MARGIN);
-    setAnchor({
-      left: Math.min(Math.max(CLAMP_MARGIN, left), maxLeft),
-      top: Math.min(Math.max(CLAMP_MARGIN, rect.bottom + 4), maxTop),
-    });
+    setTriggerBox({ left: rect.left, right: rect.right, bottom: rect.bottom });
     setOpen(true);
   };
 
@@ -69,6 +81,26 @@ export function usePopoverPanel({
     setOpen(false);
     if (restoreFocus) triggerRef.current?.focus();
   };
+
+  // The measured clamp (shared leaf). `align === 'end'` hangs the panel's END from the trigger's
+  // right edge, so the x fed to the clamp depends on the panel's own width — the estimate for the
+  // first paint, the measurement before the browser paints (useMeasuredBox is a layout effect).
+  const box = useMeasuredBox(panelRef, triggerBox, open);
+  const width = box?.width ?? ESTIMATED_WIDTH;
+  const height = box?.height ?? ESTIMATED_HEIGHT;
+  const { left, top } = clampAnchor(
+    { x: align === 'end' ? triggerBox.right - width : triggerBox.left, y: triggerBox.bottom + 4 },
+    width,
+    height,
+  );
+  /**
+   * The panel's height ceiling: the space between its clamped top and the viewport bottom. A panel
+   * taller than that scrolls INSIDE itself (`overflow-y: auto`) instead of running off-screen —
+   * #203(a): a control below the fold in an unscrollable panel is present in the DOM and
+   * unreachable by pointer, the same class the menu's measured clamp fixed one primitive over.
+   */
+  const maxHeight =
+    typeof window === 'undefined' ? undefined : window.innerHeight - top - CLAMP_MARGIN;
 
   // While open: move focus into the panel; Escape / outside-pointer close it, and — since the panel
   // may hold no focusable content (Summary/Legend are static) — **Tab out of it closes it too**,
@@ -80,6 +112,13 @@ export function usePopoverPanel({
     panel?.focus();
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // **Both, and `preventDefault` is the load-bearing one** (#196a, its third copy — the fix
+        // landed in `Menu` and `Combobox` and this file kept only `stopPropagation`).
+        // `stopPropagation` keeps the key from other LISTENERS; a modal `<dialog>`'s
+        // Escape-to-close is a **default action**, checked against `defaultPrevented` after the
+        // whole dispatch finishes, so propagation is irrelevant to it. Without `preventDefault`
+        // one Escape closes this panel AND fires the enclosing dialog's close request.
+        event.preventDefault();
         event.stopPropagation();
         setOpen(false);
         triggerRef.current?.focus();
@@ -120,12 +159,16 @@ export function usePopoverPanel({
             role="dialog"
             aria-label={label}
             tabIndex={-1}
-            style={{ position: 'fixed', left: anchor.left, top: anchor.top }}
-            className="border-border bg-popover text-popover-foreground z-50 max-w-[min(20rem,calc(100vw-1rem))] rounded-md border p-3 shadow-md outline-none"
+            style={{ position: 'fixed', left, top, maxHeight }}
+            className="border-border bg-popover text-popover-foreground z-50 max-w-[min(20rem,calc(100vw-1rem))] overflow-y-auto rounded-md border p-3 shadow-md outline-none"
           >
             {children}
           </div>,
-          document.body,
+          // The shared target (fix-slice M-C): the topmost open modal `<dialog>` when one is open.
+          // No `ToolbarPopover` renders inside a modal today (verified: the deck is not inside
+          // one), so this is latent — fixed for `sheet.tsx`'s stated reason that a convention is
+          // not a property of the primitive.
+          portalTarget(),
         )
       : null;
 
