@@ -166,3 +166,32 @@ product finding, not a test to relax.**
   Three- and four-way interactions are not covered and will not be.
 - **That the sentences above are still true.** `check:playbook` gates the plan ids, not the prose.
   ADR-0058's rule applies: verify the claim, do not trust the document.
+
+---
+
+## The schedule health check (health M1)
+
+`GET …/schedule/health-check` judges how a plan is built — fourteen DCMA metrics over the persisted
+rows. The catalogue is its oracle for eleven of them; the numbers below were measured at M0-T1
+(2026-08-27, `docs/specs/schedule-health-check/m0-measurement.md`) against a freshly seeded,
+API-recalculated database, so a change to either the catalogue or an evaluator shows up as a
+disagreement with this table.
+
+| Metric                       | Plan                                                | Correct                                                                                                                                        | Wrong                                                                                                                                                      |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Missing logic (typed rule) | `plan:fixture-p6-torture-v1`                        | 8 offenders (6 no-pred + 2 no-succ) of 126, with 1 start-milestone + 1 finish-milestone excused and **printed**                                | The excused milestones counted as offenders (the rule went positional), or summaries in the denominator (every well-built plan then fails by construction) |
+| 2 Leads                      | `plan:fixture-p6-torture-v1`                        | 4, judged in **minutes**                                                                                                                       | A sub-day lead missed — the evaluator read the rounded `lagDays`, ADR-0070's defect reborn                                                                 |
+| 3 Lags                       | `plan:fixture-p6-torture-v1`                        | 31 of 188 (16.5 %, FAIL)                                                                                                                       | —                                                                                                                                                          |
+| 4 Types                      | `plan:fixture-p6-torture-v1`                        | FS 143 / SS 25 / FF 17 / SF 3, FS 76 % FAIL, SF named in its offender note                                                                     | Only the FS share reported — a planner fixing this needs to know which type dominates                                                                      |
+| 5 Hard constraints           | `plan:fixture-p6-torture-v1`                        | 7 of 126 (5.6 % — FAIL by 0.6 pp, a real boundary case)                                                                                        | `SNET`/`FNET` counted (they are soft), or a secondary-slot `FNLT` missed                                                                                   |
+| 6 High float                 | `plan:scale-500`                                    | 248 of 500 (49.6 %, FAIL) — a **direct integer comparison**, no unit conversion                                                                | Any conversion applied: `total_float` is already whole working days on the activity's own calendar                                                         |
+| 7 Negative float             | `plan:fixture-p6-torture-v1`                        | 65                                                                                                                                             | —                                                                                                                                                          |
+| 9 Invalid dates              | `plan:fixture-p6-torture-v1`                        | 8 forecast-before-data-date, 0 actual-after — two counts, never one                                                                            | The two halves collapsed into one number                                                                                                                   |
+| 10 Resources                 | `plan:scale-500`                                    | 478 of 478 unassigned, `INFORMATIONAL`, `threshold: null`, narrowing named                                                                     | A pass/fail verdict, or a threshold object on an informational row                                                                                         |
+| 6/7/9 on an unseeded recalc  | `plan:fixture-p6-torture-v1` **before** Recalculate | `NOT_ASSESSABLE / PLAN_NOT_SCHEDULED` — the fixture/scale tiers land **uncalculated** (M0-T1 F-M0-1), so this is the catalogue's resting state | A vacuous PASS on a plan whose engine columns are all NULL                                                                                                 |
+
+**Metrics 11, 13 and 14 have no catalogue plan** — the catalogue captures no baselines (verified
+M0-T1, claim 3) — and are proven by `apps/api/test/schedule-health-check.e2e-spec.ts`, which builds
+the baseline **through the public REST API** (capture → move the data date → report progress) and
+asserts `NO_ACTIVE_BASELINE`, `NOTHING_DUE`, a real BEI ratio and a CPLI with its target source
+named. Metric 12 reports `NOT_ASSESSABLE / REQUIRES_WHAT_IF_ANALYSIS` until M6 computes it.

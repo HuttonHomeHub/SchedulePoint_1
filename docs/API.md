@@ -958,6 +958,22 @@ problem, and saying so discloses nothing about the organisation's contents.
   granularity too fine for the plan's span returns **422**
   (`HISTOGRAM_GRANULARITY_TOO_FINE`); request a coarser one.
 
+- `GET …/schedule/health-check` reads a plan's **DCMA 14-point schedule health
+  report** (health M1, `schedule:read` — every member). A pure read over the
+  persisted definition and CPM columns: **the CPM engine is not invoked**, no lock
+  or transaction is taken, and nothing is written. The `metrics` array is always
+  exactly **14 entries, one per `HealthMetricId`, in ordinal order — never
+  sparse**; a metric that could not be computed is present with
+  `verdict: NOT_ASSESSABLE` and a typed `reason`, never omitted, never a 4xx.
+  The per-metric shape is a documented discriminator on `verdict` (a
+  `NOT_ASSESSABLE` row has `measured: null`, `detail: null`, empty offenders).
+  Thresholds and the offender cap travel **in the payload** — a client never
+  restates either. **The response does not vary by role**: it carries no cost,
+  rate or budget field at any depth (metric 10 is narrowed to
+  resource-assignment existence and says so in `detail.narrowing`), so one URL
+  produces one document — a handover artefact. Shares the global throttle
+  budget (measured: `docs/specs/schedule-health-check/m0-measurement.md`).
+
 ## Authentication
 
 - Cookie-based sessions via Better Auth (secure, http-only, same-site); ADR-0003.

@@ -208,6 +208,12 @@ export const scheduleKeys = {
   // sweep it too (dates move EV's PV/EV).
   earnedValue: (orgSlug: string, planId: string) =>
     [...scheduleKeys.all(orgSlug), 'plan', planId, 'earned-value'] as const,
+  // The DCMA health-check read-model (health M1): a pure GET over the persisted rows, keyed under
+  // the schedule namespace DELIBERATELY — the recalculation already invalidates
+  // `scheduleKeys.all(orgSlug)` (use-schedule.ts), so a recalc sweeps this report with no new
+  // invalidation site to forget. Found by grepping the existing sites, not by adding one (M2-T1).
+  health: (orgSlug: string, planId: string) =>
+    [...scheduleKeys.all(orgSlug), 'plan', planId, 'health-check'] as const,
   // The resource-loading histogram read-model (M7 rung 5, ADR-0044 §3): a pure GET over the live
   // schedule + resource assignments, keyed under the same schedule namespace as the summary so a
   // recalc's schedule invalidation sweeps it too (dates move each assignment's units-over-time).

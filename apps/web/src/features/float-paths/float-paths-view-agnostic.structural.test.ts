@@ -30,7 +30,13 @@ describe('features/float-paths is view-agnostic', () => {
   it('imports nothing from the TSLD renderer', () => {
     // If it did, opening the panel in the Gantt would pull in a canvas module — and worse, the
     // temptation to reach for `centerOnDate` directly, which is null whenever the Gantt is showing.
-    // The one seam both views share is `ctx.goToActivity`, owned by the workspace.
+    // The one seam both views share is the workspace's selection lift —
+    // `canvasUi.requestSelectActivity(id)` + `model.onSelectionChange(id)`
+    // (`plan-workspace-toolbar.tsx`, the panel's `onActivateActivity` wiring). This comment named
+    // it `ctx.goToActivity` from its first commit, and a repository-wide grep returned that
+    // comment and nothing else: the seam was real, the name was not (corrected at health M3-T4 —
+    // noticing drift and stepping over it leaves the file exactly as wrong as not noticing,
+    // ADR-0071).
     const offenders = sourceFiles(FEATURE_DIR).filter((path) =>
       /from '@\/features\/tsld/.test(readFileSync(path, 'utf8')),
     );

@@ -10,6 +10,7 @@ import { PlanDialogs } from './plan-dialogs';
 import { PlanFactsProvider } from './plan-facts-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
+import { docksToClose, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
   PANEL_MAX_HEIGHT,
@@ -78,6 +79,12 @@ import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
 import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
+import {
+  HEALTH_PANEL_MIN_WIDTH,
+  ScheduleHealthPanel,
+  useScheduleHealth,
+  useScheduleHealthPanelPrefs,
+} from '@/features/schedule-health';
 import { TsldPanel, barDateSourceFor } from '@/features/tsld';
 import { EditConflictBanner } from '@/features/tsld/components/EditConflictBanner';
 import { type LensLegendInfo } from '@/features/tsld/components/TsldLegend';
@@ -172,14 +179,46 @@ export function ToolbarPlanWorkspace({
   // section isn't mounted (the responsive single-pane toggle / `VITE_NOTES` off), so it never throws.
   const notesHeadingRef = useRef<HTMLHeadingElement>(null);
   const setNotesOpen = model.setNotesOpen;
+  // The docked Health check panel (health M2) — ephemeral open state, owned here like the other
+  // right docks. No VITE_ flag (ADR-0088 D1): the rollback is a commit boundary.
+  const [healthOpen, setHealthOpen] = useState(false);
+  // The health panel's Gantt reveal channel (M3-T2): the offender the planner last pressed. An
+  // EVENT lifted into state, because the Gantt's scroll + ancestor-expand hang off
+  // `bringIntoViewActivityId` and the two existing sources (search nav, float paths) are standing
+  // states a health activation satisfies neither of — without this, pressing an offender in the
+  // Gantt moves the selection and reveals nothing. Cleared when the dock closes, so the standing
+  // sources resume.
+  const [healthRevealId, setHealthRevealId] = useState<string | null>(null);
+  // **One closure over the set** (health M2-T2 step 7): each dock's closer, keyed by the member
+  // name, and `closeOtherDocks` derives what to close from `docksToClose` — so a fourth dock is one
+  // map entry, never six hand-written statements of which five get written. Defined above every
+  // opener so each can call it; reads the model's closers directly, which are stable.
+  const modelFloatPathsClose = model.floatPaths.close;
+  const closeDockOf: Record<RightDock, () => void> = useMemo(
+    () => ({
+      notes: () => setNotesOpen(false),
+      floatPaths: modelFloatPathsClose,
+      health: () => {
+        setHealthOpen(false);
+        setHealthRevealId(null);
+      },
+    }),
+    [setNotesOpen, modelFloatPathsClose],
+  );
+  const closeOtherDocks = useCallback(
+    (opening: RightDock) => {
+      for (const dock of docksToClose(opening)) closeDockOf[dock]();
+    },
+    [closeDockOf],
+  );
   const revealComments = useCallback(() => {
     // Entry-route win 1 (`VITE_ENTRY_ROUTES`): the Comments button is a genuine TOGGLE for the docked
     // notes panel (open when closed, close when open) — the panel docks in the layout below and pushes
     // the canvas, never overlays. Flag-off keeps the original behaviour — scroll the inline notes
     // heading into view + focus it.
     if (ENTRY_ROUTES_ENABLED) {
-      // The other half of the one-dock-at-a-time rule: revealing Comments closes Float paths.
-      model.floatPaths.close();
+      // One-dock-at-a-time, derived from the SET (right-docks.ts) — never a hand-written pair.
+      closeOtherDocks('notes');
       setNotesOpen((open) => !open);
       return;
     }
@@ -189,7 +228,7 @@ export function ToolbarPlanWorkspace({
     // `features/plan-lock/lib/use-pen-lock-view.ts`, which omits `behavior` deliberately).
     el?.scrollIntoView({ block: 'start' });
     el?.focus();
-  }, [setNotesOpen, model.floatPaths]);
+  }, [setNotesOpen, closeOtherDocks]);
   // **The right edge holds one dock at a time** (audit F4). Notes and Float paths are both docked
   // right columns, and each reserves `CANVAS_MIN_WIDTH` for the diagram only as a best-effort floor
   // (see `notesEffectiveMax` below) — two of them plus the Project Explorer rail on a 1280 px screen
@@ -230,15 +269,36 @@ export function ToolbarPlanWorkspace({
     // The ladder already refuses the no-selection case, so this is a guard rather than a branch a
     // planner reaches: a target is required, never inferred (CQ-2).
     if (floatPathsSelectedId === null) return;
-    setNotesOpen(false);
+    closeOtherDocks('floatPaths');
     openFloatPathsWith(floatPathsSelectedId);
   }, [
     floatPaths.open,
     closeFloatPathsAndFocus,
     openFloatPathsWith,
     floatPathsSelectedId,
-    setNotesOpen,
+    closeOtherDocks,
   ]);
+
+  // Close the health dock AND return focus — the Float-paths rule verbatim: the menu item that
+  // opened this unmounts with its menu, so the stable ancestor (`analysis`, else the deck's `⋯`)
+  // is the honest destination (WCAG 2.4.3).
+  const closeHealthAndFocus = useCallback(() => {
+    setHealthOpen(false);
+    setHealthRevealId(null);
+    const target =
+      document.querySelector<HTMLElement>('[data-toolbar-item="analysis"]') ??
+      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
+    target?.focus();
+  }, []);
+
+  const toggleHealthCheck = useCallback(() => {
+    if (healthOpen) {
+      closeHealthAndFocus();
+      return;
+    }
+    closeOtherDocks('health');
+    setHealthOpen(true);
+  }, [healthOpen, closeHealthAndFocus, closeOtherDocks]);
 
   // The view switch is router-backed, so the workspace (which is inside the router) owns it and
   // passes it down — exactly like `legend` and `revealComments`. Keeping `useNavigate` out of the
@@ -306,6 +366,7 @@ export function ToolbarPlanWorkspace({
     minimap: { open: minimap.open, toggle: minimap.toggle },
     revealComments,
     toggleFloatPaths,
+    toggleHealthCheck,
     planView,
     setPlanView,
     barDateSource,
@@ -446,6 +507,28 @@ export function ToolbarPlanWorkspace({
     (next: number) => floatPathsPrefs.setSize(Math.min(next, floatPathsEffectiveMax)),
     [floatPathsPrefs, floatPathsEffectiveMax],
   );
+
+  // The Health check dock — the third member of the right-dock set, on the same shared resizable
+  // prefs with its own storage key and its own DERIVED width floor (see the prefs docblock).
+  const healthPrefs = useScheduleHealthPanelPrefs();
+  const healthDockActive = healthOpen;
+  const healthEffectiveMax = Math.min(
+    NOTES_PANEL_MAX_WIDTH,
+    Math.max(HEALTH_PANEL_MIN_WIDTH, bodyWidth - CANVAS_MIN_WIDTH),
+  );
+  const healthWidth = Math.min(healthPrefs.size, healthEffectiveMax);
+  const healthPointerToSize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
+    [],
+  );
+  const onHealthResize = useCallback(
+    (next: number) => healthPrefs.setSize(Math.min(next, healthEffectiveMax)),
+    [healthPrefs, healthEffectiveMax],
+  );
+  // Enabled-gated on the panel being open, so a closed panel costs nothing — and keyed under the
+  // schedule namespace, so the recalculation's existing invalidation sweeps it.
+  const health = useScheduleHealth(model.orgSlug, model.planId, healthDockActive);
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -998,11 +1081,18 @@ export function ToolbarPlanWorkspace({
           // because "whichever is set" is not a rule, it is an accident that only shows up when both
           // are on at once.
           emphasisIds={ganttEmphasisIds}
-          {...(searchNavActive && ctx.currentMatchId !== null
-            ? { bringIntoViewActivityId: ctx.currentMatchId }
-            : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
-              ? { bringIntoViewActivityId: model.selectedActivityId }
-              : {})}
+          {...(healthDockActive && healthRevealId !== null
+            ? // A health-offender press outranks both standing sources while its dock is open: it
+              // is the planner's NEWEST explicit instruction, where search nav and float paths are
+              // standing states that may have been set minutes ago. Cleared when the dock closes,
+              // so this cannot go stale over the other two — the "whichever is set is an accident"
+              // trap the comment above warns about, answered in writing for the third source.
+              { bringIntoViewActivityId: healthRevealId }
+            : searchNavActive && ctx.currentMatchId !== null
+              ? { bringIntoViewActivityId: ctx.currentMatchId }
+              : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
+                ? { bringIntoViewActivityId: model.selectedActivityId }
+                : {})}
         />
         {/*
           The object-action bar, in the Gantt (M1). `CanvasDock` portals it into the Activities
@@ -1119,6 +1209,31 @@ export function ToolbarPlanWorkspace({
         canvasUi.requestSelectActivity(activityId);
         model.onSelectionChange(activityId);
       }}
+    />
+  ) : null;
+
+  // The Health check dock's content (health M2). One `onActivateActivity` for both views — the
+  // host lifts the selection and each view reveals it its own way (the Float-paths shape; the
+  // Gantt reveal seam is M3's subject). Remedies are offered only to a caller who holds them
+  // (ADR-0082): Recalculate needs `canRecalc`; opening Baselines to capture one needs `canWrite`.
+  const healthDockContent = healthDockActive ? (
+    <ScheduleHealthPanel
+      report={health.data ?? null}
+      isPending={health.isPending}
+      isError={health.isError}
+      onRetry={() => void health.refetch()}
+      onClose={closeHealthAndFocus}
+      {...(model.canRecalc ? { onRecalculate: () => ctx.recalculate() } : {})}
+      {...(model.canWrite ? { onOpenBaselines: () => setDialog('baselines') } : {})}
+      onActivateActivity={(activityId) => {
+        canvasUi.requestSelectActivity(activityId);
+        model.onSelectionChange(activityId);
+        // The Gantt half of the reveal (M3-T2) — selection alone scrolls nothing there.
+        setHealthRevealId(activityId);
+      }}
+      filterActive={
+        canvasUi.lensState.filterQuery !== '' || canvasUi.lensState.filterAttrs.size > 0
+      }
     />
   ) : null;
 
@@ -1619,6 +1734,28 @@ export function ToolbarPlanWorkspace({
                   </>
                 ) : null}
 
+                {healthDockActive ? (
+                  <>
+                    <PanelResizer
+                      orientation="vertical"
+                      size={healthWidth}
+                      min={HEALTH_PANEL_MIN_WIDTH}
+                      max={healthEffectiveMax}
+                      label="Resize health check panel"
+                      onResize={onHealthResize}
+                      pointerToSize={healthPointerToSize}
+                      reverseKeys
+                      className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                    />
+                    <div
+                      style={{ width: healthWidth }}
+                      className="border-border bg-card shrink-0 border-l"
+                    >
+                      {healthDockContent}
+                    </div>
+                  </>
+                ) : null}
+
                 {notesDockActive ? (
                   <>
                     <PanelResizer
@@ -1642,6 +1779,12 @@ export function ToolbarPlanWorkspace({
                     </div>
                   </>
                 ) : null}
+              </div>
+            ) : healthDockActive ? (
+              // Narrow: a right dock doesn't fit — Health check takes the single pane, exactly as
+              // Float paths and notes do beside it (the one-pane-at-a-time narrow philosophy).
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {healthDockContent}
               </div>
             ) : floatPathsDockActive ? (
               // Narrow: a right dock doesn't fit — Float paths takes the single pane, exactly as notes

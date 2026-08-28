@@ -21,6 +21,7 @@ import { ParseUuidPipe } from '../../common/validation/uuid';
 import { FloatPathsQueryDto } from './dto/float-paths-query.dto';
 import { PlanEarnedValueDto } from './dto/plan-earned-value.dto';
 import { PlanFloatPathsDto } from './dto/plan-float-paths.dto';
+import { ScheduleHealthReportDto } from './dto/plan-health-check.dto';
 import {
   ResourceHistogramMetaDto,
   ResourceHistogramSeriesDto,
@@ -151,6 +152,40 @@ export class ScheduleController {
   ): Promise<PlanFloatPathsDto> {
     return PlanFloatPathsDto.from(
       await this.service.floatPaths(principal, orgSlug, planId, query.target, query.maxPaths),
+    );
+  }
+
+  @Get('health-check')
+  @ApiOperation({
+    summary: 'The plan’s DCMA 14-point schedule health check (any member, health M1).',
+    description:
+      'A pure read over the persisted definition and CPM columns — **the CPM engine is not ' +
+      'invoked** (contrast float-paths, which recomputes per call), no lock or transaction is ' +
+      'taken, and nothing is written. **The response does not vary by role**: it carries no cost, ' +
+      'rate or budget field at any depth, so cost:read changes nothing and one URL produces one ' +
+      'document — which is what makes it a handover artefact. Metric 10 (Resources) is ' +
+      'deliberately narrowed to resource-assignment existence for the same reason, and says so in ' +
+      'its detail.narrowing. The metrics array is always exactly 14 entries, one per ' +
+      'HealthMetricId, in ordinal order — never sparse; a metric that could not be computed is ' +
+      'present with verdict NOT_ASSESSABLE and a reason, never omitted.',
+  })
+  @ApiOkResponse({ type: ScheduleHealthReportDto })
+  @ApiTooManyRequestsResponse({
+    description:
+      'Rate limited by the global budget (100 requests / 60 s per IP). This route is a persisted ' +
+      'read — it runs no CPM computation — so it shares the generic read budget with the schedule ' +
+      'summary and the Earned-Value read rather than earning a tighter one. Measured at both ' +
+      'scales (M0-T2 at 500 activities; the M5 gate pass at 2,000 — all four loads sub-1 ms, ' +
+      'independently re-derived by the security review): see ' +
+      'docs/specs/schedule-health-check/m0-measurement.md §M0-T2.',
+  })
+  async healthCheck(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<ScheduleHealthReportDto> {
+    return ScheduleHealthReportDto.from(
+      await this.service.getHealthCheck(principal, orgSlug, planId),
     );
   }
 

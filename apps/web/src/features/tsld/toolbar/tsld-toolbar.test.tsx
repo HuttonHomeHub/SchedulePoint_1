@@ -58,6 +58,7 @@ const spies = {
   editPlan: vi.fn(),
   openShortcuts: vi.fn(),
   toggleLegend: vi.fn(),
+  toggleHealthCheck: vi.fn(),
 };
 
 function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
@@ -75,6 +76,7 @@ function ctx(over: Partial<TsldToolbarContext> = {}): TsldToolbarContext {
     editPlan: spies.editPlan,
     openShortcuts: spies.openShortcuts,
     toggleLegend: spies.toggleLegend,
+    toggleHealthCheck: spies.toggleHealthCheck,
     ...over,
   });
 }
@@ -230,6 +232,16 @@ describe('TSLD toolbar registry (two-row)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Baselines…' }));
     expect(spies.openBaselines).toHaveBeenCalledOnce();
+  });
+
+  it('drives the health-check toggle from the Analysis trigger (health M2)', () => {
+    // The Baselines case's sibling — this menu item is the report's ONLY entry point (ADR-0081:
+    // a capability with no asserted entry point is how W5 shipped a dark milestone), added on an
+    // M5 component-review finding.
+    renderRows(ctx());
+    fireEvent.click(screen.getByRole('button', { name: 'Analysis' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Health check…' }));
+    expect(spies.toggleHealthCheck).toHaveBeenCalledOnce();
   });
 
   it('has no standalone Plan-details or Edit-plan toolbar buttons (folded into Summary)', () => {

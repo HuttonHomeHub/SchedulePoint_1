@@ -5258,3 +5258,58 @@ from the M0 enumeration and from memory rather than from `LENS_TOGGLES`, which i
 one step upstream of a document: a decision-bearing claim asserted without checking, inside a
 question put to somebody else. No code defect; recorded because the rule §19.11 states is about
 claims in documents and this was a claim in a **choice**, and nothing currently covers that.
+
+## 205. A double-seeded fixture cannot recalculate, and the engine's horizon guard is an untyped 500
+
+**Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Size:** S + S · **Owner:** api
+
+Two defects sharing one reproduction, found while seeding the catalogue for the health-check
+measurement and filed rather than absorbed, because neither is in that epic's scope.
+
+**Repro:** seed `--tier fixture` twice into the same project (the second run reuses the plan —
+same seed name), then `POST …/schedule/recalculate`. The response is `500 INTERNAL_ERROR`; the log
+shows the engine's working-time horizon guard, `addWorkingTime exceeded the working-time horizon
+(no reachable minute)`, thrown from `engine/working-time` (the ADR-0036 N11/N16 cap). A fresh
+single-seeded fixture recalculates cleanly (200 in 74 ms, 147 activities), so the trigger is
+the second seed pass, not the fixture.
+
+**(a) The fixture seed path is not re-runnable.** The second run's calendar writes leave a
+working-time state the walker cannot traverse. Either the seeder should refuse a plan it already
+seeded, or the second pass should converge to the same state as the first. Until then, "re-run the
+seed" — the obvious recovery for a half-seeded catalogue — can quietly break the one plan the
+playbook calls the realistic-load oracle.
+
+**(b) The horizon guard reaches the client as an unhandled 500.** ADR-0071 set the pattern:
+_"the engine's own guard is a typed error and a 422, not a 500."_ This guard predates that ruling
+and was never converted. A planner who authors a calendar with no reachable working minute — which
+ADR-0067's Window-only preset makes authorable — and then recalculates meets a bare
+`INTERNAL_ERROR` with no words about the calendar. The fix is the ADR-0071 shape: a typed engine
+error mapped to 422 with the calendar named.
+
+## 206. Health-check review suggestions consciously not folded at the M5 gate pass
+
+**Raised:** 2026-08-28 (schedule-health-check M5-T1) · **Size:** S ×5 · **Owner:** web
+
+The M5 gate pass blocked on findings that were all folded (token pairing, NoticeStrip reuse,
+provenance on screen, the Viewer role sentence, `aria-describedby`, the announcement's four
+counts, the G4 regex holes, the 429 citation). Five suggestions were judged real and deferred
+rather than quietly dropped:
+
+- **The footer's "Next conflict" mention is prose, not a control.** The spec said the report
+  "links to the conflict review"; the shipped footer names it. Wiring a button means handing the
+  panel the conflict-navigation command, which lives on the toolbar context — a seam the panel
+  deliberately does not hold today.
+- **Rich per-metric `detail` is computed and never rendered** — the missing-logic
+  predecessor/successor split, the relationship-type breakdown, metric 9's forecast/actual split,
+  CPLI's target source and date, BEI's due/completed counts. The expanded row is the obvious
+  home; M6 (which touches metric 12's row) is the natural vehicle.
+- **The printed document names the plan but not the organisation or project** — a submission-pack
+  page with two plans named "Phase 1" from different projects is ambiguous. The Gantt programme
+  shares the gap; fix both from one header convention.
+- **Two real-AT listens owed** (the M5 accessibility review's S2/S9): the disclosure's
+  concatenated "name Verdict" accname, and the offender press speaking its own announcement a
+  beat before the canvas listbox's `aria-activedescendant` speech — both fine on paper, neither
+  yet heard in VoiceOver/NVDA. The #154 shape.
+- **`VerdictBadge` hand-rolls a coloured span where `Badge` exists** — the spec named the
+  `EarnedValuePanel` precedent; the hand-rolled path is also where the `text-destructive` token
+  slip happened, which is the argument for the primitive.
