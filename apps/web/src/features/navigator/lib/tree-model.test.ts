@@ -110,6 +110,21 @@ describe('treeKeydown', () => {
     expect(treeKeydown(' ', leaf)).toBe('activate');
   });
 
+  /**
+   * **Space mirrors the ROW's click; Enter mirrors the NAME's** (`docs/TECH_DEBT.md` #143,
+   * §19.13 gate 2026-08-28). When #143 made `activate` navigate for every kind, Space silently
+   * inherited it — so the key that most closely stands in for "click the thing I'm sitting on"
+   * navigated a reader away from the Explorer where the row's own click toggles. Verified red
+   * against that state: Space on an expandable row returned 'activate'.
+   */
+  it('Space toggles a container and activates a leaf, mirroring the row click', () => {
+    expect(treeKeydown(' ', { expandable: true, expanded: false })).toBe('expand');
+    expect(treeKeydown(' ', { expandable: true, expanded: true })).toBe('collapse');
+    expect(treeKeydown(' ', { expandable: false, expanded: false })).toBe('activate');
+    // Enter is the name's click on every kind — the two keys deliberately differ on a container.
+    expect(treeKeydown('Enter', { expandable: true, expanded: false })).toBe('activate');
+  });
+
   it('expands, enters, collapses, and moves to parent per the APG keymap', () => {
     expect(treeKeydown('ArrowRight', { expandable: true, expanded: false })).toBe('expand');
     expect(treeKeydown('ArrowRight', { expandable: true, expanded: true })).toBe('firstChild');

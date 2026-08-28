@@ -69,10 +69,11 @@ function targetOf(node: TreeNodeData): NodeActionTarget {
  * flattened visible rows from {@link useHierarchyTree}, **virtualized** so it stays
  * cheap at org scale. A single tab stop with roving `tabindex`; the WAI-ARIA APG
  * keymap (↑/↓, ←/→ expand-collapse-or-move, Home/End, Enter/Space) drives it.
- * **Every kind navigates** (`docs/TECH_DEBT.md` #143): Enter/Space and a click on the
- * row's NAME open that node's own screen (client/project detail, or the plan onto the
+ * **Every kind navigates** (`docs/TECH_DEBT.md` #143): Enter and a click on the row's
+ * NAME open that node's own screen (client/project detail, or the plan onto the
  * canvas — the URL stays the source of truth), while a click elsewhere on a container
- * row still toggles expansion, and ←/→ keep the APG expand/collapse contract. This
+ * row still toggles expansion — and **Space mirrors the row's click** (toggle on a
+ * container, navigate on a leaf; §19.13 gate), with ←/→ keeping the APG contract. This
  * paragraph said "folders only expand" until 2026-08-28 — written before the client and
  * project detail screens existed, and never revisited when they landed.
  * ARIA `setsize`/`posinset` come from the full model, and the focused/selected node is

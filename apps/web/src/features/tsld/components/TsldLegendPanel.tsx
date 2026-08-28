@@ -6,6 +6,7 @@ import type { LegendPanelPosition } from '../toolbar/use-legend-panel-prefs';
 import { TsldLegend, type LensLegendInfo } from './TsldLegend';
 
 import { Button } from '@/components/ui/button';
+import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
 
 export interface TsldLegendPanelProps {
@@ -171,7 +172,15 @@ export function TsldLegendPanel({
         </Button>
       </div>
       <div className="px-2.5 py-2">
-        <TsldLegend orientation="vertical" {...(lens ? { lens } : {})} />
+        {/* The key describes the DIAGRAM, so its swatch `var()` reads must resolve the canvas
+            scope's plot values — the same tokens the painter reads — not the page family this
+            floating card otherwise sits in (`docs/TECH_DEBT.md` #162; the guest view's legend
+            was scoped at ADR-0102 D5 and this one was not, found by the §19.13 gate).
+            `className="contents"` generates no box: colour correction only, and the card's own
+            chrome (popover ground, heading, close) deliberately stays page-scoped. */}
+        <Surface tone="canvas" className="contents">
+          <TsldLegend orientation="vertical" {...(lens ? { lens } : {})} />
+        </Surface>
       </div>
     </div>
   );

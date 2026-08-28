@@ -3355,6 +3355,18 @@ describes.
 (ADR-0102 D5) and this one swatch still cannot follow, because the token it names was never part of
 the family. Naming `--primary` is the fix; the wrapper is not.
 
+**Correction, same day (§19.13 gate):** "the legend is now correctly scoped" was true of the
+**guest view's** legend only — ADR-0102 D5's wrapper sits in `TsldPanel`'s `!chromeless` branch,
+and the authenticated workspace renders the floating `TsldLegendPanel` as a **sibling** of the
+canvas surface, outside any `[data-surface="canvas"]` element. So in the workspace every swatch
+`var()` resolved the PAGE family while the painter draws the PLOT family — the token rename alone
+would have swapped an invisible swatch for a wrong-hued one. The panel's key now takes the same
+`Surface tone="canvas" className="contents"` wrapper (the `TsldPanel.tsx:2522` precedent), pinned
+by a structural seam test verified red against the unwrapped panel; the card's own chrome stays
+page-scoped deliberately. The mechanism is the validated one — the swatches read `--primary`
+directly (custom properties inherit through the rebind), not the frozen `@theme inline` aliases
+that defeated the painter in ADR-0102.
+
 ## 163. The print palette is a surface family truncated to three members **(CLOSED 2026-08-22)**
 
 **Raised 2026-08-21** (the TECH_DEBT #158 deferred review, reached independently by the
