@@ -3657,7 +3657,12 @@ to the default picture rather than crashing an export — and because that toler
 set end-to-end into the scene `renderExportImage` receives. The five entries left `SCREEN_ONLY`,
 which turned the parity gate into the red-first proof: it named exactly the five missing keys
 against the pre-fix composer. Interaction state (selection, hover, drags) stays screen-only —
-a delivered picture has no cursor.
+a delivered picture has no cursor. **One suggestion from the phase's ux gate is filed rather than
+built**: the Export menu gives no cue that an active lens will shape the deliverable (its copy is
+static whichever picture is about to be produced), so a planner isolating a subnetwork for their
+own analysis could hand a client the isolated picture unreminded. Defensible as-is — the behaviour
+matches US-2's own contract and lens state is session-local, never persisted — so an export-menu
+indicator is a design-pass item, not a correctness fix.
 
 #164 restored the seven layers the export never composed. **Five more keys it does not compose are
 lens state**, and they are a different question: not "a layer nobody wired up" but "whose picture is
@@ -3902,7 +3907,11 @@ its containers and only the docked `ExplorerColumn` got one — `Sheet` is `bg-t
 design, so below `lg` the Explorer painted its rows straight over the page (measured in Chromium:
 dialog and nav both `rgba(0, 0, 0, 0)`), while the rail's own docblock claimed the Sheet owned
 the scope. Fixed at the call site with the `ExplorerColumn` pattern, pinned red-first in
-`app-shell.test.tsx`. The run also corrected the journey's own first draft: creating the plan at
+`app-shell.test.tsx` — and the phase's ux gate caught that sentence overclaiming: the first fix
+copied only the GROUND half of the pattern, omitting the `border-border border-r` trailing edge
+every `panel`-tone consumer carries, so the panel's edge faded into the scrim. Both halves now
+applied — the claim matches the code because the code was finished, not because the sentence was
+softened (ADR-0076). The run also corrected the journey's own first draft: creating the plan at
 a wide viewport auto-expands the path to it (reveal-on-create persists per organisation), so a
 blind container click COLLAPSES the branch — the spec now reads `aria-expanded` before clicking,
 with the reason recorded in the file.

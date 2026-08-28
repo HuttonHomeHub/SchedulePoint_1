@@ -539,7 +539,17 @@ function ShellFrame(): React.ReactElement {
                   // `rgba(0, 0, 0, 0)`), unnoticed because no journey had ever run below `lg`.
                   // The rail's own docblock said "the container owns the scope: the drawer at
                   // `lg`+, and the `Sheet` below it" — describing the intent, not the code.
-                  <Surface tone="panel" className="flex h-full min-h-0 flex-col">
+                  //
+                  // `border-r` as well as the ground: every `panel`-tone consumer pairs the
+                  // Surface with a trailing-edge border (`explorer-column.tsx` both states,
+                  // `context-drawer.tsx`), and the first version of this fix copied only the
+                  // ground half — the panel's trailing edge faded into the scrim with no defined
+                  // boundary while the closure note claimed the ExplorerColumn pattern whole
+                  // (ux gate, 2026-08-28).
+                  <Surface
+                    tone="panel"
+                    className="border-border flex h-full min-h-0 flex-col border-r"
+                  >
                     <NavigatorRail
                       orgSlug={orgSlug}
                       expansion={expansion}
