@@ -2089,6 +2089,21 @@ what `RUN_CAP` exists for.
 
 ## 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
+**Captured and diagnosed 2026-08-28 (reconciliation pass), and the mechanism explains why every
+prior occurrence destroyed its own evidence.** The full log (kept, per this row's instruction)
+shows `activities.e2e-spec.ts` failing **all 45 tests in `beforeEach`** on
+`resource_assignments_activity_id_fkey`: a leftover assignment row — left in the shared `app_test`
+by an external writer (a Playwright journey, or an aborted earlier run) — and **twenty** specs
+swept `activities` without sweeping `resource_assignments` first, the #119 defect one table along,
+in the same files whose comments record the class. The fails-once-passes-on-re-run signature now
+has a cause: `fileParallelism: false` runs the files in sequence, and a LATER suite in the failed
+run (`calendar-scope` and its siblings do sweep assignments) deletes the poison — so the re-run is
+clean and the evidence is gone, which is why three sessions of re-runs never caught it. All twenty
+specs now sweep `resourceAssignment` + `resource` before `activity` (one shared comment naming
+this occurrence). The concurrent-two-runs hazard below is untouched and stays filed; whether the
+2026-08-10 `staff.e2e-spec.ts` occurrences were this mechanism is **not claimed** — their logs
+were never kept, which is the point of this row.
+
 **Occurrence 2026-08-28 (correctness programme), and the capture failed for a recordable reason.**
 A full `scripts/e2e-local.sh api` run reported **74 failed across 2 files** (one identified:
 `test/interchange.e2e-spec.ts:347`; the other unknown), and an immediate re-run of the SAME
@@ -4371,6 +4386,8 @@ then be changing underneath the citations it is checking.
 
 ## 182. Three base-journey sign-up specs sit close enough to a 5 s timeout that Firefox tips under load
 
+_A second, em-dash-styled row briefly shared this number (the deck's folded groups); it is now **#207**._
+
 _Found 2026-08-23, on the Better Auth 1.7 release (#176 / ADR-0107). Filed because a green re-run
 proves the failure is not **deterministic**, not that the tests are not **marginal** — and the
 evidence for that distinction only exists while somebody has just looked at it._
@@ -4434,6 +4451,8 @@ re-run.
 
 ## 183. `check:claims` cannot see a camelCase basename in its colon form
 
+_A second, em-dash-styled row briefly shared this number (API-seeding journeys); it is now **#208**._
+
 _Found 2026-08-23 by the `ui-architect` while designing the unsaved-work guard, and confirmed here._
 
 `scripts/check-claims.mjs`'s colon-form citation pattern is case-sensitive lowercase, so a citation
@@ -4458,6 +4477,8 @@ carries no version) — three holes in one gate, all found by using it rather th
 ---
 
 ## 184. Unsaved-work guard: the findings its gate pass did not block on
+
+_A second, em-dash-styled row briefly shared this number (the bulk-delete focus race); it is now **#209**._
 
 _Triage 2026-08-28 (Phase 4): re-filed consciously. The CONFIRM-path focus gap is the register's
 own words — "a systemic router gap… worth its own look at where focus should land after any route
@@ -4516,7 +4537,11 @@ not change — so something other than this guard reverts the pop. Recorded rath
 
 ---
 
-## #182 — The deck's folded groups are unreachable by any journey
+## #207 — The deck's folded groups are unreachable by any journey
+
+_Renumbered from #182 on the 2026-08-28 reconciliation pass: the number collided with the
+dot-style row `## 182.` filed the same week, and a register whose ids are ambiguous fails at its
+one job. Every reference that meant THIS row now says #207._
 
 _Filed 2026-08-24 with ADR-0109 M2._ **CLOSED 2026-08-25 (ADR-0110 M4).**
 **The subject itself was then REMOVED (workspace visual polish, 2026-08-28):** the deck's fold went
@@ -4553,7 +4578,9 @@ Cost: one journey that folds a group, tabs through the strip, and unfolds it.
 
 ---
 
-## #183 — A journey that seeds through the API must tell the client itself
+## #208 — A journey that seeds through the API must tell the client itself
+
+_Renumbered from #183 on the 2026-08-28 reconciliation pass (the #207 note explains why)._
 
 _Filed 2026-08-24 with ADR-0109 M5, from the estate sweep._
 
@@ -4586,7 +4613,9 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 
 ---
 
-## #184 — The bulk-delete focus restoration is a race, and it failed once under load
+## #209 — The bulk-delete focus restoration is a race, and it failed once under load
+
+_Renumbered from #184 on the 2026-08-28 reconciliation pass (the #207 note explains why)._
 
 _Filed 2026-08-24 with ADR-0109 M5 as **not reproduced**. **Closed the same day, reproduced under
 load and hardened** — the update is below._
@@ -4858,8 +4887,8 @@ the horizontal keys and the line keys and nothing else, so the vertical arrows s
 and are the route out. `<textarea>`, `<select>` and contenteditable genuinely navigate with the
 vertical arrows, so for those the veto stays total.
 
-**Two things about how it was found are worth more than the fix.** It was found by the `#182`
-journey — written to close a row about folded groups, which is not this — and it was invisible to
+**Two things about how it was found are worth more than the fix.** It was found by the `#207`
+journey (then numbered #182) — written to close a row about folded groups, which is not this — and it was invisible to
 every existing instrument because **`Deck` had no unit suite at all**, while its keyboard docblock
 said "the test caught it immediately". That sentence is true of `Toolbar.test.tsx`, about the other
 primitive: a comment claiming coverage that belonged to a neighbour, which is ADR-0076 Class 3 in
@@ -5589,3 +5618,32 @@ rather than quietly dropped:
   gracefully to 'Unknown activity'). Measured immaterial (~0.7 ms beside an ~800 ms compute); fold
   the label columns into the engine loader, or a narrow `{id, code, name, calendarId}` loader, on
   next touch (the M6 backend-performance review).
+
+## 210. The panel-Surface-plus-border pairing is a literal in four places, and it has already drifted once
+
+**Raised:** 2026-08-28 (reconciliation-pass component review) · **Size:** S · **Owner:** web
+
+Every `tone="panel"` consumer pairs the `Surface` with a trailing-edge border, and the pairing is
+a copied literal rather than a primitive: `app-shell.tsx:549-551` is character-for-character
+`explorer-column.tsx:119`, `explorer-column.tsx:76-77` is the same pairing with the collapsed
+spine's layout classes, and `context-drawer.tsx:81` is the fourth consumer. The drift is not
+hypothetical — the first version of the `#172` fix copied only the ground half of the pairing and
+was caught by a ux reviewer reading a screenshot, and `app-shell.tsx`'s own comment says so. The
+fix is a small named primitive (e.g. `PanelSurface`, co-located with `Surface`) that renders
+`tone="panel"` + the border together and takes only the layout classes, with all four sites
+switched to it — **which changes a shared primitive's public surface, so it takes the ADR-0105
+spec step rather than being folded mid-reconciliation-pass**; that is why this is a row and not a
+commit (the review explicitly allowed either).
+
+Two companions travel with the extraction:
+
+- **The half that broke has no regression test.** `app-shell.test.tsx`'s `#172` assertion pins
+  `data-surface="panel"` and never `border-r` — the ground half is pinned and the border half
+  (the half the first fix dropped) is not. Assert through the shared primitive when it exists,
+  not against the raw class string.
+- **Two verbatim minors from the same review, on next touch of their files:** the
+  `toggles.nonWorking && scene.isWorkingDay` guard is repeated by `paint.ts`'s primary and
+  sub-floor wash branches (hoist once when the block is next edited — not now, the primary branch
+  is byte-pinned by the golden log); and `HierarchyTree.tsx`'s `suppressClick` check-and-reset is
+  duplicated between the row's and the name span's `onClick` (a `consumeSuppressedClick()` helper;
+  no correctness bug today because `stopPropagation` means only one runs per click).

@@ -463,7 +463,10 @@ export function MenuItem({
    * order — why you cannot use it outranks what it would tell you.
    */
   srDescription?: string;
-  /** A write is in flight — `aria-busy`, so the item is not silently inert (ToolbarOverflow parity). */
+  /** A write is in flight — `aria-busy`, so the item is not silently inert. This said
+   * "(ToolbarOverflow parity)" until the 2026-08-28 reconciliation pass — that component went
+   * with the width ladder (ADR-0109 D1); the surviving statement of the rule is
+   * `ToolbarButton`'s busy handling, and the reason stands on its own. */
   busy?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {

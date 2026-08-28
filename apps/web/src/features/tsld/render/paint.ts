@@ -734,6 +734,11 @@ function drawRefreshedBar(
  * whole plan — measured, a whole-plan viewport culls to 255 of 2,160 bars
  * (`docs/specs/tsld-minimap/input-performance.md` §5).
  */
+/**
+ * Per-call paint overrides. Future overrides EXTEND this interface rather than adding new
+ * positional parameters to `paintScene` — this object is the seam the signature grew for
+ * (2026-08-28 component review), and an eighth positional would re-open it.
+ */
 export interface PaintSceneOptions {
   /**
    * Override for the non-working wash's px-per-day cull floor (`docs/TECH_DEBT.md` #166). On

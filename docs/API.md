@@ -492,6 +492,22 @@ So `durationDays: 5` on an eight-hour calendar is 2,400 working minutes, not 7,2
 Changing a calendar's `hoursPerDay` does **not** rewrite stored durations and moves no dates. It
 changes what the same stored minutes are reported as.
 
+### `CALENDAR_WORKING_TIME_UNREACHABLE` (422)
+
+The engine's walk-time sibling of the build-time reject below (`docs/TECH_DEBT.md` #205(b)): a
+calendar can hold SOME working time that the schedule still cannot reach — a window-only calendar
+whose only working exception sits outside the span the walk needs (the conformance fixture's
+CAL-05 is the canonical case), or a dated blackout longer than the engine's horizon. The walk
+throws a typed `WorkingTimeHorizonExceededError`, mapped to 422 `CALENDAR_WORKING_TIME_UNREACHABLE`
+at **every** service seam that reaches the working-time walk — five today: **recalculate** (and
+the programme variant, via the shared per-plan recalculation), the **critical-path test**,
+**float-paths** (it runs the same compute as a recalculation), and **earned-value** and the
+**resource-histogram** (both walk per-assignment lag phasing, ADR-0071 §1). Previously the first
+two 500ed and the last three still did — the enumeration is now computed
+(`horizon-seams.structural.spec.ts`), so a new seam fails CI until it maps the error. `calendarId`
+is carried **only when it is unambiguous** (the plan schedules everything on one calendar);
+otherwise it is `null` rather than a guess (ADR-0076).
+
 ### `CALENDAR_HAS_NO_WORKING_TIME` (422)
 
 A calendar with an empty week and no working exceptions has no working time at all. It is a valid
