@@ -2089,6 +2089,15 @@ what `RUN_CAP` exists for.
 
 ## 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
+**Occurrence 2026-08-28 (correctness programme), and the capture failed for a recordable reason.**
+A full `scripts/e2e-local.sh api` run reported **74 failed across 2 files** (one identified:
+`test/interchange.e2e-spec.ts:347`; the other unknown), and an immediate re-run of the SAME
+working tree — the #205(b) changes present in both — passed 572/572. The detail was lost because
+the observing command piped the run through `tail -15`, keeping only the summary: the observer
+reproduced this row's own subject. The re-run was captured in full
+(`vitest run --config vitest.e2e.config.ts`, 237 s) and is clean, so the next occurrence's
+instruction is: never pipe the first run — redirect the WHOLE log to a file, then read it.
+
 **Observed 2026-08-10, three times in one session, against `scripts/e2e-local.sh api`.** Each time
 the whole `test/staff.e2e-spec.ts` file failed — all 13 tests including ones the change had not
 touched, which is the shape of a `beforeAll` failure rather than 13 independent ones. Each time the
@@ -5324,32 +5333,55 @@ one step upstream of a document: a decision-bearing claim asserted without check
 question put to somebody else. No code defect; recorded because the rule §19.11 states is about
 claims in documents and this was a claim in a **choice**, and nothing currently covers that.
 
-## 205. A double-seeded fixture cannot recalculate, and the engine's horizon guard is an untyped 500
+## 205. The fixture plan is unschedulable as seeded, and the horizon guard was an untyped 500
 
-**Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Size:** S + S · **Owner:** api
+**Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Re-diagnosed:** 2026-08-28 ·
+**Size:** S (done) + decision · **Owner:** api / product owner
 
-Two defects sharing one reproduction, found while seeding the catalogue for the health-check
-measurement and filed rather than absorbed, because neither is in that epic's scope.
+**(b) is FIXED and proven live** (2026-08-28, `7aaf155c`). The engine's horizon guard is now a
+typed `WorkingTimeHorizonExceededError` mapped to `422 VALIDATION_FAILED` reason
+`CALENDAR_WORKING_TIME_UNREACHABLE` at both the recalculate transaction and the critical-path
+test, per the ADR-0071 pattern; the calendar is named only when it is unambiguous (plan default
+in play and no per-activity calendars), because naming a guess would be the ADR-0076 failure.
+Regression: `working-time-calendar.spec.ts` (typed error, verified red) and
+`schedule.e2e-spec.ts` ("refuses a calendar whose working time is unreachable with a 422, not a
+500", against a real database).
 
-**Repro:** seed `--tier fixture` twice into the same project (the second run reuses the plan —
-same seed name), then `POST …/schedule/recalculate`. The response is `500 INTERNAL_ERROR`; the log
-shows the engine's working-time horizon guard, `addWorkingTime exceeded the working-time horizon
-(no reachable minute)`, thrown from `engine/working-time` (the ADR-0036 N11/N16 cap). A fresh
-single-seeded fixture recalculates cleanly (200 in 74 ms, 147 activities), so the trigger is
-the second seed pass, not the fixture.
+**(a) was a misdiagnosis on both halves, and the control was the culprit.** Measured 2026-08-28:
 
-**(a) The fixture seed path is not re-runnable.** The second run's calendar writes leave a
-working-time state the walker cannot traverse. Either the seeder should refuse a plan it already
-seeded, or the second pass should converge to the same state as the first. Until then, "re-run the
-seed" — the obvious recovery for a half-seeded catalogue — can quietly break the one plan the
-playbook calls the realistic-load oracle.
+- The seeder already refuses a re-seed cleanly — the plan create answers 409, the run reports
+  `alreadyExists`, and **nothing is created or modified** on the second pass (ORG-library
+  calendars are reused by name, their exceptions posted only on create). "The second seed pass
+  corrupts working time" is false.
+- The real trigger is the **fixture itself**: CAL-05 "Turnaround Window" has an empty base week
+  and one working exception range, 05–16 Oct 2026 × 12 h = **144 h of working time that will
+  ever exist**, while its TT.10 FS chain (A10200 24 h → A10300 96 h → A10400 36 h, zero lag)
+  needs **156 h in sequence**. No valid schedule exists; the 422 is the correct answer to an
+  infeasible network, not a defect.
+- The row's "fresh single-seeded fixture recalculates cleanly" control was almost certainly the
+  **legacy catalogue plan** seeded 2026-07-31 — before window-only calendars were creatable
+  (#79, closed by `8e106b1f` on 2026-08-02) — so its CAL-05 was refused with a finding and the
+  TT.10 activities fell back to the plan default. Every fixture seed **since 2026-08-02**
+  attaches CAL-05 honestly and cannot recalculate (fresh-project seed + recalculate → 422,
+  re-measured twice on 2026-08-28). The conformance harness never sees any of this because the
+  adapter **substitutes** window-only calendars with the plan default
+  (`conformance/adapter.ts:666-676`, its own recorded approximation — "in-window placement is an
+  M5-epic edge case"), so the engine goldens stay green while the application is honest.
 
-**(b) The horizon guard reaches the client as an unhandled 500.** ADR-0071 set the pattern:
-_"the engine's own guard is a typed error and a 422, not a 500."_ This guard predates that ruling
-and was never converted. A planner who authors a calendar with no reachable working minute — which
-ADR-0067's Window-only preset makes authorable — and then recalculates meets a bare
-`INTERNAL_ERROR` with no words about the calendar. The fix is the ADR-0071 shape: a typed engine
-error mapped to 422 with the calendar named.
+**A third defect fell out of the reproduction and is FIXED**: the seeder sent holiday exceptions
+as `windows: []`, which the API deliberately refuses as "a second spelling of holiday"
+(`create-calendar-exception.dto.ts` `@ArrayNotEmpty()`) — so **every empty-window exception in
+the catalogue was dropped as a 422 finding**, and the Night Shift and Heavy Lift calendars
+silently lost their non-working seasons. It now sends `isWorking: false`
+(`packages/seed-http/src/runner.ts`, regression in `runner.spec.ts`, verified red).
+
+**What remains is a decision, not code.** The catalogue's flagship plan cannot recalculate when
+freshly seeded, which strands `docs/TEST_PLAYBOOK.md` Tier 1 ("recalculate and read the row")
+and the ADR-0116 DCMA rows in any fresh environment. The options are ADR-0034-shaped: amend the
+versioned fixture (widen CAL-05's window or shorten the chain — a benchmark edit), or mark the
+fixture plan **expected-unschedulable** in the playbook and give the tiers a recalculable
+stand-in. In-window placement work does not help — the capacity is genuinely insufficient.
+Playbook annotated 2026-08-28; the decision goes to the product owner.
 
 ## 206. Health-check review suggestions consciously not folded at the M5 gate pass
 

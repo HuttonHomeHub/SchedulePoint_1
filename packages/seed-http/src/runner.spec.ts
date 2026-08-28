@@ -372,6 +372,48 @@ describe('the payload contracts the real API enforces', () => {
     ]);
   });
 
+  /**
+   * **A holiday is `isWorking: false`, never `windows: []`** (`docs/TECH_DEBT.md` #205, found
+   * 2026-08-28). The API deliberately refuses an empty windows array as "a second spelling of
+   * holiday" (`create-calendar-exception.dto.ts` `@ArrayNotEmpty()`), and the runner sent the
+   * spec's windows verbatim — so every holiday exception in the catalogue was dropped as a 422
+   * finding, and the Night Shift and Heavy Lift calendars silently lost their non-working
+   * seasons. Verified red against that code: the old body carried `windows: []` and no
+   * `isWorking` key.
+   */
+  it('sends a holiday exception as isWorking: false, and a windowed one verbatim', async () => {
+    const fetchMock = acceptEverything();
+    globalThis.fetch = fetchMock;
+    await seedPlan(
+      new SeedClient({ baseUrl: 'http://x' }),
+      target,
+      minimalSpec({
+        calendars: [
+          calendar({
+            workingWeekdays: [1, 2, 3, 4, 5],
+            exceptions: [
+              { date: '2026-12-25', windows: [], label: 'Christmas Day' },
+              {
+                date: '2026-12-24',
+                windows: [{ startMinute: 480, endMinute: 720 }],
+                label: 'half day',
+              },
+            ],
+          }),
+        ],
+      }),
+    );
+    const posted = callsOf(fetchMock)
+      .filter((c) => c.url.includes('/exceptions'))
+      .map((c) => JSON.parse(c.body) as Record<string, unknown>);
+    const holiday = posted.find((b) => b.date === '2026-12-25');
+    expect(holiday).toMatchObject({ isWorking: false });
+    expect(holiday).not.toHaveProperty('windows');
+    const halfDay = posted.find((b) => b.date === '2026-12-24');
+    expect(halfDay).toMatchObject({ windows: [{ startMinute: 480, endMinute: 720 }] });
+    expect(halfDay).not.toHaveProperty('isWorking');
+  });
+
   it('sets the plan’s default calendar on the update, never on the create', async () => {
     const fetchMock = acceptEverything();
     globalThis.fetch = fetchMock;
