@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import { WorkingTimeHorizonExceededError } from './errors';
-
 import {
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,

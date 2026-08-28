@@ -68,9 +68,13 @@ function targetOf(node: TreeNodeData): NodeActionTarget {
  * The **Project Explorer** tree (ADR-0029): an accessible ARIA `tree` over the
  * flattened visible rows from {@link useHierarchyTree}, **virtualized** so it stays
  * cheap at org scale. A single tab stop with roving `tabindex`; the WAI-ARIA APG
- * keymap (↑/↓, ←/→ expand-collapse-or-move, Home/End, Enter/Space) drives it. Per the
- * product-owner decision, **folders (client/project) only expand**; only a **plan**
- * leaf navigates (updating the URL, the source of truth) and loads onto the canvas.
+ * keymap (↑/↓, ←/→ expand-collapse-or-move, Home/End, Enter/Space) drives it.
+ * **Every kind navigates** (`docs/TECH_DEBT.md` #143): Enter/Space and a click on the
+ * row's NAME open that node's own screen (client/project detail, or the plan onto the
+ * canvas — the URL stays the source of truth), while a click elsewhere on a container
+ * row still toggles expansion, and ←/→ keep the APG expand/collapse contract. This
+ * paragraph said "folders only expand" until 2026-08-28 — written before the client and
+ * project detail screens existed, and never revisited when they landed.
  * ARIA `setsize`/`posinset` come from the full model, and the focused/selected node is
  * always force-rendered, so keyboard nav and deep-links reach any item even when
  * windowed.
@@ -444,7 +448,12 @@ export function HierarchyTree({
                     }
                     activate(row);
                   }}
-                  className="hover:underline"
+                  // The `rowLinkClass` treatment minus its weight and wrap: the tree already
+                  // decides weight per LEVEL (a client heads its branch; every name bold would
+                  // erase that), and it truncates rather than wraps. The colour shift is the
+                  // second cue beside the underline, so the "this opens a screen" affordance is
+                  // not a hover-only underline the exact width of the text (ux gate, 2026-08-28).
+                  className="hover:text-primary underline-offset-4 hover:underline"
                 >
                   {node.name}
                 </span>
