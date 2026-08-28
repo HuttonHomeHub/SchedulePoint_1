@@ -10,6 +10,55 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-08-28 — Reconciliation pass: one register, two numbering styles, and a seam fixed once
+
+Run at the correctness programme's boundary (ADR-0116 + the polish pass + the four-phase
+programme, released `web-v0.112.0`/`api-v0.55.1`/`web-v0.113.0`), on the product owner's "what
+next" with the fix slice deliberately sequenced after it — the programme had itself found ~6 stale
+register rows while working, so a fix slice chosen off the un-trued register would have been
+aimed by stale claims. Full findings in [`RECONCILE.md`](RECONCILE.md)'s table; three worth
+carrying:
+
+**The debt register held two numbering styles and they collided.** Modern rows are `## NNN.`;
+three rows filed in the em-dash style (`## #NNN —`) reused **182/183/184**, numbers the dot style
+had already spent — so `#182` resolved to two different debts depending on which grep you ran, and
+one in-register cross-reference already pointed at the wrong one. The em-dash trio is renumbered
+**#207/#208/#209** with tombstone notes in both directions and every external citation updated
+(two specs, ADR-0110, one journey docblock). The collision class is exactly the ADR-0079/ADR-0071
+number-collision failure, one document over.
+
+**The #205(b) fix was one correct pattern applied to a seam and not its neighbours** — the step-7
+api review's blocking finding. `WorkingTimeHorizonExceededError` was mapped to the typed 422 at
+recalculate and the critical-path test, and **three more public read routes reached the same walk
+and still answered raw 500s**: float-paths (via `computeFloatPaths` → `computeSchedule`),
+earned-value and resource-histogram (both via ADR-0071 per-assignment lag phasing). All three now
+map through the one `rejectIfWorkingTimeHorizonExceeded` mapper, and the enumeration stopped being
+remembered: `horizon-seams.structural.spec.ts` scans the service for walk-entry calls and fails on
+any method missing the mapper — verified red naming exactly the three offenders before the fix.
+OpenAPI on all four routes, a `docs/API.md` section, and the existing e2e case extended to prove
+float-paths live.
+
+**The component review's blocking finding is filed rather than folded, and the reason is
+ADR-0105.** The `Surface tone="panel"` + trailing-border pairing is a verbatim literal in four
+places and drifted once inside the very commit under review; the fix is a `PanelSurface`
+primitive, which changes a shared primitive's public surface — an ADR-0105 trigger — so it is
+`docs/TECH_DEBT.md` **#210** with the reviewer's full enumeration, not a mid-pass commit. The
+review's cheap nits were folded: the `getSceneLenses` optional-call tolerance now states in its
+comment that it serves only cast-based test doubles today, `PaintSceneOptions` carries the
+extend-this-not-the-signature rule, and the `#173` font-load bust gained the two tests it never
+had (`MeasureCache.clear()`, and the `document.fonts.ready` wiring — the latter verified red by
+disabling the bust). Steps 1–3, 5 and 6 verified clean; step 4 also fixed `menu.tsx`'s `busy`
+docblock, which cited `ToolbarOverflow` for parity — a component ADR-0109 D1 deleted.
+
+**And running the pass's own gate closed `#119a`'s three-session mystery.** The mandatory
+`e2e-local.sh api` run failed — captured in full this time, per that row's standing instruction —
+and the log names the cause: a leftover `resource_assignments` row in the shared `app_test`
+failing `activities.e2e-spec.ts`'s `beforeEach` for all 45 tests at once, because **twenty** specs
+swept `activities` without sweeping assignments first (the #119 defect one table along, in files
+whose own comments record the class). The fails-once-passes-on-re-run signature finally has a
+mechanism: the files run in sequence and a later suite that does sweep assignments deletes the
+poison, so every re-run was clean and every re-run destroyed the evidence. All twenty specs fixed.
+
 ## 2026-08-25 — Reconciliation pass: the cadence itself had stopped
 
 Run at the product owner's request after the `workspace-chrome-fit` epic, with two subjects they

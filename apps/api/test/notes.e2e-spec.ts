@@ -63,6 +63,13 @@ describe.skipIf(!hasDatabase)('Notes API (e2e, pen enforced)', () => {
     await prisma.planLock.deleteMany();
     await prisma.crossPlanDependency.deleteMany();
     await prisma.activityDependency.deleteMany();
+    // Resource assignments hold `activity_id` FKs and resources are organisation-scoped, so both
+    // are swept here for the same shared-database reason as the link tables above
+    // (docs/TECH_DEBT.md #119): a leftover row from a sibling suite or a Playwright run against
+    // the same `app_test` otherwise fails a spec that never touches resources — which happened
+    // on 2026-08-28, in `beforeEach`, to every test in the file at once.
+    await prisma.resourceAssignment.deleteMany();
+    await prisma.resource.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();

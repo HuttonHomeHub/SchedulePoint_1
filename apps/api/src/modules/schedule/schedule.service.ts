@@ -635,7 +635,7 @@ export class ScheduleService {
 
     // Read a consistent snapshot of the graph (no write lock — this never persists). Reuses the exact
     // same engine-input builder as `recalculate`, so the analysis can never drift from the schedule.
-    const { activities, edges, options } = await this.prisma.$transaction((tx) =>
+    const { activities, edges, options, meta } = await this.prisma.$transaction((tx) =>
       this.buildEngineGraph(organization.id, plan, dataDate, tx),
     );
     // The engine returns [] for an unknown target; surface that as a 404 rather than an empty result
@@ -653,7 +653,20 @@ export class ScheduleService {
     // Note the probe deliberately exceeds the DTO's declared `maxPaths` ceiling by one. That ceiling
     // is REQUEST validation; this internal call is not re-validated, and clamping it here would
     // silently disable the probe at the top of the range.
-    const found = computeFloatPaths(activities, edges, options, targetActivityId, maxPaths + 1);
+    let found;
+    try {
+      found = computeFloatPaths(activities, edges, options, targetActivityId, maxPaths + 1);
+    } catch (error) {
+      // `computeFloatPaths` runs `computeSchedule` over the same graph `recalculate` builds, so
+      // the engine's walk-time horizon guard is reachable here too and takes the same 422
+      // (`docs/TECH_DEBT.md` #205(b) — this was one of the three seams the reconciliation pass's
+      // api review found still answering a raw 500, one door over from the fixed pair).
+      rejectIfWorkingTimeHorizonExceeded(error, {
+        planCalendarId: plan.calendarId ?? null,
+        activityCalendarCount: meta.activityCalendarCount,
+      });
+      throw error;
+    }
     const hasMorePaths = found.length > maxPaths;
     const paths = found.slice(0, maxPaths).map((p) => ({
       index: p.index,
@@ -925,12 +938,26 @@ export class ScheduleService {
     });
 
     const dataDate = plan.plannedStart ? formatCalendarDate(plan.plannedStart) : null;
-    const result = computeEarnedValue({
-      activities,
-      dataDate,
-      eacMethod: plan.eacMethod,
-      calendar,
-    });
+    let result;
+    try {
+      result = computeEarnedValue({
+        activities,
+        dataDate,
+        eacMethod: plan.eacMethod,
+        calendar,
+      });
+    } catch (error) {
+      // "It NEVER recomputes" is true of `computeSchedule` and irrelevant to the walk: the
+      // per-assignment PV phasing lag (ADR-0071 §1) calls `addWorkingTime` on the ONE resolved
+      // plan calendar, so the horizon guard is reachable by this different door and takes the
+      // same 422 (#205(b), found by the reconciliation pass's api review). `activityCalendarCount`
+      // is 0 because this read walks only the plan calendar — the mapper may name it.
+      rejectIfWorkingTimeHorizonExceeded(error, {
+        planCalendarId: plan.calendarId ?? null,
+        activityCalendarCount: 0,
+      });
+      throw error;
+    }
 
     return {
       dataDate,
@@ -1026,6 +1053,14 @@ export class ScheduleService {
           { reason: SCHEDULE_ERROR.HISTOGRAM_GRANULARITY_TOO_FINE },
         );
       }
+      // The per-assignment lag phasing walks each assignment's OWN resolved calendar
+      // (`portFor` above), so the horizon guard is reachable here too and takes the same 422
+      // (#205(b), found by the reconciliation pass's api review). The count of distinct
+      // non-plan calendars in play decides whether the mapper may name one.
+      rejectIfWorkingTimeHorizonExceeded(error, {
+        planCalendarId: plan.calendarId ?? null,
+        activityCalendarCount: portByCalId.size,
+      });
       throw error;
     }
 

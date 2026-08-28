@@ -105,8 +105,10 @@ export class ScheduleController {
   @ApiForbiddenResponse({ description: 'Insufficient role in this organisation.' })
   @ApiUnprocessableEntityResponse({
     description:
-      'A plan in the closure has no start date (PLAN_START_REQUIRED), or a calendar ANY plan in ' +
-      'the closure schedules on has no working time (CALENDAR_HAS_NO_WORKING_TIME).',
+      'A plan in the closure has no start date (PLAN_START_REQUIRED), a calendar ANY plan in ' +
+      'the closure schedules on has no working time (CALENDAR_HAS_NO_WORKING_TIME), or a plan’s ' +
+      'schedule walked past the engine’s working-time horizon without finding a working minute ' +
+      '(CALENDAR_WORKING_TIME_UNREACHABLE) — the shared per-plan recalculation surfaces it here too.',
   })
   @ApiLockedResponse(
     'One or more plans in the closure are held by another editor (PROGRAMME_PLANS_LOCKED) — nothing written.',
@@ -153,9 +155,12 @@ export class ScheduleController {
   })
   @ApiUnprocessableEntityResponse({
     description:
-      'The plan has no start date (PLAN_START_REQUIRED), or a calendar the plan schedules on has ' +
+      'The plan has no start date (PLAN_START_REQUIRED), a calendar the plan schedules on has ' +
       'no working time at all — an empty week with no working exceptions ' +
-      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar’s id and name).',
+      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar’s id and name) — or the schedule ' +
+      'walked past the engine’s working-time horizon without finding a working minute ' +
+      '(CALENDAR_WORKING_TIME_UNREACHABLE): this analysis runs the same compute as a ' +
+      'recalculation, so it refuses the same unreachable calendars.',
   })
   async floatPaths(
     @CurrentUser() principal: Principal,
@@ -255,6 +260,14 @@ export class ScheduleController {
   @ApiForbiddenResponse({
     description: 'Insufficient role — cost:read (Planner/Org Admin) is required to read cost.',
   })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A calendar the analysis walks has no working time at all (CALENDAR_HAS_NO_WORKING_TIME), ' +
+      'or the per-assignment PV-phasing lag walked past the engine’s working-time horizon ' +
+      'without finding a working minute (CALENDAR_WORKING_TIME_UNREACHABLE). This read never ' +
+      'recomputes the schedule, but its lag phasing walks the plan calendar (ADR-0071 §1), so ' +
+      'the same unreachable-calendar refusal applies.',
+  })
   async earnedValue(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
@@ -280,7 +293,8 @@ export class ScheduleController {
   @ApiUnprocessableEntityResponse({
     description:
       'The requested granularity would produce too many buckets (HISTOGRAM_GRANULARITY_TOO_FINE); ' +
-      'request a coarser one.',
+      'request a coarser one. Or an assignment’s lag phasing walked past the engine’s ' +
+      'working-time horizon without finding a working minute (CALENDAR_WORKING_TIME_UNREACHABLE).',
   })
   async resourceHistogram(
     @CurrentUser() principal: Principal,

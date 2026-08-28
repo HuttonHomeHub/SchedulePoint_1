@@ -109,7 +109,7 @@ blind sweep would have been worse than leaving it open, because a green gate sto
 
 ### D5a — What the gate then found, which is the argument for D5 rather than an illustration of it
 
-The sweep was one half of `#186`; the other was `#182`, a row saying the deck's **folded** groups
+The sweep was one half of `#186`; the other was `#207` (then numbered #182), a row saying the deck's **folded** groups
 were driven by nothing. Writing that journey — fold from the keyboard, assert a roving stop
 survives, arrow along the surface, unfold — turned up a defect in neither of those subjects.
 

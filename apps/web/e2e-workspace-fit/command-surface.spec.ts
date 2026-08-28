@@ -254,7 +254,7 @@ test.describe('The plan command surface', () => {
    * longer exists does not become a safety net by staying green (ADR-0109 D1). What replaces them
    * pins the new contract against the SHIPPED registry rather than a unit fixture (the ADR-0114
    * lesson: `Deck.test.tsx`'s fixture is a shape the real registry does not contain), and keeps the
-   * roving walk — the part of #182 that was about keyboard coherence, not about folding.
+   * roving walk — the part of #207 (then numbered #182) that was about keyboard coherence, not about folding.
    */
   test('the deck has no disclosure captions, and the roving walk still laps every command', async () => {
     test.setTimeout(120_000);

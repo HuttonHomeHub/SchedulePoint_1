@@ -186,7 +186,7 @@ and each group caption's label sits on its row's baseline.
 **Entry point:** the **command deck** itself — the toolbar labelled `Plan commands` above the
 diagram. Nothing is added or removed; the same controls are pressed and they stop shimmering.
 **Journey:** `apps/web/e2e-workspace-fit/command-surface.spec.ts` — opens a plan, folds and unfolds a
-deck group (which also closes TECH_DEBT #182), and asserts SC-4 and SC-7 at four widths. **This is
+deck group (which also closes TECH_DEBT #207, then numbered #182), and asserts SC-4 and SC-7 at four widths. **This is
 the epic's first user-facing milestone, so the journey lands here and not at the end** (ADR-0081 §2).
 
 **Acceptance condition:** SC-4 and SC-7 green at 1280 / 1440 / 1646 / 1920 in both plan views;
@@ -304,7 +304,7 @@ geometry change and **neither may be raised**); `axe` in the journey.
      nothing (the ADR-0093/ADR-0108 lesson).
   3. SC-7: every `[data-toolbar-focusable]` clears 24 × 24 and is hit-testable, at every width, in
      both plan views, once with a coarse pointer.
-  4. Fold a group, tab through, unfold — closing TECH_DEBT #182.
+  4. Fold a group, tab through, unfold — closing TECH_DEBT #207 (then #182).
   5. `axe` scan with `.include()` located by **role and name**, never by a selector string — three
      suites in this repo shipped scans pointed at deleted rows (ADR-0099 M5).
   6. CI step after the prior suites tear down their servers; report path added to the artefact list.
@@ -561,7 +561,7 @@ commit (ADR-0078 S1 found seven ADRs missing from that index).
   3. `toolbar-styles.ts:5`, `toolbar-registry.ts:548,561`, `toolbar-band.tsx:12` — citations to
      `ToolbarOverflow`, `computeLadder` and `toolbar-ladder.ts`, all deleted by ADR-0109.
   4. `docs/TECH_DEBT.md`: close **#186**; update **#185** with M0-T3's answer and whether the cause
-     is now established; close **#182** if M1-T5's fold step lands; note **#31**'s status.
+     is now established; close **#207** (then #182) if M1-T5's fold step lands; note **#31**'s status.
   5. `docs/DESIGN_SYSTEM.md` (geometry variant; caption-baseline rule), `docs/UX_STANDARDS.md`
      (give-way order in a fixed-height chrome row), `CLAUDE.md` §16 (ADR entry).
 

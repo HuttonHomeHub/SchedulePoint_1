@@ -120,6 +120,15 @@ export const CALENDAR_WORKING_TIME_UNREACHABLE = 'CALENDAR_WORKING_TIME_UNREACHA
  * So the calendar is named only when the plan has exactly one in play (`activityCalendarCount`
  * is 0 and the plan carries a calendar); otherwise the sentence points at the plan's calendars
  * without inventing a culprit (ADR-0076: never claim what is not known).
+ *
+ * **Every service seam that reaches the engine's working-time walk must call this** — five today:
+ * `recalculate`, the critical-path test, `float-paths` (via `computeFloatPaths` →
+ * `computeSchedule`), `earned-value` and `resource-histogram` (both via per-assignment lag
+ * phasing, ADR-0071 §1). The first fix mapped two and left three answering a raw 500 — one
+ * correct pattern applied to a seam and not its neighbours, found by the 2026-08-28
+ * reconciliation pass's api review. The enumeration is now COMPUTED, not remembered:
+ * `horizon-seams.structural.spec.ts` scans the service for walk-entry calls and fails on any
+ * method missing this mapper, so the sixth seam is caught the day it is written.
  */
 export function rejectIfWorkingTimeHorizonExceeded(
   error: unknown,

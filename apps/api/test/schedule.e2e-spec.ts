@@ -989,6 +989,22 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
       details: { reason: 'CALENDAR_WORKING_TIME_UNREACHABLE', calendarId: calId },
     });
     expect(res.body.error.message).toContain('horizon');
+
+    // **float-paths refuses the same plan the same way** — it runs the same compute over the
+    // same graph, and it answered a raw 500 until the 2026-08-28 reconciliation pass's api
+    // review found the horizon mapping applied to two seams and not their three neighbours
+    // (the enumeration is now the `horizon-seams.structural.spec.ts` gate). The target id is
+    // read from the activity list so the 404 branch cannot mask the seam under test.
+    const acts = await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .expect(200);
+    const targetId = acts.body.data[0].id as string;
+    const fp = await actor.agent
+      .get(`/api/v1/organizations/acme/plans/${planId}/schedule/float-paths?target=${targetId}`)
+      .expect(422);
+    expect(fp.body.error).toMatchObject({
+      details: { reason: 'CALENDAR_WORKING_TIME_UNREACHABLE', calendarId: calId },
+    });
   });
 
   it('accepts the same calendar once a working exception gives it hours', async () => {

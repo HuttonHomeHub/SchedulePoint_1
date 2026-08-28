@@ -100,8 +100,12 @@ export function useDiagramImage(args: {
       // ghosts and isolate/filter dimming export AS SHOWN, read through the handle rather than
       // re-derived — a second derivation would drift, and the drift would surface only in the
       // file a planner hands to someone who was not in the room.
-      // Optional-call, not a bare call: a partial handle (a test fixture, a future host wiring
-      // only the viewport) degrades to the default picture rather than crashing the export.
+      // Optional-call, not a bare call — a DELIBERATE tolerance, not a hedge: a partial handle
+      // (a test fixture cast past the interface, a future host wiring only the viewport) degrades
+      // to the default picture rather than crashing the export. Today's only real host implements
+      // the full `TsldCanvasHandle` (compiler-enforced at its `useImperativeHandle`), so the `?.()`
+      // currently serves only cast-based test doubles; it is kept because a second host would
+      // otherwise ship a silent throw in the one path nobody watches (2026-08-28 component review).
       const lenses = canvasControlRef.current?.getSceneLenses?.() ?? {};
       const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
       // The band comes from the SAME derivation the live canvas uses (ADR-0063 §M5), so the export
