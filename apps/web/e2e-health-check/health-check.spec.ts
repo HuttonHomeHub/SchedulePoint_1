@@ -58,6 +58,34 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
   const cptRow = rows.filter({ hasText: 'Critical Path Test' }).first();
   await expect(cptRow).toContainText('Not assessed');
 
+  // ── 2b · M6: Run critical path test — the verdict computes and the STORED dates do not move.
+  // The API-side non-mutation e2e reads every engine-owned column; this is the journey's lighter
+  // echo of the same claim, through the browser the planner actually uses.
+  const engineDates = () =>
+    page.evaluate(
+      async ({ slug, id }) => {
+        const res = await fetch(`/api/v1/organizations/${slug}/plans/${id}/activities?limit=100`);
+        const body = (await res.json()) as {
+          data: {
+            id: string;
+            earlyStart: string | null;
+            earlyFinish: string | null;
+            totalFloat: number | null;
+          }[];
+        };
+        return body.data
+          .map((a) => [a.id, a.earlyStart, a.earlyFinish, a.totalFloat] as const)
+          .sort((x, y) => x[0].localeCompare(y[0]));
+      },
+      { slug: orgSlug, id: planId },
+    );
+  const datesBefore = await engineDates();
+  await cptRow.getByRole('button', { name: 'Run critical path test' }).click();
+  await expect(cptRow).toContainText('Pass');
+  // The hand-checkable sentence: injection and movement from the payload, on screen.
+  await expect(cptRow).toContainText(/Injected 600 d/);
+  expect(await engineDates()).toEqual(datesBefore);
+
   // Metrics 11/14: no baseline exists, and the row says so rather than failing or vanishing.
   await expect(rows.filter({ hasText: 'Baseline Execution Index' }).first()).toContainText(
     'Not assessed',

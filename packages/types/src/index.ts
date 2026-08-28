@@ -2455,6 +2455,10 @@ export const HEALTH_NOT_ASSESSABLE_REASONS = [
   'NO_INCOMPLETE_ACTIVITIES',
   'NOTHING_REMAINING',
   'REQUIRES_WHAT_IF_ANALYSIS',
+  // M6: the what-if route found no incomplete critical work-carrying activity to perturb — a
+  // scheduled plan CAN legitimately have no critical activity (a late hard finish bound can leave
+  // every path positive float), and that is a fact to state, not a crash (M6-T1).
+  'NO_CRITICAL_PATH',
 ] as const;
 
 export type HealthNotAssessableReason = (typeof HEALTH_NOT_ASSESSABLE_REASONS)[number];

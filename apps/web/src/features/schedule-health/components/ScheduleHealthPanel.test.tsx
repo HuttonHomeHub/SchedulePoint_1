@@ -389,4 +389,68 @@ describe('ScheduleHealthPanel', () => {
     renderPanel();
     expect(screen.getByText(/separate from the issues a recalculation finds/)).toBeInTheDocument();
   });
+
+  it('row 12 offers Run critical path test when the host supplies the seam, and fires it', () => {
+    const run = vi.fn();
+    renderPanel({
+      criticalPathTest: { run, isPending: false, isError: false, result: null },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Run critical path test' }));
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it('the running state keeps the button in the tree (never native disabled) and guards the press', () => {
+    const run = vi.fn();
+    renderPanel({
+      criticalPathTest: { run, isPending: true, isError: false, result: null },
+    });
+    const button = screen.getByRole('button', { name: 'Running…' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(button);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('a settled result merges over row 12, recounts the summary and announces the verdict once', () => {
+    announce.mockClear();
+    const result = metric({
+      id: 'CRITICAL_PATH_TEST',
+      ordinal: 12,
+      name: 'critical path test',
+      verdict: 'PASS',
+      reason: null,
+      threshold: null,
+      measured: { count: null, denominator: null, percent: null, ratio: 1 },
+      detail: {
+        injectedDays: 600,
+        deltaDays: 600,
+        toleranceDays: 5,
+        perturbedActivityName: 'Piling',
+      },
+    });
+    const props: ScheduleHealthPanelProps = {
+      report: fullReport({
+        summary: { passed: 13, failed: 0, notAssessable: 1, informational: 0 },
+      }),
+      isPending: false,
+      isError: false,
+      onRetry: vi.fn(),
+      onClose: vi.fn(),
+      onActivateActivity: vi.fn(),
+      criticalPathTest: { run: vi.fn(), isPending: false, isError: false, result },
+    };
+    const { rerender } = render(<ScheduleHealthPanel {...props} />);
+    rerender(<ScheduleHealthPanel {...props} />);
+    // The visible summary recounts from the MERGED rows (all 14 fixture rows are PASS + the
+    // merged PASS = 14 passed) — merged rows and counts can never disagree.
+    expect(screen.getByText(/14 passed/)).toBeInTheDocument();
+    // The hand-checkable caveat renders from payload numbers alone.
+    expect(
+      screen.getByText('Injected 600 d at Piling; completion moved 600 d.'),
+    ).toBeInTheDocument();
+    // Spoken once, not per render.
+    const spoken = announce.mock.calls.filter(([m]) => String(m).startsWith('Critical path test'));
+    expect(spoken).toEqual([
+      ['Critical path test passed — the completion moved with the injection.'],
+    ]);
+  });
 });

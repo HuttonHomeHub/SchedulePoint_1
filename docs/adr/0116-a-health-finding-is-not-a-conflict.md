@@ -1,7 +1,8 @@
 # ADR-0116 — A health finding is not a conflict, and a report never omits a check
 
-- **Status:** Accepted (M0–M5 landed 2026-08-28, gate pass folded; M6 — the metric-12 what-if
-  route — follows as its own slice per the plan's sequencing table)
+- **Status:** Accepted (M0–M5 landed and released 2026-08-28 in `api-v0.54.0` / `web-v0.109.0`;
+  M6 — the metric-12 what-if route — landed 2026-08-28 as its own slice per the plan's sequencing
+  table)
 - **Date:** 2026-08-28
 - **Spec:** [`docs/specs/schedule-health-check/`](../specs/schedule-health-check/)
 
@@ -162,6 +163,55 @@ this one, because an `EXPLAIN` of the loader queries reads rows and never exerci
 (ADR-0066's never-read-persisted-rows rule governs the engine-input differential, not an
 `EXPLAIN`). Five suggestions were deferred with reasons as `docs/TECH_DEBT.md` #206 rather than
 dropped.
+
+## M6 — the what-if landed (2026-08-28)
+
+`GET …/schedule/health-check/critical-path-test` runs DCMA's own test: 600 working days
+(`CRITICAL_PATH_TEST_INJECTED_DAYS`, the assessment's convention) injected into the front of the
+critical path on an in-memory copy of the graph, both passes through the same `buildEngineGraph`
+snapshot `recalculate` uses. D7's sentence is on the route's own OpenAPI and nowhere near D1's;
+the engine-free gate is untouched because the module lives OUTSIDE `health/`
+(`critical-path-test.ts`) — the gate keeps meaning what it says — and G4's scan widened to the new
+service/controller seams. The panel's row 12 gains **Run critical path test**; the result merges
+over the placeholder client-side with the summary **recounted from the merged rows** — a merged
+verdict beside a summary still counting the placeholder would be this epic's own
+two-numbers-disagree defect reproduced inside one panel.
+
+**The first verdict rule was wrong, and the fixture written to fail it is why it did not ship.**
+The draft measured the movement of `summary.projectFinish` — max early finish over all activities
+— and the injected subject's OWN finish grows by 600 days unconditionally, so a MANDATORY pin
+masking the whole downstream chain read as PASS: the exact schedule pathology DCMA 12 exists to
+catch, passed by the test built to catch it. The shipped rule watches the **completion carrier** —
+the control run's latest-finishing activity — whose movement is what "the completion moved" means;
+the pin fixture went red against the draft and green against the carrier rule (ADR-0110 D5,
+applied to a rule rather than a gate).
+
+**Measured before shipped, with the falsification condition committed first** (`m6-measurement.md`,
+its own commit preceding the run): 260.5 ms p95 at scale-500 (1.18× a recalculate on the same
+plan), 846.5 ms p95 at 2,000 activities over the whole real route (1.22×) — so
+`CRITICAL_PATH_TEST_THROTTLE` is the formula's **14 / 60 s**, not a copy of
+`FLOAT_PATHS_THROTTLE`. The run also put the first number ever on `docs/TECH_DEBT.md` #74's
+"recalculate at 2,000 activities: unmeasured" — 694.3 ms p95, indicative.
+
+Three deviations from the plan's own text, recorded rather than smoothed:
+
+- **The metric-12 placeholder pin is kept, reframed — not deleted.** The plan said to delete it;
+  that instruction assumed an in-place upgrade of the REPORT route, and what shipped is the
+  on-demand merge, so the report route still answers `NOT_ASSESSABLE / REQUIRES_WHAT_IF_ANALYSIS`
+  and the pin still describes it exactly. Deleting a passing, accurate assertion to obey a stale
+  sentence would be the register's document-over-code failure inverted.
+- **`NO_CRITICAL_PATH` joins the reason union** — the spec's reason list had no word for a
+  scheduled plan with no critical activity (a late hard finish bound can leave every path positive
+  float), which M6-T1's own "no critical path is a fact, not a crash" test required.
+- **The PLAN_START_REQUIRED e2e case was withdrawn on a finding**: `plannedStart` is required on
+  create and non-nullable on update, so the no-start state is unreachable through the public API —
+  the 422 is a legacy-row defence (the floatPaths rule) and is pinned in the service unit suite,
+  where the state can exist, instead of faked through REST.
+
+The non-mutation proof is the load-bearing test and was **verified red by persisting once
+deliberately** — the diff named `totalFloat` on every row rather than reporting a bare inequality —
+then green with the persist removed. The journey drives the button in a real browser and re-reads
+the stored dates through the API afterwards.
 
 ## Consequences
 

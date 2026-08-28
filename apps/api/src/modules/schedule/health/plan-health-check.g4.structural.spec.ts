@@ -91,6 +91,9 @@ describe('G4 — no cost-shaped field in the health report', () => {
       .filter((f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'))
       .map((f) => join(__dirname, f)),
     join(__dirname, '..', 'dto', 'plan-health-check.dto.ts'),
+    // The M6 what-if computes the metric-12 row the report merges — the same role-invariance
+    // story, so the same gate.
+    join(__dirname, '..', 'critical-path-test.ts'),
   ];
 
   // The seam the report crosses on its way out: a future enrichment here (an `Object.assign`
@@ -104,9 +107,19 @@ describe('G4 — no cost-shaped field in the health report', () => {
       'async getHealthCheck(',
     ],
     [
+      'schedule.service.ts getCriticalPathTest',
+      join(__dirname, '..', 'schedule.service.ts'),
+      'async getCriticalPathTest(',
+    ],
+    [
       'schedule.controller.ts healthCheck',
       join(__dirname, '..', 'schedule.controller.ts'),
       'async healthCheck(',
+    ],
+    [
+      'schedule.controller.ts criticalPathTest',
+      join(__dirname, '..', 'schedule.controller.ts'),
+      'async criticalPathTest(',
     ],
   ];
 

@@ -66,7 +66,9 @@ const REASON_SENTENCES: Record<HealthNotAssessableReason, string> = {
   NOTHING_REMAINING:
     'The schedule finishes on or before the data date — there is no remaining path to index.',
   REQUIRES_WHAT_IF_ANALYSIS:
-    'The critical-path integrity test perturbs a critical activity and confirms completion moves with it. It is not computed yet.',
+    'The critical-path integrity test perturbs a critical activity and confirms completion moves with it. Run it from this row.',
+  NO_CRITICAL_PATH:
+    'No incomplete critical activity exists to perturb — a plan can legitimately have no critical path.',
 };
 
 /** Which remedy each reason has, when the product offers one the reader can act on. */
@@ -124,11 +126,46 @@ export function buildHealthRows(report: ScheduleHealthReport): HealthRowView[] {
     measuredLabel: formatMeasured(metric.measured),
     reasonSentence: metric.reason === null ? null : REASON_SENTENCES[metric.reason],
     remedy: metric.reason === null ? null : (REASON_REMEDIES[metric.reason] ?? null),
-    caveatSentence:
-      metric.id === 'RESOURCES' && metric.verdict === 'INFORMATIONAL'
-        ? 'Reads resource-assignment existence only — not workload or over-allocation.'
-        : null,
+    caveatSentence: caveatFor(metric),
   }));
+}
+
+/** The scope caveat a row carries on screen; every NUMBER in it comes from the payload (G3). */
+function caveatFor(metric: HealthMetricResult): string | null {
+  if (metric.id === 'RESOURCES' && metric.verdict === 'INFORMATIONAL') {
+    return 'Reads resource-assignment existence only — not workload or over-allocation.';
+  }
+  // The computed what-if (M6): say what was injected and what moved, so the verdict is
+  // reproducible by hand from the sentence alone.
+  if (metric.id === 'CRITICAL_PATH_TEST' && metric.detail !== null) {
+    const d = metric.detail;
+    return `Injected ${String(d['injectedDays'])} d at ${String(d['perturbedActivityName'])}; completion moved ${String(d['deltaDays'])} d.`;
+  }
+  return null;
+}
+
+/**
+ * The report with the on-demand metric-12 result merged over its placeholder row (health M6).
+ * The summary buckets are RECOUNTED from the merged rows — the four counts are derived from the
+ * metrics, and a merged row whose verdict changed with a summary that still counts the placeholder
+ * is the two-numbers-disagreeing defect this epic exists to remove, reproduced inside one panel.
+ */
+export function mergeCriticalPathResult(
+  report: ScheduleHealthReport,
+  result: HealthMetricResult | null,
+): ScheduleHealthReport {
+  if (result === null) return report;
+  const metrics = report.metrics.map((m) => (m.id === 'CRITICAL_PATH_TEST' ? result : m));
+  return {
+    ...report,
+    metrics,
+    summary: {
+      passed: metrics.filter((m) => m.verdict === 'PASS').length,
+      failed: metrics.filter((m) => m.verdict === 'FAIL').length,
+      notAssessable: metrics.filter((m) => m.verdict === 'NOT_ASSESSABLE').length,
+      informational: metrics.filter((m) => m.verdict === 'INFORMATIONAL').length,
+    },
+  };
 }
 
 /**

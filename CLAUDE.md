@@ -3419,7 +3419,7 @@ progress` off the command surface because **an object action belongs on the obje
   document, in a choice put to somebody else (`docs/TECH_DEBT.md` #204). **The CPM engine is not
   imported and no migration runs.**
 
-- **ADR-0116** _(Accepted; M0–M5 landed 2026-08-28, M6 follows as its own slice)_ — A health
+- **ADR-0116** _(Accepted; M0–M5 landed and released 2026-08-28 — `api-v0.54.0`/`web-v0.109.0`; M6 landed the same day as its own slice)_ — A health
   finding is not a conflict, and a report never omits a check. The DCMA 14-point assessment as a
   **pure read model** — `GET …/schedule/health-check`, `schedule:read`, computed from persisted
   rows: **the CPM engine is not imported and the ADR-0034 parity gate is untouched by
@@ -3458,6 +3458,20 @@ progress` off the command surface because **an object action belongs on the obje
   DTO `count` description inverted, a 429 text citing TBD rows — now measured: all four loaders
   sub-1 ms at 2,000 activities, independently re-derived by the security review). Deferred
   suggestions are #206, with reasons.
+  **M6 landed as its own slice, and its first verdict rule was wrong in exactly the way the test
+  exists to catch**: the draft measured the max-over-all project finish, and the injected subject's
+  OWN finish grows by 600 days unconditionally — so a MANDATORY pin masking the whole downstream
+  chain read as PASS, caught by the fixture written to fail it and fixed by watching the
+  **completion carrier** (the control run's latest-finishing activity), verified red first. The
+  route carries D7's weaker sentence on its own OpenAPI, its throttle is the committed formula's
+  **14/60 s** from a measurement whose falsification condition was committed before the run
+  (260.5 ms p95 at scale-500, 846.5 ms at 2,000 — 1.18–1.22× a recalculate; the run also put the
+  first number on #74's unmeasured recalculate), and the non-mutation e2e was verified red by
+  persisting once deliberately. Three plan deviations recorded rather than smoothed: the
+  metric-12 placeholder pin is kept-and-reframed (the report route is unchanged; the plan's
+  delete instruction assumed an in-place upgrade), `NO_CRITICAL_PATH` joins the reason union, and
+  the PLAN_START_REQUIRED e2e was withdrawn because the no-start state is unreachable through the
+  public API (pinned in the service unit suite instead).
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

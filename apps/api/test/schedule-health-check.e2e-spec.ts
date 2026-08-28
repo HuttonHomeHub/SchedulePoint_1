@@ -331,4 +331,83 @@ describe.skipIf(!hasDatabase)('Schedule health check API (e2e)', () => {
     expect(m11.verdict).toBe('PASS');
     expect(m11.detail).toMatchObject({ dueCount: 1 });
   });
+
+  // ── M6: the critical-path what-if ────────────────────────────────────────────────────────────
+
+  const cptUrl = (planId: string, slug = 'acme') =>
+    `/api/v1/organizations/${slug}/plans/${planId}/schedule/health-check/critical-path-test`;
+
+  /** Every engine-owned column the recalculation persists, ordered — the non-mutation oracle. */
+  async function engineOwnedSnapshot(planId: string) {
+    const activities = await prisma.activity.findMany({
+      where: { planId },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        earlyStart: true,
+        earlyFinish: true,
+        lateStart: true,
+        lateFinish: true,
+        totalFloat: true,
+        freeFloat: true,
+        isCritical: true,
+        isNearCritical: true,
+        constraintViolated: true,
+        version: true,
+        updatedAt: true,
+      },
+    });
+    const plan = await prisma.plan.findUniqueOrThrow({
+      where: { id: planId },
+      select: { scheduleComputedAt: true, version: true, updatedAt: true },
+    });
+    return { activities, plan };
+  }
+
+  it('M6: the what-if judges the plan and PERSISTS NOTHING — every engine-owned column unchanged', async () => {
+    const admin = await adminWithOrg();
+    const planId = await makePlan(admin);
+    const a = await makeActivity(admin, planId, 'Groundworks', 10);
+    const b = await makeActivity(admin, planId, 'Frame', 10);
+    await link(admin, planId, a, b);
+    await recalculate(admin, planId);
+
+    // The claim "it persists nothing" is PROVED, not asserted (ADR-0116 D7): snapshot every
+    // engine-owned column the recalculation writes, run the what-if, snapshot again, compare
+    // whole objects. Verified red by making the route persist once deliberately — the diff then
+    // NAMES the columns that moved rather than reporting a bare inequality.
+    const before = await engineOwnedSnapshot(planId);
+    const res = await admin.agent.get(cptUrl(planId)).expect(200);
+    const after = await engineOwnedSnapshot(planId);
+    expect(after).toEqual(before);
+
+    // An intact two-task chain: the completion moved in step with the injection.
+    expect(res.body.data).toMatchObject({
+      id: 'CRITICAL_PATH_TEST',
+      ordinal: 12,
+      verdict: 'PASS',
+      reason: null,
+      threshold: null,
+    });
+    expect(res.body.data.measured.ratio).toBe(1);
+    expect(res.body.data.detail).toMatchObject({
+      injectedDays: 600,
+      deltaDays: 600,
+      perturbedActivityId: a,
+      completionActivityId: b,
+    });
+    // Role-invariance holds on this route too — same G4 shadow as the report.
+    expect(JSON.stringify(res.body)).not.toMatch(/cost|budget|rate|expense/i);
+
+    // Cross-org: 404, no existence oracle — the report route's rule, re-proved here because this
+    // is a separate controller route with its own guard path.
+    const stranger = await signUp('cpt-stranger@example.com');
+    await stranger.agent.post('/api/v1/organizations').send({ name: 'Other' }).expect(201);
+    await stranger.agent.get(cptUrl(planId)).expect(404);
+  });
+
+  // The PLAN_START_REQUIRED 422 is deliberately NOT proved here: `plannedStart` is required on
+  // create and non-nullable on update, so the no-start state is unreachable through the public
+  // API — it is a legacy-row defence (the floatPaths rule), pinned by the service unit suite
+  // where the state can exist.
 });

@@ -47,13 +47,29 @@ mid-seed (twice recorded in `m0-measurement.md`):
    this route's cost (the M0-T2 loaders measured sub-1 ms each at this scale), so the two-pass
    engine figure bounds the route figure to within loader + serialisation noise.
 
-## Results
+## Results (2026-08-28, `scripts/measure-critical-path-test.mjs`, n=20 after one warm-up)
 
-_(filled after the run — the condition above is committed first)_
+| Measurement                                        | Result                                                  |
+| -------------------------------------------------- | ------------------------------------------------------- |
+| scale-500 route p95 (540 activities / 800 links)   | **260.5 ms** (p50 209.4)                                |
+| scale-500 recalculate p95 (same plan, same script) | 220.7 ms — the route is **1.18×** a recalculate         |
+| 2,000-activity route p95 (whole endpoint, HTTP)    | **846.5 ms** (p50 804.0; recalculate 694.3 → **1.22×**) |
+| Derived limit (formula above)                      | `clamp(floor(12_000 / 846.5), 3, 20)` = **14 / 60 s**   |
 
-| Measurement                                        | Result |
-| -------------------------------------------------- | ------ |
-| scale-500 route p95                                | TBD    |
-| scale-500 recalculate p95 (same plan, same script) | TBD    |
-| 2,000-activity two-pass p95                        | TBD    |
-| Derived limit (formula above)                      | TBD    |
+Neither falsification condition fired: 846.5 ms is far below the 4,000 ms line, and both scales
+hold the route under 2× a recalculate — two passes cost about two passes, minus the write and lock
+a recalculate also pays. `CRITICAL_PATH_TEST_THROTTLE = 14/60 s` ships with this table cited.
+
+**Method notes.** The scale-500 plan is the REST catalogue seed (`plan:scale-500`, 540 activities /
+800 links). The 2,000-activity plan is a synthetic SQL build INSIDE the measurement org (chain +
+20 % skip links, mixed FS/SS/FF with lead/lag spread) — the M5 loader-measurement method one step
+further: because the plan lives in a real org with a real member, the number is the **whole real
+route over HTTP** (auth, loaders, graph build, both computes, serialisation), not an engine-only
+proxy, so instrument 2 in the method section above was not needed. The throttle was lifted for the
+measurement run only (the throttle is not part of the latency being measured) and set to the
+derived value before commit.
+
+**A side-measurement worth recording:** `docs/TECH_DEBT.md` #74 calls recalculate's own
+2,000-activity cost unmeasured — this run put it at **694.3 ms p95** on this host and this
+synthetic shape. Indicative only (a chain-heavy synthetic graph, a CI-class container), but it is
+the first number that row has ever had.

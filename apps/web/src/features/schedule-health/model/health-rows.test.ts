@@ -1,7 +1,7 @@
 import type { HealthMetricResult, ScheduleHealthReport } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildHealthRows, healthAnnouncement } from './health-rows';
+import { buildHealthRows, healthAnnouncement, mergeCriticalPathResult } from './health-rows';
 
 /** A report factory: every number in these fixtures is deliberately NOT a DCMA default, so an
  *  assertion passing proves the label came from the payload and not from a constant (G3). */
@@ -114,5 +114,55 @@ describe('healthAnnouncement', () => {
     expect(healthAnnouncement(r)).toBe(
       'Health check: 0 failed, 14 passed, 0 not assessed, 0 informational.',
     );
+  });
+});
+
+describe('mergeCriticalPathResult (health M6)', () => {
+  const cptResult = (verdict: 'PASS' | 'FAIL') =>
+    metric({
+      id: 'CRITICAL_PATH_TEST',
+      ordinal: 12,
+      name: 'Critical Path Test',
+      verdict,
+      reason: null,
+      threshold: null,
+      measured: {
+        count: null,
+        denominator: null,
+        percent: null,
+        ratio: verdict === 'PASS' ? 1 : 0,
+      },
+      detail: {
+        injectedDays: 600,
+        deltaDays: verdict === 'PASS' ? 600 : 0,
+        toleranceDays: 5,
+        perturbedActivityName: 'Groundworks',
+      },
+    });
+
+  it('replaces row 12 and RECOUNTS the summary — merged rows and counts can never disagree', () => {
+    const r = report([
+      metric({ id: 'MISSING_LOGIC', ordinal: 1, verdict: 'FAIL' }),
+      metric({
+        id: 'CRITICAL_PATH_TEST',
+        ordinal: 12,
+        verdict: 'NOT_ASSESSABLE',
+        reason: 'REQUIRES_WHAT_IF_ANALYSIS',
+        measured: null,
+        threshold: null,
+      }),
+    ]);
+    r.summary = { passed: 0, failed: 1, notAssessable: 1, informational: 0 };
+    const merged = mergeCriticalPathResult(r, cptResult('PASS'));
+    expect(merged.metrics.find((m) => m.id === 'CRITICAL_PATH_TEST')?.verdict).toBe('PASS');
+    expect(merged.summary).toEqual({ passed: 1, failed: 1, notAssessable: 0, informational: 0 });
+    // No result = the identical report object semantics (nothing to merge).
+    expect(mergeCriticalPathResult(r, null)).toBe(r);
+  });
+
+  it('the computed row carries a hand-checkable caveat sentence built ONLY from payload numbers', () => {
+    const rows = buildHealthRows(report([cptResult('FAIL')]));
+    const row = rows.find((r) => r.metric.id === 'CRITICAL_PATH_TEST');
+    expect(row?.caveatSentence).toBe('Injected 600 d at Groundworks; completion moved 0 d.');
   });
 });
