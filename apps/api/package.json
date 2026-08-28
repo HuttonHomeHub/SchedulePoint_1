@@ -1,6 +1,6 @@
 {
   "name": "@repo/api",
-  "version": "0.55.1",
+  "version": "0.55.2",
   "private": true,
   "description": "SchedulePoint REST API — NestJS + Prisma + PostgreSQL, documented with OpenAPI.",
   "license": "MIT",

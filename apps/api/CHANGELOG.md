@@ -1,5 +1,14 @@
 # @repo/api
 
+## 0.55.2
+
+### Patch Changes
+
+- [#414](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/414) [`ae07681`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/ae07681f5ab637d18631923a5a37430953fe4fa8) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The working-time horizon guard now maps to the typed 422 (`CALENDAR_WORKING_TIME_UNREACHABLE`) at
+  every seam that reaches the engine's walk — float-paths, earned-value and resource-histogram
+  previously answered a raw 500 on the identical error the recalculate and critical-path-test routes
+  already mapped. The seam enumeration is now computed by a structural gate rather than remembered.
+
 ## 0.55.1
 
 ### Patch Changes
