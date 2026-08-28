@@ -974,6 +974,22 @@ problem, and saying so discloses nothing about the organisation's contents.
   produces one document — a handover artefact. Shares the global throttle
   budget (measured: `docs/specs/schedule-health-check/m0-measurement.md`).
 
+- `GET …/schedule/health-check/critical-path-test` runs **DCMA metric 12, the
+  Critical Path Test, as a read-only what-if** (health M6, `schedule:read` —
+  every member). **This route runs the CPM engine — twice** — on an in-memory
+  copy of the plan graph: a control pass, then a pass with 600 working days
+  injected into the front of the critical path, and the verdict from whether
+  the control run's completion carrier moved in step. Its parity claim is
+  deliberately the report route's WEAKER sibling (ADR-0116 D7): it computes
+  **read-only and persists nothing** — no lock, no pen, no write path — proved
+  by an e2e reading every engine-owned column back after the call. Returns the
+  upgraded metric-12 row in the report's own `HealthMetricResult` shape;
+  everything injected (amount, tolerance, subject, completion carrier) rides
+  `detail`, so the verdict is reproducible by hand. Its own throttle
+  (**14/60 s**) is derived from a committed formula and measurement
+  (`docs/specs/schedule-health-check/m6-measurement.md`), never copied from
+  the float-paths budget.
+
 ## Authentication
 
 - Cookie-based sessions via Better Auth (secure, http-only, same-site); ADR-0003.

@@ -7,6 +7,7 @@ import type {
   PlanScheduleSummary,
   ProgrammeScheduleLockedDetails,
   ProgrammeScheduleResult,
+  HealthMetricResult,
   ResourceHistogramSeries,
   ScheduleHealthReport,
 } from '@repo/types';
@@ -29,6 +30,7 @@ import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
+import { runCriticalPathTest } from './critical-path-test';
 import {
   deriveExternalInstants,
   type DerivedExternalInstant,
@@ -752,6 +754,63 @@ export class ScheduleService {
           }
         : null,
       workingDaysBetween,
+    });
+  }
+
+  /**
+   * **DCMA metric 12, computed for real** (health M6, ADR-0116 D7) — a what-if perturbation on an
+   * in-memory copy of the plan's graph, `schedule:read` (any member).
+   *
+   * **This route's parity sentence is D7's, never D1's**: the CPM engine IS invoked here — twice —
+   * and the claim that holds is the different, weaker one: it **computes read-only and persists
+   * nothing**. No plan lock, no pen, and the one transaction is the read-snapshot
+   * `buildEngineGraph` shares with `floatPaths`; no write path is reachable from this method, and
+   * the non-mutation e2e proves it by reading every engine-owned column back after the call.
+   */
+  async getCriticalPathTest(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+  ): Promise<HealthMetricResult> {
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    this.assertCan(principal, 'schedule:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+    if (!plan.plannedStart) {
+      throw new ValidationError(
+        'Set the plan’s start date before running the critical path test.',
+        {
+          reason: SCHEDULE_ERROR.PLAN_START_REQUIRED,
+        },
+      );
+    }
+    const dataDate = formatCalendarDate(plan.plannedStart);
+
+    // The same read snapshot `floatPaths` takes: the exact engine-input builder `recalculate`
+    // uses, so the what-if can never drift from what a real recalculation would compute.
+    const [{ activities, edges, options }, labelRows] = await Promise.all([
+      this.prisma.$transaction((tx) => this.buildEngineGraph(organization.id, plan, dataDate, tx)),
+      this.schedule.loadHealthActivities(organization.id, planId),
+    ]);
+    // One narrow loader serves both jobs: display labels for the offender/detail fields, and each
+    // activity's own day↔minute factor (ADR-0068) for the injection's unit.
+    const withFactors = await attachDayFactors(
+      this.calendars,
+      labelRows,
+      new Map([[planId, plan.calendarId]]),
+    );
+    const byId = new Map(withFactors.map((r) => [r.id, r]));
+
+    return runCriticalPathTest({
+      activities,
+      edges,
+      options,
+      dayFactorMinutesOf: (id) => byId.get(id)?.dayFactorMinutes ?? DEFAULT_HOURS_PER_DAY_MINUTES,
+      labelOf: (id) => {
+        const row = byId.get(id);
+        return { code: row?.code ?? null, name: row?.name ?? 'Unknown activity' };
+      },
     });
   }
 

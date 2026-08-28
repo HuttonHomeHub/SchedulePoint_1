@@ -21,7 +21,7 @@ import { ParseUuidPipe } from '../../common/validation/uuid';
 import { FloatPathsQueryDto } from './dto/float-paths-query.dto';
 import { PlanEarnedValueDto } from './dto/plan-earned-value.dto';
 import { PlanFloatPathsDto } from './dto/plan-float-paths.dto';
-import { ScheduleHealthReportDto } from './dto/plan-health-check.dto';
+import { HealthMetricResultDto, ScheduleHealthReportDto } from './dto/plan-health-check.dto';
 import {
   ResourceHistogramMetaDto,
   ResourceHistogramSeriesDto,
@@ -46,6 +46,16 @@ import { ScheduleService } from './schedule.service';
  * below what a loop would want. `ttl` is milliseconds, matching the global `ThrottlerModule`.
  */
 const FLOAT_PATHS_THROTTLE = { default: { ttl: 60_000, limit: 20 } } as const;
+
+/**
+ * The critical-path-test budget — **derived from the M6-T0 measurement, never copied from
+ * `FLOAT_PATHS_THROTTLE`** (which was sized for ONE compute pass at 540 activities; this route
+ * runs TWO). The formula was committed before the measurement ran
+ * (`docs/specs/schedule-health-check/m6-measurement.md`): `clamp(floor(12_000 / p95_2000), 3, 20)`
+ * — at most 20 % of a 60-second window per IP in worst-case compute time. Measured p95 at 2,000
+ * activities: see that file's results table, which this constant's value must agree with.
+ */
+const CRITICAL_PATH_TEST_THROTTLE = { default: { ttl: 60_000, limit: 14 } } as const;
 
 @ApiTags('schedule')
 @ApiCookieAuth('schedulepoint.session_token')
@@ -186,6 +196,44 @@ export class ScheduleController {
   ): Promise<ScheduleHealthReportDto> {
     return ScheduleHealthReportDto.from(
       await this.service.getHealthCheck(principal, orgSlug, planId),
+    );
+  }
+
+  @Get('health-check/critical-path-test')
+  @Throttle(CRITICAL_PATH_TEST_THROTTLE)
+  @ApiOperation({
+    summary: 'Run DCMA metric 12, the Critical Path Test, as a read-only what-if (health M6).',
+    description:
+      'Injects 600 working days into the front of the critical path on an IN-MEMORY copy of the ' +
+      'plan graph, recomputes, and reports whether the control run\u2019s completion moved in step. ' +
+      '**This route runs the CPM engine \u2014 twice \u2014 and its parity claim is deliberately ' +
+      'different from the health report\u2019s** (ADR-0116 D7): it computes READ-ONLY and persists ' +
+      'nothing \u2014 no lock, no pen, no write path \u2014 proved by an e2e that reads every ' +
+      'engine-owned column back after the call and asserts equality. The response is the upgraded ' +
+      'metric-12 row in the same shape the report carries, so the report contract never changes; ' +
+      'everything injected (amount, tolerance, subject, completion carrier) rides detail so the ' +
+      'verdict is reproducible by hand.',
+  })
+  @ApiOkResponse({ type: HealthMetricResultDto })
+  @ApiTooManyRequestsResponse({
+    description:
+      'Rate limited by this route\u2019s own budget \u2014 14 requests / 60 s per IP, derived from ' +
+      'the M6-T0 measurement by a formula committed before the run ' +
+      '(docs/specs/schedule-health-check/m6-measurement.md; CRITICAL_PATH_TEST_THROTTLE).',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The plan has no start date (PLAN_START_REQUIRED), or a calendar the plan schedules on has ' +
+      'no working time at all \u2014 an empty week with no working exceptions ' +
+      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar\u2019s id and name).',
+  })
+  async criticalPathTest(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+  ): Promise<HealthMetricResultDto> {
+    return HealthMetricResultDto.from(
+      await this.service.getCriticalPathTest(principal, orgSlug, planId),
     );
   }
 

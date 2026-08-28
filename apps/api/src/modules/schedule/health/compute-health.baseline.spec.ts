@@ -148,10 +148,13 @@ describe('metric 14 — BEI', () => {
   });
 });
 
-describe('metric 12 — the placeholder M6 must replace', () => {
+describe('metric 12 — the report’s resting state (M6 computes it on a separate route)', () => {
   it('is NOT_ASSESSABLE / REQUIRES_WHAT_IF_ANALYSIS with threshold null', () => {
-    // M6 (CQ-1 = (b)) computes this for real; it has to DELETE this failing assertion rather than
-    // silently diverge from the placeholder — the plan's own pin.
+    // This is DELIBERATE after M6, not a leftover: the what-if runs two engine passes, so the
+    // REPORT route never computes it — the row rests here and the panel's `Run critical path
+    // test` button merges the computed result over it (`critical-path-test.ts`, ADR-0116 D7).
+    // The plan drafted M6 as an in-place upgrade and told this pin to be deleted; what shipped is
+    // the on-demand merge, so the pin stays because it still describes the report route exactly.
     const m = metric(computeInput({}), 'CRITICAL_PATH_TEST');
     expect(m.verdict).toBe('NOT_ASSESSABLE');
     expect(m.reason).toBe('REQUIRES_WHAT_IF_ANALYSIS');

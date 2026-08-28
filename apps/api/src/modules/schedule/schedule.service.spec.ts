@@ -889,6 +889,17 @@ describe('ScheduleService.getHealthCheck', () => {
     expect(schedule.loadActiveBaselineHealthSnapshot).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
     expect(schedule.loadHealthAssignedActivityIds).toHaveBeenCalledWith(ORG_ID, PLAN_ID);
   });
+
+  it('getCriticalPathTest: a plan with no start is 422 PLAN_START_REQUIRED before any load (M6)', async () => {
+    // Unreachable through the public API today (`plannedStart` is required on create and
+    // non-nullable on update) — a legacy-row defence, the floatPaths rule, so it is pinned HERE
+    // where the state can exist rather than faked in the e2e.
+    plans.findActiveByIdInOrg.mockResolvedValue({ ...plan(), plannedStart: null });
+    await expect(
+      service.getCriticalPathTest(principalWith(READ), 'acme', PLAN_ID),
+    ).rejects.toMatchObject({ details: { reason: 'PLAN_START_REQUIRED' } });
+    expect(schedule.loadHealthActivities).not.toHaveBeenCalled();
+  });
 });
 
 describe('ScheduleService.getEarnedValue', () => {

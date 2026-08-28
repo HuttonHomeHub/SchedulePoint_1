@@ -377,7 +377,11 @@ with a P2028 timeout rather than waiting cleanly.
 
 **What would close it:** seed a 2,000-activity plan, measure recalculate's hold duration on the key
 and a concurrent `PATCH …/activities/parents`'s wait, then set explicit transaction timeouts against
-the measured numbers. Raised by the ADR-0063 M6 backend-performance gate as an open risk, not a
+the measured numbers. _(Partial input, 2026-08-28: the health M6-T0 run measured the whole
+recalculate ROUTE at 694.3 ms p95 on a synthetic 2,000-activity chain plan —
+`docs/specs/schedule-health-check/m6-measurement.md` — which bounds the lock hold well under the
+5 s default on that shape. Indicative, not the concurrent-wait measurement this row asks for; the
+row stays open.)_ Raised by the ADR-0063 M6 backend-performance gate as an open risk, not a
 confirmed defect — the design (plan-scoped key, skipped on the uncontended path) is otherwise sound.
 Related: the parent-chain walk inside that lock has **no depth cap**, unlike the resource tree's
 documented ≤ 10 (ADR-0053 §3).
@@ -5313,3 +5317,9 @@ rather than quietly dropped:
 - **`VerdictBadge` hand-rolls a coloured span where `Badge` exists** — the spec named the
   `EarnedValuePanel` precedent; the hand-rolled path is also where the `text-destructive` token
   slip happened, which is the argument for the primitive.
+- **(M6 addendum) `getCriticalPathTest` scans the plan's activities twice** — `buildEngineGraph`'s
+  `loadActivities` plus `loadHealthActivities` for labels/factors, concurrent but on separate
+  connections (so not one snapshot; a concurrent rename can label the offender stale, degraded
+  gracefully to 'Unknown activity'). Measured immaterial (~0.7 ms beside an ~800 ms compute); fold
+  the label columns into the engine loader, or a narrow `{id, code, name, calendarId}` loader, on
+  next touch (the M6 backend-performance review).

@@ -228,6 +228,11 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   'GET /api/v1/organizations/:orgSlug/plans/:planId/notes/activity-counts': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/earned-value': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/health-check': REASONS.READ,
+  // The M6 what-if COMPUTES twice and persists nothing — durability test not met, same as the
+  // sibling float-paths read (and auditing a deterministic recomputation is the ADR-0072
+  // ENGINE_DERIVED rule).
+  'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/health-check/critical-path-test':
+    REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/float-paths': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/resource-histogram': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/summary': REASONS.READ,

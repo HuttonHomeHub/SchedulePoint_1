@@ -1,5 +1,11 @@
-import type { ScheduleHealthReport } from '@repo/types';
-import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import type { HealthMetricResult, ScheduleHealthReport } from '@repo/types';
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
 import { scheduleKeys } from '@/lib/query/hierarchy-keys';
@@ -33,4 +39,27 @@ export function useScheduleHealth(
   enabled = true,
 ): UseQueryResult<ScheduleHealthReport> {
   return useQuery(scheduleHealthQueryOptions(orgSlug, planId, enabled));
+}
+
+/**
+ * **DCMA metric 12, run on demand** (health M6) — the read-only what-if that upgrades the report's
+ * one placeholder row. A mutation hook for an explicit BUTTON press, not a query: the server runs
+ * the CPM engine twice per call, so nothing may fire it on mount, on focus, or on a stale timer —
+ * only a planner asking. The result is the metric-12 row in the report's own shape; the caller
+ * merges it over the placeholder (the report contract never changes).
+ *
+ * The route persists nothing — proved server-side by the non-mutation e2e — so there is
+ * deliberately no cache invalidation here: no stored row changed, and sweeping `scheduleKeys`
+ * would refetch a report that is byte-identical.
+ */
+export function useCriticalPathTest(
+  orgSlug: string,
+  planId: string,
+): UseMutationResult<HealthMetricResult, Error, void> {
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<HealthMetricResult>(
+        `/organizations/${orgSlug}/plans/${planId}/schedule/health-check/critical-path-test`,
+      ),
+  });
 }

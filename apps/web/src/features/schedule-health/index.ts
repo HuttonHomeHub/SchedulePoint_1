@@ -1,4 +1,8 @@
-export { useScheduleHealth, scheduleHealthQueryOptions } from './api/use-schedule-health';
+export {
+  useScheduleHealth,
+  useCriticalPathTest,
+  scheduleHealthQueryOptions,
+} from './api/use-schedule-health';
 export { buildHealthRows, healthAnnouncement } from './model/health-rows';
 export { ScheduleHealthPanel } from './components/ScheduleHealthPanel';
 export {

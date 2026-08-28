@@ -1,10 +1,11 @@
-import type { HealthOffender, ScheduleHealthReport } from '@repo/types';
+import type { HealthMetricResult, HealthOffender, ScheduleHealthReport } from '@repo/types';
 import { ChevronDown, ChevronRight, CircleCheck, CircleHelp, CircleX, Info } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import {
   buildHealthRows,
   healthAnnouncement,
+  mergeCriticalPathResult,
   REMEDY_ROLE_SENTENCES,
   type HealthRowView,
 } from '../model/health-rows';
@@ -50,6 +51,19 @@ export interface ScheduleHealthPanelProps {
    * the offender list says why a jumped-to bar may render dimmed.
    */
   filterActive?: boolean;
+  /**
+   * The on-demand metric-12 what-if (health M6): pressed from row 12, its result merges over the
+   * placeholder and the summary recounts. The host owns the mutation (it owns the org/plan scope);
+   * absent in standalone hosts, where the row keeps its placeholder sentence.
+   */
+  criticalPathTest?:
+    | {
+        run: () => void;
+        isPending: boolean;
+        isError: boolean;
+        result: HealthMetricResult | null;
+      }
+    | undefined;
 }
 
 const TONE_ICONS = {
@@ -99,9 +113,16 @@ export function ScheduleHealthPanel({
   onOpenBaselines,
   onActivateActivity,
   filterActive = false,
+  criticalPathTest,
 }: ScheduleHealthPanelProps): React.ReactElement {
   const announce = useAnnounce();
   const headingId = useId();
+
+  // The report the panel RENDERS: the on-demand metric-12 result merged over its placeholder,
+  // with the summary recounted (health M6). Print and the rows read the same merged object, so
+  // paper and screen cannot disagree about what was computed.
+  const effectiveReport =
+    report === null ? null : mergeCriticalPathResult(report, criticalPathTest?.result ?? null);
 
   // One announcement, once, when the report settles — never per render (the ADR-0079
   // stale-debounce lesson: a re-render must not re-arm the message).
@@ -114,7 +135,23 @@ export function ScheduleHealthPanel({
     announce(message);
   }, [report, announce]);
 
-  const rows = report === null ? [] : buildHealthRows(report);
+  // The what-if's verdict, spoken once when it settles — the run button keeps focus, so this is
+  // the only channel telling a screen-reader user the press did anything.
+  const cptSpokenRef = useRef<HealthMetricResult | null>(null);
+  const cptResult = criticalPathTest?.result ?? null;
+  useEffect(() => {
+    if (cptResult === null || cptSpokenRef.current === cptResult) return;
+    cptSpokenRef.current = cptResult;
+    announce(
+      cptResult.verdict === 'PASS'
+        ? 'Critical path test passed — the completion moved with the injection.'
+        : cptResult.verdict === 'FAIL'
+          ? 'Critical path test failed — the completion did not move with the injection.'
+          : 'Critical path test could not be assessed.',
+    );
+  }, [cptResult, announce]);
+
+  const rows = effectiveReport === null ? [] : buildHealthRows(effectiveReport);
 
   return (
     // Escape closes the dock (a non-modal column has no native cancel), scoped and stopped so it
@@ -136,11 +173,11 @@ export function ScheduleHealthPanel({
         onClose={onClose}
         closeLabel="Close health check"
         actions={
-          report === null ? null : (
+          effectiveReport === null ? null : (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => printHealthReport(report)}
+              onClick={() => printHealthReport(effectiveReport)}
               className="h-7 px-2 text-xs"
             >
               Print report
@@ -177,13 +214,13 @@ export function ScheduleHealthPanel({
           </NoticeStrip>
         ) : null}
 
-        {report === null || isError ? null : (
+        {effectiveReport === null || isError ? null : (
           <>
             <p className="text-muted-foreground text-sm">
-              {report.summary.failed} failed · {report.summary.passed} passed ·{' '}
-              {report.summary.notAssessable} not assessed · {report.summary.informational}{' '}
-              informational
-              {report.computedAt === null ? (
+              {effectiveReport.summary.failed} failed · {effectiveReport.summary.passed} passed ·{' '}
+              {effectiveReport.summary.notAssessable} not assessed ·{' '}
+              {effectiveReport.summary.informational} informational
+              {effectiveReport.computedAt === null ? (
                 <span className="block">
                   The plan has never been calculated — schedule metrics say so below.
                 </span>
@@ -194,12 +231,12 @@ export function ScheduleHealthPanel({
                 schedule assessment is meaningless without when it was computed and under which
                 mode) — the M5 ux review found the printout more honest than the live panel. */}
             <p className="text-muted-foreground text-xs">
-              {report.computedAt === null
+              {effectiveReport.computedAt === null
                 ? 'Never calculated'
-                : `Calculated ${report.computedAt.slice(0, 10)}`}{' '}
-              · data date {report.dataDate} ·{' '}
-              {report.schedulingMode === 'EARLY' ? 'Early' : 'Visual'} scheduling · baseline:{' '}
-              {report.baseline?.name ?? 'none'}
+                : `Calculated ${effectiveReport.computedAt.slice(0, 10)}`}{' '}
+              · data date {effectiveReport.dataDate} ·{' '}
+              {effectiveReport.schedulingMode === 'EARLY' ? 'Early' : 'Visual'} scheduling ·
+              baseline: {effectiveReport.baseline?.name ?? 'none'}
             </p>
 
             {/* Panel-level, not per-row: with several rows expanded under a lens the per-row copy
@@ -215,7 +252,10 @@ export function ScheduleHealthPanel({
                 <HealthMetricRow
                   key={row.metric.id}
                   row={row}
-                  offenderCap={report.offenderCap}
+                  offenderCap={effectiveReport.offenderCap}
+                  criticalPathTest={
+                    row.metric.id === 'CRITICAL_PATH_TEST' ? criticalPathTest : undefined
+                  }
                   onActivateActivity={(offender) => {
                     onActivateActivity(offender.activityId);
                     // Spoken from HERE, inside the focus frame — focus stays on the offender
@@ -246,12 +286,14 @@ function HealthMetricRow({
   onActivateActivity,
   onRecalculate,
   onOpenBaselines,
+  criticalPathTest,
 }: {
   row: HealthRowView;
   offenderCap: number;
   onActivateActivity: (offender: HealthOffender) => void;
   onRecalculate?: (() => void) | undefined;
   onOpenBaselines?: (() => void) | undefined;
+  criticalPathTest?: ScheduleHealthPanelProps['criticalPathTest'];
 }): React.ReactElement {
   const { metric } = row;
   const [expanded, setExpanded] = useState(false);
@@ -313,6 +355,28 @@ function HealthMetricRow({
 
       {row.caveatSentence !== null ? (
         <p className="text-muted-foreground pl-5 text-xs">{row.caveatSentence}</p>
+      ) : null}
+
+      {criticalPathTest !== undefined ? (
+        <div className="space-y-1 pl-5">
+          {/* Not native `disabled` while pending — a control that flips twice per press blurs to
+              `<body>` and takes the accelerators with it (the ScopeSaveBar lesson); guard in the
+              handler instead and say what is happening in the name. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-disabled={criticalPathTest.isPending}
+            onClick={() => {
+              if (!criticalPathTest.isPending) criticalPathTest.run();
+            }}
+            className="h-6 px-2 text-xs"
+          >
+            {criticalPathTest.isPending ? 'Running…' : 'Run critical path test'}
+          </Button>
+          {criticalPathTest.isError ? (
+            <p className="text-muted-foreground text-xs">The test could not be run — try again.</p>
+          ) : null}
+        </div>
       ) : null}
 
       {row.reasonSentence !== null ? (

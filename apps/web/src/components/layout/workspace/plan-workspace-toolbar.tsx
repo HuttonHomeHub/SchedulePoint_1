@@ -82,6 +82,7 @@ import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedul
 import {
   HEALTH_PANEL_MIN_WIDTH,
   ScheduleHealthPanel,
+  useCriticalPathTest,
   useScheduleHealth,
   useScheduleHealthPanelPrefs,
 } from '@/features/schedule-health';
@@ -529,6 +530,9 @@ export function ToolbarPlanWorkspace({
   // Enabled-gated on the panel being open, so a closed panel costs nothing — and keyed under the
   // schedule namespace, so the recalculation's existing invalidation sweeps it.
   const health = useScheduleHealth(model.orgSlug, model.planId, healthDockActive);
+  // The on-demand metric-12 what-if (health M6): a mutation, so nothing but the row's button can
+  // fire the two engine passes; the result merges over the placeholder inside the panel.
+  const criticalPathTest = useCriticalPathTest(model.orgSlug, model.planId);
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -1234,6 +1238,12 @@ export function ToolbarPlanWorkspace({
       filterActive={
         canvasUi.lensState.filterQuery !== '' || canvasUi.lensState.filterAttrs.size > 0
       }
+      criticalPathTest={{
+        run: () => criticalPathTest.mutate(),
+        isPending: criticalPathTest.isPending,
+        isError: criticalPathTest.isError,
+        result: criticalPathTest.data ?? null,
+      }}
     />
   ) : null;
 
