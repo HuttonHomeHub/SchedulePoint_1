@@ -151,6 +151,46 @@ describe('HierarchyTree', () => {
     );
   });
 
+  /**
+   * **#143 — the tree can open all three of ADR-0029's levels, not one.** `activate` used to
+   * navigate for a plan and TOGGLE for a client or project, so the Client → Project → Plan
+   * navigator could open exactly one of the things it names. The meanings are split now: the
+   * NAME's click and the keyboard's Enter navigate (the APG tree's "default action"), while the
+   * row's remaining surface keeps the container toggle (the Q3 case above) and the arrows keep
+   * expansion. **Verified red** against the pre-fix `activate`: both cases below saw
+   * `navigate` never called.
+   */
+  it('clicking a client name opens the client, and Enter on a project opens the project (#143)', async () => {
+    renderTree();
+    const client = await screen.findByRole('treeitem', { name: /Northgate/ });
+    // The NAME navigates; the row's own click (Q3 above) still toggles.
+    fireEvent.click(screen.getByText('Northgate'));
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/orgs/$orgSlug/clients/$clientId',
+      params: { orgSlug: 'acme', clientId: 'c1' },
+    });
+
+    // Enter is the keyboard's route in — expansion has its own keys, so the default action is
+    // free to mean "open". Reveal the project by expanding the client first (row click), then
+    // move the roving focus with the tree's OWN key (ArrowDown), not `element.focus()` — the
+    // ArrowRight case above appears to prove `focus()` updates the roving model and does not:
+    // its subject is the first row, which is also the model's fallback, so it passes with the
+    // focus silently ignored. Driving the model through its own keys is both honest and the
+    // path a keyboard user actually takes.
+    navigate.mockClear();
+    fireEvent.click(client);
+    const project = await screen.findByRole('treeitem', { name: /Fit-out/ });
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'ArrowDown' });
+    fireEvent.keyDown(screen.getByRole('tree'), { key: 'Enter' });
+    expect(navigate).toHaveBeenCalledWith({
+      to: '/orgs/$orgSlug/projects/$projectId',
+      params: { orgSlug: 'acme', projectId: 'p1' },
+    });
+    // And navigating did NOT also toggle the branch under the reader (stopPropagation's job on
+    // the pointer path; on the keyboard path Enter simply never toggles any more).
+    expect(project).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('deep-links: a plan route auto-reveals and marks its ancestor path', async () => {
     params = { planId: 'pl1' };
     renderTree();

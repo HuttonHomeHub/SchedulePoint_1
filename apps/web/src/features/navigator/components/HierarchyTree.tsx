@@ -205,17 +205,37 @@ export function HierarchyTree({
     }, LONG_PRESS_MS);
   };
 
+  /**
+   * **Every kind navigates now** (`docs/TECH_DEBT.md` #143). This function used to navigate for a
+   * plan and TOGGLE for a client or project — so the rail ADR-0029 describes as the
+   * Client → Project → Plan navigator could open exactly one of its three levels, and the
+   * client/project detail screens were reachable only through the `Clients` destination. The
+   * register row's own shape is followed: a row that both expands and navigates is a control with
+   * two meanings, so the meanings are SPLIT rather than merged — `activate` (the name's click, and
+   * the APG tree's Enter, whose job is "the default action") navigates; expansion keeps its own
+   * dedicated affordances (ArrowRight/ArrowLeft on the keyboard, the row's remaining surface for
+   * the pointer — see the row's `onClick`).
+   */
   const activate = (row: VisibleRow): void => {
     if (!row.node) return;
-    if (row.node.kind === 'plan') {
+    const node = row.node;
+    if (node.kind === 'plan') {
       void navigate({
         to: '/orgs/$orgSlug/plans/$planId',
-        params: { orgSlug, planId: row.node.id },
+        params: { orgSlug, planId: node.id },
       });
-      onNavigate?.();
+    } else if (node.kind === 'project') {
+      void navigate({
+        to: '/orgs/$orgSlug/projects/$projectId',
+        params: { orgSlug, projectId: node.id },
+      });
     } else {
-      tree.toggle(row.node.id);
+      void navigate({
+        to: '/orgs/$orgSlug/clients/$clientId',
+        params: { orgSlug, clientId: node.id },
+      });
     }
+    onNavigate?.();
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -337,7 +357,13 @@ export function HierarchyTree({
                   suppressClick.current = false;
                   return;
                 }
-                activate(row);
+                // **The row's surface keeps the TOGGLE for a container** (#143): clicking a
+                // client or project row expands it, exactly as it always has — the trained
+                // gesture, and what the Q3 unit case pins. Navigation is the NAME's click (below,
+                // which stops propagation so it never reaches this) and the keyboard's Enter. A
+                // plan has nothing to expand, so its whole row still navigates.
+                if (row.expandable && row.node) tree.toggle(row.node.id);
+                else activate(row);
               }}
               onFocus={() => setFocusedKey(row.key)}
               onContextMenu={
@@ -385,6 +411,16 @@ export function HierarchyTree({
                 )}
               />
               <Icon aria-hidden="true" className="size-4 shrink-0 opacity-80" />
+              {/* **The name is the pointer's route IN** (#143): clicking it opens the node's own
+                  screen — client detail, project detail, or the plan workspace — while the rest
+                  of the row keeps the container toggle. A span with a handler rather than a
+                  nested `<a>`: the tree is one roving tab stop and the treeitem itself carries
+                  Enter, so a focusable link inside it would be a second interactive element
+                  inside a `treeitem` — the nested-control shape the APG's tree pattern avoids.
+                  `stopPropagation` is load-bearing: without it the click also reaches the row and
+                  toggles the branch the reader just navigated away from. `hover:underline` is the
+                  affordance (decoration on hover, so 1.4.1 is not in play — the name is
+                  clickable, not conveying state). */}
               <span
                 className={cn(
                   'min-w-0 flex-1 truncate',
@@ -394,7 +430,24 @@ export function HierarchyTree({
                   row.level === 1 && 'font-medium',
                 )}
               >
-                {node.name}
+                {/* The handler sits on an INNER span sized to the text, not on the `flex-1`
+                    wrapper: the wrapper stretches across the row, so putting the click there
+                    would make most of the row's width navigate and invert the rule the row
+                    onClick states — the empty space right of a name still toggles. */}
+                {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events */}
+                <span
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (suppressClick.current) {
+                      suppressClick.current = false;
+                      return;
+                    }
+                    activate(row);
+                  }}
+                  className="hover:underline"
+                >
+                  {node.name}
+                </span>
               </span>
               {showActions ? (
                 <Button

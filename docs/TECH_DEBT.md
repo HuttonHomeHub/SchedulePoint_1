@@ -2416,6 +2416,19 @@ not guess.
 
 ## 143. The Project Explorer cannot open a client or a project — two of ADR-0029's three levels
 
+**CLOSED 2026-08-28 (correctness programme, Phase 1).** The row's own shape was followed: the
+meanings are split rather than merged. `activate` — the name's click and the APG tree's Enter,
+whose job is the default action — now navigates for **every** kind (client detail, project detail,
+plan workspace); the row's remaining surface keeps the container toggle (the Q3 unit case passes
+unchanged), and expansion keeps its dedicated keys (ArrowRight/ArrowLeft). The pointer handler sits
+on an inner span sized to the TEXT, not on the `flex-1` wrapper — the wrapper stretches across the
+row, so a handler there would have made most of the row's width navigate and inverted the rule in
+the same commit that stated it. Regression test verified red against the pre-fix `activate`
+(`HierarchyTree.test.tsx`, the #143 case); no journey clicks a container row to expand (checked,
+not assumed — they use the action buttons and dialogs), so the blast radius the row predicted did
+not fire. The Enter-semantics change is a tree keyboard-contract change, so the §19.13
+accessibility review runs over it before the phase's release.
+
 **Found 2026-08-19**, by the ADR-0097 Landing D1b sweep, and it is older than the milestone that
 exposed it.
 
