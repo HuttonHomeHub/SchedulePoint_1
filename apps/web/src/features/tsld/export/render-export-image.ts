@@ -115,6 +115,12 @@ export async function renderExportImage(
   const createCanvas = deps.createCanvas ?? (() => document.createElement('canvas'));
   const paint = deps.paint ?? paintScene;
 
+  // A one-shot render must not race the product's self-hosted face (#173): the live canvas
+  // repaints every frame so a late-arriving woff2 corrects itself, but this paint happens once
+  // and the file it produces is the deliverable. Settled by the time any user can reach Export in
+  // practice; awaited anyway because "in practice" is not a guarantee. No-op under jsdom.
+  if (typeof document !== 'undefined' && 'fonts' in document) await document.fonts.ready;
+
   const canvas = createCanvas();
   canvas.width = Math.max(1, Math.round(size.width * dpr));
   canvas.height = Math.max(1, Math.round(size.height * dpr));
@@ -124,7 +130,13 @@ export async function renderExportImage(
   // Paint the diagram with the light print palette. `paintScene` sets the dpr transform and authors in
   // CSS px, so every draw below stays in CSS px too. It clears to transparent, so the white ground is
   // laid BEHIND everything afterwards (`destination-over`).
-  paint(ctx, scene, viewport, size, palette, dpr);
+  //
+  // `minNonWorkingPx: 0` (#166): the screen culls the non-working wash below 3 px/day because a
+  // planner can zoom; a whole-plan export frames any span at any scale and paper cannot — so
+  // without the override a long programme's deliverable lost its weekends entirely, not
+  // degraded them. Below the screen floor the painter merges consecutive non-working days into
+  // runs, so a weekend is one crisp band rather than two sub-pixel blends.
+  paint(ctx, scene, viewport, size, palette, dpr, { minNonWorkingPx: 0 });
 
   // The band goes in BEFORE the paper ground: `paintWbsBand` clears its own strip (it owns a canvas
   // on the live path), and clearing after the ground was laid would punch a transparent hole

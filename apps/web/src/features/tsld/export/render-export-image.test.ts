@@ -70,12 +70,17 @@ describe('renderExportImage', () => {
     const blob = await renderExportImage(spec, { createCanvas: () => canvas, paint });
 
     expect(paint).toHaveBeenCalledTimes(1);
-    const [calledCtx, , calledView, calledSize, calledPalette, calledDpr] = paint.mock.calls[0]!;
+    const [calledCtx, , calledView, calledSize, calledPalette, calledDpr, calledOpts] =
+      paint.mock.calls[0]!;
     expect(calledCtx).toBe(ctx); // the OFF-SCREEN context, never the live canvas
     expect(calledView).toBe(spec.viewport);
     expect(calledSize).toBe(spec.size);
     expect(calledPalette).toBe(spec.palette);
     expect(calledDpr).toBe(2);
+    // The wash cull floor drops to zero for the deliverable (#166): a whole-plan export frames
+    // any span at any scale and paper has no zoom, so the screen's 3 px/day legibility cull was
+    // deleting weekends from long programmes entirely. Verified red against the pre-#166 call.
+    expect(calledOpts).toEqual({ minNonWorkingPx: 0 });
     // The backing store is allocated at size × dpr.
     expect(raw.width).toBe(400);
     expect(raw.height).toBe(280);

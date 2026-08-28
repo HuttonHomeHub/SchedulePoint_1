@@ -2395,6 +2395,19 @@ still well clear of 24 px). Reducing `px-2` does **not** help — the coarse var
 Cheapest real fix is probably none of those: extend the fit gate to assert a _labelled_ floor under
 coarse, so the next width decision is made with both pointers in view rather than one.
 
+**CLOSED 2026-08-28 (correctness programme Phase 2) — re-measured under the wrap, and the defect
+is gone with the mechanism that caused it.** Every figure above describes the width-ladder era:
+ADR-0109 D1 deleted the ladder, the `⋯` and the eviction entirely — a command surface wraps, it
+never hides — so nothing CAN leave the row under a coarse pointer any more, `next-conflict`
+included. Measured in Chromium at 1646 with `hasTouch: true` against the same plan and build:
+the command deck is **identical** fine vs coarse — 108 px tall, 25 buttons, 17 labelled, both
+pointers — because the 32 px the coarse padding adds (visible on the mode row, 404 → 436 px) is
+absorbed by the wrap's slack on the deck's existing lines. The worst coarse-pointer cost the
+wrap model can now produce is one extra wrapped line on a fuller row, which is ADR-0109's stated
+and accepted cost, not an eviction. The 2.5.8 geometry stays gated (`pointer-coarse:px-3` and
+`TOOLBAR_CARET_TARGET` are live); the tooltip-primitive question this row's siblings raise stays
+with #131/#204(a).
+
 ## 134. A `render` item outranks every command on its row, and nothing says so
 
 **Raised:** 2026-08-14 (ADR-0094 M5) · **Size:** S · **Risk if left:** medium
@@ -3012,7 +3025,18 @@ gate pass could observe only one of them in this environment:
    change is large-scale rather than subtle. The remaining owed half is a hands-on pass at
    real magnification, which a screenshot cannot stand in for.
 
+**Attempted 2026-08-28 (correctness programme Phase 2) and structurally could not be discharged
+here**: the build container runs no screen reader and no OS magnifier, so both observations
+remain owed to a human pass on real hardware — NVDA or VoiceOver for the listen, an OS zoom for
+the magnification half. Recorded rather than quietly re-deferred; flagged to the product owner
+with the Phase 2 report so the row has an owner outside this environment.
+
 ## 155. The minimap M4 gate pass's non-blocking findings
+
+_Triage 2026-08-28 (correctness programme Phase 4): re-filed consciously. Items 1–3 are design
+judgements for a minimap design pass, not defects; item 4's focus-chain last resort is real and
+S-sized but sits on a shared close-chain contract (§19.13 territory — a review before release,
+not a residue fold); item 5 is an instrument nit whose reason stands._
 
 **Raised 2026-08-21** (minimap M4-T1; the blocking findings are folded with regression
 tests and recorded in ADR-0100's Consequences). **Size:** S each.
@@ -3589,6 +3613,17 @@ rather than done inside a catalogue-only slice.
 the W3 plan). **Size:** S–M. Filed separately because it is a different defect from #164: that row
 was about layers the export never composed, and this is about a layer it composes and then culls.
 
+**CLOSED 2026-08-28 (correctness programme Phase 3).** `paintScene` gains an options seam
+(`minNonWorkingPx`) and the export passes `0`: below the screen's 3 px/day floor the wash paints
+as **merged runs** — a weekend is one crisp band, never two sub-pixel blends — and the sub-floor
+branch is unreachable with the option absent, so the live painter is byte-identical (the golden
+log did not move). One detail below has changed since this row was written: ADR-0109 D4 deleted
+the hatch, so the flat wash (`--canvas-nonworking`, a real value now) is the only weekend channel
+on paper — which made the cull worse than this row describes, not better. Regression pinned in
+`paint.test.ts` (verified red against the option-ignoring painter, and its own first assertion
+corrected: an edge-clipped weekend legitimately fills one day) and in
+`render-export-image.test.ts` (the override reaches the painter).
+
 `paint.ts` paints the non-working wash and its hatch as **one `fillStyle`**, and culls both below
 `NON_WORKING_MIN_PX = 3`. An export can frame the **entire plan** rather than a viewport, so on a
 long programme the per-day width falls under that floor and weekends disappear — not degraded,
@@ -3611,6 +3646,23 @@ the layer rather than changing how it culls.
 **Raised 2026-08-22** (the W3-M2 component review). **Size:** M. The spec's CQ-5 promised this row
 and it was never filed — the enumeration lived only in a `SCREEN_ONLY` record whose reasons were
 partly wrong, which is the opposite of a durable record.
+
+**CLOSED 2026-08-28 (correctness programme Phase 3).** All five LENS keys now export as shown:
+`TsldCanvasHandle` gains `getSceneLenses()` — a pure read of `barFill`, `barInk`, `flaggedIds`,
+`baselineGhosts` and `dimmedIds` off the LIVE scene ref, so the deliverable is the planner's
+picture **by the one derivation the screen uses**, never a second one that agrees until it does
+not (the ADR-0065 rule). The composer's call is optional (`?.()`), so a partial handle degrades
+to the default picture rather than crashing an export — and because that tolerance would let
+"lenses flow" and "lenses silently dropped" share a green, the pdf suite pins a distinctive lens
+set end-to-end into the scene `renderExportImage` receives. The five entries left `SCREEN_ONLY`,
+which turned the parity gate into the red-first proof: it named exactly the five missing keys
+against the pre-fix composer. Interaction state (selection, hover, drags) stays screen-only —
+a delivered picture has no cursor. **One suggestion from the phase's ux gate is filed rather than
+built**: the Export menu gives no cue that an active lens will shape the deliverable (its copy is
+static whichever picture is about to be produced), so a planner isolating a subnetwork for their
+own analysis could hand a client the isolated picture unreminded. Defensible as-is — the behaviour
+matches US-2's own contract and lens state is session-local, never persisted — so an export-menu
+indicator is a design-pass item, not a correctness fix.
 
 #164 restored the seven layers the export never composed. **Five more keys it does not compose are
 lens state**, and they are a different question: not "a layer nobody wired up" but "whose picture is
@@ -3752,6 +3804,13 @@ inclusion survived in the first place.
 every rule to six tags), which is a coverage change on three suites in a PR about the app shell. Each
 is a one-line edit and none should change colour.
 
+**CLOSED 2026-08-28 (correctness programme Phase 4).** The siblings are **two, not three** — the
+third (`e2e-toolbar-fit/fit.spec.ts`) was deleted whole with the width ladder (ADR-0109 D1), which
+this row could not have known. `e2e-gantt-editing/object-actions.spec.ts` and
+`e2e-minimap/minimap.spec.ts` now carry the single-`options()` shape with the reason at each site.
+Both previously passed while running MORE rules than they claimed, so the narrowing cannot turn
+either red; what changes is that "the scan is green" now means what its docblock says it means.
+
 **Two gate findings came out of the same thread and ARE fixed**, both in `scripts/check-claims.mjs`'s
 neighbourhood:
 
@@ -3839,6 +3898,24 @@ immediately found Row 2 losing all nine labels.
 Do not read this row as "narrow viewports are broken". Nothing here says they are; it says **nobody
 knows**, which is the point.
 
+**CLOSED 2026-08-28 (correctness programme Phase 2) — option 1, and the row's warning was right.**
+`apps/web/e2e-narrow-shell/` (`docs/specs/narrow-shell-journey/`, its own CI step, spec written
+first per this row's own ADR-0105 note) drives the sheet, the hamburger, the breakpoint crossing
+in both directions, the below-`md` facts fallback and an axe scan at 390 × 844. **Its first run
+found the sheet had no ground at all**: the workspace redesign moved the rail's `Surface` out to
+its containers and only the docked `ExplorerColumn` got one — `Sheet` is `bg-transparent` by
+design, so below `lg` the Explorer painted its rows straight over the page (measured in Chromium:
+dialog and nav both `rgba(0, 0, 0, 0)`), while the rail's own docblock claimed the Sheet owned
+the scope. Fixed at the call site with the `ExplorerColumn` pattern, pinned red-first in
+`app-shell.test.tsx` — and the phase's ux gate caught that sentence overclaiming: the first fix
+copied only the GROUND half of the pattern, omitting the `border-border border-r` trailing edge
+every `panel`-tone consumer carries, so the panel's edge faded into the scrim. Both halves now
+applied — the claim matches the code because the code was finished, not because the sentence was
+softened (ADR-0076). The run also corrected the journey's own first draft: creating the plan at
+a wide viewport auto-expands the path to it (reveal-on-create persists per organisation), so a
+blind container click COLLAPSES the branch — the spec now reads `aria-expanded` before clicking,
+with the reason recorded in the file.
+
 ## 173. The canvas painter draws every glyph in a typeface the product does not use
 
 **Raised 2026-08-22**, found while measuring for #148 rather than reported.
@@ -3883,6 +3960,22 @@ the paint path, or the first draw of every session is in the fallback face.
 **Not scheduled.** The three marks #148 moves to DOM pick up Space Grotesk incidentally, which
 narrows the inconsistency without addressing it; that is a side effect, not a fix, and it is
 recorded so the next reader does not mistake it for one.
+
+**CLOSED 2026-08-28 (correctness programme Phase 3) — and this row itself had gone stale in the
+way it warns about**: the product's face is no longer Space Grotesk but **IBM Plex Sans** (the
+workspace redesign, 2026-08-24, self-hosted for GDPR reasons), and nothing updated this row when
+the face changed — the exact "cascade-level decision applied by hand to the layer that opts out"
+failure, one document over. `LABEL_FONT` now leads with the product's face, and the family is
+**derived, not remembered**: `label-font.structural.test.ts` parses `--font-sans` out of
+`globals.css` and asserts `LABEL_FONT` carries its leading family, so the NEXT face change fails
+a gate instead of shipping a third era of the drift (verified red against the `system-ui`
+constant). The two costs this row priced were both paid as it said: the golden oracle was
+re-baselined and audited line by line — the diff is exactly the two `font=` lines and nothing
+else — and the load race is handled at both ends: the shared width memo gains `clear()`, busted
+once on `document.fonts.ready` (a fallback-face width would poison the memo for the session, the
+hazard its own docblock had carried since it was written), and the one-shot export render awaits
+`fonts.ready` before painting, because the live canvas repaints every frame and the deliverable
+paints once.
 
 ## 174. The axis-markers gate pass's non-blocking findings
 
@@ -4326,6 +4419,17 @@ which is why the flake verdict here is stated with its evidence rather than assu
 Cross-references **#1** (web e2e is Chromium-first, and the flag-scoped suites never run these
 engines at all).
 
+**CLOSED 2026-08-28 (correctness programme Phase 2) — the row's own first candidate.** The three
+post-sign-up heading assertions (`clients.spec.ts`, `dependencies.spec.ts` ×2) carry an explicit
+`{ timeout: 15_000 }` with the reason in a comment at each site — the assertion spans a form
+submit, a network round trip and a client-side route change, and the default 5 s was measured
+marginal only under a loaded CI runner on Firefox. The global expect timeout is untouched, per
+this row's own warning that raising it would hide real regressions everywhere. The job-split
+candidate stays uncosted and is deliberately not taken here (a CI-topology change for a margin a
+targeted timeout already covers). Firefox still cannot run locally (#1), so the proof is the
+assertion now failing only past 15 s — three times the measured envelope — rather than a local
+re-run.
+
 ---
 
 ## 183. `check:claims` cannot see a camelCase basename in its colon form
@@ -4354,6 +4458,11 @@ carries no version) — three holes in one gate, all found by using it rather th
 ---
 
 ## 184. Unsaved-work guard: the findings its gate pass did not block on
+
+_Triage 2026-08-28 (Phase 4): re-filed consciously. The CONFIRM-path focus gap is the register's
+own words — "a systemic router gap… worth its own look at where focus should land after any route
+change" — which is a design pass across every navigation, not a residue fold; the rest stand on
+their filed reasons._
 
 _Filed 2026-08-23 with ADR-0108. Six blocking findings were fixed in the milestone; these are the
 rest, recorded rather than carried in someone's head._
@@ -5172,6 +5281,19 @@ judge.
 than a reading; the 21 shots it did take were enough to judge M2-T5's question (what the merged
 header did to the twelve screens that are not a plan).
 
+**FIXED 2026-08-28 (correctness programme Phase 4), and hypothesis 1 was FALSE.** Probed on the
+live workspace as this row demanded: `getByRole('button', { name: /^View/ }).first()` resolves
+`[data-toolbar-item="view"]` — the RIGHT control — and no deck group card matches `/view/i` at
+all, so the fold-a-caption theory does not hold on today's tree. The 2026-08-26 failure's exact
+cause is unrecoverable (three epics have reshaped the deck since), which is itself the argument
+for the shipped fix: the helper now locates by `[data-toolbar-item="view"]` (ADR-0091's own rule
+— by the registry id, never the copy), so a renamed caption cannot recreate the failure class.
+The second half shipped as specified: a failed shot records `FAILED — <reason>` and the run
+carries on, with a non-zero exit naming every missing picture. Proven by running the instrument:
+all 25 shots at 1646 including the three this row said were lost (`gantt-arrows`,
+`plan-workspace-minimap`, `plan-workspace-lenses`), zero failures, one documented staff opt-in
+skip.
+
 ---
 
 ## #200 — Two named-slot registries, one of them the better pattern, neither shared
@@ -5242,6 +5364,11 @@ a rendering meaning is a `Toolbar` contract change — ADR-0105's trigger, so it
 
 ## 202. Six non-blocking findings from the foot-row gate pass
 
+_Triage 2026-08-28 (Phase 4): (e) closed as STALE — its coverage exists (see the item). The other
+five re-filed consciously: (a) is a distance cost whose order matches the visual arrangement, (b)
+and (d) are refactors of working code, (c) is an instrument-widening task with its own scope, (f)'s
+pairing is gated._
+
 **Raised:** 2026-08-27 (ADR-0114 M7) · **Size:** S each · **Owner:** unassigned
 
 Four specialist reviews over the foot-row diff; eight blocking findings folded in the milestone (see
@@ -5279,6 +5406,10 @@ transitively through two callers and end to end by `dock.spec.ts`. The positiona
 needs a real layout, so e2e is the right tier for that — but `hostsPlanSlots` toggling both outlets,
 and `toggle` rendering when present and absent, are cheap to pin at the unit level and are not pinned
 anywhere. This is the seam that produced the milestone's largest blocking finding.
+**Re-verified 2026-08-28 (correctness programme Phase 4): STALE — the coverage exists.**
+`activity-bottom-panel.test.tsx` pins exactly the two branches this item names ("gates BOTH plan
+slots on `hostsPlanSlots`, never just one"; "renders the toggle when given one, and nothing in its
+place when not"), 4/4 green. Added after this row was filed; the row was not updated. Item closed.
 
 **(f) `bg-foreground/5` now paints on the canvas-dock surface scope for the first time.** The token
 pairing is unchanged from `Deck`'s pre-existing use, and the card is decorative grouping with every
@@ -5319,6 +5450,11 @@ and outside the stated scope of the change that found it — but the two clamps 
 Both raised by the accessibility gate on the `Menu` fix, which passed it with no blocking finding.
 
 ## 204. Four things the foot-row-and-deck epic found and did not fix
+
+_Triage 2026-08-28 (Phase 4): re-filed consciously. (a) is #131's tooltip-primitive question,
+narrowed there the same day (six universal glyphs; ADR-0105 spec item); (b) is a gated pairing;
+(c) is an unverified "may" that needs a browser probe before it is a defect; (d) is a record, not
+work._
 
 **Raised:** 2026-08-27 (foot-row-and-deck M7) · **Size:** S each · **Owner:** unassigned
 
@@ -5415,6 +5551,12 @@ stand-in. In-window placement work does not help — the capacity is genuinely i
 Playbook annotated 2026-08-28; the decision goes to the product owner.
 
 ## 206. Health-check review suggestions consciously not folded at the M5 gate pass
+
+_Triage 2026-08-28 (Phase 4): re-filed consciously. The print-header convention spans two print
+documents and wants one decision, not a fold; the Badge swap changes a shipped panel's look (a ux
+call, not a correctness fix); the two AT listens are environment-blocked exactly as #154 records
+(no screen reader in this container — owed to a human pass); the rest stand on their filed
+reasons._
 
 **Raised:** 2026-08-28 (schedule-health-check M5-T1) · **Size:** S ×5 · **Owner:** web
 

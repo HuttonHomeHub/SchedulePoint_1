@@ -54,15 +54,16 @@ const SCREEN_ONLY: Record<string, string> = {
   selectedId: 'a selection is a live interaction; a delivered picture has no selected bar',
   selectedIds: 'as selectedId — the plural selection (ADR-0080) is interaction state',
   showEdgeHandles: 'edge handles are grab targets, and paper has no pointer',
-  dimmedIds: 'LENS — filter, isolate and float-path dimming, unioned; see TECH_DEBT #167',
   hoverId: 'hover cannot exist in a raster',
   lagHandles: 'a lag handle is a drag target (ADR-0052 M3)',
   activeLagId: 'the lag drag in progress',
   gestureSourceId: 'the bar a gesture started on',
-  barFill: "LENS — the Colour-by mode's per-bar fill map; see TECH_DEBT #167",
-  barInk: "LENS — the Colour-by mode's paired ink map; see TECH_DEBT #167",
-  baselineGhosts: 'LENS — the baseline variance ghosts; see TECH_DEBT #167',
-  flaggedIds: 'LENS — the over-allocation highlight (ADR-0041); see TECH_DEBT #167',
+  // The five LENS keys (`barFill`, `barInk`, `flaggedIds`, `baselineGhosts`, `dimmedIds`) left
+  // this record on 2026-08-28 (#167 closed): the export now composes them from the live scene via
+  // `TsldCanvasHandle.getSceneLenses()`, so the deliverable is the planner's picture — colour-by,
+  // over-allocation, baseline variance and isolate/filter dimming all export as shown. Their
+  // removal made this gate demand the keys in the export composer, verified red before the
+  // composer carried them.
 };
 
 /**

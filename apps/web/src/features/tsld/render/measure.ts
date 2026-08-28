@@ -11,6 +11,12 @@ export interface MeasureCache {
   measure(text: string, measureText: (s: string) => number): number;
   /** Number of distinct strings cached (bounded by the plan's label count). */
   readonly size: number;
+  /**
+   * Drop every entry. Exists for exactly one caller: the font-load bust in
+   * `layers/text-measure.ts` (#173) — a width measured in the fallback face before the product's
+   * own woff2 arrived is wrong for the rest of the session, and the memo cannot see fonts.
+   */
+  clear(): void;
 }
 
 export function createMeasureCache(): MeasureCache {
@@ -25,6 +31,9 @@ export function createMeasureCache(): MeasureCache {
     },
     get size() {
       return cache.size;
+    },
+    clear() {
+      cache.clear();
     },
   };
 }

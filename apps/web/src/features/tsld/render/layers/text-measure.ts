@@ -13,3 +13,18 @@ import { createMeasureCache } from '../measure';
  * poison every entry across palettes. One module makes that one place to fix.
  */
 export const labelWidths = createMeasureCache();
+
+/**
+ * **The font-load bust** (#173). `LABEL_FONT` now leads with the product's own face, which is a
+ * self-hosted woff2 — so a label measured before the file arrives is measured in the FALLBACK
+ * face, and the memo (keyed by text alone, deliberately) would hold that wrong width for the
+ * session: the exact poisoning the docblock above has warned about since it was written. When the
+ * document's fonts finish loading after this module was first used, drop everything measured so
+ * far; the next frame re-measures in the real face. One-shot, module-level, and a no-op wherever
+ * `document.fonts` does not exist (jsdom), where nothing ever loads and the fallback IS the font.
+ */
+if (typeof document !== 'undefined' && 'fonts' in document) {
+  void document.fonts.ready.then(() => {
+    labelWidths.clear();
+  });
+}

@@ -9,7 +9,7 @@ import type {
   LoadedPlan,
   PlanWorkspaceModel,
 } from '@/components/layout/workspace/use-plan-workspace-model';
-import { DEFAULT_VIEW_TOGGLES } from '@/features/tsld/render/paint';
+import { DEFAULT_VIEW_TOGGLES, type TsldScene } from '@/features/tsld/render/paint';
 
 /**
  * The `useTsldToolbarContext` Diagram-PDF wiring (spec `docs/specs/export-print/` §Milestone 3): the
@@ -101,6 +101,11 @@ function makeCanvasUi(): TsldCanvasUiState {
           view: { pxPerDay: 20, originX: 0, originY: 0 },
           size: { width: 800, height: 600 },
         }),
+        // The five LENS keys the export composes from the live scene (#167). A distinctive
+        // value, asserted below: the composer's optional-call tolerance means a fixture WITHOUT
+        // this method still passes every other case, so without a positive pin "lenses flow"
+        // and "lenses silently dropped" would be the same green (the ADR-0093 shape).
+        getSceneLenses: () => ({ dimmedIds: new Set(['dim-1']), flaggedIds: new Set(['flag-1']) }),
       },
     } as unknown as TsldCanvasUiState['canvasControlRef'],
     requestFit: vi.fn(),
@@ -177,6 +182,14 @@ describe('useTsldToolbarContext — Diagram-PDF export (M3)', () => {
     expect(meta.filename).toBe('north-tower-diagram-whole-2026-07-20.pdf');
     expect(announce).toHaveBeenCalledWith('Downloaded north-tower-diagram-whole-2026-07-20.pdf.');
     expect(result.current.pdfExporting).toBe(false);
+    // **The planner's lenses reach the export scene** (#167): the fixture handle returns
+    // distinctive dim/flag sets, and the scene handed to `renderExportImage` must carry them.
+    // Verified red against the pre-#167 composer, which composed neither key.
+    const { renderExportImage } = await import('../export/render-export-image');
+    const exportScene = (vi.mocked(renderExportImage).mock.calls[0]![0] as { scene: TsldScene })
+      .scene;
+    expect(exportScene.dimmedIds).toEqual(new Set(['dim-1']));
+    expect(exportScene.flaggedIds).toEqual(new Set(['flag-1']));
   });
 
   it('names the "view" extent distinctly from the "whole" extent (B1 — no collision)', async () => {

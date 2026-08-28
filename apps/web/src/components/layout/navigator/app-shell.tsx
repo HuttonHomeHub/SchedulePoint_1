@@ -30,6 +30,7 @@ import {
 } from '@/components/layout/drawer/use-context-drawer-prefs';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
+import { Surface } from '@/components/ui/surface';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
@@ -529,12 +530,33 @@ function ShellFrame(): React.ReactElement {
                 title="Project Explorer"
               >
                 {explorerAvailable ? (
-                  <NavigatorRail
-                    orgSlug={orgSlug}
-                    expansion={expansion}
-                    onClose={closeDrawer}
-                    onNavigate={closeDrawer}
-                  />
+                  // **The ground is this call site's job, and it was missing** (#172's first
+                  // find, 2026-08-28). `Sheet` is `bg-transparent` by design — its content owns
+                  // the panel — and when the workspace redesign moved the rail's own `Surface`
+                  // out to its containers, only the docked `ExplorerColumn` got one. Below `lg`
+                  // the Explorer painted NOTHING behind its rows: the page showed through the
+                  // open drawer (measured in Chromium at 390 px — dialog and nav both
+                  // `rgba(0, 0, 0, 0)`), unnoticed because no journey had ever run below `lg`.
+                  // The rail's own docblock said "the container owns the scope: the drawer at
+                  // `lg`+, and the `Sheet` below it" — describing the intent, not the code.
+                  //
+                  // `border-r` as well as the ground: every `panel`-tone consumer pairs the
+                  // Surface with a trailing-edge border (`explorer-column.tsx` both states,
+                  // `context-drawer.tsx`), and the first version of this fix copied only the
+                  // ground half — the panel's trailing edge faded into the scrim with no defined
+                  // boundary while the closure note claimed the ExplorerColumn pattern whole
+                  // (ux gate, 2026-08-28).
+                  <Surface
+                    tone="panel"
+                    className="border-border flex h-full min-h-0 flex-col border-r"
+                  >
+                    <NavigatorRail
+                      orgSlug={orgSlug}
+                      expansion={expansion}
+                      onClose={closeDrawer}
+                      onNavigate={closeDrawer}
+                    />
+                  </Surface>
                 ) : null}
               </Sheet>
             </>
