@@ -1,5 +1,16 @@
 # @repo/types
 
+## 0.28.0
+
+### Minor Changes
+
+- [#404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/404) [`55706c9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/55706c9c11dc14d2263dc6d237161bf80883bdda) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The DCMA 14-point schedule health check: `GET …/schedule/health-check` computes all fourteen
+  metrics from the persisted rows — no engine run, no lock, nothing written. The response is always
+  exactly fourteen rows in ordinal order; a metric that cannot be computed says so with a typed
+  reason instead of disappearing or failing the request. Thresholds and the offender cap travel in
+  the payload, and the report carries no cost field at any depth, so one URL produces one document
+  whoever reads it.
+
 ## 0.27.0
 
 ### Minor Changes
