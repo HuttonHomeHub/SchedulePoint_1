@@ -410,6 +410,23 @@ describe('paintScene', () => {
     const coarse = mockCtx();
     paintScene(coarse, scene({ isWorkingDay }), { ...VIEW, pxPerDay: 1 }, SIZE, PALETTE);
     expect(coarse.fillRect).not.toHaveBeenCalled();
+
+    // **The export's override paints below the screen floor, as merged runs** (#166). A
+    // whole-plan export frames any span at any scale and paper has no zoom, so the deliverable
+    // was losing weekends ENTIRELY on long programmes — the wash is the only weekend channel on
+    // paper since the hatch went (ADR-0109 D4). Each 2-day weekend is ONE fill (the run), never
+    // two sub-pixel fills. Verified red against the pre-#166 painter, which ignored the option.
+    const exportCoarse = mockCtx();
+    paintScene(exportCoarse, scene({ isWorkingDay }), { ...VIEW, pxPerDay: 1 }, SIZE, PALETTE, 1, {
+      minNonWorkingPx: 0,
+    });
+    const washFills = exportCoarse.fillRect.mock.calls;
+    expect(washFills.length).toBeGreaterThan(0);
+    // Runs, not days: an interior weekend is ONE two-day fill (2 × 1 px here). A weekend cut in
+    // half by the paint window's edge legitimately fills one day — the first version of this
+    // assertion demanded 2 everywhere and failed against a correct painter.
+    expect(washFills.some((call) => Math.abs((call[2] as number) - 2) < 1e-5)).toBe(true);
+    for (const call of washFills) expect(call[2] as number).toBeGreaterThanOrEqual(1 - 1e-5);
   });
 
   it('draws the TODAY marker (dashed) only when on, mapped, and on-screen', () => {

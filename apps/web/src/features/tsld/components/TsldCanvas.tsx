@@ -154,6 +154,19 @@ export interface TsldCanvasHandle {
    * **Diagram — current view (PNG)** export (spec `docs/specs/export-print/`) to crop the off-screen
    * image to the live bounds. A pure read off the rAF-owned refs; it never repaints the live canvas. */
   getViewport: () => { view: Viewport; size: Size };
+  /**
+   * Read (never mutate) the five LENS keys off the live scene — the Colour-by fill/ink maps, the
+   * over-allocation highlight, the baseline ghosts, and the filter ∪ isolate ∪ float-path dimming
+   * (`docs/TECH_DEBT.md` #167). The export composes THESE rather than re-deriving them, so the
+   * deliverable is the planner's picture by construction — a second derivation is the ADR-0065
+   * two-implementations drift, and here the drift would surface only in the file a planner hands
+   * to someone who was not in the room. Interaction state (selection, hover, drags) is
+   * deliberately NOT here: a delivered picture has no cursor.
+   */
+  getSceneLenses: () => Pick<
+    TsldScene,
+    'barFill' | 'barInk' | 'flaggedIds' | 'baselineGhosts' | 'dimmedIds'
+  >;
 }
 
 /** Left inset (px) the "Go to date" jump leaves before the target day, so it isn't flush to the edge. */
@@ -1311,6 +1324,10 @@ export function TsldCanvas({
       // A pure read of the live viewport (transform + measured size) for the current-view PNG export.
       // Returns copies so a caller can't mutate the rAF-owned refs; never repaints the live canvas.
       getViewport: () => ({ view: { ...viewRef.current }, size: { ...sizeRef.current } }),
+      getSceneLenses: () => {
+        const { barFill, barInk, flaggedIds, baselineGhosts, dimmedIds } = sceneRef.current;
+        return { barFill, barInk, flaggedIds, baselineGhosts, dimmedIds };
+      },
     }),
     // Stable — reads live state through refs (the two minimap commits are `[]` callbacks).
     [minimapCenterOnWorld, minimapPanPages],

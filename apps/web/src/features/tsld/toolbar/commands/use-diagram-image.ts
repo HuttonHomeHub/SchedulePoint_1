@@ -96,6 +96,13 @@ export function useDiagramImage(args: {
       const dataDate = plan.plannedStart;
       const live = canvasControlRef.current?.getViewport();
       if (dataDate === null || !live) return null;
+      // **The planner's lenses, off the live scene** (#167): colour-by, over-allocation, baseline
+      // ghosts and isolate/filter dimming export AS SHOWN, read through the handle rather than
+      // re-derived — a second derivation would drift, and the drift would surface only in the
+      // file a planner hands to someone who was not in the room.
+      // Optional-call, not a bare call: a partial handle (a test fixture, a future host wiring
+      // only the viewport) degrades to the default picture rather than crashing the export.
+      const lenses = canvasControlRef.current?.getSceneLenses?.() ?? {};
       const source = barDateSourceFor(plan.schedulingMode, lateOverlayActive);
       // The band comes from the SAME derivation the live canvas uses (ADR-0063 §M5), so the export
       // cannot disagree with the screen about the band's height or about which activities the
@@ -139,6 +146,16 @@ export function useDiagramImage(args: {
         visualRefresh: layers.visualRefresh,
         linkRouting: layers.linkRouting,
         dataDateLine: layers.dataDateLine,
+        // **The five LENS keys, from the live scene via the handle** (#167 — closed). US-2's
+        // wording is the contract: the export is MY picture, not a fixed one. A planner who
+        // colours by resource, highlights over-allocation, shows the baseline ghosts or isolates
+        // a subnetwork gets that picture in the deliverable. Explicit keys, never a spread —
+        // the parity gate reads this file as text and refuses a spread it cannot resolve.
+        dimmedIds: lenses.dimmedIds,
+        barFill: lenses.barFill,
+        barInk: lenses.barInk,
+        baselineGhosts: lenses.baselineGhosts,
+        flaggedIds: lenses.flaggedIds,
       };
       const { viewport, size, dpr, scaledToFit } = buildExportViewport(renderActivities, dataDate, {
         extent,

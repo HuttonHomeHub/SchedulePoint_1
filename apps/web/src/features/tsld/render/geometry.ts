@@ -250,8 +250,22 @@ export function dateLabelSlot(args: {
 }
 /** Minimum clear room (px) to the same-lane neighbour before a beside label is worth drawing. */
 export const LABEL_BESIDE_MIN_PX = 24;
-/** The fixed label font. Constant so the width memo can key by text alone (font-stable). */
-export const LABEL_FONT = "11px system-ui, -apple-system, 'Segoe UI', sans-serif";
+/**
+ * The fixed label font. Constant so the width memo can key by text alone (font-stable).
+ *
+ * **It leads with the product's own face** (`docs/TECH_DEBT.md` #173, closed 2026-08-28): this
+ * constant shipped as bare `system-ui` for the whole life of the canvas, so the primary surface's
+ * every glyph was set in whatever the reader's machine resolved while the rest of the product was
+ * set in a face somebody chose — first Space Grotesk (ADR-0097), then IBM Plex Sans (the
+ * workspace redesign), with the register row about the mismatch going stale at the change. The
+ * stack mirrors `--font-sans` in `globals.css`, and `label-font.structural.test.ts` derives the
+ * family from that declaration so the NEXT face change fails a gate instead of shipping a third
+ * era of the drift. The load race is handled where the cache lives (`layers/text-measure.ts`):
+ * a width measured in the fallback face before the woff2 arrives would poison the memo for the
+ * session.
+ */
+export const LABEL_FONT =
+  "11px 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 /**
  * Discrete zoom stops → pixels per day. A continuous slider interpolates between them;

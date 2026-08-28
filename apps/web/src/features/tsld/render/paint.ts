@@ -734,6 +734,18 @@ function drawRefreshedBar(
  * whole plan — measured, a whole-plan viewport culls to 255 of 2,160 bars
  * (`docs/specs/tsld-minimap/input-performance.md` §5).
  */
+export interface PaintSceneOptions {
+  /**
+   * Override for the non-working wash's px-per-day cull floor (`docs/TECH_DEBT.md` #166). On
+   * screen the floor is a legibility decision — below `NON_WORKING_MIN_PX` a day column is
+   * sub-pixel and a planner can zoom — but a whole-plan EXPORT frames any span at any scale and
+   * paper has no zoom, so the export passes `0` and the wash paints at every scale (as merged
+   * runs — see the layer). Absent ⇒ the constant, and the sub-floor branch is unreachable: the
+   * live painter is byte-identical.
+   */
+  minNonWorkingPx?: number;
+}
+
 export function paintScene(
   ctx: Ctx2D,
   scene: TsldScene,
@@ -741,6 +753,7 @@ export function paintScene(
   size: Size,
   palette: TsldPalette,
   dpr = 1,
+  opts?: PaintSceneOptions,
 ): string[] {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, size.width, size.height);
@@ -793,6 +806,29 @@ export function paintScene(
     for (let d = firstDay; d <= lastDay; d += 1) {
       if (scene.isWorkingDay(d)) continue;
       ctx.fillRect(screenXOfDay(d, view), 0, view.pxPerDay, size.height);
+    }
+  } else if (
+    toggles.nonWorking &&
+    scene.isWorkingDay &&
+    view.pxPerDay >= (opts?.minNonWorkingPx ?? NON_WORKING_MIN_PX)
+  ) {
+    // **Below the screen floor, only when a caller lowered it — the export** (#166). A whole-plan
+    // export can frame years at under a pixel per day, and on paper the wash is the only weekend
+    // channel and there is no zoom — so the deliverable was losing weekends entirely, not
+    // degrading them. Consecutive non-working days merge into one rect: at these scales the RUN
+    // (a weekend, a shutdown) is the legible unit, and a merged fill is crisp where per-day
+    // sub-pixel fills would each blend separately. Unreachable with `opts` absent, so the live
+    // painter above stays byte-identical — pinned by the golden log.
+    ctx.fillStyle = palette.nonWorking;
+    let runStart: number | null = null;
+    for (let d = firstDay; d <= lastDay + 1; d += 1) {
+      const nonWorking = d <= lastDay && !scene.isWorkingDay(d);
+      if (nonWorking && runStart === null) runStart = d;
+      else if (!nonWorking && runStart !== null) {
+        const x = screenXOfDay(runStart, view);
+        ctx.fillRect(x, 0, screenXOfDay(d, view) - x, size.height);
+        runStart = null;
+      }
     }
   }
 

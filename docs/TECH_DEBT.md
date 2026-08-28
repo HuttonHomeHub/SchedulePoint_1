@@ -3608,6 +3608,17 @@ rather than done inside a catalogue-only slice.
 the W3 plan). **Size:** S–M. Filed separately because it is a different defect from #164: that row
 was about layers the export never composed, and this is about a layer it composes and then culls.
 
+**CLOSED 2026-08-28 (correctness programme Phase 3).** `paintScene` gains an options seam
+(`minNonWorkingPx`) and the export passes `0`: below the screen's 3 px/day floor the wash paints
+as **merged runs** — a weekend is one crisp band, never two sub-pixel blends — and the sub-floor
+branch is unreachable with the option absent, so the live painter is byte-identical (the golden
+log did not move). One detail below has changed since this row was written: ADR-0109 D4 deleted
+the hatch, so the flat wash (`--canvas-nonworking`, a real value now) is the only weekend channel
+on paper — which made the cull worse than this row describes, not better. Regression pinned in
+`paint.test.ts` (verified red against the option-ignoring painter, and its own first assertion
+corrected: an edge-clipped weekend legitimately fills one day) and in
+`render-export-image.test.ts` (the override reaches the painter).
+
 `paint.ts` paints the non-working wash and its hatch as **one `fillStyle`**, and culls both below
 `NON_WORKING_MIN_PX = 3`. An export can frame the **entire plan** rather than a viewport, so on a
 long programme the per-day width falls under that floor and weekends disappear — not degraded,
@@ -3630,6 +3641,18 @@ the layer rather than changing how it culls.
 **Raised 2026-08-22** (the W3-M2 component review). **Size:** M. The spec's CQ-5 promised this row
 and it was never filed — the enumeration lived only in a `SCREEN_ONLY` record whose reasons were
 partly wrong, which is the opposite of a durable record.
+
+**CLOSED 2026-08-28 (correctness programme Phase 3).** All five LENS keys now export as shown:
+`TsldCanvasHandle` gains `getSceneLenses()` — a pure read of `barFill`, `barInk`, `flaggedIds`,
+`baselineGhosts` and `dimmedIds` off the LIVE scene ref, so the deliverable is the planner's
+picture **by the one derivation the screen uses**, never a second one that agrees until it does
+not (the ADR-0065 rule). The composer's call is optional (`?.()`), so a partial handle degrades
+to the default picture rather than crashing an export — and because that tolerance would let
+"lenses flow" and "lenses silently dropped" share a green, the pdf suite pins a distinctive lens
+set end-to-end into the scene `renderExportImage` receives. The five entries left `SCREEN_ONLY`,
+which turned the parity gate into the red-first proof: it named exactly the five missing keys
+against the pre-fix composer. Interaction state (selection, hover, drags) stays screen-only —
+a delivered picture has no cursor.
 
 #164 restored the seven layers the export never composed. **Five more keys it does not compose are
 lens state**, and they are a different question: not "a layer nobody wired up" but "whose picture is
@@ -3916,6 +3939,22 @@ the paint path, or the first draw of every session is in the fallback face.
 **Not scheduled.** The three marks #148 moves to DOM pick up Space Grotesk incidentally, which
 narrows the inconsistency without addressing it; that is a side effect, not a fix, and it is
 recorded so the next reader does not mistake it for one.
+
+**CLOSED 2026-08-28 (correctness programme Phase 3) — and this row itself had gone stale in the
+way it warns about**: the product's face is no longer Space Grotesk but **IBM Plex Sans** (the
+workspace redesign, 2026-08-24, self-hosted for GDPR reasons), and nothing updated this row when
+the face changed — the exact "cascade-level decision applied by hand to the layer that opts out"
+failure, one document over. `LABEL_FONT` now leads with the product's face, and the family is
+**derived, not remembered**: `label-font.structural.test.ts` parses `--font-sans` out of
+`globals.css` and asserts `LABEL_FONT` carries its leading family, so the NEXT face change fails
+a gate instead of shipping a third era of the drift (verified red against the `system-ui`
+constant). The two costs this row priced were both paid as it said: the golden oracle was
+re-baselined and audited line by line — the diff is exactly the two `font=` lines and nothing
+else — and the load race is handled at both ends: the shared width memo gains `clear()`, busted
+once on `document.fonts.ready` (a fallback-face width would poison the memo for the session, the
+hazard its own docblock had carried since it was written), and the one-shot export render awaits
+`fonts.ready` before painting, because the live canvas repaints every frame and the deliverable
+paints once.
 
 ## 174. The axis-markers gate pass's non-blocking findings
 
