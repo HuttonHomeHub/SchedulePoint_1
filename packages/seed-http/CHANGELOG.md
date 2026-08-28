@@ -1,5 +1,16 @@
 # @repo/seed-http
 
+## 0.3.1
+
+### Patch Changes
+
+- [#410](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/410) [`f10762c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f10762ce5f37a1d235eaafcb9ca4741b54a4c1a5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Correctness pass, phase 1 (api/seed): a calendar whose working time the schedule cannot reach
+  now answers recalculate and the critical-path test with a typed
+  `422 CALENDAR_WORKING_TIME_UNREACHABLE` instead of an unhandled 500 ([#205](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/205), the ADR-0071
+  pattern), and the seeder sends a holiday exception as `isWorking: false` rather than the
+  `windows: []` the API deliberately refuses — so the catalogue's non-working seasons are seeded
+  instead of silently dropped.
+
 ## 0.3.0
 
 ### Minor Changes
