@@ -217,17 +217,22 @@ export class ScheduleController {
   @ApiOkResponse({ type: HealthMetricResultDto })
   @ApiTooManyRequestsResponse({
     description:
-      'Rate limited by this route\u2019s own budget \u2014 see CRITICAL_PATH_TEST_THROTTLE, whose ' +
-      'docblock carries the M6-T0 measurement it was derived from ' +
-      '(docs/specs/schedule-health-check/m6-measurement.md).',
+      'Rate limited by this route\u2019s own budget \u2014 14 requests / 60 s per IP, derived from ' +
+      'the M6-T0 measurement by a formula committed before the run ' +
+      '(docs/specs/schedule-health-check/m6-measurement.md; CRITICAL_PATH_TEST_THROTTLE).',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'The plan has no start date (PLAN_START_REQUIRED), or a calendar the plan schedules on has ' +
+      'no working time at all \u2014 an empty week with no working exceptions ' +
+      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar\u2019s id and name).',
   })
   async criticalPathTest(
     @CurrentUser() principal: Principal,
     @Param('orgSlug') orgSlug: string,
     @Param('planId', ParseUuidPipe) planId: string,
   ): Promise<HealthMetricResultDto> {
-    return Object.assign(
-      new HealthMetricResultDto(),
+    return HealthMetricResultDto.from(
       await this.service.getCriticalPathTest(principal, orgSlug, planId),
     );
   }

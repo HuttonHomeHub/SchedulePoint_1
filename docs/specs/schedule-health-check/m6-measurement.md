@@ -59,6 +59,12 @@ mid-seed (twice recorded in `m0-measurement.md`):
 Neither falsification condition fired: 846.5 ms is far below the 4,000 ms line, and both scales
 hold the route under 2× a recalculate — two passes cost about two passes, minus the write and lock
 a recalculate also pays. `CRITICAL_PATH_TEST_THROTTLE = 14/60 s` ships with this table cited.
+**The "indicative" caveat below applies to THESE headline numbers with equal force, not only to
+the recalculate side-figure** (the M6 backend-performance review's point): a chain-heavy synthetic
+graph exercises no WBS summary-rollup walk and a thinner edge ratio than a real programme, and a
+CI-class container is not a production host. The engine's passes are O(V+E) regardless of shape,
+and the derived limit carries ~4.7× headroom to the falsification line, which is what the number
+is for.
 
 **Method notes.** The scale-500 plan is the REST catalogue seed (`plan:scale-500`, 540 activities /
 800 links). The 2,000-activity plan is a synthetic SQL build INSIDE the measurement org (chain +

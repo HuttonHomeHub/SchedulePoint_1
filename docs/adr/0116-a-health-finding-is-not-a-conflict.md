@@ -213,6 +213,20 @@ deliberately** — the diff named `totalFloat` on every row rather than reportin
 then green with the persist removed. The journey drives the button in a real browser and re-reads
 the stored dates through the API afterwards.
 
+**The M6 security review then caught the proof being narrower than its sentence**: "every
+engine-owned column" was written in four places while the snapshot read **9 of the 21** activity
+columns the recalc's `unnest` UPDATE writes, and omitted `ActivityDependency.isDriving` entirely —
+so the red verification had only proved the harness could see a write to a covered column. The
+snapshot now reads all 21 plus the dependency layer and was **re-verified red against a NEWLY
+covered column** (`visualConflict`), which is the same lesson as the carrier rule one section up:
+a proof is finished when it has been made to fail by the thing it claims to exclude, not when its
+sentence sounds complete. The api review separately caught the route declaring no 422 while
+`CALENDAR_HAS_NO_WORKING_TIME` — reachable through the public API in two calls — shared its
+throwing code with two documented siblings; declared and regression-tested now. The
+backend-performance review passed, re-deriving the throttle arithmetic and confirming the
+transaction closes before either compute runs; its duplicate-label-scan suggestion is
+`docs/TECH_DEBT.md` #206's M6 addendum.
+
 ## Consequences
 
 Positive: a client-grade assessment without leaving the product; a second honest use of the seeded

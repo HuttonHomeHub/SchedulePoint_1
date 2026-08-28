@@ -5317,3 +5317,9 @@ rather than quietly dropped:
 - **`VerdictBadge` hand-rolls a coloured span where `Badge` exists** — the spec named the
   `EarnedValuePanel` precedent; the hand-rolled path is also where the `text-destructive` token
   slip happened, which is the argument for the primitive.
+- **(M6 addendum) `getCriticalPathTest` scans the plan's activities twice** — `buildEngineGraph`'s
+  `loadActivities` plus `loadHealthActivities` for labels/factors, concurrent but on separate
+  connections (so not one snapshot; a concurrent rename can label the offender stale, degraded
+  gracefully to 'Unknown activity'). Measured immaterial (~0.7 ms beside an ~800 ms compute); fold
+  the label columns into the engine loader, or a narrow `{id, code, name, calendarId}` loader, on
+  next touch (the M6 backend-performance review).

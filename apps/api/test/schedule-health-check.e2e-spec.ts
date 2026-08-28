@@ -337,7 +337,14 @@ describe.skipIf(!hasDatabase)('Schedule health check API (e2e)', () => {
   const cptUrl = (planId: string, slug = 'acme') =>
     `/api/v1/organizations/${slug}/plans/${planId}/schedule/health-check/critical-path-test`;
 
-  /** Every engine-owned column the recalculation persists, ordered — the non-mutation oracle. */
+  /**
+   * Every engine-owned column the recalculation persists, ordered — the non-mutation oracle.
+   * **All 21 activity columns the recalc's `unnest` UPDATE writes, plus the dependency layer's
+   * `isDriving` and the plan's `scheduleComputedAt`** — the M6 security review caught the first
+   * version covering 9 of 21 and omitting `isDriving` entirely, which made the docblocks' "every
+   * engine-owned column" claim false while the test stayed green: a proof narrower than its
+   * sentence. Re-verified red against a NEWLY covered column (`visualConflict`) after widening.
+   */
   async function engineOwnedSnapshot(planId: string) {
     const activities = await prisma.activity.findMany({
       where: { planId },
@@ -353,15 +360,32 @@ describe.skipIf(!hasDatabase)('Schedule health check API (e2e)', () => {
         isCritical: true,
         isNearCritical: true,
         constraintViolated: true,
+        externalDriven: true,
+        loeNoSpan: true,
+        resourceDriverMissing: true,
+        visualEffectiveStart: true,
+        visualEffectiveFinish: true,
+        visualConflict: true,
+        visualDriftDays: true,
+        leveledStart: true,
+        leveledFinish: true,
+        levelingDelayMinutes: true,
+        levelingWindowExceeded: true,
+        selfOverAllocated: true,
         version: true,
         updatedAt: true,
       },
+    });
+    const dependencies = await prisma.activityDependency.findMany({
+      where: { planId },
+      orderBy: { id: 'asc' },
+      select: { id: true, isDriving: true, version: true, updatedAt: true },
     });
     const plan = await prisma.plan.findUniqueOrThrow({
       where: { id: planId },
       select: { scheduleComputedAt: true, version: true, updatedAt: true },
     });
-    return { activities, plan };
+    return { activities, dependencies, plan };
   }
 
   it('M6: the what-if judges the plan and PERSISTS NOTHING — every engine-owned column unchanged', async () => {
@@ -410,4 +434,27 @@ describe.skipIf(!hasDatabase)('Schedule health check API (e2e)', () => {
   // create and non-nullable on update, so the no-start state is unreachable through the public
   // API — it is a legacy-row defence (the floatPaths rule), pinned by the service unit suite
   // where the state can exist.
+
+  it('M6: a calendar with no working time is the shared 422, reachable through the API today', async () => {
+    // NOT a legacy edge: a planner reaches this in two calls (the schedule.e2e precedent for
+    // recalculate, applied to the route that shares its `buildEngineGraph` verbatim). The M6 api
+    // review caught the route declaring no 422 while this branch was live and untested.
+    const admin = await adminWithOrg();
+    const planId = await makePlan(admin);
+    await makeActivity(admin, planId, 'X', 1);
+    const cal = await admin.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({ name: 'Nothing works', workingWeekdays: 0 })
+      .expect(201);
+    const planRow = await admin.agent.get(`/api/v1/organizations/acme/plans/${planId}`).expect(200);
+    await admin.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: cal.body.data.id, version: planRow.body.data.version })
+      .expect(200);
+
+    const res = await admin.agent.get(cptUrl(planId)).expect(422);
+    expect(res.body.error).toMatchObject({
+      details: { reason: 'CALENDAR_HAS_NO_WORKING_TIME', calendarId: cal.body.data.id },
+    });
+  });
 });

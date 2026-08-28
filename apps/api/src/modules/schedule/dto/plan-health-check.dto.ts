@@ -167,6 +167,11 @@ export class HealthMetricResultDto implements HealthMetricResult {
     description: 'At most offenderCap rows; empty on PASS and NOT_ASSESSABLE.',
   })
   offenders!: HealthOffender[];
+
+  /** The M6 what-if route returns one bare metric row; same shape as the report carries. */
+  static from(result: HealthMetricResult): HealthMetricResultDto {
+    return Object.assign(new HealthMetricResultDto(), result);
+  }
 }
 
 export class HealthBaselineRefDto implements HealthBaselineRef {

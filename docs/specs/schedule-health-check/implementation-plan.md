@@ -867,8 +867,11 @@ stored dates did not.
   silent, plausible, and discovered as "the dates moved and nobody edited anything".
 - **Testing:** the non-mutation e2e below is the load-bearing one.
 - **Development steps:**
-  1. The read-only recompute, with **no** plan lock, **no** transaction and **no** write path reachable
-     from it.
+  1. The read-only recompute, with **no** plan lock, **no** WRITE transaction and **no** write path
+     reachable from it. _(Corrected at M6: the shipped route does open the one READ-snapshot
+     `$transaction` that `buildEngineGraph` shares with `floatPaths`, closed before either compute
+     runs — the service docblock states it precisely; this line's original "no transaction"
+     shorthand was loose.)_
   2. An API e2e that reads **every engine-owned column** before and after the call and asserts equality
      — **the claim "it persists nothing" is proved, not asserted.** Verify it red by making the route
      persist once, deliberately, and confirming the test names the columns that moved.
