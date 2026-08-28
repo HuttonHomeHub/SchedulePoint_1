@@ -80,3 +80,17 @@ Every item photographed before/after at 1646 and 1920 via `scripts/shoot.mjs`; t
 target-size sweep and the dock equalities green with re-derived values; accessibility + ux reviews
 folded; prepush 13/13; base + workspace-chrome + health-check + gantt journeys green locally
 (the #133 rule: a layout change sweeps the journeys); one changeset (`@repo/web` minor).
+
+## M0 — measured (1646×900, Chromium, `scratchpad/m0-polish-probe.mjs`, 2026-08-28)
+
+| Fact                                                    | Value                                                                                     |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Shell frame margins (band + workspace + foot vs window) | **12 px** each side (band x=12→1634, foot bottom 888 vs 900)                              |
+| Deck content inset (band edge → first group card)       | **9 px**                                                                                  |
+| Foot content inset                                      | **16 px** left, **≈1 px** top — the mismatch item 4 names                                 |
+| Foot block                                              | ONE 41 px `chrome`-surface row (object bar + facts inline; no separate status strip)      |
+| Stage card                                              | x289 y209 1345×638; canvas 596 px tall                                                    |
+| Dock (Health open)                                      | full-height sibling, y 209→888; **narrows the foot 1345→944 px** and the canvas to 942 px |
+
+Item 6's "status line" is therefore the facts' two wrapped lines INSIDE the 41 px row; item 8's
+change moves the dock's bottom edge from 888 (foot bottom) to 847 (canvas bottom).
