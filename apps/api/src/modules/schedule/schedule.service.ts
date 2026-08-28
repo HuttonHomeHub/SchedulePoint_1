@@ -65,6 +65,8 @@ import {
   buildPlanCalendar,
   buildPlanCalendarOrReject,
   CALENDAR_HAS_NO_WORKING_TIME,
+  CALENDAR_WORKING_TIME_UNREACHABLE,
+  rejectIfWorkingTimeHorizonExceeded,
 } from './plan-calendar';
 import { ProgrammeCycleError, resolveProgrammeOrder } from './programme-order';
 import { resolveRemainingMinutes } from './remaining-duration';
@@ -141,6 +143,14 @@ export const SCHEDULE_ERROR = {
    * here rather than guarded at the DTO.
    */
   CALENDAR_HAS_NO_WORKING_TIME,
+  /**
+   * The walk-time sibling (`docs/TECH_DEBT.md` #205(b)): a calendar that HAS working time,
+   * placed where the schedule cannot reach it within the engine's horizon — a blackout longer
+   * than the cap, or a window-only calendar whose one working exception sits years from the
+   * dates being walked. Raised by the engine's `WorkingTimeHorizonExceededError` and phrased in
+   * `rejectIfWorkingTimeHorizonExceeded`.
+   */
+  CALENDAR_WORKING_TIME_UNREACHABLE,
   /** The programme's upstream closure exceeds {@link MAX_PROGRAMME_PLANS} — too many plans to solve
    * synchronously in one request (ADR-0045: M2 is a synchronous, bounded solve; a background/queued
    * programme recalc is the deferred next slice). */
@@ -300,6 +310,13 @@ export class ScheduleService {
         return summary;
       });
     } catch (error) {
+      // The engine's walk-time horizon guard is a user-caused, user-fixable state
+      // (`docs/TECH_DEBT.md` #205(b)) — map it to a 422 naming the calendar where the plan has
+      // exactly one in play. `activityCalendarCount` was captured before the compute threw.
+      rejectIfWorkingTimeHorizonExceeded(error, {
+        planCalendarId: plan.calendarId ?? null,
+        activityCalendarCount,
+      });
       // A residual cycle is a breach of the DAG invariant the write path
       // guarantees (ADR-0021) — it should be unreachable. Log it distinctly and
       // rethrow so the global filter returns an opaque 500 (no data persisted).
@@ -789,7 +806,7 @@ export class ScheduleService {
 
     // The same read snapshot `floatPaths` takes: the exact engine-input builder `recalculate`
     // uses, so the what-if can never drift from what a real recalculation would compute.
-    const [{ activities, edges, options }, labelRows] = await Promise.all([
+    const [{ activities, edges, options, meta }, labelRows] = await Promise.all([
       this.prisma.$transaction((tx) => this.buildEngineGraph(organization.id, plan, dataDate, tx)),
       this.schedule.loadHealthActivities(organization.id, planId),
     ]);
@@ -802,16 +819,26 @@ export class ScheduleService {
     );
     const byId = new Map(withFactors.map((r) => [r.id, r]));
 
-    return runCriticalPathTest({
-      activities,
-      edges,
-      options,
-      dayFactorMinutesOf: (id) => byId.get(id)?.dayFactorMinutes ?? DEFAULT_HOURS_PER_DAY_MINUTES,
-      labelOf: (id) => {
-        const row = byId.get(id);
-        return { code: row?.code ?? null, name: row?.name ?? 'Unknown activity' };
-      },
-    });
+    try {
+      return runCriticalPathTest({
+        activities,
+        edges,
+        options,
+        dayFactorMinutesOf: (id) => byId.get(id)?.dayFactorMinutes ?? DEFAULT_HOURS_PER_DAY_MINUTES,
+        labelOf: (id) => {
+          const row = byId.get(id);
+          return { code: row?.code ?? null, name: row?.name ?? 'Unknown activity' };
+        },
+      });
+    } catch (error) {
+      // The what-if runs the same two passes a recalculation would, so the walk-time horizon
+      // guard is reachable here too and takes the same 422 (`docs/TECH_DEBT.md` #205(b)).
+      rejectIfWorkingTimeHorizonExceeded(error, {
+        planCalendarId: plan.calendarId ?? null,
+        activityCalendarCount: meta.activityCalendarCount,
+      });
+      throw error;
+    }
   }
 
   /**

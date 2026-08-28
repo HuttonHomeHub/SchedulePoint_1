@@ -74,7 +74,10 @@ export class ScheduleController {
     description:
       'The plan has no start date (PLAN_START_REQUIRED), or a calendar the plan schedules on has ' +
       'no working time at all — an empty week with no working exceptions ' +
-      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar’s id and name).',
+      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar’s id and name); or a calendar has ' +
+      'working time the schedule cannot reach within the engine’s horizon — e.g. a window-only ' +
+      'calendar whose one working exception is exhausted (CALENDAR_WORKING_TIME_UNREACHABLE, ' +
+      'carrying the calendar’s id when the plan has exactly one in play).',
   })
   @ApiLockedResponse('You do not hold the plan edit-lock (when enforcement is on).')
   async recalculate(
@@ -223,9 +226,11 @@ export class ScheduleController {
   })
   @ApiUnprocessableEntityResponse({
     description:
-      'The plan has no start date (PLAN_START_REQUIRED), or a calendar the plan schedules on has ' +
+      'The plan has no start date (PLAN_START_REQUIRED); a calendar the plan schedules on has ' +
       'no working time at all \u2014 an empty week with no working exceptions ' +
-      '(CALENDAR_HAS_NO_WORKING_TIME, carrying the calendar\u2019s id and name).',
+      '(CALENDAR_HAS_NO_WORKING_TIME); or a calendar has working time the schedule cannot ' +
+      'reach within the engine\u2019s horizon (CALENDAR_WORKING_TIME_UNREACHABLE) \u2014 the ' +
+      'what-if runs the same passes a recalculation would, so it meets the same calendar states.',
   })
   async criticalPathTest(
     @CurrentUser() principal: Principal,

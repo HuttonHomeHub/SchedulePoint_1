@@ -5,6 +5,7 @@ import {
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
   EmptyWorkingTimeCalendarError,
+  WorkingTimeHorizonExceededError,
   type ShiftWindow,
   type TimeException,
   type WorkingTimeCalendar,
@@ -100,4 +101,44 @@ export function buildPlanCalendarOrReject(
     }
     throw error;
   }
+}
+
+/**
+ * The machine-readable reason for the WALK-time sibling of the rejection above
+ * (`docs/TECH_DEBT.md` #205(b)): a calendar that HAS working time, placed where the schedule
+ * cannot reach it within the engine's horizon.
+ */
+export const CALENDAR_WORKING_TIME_UNREACHABLE = 'CALENDAR_WORKING_TIME_UNREACHABLE';
+
+/**
+ * Map the engine's walk-time horizon guard to a 422 (`docs/TECH_DEBT.md` #205(b), the ADR-0071
+ * rule: the engine's own guard is a typed error and a 422, not a 500). A no-op for every other
+ * error — the caller rethrows.
+ *
+ * Unlike {@link buildPlanCalendarOrReject} this fires DURING `computeSchedule`, where the engine
+ * cannot say which calendar failed — an activity schedules on its own resolved port (ADR-0037).
+ * So the calendar is named only when the plan has exactly one in play (`activityCalendarCount`
+ * is 0 and the plan carries a calendar); otherwise the sentence points at the plan's calendars
+ * without inventing a culprit (ADR-0076: never claim what is not known).
+ */
+export function rejectIfWorkingTimeHorizonExceeded(
+  error: unknown,
+  context: { planCalendarId: string | null; activityCalendarCount: number },
+): void {
+  if (!(error instanceof WorkingTimeHorizonExceededError)) return;
+  const single = context.activityCalendarCount === 0 && context.planCalendarId !== null;
+  throw new ValidationError(
+    'The schedule walked past the engine\u2019s working-time horizon without finding a working ' +
+      'minute. ' +
+      (single
+        ? 'The plan\u2019s calendar has working time the schedule cannot reach'
+        : 'A calendar used by this plan has working time the schedule cannot reach') +
+      ' \u2014 for example a dated blackout longer than the horizon, or a window-only calendar ' +
+      'whose working exception sits far from the plan\u2019s dates. Check the calendar\u2019s ' +
+      'exceptions against the plan\u2019s data date.',
+    {
+      reason: CALENDAR_WORKING_TIME_UNREACHABLE,
+      calendarId: single ? context.planCalendarId : null,
+    },
+  );
 }

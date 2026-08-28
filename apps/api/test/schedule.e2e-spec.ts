@@ -951,6 +951,46 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(res.body.error.message).toContain('exception');
   });
 
+  /**
+   * **The walk-time sibling** (`docs/TECH_DEBT.md` #205(b), the ADR-0071 rule). A window-only
+   * calendar whose one working exception is EXHAUSTED has working time — so the build guard
+   * above passes — placed where the schedule cannot reach more of it: an activity longer than
+   * the exception walks the engine to its horizon. That answered a bare 500
+   * (`addWorkingTime exceeded the working-time horizon`) until the guard was typed and mapped;
+   * the register row's repro was the double-seeded fixture, and this is the same state authored
+   * in three requests. **Verified red by the register row itself** — the 500 is its filed repro.
+   */
+  it('refuses a calendar whose working time is unreachable with a 422, not a 500', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'HorizonCal', '2026-03-02');
+    const cal = await actor.agent
+      .post('/api/v1/organizations/acme/calendars')
+      .send({ name: 'One hour ever', workingWeekdays: 0 })
+      .expect(201);
+    const calId = cal.body.data.id as string;
+    // One working hour, once — the calendar is valid (the build guard passes)…
+    await actor.agent
+      .post(`/api/v1/organizations/acme/calendars/${calId}/exceptions`)
+      .send({ date: '2026-03-02', windows: [{ startMinute: 480, endMinute: 540 }] })
+      .expect(201);
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({ calendarId: calId, version: 2 })
+      .expect(200);
+    // …and two hours of work can never finish on it.
+    await actor.agent
+      .post(`/api/v1/organizations/acme/plans/${planId}/activities`)
+      .send({ name: 'Too long', durationMinutes: 120 })
+      .expect(201);
+
+    const res = await actor.agent.post(recalcUrl(planId)).expect(422);
+    expect(res.body.error).toMatchObject({
+      // The plan has exactly one calendar in play, so the 422 may name it.
+      details: { reason: 'CALENDAR_WORKING_TIME_UNREACHABLE', calendarId: calId },
+    });
+    expect(res.body.error.message).toContain('horizon');
+  });
+
   it('accepts the same calendar once a working exception gives it hours', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'TurnaroundOk', '2026-03-02');
