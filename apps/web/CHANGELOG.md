@@ -1,5 +1,21 @@
 # @repo/web
 
+## 0.109.0
+
+### Minor Changes
+
+- [#404](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/404) [`55706c9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/55706c9c11dc14d2263dc6d237161bf80883bdda) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - **Health check** joins the Analysis menu: the DCMA 14-point assessment as a docked panel beside the
+  plan. Fourteen verdicts with the measured value and the bar it was judged against, offender lists
+  that jump to the activity in whichever view is showing (in the Gantt the jump also expands a
+  collapsed WBS parent and scrolls the row into view), honest "not assessed" rows that say why and
+  offer the fix where you hold it, and a printed report for the submission pack — every failing
+  metric's offenders on paper, with the cap stated in words when a list is truncated.
+
+### Patch Changes
+
+- Updated dependencies [[`55706c9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/55706c9c11dc14d2263dc6d237161bf80883bdda)]:
+  - @repo/types@0.28.0
+
 ## 0.108.3
 
 ### Patch Changes
