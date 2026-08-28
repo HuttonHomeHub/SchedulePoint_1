@@ -1,5 +1,17 @@
 # @repo/web
 
+## 0.112.0
+
+### Minor Changes
+
+- [#410](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/410) [`f10762c`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f10762ce5f37a1d235eaafcb9ca4741b54a4c1a5) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Correctness pass, phase 1 (web): the Project Explorer's client and project rows navigate to
+  their detail screens (a name click or Enter — the row still toggles expansion, [#143](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/143));
+  zoom-to-selection repairs the vertical axis so a high-lane activity is actually brought into
+  view ([#152](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/152)); a plural canvas drag previews every selected member as a ghost at its projected
+  drop position, not only the grabbed bar ([#108](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/108)); and the legend's relationship-slack chip is
+  painted with the colour the painter actually uses instead of an invisible card-on-card swatch
+  ([#162](https://github.com/HuttonHomeHub/SchedulePoint_1/issues/162)).
+
 ## 0.111.0
 
 ### Minor Changes
