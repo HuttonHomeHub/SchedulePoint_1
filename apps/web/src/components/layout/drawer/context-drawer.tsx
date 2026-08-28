@@ -7,7 +7,7 @@ import {
 } from '@/components/layout/drawer/use-context-drawer-prefs';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
-import { Surface } from '@/components/ui/surface';
+import { PanelSurface, Surface } from '@/components/ui/surface';
 
 /**
  * The **context drawer** — the app's single trailing panel (ADR-0099 D2), and the first
@@ -62,6 +62,8 @@ export function ContextDrawer({
           only the caller knows which edge the divider is on; here it is the panel's right edge
           minus the pointer, read from the live box rather than from `width` (which is the value
           being changed). */}
+      {/* Stays a raw `Surface` deliberately: `contents` gives the resizer the panel family with
+          no box of its own, and `PanelSurface`'s border needs a box (TECH_DEBT #210). */}
       <Surface tone="panel" className="contents">
         <PanelResizer
           orientation="vertical"
@@ -77,12 +79,12 @@ export function ContextDrawer({
           }}
         />
       </Surface>
-      <Surface
-        tone="panel"
+      <PanelSurface
+        border="start"
         as="aside"
         aria-label={title}
         ref={panelRef}
-        className="border-border flex h-full min-h-0 flex-col border-l"
+        className="flex h-full min-h-0 flex-col"
         style={{ width }}
       >
         <div className="border-border flex h-10 shrink-0 items-center gap-1 border-b pr-1 pl-3">
@@ -102,7 +104,7 @@ export function ContextDrawer({
           </Button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-      </Surface>
+      </PanelSurface>
     </div>
   );
 }

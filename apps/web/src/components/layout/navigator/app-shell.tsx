@@ -30,7 +30,7 @@ import {
 } from '@/components/layout/drawer/use-context-drawer-prefs';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
-import { Surface } from '@/components/ui/surface';
+import { PanelSurface } from '@/components/ui/surface';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
@@ -540,23 +540,19 @@ function ShellFrame(): React.ReactElement {
                   // The rail's own docblock said "the container owns the scope: the drawer at
                   // `lg`+, and the `Sheet` below it" — describing the intent, not the code.
                   //
-                  // `border-r` as well as the ground: every `panel`-tone consumer pairs the
-                  // Surface with a trailing-edge border (`explorer-column.tsx` both states,
-                  // `context-drawer.tsx`), and the first version of this fix copied only the
-                  // ground half — the panel's trailing edge faded into the scrim with no defined
+                  // `PanelSurface` carries the ground AND the edge border as one primitive: the
+                  // first version of this fix copied only the ground half of the then-literal
+                  // pairing — the panel's trailing edge faded into the scrim with no defined
                   // boundary while the closure note claimed the ExplorerColumn pattern whole
-                  // (ux gate, 2026-08-28).
-                  <Surface
-                    tone="panel"
-                    className="border-border flex h-full min-h-0 flex-col border-r"
-                  >
+                  // (ux gate, 2026-08-28; extracted by TECH_DEBT #210).
+                  <PanelSurface className="flex h-full min-h-0 flex-col">
                     <NavigatorRail
                       orgSlug={orgSlug}
                       expansion={expansion}
                       onClose={closeDrawer}
                       onNavigate={closeDrawer}
                     />
-                  </Surface>
+                  </PanelSurface>
                 ) : null}
               </Sheet>
             </>

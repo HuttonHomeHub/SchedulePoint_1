@@ -5626,6 +5626,25 @@ rather than quietly dropped:
 
 **Raised:** 2026-08-28 (reconciliation-pass component review) · **Size:** S · **Owner:** web
 
+_**CLOSED 2026-08-28** (fix-slice M-D, `docs/specs/fix-slice-2026-08/`), with this row's own claims
+corrected on the way — recording the corrections is the ADR-0071 lesson:_
+
+- _**Seven pairings, not four.** The spec's re-derivation found six occurrences (four switchable +
+  two `className="contents"` resizer scopes that must NOT switch, because a border needs a box) —
+  and then the new structural gate's own first run found **three more** this row and the spec both
+  missed: the workspace's three right docks in `plan-workspace-toolbar.tsx` (ADR-0110's rule — the
+  gate found the defect its author could not enumerate). All seven switched to `PanelSurface`._
+- _**"Trailing-edge border" was wrong for one of them**: the context drawer and the three right
+  docks carry `border-l` (`border="start"`), not `border-r`. Building to this row's wording would
+  have put a wrong edge on four of seven sites._
+- _**Neither travelling minor was folded**, because neither trigger fired: nothing in the epic
+  edits `paint.ts`'s wash branch or `HierarchyTree.tsx`. They stand below as filed._
+
+_`PanelSurface` lives in `surface.tsx` with `panel-surface.test.tsx`, the missing border half is
+asserted through the primitive's `data-panel-border` stamp in `app-shell.test.tsx` (verified red
+against the raw-Surface call site), and `panel-surface.structural.test.ts` (comment-stripped,
+pinned positive) fails the next raw pairing._
+
 Every `tone="panel"` consumer pairs the `Surface` with a trailing-edge border, and the pairing is
 a copied literal rather than a primitive: `app-shell.tsx:549-551` is character-for-character
 `explorer-column.tsx:119`, `explorer-column.tsx:76-77` is the same pairing with the collapsed
