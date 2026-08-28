@@ -395,13 +395,18 @@ export function TsldLegend({
             </span>
           ) : 'slack' in item ? (
             <span aria-hidden="true" className="inline-flex h-3 w-5 items-center justify-center">
-              {/* The outlined chip the canvas prints the gap in, on the selected activity's links. */}
+              {/* The outlined chip the canvas prints the gap in, on the selected activity's links.
+                  `--primary` + `--border`, because that is what the painter draws it with
+                  (`paint.ts` layer 3.5: `palette.bar` fill + `palette.barStroke` stroke). This
+                  swatch was `--card` (`docs/TECH_DEBT.md` #162) — a token ADR-0097 made a RESET,
+                  deliberately absent from the canvas scope's rebind closure, so even correctly
+                  scoped the legend showed a different colour from the thing it describes. */}
               <span
                 className="rounded-[2px]"
                 style={{
                   width: 14,
                   height: 10,
-                  backgroundColor: 'var(--card)',
+                  backgroundColor: 'var(--primary)',
                   border: '1px solid var(--border)',
                 }}
               />

@@ -429,6 +429,37 @@ function liveGhostRect(state: GestureState, view: Viewport): Rect | null {
 }
 
 /**
+ * The OTHER selected bars' destinations during a plural drag (`docs/TECH_DEBT.md` #108's preview
+ * half), or null in every other state. Each peer's own drawn rect, shifted by the grabbed bar's
+ * live day/lane delta in PIXELS — the same per-activity delta the release writes through
+ * `bulkMoveSnapshots`, so the preview cannot disagree with the write about where a bar lands.
+ * Null unless the drag's subject is one of a PLURAL selection: a single-bar drag adds not one
+ * call to the overlay, which is the parity/draw-budget contract. Exported for unit tests (pure).
+ */
+export function livePeerGhostRects(
+  state: GestureState,
+  selectedIds: readonly string[] | undefined,
+  lookup: (id: string) => RenderActivity | undefined,
+  view: Viewport,
+  dataDate: string,
+): Rect[] | null {
+  if (state.kind !== 'repositioning' || !selectedIds || selectedIds.length < 2) return null;
+  if (!selectedIds.includes(state.activityId)) return null;
+  const dx = (state.currentStartDay - state.originStartDay) * view.pxPerDay;
+  const dy = (state.currentLaneIndex - state.laneIndex) * LANE_HEIGHT;
+  const rects: Rect[] = [];
+  for (const id of selectedIds) {
+    if (id === state.activityId) continue;
+    const activity = lookup(id);
+    if (!activity) continue;
+    const rect = activityRect(activity, view, dataDate);
+    if (!rect) continue;
+    rects.push({ x: rect.x + dx, y: rect.y + dy, w: rect.w, h: rect.h });
+  }
+  return rects.length > 0 ? rects : null;
+}
+
+/**
  * The activity a gesture is currently dragging or resizing (ADR-0054 §1) — the bar the scene dims
  * so its ghost reads as the bar itself moving rather than a second shape beside it. A `creating`
  * gesture has no source bar yet, and the link / LOE tools move nothing. Exported for unit tests.
@@ -1740,6 +1771,17 @@ export function TsldCanvas({
             CANVAS_MULTI_SELECT_ENABLED && gestureRef.current.kind === 'marqueeing'
               ? rectFromCorners(gestureRef.current.originPoint, gestureRef.current.currentPoint)
               : null,
+          // Peer ghosts during a plural drag (#108): null in every other state, so the overlay
+          // and the painter are byte-for-byte outside the one gesture this exists for.
+          peers: CANVAS_MULTI_SELECT_ENABLED
+            ? livePeerGhostRects(
+                gestureRef.current,
+                sceneRef.current.selectedIds,
+                activityById,
+                viewRef.current,
+                sceneRef.current.dataDate,
+              )
+            : null,
         };
         paintInteractionLayer(ictx, overlay, size, paletteRef.current!, dpr);
         cursorAnchorRef.current = overlay.cursor?.x ?? 0;

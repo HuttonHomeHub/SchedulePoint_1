@@ -1503,7 +1503,19 @@ pass, because it is an interaction change with its own ghost-painting cost to me
 
 ### Narrowed 2026-08-08 — the write path is wired; the N-ghost preview is not
 
-**Status: open, narrowed.** The functional half is done and proven end to end. Dragging one of a
+**CLOSED 2026-08-28 (correctness programme, Phase 1) — the preview half.** `livePeerGhostRects`
+(pure, exported, unit-pinned) derives one outline ghost per selected peer from the grabbed bar's
+live day/lane delta — the SAME per-activity delta `bulkMoveSnapshots` writes, so the preview and
+the write cannot disagree about where a bar lands — and `paintInteractionLayer` draws them as
+faint fills + solid outlines below the live ghost. Two costs are decisions rather than omissions:
+peers ghost OUTLINE-ONLY (the grabbed bar keeps the full-fidelity ADR-0054 treatment; N labelled
+ghosts would multiply the frame's text cost for detail the planner already has), and the peers'
+SOURCE bars stay lit (dimming them means widening the scene layer's `gestureSourceId` to a set —
+a `paintScene` behaviour change under the ADR-0078 golden oracle, not worth re-baselining for a
+preview). The parity pin is the painter test's second half: an overlay without `peers` adds not
+one call, verified red against the peers-less painter.
+
+**Status at narrowing: open, narrowed.** The functional half is done and proven end to end. Dragging one of a
 plural selection now moves every selected activity by the same delta, as **one** batch
 (`PATCH …/activities/placements`) and **one** undoable step, mode-aware through `bulkMoveSnapshots`
 so EARLY pins and VISUAL hand-places exactly as the single-bar drag does. A lane-only move still
@@ -3294,6 +3306,12 @@ The accepted cost is recorded at the declaration: a floating card gets much of i
 surround, so the login reads calmer.
 
 ## 162. The legend's slack chip does not match what the canvas paints
+
+**CLOSED 2026-08-28 (correctness programme, Phase 1).** The swatch names `--primary` + `--border` —
+what the painter actually draws the chip with (`palette.bar` / `palette.barStroke`, confirmed at
+`palette.ts` rather than recalled) — with the reason `--card` could never work kept in the
+swatch's own comment: ADR-0097 made `Card` a reset, deliberately outside the canvas scope's rebind
+closure, so even a correctly-scoped legend resolved it to the page's card colour.
 
 **Raised 2026-08-21** (ADR-0102's component gate). **Size:** XS. **Pre-existing** — the light theme
 only re-pointed its token names, it did not introduce the mismatch.
