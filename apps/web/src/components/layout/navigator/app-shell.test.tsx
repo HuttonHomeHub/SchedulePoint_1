@@ -206,6 +206,20 @@ describe('AppShell', () => {
       within(drawer).getByRole('button', { name: 'Close Project Explorer' }),
     ).toBeInTheDocument();
 
+    // **The sheet's rail sits in a `panel` surface scope** (`docs/TECH_DEBT.md` #172's first
+    // find, 2026-08-28). The workspace redesign moved the rail's own `Surface` out to its
+    // containers, and only the docked `ExplorerColumn` got one — the `Sheet` is `bg-transparent`
+    // by design (its content owns the ground), so below `lg` the Explorer painted NOTHING behind
+    // its rows and the page showed through the open drawer. Measured in Chromium at 390 px:
+    // dialog and nav both `rgba(0, 0, 0, 0)`. Invisible to every suite before the narrow-shell
+    // journey existed, because no browser had ever opened this sheet. Verified red against the
+    // unwrapped call site.
+    expect(
+      within(drawer)
+        .getByRole('navigation', { name: 'Project Explorer' })
+        .closest('[data-surface="panel"]'),
+    ).not.toBeNull();
+
     fireEvent.click(within(drawer).getByRole('button', { name: 'Close Project Explorer' }));
     expect(
       screen.queryByRole('button', { name: 'Close Project Explorer' }),

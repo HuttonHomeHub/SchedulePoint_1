@@ -24,7 +24,13 @@ test('a user can open an activity’s Logic panel (accessible)', async ({ page }
   await page.getByLabel('Password').fill('correct-horse-battery');
   await page.getByRole('button', { name: /create an account/i }).click();
 
-  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not the 5 s default (`docs/TECH_DEBT.md` #182): this wait spans the sign-up POST, the
+  // redirect and the onboarding render, and three Firefox runs died within a whisker of 5 s under
+  // CI load while a re-run passed — marginal, not broken, so the margin is widened where the
+  // evidence says it is thin.
+  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.getByLabel('Organisation name').fill(orgName);
   await page.getByRole('button', { name: /create organisation/i }).click();
   await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));
@@ -85,7 +91,13 @@ test('a planner adds a dependency, is stopped from making a loop, and removes it
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill('correct-horse-battery');
   await page.getByRole('button', { name: /create an account/i }).click();
-  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible();
+  // 15 s, not the 5 s default (`docs/TECH_DEBT.md` #182): this wait spans the sign-up POST, the
+  // redirect and the onboarding render, and three Firefox runs died within a whisker of 5 s under
+  // CI load while a re-run passed — marginal, not broken, so the margin is widened where the
+  // evidence says it is thin.
+  await expect(page.getByRole('heading', { name: /create your organisation/i })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.getByLabel('Organisation name').fill(`Logic Two ${stamp}`);
   await page.getByRole('button', { name: /create organisation/i }).click();
   await expect(page).toHaveURL(new RegExp(`/orgs/${orgSlug}`));

@@ -30,6 +30,7 @@ import {
 } from '@/components/layout/drawer/use-context-drawer-prefs';
 import { AnnouncerProvider, useAnnounce } from '@/components/ui/announcer';
 import { Sheet } from '@/components/ui/sheet';
+import { Surface } from '@/components/ui/surface';
 import { useMediaQuery } from '@/components/ui/use-media-query';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
@@ -529,12 +530,23 @@ function ShellFrame(): React.ReactElement {
                 title="Project Explorer"
               >
                 {explorerAvailable ? (
-                  <NavigatorRail
-                    orgSlug={orgSlug}
-                    expansion={expansion}
-                    onClose={closeDrawer}
-                    onNavigate={closeDrawer}
-                  />
+                  // **The ground is this call site's job, and it was missing** (#172's first
+                  // find, 2026-08-28). `Sheet` is `bg-transparent` by design — its content owns
+                  // the panel — and when the workspace redesign moved the rail's own `Surface`
+                  // out to its containers, only the docked `ExplorerColumn` got one. Below `lg`
+                  // the Explorer painted NOTHING behind its rows: the page showed through the
+                  // open drawer (measured in Chromium at 390 px — dialog and nav both
+                  // `rgba(0, 0, 0, 0)`), unnoticed because no journey had ever run below `lg`.
+                  // The rail's own docblock said "the container owns the scope: the drawer at
+                  // `lg`+, and the `Sheet` below it" — describing the intent, not the code.
+                  <Surface tone="panel" className="flex h-full min-h-0 flex-col">
+                    <NavigatorRail
+                      orgSlug={orgSlug}
+                      expansion={expansion}
+                      onClose={closeDrawer}
+                      onNavigate={closeDrawer}
+                    />
+                  </Surface>
                 ) : null}
               </Sheet>
             </>

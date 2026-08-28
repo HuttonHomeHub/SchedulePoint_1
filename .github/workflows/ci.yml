@@ -576,6 +576,18 @@ jobs:
       - name: Web end-to-end tests (minimap)
         run: pnpm --filter @repo/web test:e2e:minimap
 
+      # The narrow-shell journey (playwright.narrow-shell.config.ts,
+      # docs/specs/narrow-shell-journey/ — closes TECH_DEBT #172). The first authenticated journey
+      # ever to run below `lg`: the off-canvas Sheet that IS the Project Explorer on a narrow
+      # screen, the hamburger that opens it, the matchMedia effect that closes it on crossing
+      # 1024, and the below-`md` facts fallback ADR-0114 M7 found broken. No flags to pin (default
+      # bundle = shipped surface); the pointer stays FINE deliberately — the coarse axis is #133's.
+      # It earned its place on its first run: the sheet had NO ground at all (`bg-transparent`
+      # dialog, no Surface at the call site), invisible to every suite because none had ever
+      # opened it. Runs after the prior suites tear down.
+      - name: Web end-to-end tests (narrow shell)
+        run: pnpm --filter @repo/web test:e2e:narrow-shell
+
       # The unsaved-work guard journey (playwright.unsaved-work.config.ts,
       # docs/specs/unsaved-work-guard/). No flags to pin: no VITE_ flag, so this runs the default
       # bundle, which IS the shipped surface. What only it can prove is the CLEAN case — that a

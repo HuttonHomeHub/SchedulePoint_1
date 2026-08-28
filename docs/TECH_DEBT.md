@@ -2395,6 +2395,19 @@ still well clear of 24 px). Reducing `px-2` does **not** help — the coarse var
 Cheapest real fix is probably none of those: extend the fit gate to assert a _labelled_ floor under
 coarse, so the next width decision is made with both pointers in view rather than one.
 
+**CLOSED 2026-08-28 (correctness programme Phase 2) — re-measured under the wrap, and the defect
+is gone with the mechanism that caused it.** Every figure above describes the width-ladder era:
+ADR-0109 D1 deleted the ladder, the `⋯` and the eviction entirely — a command surface wraps, it
+never hides — so nothing CAN leave the row under a coarse pointer any more, `next-conflict`
+included. Measured in Chromium at 1646 with `hasTouch: true` against the same plan and build:
+the command deck is **identical** fine vs coarse — 108 px tall, 25 buttons, 17 labelled, both
+pointers — because the 32 px the coarse padding adds (visible on the mode row, 404 → 436 px) is
+absorbed by the wrap's slack on the deck's existing lines. The worst coarse-pointer cost the
+wrap model can now produce is one extra wrapped line on a fuller row, which is ADR-0109's stated
+and accepted cost, not an eviction. The 2.5.8 geometry stays gated (`pointer-coarse:px-3` and
+`TOOLBAR_CARET_TARGET` are live); the tooltip-primitive question this row's siblings raise stays
+with #131/#204(a).
+
 ## 134. A `render` item outranks every command on its row, and nothing says so
 
 **Raised:** 2026-08-14 (ADR-0094 M5) · **Size:** S · **Risk if left:** medium
@@ -3011,6 +3024,12 @@ gate pass could observe only one of them in this environment:
    decade changes visibly), the minimap rectangle relocates in the same frame, and the
    change is large-scale rather than subtle. The remaining owed half is a hands-on pass at
    real magnification, which a screenshot cannot stand in for.
+
+**Attempted 2026-08-28 (correctness programme Phase 2) and structurally could not be discharged
+here**: the build container runs no screen reader and no OS magnifier, so both observations
+remain owed to a human pass on real hardware — NVDA or VoiceOver for the listen, an OS zoom for
+the magnification half. Recorded rather than quietly re-deferred; flagged to the product owner
+with the Phase 2 report so the row has an owner outside this environment.
 
 ## 155. The minimap M4 gate pass's non-blocking findings
 
@@ -3839,6 +3858,20 @@ immediately found Row 2 losing all nine labels.
 Do not read this row as "narrow viewports are broken". Nothing here says they are; it says **nobody
 knows**, which is the point.
 
+**CLOSED 2026-08-28 (correctness programme Phase 2) — option 1, and the row's warning was right.**
+`apps/web/e2e-narrow-shell/` (`docs/specs/narrow-shell-journey/`, its own CI step, spec written
+first per this row's own ADR-0105 note) drives the sheet, the hamburger, the breakpoint crossing
+in both directions, the below-`md` facts fallback and an axe scan at 390 × 844. **Its first run
+found the sheet had no ground at all**: the workspace redesign moved the rail's `Surface` out to
+its containers and only the docked `ExplorerColumn` got one — `Sheet` is `bg-transparent` by
+design, so below `lg` the Explorer painted its rows straight over the page (measured in Chromium:
+dialog and nav both `rgba(0, 0, 0, 0)`), while the rail's own docblock claimed the Sheet owned
+the scope. Fixed at the call site with the `ExplorerColumn` pattern, pinned red-first in
+`app-shell.test.tsx`. The run also corrected the journey's own first draft: creating the plan at
+a wide viewport auto-expands the path to it (reveal-on-create persists per organisation), so a
+blind container click COLLAPSES the branch — the spec now reads `aria-expanded` before clicking,
+with the reason recorded in the file.
+
 ## 173. The canvas painter draws every glyph in a typeface the product does not use
 
 **Raised 2026-08-22**, found while measuring for #148 rather than reported.
@@ -4325,6 +4358,17 @@ which is why the flake verdict here is stated with its evidence rather than assu
 
 Cross-references **#1** (web e2e is Chromium-first, and the flag-scoped suites never run these
 engines at all).
+
+**CLOSED 2026-08-28 (correctness programme Phase 2) — the row's own first candidate.** The three
+post-sign-up heading assertions (`clients.spec.ts`, `dependencies.spec.ts` ×2) carry an explicit
+`{ timeout: 15_000 }` with the reason in a comment at each site — the assertion spans a form
+submit, a network round trip and a client-side route change, and the default 5 s was measured
+marginal only under a loaded CI runner on Firefox. The global expect timeout is untouched, per
+this row's own warning that raising it would hide real regressions everywhere. The job-split
+candidate stays uncosted and is deliberately not taken here (a CI-topology change for a margin a
+targeted timeout already covers). Firefox still cannot run locally (#1), so the proof is the
+assertion now failing only past 15 s — three times the measured envelope — rather than a local
+re-run.
 
 ---
 
