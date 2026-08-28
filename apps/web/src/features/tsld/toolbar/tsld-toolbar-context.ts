@@ -181,8 +181,11 @@ export interface TsldToolbarContext {
   /** Open the resource-loading-histogram dialog (M7 rung 5, ADR-0044 §3). Wired to the shared
    * plan-chrome dialogs; the toolbar item that calls it is gated behind `VITE_RESOURCE_CURVES`. */
   openResourceHistogram: () => void;
-  /** Toggle the docked Health check panel (health M2) — the DCMA 14-point report beside the plan. */
-  openHealthCheck: () => void;
+  /** Toggle the docked Health check panel (health M2) — the DCMA 14-point report beside the plan.
+   * Named for what it does: a second select while the panel is open CLOSES it (the menu item is a
+   * toggle, like the Notes and Float-paths docks) — `open` here once read as idempotent and was
+   * not (an M5 component-review finding). */
+  toggleHealthCheck: () => void;
   /** Whether the viewer may create/list/revoke External-Guest share links (`plan:share` — Planner +
    * Org Admin; ADR-0051 F-M4). Gates the toolbar **Share…** item ALONGSIDE `VITE_GUEST_SHARE_LINKS`
    * (both must hold). NOT pen-gated — sharing grants read access, it doesn't edit the plan. Populated on

@@ -1314,7 +1314,7 @@ function PlanAnalysisControl({
         {/* The DCMA 14-point report (health M2) — a docked column, not a dialog, so the report is
             read BESIDE the plan with jump-to-offender. Unflagged (ADR-0088 D1): the rollback is a
             commit boundary, and a VITE_ constant was never an operator rollback. */}
-        <MenuItem onSelect={() => ctx.openHealthCheck()}>
+        <MenuItem onSelect={() => ctx.toggleHealthCheck()}>
           <HeartPulse aria-hidden="true" className="size-4" />
           Health check…
         </MenuItem>

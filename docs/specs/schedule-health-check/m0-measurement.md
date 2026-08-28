@@ -90,10 +90,10 @@ The four parallel loads, narrowed to the health check's columns, `EXPLAIN (ANALY
 
 | Load                                                   | Scale-500 | Scale-2000 |
 | ------------------------------------------------------ | --------- | ---------- |
-| 1 activities (16 health columns)                       | 0.377 ms  | TBD        |
-| 2 dependencies                                         | 0.364 ms  | TBD        |
-| 3 active baseline snapshot (join via `baselines`)      | 0.422 ms  | TBD        |
-| 4 resource-assignment existence (relation-filter join) | 0.329 ms  | TBD        |
+| 1 activities (16 health columns)                       | 0.377 ms  | 0.666 ms   |
+| 2 dependencies                                         | 0.364 ms  | 0.551 ms   |
+| 3 active baseline snapshot (join via `baselines`)      | 0.422 ms  | 0.612 ms   |
+| 4 resource-assignment existence (relation-filter join) | 0.329 ms  | 0.952 ms   |
 
 **Context the numbers need:** the whole test database holds 7,196 activities / 1,569 dependencies /
 557 baseline rows / 137 assignments, so the planner legitimately chooses sequential scans on the
@@ -102,5 +102,18 @@ production table. The falsification condition stands as written in the plan: the
 the whole-endpoint p95 at 2,000 activities once the endpoint exists (M1), re-measured at M5 by the
 security reviewer; today's numbers say the loads are nowhere near the 200 ms budget.
 
-_(2,000-activity rows to be filled in below when the generator finishes — the plan is seeded and
-recalculated in the same session, same method.)_
+**Scale-2000 method (filled at the M5 gate pass, 2026-08-28):** the catalogue's REST-seeded
+2,000-activity plan was lost twice to environment recycles mid-seed (recorded above), so the
+Scale-2000 rows were measured against a **synthetic plan built directly in SQL** — 2,000
+activities, 2,398 dependencies (chain + 20 % skip links, mixed FS/SS/FF, lead/lag spread), an
+active baseline with 2,000 rows, 1,000 resource assignments — then `ANALYZE` and the same
+`m0-explain.sql` script. That is a legitimate stand-in for THIS measurement and only this one: it
+measures the four **loader queries'** cost at scale, and the loaders read rows, not the write path
+(which the seed catalogue exists to prove — ADR-0066's rule about never substituting persisted
+rows applies to the engine-input differential, not to an `EXPLAIN`). Total ≈ 2.8 ms summed, ~1 ms
+wall (the four run concurrently via `Promise.all`) — nowhere near the 200 ms global-budget line.
+The M5 security review **independently re-derived the same conclusion** with its own synthetic
+2,000-activity build (1.356 / 1.090 / 0.537 / 2.015 ms — its database held more unrelated rows),
+and read `attachDayFactors`/`resolveDayFactorMinutes` to confirm the day-factor lookup is bounded
+by distinct calendars, never per-activity. **The global-throttle decision holds at 4× the
+originally measured scale**; no tighter per-route throttle is warranted.

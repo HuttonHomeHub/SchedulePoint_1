@@ -5285,3 +5285,31 @@ and was never converted. A planner who authors a calendar with no reachable work
 ADR-0067's Window-only preset makes authorable — and then recalculates meets a bare
 `INTERNAL_ERROR` with no words about the calendar. The fix is the ADR-0071 shape: a typed engine
 error mapped to 422 with the calendar named.
+
+## 206. Health-check review suggestions consciously not folded at the M5 gate pass
+
+**Raised:** 2026-08-28 (schedule-health-check M5-T1) · **Size:** S ×5 · **Owner:** web
+
+The M5 gate pass blocked on findings that were all folded (token pairing, NoticeStrip reuse,
+provenance on screen, the Viewer role sentence, `aria-describedby`, the announcement's four
+counts, the G4 regex holes, the 429 citation). Five suggestions were judged real and deferred
+rather than quietly dropped:
+
+- **The footer's "Next conflict" mention is prose, not a control.** The spec said the report
+  "links to the conflict review"; the shipped footer names it. Wiring a button means handing the
+  panel the conflict-navigation command, which lives on the toolbar context — a seam the panel
+  deliberately does not hold today.
+- **Rich per-metric `detail` is computed and never rendered** — the missing-logic
+  predecessor/successor split, the relationship-type breakdown, metric 9's forecast/actual split,
+  CPLI's target source and date, BEI's due/completed counts. The expanded row is the obvious
+  home; M6 (which touches metric 12's row) is the natural vehicle.
+- **The printed document names the plan but not the organisation or project** — a submission-pack
+  page with two plans named "Phase 1" from different projects is ambiguous. The Gantt programme
+  shares the gap; fix both from one header convention.
+- **Two real-AT listens owed** (the M5 accessibility review's S2/S9): the disclosure's
+  concatenated "name Verdict" accname, and the offender press speaking its own announcement a
+  beat before the canvas listbox's `aria-activedescendant` speech — both fine on paper, neither
+  yet heard in VoiceOver/NVDA. The #154 shape.
+- **`VerdictBadge` hand-rolls a coloured span where `Badge` exists** — the spec named the
+  `EarnedValuePanel` precedent; the hand-rolled path is also where the `text-destructive` token
+  slip happened, which is the argument for the primitive.

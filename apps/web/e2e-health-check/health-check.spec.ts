@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 import { revealToolbarCommand } from '../e2e-support/toolbar';
@@ -64,6 +65,16 @@ test('a planner opens the health check, reads the verdicts and jumps to an offen
 
   // ── 3 · Jump to an offender: press it, and the workspace selection lifts it ────────────────
   await missingRow.getByRole('button', { name: /missing logic/i }).click();
+
+  // Axe over the REAL panel in the state the unit fixture cannot produce — open, mixed verdicts,
+  // a failing row expanded with its offender list rendered (M5 accessibility blocker B2: the
+  // unit scan's all-PASS fixture never touched the interactive branch; CLAUDE.md §13 makes the
+  // journey scan a merge requirement).
+  // Whole page, no `.include()` — the e2e-audit precedent. ADR-0099 M5 records what a stale
+  // include selector does (axe throws on an empty context), and the panel's name comes from
+  // `aria-labelledby`, which a naive attribute selector cannot find.
+  const axeResults = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+  expect(axeResults.violations).toEqual([]);
   await missingRow.getByRole('button', { name: new RegExp(danglerName) }).click();
   // The canvas's parallel listbox is the a11y surface the selection must reach (ADR-0026 D7).
   const selected = canvasListbox(page).locator('[aria-selected="true"]');

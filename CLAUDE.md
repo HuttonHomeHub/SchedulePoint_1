@@ -3419,7 +3419,7 @@ progress` off the command surface because **an object action belongs on the obje
   document, in a choice put to somebody else (`docs/TECH_DEBT.md` #204). **The CPM engine is not
   imported and no migration runs.**
 
-- **ADR-0116** _(Accepted; M0–M4 landed 2026-08-28, M6 follows as its own slice)_ — A health
+- **ADR-0116** _(Accepted; M0–M5 landed 2026-08-28, M6 follows as its own slice)_ — A health
   finding is not a conflict, and a report never omits a check. The DCMA 14-point assessment as a
   **pure read model** — `GET …/schedule/health-check`, `schedule:read`, computed from persisted
   rows: **the CPM engine is not imported and the ADR-0034 parity gate is untouched by
@@ -3444,6 +3444,20 @@ progress` off the command surface because **an object action belongs on the obje
   test is M6, measurement first, carrying its own weaker parity sentence (computes read-only,
   persists nothing — proved, not asserted) that must never be swapped with D1's. **No schema change
   and no `VITE_` flag**; two out-of-scope defects found on the way are filed as #205.
+  **The M5 gate pass blocked on five of six reviews, and the sharpest finding was the epic's own
+  gate**: G4's key pattern was line-anchored, so a Prettier-clean single-line
+  `{ …, cost: 0 }` and a banned-named shorthand property both sailed past the scan whose docblock
+  claimed to catch exactly that — proven by running the mutations live, fixed whole-file with both
+  bypasses pinned as fixtures, verified red against the real mutation. The rest are the register's
+  recurring shapes: the printout stating provenance the live panel withheld (D9 applied to half
+  the renderings); one correct pattern applied to a control and not its neighbour three more times
+  (the fill token as ink where its sibling used `-text`, a bespoke error div beside a sibling
+  dock's `NoticeStrip`, a live region dropping the informational count the visible summary
+  states); a role-shut remedy rendered as silence against the ADR-0082 rule the code itself cited;
+  an axe scan certifying only the all-PASS state no real plan shows; and two wrong citations (the
+  DTO `count` description inverted, a 429 text citing TBD rows — now measured: all four loaders
+  sub-1 ms at 2,000 activities, independently re-derived by the security review). Deferred
+  suggestions are #206, with reasons.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

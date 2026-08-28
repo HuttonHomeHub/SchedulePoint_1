@@ -174,8 +174,10 @@ export class ScheduleController {
     description:
       'Rate limited by the global budget (100 requests / 60 s per IP). This route is a persisted ' +
       'read — it runs no CPM computation — so it shares the generic read budget with the schedule ' +
-      'summary and the Earned-Value read rather than earning a tighter one. Measured at M0-T2: ' +
-      'see docs/specs/schedule-health-check/m0-measurement.md.',
+      'summary and the Earned-Value read rather than earning a tighter one. Measured at both ' +
+      'scales (M0-T2 at 500 activities; the M5 gate pass at 2,000 — all four loads sub-1 ms, ' +
+      'independently re-derived by the security review): see ' +
+      'docs/specs/schedule-health-check/m0-measurement.md §M0-T2.',
   })
   async healthCheck(
     @CurrentUser() principal: Principal,

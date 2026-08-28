@@ -14,7 +14,9 @@ import {
  * ≈ 82 px with its icon), the row gap and the disclosure chevron (≈ 40 px), inside the panel's
  * 2 × 12 px padding — ≈ 330 px before the name would truncate against the verdict. 340 keeps a
  * margin; the measured/threshold pair sits on its own line below the name, so it never competes.
- * Verified against the rendered row by the journey's probe (`e2e-health-check`).
+ * The figure is DERIVED from that arithmetic, not measured in a browser — no journey probe
+ * asserts it (this sentence once claimed one did; ADR-0076 Class 3, caught at the M5 gate pass).
+ * The name is `truncate`d, so an undershoot degrades to an ellipsis rather than an overflow.
  */
 const STORAGE_KEY = 'schedulepoint-health-panel';
 

@@ -10,9 +10,9 @@ import type {
  *
  * **G3 lives here**: every number a row prints comes from the payload — the threshold's value, the
  * measured count/percent/ratio, the offender cap. This module contains no threshold literal, and
- * `health-threshold-source.structural.test.ts` fails the build if one appears anywhere in the
- * feature. What IS authored here is prose: the verdict words, the reason sentences, and the
- * comparison glyph each `ThresholdKind` implies.
+ * `schedule-health-vocabulary.structural.test.ts` (its G3 case) fails the build if one appears
+ * anywhere in the feature. What IS authored here is prose: the verdict words, the reason
+ * sentences, and the comparison glyph each `ThresholdKind` implies.
  */
 
 export interface HealthRowView {
@@ -29,7 +29,25 @@ export interface HealthRowView {
   reasonSentence: string | null;
   /** Which remedy route fixes a not-assessable row, when one exists. */
   remedy: 'RECALCULATE' | 'CAPTURE_BASELINE' | null;
+  /**
+   * A scope caveat the row must carry on screen, not only on paper — metric 10's narrowing. The
+   * payload's `detail.narrowing` says WHAT the metric reads; without the sentence a planner
+   * believes the row measures workload or over-allocation (the M5 ux finding: the printout
+   * explained it and the live panel did not).
+   */
+  caveatSentence: string | null;
 }
+
+/**
+ * What a reader WITHOUT the remedy capability is told instead of a button. ADR-0082's
+ * discriminator: a route shut by ROLE is explained, never omitted — omission would leave a Viewer
+ * unable to tell "nobody captured a baseline" from "I am not allowed to fix this", and the two
+ * calls to action differ (ask a Planner vs. do nothing).
+ */
+export const REMEDY_ROLE_SENTENCES: Record<'RECALCULATE' | 'CAPTURE_BASELINE', string> = {
+  RECALCULATE: 'Recalculating needs a role that can edit the schedule — ask a Planner.',
+  CAPTURE_BASELINE: 'Capturing a baseline needs a Planner or Org Admin.',
+};
 
 /**
  * The reason sentences. `REQUIRES_WHAT_IF_ANALYSIS` names what the check IS so the row teaches
@@ -106,19 +124,21 @@ export function buildHealthRows(report: ScheduleHealthReport): HealthRowView[] {
     measuredLabel: formatMeasured(metric.measured),
     reasonSentence: metric.reason === null ? null : REASON_SENTENCES[metric.reason],
     remedy: metric.reason === null ? null : (REASON_REMEDIES[metric.reason] ?? null),
+    caveatSentence:
+      metric.id === 'RESOURCES' && metric.verdict === 'INFORMATIONAL'
+        ? 'Reads resource-assignment existence only — not workload or over-allocation.'
+        : null,
   }));
 }
 
 /**
  * The headline announced once when the report settles (never per render — the ADR-0079
- * stale-debounce lesson): the summary counts, in words.
+ * stale-debounce lesson): the summary counts, in words. **All four counts, always** — the visible
+ * summary states all four, and a live region that silently drops one hands a screen-reader user a
+ * different report from the sighted one (the M5 ux finding; the ADR-0073 C1 "two empty states, one
+ * channel" shape).
  */
 export function healthAnnouncement(report: ScheduleHealthReport): string {
   const s = report.summary;
-  const parts = [
-    `${s.failed} failed`,
-    `${s.passed} passed`,
-    ...(s.notAssessable > 0 ? [`${s.notAssessable} not assessed`] : []),
-  ];
-  return `Health check: ${parts.join(', ')}.`;
+  return `Health check: ${s.failed} failed, ${s.passed} passed, ${s.notAssessable} not assessed, ${s.informational} informational.`;
 }

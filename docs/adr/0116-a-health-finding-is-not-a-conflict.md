@@ -1,7 +1,7 @@
 # ADR-0116 — A health finding is not a conflict, and a report never omits a check
 
-- **Status:** Accepted (M0–M4 landed 2026-08-28; M6 — the metric-12 what-if route — follows as its
-  own slice per the plan's sequencing table)
+- **Status:** Accepted (M0–M5 landed 2026-08-28, gate pass folded; M6 — the metric-12 what-if
+  route — follows as its own slice per the plan's sequencing table)
 - **Date:** 2026-08-28
 - **Spec:** [`docs/specs/schedule-health-check/`](../specs/schedule-health-check/)
 
@@ -112,6 +112,56 @@ late is telling half the story.
   `resetDatabase()` wiped the seeded catalogue mid-epic, so the 2,000-activity numbers had to be
   re-seeded after the suite ran. Recorded in `m0-measurement.md` so the next measurement sequences
   seeding after e2e runs rather than rediscovering this.
+
+## The M5 gate pass (2026-08-28)
+
+Six specialists over the epic's combined diff. Backend-performance passed (it measured the shipped
+compute at 5.7–5.9 ms at 2,000 activities and its one suggestion — the two day-factor lookups
+sharing a round trip — was folded); the other five blocked, on findings that share this register's
+recurring shapes:
+
+- **The epic's own gate did not deliver what its docblock claimed** (the ADR-0110 D5 shape, on a
+  gate rather than a feature). G4's key pattern was anchored to line start — how Prettier formats a
+  MULTI-line object literal and not a single-line one — so
+  `{ narrowing: RESOURCES_NARROWING, cost: 0 }` (Prettier-clean, 95 chars) passed it, as did a
+  banned-named shorthand property, which has no `:` at all. The security review proved both by
+  running the mutations live. The scan is whole-file now, both bypasses are pinned as fixtures, the
+  fix was verified red against the real mutation, and the scan set gained the `getHealthCheck`
+  method slices of the service and controller — method-scoped, because the service legitimately
+  hosts the ADR-0042 cost read model whole-file, which the first widened draft flagged in 26 places.
+- **The printout was more honest than the screen.** The panel never stated `computedAt`,
+  `schedulingMode` or the active baseline — the spec's own D9 says provenance is on the face of
+  _every_ rendering, and the print document obeyed while the live panel did not. A planner reading
+  a stale report on screen had no way to tell.
+- **One correct pattern applied to a control and not its neighbour, three more times** (the
+  ADR-0064 §7 shape): `pass` used the audited `-text` ink token while `fail` used the fill token
+  the contrast gate never checks as text; the error state was a bespoke `role="status"` div while
+  the sibling Float-paths dock renders the same failure through `NoticeStrip` as an alert; and the
+  live announcement dropped the informational count that the visible summary always states —
+  handing a screen-reader user a different report.
+- **A role-shut remedy rendered as silence**, misapplying the ADR-0082 rule the code itself cited:
+  omission is for a remedy that does not exist; a route shut by ROLE is explained. A Viewer now
+  reads "ask a Planner" instead of nothing, in both docks — fixing only one would have created the
+  drift the finding was about.
+- **The only axe scan certified the one state a real plan never shows** — an all-PASS fixture
+  exercising the non-interactive branch, no disclosure, no offender list, no remedy button, while
+  the journey ran no scan at all. The unit suite now scans mixed verdicts with a row expanded plus
+  the error state, and the journey scans the real panel open (whole-page, no `.include()` — the
+  ADR-0099 M5 stale-selector lesson applied in advance).
+- **Two of the epic's own citations were wrong**: the DTO's `count` description asserted the
+  inverse of what `measuredPercent()` does, and the 429 text cited a measurement whose Scale-2000
+  rows were still `TBD` — an ADR-0076 Class 3 claim inside the OpenAPI contract. The rows are now
+  filled (the loaders measured sub-1 ms each at 2,000 activities against a synthetic SQL-built
+  plan, with the security review's independent re-derivation agreeing), and the DTO's three closed
+  unions are derived from the `@repo/types` tuples rather than hand-copied.
+
+One more environment fact is recorded because the next measurement will meet it: the 2,000-activity
+REST seed was lost twice to environment recycles mid-run, so the Scale-2000 loader numbers were
+measured against a synthetic plan built directly in SQL — legitimate for THIS measurement and only
+this one, because an `EXPLAIN` of the loader queries reads rows and never exercises the write path
+(ADR-0066's never-read-persisted-rows rule governs the engine-input differential, not an
+`EXPLAIN`). Five suggestions were deferred with reasons as `docs/TECH_DEBT.md` #206 rather than
+dropped.
 
 ## Consequences
 

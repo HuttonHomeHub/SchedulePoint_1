@@ -28,8 +28,11 @@ import { mountPrintDocument, type PrintDocumentDeps } from '@/lib/print-document
  */
 export function ScheduleHealthPrintDocument({
   report,
+  printedAt = new Date(),
 }: {
   report: ScheduleHealthReport;
+  /** Injectable for the unit suite; callers take the default. */
+  printedAt?: Date;
 }): React.ReactElement {
   const rows = buildHealthRows(report);
   return (
@@ -42,7 +45,10 @@ export function ScheduleHealthPrintDocument({
             ? 'never calculated'
             : `calculated ${report.computedAt.slice(0, 10)}`}{' '}
           · {report.schedulingMode === 'EARLY' ? 'Early' : 'Visual'} scheduling · baseline:{' '}
-          {report.baseline?.name ?? 'none'}
+          {report.baseline?.name ?? 'none'} · printed {printedAt.toISOString().slice(0, 10)}
+          {/* "printed" is a separate fact from "calculated": several metrics read current
+              definition rows, so two prints under one computedAt can honestly differ, and a page
+              with no print date cannot say which came first (M5 ux finding). */}
         </p>
         <p className="health-print-meta">
           {report.summary.failed} failed · {report.summary.passed} passed ·{' '}

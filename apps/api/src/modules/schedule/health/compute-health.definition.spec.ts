@@ -110,6 +110,19 @@ describe('metrics 2 and 3 — leads and lags, in minutes', () => {
     expect(metric(input, 'LAGS').reason).toBe('NO_RELATIONSHIPS');
     expect(metric(input, 'RELATIONSHIP_TYPES').reason).toBe('NO_RELATIONSHIPS');
   });
+
+  it('metric 1 FAILS loudly on the same zero-dependency plan — never NO_RELATIONSHIPS', () => {
+    // The spec's own edge case (§edge table): metrics 2–4 have nothing to judge without
+    // relationships, but metric 1's whole subject is the ABSENCE of logic, so an unlinked plan
+    // is its loudest failure, not an unassessable state. Pinned directly on an M5 api-review
+    // finding — the two halves of the edge case were asserted in different suites and this half
+    // in none.
+    const input = computeInput({ dependencies: [] });
+    const row = metric(input, 'MISSING_LOGIC');
+    expect(row.verdict).toBe('FAIL');
+    expect(row.reason).toBeNull();
+    expect(row.measured?.percent).toBe(100);
+  });
 });
 
 describe('metric 4 — relationship types', () => {

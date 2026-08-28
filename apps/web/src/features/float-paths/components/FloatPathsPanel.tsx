@@ -15,6 +15,9 @@ import { Spinner } from '@/components/ui/spinner';
 // Deep import, deliberately: the shared 422 sentence is a pure constant, and the schedule barrel
 // pulls the whole data layer with it — which several workspace suites replace wholesale.
 import { NO_START_HINT } from '@/features/schedule/api/use-schedule';
+// The SHARED role sentence, not a second wording: the health dock explains the same shut route
+// with the same words (M5 ux finding — fixing only one dock would have created a fresh drift).
+import { REMEDY_ROLE_SENTENCES } from '@/features/schedule-health/model/health-rows';
 import { cn } from '@/lib/utils';
 
 export interface FloatPathsPanelProps {
@@ -200,7 +203,11 @@ export function FloatPathsPanel({
             // and two wordings for one state is how a product stops sounding like itself.
             message={`There are no float paths to rank yet. ${NO_START_HINT}`}
           >
-            {onRecalculate === undefined ? null : (
+            {/* A reader without the capability gets the route in words, never silence — the state
+                is shut by ROLE, so ADR-0082 says explain it rather than omit it. */}
+            {onRecalculate === undefined ? (
+              <p className="text-muted-foreground text-xs">{REMEDY_ROLE_SENTENCES.RECALCULATE}</p>
+            ) : (
               <Button variant="secondary" size="sm" onClick={onRecalculate}>
                 Recalculate
               </Button>

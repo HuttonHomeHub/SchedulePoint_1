@@ -12,33 +12,27 @@ import type {
   HealthVerdict,
   ScheduleHealthReport,
 } from '@repo/types';
-import { HEALTH_METRIC_IDS } from '@repo/types';
+import {
+  HEALTH_METRIC_IDS,
+  HEALTH_NOT_ASSESSABLE_REASONS,
+  HEALTH_THRESHOLD_KINDS,
+  HEALTH_VERDICTS,
+} from '@repo/types';
 
 /**
  * The DCMA 14-point health report (health M1). **The response carries no cost, rate or budget
  * field at any depth** — G4 (`plan-health-check.g4.structural.spec.ts`) pins that by name, so the
  * report structurally cannot vary by `cost:read` and one URL produces one document (spec §3.2).
+ *
+ * Every `enum:` below is DERIVED from the `@repo/types` tuple that also derives the union type —
+ * never a hand-copied array, which would compile fine while silently missing a member added later
+ * (the `HEALTH_METRIC_IDS` rule, extended to the other three closed sets on an M5 api-review
+ * finding).
  */
-
-const VERDICTS = ['PASS', 'FAIL', 'NOT_ASSESSABLE', 'INFORMATIONAL'] as const;
-
-const NOT_ASSESSABLE_REASONS = [
-  'EMPTY_PLAN',
-  'NO_RELATIONSHIPS',
-  'PLAN_NOT_SCHEDULED',
-  'NO_ACTIVE_BASELINE',
-  'NO_TARGET_FINISH',
-  'NOTHING_DUE',
-  'NO_INCOMPLETE_ACTIVITIES',
-  'NOTHING_REMAINING',
-  'REQUIRES_WHAT_IF_ANALYSIS',
-] as const;
-
-const THRESHOLD_KINDS = ['MAX_PERCENT', 'MAX_COUNT', 'MIN_PERCENT', 'MIN_RATIO'] as const;
 
 export class HealthThresholdDto implements HealthThreshold {
   @ApiProperty({
-    enum: THRESHOLD_KINDS,
+    enum: HEALTH_THRESHOLD_KINDS,
     description:
       'How the threshold judges its measurement. A closed set — a client needs no default case.',
   })
@@ -55,7 +49,9 @@ export class HealthMeasuredDto implements HealthMeasured {
   @ApiProperty({
     nullable: true,
     type: Number,
-    description: 'Offending-row count; null when the metric is not count-shaped.',
+    description:
+      'Offending-row count. Populated for count-shaped AND percent-shaped metrics alike; null ' +
+      'only for the two ratio-shaped index metrics (13/14).',
   })
   count!: number | null;
 
@@ -116,14 +112,14 @@ export class HealthMetricResultDto implements HealthMetricResult {
   @ApiProperty({ description: '1-based DCMA ordinal; the metrics array is always sorted by it.' })
   ordinal!: number;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'The metric’s display name, e.g. "Missing logic".' })
   name!: string;
 
-  @ApiProperty({ enum: VERDICTS })
+  @ApiProperty({ enum: HEALTH_VERDICTS })
   verdict!: HealthVerdict;
 
   @ApiProperty({
-    enum: NOT_ASSESSABLE_REASONS,
+    enum: HEALTH_NOT_ASSESSABLE_REASONS,
     nullable: true,
     description:
       'Non-null if and only if verdict is NOT_ASSESSABLE. Deliberately redundant with the verdict ' +
@@ -174,10 +170,10 @@ export class HealthMetricResultDto implements HealthMetricResult {
 }
 
 export class HealthBaselineRefDto implements HealthBaselineRef {
-  @ApiProperty()
+  @ApiProperty({ description: 'The active baseline’s id.' })
   id!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'The active baseline’s name, as printed on the report header.' })
   name!: string;
 
   @ApiProperty({ description: 'ISO instant the active baseline was captured.' })
@@ -225,7 +221,9 @@ export class ScheduleHealthReportDto implements ScheduleHealthReport {
   })
   activityCount!: number;
 
-  @ApiProperty()
+  @ApiProperty({
+    description: 'Dependencies between active activities — metrics 2–4’s denominator.',
+  })
   relationshipCount!: number;
 
   @ApiProperty({ nullable: true, type: HealthBaselineRefDto })

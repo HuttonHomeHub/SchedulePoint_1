@@ -501,7 +501,7 @@ export function useTsldToolbarContext({
       openResourceHistogram: () => openDialog('resource-histogram'),
       // The DCMA health report is a DOCKED COLUMN, not a dialog — the workspace owns its state and
       // the one-dock-at-a-time set (right-docks.ts), so this is a callback the host supplies.
-      openHealthCheck: toggleHealthCheck,
+      toggleHealthCheck,
       // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
       // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
       // is off (the `share` id resolves to its placeholder, so neither is read).

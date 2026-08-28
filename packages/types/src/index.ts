@@ -2428,7 +2428,12 @@ export const HEALTH_METRIC_IDS = [
 
 export type HealthMetricId = (typeof HEALTH_METRIC_IDS)[number];
 
-export type HealthVerdict = 'PASS' | 'FAIL' | 'NOT_ASSESSABLE' | 'INFORMATIONAL';
+/** Tuple, not a bare union: the API DTO derives its OpenAPI `enum:` from this same value, so the
+ * two cannot disagree about membership (the `HEALTH_METRIC_IDS` rule, applied to the other three
+ * closed sets — an M5 api-review finding). */
+export const HEALTH_VERDICTS = ['PASS', 'FAIL', 'NOT_ASSESSABLE', 'INFORMATIONAL'] as const;
+
+export type HealthVerdict = (typeof HEALTH_VERDICTS)[number];
 
 /**
  * Why a metric could not be assessed. Redundant with `verdict === 'NOT_ASSESSABLE'` **deliberately**
@@ -2440,16 +2445,19 @@ export type HealthVerdict = 'PASS' | 'FAIL' | 'NOT_ASSESSABLE' | 'INFORMATIONAL'
  * date for metric 13's divisor) but its reason list omitted them — an inconsistency found by
  * implementing the table, resolved toward the table.
  */
-export type HealthNotAssessableReason =
-  | 'EMPTY_PLAN'
-  | 'NO_RELATIONSHIPS'
-  | 'PLAN_NOT_SCHEDULED'
-  | 'NO_ACTIVE_BASELINE'
-  | 'NO_TARGET_FINISH'
-  | 'NOTHING_DUE'
-  | 'NO_INCOMPLETE_ACTIVITIES'
-  | 'NOTHING_REMAINING'
-  | 'REQUIRES_WHAT_IF_ANALYSIS';
+export const HEALTH_NOT_ASSESSABLE_REASONS = [
+  'EMPTY_PLAN',
+  'NO_RELATIONSHIPS',
+  'PLAN_NOT_SCHEDULED',
+  'NO_ACTIVE_BASELINE',
+  'NO_TARGET_FINISH',
+  'NOTHING_DUE',
+  'NO_INCOMPLETE_ACTIVITIES',
+  'NOTHING_REMAINING',
+  'REQUIRES_WHAT_IF_ANALYSIS',
+] as const;
+
+export type HealthNotAssessableReason = (typeof HEALTH_NOT_ASSESSABLE_REASONS)[number];
 
 /**
  * How a threshold judges its measurement. A **closed** union so the client needs no default case —
@@ -2457,7 +2465,14 @@ export type HealthNotAssessableReason =
  * metric 10 (informational) and metric 12 carry `threshold: null`, because a threshold object on
  * screen reads as a real threshold and "judged against: none" is worse than nothing.
  */
-export type HealthThresholdKind = 'MAX_PERCENT' | 'MAX_COUNT' | 'MIN_PERCENT' | 'MIN_RATIO';
+export const HEALTH_THRESHOLD_KINDS = [
+  'MAX_PERCENT',
+  'MAX_COUNT',
+  'MIN_PERCENT',
+  'MIN_RATIO',
+] as const;
+
+export type HealthThresholdKind = (typeof HEALTH_THRESHOLD_KINDS)[number];
 
 export interface HealthThreshold {
   kind: HealthThresholdKind;

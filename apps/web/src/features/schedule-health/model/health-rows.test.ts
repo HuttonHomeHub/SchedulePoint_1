@@ -102,15 +102,17 @@ describe('buildHealthRows', () => {
 });
 
 describe('healthAnnouncement', () => {
-  it('says the summary once, in words, leading with failures', () => {
+  it('says the summary once, in words, leading with failures — ALL FOUR counts', () => {
     expect(healthAnnouncement(report([]))).toBe(
-      'Health check: 2 failed, 1 passed, 3 not assessed.',
+      'Health check: 2 failed, 1 passed, 3 not assessed, 1 informational.',
     );
   });
 
-  it('omits the not-assessed clause when there is nothing to say', () => {
+  it('states a zero rather than dropping the clause — the visible summary states all four, and a live region that silently drops one hands a screen-reader user a different report (M5 ux finding)', () => {
     const r = report([]);
     r.summary = { passed: 14, failed: 0, notAssessable: 0, informational: 0 };
-    expect(healthAnnouncement(r)).toBe('Health check: 0 failed, 14 passed.');
+    expect(healthAnnouncement(r)).toBe(
+      'Health check: 0 failed, 14 passed, 0 not assessed, 0 informational.',
+    );
   });
 });
