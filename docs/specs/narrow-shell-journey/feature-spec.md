@@ -48,7 +48,10 @@ narrow half **works**, not merely renders:
   (the ADR-0114 M7 regression's journey-level pin — its unit pin exists, this is the browser
   half).
 - **FR-5 (a11y smoke):** an axe scan of the shell with the sheet open at the narrow viewport
-  (scoped include; wcag2a/wcag2aa tags, matching the estate's convention).
+  (the #170 single-`options()` shape — full WCAG 2.0/2.1/2.2 tag set with `target-size` opted
+  in, since axe ships that rule disabled and a 390 px journey is exactly where WCAG 2.5.8 bites.
+  This line first said "wcag2a/wcag2aa tags, matching the estate's convention" — the convention
+  #170, closed in the same PR, diagnoses as the coverage gap; caught by the phase gate).
 
 ## 3. Technical analysis
 

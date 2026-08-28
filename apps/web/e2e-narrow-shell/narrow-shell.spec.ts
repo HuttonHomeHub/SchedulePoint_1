@@ -132,10 +132,25 @@ test('the narrow shell: sheet navigation, header reachability, breakpoint crossi
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('button', { name: 'Show Project Explorer' })).toBeVisible();
 
-  // ── FR-5: the narrow shell with the sheet open is accessible (the estate's tag set).
+  // ── FR-5: the narrow shell with the sheet open is accessible. ONE `options()` carrying BOTH
+  // runOnly and rules — the #170 shape this same PR fixes elsewhere, and this spec's first draft
+  // shipped the superseded `.withTags(['wcag2a','wcag2aa'])` in the same diff (caught by the
+  // phase gate: the "one correct pattern applied to a control and not its neighbour" class,
+  // committed by the neighbour's own author). `target-size` is opted in because axe ships it
+  // disabled and tags it wcag22aa — and a 390 px phone journey is exactly where WCAG 2.5.8 bites.
   await page.getByRole('button', { name: 'Show Project Explorer' }).click();
   await expect(page.getByRole('dialog', { name: 'Project Explorer' })).toBeVisible();
   expect(
-    (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
+    (
+      await new AxeBuilder({ page })
+        .options({
+          runOnly: {
+            type: 'tag',
+            values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'],
+          },
+          rules: { 'target-size': { enabled: true } },
+        })
+        .analyze()
+    ).violations,
   ).toEqual([]);
 });
