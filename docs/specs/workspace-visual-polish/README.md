@@ -95,6 +95,27 @@ folded; prepush 13/13; base + workspace-chrome + health-check + gantt journeys g
 Item 6's "status line" is therefore the facts' two wrapped lines INSIDE the 41 px row; item 8's
 change moves the dock's bottom edge from 888 (foot bottom) to 847 (canvas bottom).
 
+## The reviews, and item 8's accepted cost (2026-08-28)
+
+The §19.13 accessibility review **passed with nothing blocking** (the Deck caption/`aria-hidden`
+reasoning correct in both surfaces for opposite reasons; the panel-scope migration inherits the
+existing computed contrast coverage; one nit recorded — the `View` group name echoing the
+`View ▾` trigger's — and one process check, answered: `dock.spec.ts` ran green twice after M5,
+its guarantees being deltas a constant applied to both states cannot move).
+
+The ux review **blocked on one real finding**: the dock-pushes-canvas-only restructure made an
+open dock's height BE the canvas row's height, so an **expanded activities panel** squeezed an
+open Health/Float-paths/Notes panel to the 240 px canvas floor — unmeasured, untested, unstated,
+in the item whose whole point was to stop other layout state taxing the docks. Fixed with a
+`DOCK_MIN_HEIGHT` (360 px) reservation in the panel clamp while any right dock is open, proven by
+a new `dock.spec.ts` case **verified red first** (the unfloored clamp measured the dock at 236 px
+at 1646×900). **The cost runs the other way and is accepted**: while a dock is open the activities
+panel's effective max is correspondingly lower, and a taller persisted height is render-clamped
+for the duration — `panel.size` is never overwritten, so closing the dock restores the panel
+exactly. Its two nits are folded too: the SELECTION caption gains the deck captions' trailing
+divider, and the after-screenshots were re-taken post-M6 (the committed set predated the fold
+removal).
+
 ## After M1–M5 — re-measured (same probe, 2026-08-28)
 
 | Fact                  | Value                                                                                           |

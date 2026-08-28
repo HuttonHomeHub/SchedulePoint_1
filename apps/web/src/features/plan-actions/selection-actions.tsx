@@ -1014,7 +1014,7 @@ export function SelectionActionsBar({
           The PLURAL bar deliberately gets none: its `NoticeStrip` message already states the
           subject in a sentence ("N activities selected — …"), and a second label beside it would
           be the same fact rendered twice (ADR-0093's shape, one row down). */}
-      <span className={cn(TOOLBAR_CAPTION, 'px-1')}>Selection</span>
+      <span className={cn(TOOLBAR_CAPTION, 'border-primary/25 border-r pr-2 pl-1')}>Selection</span>
       <Toolbar
         items={selectionActionItems}
         context={context}

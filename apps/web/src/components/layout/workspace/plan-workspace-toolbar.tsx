@@ -13,6 +13,7 @@ import { ResourceStripPanel } from './resource-strip-panel';
 import { docksToClose, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
+  DOCK_MIN_HEIGHT,
   PANEL_MAX_HEIGHT,
   PANEL_MIN_OPEN,
   useActivityPanelPrefs,
@@ -451,19 +452,10 @@ export function ToolbarPlanWorkspace({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const effectiveMax = Math.min(
-    PANEL_MAX_HEIGHT,
-    Math.max(PANEL_MIN_OPEN, bodyHeight - CANVAS_MIN_HEIGHT),
-  );
-  const panelHeight = Math.min(panel.size, effectiveMax);
   const pointerToSize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) =>
       (bodyRef.current?.getBoundingClientRect().bottom ?? 0) - event.clientY,
     [],
-  );
-  const onResize = useCallback(
-    (next: number) => panel.setSize(Math.min(next, effectiveMax)),
-    [panel, effectiveMax],
   );
 
   // Docked notes panel (entry-route win 1): a right-side sibling of the bottom activity panel — a
@@ -527,6 +519,29 @@ export function ToolbarPlanWorkspace({
   const onHealthResize = useCallback(
     (next: number) => healthPrefs.setSize(Math.min(next, healthEffectiveMax)),
     [healthPrefs, healthEffectiveMax],
+  );
+
+  // **The activities panel's clamp, computed BELOW the dock flags because it reads them** (the ux
+  // gate's blocking finding on the polish pass, 2026-08-28). Since the dock-pushes-canvas-only
+  // restructure, an open right dock's height IS the canvas row's height — so a clamp that reserved
+  // only `CANVAS_MIN_HEIGHT` let an expanded activities panel squeeze an open Health/Float-paths/
+  // Notes panel to the 240 px canvas floor: a scrolling review panel in a box shorter than the
+  // content it exists to walk, in the pass whose item 8 was about STOPPING other layout state
+  // taxing the docks. With a dock open the row keeps `DOCK_MIN_HEIGHT` instead; the cost runs the
+  // other way and is stated in that constant's docblock (a taller persisted panel is render-clamped
+  // while a dock is open, and restored exactly on close — `panel.size` is never overwritten).
+  const anyRightDockActive = notesDockActive || floatPathsDockActive || healthDockActive;
+  const effectiveMax = Math.min(
+    PANEL_MAX_HEIGHT,
+    Math.max(
+      PANEL_MIN_OPEN,
+      bodyHeight - (anyRightDockActive ? DOCK_MIN_HEIGHT : CANVAS_MIN_HEIGHT),
+    ),
+  );
+  const panelHeight = Math.min(panel.size, effectiveMax);
+  const onResize = useCallback(
+    (next: number) => panel.setSize(Math.min(next, effectiveMax)),
+    [panel, effectiveMax],
   );
   // Enabled-gated on the panel being open, so a closed panel costs nothing — and keyed under the
   // schedule namespace, so the recalculation's existing invalidation sweeps it.

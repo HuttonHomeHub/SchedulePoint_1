@@ -239,3 +239,65 @@ test('expanding the panel leaves the facts and the actions where they were', asy
   ).toBeVisible();
   await expect(page.locator('[data-schedule-state]')).toHaveCount(1);
 });
+
+/**
+ * **An expanded activities panel cannot crush an open dock** (workspace visual polish, the ux
+ * gate's blocking finding, 2026-08-28).
+ *
+ * The dock-pushes-canvas-only restructure made an open right dock's height BE the canvas row's
+ * height — so with the panel clamp reserving only `CANVAS_MIN_HEIGHT` (240), a planner who
+ * expanded the activities panel squeezed an open Health/Float-paths/Notes panel down to 240 px: a
+ * scrolling review panel in a box shorter than the content it exists to walk, in the pass whose
+ * item 8 was about STOPPING other layout state taxing the docks. The clamp now reserves
+ * `DOCK_MIN_HEIGHT` (360) while any right dock is open; the cost runs the other way and is stated
+ * in that constant's docblock.
+ *
+ * The floor asserted here is 350, not 360: the reservation is spent on the whole canvas row, and
+ * the panel's ~4 px splitter lives inside it — the dock gets the reservation minus the splitter.
+ *
+ * **Verified red** against the unfloored clamp: the dock measured 236 px at this viewport.
+ */
+test('an expanded activities panel leaves an open dock a usable height', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.setViewportSize({ width: 1646, height: 900 });
+  const orgSlug = await onboard(page, Date.now() + 11);
+  await createHierarchy(page);
+  await newPlan(page, 'Dock floor');
+  await ensurePen(page);
+  await seedActivities(page, orgSlug, [{ name: 'Dig', laneIndex: 0 }]);
+  await recalculate(page, orgSlug);
+
+  // Persist the panel's HEIGHT at its static maximum, then reload so the clamp meets the worst
+  // case the storage can hold — the state a planner reaches by dragging the splitter to the top
+  // and coming back tomorrow. The collapsed flag is deliberately NOT seeded: the workspace's
+  // collapsed state is session-local `useState(true)` (ADR-0113 — only the height persists), so
+  // the expansion is a button press, which is also the honest route.
+  await page.evaluate(() =>
+    window.localStorage.setItem(
+      'schedulepoint-activity-panel',
+      JSON.stringify({ size: 720, collapsed: false }),
+    ),
+  );
+  await page.reload();
+  await page.getByRole('button', { name: 'Expand activities panel' }).click();
+  await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeVisible();
+
+  // Open the Health dock — a scrolling review panel, the content the squeeze hurts most.
+  await page.locator('[data-toolbar-item="analysis"]').click();
+  await page.getByRole('menuitem', { name: /Health check/ }).click();
+  const dock = page
+    .locator('[data-surface="panel"]')
+    .filter({ has: page.getByRole('heading', { name: 'Health check' }) });
+  await expect(dock).toBeVisible();
+
+  const box = await dock.boundingBox();
+  if (!box) throw new Error('the health dock has no bounding box');
+  expect(
+    Math.round(box.height),
+    'an expanded activities panel squeezed the open dock below its floor',
+  ).toBeGreaterThanOrEqual(350);
+
+  // The pinned positive for the trade's other half: the panel is still open and still real — the
+  // floor must be paid by clamping the panel, never by collapsing it.
+  await expect(page.getByRole('button', { name: 'Collapse activities panel' })).toBeVisible();
+});
