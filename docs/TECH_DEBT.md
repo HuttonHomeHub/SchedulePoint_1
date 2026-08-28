@@ -4315,6 +4315,12 @@ not change — so something other than this guard reverts the pop. Recorded rath
 ## #182 — The deck's folded groups are unreachable by any journey
 
 _Filed 2026-08-24 with ADR-0109 M2._ **CLOSED 2026-08-25 (ADR-0110 M4).**
+**The subject itself was then REMOVED (workspace visual polish, 2026-08-28):** the deck's fold went
+on the product owner's steer ("it adds very little and I don't think someone is ever going to
+collapse a toolbar"), so the two browser cases this row's closure describes went with it — a gate
+whose subject no longer exists does not become a safety net by staying green (ADR-0109 D1). The
+roving-walk half survives inside the replacement case in `command-surface.spec.ts`, which pins the
+NEW contract: no disclosure captions, groups still named for AT, the walk still laps every command.
 `apps/web/e2e-workspace-fit/command-surface.spec.ts` now drives the fold path in a real browser,
 in both halves this row asked for: a pointer fold **and unfold** that proves the commands come
 back, and a keyboard one that folds with `Enter`, asserts the deck still has **exactly one** roving

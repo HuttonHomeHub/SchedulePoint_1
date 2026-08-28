@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { Deck } from './Deck';
 import { defineToolbar, type ToolbarItem } from './toolbar-registry';
@@ -189,100 +189,57 @@ describe('Deck — the roving keyboard model', () => {
 });
 
 /**
- * **A group holding an ARMED command cannot be folded away** (`docs/specs/foot-row/spec.md` D3).
+ * **The captions are static labels, not disclosure buttons** (workspace visual polish, 2026-08-28).
  *
- * Folding unmounts a group's items and the fold set is persisted globally, so a planner who armed a
- * tool and then folded its group was left with the tool still armed, no trigger rendered to say so,
- * and no trigger to stop it with — ADR-0064's founding defect restored by a housekeeping gesture.
+ * The deck shipped with foldable groups and this file held three cases about the fold's `hasActive`
+ * guard; the product owner's steer removed the fold ("it adds very little and I don't think someone
+ * is ever going to collapse a toolbar"), so the guard, the persisted fold set and the caption
+ * buttons went with it. What replaces those cases is the new contract, asserted in both directions
+ * so a fold quietly returning fails rather than reflowing past a green suite:
  *
- * The rule is general rather than a carve-out: you should not be able to hide a control that is
- * currently doing something. It is what lets the mode band withdraw its `adding` / `loe` / `linking`
- * statements at all, because it is what makes "the trigger states it" true in every state rather
- * than in most of them.
+ * - no caption renders as a button (nothing named `<caption> commands`, nothing with
+ *   `aria-expanded` anywhere in the deck);
+ * - the caption WORD still reaches AT exactly once, as the group's own name — the visible span is
+ *   `aria-hidden` precisely so "View, group — View" is not announced twice;
+ * - captions are outside the roving order (a static label in the sequence would be a stop that
+ *   does nothing — the inverse of the defect that put them in it).
  */
-describe('Deck — a group with an active command cannot be folded', () => {
-  /**
-   * **The fold set is persisted in `localStorage`, globally, so it LEAKS between cases.**
-   *
-   * Found by verifying these two red rather than by reading them: with the guard removed the first
-   * case folded `Author` for real, wrote it to storage, and the second then started already folded
-   * — so it reported `aria-expanded="true"` where it expected `"false"`, i.e. it failed for the
-   * pollution and not for the rule. With the guard in place it passed, which is worse: an
-   * order-dependent test that happens to be green.
-   */
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
+describe('Deck — captions are static labels', () => {
+  it('renders no disclosure captions and keeps the group names for AT', () => {
+    renderDeck();
+    // The old buttons were named `<caption> commands`; none may survive, under any state.
+    expect(screen.queryByRole('button', { name: /commands$/ })).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-expanded]')).toBeNull();
 
-  const armedItems: ToolbarItem<Ctx>[] = defineToolbar<Ctx>([
-    { id: 'today', group: 'frame', order: 1, tier: 1, label: 'Today', onActivate: () => {} },
-    {
-      id: 'add-activity',
-      group: 'tools',
-      order: 1,
-      tier: 1,
-      label: 'Add activity',
-      isActive: () => true,
-      onActivate: () => {},
-    },
-  ]);
-
-  it('refuses the fold, shades the caption and says why', () => {
-    render(<Deck items={armedItems} context={{}} label="Plan commands" />);
-    const caption = screen.getByRole('button', { name: /^Author commands/ });
-
-    expect(caption).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
-
-    fireEvent.click(caption);
-
-    // Still expanded, and its command still mounted — which is the point. `aria-expanded` alone
-    // would pass against a caption that flipped its own state while the items vanished.
-    expect(caption).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
-
-    // The reason is REACHABLE, not merely present: shaded with a described reason, never removed
-    // (ADR-0082), and never the native `disabled` attribute on a control that flips as a tool is
-    // armed and disarmed.
-    const describedBy = caption.getAttribute('aria-describedby');
-    expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy!)).toHaveTextContent(
-      'Cannot be folded away while one of its tools is armed.',
+    // The grouping itself is kept — the caption word reaches AT once, as the group's name.
+    for (const name of ['View', 'Find', 'Author', 'Plan']) {
+      expect(screen.getByRole('group', { name })).toBeInTheDocument();
+    }
+    // And the visible caption is aria-hidden, so the word is not announced twice.
+    const authorGroup = screen.getByRole('group', { name: 'Author' });
+    const caption = [...authorGroup.querySelectorAll('span')].find(
+      (s) => s.textContent === 'Author',
     );
+    expect(caption).toBeDefined();
+    expect(caption).toHaveAttribute('aria-hidden', 'true');
   });
 
-  /**
-   * **The guard is one-way**, and this is the case that says so.
-   *
-   * `hasActive`'s docblock used to argue the guard could only ever refuse to START a fold, on a
-   * premise about today's registry rather than about the primitive. The `onClick` did not
-   * distinguish the directions, so a group that came back folded AND active — the fold set is
-   * global `localStorage`, and so is at least one panel-open flag that drives an `isActive` in one
-   * of these cards — would have been permanently shut, announcing "cannot be folded away" about a
-   * group that was already folded.
-   *
-   * **Verified red** against the direction-blind guard.
-   */
-  it('still unfolds a group that comes back folded with a tool armed', () => {
-    window.localStorage.setItem('schedulepoint-deck-folds', JSON.stringify(['author']));
-    render(<Deck items={armedItems} context={{}} label="Plan commands" />);
-    const caption = screen.getByRole('button', { name: /^Author commands/ });
-
-    expect(caption).toHaveAttribute('aria-expanded', 'false');
-    expect(caption).not.toHaveAttribute('aria-disabled');
-
-    fireEvent.click(caption);
-    expect(caption).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('button', { name: 'Add activity' })).toBeInTheDocument();
-  });
-
-  it('folds normally when nothing in the group is active', () => {
-    render(<Deck items={items} context={{}} label="Plan commands" />);
-    const caption = screen.getByRole('button', { name: /^Author commands/ });
-
-    expect(caption).not.toHaveAttribute('aria-disabled');
-    fireEvent.click(caption);
-    expect(caption).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('button', { name: 'Add activity' })).not.toBeInTheDocument();
+  it('keeps captions out of the roving order', () => {
+    renderDeck();
+    const today = screen.getByRole('button', { name: 'Today' });
+    today.focus();
+    // One full lap: every stop visited must be a command, never a caption. ArrowDown to leave a
+    // text field (a single-line input keeps the horizontal keys for its caret — #189), ArrowRight
+    // everywhere else, the same two-key walk the e2e sweep models.
+    const reached = new Set<string>();
+    for (let i = 0; i < 20; i += 1) {
+      const inField = document.activeElement?.tagName === 'INPUT';
+      fireEvent.keyDown(document.activeElement!, { key: inField ? 'ArrowDown' : 'ArrowRight' });
+      const id = focusedItemId();
+      if (id !== null) reached.add(id);
+    }
+    expect([...reached].filter((id) => id.startsWith('caption:'))).toEqual([]);
+    // The pinned positive — a deck with no stops at all would satisfy the filter trivially.
+    expect(reached.size).toBeGreaterThanOrEqual(6);
   });
 });
