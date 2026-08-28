@@ -5202,16 +5202,19 @@ toggle-to-close (mouse only).
 ## #197 — Three rules with two or three implementations each, agreeing by discipline
 
 _Filed 2026-08-26 by the ADR-0111 sweep's component half. None divergent enough to block; one
-already asymmetric._
+already asymmetric. **Item 1 closed 2026-08-28** (fix-slice M-A); item 3's `usePopoverPanel` copy
+is closed by the same epic's M-C._
 
-1. **`Dialog` and `Sheet` each carry a private `closeIfSelf`** — the guard that stops a nested
-   `<dialog>`'s non-bubbling `close`/`cancel` from tearing down its parent through React's
-   capture-phase root dispatch (`#50`'s fix). The two docblocks point at each other rather than
-   sharing code, **and they have already diverged**: `dialog.tsx` grew a `confirmBeforeClose` clause
-   for ADR-0108's unsaved-work guard that `sheet.tsx` never received. Nothing breaks today — no
-   `Sheet` consumer holds unsaved editable state — but the next confirm-before-close drawer either
-   duplicates the clause a third time or discovers the gap the hard way. **The closest to blocking,
-   and the one worth extracting first.**
+1. **CLOSED (2026-08-28, `docs/specs/fix-slice-2026-08/` M-A).** The guard now lives once in
+   `components/ui/native-dialog-close.ts` (`useNativeDialogClose`), adopted by both primitives, and
+   `Sheet` gained the `confirmBeforeClose` clause it never received — latent by design, no consumer
+   sets it (verified by grep), documented on the prop with this row's reasoning. A structural gate
+   (`native-dialog-close.structural.test.ts`, comment-stripped, pinned positive) fails the next
+   private copy; verified red against the pre-extraction tree, where it named both files. The two
+   pre-existing nesting tests passed unedited through the extraction, which is the ADR-0078
+   condition for calling a move a move. _Original finding:_ `dialog.tsx` and `sheet.tsx` each
+   carried a private `closeIfSelf`, and the copies had already diverged by exactly the
+   `confirmBeforeClose` clause.
 2. **`MenuItem` and `ToolbarButton` each hand-roll the reason-first `aria-describedby` composition**
    — reason before standing description, because "why you cannot use it outranks what it would tell
    you", plus the guard against a dangling `aria-describedby`. `form.tsx` has a third textually

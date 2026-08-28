@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useNativeDialogClose } from '@/components/ui/native-dialog-close';
 import { cn } from '@/lib/utils';
 
 /**
@@ -69,26 +70,9 @@ export function Dialog({
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  /**
-   * Only this dialog's own close counts as this dialog closing.
-   *
-   * `close` and `cancel` do not bubble, but React listens at the root in the
-   * CAPTURE phase — and capture reaches every ancestor on the way DOWN,
-   * bubbling or not. So a nested `<dialog>` closing (a `ConfirmDialog` inside a
-   * `Dialog`, e.g. revoking a share link or deleting a baseline) used to fire
-   * the OUTER dialog's `onClose` too, tearing down the whole parent behind the
-   * confirmation the user just answered (TECH_DEBT #50). Comparing the target
-   * fixes every nesting inside a `Dialog` at once, rather than the two that had
-   * been noticed. `Sheet` is a separate primitive and carries its own copy of
-   * this guard.
-   */
-  const closeIfSelf = (event: React.SyntheticEvent<HTMLDialogElement>): void => {
-    if (event.target !== ref.current) return;
-    // `cancel` is Escape (and the backdrop). Cancelling it keeps the dialog on screen so the host's
-    // `onClose` can decide — the browser's default is to close first and ask never.
-    if (confirmBeforeClose && event.type === 'cancel') event.preventDefault();
-    onClose();
-  };
+  // The close/cancel guard is the shared leaf — see `native-dialog-close.ts` for why only the
+  // dialog's own close counts (TECH_DEBT #50) and why the guard lives once (TECH_DEBT #197).
+  const closeHandlers = useNativeDialogClose({ ref, onClose, confirmBeforeClose });
 
   return (
     <dialog
@@ -96,8 +80,8 @@ export function Dialog({
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       {...(role ? { role } : {})}
-      onClose={closeIfSelf}
-      onCancel={closeIfSelf}
+      onClose={closeHandlers.onClose}
+      onCancel={closeHandlers.onCancel}
       className={cn(
         'border-border bg-card text-card-foreground m-auto w-[calc(100vw-2rem)] rounded-lg border p-0 shadow-lg',
         SIZE_CLASSES[size],

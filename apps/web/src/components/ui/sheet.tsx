@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useNativeDialogClose } from '@/components/ui/native-dialog-close';
 import { cn } from '@/lib/utils';
 
 /**
@@ -17,6 +18,7 @@ export function Sheet({
   onClose,
   title,
   side = 'left',
+  confirmBeforeClose = false,
   children,
 }: {
   open: boolean;
@@ -24,6 +26,15 @@ export function Sheet({
   title: string;
   /** Which edge the sheet anchors to — `'left'` (default, inline-start) or `'right'` (inline-end). */
   side?: 'left' | 'right';
+  /**
+   * As on {@link Dialog}: the host may refuse a close, so Escape/backdrop ask rather than act.
+   * **Latent by design** — no consumer sets it today (2026-08-28, verified by grep), and it exists
+   * for the reason the nesting guard below was fixed while latent: `Sheet` is a general-purpose
+   * drawer, and the next feature to host an editor in one needs the clause to already be a property
+   * of the primitive rather than a convention (TECH_DEBT #197 item 1 — the two `closeIfSelf`
+   * copies had already diverged by exactly this prop).
+   */
+  confirmBeforeClose?: boolean;
   children: React.ReactNode;
 }): React.ReactElement {
   const ref = useRef<HTMLDialogElement>(null);
@@ -37,30 +48,22 @@ export function Sheet({
   }, [open]);
 
   /**
-   * Only this sheet's own close counts as this sheet closing — the same guard,
-   * and the same reason, as `dialog.tsx`. `close`/`cancel` do not bubble, but
-   * React listens at the root in the CAPTURE phase, which reaches every
-   * ancestor on the way down regardless. So a `<dialog>` nested inside a
-   * `<Sheet>` would close the sheet out from under it (TECH_DEBT #50).
+   * The close/cancel guard is the shared leaf — see `native-dialog-close.ts` (TECH_DEBT #50/#197).
    *
-   * No consumer nests one today — the Project Explorer drawer renders its
-   * dialogs as siblings of `{children}` — so this is latent rather than live.
-   * It is fixed anyway because that avoidance is a convention, not a property
-   * of the primitive, and `Sheet` is a general-purpose drawer: the next
-   * feature to put a confirmation inside one would reintroduce exactly the bug
-   * that was just removed from `Dialog`.
+   * The nesting it guards against is latent here: no consumer nests a `<dialog>` inside a `Sheet`
+   * today — the Project Explorer drawer renders its dialogs as siblings of `{children}`. It is
+   * guarded anyway because that avoidance is a convention, not a property of the primitive, and
+   * `Sheet` is a general-purpose drawer: the next feature to put a confirmation inside one would
+   * reintroduce exactly the bug that was removed from `Dialog`.
    */
-  const closeIfSelf = (event: React.SyntheticEvent<HTMLDialogElement>): void => {
-    if (event.target !== ref.current) return;
-    onClose();
-  };
+  const closeHandlers = useNativeDialogClose({ ref, onClose, confirmBeforeClose });
 
   return (
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      onClose={closeIfSelf}
-      onCancel={closeIfSelf}
+      onClose={closeHandlers.onClose}
+      onCancel={closeHandlers.onCancel}
       // `!m-0` beats the UA `margin:auto` that would otherwise centre a modal dialog; `fixed inset-y-0`
       // + the side edge anchors it full-height to the inline-start (default) or inline-end edge.
       className={cn(
