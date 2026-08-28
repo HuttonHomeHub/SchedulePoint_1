@@ -13,6 +13,7 @@ import { ResourceStripPanel } from './resource-strip-panel';
 import { docksToClose, type RightDock } from './right-docks';
 import {
   CANVAS_MIN_HEIGHT,
+  DOCK_MIN_HEIGHT,
   PANEL_MAX_HEIGHT,
   PANEL_MIN_OPEN,
   useActivityPanelPrefs,
@@ -42,6 +43,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
+import { Surface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { useMediaQuery } from '@/components/ui/use-media-query';
@@ -450,19 +452,10 @@ export function ToolbarPlanWorkspace({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const effectiveMax = Math.min(
-    PANEL_MAX_HEIGHT,
-    Math.max(PANEL_MIN_OPEN, bodyHeight - CANVAS_MIN_HEIGHT),
-  );
-  const panelHeight = Math.min(panel.size, effectiveMax);
   const pointerToSize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) =>
       (bodyRef.current?.getBoundingClientRect().bottom ?? 0) - event.clientY,
     [],
-  );
-  const onResize = useCallback(
-    (next: number) => panel.setSize(Math.min(next, effectiveMax)),
-    [panel, effectiveMax],
   );
 
   // Docked notes panel (entry-route win 1): a right-side sibling of the bottom activity panel — a
@@ -526,6 +519,29 @@ export function ToolbarPlanWorkspace({
   const onHealthResize = useCallback(
     (next: number) => healthPrefs.setSize(Math.min(next, healthEffectiveMax)),
     [healthPrefs, healthEffectiveMax],
+  );
+
+  // **The activities panel's clamp, computed BELOW the dock flags because it reads them** (the ux
+  // gate's blocking finding on the polish pass, 2026-08-28). Since the dock-pushes-canvas-only
+  // restructure, an open right dock's height IS the canvas row's height — so a clamp that reserved
+  // only `CANVAS_MIN_HEIGHT` let an expanded activities panel squeeze an open Health/Float-paths/
+  // Notes panel to the 240 px canvas floor: a scrolling review panel in a box shorter than the
+  // content it exists to walk, in the pass whose item 8 was about STOPPING other layout state
+  // taxing the docks. With a dock open the row keeps `DOCK_MIN_HEIGHT` instead; the cost runs the
+  // other way and is stated in that constant's docblock (a taller persisted panel is render-clamped
+  // while a dock is open, and restored exactly on close — `panel.size` is never overwritten).
+  const anyRightDockActive = notesDockActive || floatPathsDockActive || healthDockActive;
+  const effectiveMax = Math.min(
+    PANEL_MAX_HEIGHT,
+    Math.max(
+      PANEL_MIN_OPEN,
+      bodyHeight - (anyRightDockActive ? DOCK_MIN_HEIGHT : CANVAS_MIN_HEIGHT),
+    ),
+  );
+  const panelHeight = Math.min(panel.size, effectiveMax);
+  const onResize = useCallback(
+    (next: number) => panel.setSize(Math.min(next, effectiveMax)),
+    [panel, effectiveMax],
   );
   // Enabled-gated on the panel being open, so a closed panel costs nothing — and keyed under the
   // schedule namespace, so the recalculation's existing invalidation sweeps it.
@@ -716,7 +732,7 @@ export function ToolbarPlanWorkspace({
     <div
       role="status"
       aria-label="Loading the plan…"
-      className="bg-muted/40 h-full min-h-0 flex-1 animate-pulse rounded-md"
+      className="bg-muted/40 h-full min-h-0 flex-1 animate-pulse"
     />
   ) : (
     <TsldPanel
@@ -1668,145 +1684,171 @@ export function ToolbarPlanWorkspace({
           the strips are produced by the first and land in the second. Provider here rather than at
           the shell, so the shell stays plan-unaware (ADR-0029). */}
         <CanvasDockProvider>
-          {/* `px-3 pb-3` — the workspace's own inset, so the stage and the docked panels read as
-            CARDS FLOATING on the gradient ground rather than as the window's inner walls
-            (workspace redesign, 2026-08-24). It lives here, on the workspace body, and
-            deliberately NOT on the shell's `<main>`: `<main>` carries every route, and the
-            content screens already bring their own container padding, so putting it there would
-            double the inset on a dozen screens to fix one. The chrome band above supplies the
-            matching top and side gutters from the shell, because it is the shell that places it. */}
-          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-3">
+          {/* **No inset** (workspace visual polish, 2026-08-28): the `px-3 pb-3` that floated the
+            stage as a card on the gradient is removed with the card itself — the fully-flush
+            steer. The workspace body IS the window's inner wall now, deliberately. */}
+          <div ref={bodyRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {isWide ? (
-              // Wide: a HORIZONTAL split — the canvas+activities vertical stack (left) beside the docked
-              // notes panel (right, when open). Opening notes narrows the canvas; closing restores it.
-              <div className="flex min-h-0 flex-1 overflow-hidden">
-                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              // Wide: a vertical stack — the canvas row (canvas beside any open right dock) above
+              // the full-width activities foot. **A dock pushes the CANVAS only** (workspace
+              // visual polish item 8, 2026-08-28): the docks used to be full-height siblings of
+              // this whole stack, so opening one narrowed the foot row too — and a narrowed foot
+              // is exactly the wrap ADR-0114/0115 measured at 36–76 px of lost diagram. The
+              // product owner asked "when the right popout is open should it just push the canvas
+              // rather than the bottom toolbar?", and the geometry now says yes by construction:
+              // the docks are siblings of the stage inside the canvas row, and the foot spans the
+              // full width beneath both. Measured at 1646 (M0 → after): the Health dock's bottom
+              // edge moves from the window (888) to the foot's top (845), and with the dock open
+              // the foot spans its full 1369 px instead of narrowing to 944. (The M0 table's 1345
+              // was the pre-full-bleed width — M1 removed the 12 px frame before this landed.)
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="flex min-h-0 flex-1 overflow-hidden">
                   {/* Full-height chromeless canvas — the toolbar hosts its controls; the floating Legend
                   panel (when open) is overlaid via the `relative` container. */}
                   {/* No padding — see the single-pane branch below for why. */}
-                  {/* The stage is a CARD (workspace redesign, 2026-08-24): a radius, a hairline
-                    and a shadow, so the diagram reads as a sheet of paper laid on the gradient
-                    rather than as the window's own white. `overflow-hidden` is what makes the
-                    radius real — the canvas paints to its own bounds and would otherwise square
-                    off the corners it sits under. */}
-                  <div className="border-border relative flex min-h-0 flex-1 flex-col gap-2 overflow-hidden rounded-lg border shadow-md">
+                  {/* The stage was a CARD from the 2026-08-24 redesign to the 2026-08-28 polish
+                    pass; it is FULLY FLUSH now on the product owner's explicit steer — no radius,
+                    no hairline, no shadow, the diagram runs to the surfaces around it. */}
+                  <div className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
                     {surface}
                     {legendPanel}
                     {resourceStripPanel}
                   </div>
 
-                  {collapsed ? (
-                    <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
-                  ) : (
+                  {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the
+                  canvas, never overlays; toggled by Comments. Its vertical splitter sets the width. */}
+                  {floatPathsDockActive ? (
                     <>
                       <PanelResizer
-                        orientation="horizontal"
-                        size={panelHeight}
-                        min={PANEL_MIN_OPEN}
-                        max={effectiveMax}
-                        label="Resize activities panel"
-                        onResize={onResize}
-                        pointerToSize={pointerToSize}
+                        orientation="vertical"
+                        size={floatPathsWidth}
+                        min={FLOAT_PATHS_PANEL_MIN_WIDTH}
+                        max={floatPathsEffectiveMax}
+                        label="Resize float paths panel"
+                        onResize={onFloatPathsResize}
+                        pointerToSize={floatPathsPointerToSize}
+                        reverseKeys
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
-                      <div style={{ height: panelHeight }} className="shrink-0">
-                        <ActivityBottomPanel
-                          model={model}
-                          onCollapse={collapse}
-                          focusCollapseOnMount={interacted}
-                        />
-                      </div>
+                      {/* **The right docks are `panel` surfaces, not `bg-card` boxes** (workspace
+                      visual polish item 7, 2026-08-28). The Project Explorer on the other side of
+                      the stage is `<Surface tone="panel">`; these three were `bg-card` on the page
+                      scope — two mechanisms for one near-white, the exact split-pair class
+                      ADR-0097 names, and the product owner saw it as "does the grey/white need
+                      standardising between the project explorer and the right panels?". One scope
+                      now serves both edges: every token inside the docks rebinds to the panel
+                      family with no component change, and `border-border` draws the seam in the
+                      panel's own vocabulary. */}
+                      <Surface
+                        tone="panel"
+                        style={{ width: floatPathsWidth }}
+                        className="border-border shrink-0 border-l"
+                      >
+                        {floatPathsDockContent}
+                      </Surface>
                     </>
-                  )}
+                  ) : null}
+
+                  {healthDockActive ? (
+                    <>
+                      <PanelResizer
+                        orientation="vertical"
+                        size={healthWidth}
+                        min={HEALTH_PANEL_MIN_WIDTH}
+                        max={healthEffectiveMax}
+                        label="Resize health check panel"
+                        onResize={onHealthResize}
+                        pointerToSize={healthPointerToSize}
+                        reverseKeys
+                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                      />
+                      {/* `panel` scope — see the Float paths dock above (item 7). */}
+                      <Surface
+                        tone="panel"
+                        style={{ width: healthWidth }}
+                        className="border-border shrink-0 border-l"
+                      >
+                        {healthDockContent}
+                      </Surface>
+                    </>
+                  ) : null}
+
+                  {notesDockActive ? (
+                    <>
+                      <PanelResizer
+                        orientation="vertical"
+                        size={notesWidth}
+                        min={NOTES_PANEL_MIN_WIDTH}
+                        max={notesEffectiveMax}
+                        label="Resize notes panel"
+                        onResize={onNotesResize}
+                        pointerToSize={notesPointerToSize}
+                        // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
+                        // match (Left = grow, Right = shrink) — otherwise keyboard contradicts the pointer.
+                        reverseKeys
+                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                      />
+                      {/* `panel` scope — see the Float paths dock above (item 7). */}
+                      <Surface
+                        tone="panel"
+                        style={{ width: notesWidth }}
+                        className="border-border shrink-0 border-l"
+                      >
+                        {notesDockContent}
+                      </Surface>
+                    </>
+                  ) : null}
                 </div>
 
-                {/* Docked notes panel (entry-route win 1) — a resizable RIGHT column that pushes the canvas,
-                never overlays; toggled by Comments. Its vertical splitter sets the width. */}
-                {floatPathsDockActive ? (
+                {/* The full-width foot: below the canvas row, outside any dock's column — see the
+                  branch comment above (item 8). */}
+                {collapsed ? (
+                  <ActivityPanelCollapsedBar onExpand={expand} focusExpandOnMount={interacted} />
+                ) : (
                   <>
                     <PanelResizer
-                      orientation="vertical"
-                      size={floatPathsWidth}
-                      min={FLOAT_PATHS_PANEL_MIN_WIDTH}
-                      max={floatPathsEffectiveMax}
-                      label="Resize float paths panel"
-                      onResize={onFloatPathsResize}
-                      pointerToSize={floatPathsPointerToSize}
-                      reverseKeys
+                      orientation="horizontal"
+                      size={panelHeight}
+                      min={PANEL_MIN_OPEN}
+                      max={effectiveMax}
+                      label="Resize activities panel"
+                      onResize={onResize}
+                      pointerToSize={pointerToSize}
                       className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                     />
-                    <div
-                      style={{ width: floatPathsWidth }}
-                      className="border-border bg-card shrink-0 border-l"
-                    >
-                      {floatPathsDockContent}
+                    <div style={{ height: panelHeight }} className="shrink-0">
+                      <ActivityBottomPanel
+                        model={model}
+                        onCollapse={collapse}
+                        focusCollapseOnMount={interacted}
+                      />
                     </div>
                   </>
-                ) : null}
-
-                {healthDockActive ? (
-                  <>
-                    <PanelResizer
-                      orientation="vertical"
-                      size={healthWidth}
-                      min={HEALTH_PANEL_MIN_WIDTH}
-                      max={healthEffectiveMax}
-                      label="Resize health check panel"
-                      onResize={onHealthResize}
-                      pointerToSize={healthPointerToSize}
-                      reverseKeys
-                      className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                    />
-                    <div
-                      style={{ width: healthWidth }}
-                      className="border-border bg-card shrink-0 border-l"
-                    >
-                      {healthDockContent}
-                    </div>
-                  </>
-                ) : null}
-
-                {notesDockActive ? (
-                  <>
-                    <PanelResizer
-                      orientation="vertical"
-                      size={notesWidth}
-                      min={NOTES_PANEL_MIN_WIDTH}
-                      max={notesEffectiveMax}
-                      label="Resize notes panel"
-                      onResize={onNotesResize}
-                      pointerToSize={notesPointerToSize}
-                      // End-anchored (right dock): pointer-drag LEFT grows it, so invert the arrow keys to
-                      // match (Left = grow, Right = shrink) — otherwise keyboard contradicts the pointer.
-                      reverseKeys
-                      className="bg-border/60 hover:bg-border focus-visible:bg-ring"
-                    />
-                    <div
-                      style={{ width: notesWidth }}
-                      className="border-border bg-card shrink-0 border-l"
-                    >
-                      {notesDockContent}
-                    </div>
-                  </>
-                ) : null}
+                )}
               </div>
             ) : healthDockActive ? (
               // Narrow: a right dock doesn't fit — Health check takes the single pane, exactly as
               // Float paths and notes do beside it (the one-pane-at-a-time narrow philosophy).
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              // `panel` scope here too (item 7): the same content on the page scope one breakpoint
+              // down would be the split-pair drift the item exists to close.
+              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {healthDockContent}
-              </div>
+              </Surface>
             ) : floatPathsDockActive ? (
               // Narrow: a right dock doesn't fit — Float paths takes the single pane, exactly as notes
               // does below. The emphasis it drives is not visible while it holds the pane; that is the
               // honest consequence of one-pane-at-a-time, and closing the panel returns the diagram.
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              // `panel` scope for the same reason as the Health pane above (item 7).
+              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {floatPathsDockContent}
-              </div>
+              </Surface>
             ) : notesDockActive ? (
               // Narrow: a right dock doesn't fit — notes takes the single pane (the one-pane-at-a-time
               // narrow philosophy). Closing (the header Close, or the Comments toggle) restores the toggle.
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{notesDockContent}</div>
+              // `panel` scope for the same reason as the Health pane above (item 7).
+              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {notesDockContent}
+              </Surface>
             ) : (
               <>
                 <WorkspaceViewToggle value={pane} onChange={setPane} />

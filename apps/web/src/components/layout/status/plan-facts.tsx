@@ -125,18 +125,19 @@ export function PlanFacts({
 
           If the row ever does get tight, the container belongs on the row and there are two of
           them, so it wants a decision rather than a class. */}
-      {/* **The bound is on the FACTS, not on the row** — and the first version got that wrong.
-          `max-w-64` sat on the container above, which also holds `ScheduleStateRegion` and
-          `PenStatusOutlet`. Every measurement behind M4 ran after `recalculate()`, which is the one
-          state where the schedule region renders **nothing**, so the readings never contained two
-          of the row's five content sources. Two independent reviews caught it and the browser
-          settled it: injecting the real stale sentence (`Could not calculate — 3 edits still
-          pending`) plus its Recalculate button took the facts to **three** lines and the foot row
-          from **41 px to 53 px at every width** — a row that grows with no selection at all, which
-          is a worse version of the defect this epic exists to close.
-          Bounding only the facts is the fix: they are the content the two-line treatment is FOR,
-          and the schedule state and the pen sentence are neither facts nor optional. */}
-      <div className="flex max-w-64 flex-wrap items-center gap-x-4 gap-y-0">
+      {/* **The two lines are EXPLICIT rows now, not a wrap bound** (workspace visual polish,
+          2026-08-28). This div was `max-w-64 flex-wrap`: the ADR-0115 fix that bounded the FACTS
+          (not the row — the first version bounded the container that also holds
+          `ScheduleStateRegion` and `PenStatusOutlet`, and every measurement behind it ran after
+          `recalculate()`, the one state where the schedule region renders nothing; injecting the
+          real stale sentence took the facts to three lines and the row to 53 px). That bound made
+          two lines happen but left WHERE the line broke to the luck of label widths. The product
+          owner chose the split — dates on top, population below — so `FactList` now renders two
+          explicit rows and the bound has nothing left to do: each row is its own flex line, the
+          column is as wide as its wider row (about what the bound produced), and the height
+          arithmetic is unchanged — two 16 px lines at `row-gap: 0` are 32 px, under the 40 px
+          collapse button that sets this row's floor. Re-measured after the change (the spec's DoD). */}
+      <div className="flex shrink-0 items-center">
         <FactList
           activityCount={activityCount}
           criticalCount={criticalCount}
@@ -176,6 +177,13 @@ export function PlanFacts({
  * One component rather than two copies of the markup: a wide row and a disclosure panel that each
  * look right alone are exactly how ADR-0062's drift happens, and only a reader who opened both
  * would ever see one is a version behind.
+ *
+ * **Two explicit pairs, dates on top** (workspace visual polish, 2026-08-28 — a product-owner
+ * steer, taken by question). The plan's SPAN (Data date + Finish) reads first, the POPULATION and
+ * its risk (Activities + the critical count) below it — the split used to be whatever the wrap
+ * bound produced from the labels' widths, so which facts shared a line changed with the values.
+ * The pairs are rows, not a reorder inside a wrap: each is its own flex line, so the grouping
+ * cannot drift with a longer date or a four-digit count.
  */
 function FactList({
   activityCount,
@@ -191,32 +199,36 @@ function FactList({
   pending: boolean;
 }): React.ReactElement {
   return (
-    <>
-      <Fact label="Activities" value={pending ? '…' : (activityCount ?? 0).toString()} />
-      <Fact
-        label="Data date"
-        value={pending ? '…' : dataDate ? formatCalendarDate(dataDate) : 'Not set'}
-      />
-      <Fact
-        label="Finish"
-        value={
-          pending
-            ? '…'
-            : projectFinish
-              ? formatCalendarDate(projectFinish)
-              : // **Not an em dash.** A plan that has never been calculated has no finish, and a
-                // dash reads as a value the reader failed to parse rather than as an absence with
-                // a cause — the ADR-0098 "omit, never zero" rule applied to one field.
-                'Not calculated'
-        }
-      />
-      {criticalCount !== undefined && criticalCount > 0 ? (
-        <span className="text-destructive-text inline-flex items-center gap-1">
-          <CircleAlert aria-hidden="true" className="size-3" />
-          {criticalCount === 1 ? '1 critical activity' : `${criticalCount} critical activities`}
-        </span>
-      ) : null}
-    </>
+    <div className="flex flex-col">
+      <div className="flex items-center gap-x-4">
+        <Fact
+          label="Data date"
+          value={pending ? '…' : dataDate ? formatCalendarDate(dataDate) : 'Not set'}
+        />
+        <Fact
+          label="Finish"
+          value={
+            pending
+              ? '…'
+              : projectFinish
+                ? formatCalendarDate(projectFinish)
+                : // **Not an em dash.** A plan that has never been calculated has no finish, and a
+                  // dash reads as a value the reader failed to parse rather than as an absence with
+                  // a cause — the ADR-0098 "omit, never zero" rule applied to one field.
+                  'Not calculated'
+          }
+        />
+      </div>
+      <div className="flex items-center gap-x-4">
+        <Fact label="Activities" value={pending ? '…' : (activityCount ?? 0).toString()} />
+        {criticalCount !== undefined && criticalCount > 0 ? (
+          <span className="text-destructive-text inline-flex items-center gap-1">
+            <CircleAlert aria-hidden="true" className="size-3" />
+            {criticalCount === 1 ? '1 critical activity' : `${criticalCount} critical activities`}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

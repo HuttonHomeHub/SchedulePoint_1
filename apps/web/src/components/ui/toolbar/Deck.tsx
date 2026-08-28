@@ -1,4 +1,3 @@
-import { ChevronDown } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { containerShouldStandDown, TOOLBAR_NAV_KEYS, vetoesKey } from './toolbar-keyboard';
@@ -8,7 +7,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
-import { toolbarCardVariants } from './toolbar-styles';
+import { TOOLBAR_CAPTION, toolbarCardVariants } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 
 import { cn } from '@/lib/utils';
@@ -34,9 +33,15 @@ import { cn } from '@/lib/utils';
  *
  * ## What replaces the ladder
  *
- * **Group cards that fold.** Each caption is a disclosure button; folding a group you rarely touch
- * gives its width back. That is the same remedy the old app used on narrow screens, and it is the
- * honest one: the reader decides what they do not need, rather than an algorithm guessing.
+ * **Nothing but the wrap.** The deck shipped (2026-08-24) with foldable group cards — each caption
+ * a disclosure button, so a reader could give a group's width back — and the fold was REMOVED in
+ * the workspace visual polish pass (2026-08-28) on the product owner's steer: "it adds very little
+ * and I don't think someone is ever going to collapse a toolbar." They were right about the
+ * arithmetic too: the deck wraps, so width is no longer scarce enough to spend interactivity
+ * buying it back, and the fold had already cost two real defects (the ADR-0114 M7 `hasActive`
+ * guard protecting a tool whose publishers never published, and a persisted fold set that could
+ * strand a group folded-and-active). The captions survive as **static labels** — the grouping is
+ * the value; the disclosure was the cost.
  *
  * **Buttons were stacked until M1 (workspace-chrome-fit, 2026-08-25) made every control inline.**
  * Read the paragraph below as history: its width argument still explains why the deck can afford to
@@ -82,41 +87,6 @@ export type DeckGroupId = (typeof DECK_GROUPS)[number]['id'];
  */
 const ICON_ONLY = new Set(['zoom-in', 'zoom-out', 'fit', 'undo', 'redo', 'print']);
 
-const FOLD_STORAGE_KEY = 'schedulepoint-deck-folds';
-
-/**
- * Which groups the reader has folded away.
- *
- * **Global rather than per-plan**, and that is a decision rather than an omission. Folding `Plan`
- * away says "I do not use these commands", which is a fact about how this person works and not about
- * the plan they happen to have open — keying it per plan would make the deck rearrange itself every
- * time they switched, which is exactly the moving-controls complaint this epic exists to remove.
- *
- * Reads and writes are wrapped because storage throws in a private window, in previews and wherever
- * site data is blocked, and a deck that fails to render because it could not remember a fold would
- * be a far worse defect than forgetting one.
- */
-function readFolds(): Set<string> {
-  try {
-    const raw = window.localStorage.getItem(FOLD_STORAGE_KEY);
-    if (!raw) return new Set();
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? new Set(parsed.filter((v): v is string => typeof v === 'string'))
-      : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-function writeFolds(folds: Set<string>): void {
-  try {
-    window.localStorage.setItem(FOLD_STORAGE_KEY, JSON.stringify([...folds]));
-  } catch {
-    /* Storage unavailable — the fold is a convenience, never a correctness requirement. */
-  }
-}
-
 export interface DeckProps<Ctx> {
   /** The registry (validated via `defineToolbar`). */
   items: ToolbarItem<Ctx>[];
@@ -138,9 +108,6 @@ export function Deck<Ctx>({
 }: DeckProps<Ctx>): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [folded, setFolded] = useState<Set<string>>(() =>
-    typeof window === 'undefined' ? new Set() : readFolds(),
-  );
 
   // `layout` is fixed at `comfortable`: the deck never folds items away on width, so there is no
   // band to resolve. Passing the constant keeps `isVisible` predicates that take an env working
@@ -165,59 +132,15 @@ export function Deck<Ctx>({
       sections: group.members
         .map((member) => byRegistryGroup.get(member) ?? [])
         .filter((section) => section.length > 0),
-    }))
-      .filter((group) => group.sections.length > 0)
-      .map((group) => ({
-        ...group,
-        /**
-         * **A group holding an ACTIVE command cannot be folded away.**
-         *
-         * Folding unmounts a group's items (the `isFolded ? null :` branch below), and the fold set is
-         * persisted globally — so a
-         * planner who arms a tool and then folds `Author` is left with a tool armed, no trigger
-         * rendered to say so, and no trigger to stop it with. That is ADR-0064's founding defect
-         * restored: a planner who believes a tool is armed and is wrong, or worse, one who does not
-         * know a tool is armed at all.
-         *
-         * The rule is general rather than a carve-out for that case, and it is defensible on its
-         * own terms: **you should not be able to hide a control that is currently doing something.**
-         * It reuses `active`, which `resolveItems` already computes for the pressed state, so the
-         * deck learns nothing new about what its items mean.
-         *
-         * **It is a ONE-WAY guard — it refuses a fold and never an unfold — and that is a fix rather
-         * than a restatement.** This paragraph used to argue that it "can only ever refuse to START
-         * a fold", on the premise that arming needs a trigger and a folded group renders none. The
-         * premise is a survey of today's registry, not a property of the primitive: `active` is
-         * whatever a consumer's `isActive` returns, the fold set is global `localStorage` and so is
-         * at least one panel-open flag that drives an `isActive` in one of these cards, so a group
-         * CAN in principle come back folded and active in a later session. The `onClick` did not
-         * distinguish the directions, so in that case the caption would have refused to unfold, its
-         * items would have stayed unmounted, and the reason it announced — "cannot be folded away" —
-         * would have been false. Checking `!isFolded` costs one term and removes the whole class of
-         * argument. Raised by the architecture gate, which could not construct a reachable instance
-         * in today's registry either, and correctly said that is a coincidence and not a guarantee.
-         */
-        hasActive: group.sections.some((section) => section.some((r) => r.active)),
-      }));
+    })).filter((group) => group.sections.length > 0);
   }, [resolved]);
 
-  const toggleFold = useCallback((id: string) => {
-    setFolded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      writeFolds(next);
-      return next;
-    });
-  }, []);
-
   /**
-   * One roving tab stop across the whole deck, captions included.
-   *
-   * The captions are IN the sequence rather than beside it. A caption is the only route to the
-   * commands it hides, so leaving it out of the roving order would make a folded group unreachable
-   * by keyboard — the same class of defect as a shaded menu item whose reason cannot be focused
-   * (ADR-0082), one layer up.
+   * One roving tab stop across the whole deck — the COMMANDS only, since the fold's removal
+   * (workspace visual polish, 2026-08-28) made the captions static labels. While the captions were
+   * disclosure buttons they had to be in the sequence (a caption was the only route to a folded
+   * group's commands); a static label in the roving order would be a stop that does nothing, which
+   * is the inverse defect.
    */
   const focusables = useCallback(
     () => [
@@ -256,24 +179,22 @@ export function Deck<Ctx>({
     [focusables],
   );
 
-  // The roving stop must always exist and always point at something rendered. Folding a group
-  // unmounts its items, so an `activeId` naming one of them would leave the deck with no tab stop
-  // at all — a surface you cannot Tab into.
+  // The roving stop must always exist and always point at something rendered. Items appear and
+  // disappear as predicates change, so an `activeId` naming a gone item would leave the deck with
+  // no tab stop at all — a surface you cannot Tab into.
   const stopIds = useMemo(() => {
     const ids: string[] = [];
     for (const group of groups) {
-      ids.push(`caption:${group.id}`);
-      if (folded.has(group.id)) continue;
       for (const section of group.sections) {
         for (const r of section) if (!r.item.presentational) ids.push(r.item.id);
       }
     }
     return ids;
-  }, [groups, folded]);
+  }, [groups]);
 
   // **Derived, not corrected in an effect.** The first shape stored `activeId` and repaired it in
-  // a `useEffect` when folding unmounted the item it named — which lints as a cascading render and
-  // deserves to: the repair runs a frame AFTER the render that needed it, so for one commit the
+  // a `useEffect` when unmounting invalidated the item it named — which lints as a cascading render
+  // and deserves to: the repair runs a frame AFTER the render that needed it, so for one commit the
   // deck has a tab stop pointing at nothing. Deriving it means the invalid state cannot exist.
   const rovingId =
     activeId !== null && stopIds.includes(activeId) ? activeId : (stopIds[0] ?? null);
@@ -291,7 +212,6 @@ export function Deck<Ctx>({
       className={cn('flex flex-wrap items-start gap-2', className)}
     >
       {groups.map((group) => {
-        const isFolded = folded.has(group.id);
         return (
           <div
             key={group.id}
@@ -316,171 +236,114 @@ export function Deck<Ctx>({
             // consumer would have copied it.
             className={toolbarCardVariants()}
           >
-            <button
-              type="button"
-              data-toolbar-focusable=""
-              data-toolbar-item={`caption:${group.id}`}
-              aria-expanded={!isFolded}
-              // **Named `<caption> commands`, not just `<caption>`.** The visible word is the
-              // group's name and must stay short, but `View` alone collides with the `View ▾`
-              // display-toggles popover that lives INSIDE this very group — two buttons with one
-              // accessible name, which two journeys reported as a strict-mode violation on their
-              // first run against the deck.
-              //
-              // It satisfies WCAG 2.5.3 because the accessible name CONTAINS the visible label.
-              // The fold state is not in the name: that is `aria-expanded`'s job, and putting it
-              // in the name too would make the control announce its state twice and change what
-              // it is called every time somebody presses it.
-              aria-label={`${group.caption} commands`}
-              tabIndex={tabIndexFor(`caption:${group.id}`)}
-              onFocus={() => setActiveId(`caption:${group.id}`)}
-              onClick={() => {
-                // `!isFolded` is load-bearing: refuse to fold a group holding an armed tool, never
-                // to UNFOLD one. See `hasActive`'s docblock — without it a group that ever came
-                // back folded-and-active would be permanently shut, under a reason that says the
-                // opposite of what happened.
-                if (group.hasActive && !isFolded) return;
-                toggleFold(group.id);
-              }}
-              // Shaded with a reason, never removed (ADR-0082): the caption keeps its roving tab
-              // stop and its reason is reachable, which is the whole point of that decision. Not
-              // the native `disabled` attribute — this control flips as a tool is armed and
-              // disarmed, and `disabled` blurs to `<body>` mid-interaction.
-              {...(group.hasActive && !isFolded
-                ? { 'aria-disabled': true as const, 'aria-describedby': `fold-held-${group.id}` }
-                : {})}
-              className={cn(
-                // `text-micro` is the ramp's smallest member and carries its own letter-spacing.
-                // The mockup drew this at 9px with wider tracking; using the ramp's 10px instead is
-                // the disciplined answer, and the difference is imperceptible at a caption. A ramp
-                // that gets a new member every time a design wants half a pixel is not a ramp.
-                // **`min-h-9`, the same box the buttons take** (M1-T2). The caption measured 32 px
-                // against `toolbarControlVariants`' 36, and both centre their text, so their labels
-                // sat ~2 px apart — the residual spread left after M1-T1 removed the stacked
-                // geometry. A caption is a real control here (it folds its group and is a roving
-                // stop), so matching the control height is what it should have had anyway, and it
-                // moves WCAG 2.5.8's minor axis in the right direction rather than the wrong one.
-                'text-primary text-micro flex min-h-9 shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
-                'border-primary/25 cursor-pointer',
-                group.hasActive && 'cursor-default opacity-60',
-                // The rule that separated the caption from its buttons was a `border-b` under a
-                // full-width row; on its side it is a `border-r` beside them, doing the same job in
-                // the dimension the deck can afford. Absent when folded: there is nothing left to
-                // separate the caption FROM.
-                isFolded ? '' : 'border-r pr-2',
-              )}
-            >
-              <span>{group.caption}</span>
-              <ChevronDown
-                aria-hidden="true"
-                // **`-rotate-90` on the folded state is kept and now means something different.**
-                // Stacked, the chevron pointed down at the buttons below it and sideways when they
-                // were gone. Leading, it points down at rest and sideways when folded — the same
-                // two glyphs, and the same convention a disclosure uses everywhere else in the
-                // product, so nothing about it has to be re-learnt.
-                className={cn('size-3 opacity-60', isFolded && '-rotate-90')}
-              />
-              {/* `&& !isFolded` matches the guard and the `aria-disabled` above it: the sentence is
-                  only true of a group that is currently open. A described node with no
-                  `aria-describedby` pointing at it is harmless, but the three going out of step is
-                  how one of them ends up describing a state the control is not in. */}
-              {group.hasActive && !isFolded ? (
-                <span id={`fold-held-${group.id}`} className="sr-only">
-                  Cannot be folded away while one of its tools is armed.
-                </span>
-              ) : null}
-            </button>
+            {/* **A STATIC label since the fold's removal** (workspace visual polish, 2026-08-28) —
+                it was a disclosure `<button>` with `aria-expanded`, a roving tab stop and the
+                ADR-0114 M7 `hasActive` guard, all of which went with the fold. `aria-hidden`,
+                because the group's own `aria-label` already carries the word: a visible span that
+                also announced would read "View, group — View" to a screen-reader user, the same
+                fact twice (the ADR-0110 D1 duplication, one channel over). Pointer users see the
+                caption; AT users hear the group.
 
-            {isFolded ? null : (
-              <div className="flex flex-wrap items-stretch gap-1">
-                {group.sections.map((section, sectionIndex) => (
-                  <div
-                    key={section[0]?.item.group ?? sectionIndex}
-                    className={cn(
-                      'flex flex-wrap items-stretch gap-1',
-                      // The seven-group taxonomy, surviving as a hairline inside the card rather
-                      // than as a caption above it.
-                      sectionIndex > 0 && 'border-border/50 ml-1 border-l pl-2',
-                    )}
-                  >
-                    {section.map((r) =>
-                      r.item.render ? (
-                        <span key={r.item.id} className="inline-flex items-center">
-                          {r.item.render(context, {
-                            disabled: !r.enabled,
-                            disabledReason: r.disabledReason,
-                            active: r.active,
-                            layout: 'comfortable',
-                            itemProps: r.item.presentational
-                              ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
-                              : {
-                                  tabIndex: tabIndexFor(r.item.id),
-                                  'data-toolbar-focusable': '',
-                                  'data-toolbar-item': r.item.id,
-                                  onFocus: () => setActiveId(r.item.id),
-                                },
-                          })}
-                        </span>
-                      ) : (
-                        <ToolbarButton
-                          key={r.item.id}
-                          itemId={r.item.id}
-                          label={r.item.label}
-                          {...(r.item.description ? { description: r.item.description } : {})}
-                          icon={r.icon}
-                          {...(r.busy ? { busy: true } : {})}
-                          showLabel={!ICON_ONLY.has(r.item.id)}
-                          {...(r.item.isActive ? { pressed: r.active } : {})}
-                          disabled={!r.enabled}
-                          disabledReason={r.disabledReason}
-                          srDescription={r.srDescription}
-                          tabIndex={tabIndexFor(r.item.id)}
-                          onActivate={() => r.item.onActivate!(context)}
-                          onFocus={() => setActiveId(r.item.id)}
-                          // **The stacked geometry is GONE, and with it the four `!important`
-                          // overrides** (M1-T1, CQ-1). A plain command stacked its label under its
-                          // icon while a split-button or popover trigger — which never reached this
-                          // branch — kept the shared CVA's row. Nobody chose that: it is one
-                          // `if` having a side effect on layout. Measured at 1646, the deck's label
-                          // tops were 137 for inline items and 149 for stacked ones, and a reader's
-                          // eye tracks the difference along the row.
-                          //
-                          // There is now exactly ONE geometry, so it needs no variant to select it:
-                          // the shared `toolbarControlVariants` row is simply not overridden. A
-                          // two-valued `layout` variant with no second consumer would be dead code
-                          // pretending to be a choice.
-                          //
-                          // **The label's `text-micro` override is GONE**
-                          // (`docs/specs/object-bar-defects/` M3). It was kept here deliberately:
-                          // the M0 probe that priced the geometry change altered flex-direction,
-                          // height, gap and alignment and nothing else, so changing the type scale
-                          // in the same commit "would make the shipped width unattributable to the
-                          // number that justified the change". That was right, and the reason
-                          // lapsed the moment the geometry shipped and was measured.
-                          //
-                          // **It produced two type scales on one row, by two separate mechanisms,
-                          // and only the first was known.** Measured
-                          // (`m3-deck-type-scale.spec.ts`): eight `render` items — every `▾`
-                          // trigger — never reached this branch at all and kept the shared CVA's
-                          // `text-sm`. And `> span:last-of-type` is fragile in a way nobody had
-                          // costed: `ToolbarButton` renders icon → label → `sr-only` reason →
-                          // `sr-only` description, so the moment a control carries a reason or an
-                          // `srDescription` the override lands on an **invisible** span and the
-                          // visible label falls through to `text-sm`. Three items were live in that
-                          // state on the measured screen — `Next conflict`, `Float paths` and
-                          // `Add note`, all shaded — which means **a plain command's label grew
-                          // from 10 px to 14 px the moment it was disabled**.
-                          //
-                          // Deleting it leaves one scale declared in one place, by the primitive.
-                          // `min-w-*` is kept: it is geometry, and it was never the problem.
-                          className={cn(ICON_ONLY.has(r.item.id) ? 'min-w-9' : 'min-w-12')}
-                        />
-                      ),
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                `text-micro` is the ramp's smallest member and carries its own letter-spacing, and
+                `min-h-9` is the control box — a caption centred beside `min-h-9` buttons at a
+                shorter box sat its label ~2 px adrift (the M1-T2 measurement, still true of a
+                span). The `border-r` that separated the caption from its buttons stays: the
+                grouping is the value the captions kept. */}
+            <span
+              aria-hidden="true"
+              className={cn(TOOLBAR_CAPTION, 'border-primary/25 border-r pr-2')}
+            >
+              {group.caption}
+            </span>
+
+            <div className="flex flex-wrap items-stretch gap-1">
+              {group.sections.map((section, sectionIndex) => (
+                <div
+                  key={section[0]?.item.group ?? sectionIndex}
+                  className={cn(
+                    'flex flex-wrap items-stretch gap-1',
+                    // The seven-group taxonomy, surviving as a hairline inside the card rather
+                    // than as a caption above it.
+                    sectionIndex > 0 && 'border-border/50 ml-1 border-l pl-2',
+                  )}
+                >
+                  {section.map((r) =>
+                    r.item.render ? (
+                      <span key={r.item.id} className="inline-flex items-center">
+                        {r.item.render(context, {
+                          disabled: !r.enabled,
+                          disabledReason: r.disabledReason,
+                          active: r.active,
+                          layout: 'comfortable',
+                          itemProps: r.item.presentational
+                            ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
+                            : {
+                                tabIndex: tabIndexFor(r.item.id),
+                                'data-toolbar-focusable': '',
+                                'data-toolbar-item': r.item.id,
+                                onFocus: () => setActiveId(r.item.id),
+                              },
+                        })}
+                      </span>
+                    ) : (
+                      <ToolbarButton
+                        key={r.item.id}
+                        itemId={r.item.id}
+                        label={r.item.label}
+                        {...(r.item.description ? { description: r.item.description } : {})}
+                        icon={r.icon}
+                        {...(r.busy ? { busy: true } : {})}
+                        showLabel={!ICON_ONLY.has(r.item.id)}
+                        {...(r.item.isActive ? { pressed: r.active } : {})}
+                        disabled={!r.enabled}
+                        disabledReason={r.disabledReason}
+                        srDescription={r.srDescription}
+                        tabIndex={tabIndexFor(r.item.id)}
+                        onActivate={() => r.item.onActivate!(context)}
+                        onFocus={() => setActiveId(r.item.id)}
+                        // **The stacked geometry is GONE, and with it the four `!important`
+                        // overrides** (M1-T1, CQ-1). A plain command stacked its label under its
+                        // icon while a split-button or popover trigger — which never reached this
+                        // branch — kept the shared CVA's row. Nobody chose that: it is one
+                        // `if` having a side effect on layout. Measured at 1646, the deck's label
+                        // tops were 137 for inline items and 149 for stacked ones, and a reader's
+                        // eye tracks the difference along the row.
+                        //
+                        // There is now exactly ONE geometry, so it needs no variant to select it:
+                        // the shared `toolbarControlVariants` row is simply not overridden. A
+                        // two-valued `layout` variant with no second consumer would be dead code
+                        // pretending to be a choice.
+                        //
+                        // **The label's `text-micro` override is GONE**
+                        // (`docs/specs/object-bar-defects/` M3). It was kept here deliberately:
+                        // the M0 probe that priced the geometry change altered flex-direction,
+                        // height, gap and alignment and nothing else, so changing the type scale
+                        // in the same commit "would make the shipped width unattributable to the
+                        // number that justified the change". That was right, and the reason
+                        // lapsed the moment the geometry shipped and was measured.
+                        //
+                        // **It produced two type scales on one row, by two separate mechanisms,
+                        // and only the first was known.** Measured
+                        // (`m3-deck-type-scale.spec.ts`): eight `render` items — every `▾`
+                        // trigger — never reached this branch at all and kept the shared CVA's
+                        // `text-sm`. And `> span:last-of-type` is fragile in a way nobody had
+                        // costed: `ToolbarButton` renders icon → label → `sr-only` reason →
+                        // `sr-only` description, so the moment a control carries a reason or an
+                        // `srDescription` the override lands on an **invisible** span and the
+                        // visible label falls through to `text-sm`. Three items were live in that
+                        // state on the measured screen — `Next conflict`, `Float paths` and
+                        // `Add note`, all shaded — which means **a plain command's label grew
+                        // from 10 px to 14 px the moment it was disabled**.
+                        //
+                        // Deleting it leaves one scale declared in one place, by the primitive.
+                        // `min-w-*` is kept: it is geometry, and it was never the problem.
+                        className={cn(ICON_ONLY.has(r.item.id) ? 'min-w-9' : 'min-w-12')}
+                      />
+                    ),
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         );
       })}

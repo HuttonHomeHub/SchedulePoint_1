@@ -437,19 +437,29 @@ export async function placeOnDay(
   // time. Five was enough only while the aim happened to land first try.
   attempts = 8,
 ): Promise<void> {
-  /** Where the bar is DRAWN, in days from the data date — the position a drag is measured from. */
-  const drawnDay = async (): Promise<number> => {
+  /**
+   * **One read, three numbers** — where the bar is DRAWN (the position a drag is measured from),
+   * where it was DROPPED (null before any placement), and the row's `version`, from a single list
+   * request. The loop below used to make these as THREE separate calls at the top of every
+   * attempt, and that is what tripped the API's global 100-requests/60-second throttle on CI
+   * (2026-08-28, PR #408): an 8-attempt episode plus the post-drag polls is enough traffic on a
+   * slow runner that three-where-one-would-do is the difference between green and a 429 that
+   * reads as a product error. The post-drag poll learnt this lesson on 2026-08-20 ("One read, two
+   * numbers", below); the loop top had not been told.
+   */
+  const readState = async (): Promise<{
+    dropped: number | null;
+    drawn: number | null;
+    version: number;
+  }> => {
     const placement = requirePlacement(await placements(page, orgSlug), activity.name);
-    const drawn = isoDay(placement.visualEffectiveStart) ?? isoDay(placement.earlyStart);
-    if (drawn === null) throw new Error(`${activity.name} has no drawn date to aim from`);
-    return daysBetweenIso(DATA_DATE, drawn);
-  };
-  /** Where the bar was DROPPED, in days from the data date — null before any placement. */
-  const droppedDay = async (): Promise<number | null> => {
-    const raw = isoDay(
-      requirePlacement(await placements(page, orgSlug), activity.name).visualStart,
-    );
-    return raw === null ? null : daysBetweenIso(DATA_DATE, raw);
+    const droppedRaw = isoDay(placement.visualStart);
+    const drawnRaw = isoDay(placement.visualEffectiveStart) ?? isoDay(placement.earlyStart);
+    return {
+      dropped: droppedRaw === null ? null : daysBetweenIso(DATA_DATE, droppedRaw),
+      drawn: drawnRaw === null ? null : daysBetweenIso(DATA_DATE, drawnRaw),
+      version: placement.version,
+    };
   };
 
   // A deliberately coarse opening estimate: it only has to put the first drag in the right
@@ -458,10 +468,12 @@ export async function placeOnDay(
   const trace: string[] = [];
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if ((await droppedDay()) === targetDay) return;
+    const state = await readState();
+    if (state.dropped === targetDay) return;
+    if (state.drawn === null) throw new Error(`${activity.name} has no drawn date to aim from`);
 
-    const from = await drawnDay();
-    const before = requirePlacement(await placements(page, orgSlug), activity.name).version;
+    const from = state.drawn;
+    const before = state.version;
     const x = await findBarInRow(page, activity.id, row);
     // **A drag moves the bar from where it is DRAWN; the target is where it must be STORED, and
     // those are different numbers for exactly the placement this helper exists to make.** ADR-0033
@@ -537,7 +549,7 @@ export async function placeOnDay(
       )
       .toBeGreaterThanOrEqual(0);
 
-    const landed = await droppedDay();
+    const landed = (await readState()).dropped;
     if (landed === null) throw new Error('a drag that bumped the version persisted no visualStart');
     trace.push(
       `drawn day ${String(from)} ${dx >= 0 ? '+' : ''}${String(dx)}px -> dropped ${String(landed)}`,
@@ -547,8 +559,16 @@ export async function placeOnDay(
     if (landed !== from) pxPerDay = Math.abs(dx / (landed - from));
   }
 
+  // **Success is checked once more before throwing, because the loop only samples it at iteration
+  // tops.** A drop that lands on the target on the FINAL attempt was real and unobserved: the
+  // helper threw `could not drop … (reached 0)` — the error message itself naming the target as
+  // reached — after the polish pass's flush stage shifted the default framing enough that the aim
+  // took all eight drags. Latent since the helper was written; exposed by a layout change, fixed
+  // by asking the question the throw was about to answer wrongly.
+  const final = (await readState()).dropped;
+  if (final === targetDay) return;
   throw new Error(
     `could not drop ${activity.name} on day ${String(targetDay)} in ${String(attempts)} drags ` +
-      `(reached ${String(await droppedDay())}): ${trace.join('; ')}`,
+      `(reached ${String(final)}): ${trace.join('; ')}`,
   );
 }

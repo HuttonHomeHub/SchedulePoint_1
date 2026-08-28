@@ -95,6 +95,22 @@ import { cva } from 'class-variance-authority';
  * This is the epic's own rule applied to its own styling: the treatment that reads as shared is
  * shared, and the geometry that costs canvas is not.
  */
+/**
+ * The **caption** treatment: the deck's group labels (VIEW / FIND / AUTHOR / PLAN) and the
+ * selection bar's SELECTION label (workspace visual polish, 2026-08-28 — the product owner asked
+ * for "a label so it ties in with the other toolbars", which makes the style two surfaces'
+ * vocabulary rather than one component's literal). Declared here for the same reason as every
+ * export above — and because the ADR-0097 weight ratchet counts `font-*` placed outside the
+ * primitives, so a screen that respells this line is both a drift risk and a ratchet hit.
+ *
+ * `min-h-9` is the control box (`toolbarControlVariants`' 36 px): captions centre beside real
+ * controls, and a shorter box put their labels ~2 px adrift (the M1-T1 measurement). Consumers add
+ * their own geometry — the deck its `gap-1` chevron seam and fold affordances, the selection bar
+ * a `px-1`.
+ */
+export const TOOLBAR_CAPTION =
+  'text-primary text-micro flex min-h-9 shrink-0 items-center font-bold tracking-wider uppercase';
+
 export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md', {
   variants: {
     /**

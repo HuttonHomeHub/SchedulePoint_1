@@ -342,31 +342,33 @@ describe('deriveScheduleState', () => {
 });
 
 /**
- * **The two-line bound governs the FACTS, and nothing else** (foot-row-and-deck, M4 fix).
+ * **The facts' two lines are explicit pairs, and enclose nothing else** (workspace visual polish,
+ * 2026-08-28 — superseding the foot-row-and-deck M4 wrap bound this suite used to pin).
  *
- * M4 wraps the plan's facts onto two lines and claims the foot row's height is unchanged, because
- * two 16 px lines are 32 px and the row's floor is a 40 px button. The first version put the bound
- * on the whole facts ROW — which also carries `ScheduleStateRegion` and `PenStatusOutlet` — and
- * every measurement behind it ran after a recalculation, the one state where the schedule region
- * renders nothing. Two independent reviews caught the gap and the browser confirmed it: injecting
- * the real stale sentence plus its Recalculate button took the facts to three lines and the row
- * from **41 px to 53 px at every width**, with no selection involved.
+ * The history it replaces is kept because it decided the shape: M4 wrapped the facts inside a
+ * `max-w-64` bound, and the first version put that bound on the whole facts ROW — which also
+ * carries `ScheduleStateRegion` and `PenStatusOutlet`. Every measurement behind it ran after a
+ * recalculation, the one state where the schedule region renders nothing; injecting the real stale
+ * sentence took the facts to three lines and the row from **41 px to 53 px at every width**. The
+ * polish pass replaced the bound with two EXPLICIT rows (Data date + Finish, then Activities + the
+ * critical count — a product-owner steer), so which facts share a line is structure rather than
+ * the luck of label widths, and there is no `max-w-*` left to mis-scope.
  *
- * The layout half of that cannot be asserted here — jsdom has no layout, which is exactly why it
- * shipped. What CAN be pinned here is the structural fact the fix rests on: the bounded element
- * contains the facts and does **not** contain the schedule state or the pen outlet. That is cheap,
- * it is the property a future refactor would silently undo, and it is checkable without a browser.
+ * What this suite pins is the property that survives both mechanisms: the facts' column contains
+ * the four facts in their decided pairs and does NOT contain the schedule state or its remedy —
+ * so a stale sentence extends the row sideways rather than becoming a third facts line. The
+ * layout half (32 px under the 40 px floor) is jsdom-invisible and re-measured in the browser
+ * (the spec's DoD).
  *
- * **Verified red**: with `max-w-*` moved back onto the outer row, the first assertion fails on the
- * bounded element also containing the Recalculate control.
+ * **Verified red** against the pre-polish flat FactList: `pairRows` finds no two-row column.
  */
-describe('the two-line facts bound', () => {
+describe('the facts pairs', () => {
   // Its own fixture: `base` above is scoped to the `PlanStatusBar` describe, and reaching for it
   // from here is what the first version of this suite did — it failed on `base is not defined`
   // rather than on anything about the bound.
   const base = {
     activityCount: 12,
-    criticalCount: 0,
+    criticalCount: 3,
     dataDate: '2026-03-02',
     projectFinish: '2026-09-30',
     scheduleState: { kind: 'current' } as ScheduleState,
@@ -374,15 +376,31 @@ describe('the two-line facts bound', () => {
     pending: false,
   };
 
-  const bounded = (): HTMLElement => {
+  /** The facts column: the `flex-col` holding exactly two row divs. */
+  const pairRows = (): [HTMLElement, HTMLElement] => {
     const row = document.querySelector('[data-schedule-state]');
     if (!row) throw new Error('facts row not found');
-    const el = [...row.querySelectorAll('*')].find((c) =>
-      /(?:^|\s)max-w-\S+/.test(c.className.toString()),
+    const col = [...row.querySelectorAll('div')].find((c) =>
+      /(?:^|\s)flex-col(?:\s|$)/.test(c.className),
     );
-    if (!el) throw new Error('no bounded element inside the facts row');
-    return el as HTMLElement;
+    if (!col) throw new Error('no facts column inside the facts row');
+    const rows = [...col.children].filter((c): c is HTMLElement => c instanceof HTMLElement);
+    if (rows.length !== 2) throw new Error(`expected two fact rows, found ${String(rows.length)}`);
+    return [rows[0] as HTMLElement, rows[1] as HTMLElement];
   };
+
+  it('pairs the dates on top and the population below', () => {
+    render(<PlanStatusBar {...base} />);
+    const [dates, population] = pairRows();
+    // The pairing is the product owner's decision, not a wrap artefact — assert both directions
+    // for both rows, so a fact migrating between lines fails rather than reflowing quietly.
+    expect(dates.textContent ?? '').toContain('Data date');
+    expect(dates.textContent ?? '').toContain('Finish');
+    expect(dates.textContent ?? '').not.toContain('Activities');
+    expect(population.textContent ?? '').toContain('Activities');
+    expect(population.textContent ?? '').toContain('3 critical activities');
+    expect(population.textContent ?? '').not.toContain('Finish');
+  });
 
   it('does not enclose the schedule state or the pen sentence', () => {
     render(
@@ -391,24 +409,12 @@ describe('the two-line facts bound', () => {
         scheduleState={{ kind: 'stale', edits: 3, failed: true, refusal: null }}
       />,
     );
-    const box = bounded();
-    // The stale sentence and its remedy are outside the bound, so they extend the row sideways
-    // rather than pushing the facts onto a third line and growing the row's height.
-    expect(box.textContent ?? '').not.toContain('Could not calculate');
-    expect(within(box).queryByRole('button', { name: /Recalculate/i })).toBeNull();
-  });
-
-  it('does enclose the facts it exists to wrap', () => {
-    render(
-      <PlanStatusBar
-        {...base}
-        scheduleState={{ kind: 'stale', edits: 3, failed: true, refusal: null }}
-      />,
-    );
-    // The pinned positive. Without it, deleting the bound outright would satisfy the case above
-    // just as well — a green suite that cannot tell "correctly scoped" from "gone" (ADR-0093).
-    const text = bounded().textContent ?? '';
-    expect(text).toContain('Data date');
-    expect(text).toContain('Finish');
+    const [dates, population] = pairRows();
+    // The stale sentence and its remedy sit outside the pairs, so they extend the row sideways
+    // rather than becoming a third facts line and growing the row's height.
+    for (const box of [dates, population]) {
+      expect(box.textContent ?? '').not.toContain('Could not calculate');
+      expect(within(box).queryByRole('button', { name: /Recalculate/i })).toBeNull();
+    }
   });
 });

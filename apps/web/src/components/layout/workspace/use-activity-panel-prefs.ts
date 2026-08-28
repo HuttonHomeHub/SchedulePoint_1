@@ -21,6 +21,17 @@ export const PANEL_MAX_HEIGHT = 720;
 export const PANEL_DEFAULT_HEIGHT = 280;
 /** Height always kept for the canvas above, so the panel can never crush it to nothing. */
 export const CANVAS_MIN_HEIGHT = 240;
+/**
+ * Height kept for the canvas ROW while a right dock is open (workspace visual polish item 8's
+ * accepted-cost fix, 2026-08-28). Since the dock-pushes-canvas-only restructure, an open dock's
+ * height IS the canvas row's height — so without this, expanding the activities panel squeezed an
+ * open Health/Float-paths/Notes panel down to the 240 px canvas floor, a scrolling review panel
+ * in a box shorter than the content it exists to walk (the ux gate's blocking finding). The cost
+ * runs the other way now and is stated: while a dock is open the activities panel's effective max
+ * is correspondingly lower, and a taller persisted height is render-clamped for the duration —
+ * `panel.size` itself is never overwritten, so closing the dock restores the panel exactly.
+ */
+export const DOCK_MIN_HEIGHT = 360;
 
 export function useActivityPanelPrefs(): UseResizablePanelPrefs {
   return useResizablePanelPrefs({

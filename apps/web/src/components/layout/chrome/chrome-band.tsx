@@ -47,21 +47,17 @@ export function ChromeBand({ children }: { children: React.ReactNode }): React.R
  * ruler's `z-10` and the rail resizer, so a scrolled workspace never rides over the band. A `Sheet`
  * is a native `<dialog>` in the top layer, above every z-index, and still covers the band correctly.
  *
- * **It is a CARD, not a bar** (workspace redesign, 2026-08-24), and that is the change rather than
- * a decoration. Four restyles re-valued colours and none of them fixed the complaint, because the
- * complaint was never about colour: `--chrome` has held the old Flask app's navy since ADR-0102 and
- * this component was the ONLY thing in the shell asking for it — as a flat `border-b` bar with the
- * page's white running edge-to-edge above and below it. Figure and ground had a 1px border between
- * them and nothing else.
+ * **It was a CARD from 2026-08-24 to 2026-08-28, and is a full-bleed bar again by the same
+ * authority.** The redesign floated it on the gradient (radius, shadow, shell margins) because a
+ * flat bar over white had no figure/ground; the visual-polish pass removes the frame because the
+ * product owner judged the reclaimed edge worth more than the float — a knowing reversal, not a
+ * regression. What SURVIVES both shapes is the load-bearing part: the 3px `--primary` rule along
+ * the base, the old Flask app's own device (`border-bottom: 3px solid var(--secondary-color)`),
+ * which is now the only separator between the navy band and the content — and the foot band
+ * mirrors it with the same rule along its top, so the two chrome bands bracket the diagram.
  *
- * So: a radius, a real shadow, and a 3px `--primary` rule along the base. The amber rule is the old
- * app's own device (`border-bottom: 3px solid var(--secondary-color)` on both its header and its
- * toolbar) and it is doing work rather than ornament — it is the only thing that separates a navy
- * card from a navy card stacked beneath it.
- *
- * The margin that lets the gradient show around it belongs to the SHELL, not here: this component
- * has no opinion about what sits beneath it, and giving it one would make it unplaceable anywhere
- * else. The shell passes it in `className`.
+ * Any placement margin belongs to the SHELL, not here: this component has no opinion about what
+ * sits beneath it, and giving it one would make it unplaceable anywhere else.
  */
 export function ChromeBandRow({
   rowsSlotRef,
@@ -75,10 +71,7 @@ export function ChromeBandRow({
   className?: string;
 }): React.ReactElement {
   return (
-    <Surface
-      tone="chrome"
-      className={`border-border border-b-primary z-20 rounded-lg border border-b-[3px] shadow-md ${className ?? ''}`}
-    >
+    <Surface tone="chrome" className={`border-b-primary z-20 border-b-[3px] ${className ?? ''}`}>
       {/* **At every width again** (workspace redesign M3-T2). Graphite M3 deleted this row above
           `lg` and moved its three controls — brand, organisation switcher, account — onto a 48 px
           icon rail down the leading edge, to give the 56 px back to the stage. M3-T1 docks the
