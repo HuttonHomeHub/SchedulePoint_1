@@ -1,6 +1,6 @@
 # Feature Spec: Known-issues fix slice — 2026-08
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** **Approved 2026-08-28** — the product owner chose the scope by direct questions (all four items + amend CAL-05 with a version bump + export axis marks, one specced epic) and then directed "Drive to completion", which covers this spec with the critical questions taken at their stated defaults (CQ-1 (a) evidence-led via E0.2, CQ-1b (a), CQ-2 (a) no, CQ-3 (a) yes, CQ-4 (a) marker row). R5 (a second starvation behind CAL-05) remains the one deliberately reserved product-owner question, asked only if E0.5 finds it.
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-28
 - **Tracking issue / epic:** _(to be assigned)_

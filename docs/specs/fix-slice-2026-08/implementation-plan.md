@@ -1,7 +1,7 @@
 # Implementation Plan: Known-issues fix slice — 2026-08
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
-- **Status:** Draft — awaiting approval
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **approved 2026-08-28** (see its status line)
+- **Status:** **Approved 2026-08-28** — critical questions taken at their stated defaults (recorded on the spec’s status line); build order M-A → M-D → M-C → M-B → M-E → M-F → M-G
 - **Owner:** web (M-A–M-D, M-F) · api/engine-conformance (M-E) · unassigned (M-G)
 
 ## Breakdown
@@ -732,4 +732,4 @@ reproduces the four vendored artefacts. **Options:**
 
 ---
 
-**Awaiting approval before implementation.** No application code has been written.
+**Approved 2026-08-28; implementation under way** in the recommended order.
