@@ -37,13 +37,15 @@ const ALLOWED = new Set([
   'features/interchange/components/InterchangeReportTable.tsx',
   // A page in its own right, outside every scope.
   'features/share/components/GuestPlanView.tsx',
-  // **The three that are NOT portalled**, and therefore the ones that matter. They are correct
+  // **The two that are NOT portalled**, and therefore the ones that matter. They are correct
   // today because nothing yet renders them inside a `<Surface>` — `tabs.tsx` is the activity
-  // editor's vertical tabs and the two workspace panels sit beside the chrome band rather than in
+  // editor's vertical tabs and the resource strip sits beside the chrome band rather than in
   // it. ADR-0097 D17.2 moves that editor into a docked panel, which is exactly the move that could
   // put one of them inside a scope; when it does, these become `<Surface tone="card">`.
+  // `plan-workspace-toolbar.tsx` left this list at the workspace visual polish pass (2026-08-28):
+  // its three `bg-card` dock wrappers became `<Surface tone="panel">` — item 7's whole subject —
+  // which is this gate's staleness assertion doing its job.
   'components/ui/tabs.tsx',
-  'components/layout/workspace/plan-workspace-toolbar.tsx',
   'components/layout/workspace/resource-strip-panel.tsx',
 ]);
 

@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
+import { Surface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { useMediaQuery } from '@/components/ui/use-media-query';
@@ -1729,12 +1730,22 @@ export function ToolbarPlanWorkspace({
                       reverseKeys
                       className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                     />
-                    <div
+                    {/* **The right docks are `panel` surfaces, not `bg-card` boxes** (workspace
+                      visual polish item 7, 2026-08-28). The Project Explorer on the other side of
+                      the stage is `<Surface tone="panel">`; these three were `bg-card` on the page
+                      scope — two mechanisms for one near-white, the exact split-pair class
+                      ADR-0097 names, and the product owner saw it as "does the grey/white need
+                      standardising between the project explorer and the right panels?". One scope
+                      now serves both edges: every token inside the docks rebinds to the panel
+                      family with no component change, and `border-border` draws the seam in the
+                      panel's own vocabulary. */}
+                    <Surface
+                      tone="panel"
                       style={{ width: floatPathsWidth }}
-                      className="border-border bg-card shrink-0 border-l"
+                      className="border-border shrink-0 border-l"
                     >
                       {floatPathsDockContent}
-                    </div>
+                    </Surface>
                   </>
                 ) : null}
 
@@ -1751,12 +1762,14 @@ export function ToolbarPlanWorkspace({
                       reverseKeys
                       className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                     />
-                    <div
+                    {/* `panel` scope — see the Float paths dock above (item 7). */}
+                    <Surface
+                      tone="panel"
                       style={{ width: healthWidth }}
-                      className="border-border bg-card shrink-0 border-l"
+                      className="border-border shrink-0 border-l"
                     >
                       {healthDockContent}
-                    </div>
+                    </Surface>
                   </>
                 ) : null}
 
@@ -1775,32 +1788,40 @@ export function ToolbarPlanWorkspace({
                       reverseKeys
                       className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                     />
-                    <div
+                    {/* `panel` scope — see the Float paths dock above (item 7). */}
+                    <Surface
+                      tone="panel"
                       style={{ width: notesWidth }}
-                      className="border-border bg-card shrink-0 border-l"
+                      className="border-border shrink-0 border-l"
                     >
                       {notesDockContent}
-                    </div>
+                    </Surface>
                   </>
                 ) : null}
               </div>
             ) : healthDockActive ? (
               // Narrow: a right dock doesn't fit — Health check takes the single pane, exactly as
               // Float paths and notes do beside it (the one-pane-at-a-time narrow philosophy).
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              // `panel` scope here too (item 7): the same content on the page scope one breakpoint
+              // down would be the split-pair drift the item exists to close.
+              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {healthDockContent}
-              </div>
+              </Surface>
             ) : floatPathsDockActive ? (
               // Narrow: a right dock doesn't fit — Float paths takes the single pane, exactly as notes
               // does below. The emphasis it drives is not visible while it holds the pane; that is the
               // honest consequence of one-pane-at-a-time, and closing the panel returns the diagram.
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              // `panel` scope for the same reason as the Health pane above (item 7).
+              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 {floatPathsDockContent}
-              </div>
+              </Surface>
             ) : notesDockActive ? (
               // Narrow: a right dock doesn't fit — notes takes the single pane (the one-pane-at-a-time
               // narrow philosophy). Closing (the header Close, or the Comments toggle) restores the toggle.
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{notesDockContent}</div>
+              // `panel` scope for the same reason as the Health pane above (item 7).
+              <Surface tone="panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {notesDockContent}
+              </Surface>
             ) : (
               <>
                 <WorkspaceViewToggle value={pane} onChange={setPane} />
