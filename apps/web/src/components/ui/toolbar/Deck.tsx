@@ -8,7 +8,7 @@ import {
   type ToolbarGroupId,
   type ToolbarItem,
 } from './toolbar-registry';
-import { toolbarCardVariants } from './toolbar-styles';
+import { TOOLBAR_CAPTION, toolbarCardVariants } from './toolbar-styles';
 import { ToolbarButton } from './ToolbarButton';
 
 import { cn } from '@/lib/utils';
@@ -360,7 +360,8 @@ export function Deck<Ctx>({
                 // geometry. A caption is a real control here (it folds its group and is a roving
                 // stop), so matching the control height is what it should have had anyway, and it
                 // moves WCAG 2.5.8's minor axis in the right direction rather than the wrong one.
-                'text-primary text-micro flex min-h-9 shrink-0 items-center gap-1 font-bold tracking-wider uppercase',
+                TOOLBAR_CAPTION,
+                'gap-1',
                 'border-primary/25 cursor-pointer',
                 group.hasActive && 'cursor-default opacity-60',
                 // The rule that separated the caption from its buttons was a `border-b` under a

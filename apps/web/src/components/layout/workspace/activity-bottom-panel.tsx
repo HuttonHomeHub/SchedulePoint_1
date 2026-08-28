@@ -238,10 +238,25 @@ export function PlanActivitiesFootRow({
        * there. Giving it the band's radius and amber edge as well was rejected for exactly that
        * reason: those are geometry, and this row's whole value is that it does not take any.
        *
-       * `border-t` is kept and now resolves the chrome family's `--border` rather than the page's,
-       * so the seam is drawn in the vocabulary of the surface it belongs to.
+       * **The seam is the band's amber rule now, mirrored** (workspace visual polish, 2026-08-28).
+       * The row's top edge was a 1 px chrome-family hairline; the product owner asked for "an
+       * orange accent on the top of the bottom toolbar so it ties in with the top toolbar", and the
+       * mirror is exact: `ChromeBandRow` closes with `border-b-[3px] border-b-primary` (the old
+       * Flask app's own device), this row opens with the same rule the other way up, and the two
+       * chrome bands bracket the diagram. Decorative rule — 1.4.11-exempt — and the token, never a
+       * literal (the colour-literal lint rule stands).
+       *
+       * `px-2 py-1.5` COPIES the deck's own content inset (`plan-workspace-toolbar.tsx`, the
+       * `<div className="px-2 py-1.5">` around the Deck) rather than judging one: the product
+       * owner's item was that this row sits tighter to its dark ground than the deck does to the
+       * band's (measured 16 px left / ≈1 px top against the deck's 9 px,
+       * `docs/specs/workspace-visual-polish/README.md` M0). Copying the classes rather than the
+       * measured pixel keeps the two in step if the deck's inset ever moves — and keeps arbitrary
+       * values out of the sizing ratchet's sight. The vertical cost is the ask, not a side effect;
+       * `dock.spec.ts`'s guarantees are deltas (a docked strip costs the canvas nothing), which a
+       * constant applied to both states cannot move.
        */
-      className="border-border flex min-h-9 shrink-0 items-center gap-2 border-t px-4"
+      className="border-t-primary flex min-h-9 shrink-0 items-center gap-2 border-t-[3px] px-2 py-1.5"
     >
       {/* **The facts, now TRAILING** (foot-row-and-deck M3 — see the docblock above for why the
           order moved, and why the reason originally given for facts-leading did not hold). This row said "Activities" and the status bar said
