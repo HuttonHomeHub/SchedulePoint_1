@@ -38,6 +38,16 @@ looks like" column, which a description cannot carry.
 One plan, 129 activities, every capability at once. Use it to see the product under a realistic
 load; use the capability plans below to diagnose anything that looks wrong in it.
 
+> **A freshly seeded fixture plan does not recalculate — by construction, not by defect**
+> (`docs/TECH_DEBT.md` #205, measured 2026-08-28). CAL-05 "Turnaround Window" holds 144 h of
+> working time that will ever exist, and its TT.10 FS chain needs 156 h in sequence, so
+> Recalculate answers `422 CALENDAR_WORKING_TIME_UNREACHABLE`. Catalogue plans seeded **before
+> 2026-08-02** predate window-only calendar support, so their TT.10 activities sit on the plan
+> default and recalculate fine — which is why this table's "after Recalculate" readings (and the
+> ADR-0116 DCMA rows below) were obtainable at all. Until the fixture is amended or declared
+> expected-unschedulable (the open half of #205), read those rows against a pre-2026-08-02
+> catalogue plan, and treat the 422 on a fresh seed as **correct**.
+
 | Capability           | Plan                         | Look at                          | Correct                                                                         | Wrong                                                                                                                                         |
 | -------------------- | ---------------------------- | -------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | Everything, together | `plan:fixture-p6-torture-v1` | The whole plan after Recalculate | 129 activities, a visible critical path, WBS summaries that span their children | Any summary collapsed to a point at the data date; any LOE drawn as a zero-length bar. **Both of these shipped**, and are why ADR-0066 exists |

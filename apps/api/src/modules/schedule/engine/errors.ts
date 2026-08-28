@@ -59,3 +59,23 @@ export class EmptyWorkingTimeCalendarError extends Error {
     this.name = 'EmptyWorkingTimeCalendarError';
   }
 }
+
+/**
+ * Thrown when the working-time walker cannot find the requested minute within the engine's
+ * horizon (`HORIZON_DAYS`, the ADR-0036 N11/N16 cap) — a calendar that HAS working time, placed
+ * where the schedule cannot reach it: a dated blackout longer than the horizon, or a window-only
+ * calendar whose one working exception sits years from the dates being walked.
+ *
+ * **Typed for `docs/TECH_DEBT.md` #205(b), on the ADR-0071 rule** — "the engine's own guard is a
+ * typed error and a 422, not a 500". This guard predates that ruling and reached the client as a
+ * bare `INTERNAL_ERROR` for a user-caused, user-fixable state (ADR-0067's Window-only preset makes
+ * it authorable). Like {@link EmptyWorkingTimeCalendarError}, the engine raises it and the service
+ * phrases it; unlike that one, it fires at WALK time, so the engine cannot say WHICH calendar —
+ * the service names one only when the plan has exactly one in play.
+ */
+export class WorkingTimeHorizonExceededError extends Error {
+  constructor() {
+    super('addWorkingTime exceeded the working-time horizon (no reachable minute).');
+    this.name = 'WorkingTimeHorizonExceededError';
+  }
+}

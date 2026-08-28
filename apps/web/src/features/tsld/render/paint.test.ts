@@ -673,6 +673,32 @@ describe('paintInteractionLayer', () => {
     expect(ctx.strokeRect).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * **Peer ghosts during a plural drag** (`docs/TECH_DEBT.md` #108's preview half). One faint
+   * fill + one solid outline PER peer, and — the parity pin — an overlay without `peers` adds
+   * not one call, which is the draw-budget contract the field's docblock states. **Verified
+   * red** against the pre-#108 painter: `peers` was not a field, so the count assertions failed
+   * on 1 fill (the live ghost alone).
+   */
+  it('draws one faint fill + outline per peer ghost, and none absent the field (#108)', () => {
+    const ctx = mockCtx();
+    const peers = [
+      { x: 60, y: 40, w: 30, h: 18 },
+      { x: 60, y: 70, w: 22, h: 18 },
+    ];
+    paintInteractionLayer(ctx, { live: GHOST, peers }, SIZE, PALETTE);
+    // Live (1 fill + 1 stroke) + two peers (1 fill + 1 stroke each).
+    expect(ctx.fillRect).toHaveBeenCalledTimes(3);
+    expect(ctx.strokeRect).toHaveBeenCalledTimes(3);
+    // Peers are faint, and the alpha is put back — a leaked alpha would fade every later shape.
+    expect(ctx.globalAlpha).toBe(1);
+
+    const bare = mockCtx();
+    paintInteractionLayer(bare, { live: GHOST }, SIZE, PALETTE);
+    expect(bare.fillRect).toHaveBeenCalledTimes(1);
+    expect(bare.strokeRect).toHaveBeenCalledTimes(1);
+  });
+
   it('draws a pending ghost as a dashed outline with no fill', () => {
     const ctx = mockCtx();
     paintInteractionLayer(ctx, { pending: GHOST }, SIZE, PALETTE);

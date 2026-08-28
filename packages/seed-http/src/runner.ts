@@ -118,9 +118,17 @@ export async function seedPlan(
           seenDates.add(exception.date);
           await client.post(`${org}/calendars/${created.id}/exceptions`, {
             date: exception.date,
-            // Verbatim, like the weekly shifts: `isWorking` could only say worked-or-not, so a
-            // half-day before a shutdown seeded as a whole worked day.
-            windows: exception.windows,
+            // Windowed exceptions go VERBATIM (`isWorking` could only say worked-or-not, so a
+            // half-day before a shutdown seeded as a whole worked day) — but a HOLIDAY does not:
+            // the API deliberately refuses `windows: []` as a second spelling of one state
+            // (`create-calendar-exception.dto.ts`), and this line sent it anyway, so every
+            // holiday exception in the catalogue was dropped as a 422 finding and two fixture
+            // calendars silently lost their non-working seasons (found 2026-08-28 while
+            // reproducing `docs/TECH_DEBT.md` #205 — the plans seeded EARLIER dates than the
+            // spec's, with only a finding line to say so).
+            ...(exception.windows.length === 0
+              ? { isWorking: false }
+              : { windows: exception.windows }),
             ...(exception.label === null ? {} : { label: exception.label }),
           });
         }

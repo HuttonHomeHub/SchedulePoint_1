@@ -1503,7 +1503,19 @@ pass, because it is an interaction change with its own ghost-painting cost to me
 
 ### Narrowed 2026-08-08 — the write path is wired; the N-ghost preview is not
 
-**Status: open, narrowed.** The functional half is done and proven end to end. Dragging one of a
+**CLOSED 2026-08-28 (correctness programme, Phase 1) — the preview half.** `livePeerGhostRects`
+(pure, exported, unit-pinned) derives one outline ghost per selected peer from the grabbed bar's
+live day/lane delta — the SAME per-activity delta `bulkMoveSnapshots` writes, so the preview and
+the write cannot disagree about where a bar lands — and `paintInteractionLayer` draws them as
+faint fills + solid outlines below the live ghost. Two costs are decisions rather than omissions:
+peers ghost OUTLINE-ONLY (the grabbed bar keeps the full-fidelity ADR-0054 treatment; N labelled
+ghosts would multiply the frame's text cost for detail the planner already has), and the peers'
+SOURCE bars stay lit (dimming them means widening the scene layer's `gestureSourceId` to a set —
+a `paintScene` behaviour change under the ADR-0078 golden oracle, not worth re-baselining for a
+preview). The parity pin is the painter test's second half: an overlay without `peers` adds not
+one call, verified red against the peers-less painter.
+
+**Status at narrowing: open, narrowed.** The functional half is done and proven end to end. Dragging one of a
 plural selection now moves every selected activity by the same delta, as **one** batch
 (`PATCH …/activities/placements`) and **one** undoable step, mode-aware through `bulkMoveSnapshots`
 so EARLY pins and VISUAL hand-places exactly as the single-bar drag does. A lane-only move still
@@ -1693,7 +1705,11 @@ against ADR-0062 M6, which is a real reason to close them and not an urgent one.
 > this entry did not cover. The verb stayed per-site, because the nine never said the same thing:
 > a shared constant could not have fixed it and a shared builder could.
 
-**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (found by the ADR-0082 journey step)
+**Status:** CLOSED (the line above said so since 2026-08-09; this line said `open` until the
+2026-08-28 correctness pass verified the closure against the code — `penReason(action, holder)`
+exists, is exported from `features/plan-lock`, and `plan-gating.ts:75` routes the pen branch
+through it — and removed the contradiction. Two status lines disagreeing is worse than either.)
+· **Owner:** web · **Raised:** 2026-08-08 (found by the ADR-0082 journey step)
 
 `deriveActivityEditorGating`'s `NO_PEN` sentence is **"Start editing to change this activity."**, and
 the TSLD toolbar shades its pen-gated commands with the same form in eight places
@@ -2073,6 +2089,15 @@ what `RUN_CAP` exists for.
 
 ## 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
+**Occurrence 2026-08-28 (correctness programme), and the capture failed for a recordable reason.**
+A full `scripts/e2e-local.sh api` run reported **74 failed across 2 files** (one identified:
+`test/interchange.e2e-spec.ts:347`; the other unknown), and an immediate re-run of the SAME
+working tree — the #205(b) changes present in both — passed 572/572. The detail was lost because
+the observing command piped the run through `tail -15`, keeping only the summary: the observer
+reproduced this row's own subject. The re-run was captured in full
+(`vitest run --config vitest.e2e.config.ts`, 237 s) and is clean, so the next occurrence's
+instruction is: never pipe the first run — redirect the WHOLE log to a file, then read it.
+
 **Observed 2026-08-10, three times in one session, against `scripts/e2e-local.sh api`.** Each time
 the whole `test/staff.e2e-spec.ts` file failed — all 13 tests including ones the change had not
 touched, which is the shape of a `beforeAll` failure rather than 13 independent ones. Each time the
@@ -2235,7 +2260,14 @@ is the right configuration and it is also why the rate can drift a long way befo
 
 ## 130. The zoom trigger's icon says "date range", and it now owns the viewport
 
-**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** S · **Owner:** a design pass
+**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** S · **Owner:** a design pass ·
+**Status: CLOSED 2026-08-28 — overtaken.** The control this row describes no longer exists:
+`ZoomPresetControl` and the `comfortable`-band fold were deleted with the width ladder (ADR-0109
+D1 — a command surface wraps; it never hides), zoom presets moved into `View ▾` (ADR-0099), and
+the viewport commands are now separate icon-only deck items with universal glyphs (`zoom-in`,
+`zoom-out`, `fit` — `Deck.tsx` `ICON_ONLY`). `CalendarRange` appears nowhere in the workspace
+(verified by grep: its two remaining uses are the overview empty state and the navigator).
+Nothing left to choose an icon for; #126's segment-icon half was settled by its own pass.
 
 `ZoomPresetControl`'s icon is `CalendarRange`, which was right while the control did one thing: its
 presets **are** time ranges (Day / Week / Month / Quarter / Year). Below the `comfortable` band it now
@@ -2278,6 +2310,18 @@ ruled out (`docs/specs/workspace-layout/m3-narrow-widths.md`).
 
 **What to do:** build the tooltip primitive, then adopt it on `ToolbarButton` and `ToolbarPopover`
 together, rather than on whichever control someone is holding at the time.
+
+**Narrowed 2026-08-28 (re-verified against the post-ADR-0109 deck).** The premise lapsed: there
+is no collapsed band any more — the width ladder and its floors were deleted (ADR-0109 D1), and
+`Go to date`, `View`, `Filter` and the rest carry visible labels at **every** width. Icon-only is
+now a deliberate closed set of **six universal glyphs** (`Deck.tsx` `ICON_ONLY`: zoom-in,
+zoom-out, fit, undo, redo, print), each still named on hover only via `title`. The residual gap
+is therefore six controls whose glyphs are close to self-evident, not five popovers on the target
+device — real, small, and adjacent to #133's coarse-pointer state. The remedy is unchanged (a
+long-press-capable tooltip primitive, WCAG 1.4.13 concerns and all) but it is a design-system
+spec item under ADR-0105 (a new shared primitive is exactly the trigger), not a defect fix, and
+its size against six universal glyphs is no longer M. Decide it beside #133's coarse-pointer
+pass rather than alone.
 
 ## 132. `mail-alerting.e2e-spec.ts` sees its own writes late, and the two cases then swap answers
 
@@ -2415,6 +2459,19 @@ The fix is either a route-tree correction or an explicit `from`, and which one d
 not guess.
 
 ## 143. The Project Explorer cannot open a client or a project — two of ADR-0029's three levels
+
+**CLOSED 2026-08-28 (correctness programme, Phase 1).** The row's own shape was followed: the
+meanings are split rather than merged. `activate` — the name's click and the APG tree's Enter,
+whose job is the default action — now navigates for **every** kind (client detail, project detail,
+plan workspace); the row's remaining surface keeps the container toggle (the Q3 unit case passes
+unchanged), and expansion keeps its dedicated keys (ArrowRight/ArrowLeft). The pointer handler sits
+on an inner span sized to the TEXT, not on the `flex-1` wrapper — the wrapper stretches across the
+row, so a handler there would have made most of the row's width navigate and inverted the rule in
+the same commit that stated it. Regression test verified red against the pre-fix `activate`
+(`HierarchyTree.test.tsx`, the #143 case); no journey clicks a container row to expand (checked,
+not assumed — they use the action buttons and dialogs), so the blast radius the row predicted did
+not fire. The Enter-semantics change is a tree keyboard-contract change, so the §19.13
+accessibility review runs over it before the phase's release.
 
 **Found 2026-08-19**, by the ADR-0097 Landing D1b sweep, and it is older than the milestone that
 exposed it.
@@ -2832,6 +2889,14 @@ the ADR-0058 rule doing its job on a document written about instruments not bein
 
 ## 150. The drawer overloads "Close", and the editor's Close leaves an empty panel open
 
+**CLOSED 2026-08-28 (correctness programme, Phase 1) — overtaken, verified rather than assumed.**
+ADR-0101 (2026-08-21, the day after this was raised) returned the activity editor to `modalShell`,
+so the state this row describes — an editor in the drawer with its own second "Close" — is
+unreachable: the editor's drawer chrome and its "Select an activity to see its details here" empty
+state have **zero** matches in `apps/web/src`, `registerDrawerSubject` has no production caller
+(#156), and the only surviving control is the chrome's `Close context drawer` ✕, which has nothing
+left to be confused with. Closed on those greps, not on the ADR's say-so.
+
 **Raised 2026-08-20** (reconciliation pass, step 7 — ux review of the post-M10 diff). **Size:** S.
 
 The context drawer carries two controls whose names both begin with "Close", in one panel, doing
@@ -2880,6 +2945,18 @@ browser-level proof "belongs to `e2e-gantt`", which reads as coverage held elsew
 checked when written.
 
 ## 152. `zoomToSelection` frames the time axis and discards the lane axis
+
+**CLOSED 2026-08-28 (correctness programme, Phase 1) — candidate fix (a), command-local.** The
+reveal arithmetic is extracted from the selection-reveal effect to a pure `revealOffset` in
+`render/viewport.ts` (one implementation, the ADR-0065 rule — the row's fix (b) would have touched
+`fitToContent`, which is also Fit-to-plan and the export framing), and `zoomToActivity` repairs the
+lane axis after the fit with the same function the effect uses. Pinned by
+`viewport.reveal.test.ts`, whose last case composes `fitToContent` + `revealOffset` on the row's
+own numbers — a lane-273 bar in a 900 px viewport lands inside the margins after the repair, where
+the unfixed command left it ~6,800 px below the window. One correction to this row itself: it says
+the probe is "kept with this row", and `m0-t5-zoom-probe.mjs` no longer exists anywhere in the
+repository — the claim was stale when re-read, so the closure proof is the composed unit case
+rather than a probe re-run.
 
 **Raised 2026-08-20** (minimap epic, M0-T5 — filed rather than absorbed). **Size:** S.
 
@@ -3258,6 +3335,12 @@ surround, so the login reads calmer.
 
 ## 162. The legend's slack chip does not match what the canvas paints
 
+**CLOSED 2026-08-28 (correctness programme, Phase 1).** The swatch names `--primary` + `--border` —
+what the painter actually draws the chip with (`palette.bar` / `palette.barStroke`, confirmed at
+`palette.ts` rather than recalled) — with the reason `--card` could never work kept in the
+swatch's own comment: ADR-0097 made `Card` a reset, deliberately outside the canvas scope's rebind
+closure, so even a correctly-scoped legend resolved it to the page's card colour.
+
 **Raised 2026-08-21** (ADR-0102's component gate). **Size:** XS. **Pre-existing** — the light theme
 only re-pointed its token names, it did not introduce the mismatch.
 
@@ -3271,6 +3354,18 @@ describes.
 `<Surface tone="canvas">` it resolves to the page's card colour. The legend is now correctly scoped
 (ADR-0102 D5) and this one swatch still cannot follow, because the token it names was never part of
 the family. Naming `--primary` is the fix; the wrapper is not.
+
+**Correction, same day (§19.13 gate):** "the legend is now correctly scoped" was true of the
+**guest view's** legend only — ADR-0102 D5's wrapper sits in `TsldPanel`'s `!chromeless` branch,
+and the authenticated workspace renders the floating `TsldLegendPanel` as a **sibling** of the
+canvas surface, outside any `[data-surface="canvas"]` element. So in the workspace every swatch
+`var()` resolved the PAGE family while the painter draws the PLOT family — the token rename alone
+would have swapped an invisible swatch for a wrong-hued one. The panel's key now takes the same
+`Surface tone="canvas" className="contents"` wrapper (the `TsldPanel.tsx:2522` precedent), pinned
+by a structural seam test verified red against the unwrapped panel; the card's own chrome stays
+page-scoped deliberately. The mechanism is the validated one — the swatches read `--primary`
+directly (custom properties inherit through the rebind), not the frozen `@theme inline` aliases
+that defeated the painter in ADR-0102.
 
 ## 163. The print palette is a surface family truncated to three members **(CLOSED 2026-08-22)**
 
@@ -5269,32 +5364,55 @@ one step upstream of a document: a decision-bearing claim asserted without check
 question put to somebody else. No code defect; recorded because the rule §19.11 states is about
 claims in documents and this was a claim in a **choice**, and nothing currently covers that.
 
-## 205. A double-seeded fixture cannot recalculate, and the engine's horizon guard is an untyped 500
+## 205. The fixture plan is unschedulable as seeded, and the horizon guard was an untyped 500
 
-**Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Size:** S + S · **Owner:** api
+**Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Re-diagnosed:** 2026-08-28 ·
+**Size:** S (done) + decision · **Owner:** api / product owner
 
-Two defects sharing one reproduction, found while seeding the catalogue for the health-check
-measurement and filed rather than absorbed, because neither is in that epic's scope.
+**(b) is FIXED and proven live** (2026-08-28, `7aaf155c`). The engine's horizon guard is now a
+typed `WorkingTimeHorizonExceededError` mapped to `422 VALIDATION_FAILED` reason
+`CALENDAR_WORKING_TIME_UNREACHABLE` at both the recalculate transaction and the critical-path
+test, per the ADR-0071 pattern; the calendar is named only when it is unambiguous (plan default
+in play and no per-activity calendars), because naming a guess would be the ADR-0076 failure.
+Regression: `working-time-calendar.spec.ts` (typed error, verified red) and
+`schedule.e2e-spec.ts` ("refuses a calendar whose working time is unreachable with a 422, not a
+500", against a real database).
 
-**Repro:** seed `--tier fixture` twice into the same project (the second run reuses the plan —
-same seed name), then `POST …/schedule/recalculate`. The response is `500 INTERNAL_ERROR`; the log
-shows the engine's working-time horizon guard, `addWorkingTime exceeded the working-time horizon
-(no reachable minute)`, thrown from `engine/working-time` (the ADR-0036 N11/N16 cap). A fresh
-single-seeded fixture recalculates cleanly (200 in 74 ms, 147 activities), so the trigger is
-the second seed pass, not the fixture.
+**(a) was a misdiagnosis on both halves, and the control was the culprit.** Measured 2026-08-28:
 
-**(a) The fixture seed path is not re-runnable.** The second run's calendar writes leave a
-working-time state the walker cannot traverse. Either the seeder should refuse a plan it already
-seeded, or the second pass should converge to the same state as the first. Until then, "re-run the
-seed" — the obvious recovery for a half-seeded catalogue — can quietly break the one plan the
-playbook calls the realistic-load oracle.
+- The seeder already refuses a re-seed cleanly — the plan create answers 409, the run reports
+  `alreadyExists`, and **nothing is created or modified** on the second pass (ORG-library
+  calendars are reused by name, their exceptions posted only on create). "The second seed pass
+  corrupts working time" is false.
+- The real trigger is the **fixture itself**: CAL-05 "Turnaround Window" has an empty base week
+  and one working exception range, 05–16 Oct 2026 × 12 h = **144 h of working time that will
+  ever exist**, while its TT.10 FS chain (A10200 24 h → A10300 96 h → A10400 36 h, zero lag)
+  needs **156 h in sequence**. No valid schedule exists; the 422 is the correct answer to an
+  infeasible network, not a defect.
+- The row's "fresh single-seeded fixture recalculates cleanly" control was almost certainly the
+  **legacy catalogue plan** seeded 2026-07-31 — before window-only calendars were creatable
+  (#79, closed by `8e106b1f` on 2026-08-02) — so its CAL-05 was refused with a finding and the
+  TT.10 activities fell back to the plan default. Every fixture seed **since 2026-08-02**
+  attaches CAL-05 honestly and cannot recalculate (fresh-project seed + recalculate → 422,
+  re-measured twice on 2026-08-28). The conformance harness never sees any of this because the
+  adapter **substitutes** window-only calendars with the plan default
+  (`conformance/adapter.ts:666-676`, its own recorded approximation — "in-window placement is an
+  M5-epic edge case"), so the engine goldens stay green while the application is honest.
 
-**(b) The horizon guard reaches the client as an unhandled 500.** ADR-0071 set the pattern:
-_"the engine's own guard is a typed error and a 422, not a 500."_ This guard predates that ruling
-and was never converted. A planner who authors a calendar with no reachable working minute — which
-ADR-0067's Window-only preset makes authorable — and then recalculates meets a bare
-`INTERNAL_ERROR` with no words about the calendar. The fix is the ADR-0071 shape: a typed engine
-error mapped to 422 with the calendar named.
+**A third defect fell out of the reproduction and is FIXED**: the seeder sent holiday exceptions
+as `windows: []`, which the API deliberately refuses as "a second spelling of holiday"
+(`create-calendar-exception.dto.ts` `@ArrayNotEmpty()`) — so **every empty-window exception in
+the catalogue was dropped as a 422 finding**, and the Night Shift and Heavy Lift calendars
+silently lost their non-working seasons. It now sends `isWorking: false`
+(`packages/seed-http/src/runner.ts`, regression in `runner.spec.ts`, verified red).
+
+**What remains is a decision, not code.** The catalogue's flagship plan cannot recalculate when
+freshly seeded, which strands `docs/TEST_PLAYBOOK.md` Tier 1 ("recalculate and read the row")
+and the ADR-0116 DCMA rows in any fresh environment. The options are ADR-0034-shaped: amend the
+versioned fixture (widen CAL-05's window or shorten the chain — a benchmark edit), or mark the
+fixture plan **expected-unschedulable** in the playbook and give the tiers a recalculable
+stand-in. In-window placement work does not help — the capacity is genuinely insufficient.
+Playbook annotated 2026-08-28; the decision goes to the product owner.
 
 ## 206. Health-check review suggestions consciously not folded at the M5 gate pass
 

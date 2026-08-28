@@ -1713,6 +1713,19 @@ export interface InteractionOverlay {
    * scene. Absent ⇒ not one call ⇒ byte-for-byte parity with the flag off.
    */
   marquee?: Rect | null;
+  /**
+   * The OTHER selected bars' destinations during a plural drag (`docs/TECH_DEBT.md` #108's
+   * preview half): one outline ghost per peer, each the peer's own rect shifted by the grabbed
+   * bar's live day/lane delta — the SAME delta the release writes through `bulkMoveSnapshots`,
+   * so the preview and the write cannot disagree about where a bar lands.
+   *
+   * Outline-plus-faint-fill deliberately, never the full-fidelity treatment: the grabbed bar
+   * carries the labelled ghost, and N labelled ghosts would multiply the frame's text cost for
+   * detail the planner already has — the peers' source bars stay lit until release. Absent ⇒
+   * not one call ⇒ parity, which is the whole draw-budget argument (ADR-0026 §16): the field is
+   * only ever populated while a plural drag is in flight.
+   */
+  peers?: readonly Rect[] | null;
 }
 
 /** The cursor date readout's screen shape (ADR-0054 §2) — see `render/cursor-readout.ts`. */
@@ -1921,6 +1934,25 @@ export function paintInteractionLayer(
     if (beginRoundedRect(ctx, inner, Math.max(1, BAR_RADIUS - 2))) ctx.stroke();
     else ctx.strokeRect(inner.x, inner.y, inner.w, inner.h);
   };
+
+  // Peer ghosts (#108) — drawn BEFORE the live ghost so the grabbed bar reads on top. A faint
+  // fill plus the solid selection outline: fainter siblings of the live ghost, never dashed —
+  // dashed is `pending`'s "saving" vocabulary and a peer is not saving, it is previewing.
+  if (overlay.peers) {
+    for (const r of overlay.peers) {
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = palette.bar;
+      if (beginRoundedRect(ctx, r, BAR_RADIUS)) ctx.fill();
+      else ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = palette.selection;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      const outer = { x: r.x + 0.5, y: r.y + 0.5, w: r.w - 1, h: r.h - 1 };
+      if (beginRoundedRect(ctx, outer, BAR_RADIUS)) ctx.stroke();
+      else ctx.strokeRect(outer.x, outer.y, outer.w, outer.h);
+    }
+  }
 
   if (live) {
     if (refresh) {

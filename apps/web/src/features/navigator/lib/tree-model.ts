@@ -168,7 +168,14 @@ export function treeKeydown(
     case 'End':
       return 'last';
     case 'Enter':
+      return 'activate';
     case ' ':
+      // Space mirrors the ROW's own click; Enter mirrors the NAME's (#143, §19.13 gate). When
+      // activate() started navigating for every kind, Space silently inherited it — and the key
+      // that most closely stands in for "click the thing I'm sitting on" navigated the reader
+      // away from the Explorer where the row's click toggles. A container toggles; a leaf
+      // activates.
+      if (row.expandable) return row.expanded ? 'collapse' : 'expand';
       return 'activate';
     case 'ArrowRight':
       if (row.expandable && !row.expanded) return 'expand';

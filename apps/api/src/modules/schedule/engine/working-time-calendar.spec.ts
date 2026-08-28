@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { WorkingTimeHorizonExceededError } from './errors';
 import {
   allMinutesWorkCalendar,
   buildWorkingTimeCalendar,
@@ -300,6 +301,38 @@ describe('buildWorkingTimeCalendar — guards', () => {
     expect(() =>
       buildWorkingTimeCalendar([[{ startMinute: 0, endMinute: 2000 }], [], [], [], [], [], []], []),
     ).toThrow(/bounds/);
+  });
+
+  /**
+   * **The horizon guard is a TYPED error** (`docs/TECH_DEBT.md` #205(b), the ADR-0071 rule).
+   * A window-only calendar whose one working exception is exhausted has working time — so the
+   * build guard passes — placed where a forward walk can never reach more of it. The walker must
+   * refuse with `WorkingTimeHorizonExceededError`, which the service maps to a 422 naming the
+   * condition; it reached clients as a bare `INTERNAL_ERROR` until this was typed.
+   * **Verified red** against the untyped guard: the old code threw a plain `Error`, so the
+   * `instanceof` assertion failed while the message-match half passed — which is exactly the
+   * distinction the type exists to carry.
+   */
+  it('throws the TYPED horizon error when working time exists but cannot be reached (#205b)', () => {
+    const cal = buildWorkingTimeCalendar(fullDayWeek([]), [
+      {
+        startDate: '2026-10-05',
+        endDate: '2026-10-05',
+        windows: [{ startMinute: 360, endMinute: 420 }], // one hour of working time, ever
+      },
+    ]);
+    // Ask for two hours: the second is beyond every working minute the calendar will ever have.
+    let thrown: unknown;
+    try {
+      cal.addWorkingTime('2026-09-01', 120);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(WorkingTimeHorizonExceededError);
+    // And backwards, off the front of the exception.
+    expect(() => cal.addWorkingTime('2026-10-05T06:30', -120)).toThrow(
+      WorkingTimeHorizonExceededError,
+    );
   });
 
   it('handles an enormous lag quickly and finitely (the N16 analogue)', () => {

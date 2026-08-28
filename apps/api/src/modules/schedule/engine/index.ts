@@ -48,6 +48,7 @@ export {
   EmptyWorkingTimeCalendarError,
   ScheduleGraphNotADagError,
   UnknownActivityError,
+  WorkingTimeHorizonExceededError,
 } from './errors';
 export type {
   EngineActivity,

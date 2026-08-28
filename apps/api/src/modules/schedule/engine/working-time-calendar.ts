@@ -1,6 +1,6 @@
 import { formatCalendarDate, parseCalendarDate } from '../../../common/validation/calendar-date';
 
-import { EmptyWorkingTimeCalendarError } from './errors';
+import { EmptyWorkingTimeCalendarError, WorkingTimeHorizonExceededError } from './errors';
 
 /**
  * The engine's **minute-granular** working-time calendar port (ADR-0036, the M1
@@ -305,9 +305,7 @@ export function buildWorkingTimeCalendar(
         while (countWorking(fromAbs, hi) < minutes) {
           hi += weekSpan * (1 + guard);
           if (++guard > HORIZON_DAYS / 7) {
-            throw new Error(
-              'addWorkingTime exceeded the working-time horizon (no reachable minute).',
-            );
+            throw new WorkingTimeHorizonExceededError();
           }
         }
         while (lo < hi) {
@@ -325,9 +323,7 @@ export function buildWorkingTimeCalendar(
       while (countWorking(lo, fromAbs) < need) {
         lo -= weekSpan * (1 + guard);
         if (++guard > HORIZON_DAYS / 7) {
-          throw new Error(
-            'addWorkingTime exceeded the working-time horizon (no reachable minute).',
-          );
+          throw new WorkingTimeHorizonExceededError();
         }
       }
       while (lo < hi) {
