@@ -1,5 +1,19 @@
 # @repo/web
 
+## 0.110.0
+
+### Minor Changes
+
+- [#406](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/406) [`febf49d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/febf49d459f656cc9f05fe3988ccf7f6b98bb2b7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Health check panel's metric-12 row gains **Run critical path test** (health M6): the on-demand
+  what-if result merges over the placeholder row with the summary recounted, the verdict is
+  announced, and the hand-checkable injection sentence renders from payload numbers alone. The
+  printed report carries whatever was computed.
+
+### Patch Changes
+
+- Updated dependencies [[`febf49d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/febf49d459f656cc9f05fe3988ccf7f6b98bb2b7)]:
+  - @repo/types@0.29.0
+
 ## 0.109.0
 
 ### Minor Changes

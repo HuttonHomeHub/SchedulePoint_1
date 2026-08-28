@@ -1,5 +1,21 @@
 # @repo/api
 
+## 0.55.0
+
+### Minor Changes
+
+- [#406](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/406) [`febf49d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/febf49d459f656cc9f05fe3988ccf7f6b98bb2b7) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - DCMA metric 12, the Critical Path Test, computed for real (health M6): `GET
+  …/schedule/health-check/critical-path-test` runs a read-only what-if — 600 working days injected
+  into the front of the critical path on an in-memory copy of the graph — and reports whether the
+  control run's completion carrier moved in step. Persists nothing (proved by an e2e reading every
+  engine-owned column back), carries its own measured throttle (14/60 s), and returns the upgraded
+  metric-12 row in the report's own shape. Adds the `NO_CRITICAL_PATH` not-assessable reason.
+
+### Patch Changes
+
+- Updated dependencies [[`febf49d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/febf49d459f656cc9f05fe3988ccf7f6b98bb2b7)]:
+  - @repo/types@0.29.0
+
 ## 0.54.0
 
 ### Minor Changes
