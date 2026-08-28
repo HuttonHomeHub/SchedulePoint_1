@@ -2260,7 +2260,14 @@ is the right configuration and it is also why the rate can drift a long way befo
 
 ## 130. The zoom trigger's icon says "date range", and it now owns the viewport
 
-**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** S · **Owner:** a design pass
+**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** S · **Owner:** a design pass ·
+**Status: CLOSED 2026-08-28 — overtaken.** The control this row describes no longer exists:
+`ZoomPresetControl` and the `comfortable`-band fold were deleted with the width ladder (ADR-0109
+D1 — a command surface wraps; it never hides), zoom presets moved into `View ▾` (ADR-0099), and
+the viewport commands are now separate icon-only deck items with universal glyphs (`zoom-in`,
+`zoom-out`, `fit` — `Deck.tsx` `ICON_ONLY`). `CalendarRange` appears nowhere in the workspace
+(verified by grep: its two remaining uses are the overview empty state and the navigator).
+Nothing left to choose an icon for; #126's segment-icon half was settled by its own pass.
 
 `ZoomPresetControl`'s icon is `CalendarRange`, which was right while the control did one thing: its
 presets **are** time ranges (Day / Week / Month / Quarter / Year). Below the `comfortable` band it now
@@ -2303,6 +2310,18 @@ ruled out (`docs/specs/workspace-layout/m3-narrow-widths.md`).
 
 **What to do:** build the tooltip primitive, then adopt it on `ToolbarButton` and `ToolbarPopover`
 together, rather than on whichever control someone is holding at the time.
+
+**Narrowed 2026-08-28 (re-verified against the post-ADR-0109 deck).** The premise lapsed: there
+is no collapsed band any more — the width ladder and its floors were deleted (ADR-0109 D1), and
+`Go to date`, `View`, `Filter` and the rest carry visible labels at **every** width. Icon-only is
+now a deliberate closed set of **six universal glyphs** (`Deck.tsx` `ICON_ONLY`: zoom-in,
+zoom-out, fit, undo, redo, print), each still named on hover only via `title`. The residual gap
+is therefore six controls whose glyphs are close to self-evident, not five popovers on the target
+device — real, small, and adjacent to #133's coarse-pointer state. The remedy is unchanged (a
+long-press-capable tooltip primitive, WCAG 1.4.13 concerns and all) but it is a design-system
+spec item under ADR-0105 (a new shared primitive is exactly the trigger), not a defect fix, and
+its size against six universal glyphs is no longer M. Decide it beside #133's coarse-pointer
+pass rather than alone.
 
 ## 132. `mail-alerting.e2e-spec.ts` sees its own writes late, and the two cases then swap answers
 
