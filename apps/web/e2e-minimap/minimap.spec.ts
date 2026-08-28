@@ -100,8 +100,18 @@ test.describe('The minimap', () => {
 
     // ── The WCAG 2.2 scan, target-size opted in, over the panel.
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'])
-      .options({ rules: { 'target-size': { enabled: true } } })
+      // ONE `options()` carrying BOTH runOnly and rules (`docs/TECH_DEBT.md` #170, closed
+      // 2026-08-28): `AxeBuilder.options()` is a wholesale REPLACEMENT, not a merge, so the old
+      // `.withTags(...).options({rules})` chain discarded `runOnly` and ran every rule axe has —
+      // this scan passed only because its `.include()` narrows the subtree. The shape below is
+      // `e2e-shell/org-less-screens.spec.ts`'s, which read the library source rather than inferring.
+      .options({
+        runOnly: {
+          type: 'tag',
+          values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'],
+        },
+        rules: { 'target-size': { enabled: true } },
+      })
       .include('[data-testid="tsld-minimap"]')
       .analyze();
     expect(results.violations).toEqual([]);

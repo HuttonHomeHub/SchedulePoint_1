@@ -505,7 +505,12 @@ async function openHealthPanel(page) {
 }
 
 async function toggleViewSwitch(page, pattern) {
-  await page.getByRole('button', { name: /^View/ }).first().click();
+  // **By the registry id, never the copy** (`docs/TECH_DEBT.md` #199, and ADR-0091's own rule:
+  // locate a toolbar control by `[data-toolbar-item]`). #199 hypothesised the old `/^View/` name
+  // locator was folding a deck group card; PROBED 2026-08-28, that was false — the name resolved
+  // the right control — but a name locator on a control whose label is one English word stays one
+  // renamed caption away from the same timeout, so the id is the honest anchor either way.
+  await page.locator('[data-toolbar-item="view"]').first().click();
   // **A `checkbox` inside a `dialog`, not a `menuitemcheckbox` inside a `menu`.** `View` is
   // `aria-haspopup="dialog"` and the panel is a popover of radio groups and checkboxes — probed,
   // because the first version of this helper assumed the ADR-0031 menu taxonomy from the toolbar's
@@ -569,6 +574,7 @@ if (!executablePath) {
 
 const browser = await chromium.launch({ executablePath });
 
+const failures = [];
 for (const width of widths) {
   const dir = join(OUT, String(width));
   await mkdir(dir, { recursive: true });
@@ -581,167 +587,187 @@ for (const width of widths) {
   let ids = null;
 
   for (const shot of wanted) {
-    if (shot.exportPng) {
-      if (!ids) ids = await seedProgramme(page, slug);
-      await page.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`);
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(1200);
-      const start = page.getByRole('button', { name: 'Start editing' });
-      if (await start.isVisible().catch(() => false)) await start.click();
-      await page
-        .getByRole('button', { name: /share.*export/i })
-        .first()
-        .click();
-      const download = page.waitForEvent('download', { timeout: 20_000 });
-      await page.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }).click();
-      const file = await download;
-      await file.saveAs(join(dir, `${shot.name}.png`));
-    } else if (shot.shareGuest) {
-      // Needs BOTH contexts: the signed-in one to mint the link, and an anonymous one to view it
-      // as a recipient would. Minting first also means `programme` seeding has already run.
-      if (!ids) ids = await seedProgramme(page, slug);
-      const url = await mintShareLink(page, slug, ids.planId).catch(() => null);
-      if (!url) {
-        console.log(`${width}  ${shot.name}  SKIPPED — no share URL returned`);
-        continue;
-      }
-      const anon = await browser.newContext({ viewport: { width, height: 1000 } });
-      const anonPage = await anon.newPage();
-      await anonPage.goto(url.startsWith('http') ? url : `${BASE}${url}`);
-      await anonPage.waitForLoadState('networkidle');
-      await anonPage.waitForTimeout(1200);
-      await anonPage.screenshot({ path: join(dir, `${shot.name}.png`) });
-      await anon.close();
-    } else if (shot.onboarding) {
-      // Its own context and its own account, because this screen exists only between signing up
-      // and having an organisation — a state the shared signed-in context left behind minutes ago.
-      const fresh = await browser.newContext({ viewport: { width, height: 1000 } });
-      const freshPage = await fresh.newPage();
-      await signUpOnly(freshPage, width);
-      await freshPage.waitForLoadState('networkidle');
-      await freshPage.screenshot({ path: join(dir, `${shot.name}.png`) });
-      await fresh.close();
-    } else if (shot.staff) {
-      // **Skips loudly, and says what would make it run.** A silent skip in a shot list is
-      // indistinguishable from coverage — which is the whole failure W1 exists to correct.
-      if (process.env.SHOOT_STAFF !== '1') {
-        console.log(
-          `${width}  ${shot.name}  SKIPPED — set SHOOT_STAFF=1 and run the API with STAFF_EMAILS ` +
-            `containing this run's address (see playwright.staff.config.ts, which already does)`,
-        );
-        continue;
-      }
-      await shot.go(page);
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(800);
-      // A staff-gated route renders nothing recognisable to a non-staff caller, and photographing
-      // that would be a picture of the guard rather than of the console. Fail rather than file it.
-      const heading = await page
-        .getByRole('heading', { level: 1 })
-        .first()
-        .textContent()
-        .catch(() => null);
-      if (heading === null)
-        throw new Error('staff console rendered no heading — is the caller staff?');
-      await page.screenshot({ path: join(dir, `${shot.name}.png`) });
-    } else if (shot.signedOut) {
-      // A signed-out shot needs its own context — the session cookie would redirect it away.
-      const anon = await browser.newContext({ viewport: { width, height: 1000 } });
-      const anonPage = await anon.newPage();
-      await shot.go(anonPage);
-      await anonPage.waitForLoadState('networkidle');
-      await anonPage.screenshot({ path: join(dir, `${shot.name}.png`) });
-      await anon.close();
-    } else {
-      if (shot.seedFirst && !seeded) {
-        await seed(page, slug);
-        seeded = true;
-      }
-      if (shot.programme && !ids) ids = await seedProgramme(page, slug);
-      // **Intercepts arm BEFORE the navigation and disarm after the shot**, so a hung route cannot
-      // leak into the next picture. `hang` never resolves — Playwright abandons it when the context
-      // closes — which is the only way to hold a loading state still enough to photograph.
-      if (shot.intercept) {
-        await page.route(shot.intercept.url, async (route) => {
-          if (shot.intercept.hang) return; // deliberately never fulfilled
-          await route.fulfill({
-            status: shot.intercept.fulfil,
-            contentType: 'application/json',
-            body: JSON.stringify({ error: { code: 'INTERNAL', message: 'Something went wrong.' } }),
-          });
-        });
-      }
-      await shot.go(page, slug, ids);
-      // **A shot that photographed a 404 reported success.** The first run of `plan-workspace`
-      // used the wrong route, wrote a picture of "Not Found", and printed the shot's name as
-      // though it had worked — a green result about nothing, which is the failure class this
-      // repository keeps recording. A photograph nobody looks at is worth less than nothing, so
-      // the harness refuses to write one it can already tell is wrong.
-      if (
-        await page
-          .getByText('Not Found', { exact: true })
-          .isVisible()
-          .catch(() => false)
-      ) {
-        throw new Error(`${shot.name}: the page is a 404 — the route is wrong, not the screen.`);
-      }
-      // **`networkidle` can never settle behind a hung intercept** — that is the whole point of the
-      // loading shot, and waiting for it would hang the harness rather than photograph the state.
-      // A fixed settle is the right instrument for exactly this one case and the wrong one for
-      // every other, so it is branched rather than applied everywhere.
-      if (shot.intercept?.hang) await page.waitForTimeout(1500);
-      else await page.waitForLoadState('networkidle');
-      // The canvas paints from a ResizeObserver and an animation frame, neither of which
-      // `networkidle` waits for — a shot taken on the idle event alone catches an empty canvas and
-      // is indistinguishable from a canvas that IS empty, which is the confusion this whole shot
-      // exists to resolve.
-      if (shot.programme) await page.waitForTimeout(1200);
-      if (shot.releasePen) {
-        // The state a reader ARRIVES in. It is a different screen: five controls shade out, and
-        // the pen cluster changes width. Shooting only the editing state photographs the rarer half.
-        const stop = page.getByRole('button', { name: 'Stop editing' });
-        if (await stop.isVisible().catch(() => false)) {
-          await stop.click();
-          await page.getByRole('button', { name: 'Start editing' }).waitFor();
-          await page.waitForTimeout(400);
-        }
-      }
-      if (shot.takePen) {
+    // **A failed shot records itself and the run carries on** (#199's second half): the list is
+    // ordered, so a throw here silently cost every LATER picture — and the three it killed were
+    // the canvas lens states, the ones a contrast matrix and an axe scan structurally cannot
+    // judge. An instrument that produces nothing must say so (the ADR-0100 rule); it must not
+    // also destroy its neighbours' output.
+    try {
+      if (shot.exportPng) {
+        if (!ids) ids = await seedProgramme(page, slug);
+        await page.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`);
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(1200);
         const start = page.getByRole('button', { name: 'Start editing' });
-        if (await start.isVisible().catch(() => false)) {
-          await start.click();
-          await page.getByRole('button', { name: 'Stop editing' }).waitFor();
-          await page.waitForTimeout(400);
-        }
-      }
-      if (shot.after) await shot.after(page);
-      if (shot.expectText) {
-        // **Scoped to `main`.** A page-wide match would find the Project Explorer's own loading and
-        // error copy, which is a different pane in a different state — the guard would pass while
-        // the pane being photographed was still a spinner, committing the exact failure it exists
-        // to prevent. `waitFor` polls to a real deadline rather than a settle somebody guessed.
+        if (await start.isVisible().catch(() => false)) await start.click();
         await page
-          .locator('main')
-          .getByText(shot.expectText)
+          .getByRole('button', { name: /share.*export/i })
           .first()
-          .waitFor({ state: 'visible', timeout: 20_000 })
-          .catch(() => {
-            throw new Error(
-              `${shot.name}: never reached the state it is named for (${shot.expectText}). ` +
-                'The picture would be of some other state, which is worse than no picture.',
-            );
+          .click();
+        const download = page.waitForEvent('download', { timeout: 20_000 });
+        await page.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }).click();
+        const file = await download;
+        await file.saveAs(join(dir, `${shot.name}.png`));
+      } else if (shot.shareGuest) {
+        // Needs BOTH contexts: the signed-in one to mint the link, and an anonymous one to view it
+        // as a recipient would. Minting first also means `programme` seeding has already run.
+        if (!ids) ids = await seedProgramme(page, slug);
+        const url = await mintShareLink(page, slug, ids.planId).catch(() => null);
+        if (!url) {
+          console.log(`${width}  ${shot.name}  SKIPPED — no share URL returned`);
+          continue;
+        }
+        const anon = await browser.newContext({ viewport: { width, height: 1000 } });
+        const anonPage = await anon.newPage();
+        await anonPage.goto(url.startsWith('http') ? url : `${BASE}${url}`);
+        await anonPage.waitForLoadState('networkidle');
+        await anonPage.waitForTimeout(1200);
+        await anonPage.screenshot({ path: join(dir, `${shot.name}.png`) });
+        await anon.close();
+      } else if (shot.onboarding) {
+        // Its own context and its own account, because this screen exists only between signing up
+        // and having an organisation — a state the shared signed-in context left behind minutes ago.
+        const fresh = await browser.newContext({ viewport: { width, height: 1000 } });
+        const freshPage = await fresh.newPage();
+        await signUpOnly(freshPage, width);
+        await freshPage.waitForLoadState('networkidle');
+        await freshPage.screenshot({ path: join(dir, `${shot.name}.png`) });
+        await fresh.close();
+      } else if (shot.staff) {
+        // **Skips loudly, and says what would make it run.** A silent skip in a shot list is
+        // indistinguishable from coverage — which is the whole failure W1 exists to correct.
+        if (process.env.SHOOT_STAFF !== '1') {
+          console.log(
+            `${width}  ${shot.name}  SKIPPED — set SHOOT_STAFF=1 and run the API with STAFF_EMAILS ` +
+              `containing this run's address (see playwright.staff.config.ts, which already does)`,
+          );
+          continue;
+        }
+        await shot.go(page);
+        await page.waitForLoadState('networkidle');
+        await page.waitForTimeout(800);
+        // A staff-gated route renders nothing recognisable to a non-staff caller, and photographing
+        // that would be a picture of the guard rather than of the console. Fail rather than file it.
+        const heading = await page
+          .getByRole('heading', { level: 1 })
+          .first()
+          .textContent()
+          .catch(() => null);
+        if (heading === null)
+          throw new Error('staff console rendered no heading — is the caller staff?');
+        await page.screenshot({ path: join(dir, `${shot.name}.png`) });
+      } else if (shot.signedOut) {
+        // A signed-out shot needs its own context — the session cookie would redirect it away.
+        const anon = await browser.newContext({ viewport: { width, height: 1000 } });
+        const anonPage = await anon.newPage();
+        await shot.go(anonPage);
+        await anonPage.waitForLoadState('networkidle');
+        await anonPage.screenshot({ path: join(dir, `${shot.name}.png`) });
+        await anon.close();
+      } else {
+        if (shot.seedFirst && !seeded) {
+          await seed(page, slug);
+          seeded = true;
+        }
+        if (shot.programme && !ids) ids = await seedProgramme(page, slug);
+        // **Intercepts arm BEFORE the navigation and disarm after the shot**, so a hung route cannot
+        // leak into the next picture. `hang` never resolves — Playwright abandons it when the context
+        // closes — which is the only way to hold a loading state still enough to photograph.
+        if (shot.intercept) {
+          await page.route(shot.intercept.url, async (route) => {
+            if (shot.intercept.hang) return; // deliberately never fulfilled
+            await route.fulfill({
+              status: shot.intercept.fulfil,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                error: { code: 'INTERNAL', message: 'Something went wrong.' },
+              }),
+            });
           });
-        await page.waitForTimeout(300);
+        }
+        await shot.go(page, slug, ids);
+        // **A shot that photographed a 404 reported success.** The first run of `plan-workspace`
+        // used the wrong route, wrote a picture of "Not Found", and printed the shot's name as
+        // though it had worked — a green result about nothing, which is the failure class this
+        // repository keeps recording. A photograph nobody looks at is worth less than nothing, so
+        // the harness refuses to write one it can already tell is wrong.
+        if (
+          await page
+            .getByText('Not Found', { exact: true })
+            .isVisible()
+            .catch(() => false)
+        ) {
+          throw new Error(`${shot.name}: the page is a 404 — the route is wrong, not the screen.`);
+        }
+        // **`networkidle` can never settle behind a hung intercept** — that is the whole point of the
+        // loading shot, and waiting for it would hang the harness rather than photograph the state.
+        // A fixed settle is the right instrument for exactly this one case and the wrong one for
+        // every other, so it is branched rather than applied everywhere.
+        if (shot.intercept?.hang) await page.waitForTimeout(1500);
+        else await page.waitForLoadState('networkidle');
+        // The canvas paints from a ResizeObserver and an animation frame, neither of which
+        // `networkidle` waits for — a shot taken on the idle event alone catches an empty canvas and
+        // is indistinguishable from a canvas that IS empty, which is the confusion this whole shot
+        // exists to resolve.
+        if (shot.programme) await page.waitForTimeout(1200);
+        if (shot.releasePen) {
+          // The state a reader ARRIVES in. It is a different screen: five controls shade out, and
+          // the pen cluster changes width. Shooting only the editing state photographs the rarer half.
+          const stop = page.getByRole('button', { name: 'Stop editing' });
+          if (await stop.isVisible().catch(() => false)) {
+            await stop.click();
+            await page.getByRole('button', { name: 'Start editing' }).waitFor();
+            await page.waitForTimeout(400);
+          }
+        }
+        if (shot.takePen) {
+          const start = page.getByRole('button', { name: 'Start editing' });
+          if (await start.isVisible().catch(() => false)) {
+            await start.click();
+            await page.getByRole('button', { name: 'Stop editing' }).waitFor();
+            await page.waitForTimeout(400);
+          }
+        }
+        if (shot.after) await shot.after(page);
+        if (shot.expectText) {
+          // **Scoped to `main`.** A page-wide match would find the Project Explorer's own loading and
+          // error copy, which is a different pane in a different state — the guard would pass while
+          // the pane being photographed was still a spinner, committing the exact failure it exists
+          // to prevent. `waitFor` polls to a real deadline rather than a settle somebody guessed.
+          await page
+            .locator('main')
+            .getByText(shot.expectText)
+            .first()
+            .waitFor({ state: 'visible', timeout: 20_000 })
+            .catch(() => {
+              throw new Error(
+                `${shot.name}: never reached the state it is named for (${shot.expectText}). ` +
+                  'The picture would be of some other state, which is worse than no picture.',
+              );
+            });
+          await page.waitForTimeout(300);
+        }
+        await page.screenshot({ path: join(dir, `${shot.name}.png`) });
+        // Disarm, or the next shot inherits this one's failure — the harness reuses one page per
+        // width, so a route left armed is a defect that shows up several pictures later.
+        if (shot.intercept) await page.unroute(shot.intercept.url);
       }
-      await page.screenshot({ path: join(dir, `${shot.name}.png`) });
-      // Disarm, or the next shot inherits this one's failure — the harness reuses one page per
-      // width, so a route left armed is a defect that shows up several pictures later.
-      if (shot.intercept) await page.unroute(shot.intercept.url);
+      console.log(`${width}  ${shot.name}`);
+    } catch (error) {
+      failures.push(`${width}/${shot.name}`);
+      console.log(
+        `${width}  ${shot.name}  FAILED — ${String(error?.message ?? error).slice(0, 200)}`,
+      );
     }
-    console.log(`${width}  ${shot.name}`);
   }
   await context.close();
 }
 
 await browser.close();
 console.log(`\nwrote ${OUT}/`);
+if (failures.length > 0) {
+  console.log(
+    `\n${failures.length} shot(s) FAILED and are missing from the set: ${failures.join(', ')}`,
+  );
+  process.exitCode = 1;
+}

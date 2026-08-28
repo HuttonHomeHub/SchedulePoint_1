@@ -3033,6 +3033,11 @@ with the Phase 2 report so the row has an owner outside this environment.
 
 ## 155. The minimap M4 gate pass's non-blocking findings
 
+_Triage 2026-08-28 (correctness programme Phase 4): re-filed consciously. Items 1–3 are design
+judgements for a minimap design pass, not defects; item 4's focus-chain last resort is real and
+S-sized but sits on a shared close-chain contract (§19.13 territory — a review before release,
+not a residue fold); item 5 is an instrument nit whose reason stands._
+
 **Raised 2026-08-21** (minimap M4-T1; the blocking findings are folded with regression
 tests and recorded in ADR-0100's Consequences). **Size:** S each.
 
@@ -3794,6 +3799,13 @@ inclusion survived in the first place.
 every rule to six tags), which is a coverage change on three suites in a PR about the app shell. Each
 is a one-line edit and none should change colour.
 
+**CLOSED 2026-08-28 (correctness programme Phase 4).** The siblings are **two, not three** — the
+third (`e2e-toolbar-fit/fit.spec.ts`) was deleted whole with the width ladder (ADR-0109 D1), which
+this row could not have known. `e2e-gantt-editing/object-actions.spec.ts` and
+`e2e-minimap/minimap.spec.ts` now carry the single-`options()` shape with the reason at each site.
+Both previously passed while running MORE rules than they claimed, so the narrowing cannot turn
+either red; what changes is that "the scan is green" now means what its docblock says it means.
+
 **Two gate findings came out of the same thread and ARE fixed**, both in `scripts/check-claims.mjs`'s
 neighbourhood:
 
@@ -4437,6 +4449,11 @@ carries no version) — three holes in one gate, all found by using it rather th
 ---
 
 ## 184. Unsaved-work guard: the findings its gate pass did not block on
+
+_Triage 2026-08-28 (Phase 4): re-filed consciously. The CONFIRM-path focus gap is the register's
+own words — "a systemic router gap… worth its own look at where focus should land after any route
+change" — which is a design pass across every navigation, not a residue fold; the rest stand on
+their filed reasons._
 
 _Filed 2026-08-23 with ADR-0108. Six blocking findings were fixed in the milestone; these are the
 rest, recorded rather than carried in someone's head._
@@ -5255,6 +5272,19 @@ judge.
 than a reading; the 21 shots it did take were enough to judge M2-T5's question (what the merged
 header did to the twelve screens that are not a plan).
 
+**FIXED 2026-08-28 (correctness programme Phase 4), and hypothesis 1 was FALSE.** Probed on the
+live workspace as this row demanded: `getByRole('button', { name: /^View/ }).first()` resolves
+`[data-toolbar-item="view"]` — the RIGHT control — and no deck group card matches `/view/i` at
+all, so the fold-a-caption theory does not hold on today's tree. The 2026-08-26 failure's exact
+cause is unrecoverable (three epics have reshaped the deck since), which is itself the argument
+for the shipped fix: the helper now locates by `[data-toolbar-item="view"]` (ADR-0091's own rule
+— by the registry id, never the copy), so a renamed caption cannot recreate the failure class.
+The second half shipped as specified: a failed shot records `FAILED — <reason>` and the run
+carries on, with a non-zero exit naming every missing picture. Proven by running the instrument:
+all 25 shots at 1646 including the three this row said were lost (`gantt-arrows`,
+`plan-workspace-minimap`, `plan-workspace-lenses`), zero failures, one documented staff opt-in
+skip.
+
 ---
 
 ## #200 — Two named-slot registries, one of them the better pattern, neither shared
@@ -5325,6 +5355,11 @@ a rendering meaning is a `Toolbar` contract change — ADR-0105's trigger, so it
 
 ## 202. Six non-blocking findings from the foot-row gate pass
 
+_Triage 2026-08-28 (Phase 4): (e) closed as STALE — its coverage exists (see the item). The other
+five re-filed consciously: (a) is a distance cost whose order matches the visual arrangement, (b)
+and (d) are refactors of working code, (c) is an instrument-widening task with its own scope, (f)'s
+pairing is gated._
+
 **Raised:** 2026-08-27 (ADR-0114 M7) · **Size:** S each · **Owner:** unassigned
 
 Four specialist reviews over the foot-row diff; eight blocking findings folded in the milestone (see
@@ -5362,6 +5397,10 @@ transitively through two callers and end to end by `dock.spec.ts`. The positiona
 needs a real layout, so e2e is the right tier for that — but `hostsPlanSlots` toggling both outlets,
 and `toggle` rendering when present and absent, are cheap to pin at the unit level and are not pinned
 anywhere. This is the seam that produced the milestone's largest blocking finding.
+**Re-verified 2026-08-28 (correctness programme Phase 4): STALE — the coverage exists.**
+`activity-bottom-panel.test.tsx` pins exactly the two branches this item names ("gates BOTH plan
+slots on `hostsPlanSlots`, never just one"; "renders the toggle when given one, and nothing in its
+place when not"), 4/4 green. Added after this row was filed; the row was not updated. Item closed.
 
 **(f) `bg-foreground/5` now paints on the canvas-dock surface scope for the first time.** The token
 pairing is unchanged from `Deck`'s pre-existing use, and the card is decorative grouping with every
@@ -5402,6 +5441,11 @@ and outside the stated scope of the change that found it — but the two clamps 
 Both raised by the accessibility gate on the `Menu` fix, which passed it with no blocking finding.
 
 ## 204. Four things the foot-row-and-deck epic found and did not fix
+
+_Triage 2026-08-28 (Phase 4): re-filed consciously. (a) is #131's tooltip-primitive question,
+narrowed there the same day (six universal glyphs; ADR-0105 spec item); (b) is a gated pairing;
+(c) is an unverified "may" that needs a browser probe before it is a defect; (d) is a record, not
+work._
 
 **Raised:** 2026-08-27 (foot-row-and-deck M7) · **Size:** S each · **Owner:** unassigned
 
@@ -5498,6 +5542,12 @@ stand-in. In-window placement work does not help — the capacity is genuinely i
 Playbook annotated 2026-08-28; the decision goes to the product owner.
 
 ## 206. Health-check review suggestions consciously not folded at the M5 gate pass
+
+_Triage 2026-08-28 (Phase 4): re-filed consciously. The print-header convention spans two print
+documents and wants one decision, not a fold; the Badge swap changes a shipped panel's look (a ux
+call, not a correctness fix); the two AT listens are environment-blocked exactly as #154 records
+(no screen reader in this container — owed to a human pass); the rest stand on their filed
+reasons._
 
 **Raised:** 2026-08-28 (schedule-health-check M5-T1) · **Size:** S ×5 · **Owner:** web
 
