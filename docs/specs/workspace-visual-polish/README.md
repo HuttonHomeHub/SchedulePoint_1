@@ -94,3 +94,13 @@ folded; prepush 13/13; base + workspace-chrome + health-check + gantt journeys g
 
 Item 6's "status line" is therefore the facts' two wrapped lines INSIDE the 41 px row; item 8's
 change moves the dock's bottom edge from 888 (foot bottom) to 847 (canvas bottom).
+
+## After M1–M5 — re-measured (same probe, 2026-08-28)
+
+| Fact                  | Value                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------- |
+| Shell frame           | gone — band x 0→1646, foot right = window right                                                 |
+| Dock (Health open)    | y 188→**845** — bottom is the foot's top, not the window's                                      |
+| Foot with dock open   | x 277→1646 = **1369 px full width** (was 944; the M0 table's 1345 was the pre-full-bleed width) |
+| Canvas with dock open | bottom **845** = dock bottom — the dock pushes the canvas only                                  |
+| Foot row              | 55 px (was 41) — the deck-matched `py-1.5` + the 3 px amber rule, the padding the PO asked for  |

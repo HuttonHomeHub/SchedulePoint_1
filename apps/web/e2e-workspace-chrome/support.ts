@@ -547,6 +547,13 @@ export async function placeOnDay(
     if (landed !== from) pxPerDay = Math.abs(dx / (landed - from));
   }
 
+  // **Success is checked once more before throwing, because the loop only samples it at iteration
+  // tops.** A drop that lands on the target on the FINAL attempt was real and unobserved: the
+  // helper threw `could not drop … (reached 0)` — the error message itself naming the target as
+  // reached — after the polish pass's flush stage shifted the default framing enough that the aim
+  // took all eight drags. Latent since the helper was written; exposed by a layout change, fixed
+  // by asking the question the throw was about to answer wrongly.
+  if ((await droppedDay()) === targetDay) return;
   throw new Error(
     `could not drop ${activity.name} on day ${String(targetDay)} in ${String(attempts)} drags ` +
       `(reached ${String(await droppedDay())}): ${trace.join('; ')}`,
