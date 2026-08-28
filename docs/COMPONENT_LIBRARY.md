@@ -473,3 +473,43 @@ summoned it.
 - Duplicating an existing pattern instead of extending it.
 - Removing focus outlines; `div`/`span` used as buttons; icon-only controls with
   no accessible name.
+
+## Primitive: `useTooltip` (`components/ui/tooltip.tsx`)
+
+A hand-rolled APG tooltip as a **hook** (ADR-0117, fix-slice M-B) — the trigger differs per
+consumer (`usePopoverPanel`'s argument), so a wrapper component would need `cloneElement` and a
+ref it cannot type. Spread `triggerProps` onto the trigger; render `tooltip` in the same JSX.
+
+```tsx
+const tip = useTooltip({ content: label, purpose: 'name-echo' });
+return (
+  <button {...tip.triggerProps} aria-label={label}>
+    <Icon aria-hidden />
+    {tip.tooltip}
+  </button>
+);
+```
+
+**`purpose` is the sharp edge and has no default.** `'name-echo'` — the content restates the
+control's accessible name (the icon-only case): the panel is `aria-hidden` and NO
+`aria-describedby` is added, or a screen reader hears "Zoom in, Zoom in". `'description'` — the
+content carries something the name does not: `role="tooltip"`, linked while open. The caller
+states which case they are in; the compiler enforces it.
+
+WCAG 1.4.13 in full: **Dismissible** (Escape, claimed only while open, `preventDefault` ONLY —
+never `stopPropagation`, because a tooltip arms from incidental hover/focus and must not withhold
+the press from the canvas rung it was aimed at; focus unmoved), **Hoverable** (the pointer may
+rest on the tip; 150 ms leave grace), **Persistent** (no auto-dismiss timer exists). Hover opens
+at 400 ms; focus opens immediately; a **touch long-press** (500 ms) opens the name **without
+firing the command** — the following click is swallowed; an outside press dismisses; a pen takes
+the hover path only. At most one tooltip is open application-wide. Positioned by `overlay-position.ts`'s clamp and portalled via its
+`portalTarget()` — never a private copy of either (`overlay-position.structural.test.ts`).
+
+**When to reach for it — the `title` discriminator** (spec §4.2's table, binding):
+
+| The `title` you are about to write is…                   | Do this instead                                                                              |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| an icon-only control's name                              | `useTooltip({ purpose: 'name-echo' })` — never `title`                                       |
+| a truncated text's full value                            | keep native `title` (free, correct, not a control's name)                                    |
+| a supplementary clause on a control with a visible label | keep native `title` (a copy decision, not a naming gap)                                      |
+| a fact the accessible name does not carry                | `useTooltip({ purpose: 'description' })`, with its own review — it changes what AT announces |

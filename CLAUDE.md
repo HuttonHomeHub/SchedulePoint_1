@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1096 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1107 web
 > source files with 41 Playwright suites beside the base journey, and
-> 116 ADRs.
+> 117 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3472,6 +3472,30 @@ progress` off the command surface because **an object action belongs on the obje
   delete instruction assumed an in-place upgrade), `NO_CRITICAL_PATH` joins the reason union, and
   the PLAN_START_REQUIRED e2e was withdrawn because the no-start state is unreachable through the
   public API (pinned in the service unit suite instead).
+
+- **ADR-0117** _(Accepted; fix-slice M-B landed 2026-08-28)_ — An icon-only control names itself,
+  and a tooltip states its purpose. The product had no tooltip primitive: icon-only commands leaned
+  on the hover-only `title`, unreadable to keyboard focus and to touch — so the deck's six
+  `ICON_ONLY` glyphs named themselves to a mouse and to nobody else (#131). `useTooltip` is a
+  hand-rolled APG **hook** (the `usePopoverPanel` trigger argument), meeting **WCAG 1.4.13 in
+  full** with each clause a red-verified test: Dismissible (Escape claimed **only while open** —
+  the ADR-0080 ladder condition — with `preventDefault` **and** `stopPropagation`, #196a applied at
+  birth; focus unmoved), Hoverable (150 ms grace, pointer may rest on the tip), Persistent (no
+  auto-dismiss timer exists). Hover opens at 400 ms, focus immediately, and a coarse-pointer
+  **long-press** opens the name **without firing the command** — the following click swallowed in
+  `onClickCapture`. **The load-bearing option is `purpose`, and it has no default**: `'name-echo'`
+  renders `aria-hidden` with no `aria-describedby` (linking a tip that restates `aria-label` makes
+  a reader hear "Zoom in, Zoom in"), `'description'` renders `role="tooltip"` linked while open —
+  the caller states which case they are in, so the double-announcement failure cannot be reached by
+  omission. Positioned by the ONE clamp and portalled by the ONE target (`overlay-position.ts`) —
+  M-C landed first precisely so this could not become a third copy. `ToolbarButton`'s icon-only
+  branch drops `title` for the **character-identical** string through the tip; the labelled branch
+  keeps its title (a visible name needs no echo — the discriminator table is the authoring rule in
+  `docs/DESIGN_SYSTEM.md`). Reviewed by accessibility + component reviewers **before merge**
+  (§19.13 — the class that shipped twice in two days). #204(a)'s premise had lapsed before this
+  landed (ADR-0115 restored `zoom-to-selection`'s label) — corrected in the register rather than
+  stepped over; the primitive still covers any future icon-only control by construction. **The CPM
+  engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

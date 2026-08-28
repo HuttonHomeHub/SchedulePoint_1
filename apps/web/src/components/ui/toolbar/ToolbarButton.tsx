@@ -2,6 +2,7 @@ import { forwardRef, useId } from 'react';
 
 import { toolbarControlVariants } from './toolbar-styles';
 
+import { useTooltip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 /**
@@ -102,9 +103,48 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
           ? `${label} — ${disabledReason}`
           : label
       : liveTitle;
+    /**
+     * **The icon-only branch names itself with the Tooltip primitive, not `title`** (fix-slice
+     * M-B — #131/#204(a), ADR-0117). `title` is hover-only: no mainstream browser shows it on
+     * keyboard focus and touch has no hover at all, so an icon-only command's name was unreadable
+     * to exactly the users with the least other signal. The tooltip's content is the SAME string
+     * the `title` carried — character-identical, or copy has silently changed — and it is
+     * `purpose: 'name-echo'` because `aria-label` already pins the name and the reason is already
+     * `aria-describedby`-linked above: AT hears nothing new and nothing twice. The labelled branch
+     * keeps its native `title` (its name is visible; the title is a supplementary clause, and
+     * changing that channel is a copy decision — spec §4.2's discriminator table).
+     */
+    // `purpose` is DERIVED, not hardcoded (the M-B accessibility review's finding 2): an
+    // icon-only control whose tooltip carries a live `description` is saying MORE than its name,
+    // and pre-M-B its `title` reached AT as the accessible description (title maps there when no
+    // `aria-describedby` is set) — so `'name-echo'` would have silently stranded that text from
+    // AT the day a future ICON_ONLY item gained one. `'description'` restores exactly the
+    // pre-M-B AT experience. The disabled branch stays `'name-echo'`: its reason already rides
+    // the `aria-describedby` reason span above, and linking the tooltip too would read it twice.
+    const tipPurpose = !showLabel && description && !disabled ? 'description' : 'name-echo';
+    const tip = useTooltip({
+      content: showLabel ? undefined : title,
+      purpose: tipPurpose,
+      disabled: !!showLabel,
+    });
+    // The tooltip's own description id (only ever set for `'description'`) joins the reason/sr
+    // chain — the explicit `aria-describedby` below would otherwise overwrite the spread's.
+    const fullDescribedBy =
+      [tip.triggerProps['aria-describedby'], describedBy].filter(Boolean).join(' ') || undefined;
     return (
       <button
-        ref={ref}
+        // Spread FIRST, exactly as the primitive's own recipe shows, so a key added to
+        // `triggerProps` later reaches the DOM without this file knowing (the M-B component
+        // review's blocking finding: hand-wiring each handler is the invisible-drift shape the
+        // shared leaf exists to prevent). Only the two keys that genuinely need composition are
+        // overridden below: `ref` (merged with the forwarded one) and `onFocus` (composed with
+        // the roving-focus callback).
+        {...tip.triggerProps}
+        ref={(el) => {
+          tip.triggerProps.ref(el);
+          if (typeof ref === 'function') ref(el);
+          else if (ref) ref.current = el;
+        }}
         type="button"
         data-toolbar-focusable=""
         data-toolbar-item={itemId}
@@ -113,14 +153,17 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
         {...(busy ? { 'aria-busy': true } : {})}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
         {...(showLabel && !describedBy ? {} : { 'aria-label': label })}
-        {...(title ? { title } : {})}
-        {...(describedBy ? { 'aria-describedby': describedBy } : {})}
+        {...(showLabel && title ? { title } : {})}
+        {...(fullDescribedBy ? { 'aria-describedby': fullDescribedBy } : {})}
         tabIndex={tabIndex}
         onClick={() => {
           if (!disabled) onActivate();
         }}
         onKeyDown={onKeyDown}
-        onFocus={onFocus}
+        onFocus={(event) => {
+          tip.triggerProps.onFocus(event);
+          onFocus?.(event);
+        }}
         className={cn(
           toolbarControlVariants({ active: pressed === true, disabled: disabled === true }),
           className,
@@ -142,6 +185,7 @@ export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
             {srDescription}
           </span>
         ) : null}
+        {tip.tooltip}
       </button>
     );
   },

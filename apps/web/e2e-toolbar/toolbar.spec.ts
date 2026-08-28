@@ -213,3 +213,75 @@ test('every control in the View popover is pointer-reachable at a short viewport
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(520 + 1);
 });
+
+/**
+ * **The Tooltip primitive on the deck's icon-only glyphs** (fix-slice M-B — #131, ADR-0117).
+ * The four assertions the milestone header names: hover shows the visible name; focus shows it
+ * immediately; a coarse-pointer long-press shows it WITHOUT firing the command; Escape dismisses
+ * it with focus unmoved.
+ *
+ * Long-press is driven by dispatching `pointerType: 'touch'` pointer events rather than a
+ * `hasTouch` context: Playwright has no native long-press gesture, and `pointerType` is exactly
+ * what the grammar branches on — the events still run the real product listeners in a real
+ * browser. The command-not-fired oracle is the **Data date axis marker's x position** (ADR-0106
+ * DOM labels in the ruler): `zoom-out` changes pxPerDay, which moves every date's pixel — the
+ * positive control below proves the probe CAN detect a firing, so "unchanged" means "did not
+ * fire" rather than "cannot see" (the ADR-0093 oracle rule).
+ *
+ * **This test's own first run was the finding**: it long-pressed `undo` and met a bespoke `render`
+ * control that never went through `ToolbarButton` — still `title`-only, reason folded into the
+ * name — where the spec's table said it inherited the treatment. UndoRedoControl was adopted and
+ * the probe moved to a control whose firing has a DOM trace.
+ *
+ * **Verified red** against the pre-M-B `ToolbarButton` (title-only): hover produced no
+ * `[data-tooltip]` node at all.
+ */
+test('icon-only deck glyphs name themselves to pointer, keyboard and touch', async ({ page }) => {
+  test.setTimeout(180_000);
+  await onboard(page, Date.now() + 13);
+  await openNewPlan(page);
+  await startEditing(page);
+  await addActivity(page, 'Excavate');
+  await recalculate(page);
+
+  const glyph = page.locator('[data-toolbar-item="zoom-out"]');
+  await expect(glyph).toBeVisible();
+  await expect(glyph).not.toHaveAttribute('title'); // the native channel is gone, not doubled
+
+  // Hover: the name appears after the open delay.
+  await glyph.hover();
+  const tip = page.locator('[data-tooltip]');
+  await expect(tip).toHaveText('Zoom out');
+
+  // Focus keeps/opens it immediately; Escape dismisses with focus unmoved (1.4.13 Dismissible +
+  // the ADR-0080 ladder condition — the workspace's own Escape consumers are untouched).
+  await glyph.focus();
+  await expect(tip).toHaveText('Zoom out');
+  await page.keyboard.press('Escape');
+  await expect(tip).toBeHidden();
+  await expect(glyph).toBeFocused();
+
+  // Long-press on a coarse pointer: the name appears and the command does NOT fire.
+  const marker = page.locator('[data-axis-marker="dataDate"]');
+  await expect(marker).toBeVisible();
+  const before = (await marker.boundingBox())?.x;
+  const box = await glyph.boundingBox();
+  if (!box || before === undefined) throw new Error('probe geometry missing');
+  await glyph.dispatchEvent('pointerdown', {
+    pointerType: 'touch',
+    clientX: box.x + box.width / 2,
+    clientY: box.y + box.height / 2,
+  });
+  await page.waitForTimeout(650); // past TOOLTIP_LONG_PRESS_MS
+  await glyph.dispatchEvent('pointerup', { pointerType: 'touch' });
+  await glyph.dispatchEvent('click');
+  await expect(tip).toHaveText('Zoom out');
+  const afterPress = (await marker.boundingBox())?.x;
+  expect(afterPress).toBe(before); // the command did not fire
+
+  // Positive control: a REAL activation moves the marker — the oracle can see a firing.
+  await glyph.click();
+  await expect
+    .poll(async () => (await marker.boundingBox())?.x, { timeout: 10_000 })
+    .not.toBe(before);
+});

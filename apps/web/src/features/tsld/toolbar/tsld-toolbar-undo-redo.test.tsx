@@ -81,10 +81,13 @@ describe('TSLD toolbar Undo/Redo (flag on)', () => {
     const redoBtn = within(bar).getByRole('button', { name: 'Redo — Nothing to redo' });
     expect(undoBtn).toHaveAttribute('aria-disabled', 'true');
     expect(redoBtn).toHaveAttribute('aria-disabled', 'true');
-    // Undo is `showLabel: 'never'` and therefore still icon-only, so its title KEEPS the
-    // label prefix — it is the only thing identifying which button is refusing. The
-    // labelled commands dropped theirs; this one did not, and the difference is the point.
-    expect(undoBtn).toHaveAttribute('title', 'Undo — Nothing to undo');
+    // The visible name moved from `title` to the Tooltip primitive (ADR-0117, fix-slice M-B):
+    // `title` is hover-only, so it named the refusing button to a mouse and to nobody else. The
+    // identifying string is unchanged — it now appears on focus as well — and the accessible name
+    // (asserted above) still carries the label prefix, which was always this case's real subject.
+    expect(undoBtn).not.toHaveAttribute('title');
+    fireEvent.focus(undoBtn);
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Undo — Nothing to undo');
     fireEvent.click(undoBtn);
     fireEvent.click(redoBtn);
     expect(undo).not.toHaveBeenCalled();

@@ -48,8 +48,14 @@ describe('overlay-position owns the viewport clamp', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('pinned positive: both overlay hosts import the leaf', () => {
-    for (const host of ['components/ui/menu.tsx', 'components/ui/toolbar/use-popover-panel.tsx']) {
+  it('pinned positive: every overlay host imports the leaf', () => {
+    for (const host of [
+      'components/ui/menu.tsx',
+      'components/ui/toolbar/use-popover-panel.tsx',
+      // The third adopter (fix-slice M-B). Added by the M-B component review's blocking finding:
+      // the gate existed to pin "no third copy" and was not asserting the third consumer.
+      'components/ui/tooltip.tsx',
+    ]) {
       const source = readFileSync(join(WEB_SRC, host), 'utf8');
       expect(source, `${host} must import from overlay-position`).toMatch(
         /from '@\/components\/ui\/overlay-position'/,

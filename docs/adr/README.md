@@ -140,3 +140,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0114](0114-a-row-that-cannot-shrink-never-wraps.md)                        | A row that cannot shrink is never asked to wrap                         | Accepted           |
 | [0115](0115-a-bound-governs-what-it-encloses.md)                            | A bound governs what it encloses                                        | Accepted           |
 | [0116](0116-a-health-finding-is-not-a-conflict.md)                          | A health finding is not a conflict, and a report never omits a check    | Accepted           |
+| [0117](0117-an-icon-only-control-names-itself.md)                           | An icon-only control names itself, and a tooltip states its purpose     | Accepted           |

@@ -72,6 +72,7 @@ import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
+import { useTooltip } from '@/components/ui/tooltip';
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
@@ -1858,16 +1859,29 @@ function UndoRedoControl({
   const liveLabel = stepLabel ? `${verb} ${stepLabel.toLowerCase()}` : verb;
   const label = disabled && api.disabledReason ? `${verb} — ${api.disabledReason}` : liveLabel;
   const keyShortcuts = direction === 'undo' ? 'Control+Z' : 'Control+Shift+Z';
+  // The visible name comes from the Tooltip primitive, not `title` (ADR-0117 — hover-only, so a
+  // keyboard or touch user could never read it). Found by the fix-slice M-B journey, which is the
+  // ADR-0064 §7 shape one more time: `ToolbarButton`'s icon-only branch got the treatment and this
+  // bespoke `render` control — the spec's own table said it went through ToolbarButton — did not.
+  // The dynamic aria-label (the control's reason for being bespoke) is unchanged.
+  const { triggerProps: tipTrigger, tooltip: tipNode } = useTooltip({
+    content: label,
+    purpose: 'name-echo',
+  });
   return (
     <button
       {...api.itemProps}
+      {...tipTrigger}
       type="button"
       aria-label={label}
       aria-keyshortcuts={keyShortcuts}
       aria-disabled={disabled || undefined}
-      title={label}
       onClick={() => {
         if (!disabled) (direction === 'undo' ? ctx.undo : ctx.redo)();
+      }}
+      onFocus={(event) => {
+        tipTrigger.onFocus(event);
+        api.itemProps.onFocus?.();
       }}
       className={cn(toolbarControlVariants({ disabled }))}
     >
@@ -1876,6 +1890,7 @@ function UndoRedoControl({
       ) : (
         <Redo2 aria-hidden="true" className="size-4" />
       )}
+      {tipNode}
     </button>
   );
 }

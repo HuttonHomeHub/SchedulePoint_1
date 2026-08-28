@@ -1764,8 +1764,14 @@ that reader about something they cannot do. It should land **with** (1), not bef
 **3. A shaded row-menu item's reason is `sr-only`; the canvas bar's is visible.** ADR-0082's premise
 is that one operation should not teach two mental models, and for a sighted mouse-only user it still
 does: the canvas prints the sentence, the row menu holds it for assistive technology only. The
-honest reason it is not fixed is that there is **no Tooltip primitive** in `components/ui/`, adding
-one is an ADR-level decision (CLAUDE.md §5), and a one-off `title` is what ADR-0082 just removed.
+honest reason it was not fixed then is that there was **no Tooltip primitive** in `components/ui/`,
+and a one-off `title` is what ADR-0082 just removed. _(Corrected 2026-08-28: this row's "adding one
+is an ADR-level decision (CLAUDE.md §5)" over-read that section — §5's clause is about adding a
+component LIBRARY; a hand-rolled primitive is the house pattern, and what actually made it
+ADR-shaped was ADR-0105's public-contract trigger. The primitive now exists — ADR-0117 — so the
+remaining question here is narrower and stands: should a shaded LABELLED control's reason become a
+visible `purpose: 'description'` tooltip? That changes ADR-0082's rule product-wide and was
+deliberately declined in the fix-slice epic (its CQ-2); it needs its own review, not a default.)_
 
 **4. `HierarchyTree` is a third bare-boolean menu.** _(Closed 2026-08-09 as correct by design —
 see #114's banner; the rule is now stated at `tree-actions.ts` rather than inferred.)_ `tree-actions.ts`'s `nodeActions` returns `[]`
@@ -2304,6 +2310,20 @@ acquiring two glyph vocabularies.
 ## 131. An icon-only toolbar control names itself only on hover, and the target device has none
 
 **Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** M · **Owner:** a design-system pass
+
+_**CLOSED 2026-08-28** (fix-slice M-B, ADR-0117). The Tooltip primitive this row asked for exists —
+`useTooltip` in `components/ui/tooltip.tsx`, hand-rolled to the APG with WCAG 1.4.13 in full
+(Dismissible/Hoverable/Persistent, each red-verified), opening on hover, on focus, and on a
+coarse-pointer **long-press that does not fire the command**. Adopted on `ToolbarButton`'s
+icon-only branch (title deleted there, character-identical content, `purpose: 'name-echo'` so AT
+hears nothing twice) — which covers every icon-only registry item including the collapsed band's —
+and on `UndoRedoControl`, whose bespoke render path the flag-on journey caught still carrying
+`title` on its first run. Reviewed by accessibility + component reviewers before merge (§19.13).
+One coupling recorded by that review: `ToolbarPopover`/`ToolbarSplitButton`'s compact (icon-only)
+branches still use `title` — NOT live today, because `Deck`/`Toolbar` pin `layout: 'comfortable'`
+(#193) so `compact` never resolves true — but ADR-0110 M5 deliberately kept the band machinery, so
+**reactivating the compact bands must adopt `useTooltip` on both controls in the same change**, or
+the day the bands return silently reopens the defect this row closed._
 
 Every icon-only toolbar control carries its name in `aria-label` and `title`. A screen-reader user
 gets it; a **sighted, touch-only** user does not, because `title` tooltips never fire on tap. That is
@@ -5234,8 +5254,11 @@ is closed by the same epic's M-C._
    to be made in two files, and a third implementation sat one directory away. _2026-08-28
    (fix-slice M-C): the `usePopoverPanel` copy's cost is paid — its Escape handler gained the
    missing `preventDefault` and its positioning moved onto the shared `overlay-position` leaf. The
-   listener contract itself still exists three times; extracting IT stays this item's remaining
-   half._
+   listener contract itself still exists three times — **four** since M-B, whose Tooltip spells the
+   Escape rung a fourth time with deliberately different semantics (no outside-press close, no
+   focus restore — 1.4.13's "focus unmoved"), which is exactly why a naive `useEscapeToClose` leaf
+   was not smuggled in mid-epic. Extracting the rung, accommodating that variance, stays this
+   item's remaining half._
 
 All three are ADR-0105 public-contract changes, so each wants a spec note rather than a quiet edit.
 Take them in the order above.
@@ -5519,7 +5542,13 @@ component blocked on findings that were folded in the milestone. These four are 
 than rushed.
 
 **(a) An icon-only object action names itself only on hover, and the object bar is a new surface for
-that gap.** `zoom-to-selection` is `showLabel: 'never'` (foot-row-and-deck M1), so a sighted
+that gap.** _CLOSED 2026-08-28 (fix-slice M-B, ADR-0117), with the premise corrected: it had
+already lapsed before the fix landed — ADR-0115/M4 restored `zoom-to-selection`'s label
+(`selection-actions.tsx` records the round trip), so no icon-only control exists on the object bar
+today. The class is still closed durably rather than by accident: `ToolbarButton`'s icon-only
+branch now speaks through the Tooltip primitive (hover + focus + long-press), so any future
+`showLabel: 'never'` item on ANY toolbar inherits the treatment by construction — the "real fix"
+this row asked for._ `zoom-to-selection` is `showLabel: 'never'` (foot-row-and-deck M1), so a sighted
 touch-only reader gets no visible name: `aria-label` carries it for assistive technology and `title`
 carries it for a pointer, and a tap fires neither. **This is not a WCAG failure** — the accessible
 name is unconditional and independent of `title`, which the accessibility review checked rather than
