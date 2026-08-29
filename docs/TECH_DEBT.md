@@ -2203,7 +2203,29 @@ subject anyway, and assert the thing that can actually go wrong — that the bar
 viewport at 960 and 768 with its widest plausible item set. Raised by `component-reviewer` during the
 ADR-0090 pre-approval pass as a suggestion, and recorded rather than silently left out of scope.
 
-## 127. The toolbar's touch targets are 40 × 36, and the house rule is 44 × 44
+## 127. The toolbar's touch targets are 40 × 36, and the house rule is 44 × 44 — CLOSED
+
+**Raised:** 2026-08-12 (ADR-0090 M3-T4) · **Size:** M · **Closed:** 2026-08-29 (ADR-0118 M2)
+
+**Closed by giving `--control-h` a coarse-pointer axis** rather than by a padding tweak: under
+`@media (pointer: coarse)` the token re-values to 44 px, the command deck reads it instead of a
+literal `min-h-9`, and `pointer-coarse:min-w-(--control-h)` closes the minor axis too. An icon-only
+deck control goes **32 × 36 → 44 × 44** on touch and is unchanged on a fine pointer.
+
+**The reasoning below was answered by measurement, and it was wrong about the size of its own
+objection.** It says raising the height "adds 16 px to the vertical stack for every user", and that
+is exactly what the axis avoids: measured at 1646 (ADR-0118 M0-T2, three runs, zero spread) the
+change costs a mouse user **0 px** — the fine default stays 36 — and a touch user **16 px of 808,
+2.0 %**. It also expected ≥ 36 px: the deck holds **two** rows, so a taller control makes those rows
+taller rather than wrapping a third, and the cost is `2 × 8`, linear. The prediction was wrong by
+more than a factor of two and landed on the exact pixel of its own falsification boundary.
+
+Its closing instruction — "raising the floor in `e2e-toolbar-fit`'s coarse test is the one-line
+change that proves this closed" — could not be followed: ADR-0109 D1 deleted that suite. The proof
+is instead a **second projection** of `e2e-workspace-fit`'s sweep under its own `hasTouch` context,
+asserting ≥ 44 on both axes and verified red against a caret with its coarse floor removed.
+
+<details><summary>The original row</summary>
 
 **Raised:** 2026-08-12 (ADR-0090 M3-T4) · **Size:** M · **Owner:** M4, or a vertical-rhythm pass
 
@@ -2228,6 +2250,8 @@ is the milestone that measures the vertical stack (`M4-T1 — Measure the vertic
 **What to do:** take it with M4's numbers in hand. The assertion in `e2e-toolbar-fit`'s coarse-pointer
 test is deliberately written against 40 and 36 — the figures actually delivered — so raising the
 floor there is the one-line change that proves this closed.
+
+</details>
 
 ## 128. The multi-select journey's post-delete focus assertion is flaky, ~1 run in 4
 

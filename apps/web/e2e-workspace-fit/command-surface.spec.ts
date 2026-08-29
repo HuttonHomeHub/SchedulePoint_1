@@ -359,3 +359,118 @@ test.describe('The plan command surface', () => {
     }
   });
 });
+
+/**
+ * **The house rule under a coarse pointer: every command clears 44 × 44** (ADR-0118 M2).
+ *
+ * The sweep above is WCAG 2.2 §2.5.8's **24 px AA floor**, which is a different and much weaker
+ * question. 44 px is §2.5.5 Target Size (Enhanced), level **AAA**, and it is this product's own
+ * house rule (`docs/UX_STANDARDS.md`) — ADR-0118 D2 narrows it to the coarse pointer, because
+ * measurement showed the input device is the axis that matters and the fine default stays 36 px.
+ * So this is a **second** projection of the same sweep rather than a raised constant: the AA floor
+ * has to keep binding on the fine path, where 44 is deliberately not required.
+ *
+ * **Its own context, and not `test.use({ hasTouch })`.** `hasTouch` is a context option that
+ * configures the page the *fixture* builds; the describe above builds its page with
+ * `browser.newPage()` in `beforeAll`, so a `test.use` here would configure a page nothing uses and
+ * this whole file would measure a fine pointer while reading as a touch gate. That is not
+ * hypothetical — `combobox-coarse.spec.ts` earned the rule by producing two plausible numbers
+ * about the wrong pointer, and ADR-0118 M0 records four instruments caught lying in one epic.
+ *
+ * **So the `matchMedia` assertion below is non-negotiable and runs before any measurement.**
+ * Without it a mis-built context yields a green run about nothing, which is strictly worse than no
+ * gate: a green gate stops anyone looking (ADR-0110 D5).
+ *
+ * **Scope is the command deck.** The object-action bar, the plan header, the Project Explorer and
+ * the panel chrome are M3's; `docs/TECH_DEBT.md` #153 carries what is still under the rule, and the
+ * pinned count below is what stops this narrowing quietly.
+ *
+ * **Verified red** against `TOOLBAR_CARET_TARGET` with its coarse `min-w` removed: it named all
+ * three carets at **31 × 44**, by accessible name rather than item id — the split button's caret is
+ * deliberately not a `[data-toolbar-item]`, and is the exact control ADR-0110 D5 records shipping
+ * at 23 × 36 past a gate that swept per item.
+ *
+ * **It also earned its place on its first run**, on something no read of the diff had found: the
+ * TSLD search field exists as **two components** — a disabled "coming soon" control and the live
+ * one behind the lenses flag — and `tsld-toolbar-items.tsx` carries a comment on each saying they
+ * must move together, "fixing one is exactly how a correct pattern gets applied to a control and
+ * not its neighbour". The token-axis commit changed one and left the other, so every deck control
+ * measured 44 × 44 under coarse and the live field measured **240 × 36**. The sentence warning
+ * against it was in the file being edited, three lines from the edit.
+ */
+const HOUSE_TARGET = 44;
+
+const COARSE_WIDTHS = [
+  { width: 1646, height: 1097 },
+  { width: 1024, height: 768 },
+  { width: 834, height: 1112 },
+];
+
+test.describe('The plan command surface, under a coarse pointer', () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage({
+      viewport: { width: 1646, height: 1097 },
+      hasTouch: true,
+    });
+    const orgSlug = await onboard(page, Date.now() + 7);
+    await createHierarchy(page);
+    await newPlan(page, 'Riverside Quarter — Touch');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [
+      { name: 'Site setup', laneIndex: 0, durationDays: 12 },
+      { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
+    ]);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+  });
+
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  test('every command clears 44 × 44 and a pointer can reach it, at every width', async () => {
+    test.setTimeout(240_000);
+
+    // **First, and before anything is measured.** See the docblock: a context without a coarse
+    // pointer makes every assertion below true of the wrong thing.
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(
+      pointer,
+      'this context did not report a coarse pointer — every assertion below would be about the fine path, and green. `hasTouch` must be passed to the context that builds THIS page, never via test.use().',
+    ).toBe('coarse');
+
+    for (const viewport of COARSE_WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+      const targets = await sweep(page);
+
+      // The pinned positive — this passes just as happily against a deck rendering nothing.
+      expect(targets.length, `no controls swept at ${viewport.width}`).toBeGreaterThan(15);
+
+      const belowHouse = targets.filter(
+        (t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
+      );
+      expect(
+        belowHouse,
+        `commands below the ${HOUSE_TARGET}×${HOUSE_TARGET} house rule under a coarse pointer at ${viewport.width}: ${JSON.stringify(belowHouse)}`,
+      ).toEqual([]);
+
+      const invisible = targets.filter((t) => !t.visible);
+      expect(
+        invisible,
+        `controls painted at zero size at ${viewport.width}: ${JSON.stringify(invisible)}`,
+      ).toEqual([]);
+
+      const unreachable = targets.filter((t) => t.visible && !t.reachable);
+      expect(
+        unreachable,
+        `controls a pointer cannot reach at ${viewport.width}: ${JSON.stringify(unreachable)}`,
+      ).toEqual([]);
+    }
+  });
+});

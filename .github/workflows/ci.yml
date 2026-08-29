@@ -560,9 +560,17 @@ jobs:
       # attribute sits on a wrapper in some cases and a split button's caret is deliberately
       # tabIndex={-1} — which is how a caret shipped at 23x36 under a gate reporting green. And it
       # asserts pointer reachability with elementFromPoint rather than overhang, because a control
-      # shrunk to zero width has zero overhang and is still in the DOM. Runs after the prior suites
-      # tear down their servers.
-      - name: Web end-to-end tests (command surface — target sizes)
+      # shrunk to zero width has zero overhang and is still in the DOM.
+      #
+      # Since ADR-0118 M2 the same suite carries a SECOND projection of that sweep under a coarse
+      # pointer, asserting the house >= 44x44 rule (WCAG 2.2 §2.5.5, level AAA) rather than the AA
+      # floor — a separate case rather than a raised constant, because 44 is deliberately NOT
+      # required on the fine path, where the control box stays 36 px. It builds its own context
+      # with `hasTouch` (a `test.use` cannot reach a page built by `browser.newPage()`) and asserts
+      # `matchMedia('(pointer: coarse)')` BEFORE measuring, or a mis-built context yields a green
+      # run about the wrong pointer. No extra step is needed: it is the same suite and the same
+      # config. Runs after the prior suites tear down their servers.
+      - name: Web end-to-end tests (command surface — target sizes, fine and coarse)
         run: pnpm --filter @repo/web test:e2e:workspace-fit
 
       # The TSLD minimap journey (playwright.minimap.config.ts, ADR-0100 M2-T7 — lands with the

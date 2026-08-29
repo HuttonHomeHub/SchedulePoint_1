@@ -1175,11 +1175,19 @@ function LiveSearchControl({
         {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
         className={cn(
-          // `h-9`, for the reason at the sibling control above: this was the deck's one control
-          // outside the shared `min-h-9`, and the cause of a label spread M1 measured twice without
-          // finding. Both sites move together — they are the same field in two states, and fixing
-          // one is exactly how a correct pattern gets applied to a control and not its neighbour.
-          'h-9 pl-8 text-sm',
+          // `h-(--control-h)`, for the reason at the sibling control above: this was the deck's one
+          // control outside the shared control box, and the cause of a label spread M1 measured
+          // twice without finding. Both sites move together — they are the same field in two
+          // states, and fixing one is exactly how a correct pattern gets applied to a control and
+          // not its neighbour.
+          //
+          // **That sentence caught its own author** (ADR-0118 M2). The literal became wrong the
+          // moment `--control-h` gained a coarse axis, and the first fix changed the disabled
+          // sibling above and left this one — so under a coarse pointer every deck control
+          // measured 44 x 44 and the live search field measured 240 x 36. It was the new coarse
+          // projection in `e2e-workspace-fit/command-surface.spec.ts` that named it, not a read of
+          // this file, which is why that gate exists.
+          'h-(--control-h) pl-8 text-sm',
           searchFieldWidth(api.layout),
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is
