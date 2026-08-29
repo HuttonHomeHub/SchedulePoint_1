@@ -222,8 +222,8 @@ describe('useTooltip', () => {
     const removed: string[] = [];
     const addSpy = vi.spyOn(document, 'addEventListener');
     const removeSpy = vi.spyOn(document, 'removeEventListener');
-    addSpy.mockImplementation((type) => void added.push(type as string));
-    removeSpy.mockImplementation((type) => void removed.push(type as string));
+    addSpy.mockImplementation((type) => void added.push(type));
+    removeSpy.mockImplementation((type) => void removed.push(type));
     try {
       const view = render(<Host />);
       fireEvent.pointerDown(screen.getByRole('button'), {
