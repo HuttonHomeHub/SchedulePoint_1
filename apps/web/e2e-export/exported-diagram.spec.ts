@@ -245,46 +245,163 @@ test.describe('The exported diagram', () => {
   });
 
   /**
-   * **Paper computes the product's typeface** (`docs/specs/typeface-outward-artefacts/`, M1-T6).
+   * **The picture and the paper are both set in the product's typeface**
+   * (`docs/specs/typeface-outward-artefacts/`, M1-T6 + M2-U1).
    *
-   * The printed diagram and the printed programme both declared `font-family: 'Inter', …` in their
-   * own stylesheets — a face with no `@font-face` and no file in `src/assets/fonts/` — so the
-   * document fell through to `system-ui` while the diagram drawn inside it was IBM Plex Sans. One
-   * artefact, two typefaces, in the file a planner hands to a QS.
+   * Two artefacts leave the product carrying type that no cascade governs, and both had received
+   * none of the face decision the product owner made on 2026-08-24:
    *
-   * **Only a browser can see this**, which is why the assertion is here and not in a unit suite.
-   * Every print unit suite runs in jsdom, where `getComputedStyle` resolves nothing — the same
-   * structural blindness recorded at the top of this file for the picture's layers. And the
-   * structural gate cannot see it either: it proves the STRINGS are right and can never prove a
-   * face resolved.
+   * - the **printed document** declared `font-family: 'Inter', …` in `PrintSurface.css` and
+   *   `GanttPrintSurface.css` — a face with no `@font-face` and no file in `src/assets/fonts/` — so
+   *   paper fell through to `system-ui` while the diagram drawn inside it was IBM Plex Sans. One
+   *   artefact, two typefaces, in the file a planner hands to a QS;
+   * - the **exported PNG's title band** set its four fonts as bare `system-ui`, so the band around
+   *   the picture was drawn in whatever the reader's machine happened to resolve.
    *
-   * `emulateMedia({ media: 'print' })` makes the browser evaluate `@media print`, so the computed
-   * value is what paper actually gets. **Verified red before the fix**: it returned a list
-   * beginning `Inter`. Measured at the same time, the two faces differ by 66 px on this fixture's
-   * plan name at 16 px, so this was a layout difference in the band and not only a cosmetic one.
+   * **Only a browser can see either**, which is why both assertions are here. Every export and
+   * print unit suite runs in jsdom, where `getComputedStyle` resolves nothing and `measureText`
+   * returns a stub — the same structural blindness recorded at the top of this file for the
+   * picture's layers. And the structural gate (`styles/typeface-reach.structural.test.ts`) cannot
+   * see them either: it proves the STRINGS are right and can never prove a face resolved.
+   *
+   * **The raster assertion is about the FACE, never a width** (M1-T1's closing note). It measures
+   * this plan's name in-page at the export's own font shorthand and at the face the band used to
+   * name, then reads the title's ink extent out of the decoded PNG and asserts it is nearer the
+   * first than the second. A pixel width would be an assertion about IBM Plex Sans's metrics on
+   * one machine; "nearer this face than that one" is an assertion about which face was used.
+   *
+   * It refuses to pass when it cannot discriminate — `document.fonts.check()` must report the face
+   * available, and the two candidates must measure at least 8 px apart. That is M1-T1's lesson
+   * rather than caution: the first run of that probe reported a delta of **exactly zero**, because
+   * an `OffscreenCanvas` created inside `page.evaluate` gets no web face unless one is loaded, so
+   * both branches measured one fallback. A test that passes for either face is worse than none.
+   * Measured on this fixture's name once the guards were added: 66.32 px apart, eight times the
+   * bar — so the wrong face was also laying the band out ~19 % wider.
    */
-  test('the printed diagram computes the product typeface, not a face we have no file for', async ({
-    page,
-  }) => {
+  test('the picture and the paper are both set in the product typeface', async ({ page }) => {
     test.setTimeout(240_000);
-    // Its own fixture and its own plan: this file gives each test a fresh `page`, and a print
-    // document needs a plan behind it. One activity is enough — the assertion is about the
-    // document's computed family, not about what the diagram contains.
+    // Its own fixture and its own plan: this file gives each test a fresh `page`, and both a print
+    // document and an export need a plan behind them. One activity is enough — neither assertion
+    // is about what the diagram contains. The name is deliberately long, because the two candidate
+    // faces separate in proportion to the string.
+    const planName = 'Foundations and superstructure programme';
     const orgSlug = await onboard(page, STAMP + 1);
     await createHierarchy(page);
-    await newPlan(page, 'Print face');
+    await newPlan(page, planName);
     await ensurePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
+
+    // ── The raster. Read the CSS-px geometry straight out of the picture, which is sound only at
+    // dpr 1 — so that is asserted rather than assumed. This file already depends on it silently
+    // (`TITLE_BAND_PX` is used as a count of raster rows); a `deviceScaleFactor` change in the
+    // config should fail loudly here instead of halving every measurement below.
+    expect(
+      await page.evaluate(() => globalThis.devicePixelRatio),
+      'this scan reads the raster in CSS px, which holds only at deviceScaleFactor 1',
+    ).toBe(1);
+
+    const candidates = await page.evaluate(async (name) => {
+      // `fonts.ready` then an explicit `load`, then `check` — see the docblock. Measured on a real
+      // `<canvas>` rather than an `OffscreenCanvas`, which is what the export draws into.
+      await document.fonts.ready;
+      await document.fonts.load("600 16px 'IBM Plex Sans'");
+      const ctx = document.createElement('canvas').getContext('2d');
+      if (!ctx) throw new Error('no 2d context');
+      // The INK box, not the advance width: that is what a pixel scan of the raster measures, so
+      // comparing an advance against it would bias every reading toward the narrower candidate.
+      const inkWidth = (font: string): number => {
+        ctx.font = font;
+        const m = ctx.measureText(name);
+        return (m.actualBoundingBoxLeft ?? 0) + (m.actualBoundingBoxRight ?? m.width);
+      };
+      return {
+        available: document.fonts.check("600 16px 'IBM Plex Sans'"),
+        plex: inkWidth(
+          "600 16px 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+        ),
+        // What the four export-band constants named before this milestone, verbatim.
+        system: inkWidth("600 16px system-ui, -apple-system, 'Segoe UI', sans-serif"),
+      };
+    }, planName);
+
+    expect(
+      candidates.available,
+      'the product face is not loaded in this page, so neither branch below measures it — the ' +
+        'reading would be one fallback twice',
+    ).toBe(true);
+    expect(
+      Math.abs(candidates.plex - candidates.system),
+      `the two candidate faces measure ${candidates.plex} and ${candidates.system} — under 8 px ` +
+        'apart, this assertion cannot tell them apart and would pass for either',
+    ).toBeGreaterThanOrEqual(8);
 
     await page
       .getByRole('button', { name: /share.*export/i })
       .first()
       .click();
-    await page.getByRole('menuitem', { name: 'Print…', exact: true }).click();
+    const download = page.waitForEvent('download', { timeout: 30_000 });
+    await page.getByRole('menuitem', { name: 'Diagram — whole plan (PNG)' }).click();
+    const path = await (await download).path();
+    expect(path, 'the export produced no file').toBeTruthy();
 
-    const container = page.locator('.tsld-print-container');
-    await expect(container).toBeAttached({ timeout: 30_000 });
+    const bytes = (await import('node:fs')).readFileSync(path);
+    const ink = await page.evaluate(
+      async ({ base64, top, bottom }) => {
+        const binary = atob(base64);
+        const buf = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) buf[i] = binary.charCodeAt(i);
+        const bitmap = await createImageBitmap(new Blob([buf], { type: 'image/png' }));
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('no 2d context');
+        ctx.drawImage(bitmap, 0, 0);
+        const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+        let left = Number.POSITIVE_INFINITY;
+        let right = -1;
+        let dark = 0;
+        for (let y = top; y < bottom; y += 1) {
+          for (let x = 0; x < bitmap.width; x += 1) {
+            const i = (y * bitmap.width + x) * 4;
+            if ((data[i]! + data[i + 1]! + data[i + 2]!) / 3 >= 128) continue;
+            dark += 1;
+            if (x < left) left = x;
+            if (x > right) right = x;
+          }
+        }
+        return { left, right, dark, imageWidth: bitmap.width };
+      },
+      // The title's own rows and nothing else's. `render-export-image.ts` draws the title on the
+      // baseline at y = 28 at 16 px, the subtitle at 48 and the legend at 68, on an opaque band —
+      // so 14…33 contains the title's glyphs and no other ink in the picture.
+      { base64: bytes.toString('base64'), top: 14, bottom: 33 },
+    );
+
+    expect(ink.dark, 'no title ink in the exported band at all').toBeGreaterThan(50);
+    expect(
+      ink.right,
+      'the title runs to the raster edge — it is clipped, and a clipped title measures the same ' +
+        'in both faces',
+    ).toBeLessThan(ink.imageWidth - 8);
+
+    const drawn = ink.right - ink.left + 1;
+    expect(
+      Math.abs(drawn - candidates.plex),
+      `the exported title measures ${drawn} px, against ${candidates.plex} for the product face ` +
+        `and ${candidates.system} for the one the band used to name — the band was not drawn in ` +
+        'the product face',
+    ).toBeLessThan(Math.abs(drawn - candidates.system));
+
+    // ── The paper. The printed document is a separate artefact with its own stylesheets, and
+    // `emulateMedia({ media: 'print' })` makes the browser evaluate `@media print`, so the computed
+    // value below is what paper actually gets. **Verified red before the fix**: it returned a list
+    // beginning `Inter`.
+    await page
+      .getByRole('button', { name: /share.*export/i })
+      .first()
+      .click();
+    await page.getByRole('menuitem', { name: 'Print…', exact: true }).click();
+    await expect(page.locator('.tsld-print-container')).toBeAttached({ timeout: 30_000 });
 
     await page.emulateMedia({ media: 'print' });
     try {

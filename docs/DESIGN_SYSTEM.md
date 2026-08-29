@@ -83,6 +83,18 @@ Status is never conveyed by colour alone — always pair with an icon and/or tex
   this token and pins. This line said "Inter + system fallback" until
   2026-08-29, having been wrong through **both** deliberate face decisions; the
   gate below exists because prose failed twice on this exact fact.
+- **A surface that resolves nothing from the cascade is handed the family
+  explicitly**, and is covered by `typeface-reach.structural.test.ts`: the canvas
+  painter and the export band compose `FONT_STACK`, and the print documents get
+  one `font-family: var(--font-sans)` on `.tsld-print-container`. **A DOM surface
+  inherits and declares nothing** — a named family in a feature stylesheet
+  overrides the product face for that whole subtree, which is exactly how both
+  print sheets came to name a face this repository has no file for.
+- **Declare at the scoped element, never rely on `body`.** `body`'s own
+  `font-family: var(--font-sans)` resolves _on body_, so a future
+  `[data-surface="…"]` rebind of `--font-sans` — the obvious way to give paper
+  its own face — would be silently ignored. That is ADR-0102's alias trap in a
+  new costume.
 - **Type scale** (Tailwind defaults; use these, don't invent sizes):
 
   | Token       | Size / line-height | Use                         |

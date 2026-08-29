@@ -357,6 +357,37 @@ can discriminate.
   4. Assert it matches the shipped-face reference and not the fallback reference, with a tolerance
      derived from the measured gap rather than chosen.
 
+###### M2-U1 OUTCOME — built, and verified red 2026-08-29
+
+**Built**, because M1-T1(b) cleared the ≥ 8 px bar eight times over. It lives in
+`e2e-export/exported-diagram.spec.ts`, folded into the M1-T6 print-media test rather than added
+beside it: one test now asserts that **both** artefacts that leave the product — the printed
+document's computed family and the exported raster's drawn face — are the product's, which is the
+subject, and a second fixture for the second half would have cost a third four-minute setup to say
+the same thing about the same plan.
+
+**The comparator is the ink box, not the advance width.** `measureText().width` is the advance; a
+pixel scan of the raster measures ink, so comparing the two biases every reading toward the narrower
+candidate. `actualBoundingBoxLeft + actualBoundingBoxRight` is the like-for-like figure, and the red
+run confirms it empirically: the scan measured **398 px** against a predicted **400.34** for the
+face the band used to name — 2.3 px apart on a 400 px string, which is the instrument agreeing with
+itself.
+
+| run                                  | drawn (raster ink) | product face | previous face | verdict |
+| ------------------------------------ | ------------------ | ------------ | ------------- | ------- |
+| `TITLE_FONT` restored to `system-ui` | 398 px             | 326.61       | 400.34        | **RED** |
+| `TITLE_FONT` as shipped              | —                  | —            | —             | green   |
+
+Red first, against the real defect restored in the real file — not against a stubbed measurement.
+The failure message names all three numbers, so a future red says which face was drawn rather than
+that a number moved.
+
+Three guards keep it from passing for either face, which is the whole risk this task was written
+around: `document.fonts.check()` must report the product face available (M1-T1's zero-delta lesson),
+the two candidates must measure ≥ 8 px apart, and the title must not run to the raster edge — a
+clipped title measures the same in both faces. `devicePixelRatio` is asserted to be 1, because the
+scan reads the raster in CSS px; this file already depended on that silently and now says so.
+
 ##### Task M2-U2 — The harness photographs the medium it names
 
 - **Description:** `scripts/shoot.mjs`'s `health-print-document` shot reveals the print container by
@@ -377,6 +408,32 @@ can discriminate.
   2. Re-run; confirm the picture changed and is now the paper document.
   3. Comment the hook with why: a screenshot of a print surface under screen media is a screenshot
      of a different document.
+
+###### M2-U2 OUTCOME — done, and the two new shots found two defects on their first run
+
+`emulateMedia({ media: 'print' })` now precedes the reveal, and the answer to the task's own "add
+the TSLD print surface and the Gantt programme **if** they are absent" was: **absent**. The shot
+list had exactly one print document, the health report — so the two artefacts a planner actually
+hands over had never been photographed. Both were added (`tsld-print-diagram`,
+`gantt-print-programme`), and they immediately reported two content defects, neither a typeface
+defect and neither fixed here: the printed diagram states its title twice in two date formats, and
+the printed programme's `Predecessors` column is an em dash on every row of a linked plan.
+`docs/TECH_DEBT.md` **#217**.
+
+**Three things had to be discovered by running it rather than by reading it.**
+
+1. The container is `display: none` until the print stylesheet shows it, so Playwright's default
+   `waitFor` — which waits for **visible** — waits forever. `{ state: 'attached' }`.
+2. `emulateMedia` is a **context** setting that survives navigation, and this harness shares one
+   page across the whole shot list. Adding print emulation to the health shot therefore leaked
+   paper media into every later shot at that width — including `export-diagram`, `account`,
+   `my-activity` and `client-detail` — silently, and in the direction of looking plausible. That was
+   a defect introduced by this very task's one-line fix, found only because the two new shots made
+   it three leaks instead of one. The reset is now unconditional at the top of the loop, so the next
+   print shot inherits the protection rather than having to remember it; it cannot live in
+   `revealPrintDocument`, because the screenshot is taken after `after` returns.
+3. All three documents share `mountPrintDocument`'s one container, so the reveal is **one helper**
+   rather than three copies — for the reason the omission itself demonstrates: three would drift.
 
 ##### Task M2-U3 — An ADR, only if the reviewer asks _(unscheduled)_
 

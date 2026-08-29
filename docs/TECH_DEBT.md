@@ -6008,3 +6008,63 @@ register row and not a closed question.
 `[role="tree"]` from the coarse projection by ancestor selector — narrow, visible, and named — and
 `apps/web/src/styles/control-height.structural.test.ts` exempts `button.tsx::size-7` with the same
 reason. Neither hides anything else.
+
+## 216. The favicon's brand glyph is set in `system-ui`, and no gate can reach it
+
+**Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, CQ-1) · **Size:** S ·
+**Disposition: a NAMED EXCEPTION the product owner took, not an oversight**
+
+`apps/web/public/favicon.svg:16` draws the brand `S` with
+`font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"`. It is therefore the one
+outward artefact still not in IBM Plex Sans after M1 carried the face to the print documents and the
+exported picture.
+
+**It is also the one place `typeface-reach.structural.test.ts` structurally cannot reach.** That
+gate is scoped to `apps/web/src`, deliberately, so it excludes the measurement harnesses that READ a
+computed `fontFamily` rather than set one — and `public/` falls outside with them. Widening the
+scope to catch one SVG attribute would sweep in every harness and produce the over-reporting that
+gets a gate weakened rather than fixed.
+
+**Why it stays.** One glyph at 16 px, rendered in browser chrome rather than in the product, where
+a typeface is close to indistinguishable. The alternative — tracing the `S` from the vendored woff2
+into a `<path>` — bakes a glyph outline into the repository and needs its own provenance note
+alongside `src/assets/fonts/PROVENANCE.md`, so that the outline and the face cannot silently
+disagree. That cost was put to the product owner with the option and they chose the exception.
+
+**What is owed if it is ever revisited:** the conversion is cheapest in a commit that is already
+touching brand assets, and there is **no automatable assertion for a favicon's typeface** — the
+gate's blind-spot table says so, and this row does not pretend otherwise. A person looks at a
+browser tab.
+
+## 217. Two defects in the printed documents, found by photographing them for the first time
+
+**Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, M2-U2) · **Size:** S each ·
+**Status:** open
+
+The screenshot harness had **one** print shot — the health report — so the two documents a planner
+actually hands over, the printed diagram and the printed programme, had never been photographed by
+anything. M2-U2 added `tsld-print-diagram` and `gantt-print-programme`, and both defects below were
+visible in the first picture each took. Neither is a typeface defect, so neither is fixed here.
+
+**(a) The printed diagram states its title twice, in two date formats.** The print document draws
+its own heading (`PrintSurface.tsx`) — `Riverside — Phase 2 Substructure` over `As of 05 Jan 2026` —
+and the PNG mounted beneath it carries the export band, which draws the same plan name over
+`As of 2026-01-05 · Generated 2026-08-29`. So the top of the page reads the plan's name twice, six
+lines apart, with the same date rendered two ways. The band exists because the exported PNG is also
+a standalone artefact (`export-image.ts:42`, `EXPORT_TOP_BAND`) and has to name itself; the print
+document's own heading exists because a printed page needs a heading. Both are right alone. The fix
+is a decision about which one paper keeps, not a bug in either — and the generated date is the one
+fact only the band carries, so "delete the band on paper" is not free.
+
+**(b) The printed programme's `Predecessors` column is `—` on every row, on a plan that has
+links.** The shot is of the seeded programme, whose ten activities form a real dependency chain
+(`shoot.mjs` `seedProgramme`), and the screen's Gantt grid shows those predecessors — ADR-0095 M5
+shipped that column. `GanttPrintSurface` renders the column and receives no predecessor data to put
+in it, so paper asserts, in a column of its own, that a linked programme has no logic. That is worse
+than omitting the column: an em dash is a statement.
+
+**Both are the same finding about the instrument.** ADR-0102 recorded that the shot list
+photographed twelve screens and never once what the product PRODUCES; W1 added the exported PNG and
+`docs/TECH_DEBT.md` #158 recorded the gap. The print documents were the remainder of it, and the
+cost of that gap is measurable here: two defects in the deliverable, both plainly visible, neither
+reported by any test, sitting in the artefact that leaves the building.
