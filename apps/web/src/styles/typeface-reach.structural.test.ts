@@ -62,6 +62,25 @@ function walk(dir: string, ext: readonly string[]): string[] {
  * exactly one thing (`control-height.structural.test.ts`'s shape, and for its reason: a file-level
  * exemption blinded that gate to the one file carrying the pattern it existed to enforce).
  */
+/**
+ * **(a)** A string naming a generic CSS family — the tell of a hand-written stack.
+ *
+ * **Three alternations, not one backreference over a shared class.** The first version was
+ * `(['"`])([^'"`\n]*…)\1`, whose body excludes ALL quote characters — so it could not match
+ * across the inner `'Segoe UI'` in `"600 16px system-ui, -apple-system, 'Segoe UI', sans-serif"`
+ * and reported NONE of the four export-band constants this gate exists to catch. It named only
+ * `FONT_STACK`'s own declaration, and would have gone green the moment that was exempted: a gate
+ * blind to its own subject, passing for the wrong reason. Caught because the plan requires the red
+ * run to name exactly the six known sites, rather than merely to be red.
+ */
+const GENERIC_FAMILY_LITERAL =
+  /"([^"\n]*\b(?:sans-serif|system-ui|-apple-system)\b[^"\n]*)"|'([^'\n]*\b(?:sans-serif|system-ui|-apple-system)\b[^'\n]*)'|`([^`\n]*\b(?:sans-serif|system-ui|-apple-system)\b[^`\n]*)`/g;
+
+/** **(b)** A string literal assigned to anything whose name ends in `font` — `ctx.font = …`,
+ * `fontFamily: …`, `const TITLE_FONT = …`. Value-blind on purpose: see the call site. */
+const FONT_TARGET_ASSIGNMENT =
+  /\b[\w$.]*(?:font|Font|FONT)\s*[:=]\s*(['"`])((?:(?!\1)[\s\S])*?)\1/g;
+
 const EXCEPTIONS = new Map<string, string>([
   [
     'styles/globals.css::@font-face',
@@ -92,30 +111,36 @@ describe('the typeface reaches the layers that opt out of the cascade', () => {
     const offenders: string[] = [];
     for (const file of walk(WEB_SRC, ['.ts', '.tsx'])) {
       const code = stripComments(readFileSync(join(WEB_SRC, file), 'utf8'));
-      // A canvas font shorthand ends in a family list; the tell is a generic family keyword or a
-      // known system stack appearing in a string that is not built from FONT_STACK.
-      //
-      // **Three alternations, not one backreference over a shared class.** The first version was
-      // `(['"`])([^'"`\n]*…)\1`, whose body excludes ALL quote characters — so it could not match
-      // across the inner `'Segoe UI'` in `"600 16px system-ui, -apple-system, 'Segoe UI',
-      // sans-serif"` and reported NONE of the four export-band constants this gate exists to catch.
-      // It named only `FONT_STACK`'s own declaration, and would have gone green the moment that was
-      // exempted: a gate blind to its own subject, passing for the wrong reason. Caught because the
-      // plan requires the red run to name exactly the six known sites, rather than merely to be red.
-      for (const m of code.matchAll(
-        /"([^"\n]*\b(?:sans-serif|system-ui|-apple-system)\b[^"\n]*)"|'([^'\n]*\b(?:sans-serif|system-ui|-apple-system)\b[^'\n]*)'|`([^`\n]*\b(?:sans-serif|system-ui|-apple-system)\b[^`\n]*)`/g,
-      )) {
-        const text = m[1] ?? m[2] ?? m[3] ?? '';
-        if (text.includes('${FONT_STACK}') || text.includes('FONT_STACK')) continue;
+      // Two independent scans, because neither alone is enough — see each pattern's docblock.
+      const report = (text: string): void => {
+        if (text.trim() === '' || text.includes('FONT_STACK')) return;
         if (
           [...EXCEPTIONS.keys()].some((k) => {
             const [f, needle] = k.split('::');
             return f === file && needle !== undefined && text.includes(needle);
           })
         )
-          continue;
+          return;
         offenders.push(`${file}: "${text.slice(0, 80)}"`);
-      }
+      };
+
+      // **(a) By VALUE** — any string naming a generic CSS family, wherever it sits. This is the
+      // scan that catches a stack: `system-ui, -apple-system, 'Segoe UI', sans-serif`.
+      for (const m of code.matchAll(GENERIC_FAMILY_LITERAL)) report(m[1] ?? m[2] ?? m[3] ?? '');
+
+      // **(b) By TARGET** — any string assigned to something whose name ends in `font`, whatever
+      // is in it. (a) alone was **blind to the exact case the spec makes an acceptance criterion**
+      // (US-3: `ctx.font = '13px Helvetica'`), because a real face name carries none of the three
+      // generic keywords — so a hand-set `'13px Arial'` or `'12px Times New Roman'` would have
+      // passed silently under a failure message and an SC-1 that both promise otherwise. Found by
+      // the component review running that literal against the shipped regex rather than reading
+      // it; the earlier red run could not report it, because all six known sites happen to end in
+      // a generic fallback, so a regex tuned to them is proven only against them.
+      //
+      // An empty value is not a face, and a `font` shorthand cannot name one without a family —
+      // `recording-ctx.ts` initialises `font = ''`, which this must not report. Measured: zero
+      // offenders across `apps/web/src` on the fixed tree, so it over-reports nothing.
+      for (const m of code.matchAll(FONT_TARGET_ASSIGNMENT)) report(m[2] ?? '');
     }
     expect(
       offenders,
@@ -132,10 +157,23 @@ describe('the typeface reaches the layers that opt out of the cascade', () => {
         const value = (m[1] ?? '').replace(/\s+/g, ' ').trim();
         // `var(--font-sans)` / `var(--font-mono)` is the whole point: it follows the token.
         if (/^var\(--font-(sans|mono)\)$/.test(value)) continue;
+        // **The exception is matched against this declaration's OWN rule, never the whole file.**
+        // It was `code.includes(needle)` — so `styles/globals.css::@font-face` exempted EVERY
+        // `font-family` in that file, permanently, because the file will always contain the string
+        // `@font-face` somewhere. A rogue declaration in the one file that holds the token this
+        // epic exists to protect would never have been reported; proven by injecting one and
+        // getting zero offenders. That is verbatim the file-scoped exemption the map's own
+        // docblock and R-5 say `file::substring` exists to prevent — the anti-pattern reproduced
+        // inside the mechanism named as its remedy, and it was asymmetric with the canvas scan
+        // twenty lines up, which had always scoped the same lookup to the matched text.
+        //
+        // The rule is everything back to the previous `}`, so an at-rule's own header is in scope
+        // (`@font-face { … font-family: X`) while a sibling rule's is not.
+        const rule = code.slice(code.lastIndexOf('}', m.index) + 1, m.index + m[0].length);
         if (
           [...EXCEPTIONS.keys()].some((k) => {
             const [f, needle] = k.split('::');
-            return f === file && needle !== undefined && code.includes(needle);
+            return f === file && needle !== undefined && rule.includes(needle);
           })
         )
           continue;
@@ -173,10 +211,18 @@ describe('the typeface reaches the layers that opt out of the cascade', () => {
       `docs/DESIGN_SYSTEM.md claims a typeface that is not the product's (${family})`,
     ).toContain(family);
 
-    const familyBullet = /\*\*Family:\*\*[^\n]*(?:\n\s{2,}[^\n]*)*/.exec(doc);
-    expect(familyBullet, 'docs/DESIGN_SYSTEM.md has no **Family:** bullet').not.toBeNull();
+    // **The declarative clause, not the bullet.** Scanning the whole bullet would pass on a
+    // reverted value so long as the family were still mentioned in the correction prose the same
+    // bullet now carries by design — a check satisfied by a nearby mention rather than by the
+    // fact. The bullet's shape is `**Family:** \`--font-sans\` (**IBM Plex Sans**, self-hosted)`,
+    // so the bolded name inside the parenthesis IS the claim.
+    const familyBullet = /\*\*Family:\*\*[^\n]*?\(\*\*([^*]+)\*\*/.exec(doc);
     expect(
-      familyBullet![0],
+      familyBullet,
+      'docs/DESIGN_SYSTEM.md has no **Family:** bullet naming a bold family',
+    ).not.toBeNull();
+    expect(
+      familyBullet![1]!.trim(),
       `the **Family:** bullet must name ${family} — it named a stale face through two decisions`,
     ).toContain(family);
   });

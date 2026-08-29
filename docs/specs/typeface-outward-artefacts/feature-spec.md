@@ -563,7 +563,12 @@ the ADR-0034 failure. The snapshot is the oracle; it must not be touched.
 `features/tsld/render/label-font.structural.test.ts` rather than sitting beside it — two gates over
 one rule is how they drift.
 
-Four assertions:
+**Five assertions as shipped, not four.** The fifth — the authoring document names the face the
+product uses — was added on direct product-owner instruction after this section was written
+(`docs/DECISIONS.md`, 2026-08-29): asked whether `DESIGN_SYSTEM.md` should stop naming a face
+inline or name it and be gated, they chose "fix it **and** gate it".
+
+Five assertions:
 
 1. **Derivation.** Parse the leading quoted family out of `--font-sans` in `globals.css` and assert
    `FONT_STACK` contains it. _(This is `label-font.structural.test.ts` generalised from one constant
@@ -575,11 +580,33 @@ Four assertions:
 3. **No hand-set CSS family.** Scan every `.css` under `apps/web/src` for `font-family:` outside
    `globals.css`'s `@font-face` blocks. Every hit must be `var(--font-sans)` / `var(--font-mono)`,
    or a named exception.
-4. **The pinned positive.** Every exception is keyed `file::substring` and must **still match
+4. **The authoring document.** Parse `DESIGN_SYSTEM.md`'s "The typeface is …" claim and its
+   `**Family:**` bullet and assert both name `--font-sans`'s family. It parses the **claim** rather
+   than scanning for stale strings — the first version did the latter and went red on its own
+   correction notes, since the sentences recording what the page used to say contain the words it
+   used to say.
+5. **The pinned positive.** Every exception is keyed `file::substring` and must **still match
    something**, with a reason of real length. Copied deliberately from
    `control-height.structural.test.ts:118-130`, whose docblock records why: an exception list that
    outlives its subjects is a list of permissions for code that has gone, and the general assertion
    passes just as happily against it (ADR-0093's shape).
+
+> **What the gate pass found, and it is worth reading before writing the next one.** Assertions 2
+> and 3 both shipped **narrower than this section specifies**, and the component review found both
+> by running an adversarial case rather than by reading the code. Assertion 2 says "a string
+> literal matching `<n>px` followed by a family list"; what shipped matched only strings carrying
+> one of three generic keywords, so US-3's own acceptance criterion — `ctx.font = '13px Helvetica'`
+> — passed silently, under a failure message and an SC-1 that both promise otherwise. Assertion 3
+> says "outside `globals.css`'s `@font-face` **blocks**"; what shipped tested the needle against
+> the whole file, so `@font-face` appearing anywhere in `globals.css` exempted **every**
+> `font-family` in it — the file-scoped exemption that this very section's third implementation
+> rule exists to forbid.
+>
+> Neither was caught by M1-T2's red run, and that is the transferable part: **a red run proves a
+> regex catches the sites it was tuned against.** All six known sites happen to end in a generic
+> fallback, and the only rogue CSS declaration was in another file. A gate is finished when it has
+> been made to fail by a defect it has _not_ seen before (ADR-0110 D5), and the spec was right
+> about both while the implementation was not — so nobody compared them.
 
 Three implementation rules, each from a recorded failure in this repository:
 

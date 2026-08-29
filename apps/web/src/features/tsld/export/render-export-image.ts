@@ -1,5 +1,4 @@
 import { axisMarkers } from '../render/axis-markers';
-import { FONT_STACK } from '../render/geometry';
 import {
   DEFAULT_VIEW_TOGGLES,
   paintScene,
@@ -8,7 +7,11 @@ import {
   type WbsBandPalette,
 } from '../render/paint';
 import type { PrintPalette } from '../render/palette';
-import type { Size, Viewport } from '../render/render-model';
+// Through the barrel this file already imports from, never `./geometry` directly (M1-T3 step 3):
+// `render-model` re-exports the whole leaf, so the direct import bought nothing and added a second
+// edge into it. Shipped as a direct import and reconciled at the gate pass, where the component
+// review noticed the code did not follow its own stated rationale.
+import { FONT_STACK, type Size, type Viewport } from '../render/render-model';
 import type { WbsBandBar } from '../render/wbs-band';
 
 import { EXPORT_MARKER_ROW } from './export-image';

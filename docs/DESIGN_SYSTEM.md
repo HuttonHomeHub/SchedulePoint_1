@@ -83,18 +83,24 @@ Status is never conveyed by colour alone — always pair with an icon and/or tex
   this token and pins. This line said "Inter + system fallback" until
   2026-08-29, having been wrong through **both** deliberate face decisions; the
   gate below exists because prose failed twice on this exact fact.
-- **A surface that resolves nothing from the cascade is handed the family
-  explicitly**, and is covered by `typeface-reach.structural.test.ts`: the canvas
-  painter and the export band compose `FONT_STACK`, and the print documents get
-  one `font-family: var(--font-sans)` on `.tsld-print-container`. **A DOM surface
-  inherits and declares nothing** — a named family in a feature stylesheet
-  overrides the product face for that whole subtree, which is exactly how both
-  print sheets came to name a face this repository has no file for.
-- **Declare at the scoped element, never rely on `body`.** `body`'s own
-  `font-family: var(--font-sans)` resolves _on body_, so a future
-  `[data-surface="…"]` rebind of `--font-sans` — the obvious way to give paper
-  its own face — would be silently ignored. That is ADR-0102's alias trap in a
-  new costume.
+- **Outside the DOM cascade — compose `FONT_STACK`.** A canvas or a file-served
+  SVG resolves nothing from the cascade, so it is handed the family explicitly:
+  the TSLD painter and the export band both compose that one constant, and
+  `typeface-reach.structural.test.ts` refuses a hand-set one.
+- **At a surface-scope boundary — declare `var(--font-sans)` on that element.**
+  This is a **different** case, and the distinction matters because the obvious
+  reading is wrong: a print container inside the DOM inherits the face from
+  `body` perfectly well, so "does my surface resolve nothing from the cascade?"
+  answers "no" and skips the rule it still needs. The reason is that `body`'s own
+  `font-family: var(--font-sans)` resolves _on body_ — so a future
+  `[data-surface="…"]` rebind of `--font-sans`, the obvious way to give paper its
+  own face, would be silently ignored. That is ADR-0102's alias trap in a new
+  costume, and it is why `.tsld-print-container` declares the family rather than
+  leaning on inheritance. Any new `[data-surface]` root gets the same treatment.
+- **Every other DOM surface inherits and declares nothing.** A named family in a
+  feature stylesheet overrides the product face for that whole subtree, which is
+  exactly how both print sheets came to name a face this repository has no file
+  for.
 - **Type scale** (Tailwind defaults; use these, don't invent sizes):
 
   | Token       | Size / line-height | Use                         |

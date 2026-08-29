@@ -6068,3 +6068,28 @@ photographed twelve screens and never once what the product PRODUCES; W1 added t
 `docs/TECH_DEBT.md` #158 recorded the gap. The print documents were the remainder of it, and the
 cost of that gap is measurable here: two defects in the deliverable, both plainly visible, neither
 reported by any test, sitting in the artefact that leaves the building.
+
+## 218. Two review suggestions from the typeface gate pass, not folded
+
+**Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, gate pass) · **Size:** S ·
+**Status:** open
+
+Neither is blocking and neither was folded; both are recorded so they are decisions rather than
+things that were dropped.
+
+**(a) The printed programme's smallest type has never been looked at on paper.**
+`GanttPrintSurface.css` sets 9 px column text (`:77`), 8 px (`:135`) and a 7 pt bar label (`:256`).
+Those sizes are unchanged by this epic, but they now render in a self-hosted webfont rather than in
+whatever highly-hinted native `system-ui` face the reader's machine supplied — and small type on a
+real printer is where hinting differences show. **No WCAG SC applies** (the accessibility review
+was explicit that WCAG constrains contrast, resizability and spacing, not which sans-serif is
+used), so this is a legibility judgement somebody has to make by printing the page. The screenshot
+harness photographs it (`gantt-print-programme`), which is a screen at 1646 px and not paper.
+
+**(b) The `**Family:**` bullet check is tighter than it was and is still not the tightest possible.**
+`typeface-reach.structural.test.ts` now parses the bolded family inside the bullet's parenthesis
+rather than scanning the whole bullet — so a reverted value can no longer be satisfied by the
+correction prose the same bullet carries by design. What it still cannot see is a bullet rewritten
+into a different shape: the regex is `**Family:** … (**<name>**`, and an edit that drops the
+parenthesis fails the "no claim at all" assertion rather than a wrong-family one. That is the right
+way round (loud, not silent), but the failure message would name the wrong cause.

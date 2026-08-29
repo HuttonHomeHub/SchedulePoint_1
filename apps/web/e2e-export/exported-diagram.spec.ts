@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import {
   createHierarchy,
@@ -54,6 +54,38 @@ const STAMP = Date.now() + 7300;
  */
 const TITLE_BAND_PX = EXPORT_TOP_BAND;
 const RESERVED_PX = EXPORT_TOP_BAND + EXPORT_MARKER_ROW;
+
+/**
+ * Assert that one print surface, under **print media**, computes the product's own face.
+ *
+ * `emulateMedia({ media: 'print' })` makes the browser evaluate `@media print`, so the computed
+ * value is what paper actually gets — and it is restored in a `finally`, or every later test in
+ * this serial file inherits print media. One helper for both surfaces rather than two copies: the
+ * printed diagram and the printed programme are the same assertion about two roots, and the reason
+ * this epic exists is that one of the pair got a decision the other did not.
+ *
+ * **Verified red before the fix**: both returned a list beginning `Inter`.
+ */
+async function expectPaperFace(page: Page, selector: string, what: string): Promise<void> {
+  await page.emulateMedia({ media: 'print' });
+  try {
+    const family = await page
+      .locator(selector)
+      .first()
+      .evaluate((el) => getComputedStyle(el).fontFamily);
+
+    expect(
+      family,
+      `the ${what} computes \`${family}\` — paper must lead with the product's own face`,
+    ).toMatch(/^"?IBM Plex Sans"?/);
+    expect(
+      family,
+      `the ${what} names a face with no @font-face and no file in this repository`,
+    ).not.toContain('Inter');
+  } finally {
+    await page.emulateMedia({ media: null });
+  }
+}
 
 test.describe('The exported diagram', () => {
   test('is painted on light paper and carries the ground layers the screen shows', async ({
@@ -403,26 +435,36 @@ test.describe('The exported diagram', () => {
     await page.getByRole('menuitem', { name: 'Print…', exact: true }).click();
     await expect(page.locator('.tsld-print-container')).toBeAttached({ timeout: 30_000 });
 
-    await page.emulateMedia({ media: 'print' });
-    try {
-      // The ROOT, not the container: the container is where the family is declared, and the root is
-      // where the two deleted overrides used to win. Asserting the root is what proves inheritance
-      // actually reaches the content rather than stopping at the box.
-      const family = await page
-        .locator('.tsld-print-root')
-        .first()
-        .evaluate((el) => getComputedStyle(el).fontFamily);
+    // The ROOT, not the container: the container is where the family is declared, and the root is
+    // where the two deleted overrides used to win. Asserting the root is what proves inheritance
+    // actually reaches the content rather than stopping at the box.
+    await expectPaperFace(page, '.tsld-print-root', 'printed diagram');
 
-      expect(
-        family,
-        `the printed diagram computes \`${family}\` — paper must lead with the product's own face`,
-      ).toMatch(/^"?IBM Plex Sans"?/);
-      expect(family, 'a face with no @font-face and no file must not appear at all').not.toContain(
-        'Inter',
-      );
-    } finally {
-      // Restore, or every later test in this serial file inherits print media.
-      await page.emulateMedia({ media: null });
-    }
+    // ── **And the programme, which is the half that had never been driven by anything.**
+    // `GanttPrintSurface.css` carried the identical `'Inter'` override, and the spec's §0
+    // establishes that no journey in this repository has ever rendered the printed programme — so
+    // the structural gate (which proves the stylesheet no longer DECLARES a face) was the only
+    // thing covering it, and a stylesheet not declaring a face says nothing about what the browser
+    // resolves on `.gantt-print-root`. The plan's M1-T6 risk mitigation says to assert **both**
+    // surfaces and SC-3 names both artefacts; the first version of this test shipped only the
+    // first, and recorded the narrowing nowhere. Found at the gate pass, independently, by two
+    // reviewers.
+    const gantt = new URL(page.url());
+    gantt.searchParams.set('view', 'gantt');
+    await page.goto(gantt.toString());
+    // The treegrid, not the mode button: the mode button exists in both views, so waiting on it
+    // would pass before the Gantt had rendered anything to print.
+    await page
+      .getByRole('treegrid', { name: 'Schedule as a bar chart' })
+      .waitFor({ timeout: 30_000 });
+    await page
+      .getByRole('button', { name: /share.*export/i })
+      .first()
+      .click();
+    // The SAME menu item: `printDiagram` branches on the live view mode (ADR-0059 M4), so this is
+    // the programme rather than the diagram.
+    await page.getByRole('menuitem', { name: 'Print…', exact: true }).click();
+    await expect(page.locator('.tsld-print-container')).toBeAttached({ timeout: 30_000 });
+    await expectPaperFace(page, '.gantt-print-root', 'printed programme');
   });
 });

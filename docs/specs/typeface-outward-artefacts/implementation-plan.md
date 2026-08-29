@@ -435,6 +435,53 @@ the printed programme's `Predecessors` column is an em dash on every row of a li
 3. All three documents share `mountPrintDocument`'s one container, so the reveal is **one helper**
    rather than three copies — for the reason the omission itself demonstrates: three would drift.
 
+###### GATE PASS OUTCOME — 2026-08-29, three specialists over `d332df16..HEAD`
+
+**accessibility: pass.** No WCAG SC applies to a typeface substitution behind an unchanged type
+scale, and it said so rather than stretching one — the diff adds, removes and changes no
+`font-size`, `line-height` or spacing literal anywhere. It confirmed the ADR-0026 D7 parallel DOM
+layer is untouched **and unaffected in both directions** (it sits inside the cascade and had been
+correct since 2026-08-24), and that the favicon exception has no accessibility consequence, since
+the SVG's `role="img" aria-label="SchedulePoint"` is what an AT user gets regardless of which face
+drew the glyph. One suggestion, recorded as `docs/TECH_DEBT.md` #218.
+
+**ux: pass with two nits**, one folded and one that turned out to be the same finding the component
+review reached independently. It also **answered a question this plan asked rather than leaving
+it**: the ~19 % narrower title cannot look under-filled, because every element in the band is
+left-aligned at a fixed `BAND_PAD` and laid out by measured width — nothing is centred or sized
+against an edge, so a narrower face leaves trailing whitespace and nothing else. That is a property
+of `drawTitleBand`/`drawLegend`, not an opinion about the screenshot.
+
+**component: BLOCKED on three**, and all three reproduced before they were fixed.
+
+| #   | finding                                                                                                                                                               | fixed by                                                                                                                                                     |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | The canvas scan matched only three generic keywords, so **US-3's own acceptance criterion** (`ctx.font = '13px Helvetica'`) passed silently                           | a second, value-blind scan by TARGET — any string literal assigned to something whose name ends in `font`. Measured: zero over-reports across `apps/web/src` |
+| 2   | The CSS exception tested its needle against **the whole file**, so `@font-face` appearing anywhere in `globals.css` exempted every `font-family` in it                | the needle is matched against the declaration's **own rule** (back to the previous `}`), so an at-rule's header is in scope and a sibling's is not           |
+| 3   | The journey asserted the printed **diagram** and never the **programme**, contradicting M1-T6's own risk mitigation and SC-3 — and the narrowing was recorded nowhere | one `expectPaperFace(page, root, what)` helper called for both roots, with the Gantt half driving `?view=gantt` and waiting on the treegrid                  |
+
+Each was verified **red against its own defect**, not merely red: a rogue `'13px Helvetica'` in
+`geometry.ts` (offender named), a rogue `font-family: 'Comic Sans MS'` injected into `globals.css`
+before the first `@font-face` (offender named), and `'Inter'` restored on `.gantt-print-root`
+(`the printed programme computes \`Inter, …\``).
+
+**Findings 1 and 2 are the same failure, and it is not "the gate under-detects".** The spec
+specified both correctly — assertion 2 says "a string literal matching `<n>px` followed by a family
+list", assertion 3 says "outside `globals.css`'s `@font-face` **blocks**" — and the implementation
+shipped narrower than both, with M1-T2's red run unable to report it because all six known sites
+end in a generic fallback and the only rogue declaration was in a different file. **A red run
+proves a regex catches the sites it was tuned against.** Finding 2 is sharper still: it is verbatim
+the file-scoped exemption that the spec's own third implementation rule exists to forbid,
+reproduced inside the mechanism named as its remedy, and asymmetric with the canvas scan twenty
+lines above it, which had always scoped the same lookup correctly.
+
+Finding 3's honest weight is that **both** reviewers reached it separately, and that this epic's
+own spec §0 corrects a false brief claim by establishing that the printed programme had never been
+driven by any journey — so shipping the fix for both stylesheets while proving only one was the
+exact gap the correction was written about. One suggestion was also folded: `FONT_STACK` now
+imports through `render-model`, the barrel this file already uses, which is what M1-T3 step 3 said
+and the code had not done.
+
 ##### Task M2-U3 — An ADR, only if the reviewer asks _(unscheduled)_
 
 - **Description:** The spec's §4 argues **no ADR** — this applies an existing decision to layers
