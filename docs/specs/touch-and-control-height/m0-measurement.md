@@ -163,3 +163,76 @@ catching in other instruments, so it is not reported.
 The question — does a 44 px form control push a dialog past a 844 px viewport — carries into **M3**,
 whose subject is the below-`md` surfaces anyway, and the harness needs a dialog-opening step before
 it can answer.
+
+---
+
+# M0-T3 — what a coarse projection costs (F5)
+
+Instrument: `apps/web/measure-toolbar/coarse-projection-cost.spec.ts` (a **throwaway prototype**;
+M0-T5 deletes it). `hasTouch` is a **context** option, so a coarse pass needs its own
+`browser.newContext()` — which is also the trap the plan names: `command-surface.spec.ts:131`
+builds its page with `browser.newPage()` in `beforeAll`, where `test.use({ hasTouch })` would never
+have reached it. Both prototypes assert `matchMedia('(pointer: coarse)')` and both returned
+`coarse`, so the mechanism is proven rather than assumed.
+
+| shape                                                           | cost                              |
+| --------------------------------------------------------------- | --------------------------------- |
+| the fine fixture (sign-up → hierarchy → plan → seed)            | **7,487 ms**                      |
+| coarse context seeded with `storageState`, straight to the plan | **2,458 ms** median (2,226–3,377) |
+| coarse context paying the whole fixture again ("naive")         | **3,753 ms**                      |
+| **F5's threshold**                                              | 90,000 ms                         |
+
+## F5 — CONFIRMED, by a factor of ~36
+
+The projection costs **~2.5 s** against a 90 s bar. **CQ-3 does not escalate**: a projection of the
+existing sweep is the answer, and no sibling suite is needed.
+
+## Two corrections the measurement forced
+
+**1. The "~25 s fixture" is wrong, and the plan inherited it.** `command-surface.spec.ts:131`'s own
+docblock justifies sharing one page across tests because "the setup is ~25 s of real sign-up,
+hierarchy, plan, seed and recalculation", and M0-T3's risk note quotes that figure. **Measured, it
+is 7.5 s** — and that 7.5 s includes cold start; a second full fixture in the same run costs
+**3.8 s**. A docblock number nobody had run, quoted forward into a plan, which is precisely the
+ADR-0058 shape this epic keeps meeting. The sharing decision it justifies is still right; its
+stated reason is off by more than 3×.
+
+**2. `storageState` reuse is an optimisation, not a requirement.** The plan treats it as the way to
+make the projection affordable. It saves **1.3 s** against simply re-running the fixture, and both
+are two orders of magnitude inside the bar. **M2 may therefore choose the shape that is simplest
+and most robust rather than the one that is fastest** — which matters, because a `storageState`
+handoff is one more thing to get subtly wrong in a gate.
+
+---
+
+# M0-T4 — the register rows, re-derived rather than inherited
+
+**#127 — holds.** Five deck controls at exactly 40 × 36 under coarse at 1646 (F4). Actionable as
+written.
+
+**#153 — confirmed, and it understates itself.** The row describes _two_ close buttons at two
+target sizes. The tree holds **three** sizes in the same family of canvas panels:
+`TsldLegendPanel.tsx:166` `icon-sm`, `TsldMinimap.tsx:375` `icon-lg`, and
+`TsldViewControls.tsx:92,98` `icon` — which the row does not mention at all.
+
+**#145 — the two held conversions are still held**, and still on the argument its own measurement
+settled: no coarse-pointer penalty between the control types, both at 36 px, so the residue is the
+product-wide height question this epic is answering.
+
+**The deferrals to the now-closed #133 — 26 references, three of them live.**
+`.github/workflows/ci.yml:584` ("the coarse axis is #133's") and
+`apps/web/playwright.narrow-shell.config.ts:16` ("the coarse-pointer axis belongs to … #133") both
+defer **live test behaviour** to a row closed on 2026-08-28;
+`measure-toolbar/combobox-coarse.spec.ts:16-17` quotes #133's claim that "no toolbar measurement in
+this repository had ever been taken with a coarse pointer", which this epic has now falsified twice
+over. The remaining 23 are specification prose that will read as live deferrals to a reader who
+follows them. All are dispositioned in M1.
+
+## A fourth instrument caught lying, and this one was mine mid-audit
+
+Enumerating those deferrals, a `grep -rn "#133" . | grep -v … | head` returned ten lines that did
+**not** include `playwright.narrow-shell.config.ts` — and on that basis I began correcting a claim
+that was **true**. The `| head` had truncated the list at ten of **26**. The pipeline reported a
+complete-looking answer to an incomplete question, which is the same failure shape as the token
+comparison above and the dialog probe below it, in the one activity — auditing — whose entire value
+is completeness. Recorded because a near-miss that is not written down teaches nobody.
