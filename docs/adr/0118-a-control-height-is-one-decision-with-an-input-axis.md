@@ -133,6 +133,59 @@ Both reproduce identically under a fine pointer, so neither is fixed by the rule
 They are named here rather than folded silently, because an epic that fixes a house rule while
 walking past an AA candidate and an unclickable control would have its priorities exactly inverted.
 
+### D6 — What M2 and M3 changed about D4 and D5, recorded rather than quietly done
+
+Three of the dispositions above were written before the work and did not survive it. They are
+corrected here rather than in the register alone, because a decision record whose own dispositions
+have gone stale is the drift class this epic keeps citing.
+
+- **#127's own objection was answered by the measurement, and it was wrong by more than a factor of
+  two.** The row refused the height rise on the grounds that it "adds 16 px to the vertical stack
+  for every user". The axis costs a mouse user **0 px**, and the deck holds **two** rows, so a
+  taller control makes those rows taller rather than wrapping a third — `2 × 8`, linear, against a
+  prediction of ≥ 36 px that landed on the exact pixel of its own falsification boundary. Its
+  closing instruction ("raise the floor in `e2e-toolbar-fit`'s coarse test") could not be followed
+  either: ADR-0109 D1 deleted that suite. The proof is D3's projection instead.
+
+- **#153 closes AGAINST its own remedy, and against this epic's plan.** Both said the Legend's
+  close moves **up** to `icon-lg` (44). That was written before **D2** narrowed the house rule to
+  the coarse pointer — so following it would have applied a rule this ADR had already withdrawn,
+  costing every fine-pointer planner 16 px of floating-panel chrome for no accessibility gain (28
+  and 40 both clear the AA floor, and all three reach 44 under coarse through `--control-h`
+  regardless). All three unify on `icon` — 40 fine, 44 coarse — and **`icon-lg` is deleted**: its
+  docblock cited a `docs/UX_STANDARDS.md` floor that M1 had already rewritten, and its one consumer
+  was the odd size out. CLAUDE.md §19 says to re-verify a plan's **problem**; here it was the
+  plan's **remedy** that had gone stale, against its own epic, three milestones later.
+
+- **D5's breadcrumb resolves as an EXCEPTION, and the attempt to fix it is the finding.** A
+  `pointer-coarse:min-h-(--control-h)` box was built and measured: the crumb came out at
+  **16 × 44 at 390** — worse on the axis that was already failing, because a truncated crumb's
+  width IS the space left over. No CSS makes it 44 px wide, and the version that looks like it
+  complies is the one that ships a 16 px target. So it is the first entry on D1's exception list,
+  compliant under §2.5.8's **Inline** exception, excluded from the gate structurally by
+  `nav[aria-label="Breadcrumb"]` rather than by a size threshold, and its non-pointer equivalent is
+  stated: the same destinations are reachable at full size from the Project Explorer tree and the
+  wordmark on the same row.
+
+- **D5's second defect was not "covered by something" — it was off-screen.** `view-gantt` and
+  `Stop editing` laid out at x = 409 and x = 565 against a 390 px viewport. The mode cluster carried
+  `shrink-0`, which takes `max-content` and can never be asked to give anything back, so the
+  wrapping header row beside it was never asked to break a line — ADR-0114 M1's defect one surface
+  along. Removing it costs **zero** vertical height: the stack measures byte-identical at 1920,
+  1646, 1440 and 1280, because a flex item's default `min-width: auto` floors it at min-content
+  while the identity slot carries `min-w-0` and still gives way first and completely (ADR-0112's
+  ordering, unchanged). The instrument that found it could not say WHY, so it gained a `hitBy`
+  field — a gate that detects a defect and cannot describe it makes its own finding expensive to
+  act on, which is how a finding gets deferred.
+
+- **F3b, the one M0 condition left NOT MEASURED, is answered.** Its first probe queried
+  `dialog[open]` without opening one, so an empty array meant "nothing was open". `dialog-coarse`
+  opens one: at 390 × 844 the plan-settings form is **358 × 508** with every control 44 tall,
+  nothing unreachable and nothing below the house rule — so a 44 px control does not push a form
+  past a phone viewport. It found one control that was: the dialog close, `size="sm"` around a raw
+  `✕`, at **36 × 44** — height from the token, width from `px-3` plus one character — now the icon
+  button and Lucide `X` its `Sheet` sibling has always used.
+
 ## Consequences
 
 - One sentence about target size, in two documents that agreed on nothing before.
@@ -140,8 +193,13 @@ walking past an AA candidate and an unclickable control would have its prioritie
 - The coarse axis stops being deferred to a closed row and becomes a gate that runs.
 - **The `pointer-coarse:` utilities become an implementation detail of the token**, which also means
   a future one cannot hide from a search the way `HierarchyTree.tsx:483` does today.
-- The exception list being empty is a fact with a date on it. When the first exception is added, it
-  states its non-pointer equivalent or it is not an exception.
+- The exception list has **one** entry and it states its non-pointer equivalent (D6). It was empty
+  when D1 was written, which is a fact with a date on it; the first entry arrived from measurement
+  rather than from a request for a carve-out, which is the only way that list stays honest.
+- **A surface that wraps has a height that is a function of its width, and now also of the pointer.**
+  The Project Explorer's six destinations and its tree rows are taller on touch; that is the
+  intended trade, and it is stated because the rail scrolls and a reader on a tablet reaches its
+  last destination later than a reader on a laptop.
 
 **The CPM engine is not imported and no migration runs.** Frontend-only; `database-architect` is
 not engaged because there is no schema change to design, which is stated rather than omitted.

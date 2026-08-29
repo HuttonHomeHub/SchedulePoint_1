@@ -3501,7 +3501,7 @@ progress` off the command surface because **an object action belongs on the obje
   stepped over; the primitive still covers any future icon-only control by construction. **The CPM
   engine is not imported and no migration runs.**
 
-- **ADR-0118** _(Accepted; M0–M1 landed 2026-08-29)_ — A control height is one decision, and the
+- **ADR-0118** _(Accepted; M0–M3 landed 2026-08-29)_ — A control height is one decision, and the
   input is an axis of it. The product published **three different** target-size rules — 44 px
   unconditional (`UX_STANDARDS.md`), ≥ 24 preferring 44 (`DESIGN_SYSTEM.md:453`), and a scale
   defaulting to **36** (`:113`) — met by nothing, and **never measured, because no gate here had
@@ -3530,6 +3530,30 @@ progress` off the command surface because **an object action belongs on the obje
   probe that measured nothing while looking like a result; and a `grep … | head` that returned ten
   of 26 references and nearly turned a true claim into a false correction. `command-surface.spec.ts`'s
   "~25 s fixture" is **7.5 s**, a docblock number nobody had run and the plan quoted forward.
+  **M2–M3 built it, and three of the ADR's own dispositions did not survive the work** (D6).
+  Coarse-pointer controls under the house rule went **46 → 1**, the survivor being the breadcrumb —
+  the epic's ONE named exception, and the attempt to fix it is the finding: a
+  `pointer-coarse:min-h` box measured **16 × 44** at 390, worse on the axis already failing,
+  because a truncated crumb's width IS the space left over. **#153 closes against its own remedy
+  and against the plan**: both said the Legend's close moves up to `icon-lg` (44), written before
+  D2 narrowed the rule to `pointer: coarse`, so following it would have applied a rule this ADR had
+  already withdrawn; all three panel controls unify on `icon` and `icon-lg` is deleted, its docblock
+  having cited a `UX_STANDARDS.md` floor M1 rewrote. §19 says re-verify a plan's **problem** — here
+  the plan's **remedy** had gone stale against its own epic three milestones later. **#145 closed by
+  measurement**: its own conclusion was that 44 px is "a product-wide control-height question
+  (`--control-h`)", and the axis answered it for the native `<select>` and the `Combobox` at once —
+  then the re-run found the half nobody had asked about, the open list's 32 px options.
+  **D5's "painted and not clickable" turned out to be OFF-SCREEN**, at x = 409 and x = 565 against a
+  390 px viewport: the mode cluster's `shrink-0` takes `max-content` and can never be asked to give
+  anything back, so the wrapping row beside it was never asked to break a line — ADR-0114 M1 one
+  surface along, fixed at **zero** vertical cost. **F3b, the condition M0 left NOT MEASURED, is
+  answered** by a harness that opens a dialog rather than querying for one, and it found the dialog
+  close at 36 × 44 — a raw `✕` in a text-sized button beside a `Sheet` that had used the icon button
+  all along. Widening the gate exposed three holes in the gate itself, each fixed rather than worked
+  around: a failure naming `(unnamed)`; `display: none` read as "painted at zero size", which would
+  have retired the assertion that catches ADR-0090 M1's real defect; and a row below a scroller's
+  fold read as unreachable, where the discriminator is ADR-0114's own — whether there is anything
+  scrollable to move.
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
