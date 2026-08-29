@@ -66,6 +66,37 @@ const RESERVED_PX = EXPORT_TOP_BAND + EXPORT_MARKER_ROW;
  *
  * **Verified red before the fix**: both returned a list beginning `Inter`.
  */
+/**
+ * Open `Share & export ▾ → Print…` and wait for the print document to mount.
+ *
+ * **It asserts the item is not shaded before clicking, and that is the whole point of the helper.**
+ * `Print…` is `disabled={!ctx.hasDiagram}`, and `hasDiagram` reads the activities query — so it is
+ * false until that query resolves. `Menu`'s items are shaded with `aria-disabled` rather than the
+ * native attribute (ADR-0082, so a `disabledReason` stays keyboard-reachable) and `onSelect`
+ * returns early, which makes a Playwright click on a shaded item a **silent no-op**: no error, no
+ * retry, just thirty seconds of waiting for a container nothing asked for.
+ *
+ * That is exactly how this failed in CI and not on my machine. The Gantt half reloads the route,
+ * and a runner is slow enough that the treegrid renders — empty — before the activities arrive, so
+ * the click landed on a shaded item. Waiting for a row is the cause; asserting the item is the
+ * guard, and it fails in one second naming the real reason instead of timing out on a symptom.
+ */
+async function openPrintDocument(page: Page): Promise<void> {
+  await page
+    .getByRole('button', { name: /share.*export/i })
+    .first()
+    .click();
+  const print = page.getByRole('menuitem', { name: 'Print…', exact: true });
+  await expect(
+    print,
+    'Print… is shaded — the plan has no computed diagram yet, so this click would do nothing',
+  ).not.toHaveAttribute('aria-disabled', 'true');
+  await print.click();
+  // `attached`, not the default visibility: the container is `display: none` until the print
+  // stylesheet shows it.
+  await expect(page.locator('.tsld-print-container')).toBeAttached({ timeout: 30_000 });
+}
+
 async function expectPaperFace(page: Page, selector: string, what: string): Promise<void> {
   await page.emulateMedia({ media: 'print' });
   try {
@@ -428,12 +459,7 @@ test.describe('The exported diagram', () => {
     // `emulateMedia({ media: 'print' })` makes the browser evaluate `@media print`, so the computed
     // value below is what paper actually gets. **Verified red before the fix**: it returned a list
     // beginning `Inter`.
-    await page
-      .getByRole('button', { name: /share.*export/i })
-      .first()
-      .click();
-    await page.getByRole('menuitem', { name: 'Print…', exact: true }).click();
-    await expect(page.locator('.tsld-print-container')).toBeAttached({ timeout: 30_000 });
+    await openPrintDocument(page);
 
     // The ROOT, not the container: the container is where the family is declared, and the root is
     // where the two deleted overrides used to win. Asserting the root is what proves inheritance
@@ -452,19 +478,16 @@ test.describe('The exported diagram', () => {
     const gantt = new URL(page.url());
     gantt.searchParams.set('view', 'gantt');
     await page.goto(gantt.toString());
-    // The treegrid, not the mode button: the mode button exists in both views, so waiting on it
-    // would pass before the Gantt had rendered anything to print.
-    await page
-      .getByRole('treegrid', { name: 'Schedule as a bar chart' })
-      .waitFor({ timeout: 30_000 });
-    await page
-      .getByRole('button', { name: /share.*export/i })
-      .first()
-      .click();
+    // **A ROW, not the treegrid** — and not the mode button, which exists in both views. The grid
+    // renders empty while the activities query is in flight, and it is that query `hasDiagram`
+    // reads, so waiting on the grid alone is waiting for the wrong thing (see
+    // `openPrintDocument`).
+    await expect(
+      page.getByRole('treegrid', { name: 'Schedule as a bar chart' }).getByRole('row').nth(1),
+    ).toBeVisible({ timeout: 30_000 });
     // The SAME menu item: `printDiagram` branches on the live view mode (ADR-0059 M4), so this is
     // the programme rather than the diagram.
-    await page.getByRole('menuitem', { name: 'Print…', exact: true }).click();
-    await expect(page.locator('.tsld-print-container')).toBeAttached({ timeout: 30_000 });
+    await openPrintDocument(page);
     await expectPaperFace(page, '.gantt-print-root', 'printed programme');
   });
 });

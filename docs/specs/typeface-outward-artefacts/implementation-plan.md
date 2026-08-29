@@ -482,6 +482,29 @@ exact gap the correction was written about. One suggestion was also folded: `FON
 imports through `render-model`, the barrel this file already uses, which is what M1-T3 step 3 said
 and the code had not done.
 
+###### CI OUTCOME — the Gantt half failed in CI and not locally, 2026-08-29
+
+`e2e-export` went red on the first CI run of the extended journey, at the **Gantt** print and on
+all three attempts, with `.tsld-print-container` never attaching. Not a flake, and not a product
+defect: `Print…` is `disabled={!ctx.hasDiagram}` and `hasDiagram` reads the activities query
+(`use-tsld-toolbar-context.tsx:175-178`), so it is false until that query resolves. The Gantt half
+**reloads the route** to reach `?view=gantt`, and a runner is slow enough that the treegrid rendered
+— empty — before the activities arrived.
+
+**A click on a shaded `MenuItem` is a silent no-op.** `Menu` shades with `aria-disabled` rather than
+the native attribute, deliberately, so a `disabledReason` stays keyboard-reachable (ADR-0082), and
+`onSelect` returns early — Playwright's actionability checks do not consider `aria-disabled`, so the
+click reports success and nothing happens. The test then waited thirty seconds for a container
+nothing had asked for, three times, and reported the symptom.
+
+Fixed at both causes rather than by widening a timeout: the Gantt half now waits for a **row**, not
+for the grid, and both halves go through one `openPrintDocument` helper that **asserts the item is
+not shaded before clicking**. Verified red by forcing `hasDiagram` to `false` — it now fails in one
+second naming the real reason instead of timing out on a symptom.
+
+Worth carrying: this is the third time in this epic that something passed locally and could not
+have on a slower machine, and the tell each time was an assertion waiting on the wrong subject.
+
 ##### Task M2-U3 — An ADR, only if the reviewer asks _(unscheduled)_
 
 - **Description:** The spec's §4 argues **no ADR** — this applies an existing decision to layers
