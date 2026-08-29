@@ -48,6 +48,30 @@ describe('overlay-position owns the viewport clamp', () => {
     expect(offenders).toEqual([]);
   });
 
+  /**
+   * The ceiling must not be derived from the overlay's own clamped `top` — that loop is what
+   * `overlayMaxHeight`'s docblock records shipping (a WBS summary's row menu putting `Dissolve`
+   * and `Delete` below the fold, in the mechanism written to keep them reachable). A scan, not a
+   * type: the shape is an expression, and the compiler cannot see one. Comment-stripped, because
+   * the two consumers now DOCUMENT the forbidden expression to explain why they do not use it —
+   * the fourth scan-matching-prose trap in this repository.
+   */
+  it('no overlay derives its height ceiling from its own clamped top', () => {
+    const offenders: string[] = [];
+    for (const file of trackedSourceFiles()) {
+      const source = stripComments(readFileSync(join(WEB_SRC, file), 'utf8'));
+      if (/window\.innerHeight\s*-\s*top\b/.test(source)) offenders.push(file);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('pinned positive: the two clamped overlays take the ceiling from the leaf', () => {
+    for (const host of ['components/ui/menu.tsx', 'components/ui/toolbar/use-popover-panel.tsx']) {
+      const source = stripComments(readFileSync(join(WEB_SRC, host), 'utf8'));
+      expect(source, `${host} must call overlayMaxHeight()`).toMatch(/overlayMaxHeight\(\)/);
+    }
+  });
+
   it('pinned positive: every overlay host imports the leaf', () => {
     for (const host of [
       'components/ui/menu.tsx',

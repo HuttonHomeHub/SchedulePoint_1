@@ -2,8 +2,8 @@ import { createContext, useContext, useId, useEffect, useRef, useState } from 'r
 import { createPortal } from 'react-dom';
 
 import {
-  CLAMP_MARGIN,
   clampAnchor,
+  overlayMaxHeight,
   portalTarget,
   useMeasuredBox,
   type OverlayAnchor,
@@ -148,11 +148,12 @@ export function Menu({
    * The menu's height ceiling (#203(a), fix-slice M-C): a menu taller than the viewport used to
    * pin its top at the margin and run its bottom off-screen with NO scroll — reachable at a short
    * viewport or 200 % browser zoom, which roughly halves `innerHeight` in CSS px and is exactly
-   * the population WCAG 2.4.11 protects. The panel now scrolls inside the space below its clamped
-   * top instead of running off. Same rule as `usePopoverPanel`'s, derived from the same clamp.
+   * the population WCAG 2.4.11 protects. The panel now scrolls inside the viewport instead of
+   * running off. Same rule as `usePopoverPanel`'s, from the same shared leaf — and deliberately
+   * NOT `innerHeight - top - CLAMP_MARGIN`, which is self-referential and shipped the very
+   * defect it was written to fix (see {@link overlayMaxHeight}).
    */
-  const maxHeight =
-    typeof window === 'undefined' ? undefined : window.innerHeight - top - CLAMP_MARGIN;
+  const maxHeight = overlayMaxHeight();
 
   // Move focus to the first item on open (APG: opening with the pointer or the
   // menu key places focus on the first item).

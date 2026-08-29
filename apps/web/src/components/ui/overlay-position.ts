@@ -40,6 +40,31 @@ export interface OverlayAnchor {
  */
 export const CLAMP_MARGIN = 8;
 
+/**
+ * The height ceiling for a portalled overlay (#203(a)): the viewport less a margin at each end.
+ *
+ * **It must NOT be derived from the overlay's clamped `top`, and that is the whole point of this
+ * function existing rather than one expression at each call site.** Both the menu and the popover
+ * shipped it as `innerHeight - top - CLAMP_MARGIN`, which is self-referential: the ceiling is
+ * applied to the element, {@link useMeasuredBox} then measures the element it just constrained,
+ * and {@link useClampedPosition} clamps `top` against that constrained height — so an overlay
+ * whose natural height would have pushed it up learns nothing, settles at a fixed point at the
+ * pre-measurement estimate's height, and puts its last items in an internal scroll region
+ * **below the fold**. Measured by `e2e-wbs`'s pointer-reachability sweep at the M-G gate pass: a
+ * WBS summary's row menu reported `Dissolve` at 1101 and `Delete` at 1133 against a viewport of
+ * 1080 — the exact WCAG 2.4.11 defect the clamp above exists to prevent, reintroduced by the
+ * mechanism meant to strengthen it. ADR-0090's "the pass stopped measuring its own output", one
+ * primitive over.
+ *
+ * A viewport-constant ceiling has no such loop: it binds only when the overlay is genuinely
+ * taller than the screen (then `top` clamps to the margin and it scrolls, which is #203(a)'s
+ * case), and is inert otherwise — so an overlay that fits is repositioned to fit, whole, and
+ * every item stays directly clickable.
+ */
+export function overlayMaxHeight(): number | undefined {
+  return typeof window === 'undefined' ? undefined : window.innerHeight - CLAMP_MARGIN * 2;
+}
+
 /** Clamp an anchor so a box of `width × height` stays inside the viewport with the margin. */
 export function clampAnchor(
   { x, y }: OverlayAnchor,

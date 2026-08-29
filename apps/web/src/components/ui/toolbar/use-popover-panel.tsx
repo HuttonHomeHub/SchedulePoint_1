@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import {
-  CLAMP_MARGIN,
   clampAnchor,
+  overlayMaxHeight,
   portalTarget,
   useMeasuredBox,
 } from '@/components/ui/overlay-position';
@@ -94,13 +94,14 @@ export function usePopoverPanel({
     height,
   );
   /**
-   * The panel's height ceiling: the space between its clamped top and the viewport bottom. A panel
-   * taller than that scrolls INSIDE itself (`overflow-y: auto`) instead of running off-screen —
-   * #203(a): a control below the fold in an unscrollable panel is present in the DOM and
-   * unreachable by pointer, the same class the menu's measured clamp fixed one primitive over.
+   * The panel's height ceiling (fix-slice M-C, corrected at the M-G gate pass): the whole
+   * viewport, less a margin at each end. A panel taller than that scrolls INSIDE itself
+   * (`overflow-y: auto`) instead of running off-screen — #203(a): a control below the fold in an
+   * unscrollable panel is present in the DOM and unreachable by pointer, the same class the
+   * menu's measured clamp fixed one primitive over. Deliberately NOT derived from the clamped
+   * `top`: that is self-referential and reintroduces the defect (see {@link overlayMaxHeight}).
    */
-  const maxHeight =
-    typeof window === 'undefined' ? undefined : window.innerHeight - top - CLAMP_MARGIN;
+  const maxHeight = overlayMaxHeight();
 
   // While open: move focus into the panel; Escape / outside-pointer close it, and — since the panel
   // may hold no focusable content (Summary/Legend are static) — **Tab out of it closes it too**,

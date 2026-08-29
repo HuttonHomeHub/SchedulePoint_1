@@ -5749,6 +5749,40 @@ Two companions travel with the extraction:
   duplicated between the row's and the name span's `onClick` (a `consumeSuppressedClick()` helper;
   no correctness bug today because `stopPropagation` means only one runs per click).
 
+## 212. An overlay's height ceiling must not be measured from its own output
+
+**Raised and FIXED:** 2026-08-29 (fix-slice M-G gate pass) · **Size:** S · **Owner:** web
+
+Recorded rather than merely fixed, because the mechanism is a class this register keeps meeting
+and the shape is worth naming once more.
+
+M-C gave `Menu` and `usePopoverPanel` a height ceiling so a tall overlay scrolls inside itself
+instead of running off the viewport (`#203(a)`). Both derived it as
+`window.innerHeight - top - CLAMP_MARGIN` — **from their own clamped `top`** — which closes a
+loop: the ceiling is applied to the element, `useMeasuredBox` then measures the element it just
+constrained, and `useClampedPosition` clamps `top` against that constrained height. An overlay
+whose natural height would have pushed it upward therefore learns nothing and settles at a fixed
+point at the **pre-measurement estimate's** height, with its lower items in an internal scroll
+region **below the fold** — the exact WCAG 2.4.11 defect the measured clamp exists to prevent,
+reintroduced by the mechanism written to strengthen it. ADR-0090's _"the pass stopped measuring
+its own output"_, one primitive over.
+
+**Found by the sweep, not by a reviewer, and only because the anchor was low enough.** `e2e-wbs`'s
+row-menu pointer-reachability sweep reported `Dissolve` at 1101 and `Delete` at 1133 against a
+1080 viewport; re-run in isolation it **passed**, because the defect needs a row low enough
+(anchor y ≥ `innerHeight − estimate − margin`) for the ceiling to bind. That is why the numbers
+matter more than the pass/fail: they match the fixed-point arithmetic to the pixel, which is what
+established the diagnosis rather than a re-run.
+
+Fixed by one `overlayMaxHeight()` in the shared leaf — a **viewport-constant** ceiling, which
+binds only when the overlay is genuinely taller than the screen (then `top` clamps to the margin
+and it scrolls, `#203(a)`'s real case) and is inert otherwise. Guarded three ways, each verified
+red first: a structural gate forbidding `innerHeight - top` anywhere in `apps/web`, a pinned
+positive that both consumers call the leaf, and two unit cases pinning the ceiling's **value**
+and its independence from the anchor. The unit test that existed asserted only that a ceiling was
+`!== ''` — green against the looped derivation and the fixed one alike (the ADR-0093 shape),
+which is why it was strengthened rather than trusted.
+
 ## 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
 **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
