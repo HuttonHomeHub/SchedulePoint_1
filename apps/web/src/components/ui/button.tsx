@@ -32,14 +32,28 @@ const buttonVariants = cva(
         default: 'h-(--control-h) px-4 py-2',
         sm: 'h-(--control-h-sm) px-3',
         lg: 'h-11 px-6',
-        icon: 'size-10',
+        // 40px on a fine pointer, 44 on a coarse one. The `pointer-coarse` half is ADR-0118 D2:
+        // the house rule is the input device's, not the screen's, and `--control-h` is the ONE
+        // place that axis is declared. Written as a coarse override rather than by replacing the
+        // literal, because `size-(--control-h)` alone would take a mouse user's icon button from
+        // 40 px DOWN to 36 — a regression bought while closing a touch gap.
+        icon: 'size-10 pointer-coarse:size-(--control-h)',
         // 44px icon button — the UX_STANDARDS floor for a NEW close/toggle affordance on a
         // panel (minimap M2-T2; docs/UX_STANDARDS.md "Touch targets"). `icon` predates the
-        // floor at 40px; new panel chrome takes this one.
+        // floor at 40px; new panel chrome takes this one. Already at the house rule on both
+        // pointers, so it needs no coarse override.
         'icon-lg': 'size-11',
         // Row-height icon button for dense lists (e.g. the Project Explorer tree, whose
-        // rows are 28px). Pair with a larger non-pointer target (long-press / keyboard).
-        'icon-sm': 'size-7',
+        // rows are 28px).
+        //
+        // **Its coarse form is 44, and the "pair it with a long-press" advice it used to carry
+        // is deleted rather than kept** (ADR-0118 M3). That advice was the exception this size
+        // existed to license, and measurement is what withdrew it: at 1646 with a coarse pointer
+        // the Project Explorer alone reported ELEVEN controls under the house rule, five of them
+        // this size at 28 x 28 — the three tree row menus, the rail's collapse toggle and
+        // `Edit plan`. A dense list is a DENSITY choice, and density is exactly what a coarse
+        // pointer cannot honour; the row grows on touch and is untouched on a mouse.
+        'icon-sm': 'size-7 pointer-coarse:size-(--control-h)',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

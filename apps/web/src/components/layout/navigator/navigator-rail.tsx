@@ -106,7 +106,10 @@ export function NavigatorRail({
                   size="sm"
                   aria-label="New client"
                   onClick={crud.onCreateClient}
-                  className="h-7 gap-1 px-2"
+                  // `h-7` overrides `size="sm"` for the rail's density; the coarse override restores the
+                  // house rule on touch (ADR-0118 M3 — measured 74 x 28, the last control in
+                  // the Project Explorer under it).
+                  className="h-7 gap-1 px-2 pointer-coarse:h-(--control-h)"
                 >
                   <Plus aria-hidden="true" className="size-4" />
                   Client
@@ -139,7 +142,10 @@ export function NavigatorRail({
               size="sm"
               aria-label="New client"
               onClick={crud.onCreateClient}
-              className="h-7 gap-1 px-2"
+              // `h-7` overrides `size="sm"` for the rail's density; the coarse override restores the
+              // house rule on touch (ADR-0118 M3 — measured 74 x 28, the last control in
+              // the Project Explorer under it).
+              className="h-7 gap-1 px-2 pointer-coarse:h-(--control-h)"
             >
               <Plus aria-hidden="true" className="size-4" />
               Client

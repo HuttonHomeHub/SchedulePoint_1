@@ -63,6 +63,27 @@ export function Breadcrumbs({
                   <Link
                     to={crumb.to}
                     {...(crumb.params ? { params: crumb.params } : {})}
+                    // **A crumb is this epic's one NAMED exception to the house rule, and it is an
+                    // exception on BOTH pointers** (ADR-0118 M3). Measured: 58 x 20 at 1646 and
+                    // 23 x 20 at 390.
+                    //
+                    // It is compliant against WCAG 2.2 §2.5.8 under that SC's **Inline** exception
+                    // — the crumb sits on a line of non-target text (the `/` separators and the
+                    // current page's plain-text crumb) and its size is constrained by that
+                    // line-height. This register has recorded overstating an SC once (ADR-0082),
+                    // so that is claimed narrowly rather than assumed.
+                    //
+                    // **A coarse-pointer box was built, measured, and withdrawn**, which is the
+                    // more useful half. `pointer-coarse:min-h-(--control-h)` did give it 44 px of
+                    // height — and the crumb then measured **16 x 44 at 390**, worse on the axis
+                    // that was already failing, because a crumb in `nowrap` mode truncates to
+                    // whatever room is left. A breadcrumb's width is not a design choice; it is
+                    // the space available. No CSS makes a truncated crumb 44 px wide, and the
+                    // version that looks like it complies is the one that shipped a 16 px target.
+                    //
+                    // The mitigation is that this destination is never only here: the same
+                    // project and plan are reachable at full size from the Project Explorer tree
+                    // beside it, and the organisation from the wordmark on the same row.
                     className={cn(
                       'hover:text-foreground rounded-sm underline-offset-4 hover:underline',
                       nowrap && 'block truncate',

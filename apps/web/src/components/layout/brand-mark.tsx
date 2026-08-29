@@ -51,8 +51,13 @@ export function BrandMark({
  * than an underline: the wordmark is a lockup with an icon, and underlining half of it reads as
  * damage.
  */
+/**
+ * `pointer-coarse:min-h-(--control-h)` and `inline-flex items-center` (ADR-0118 M3): the wordmark
+ * is the route home and measured **139 x 28** on touch, under the house rule on its minor axis.
+ * The fine form keeps the wordmark's own height — the axis is the input device, not the screen.
+ */
 const BRAND_LINK_CLASS =
-  'focus-visible:ring-ring hover:opacity-90 rounded-md focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none';
+  'focus-visible:ring-ring hover:opacity-90 inline-flex items-center rounded-md pointer-coarse:min-h-(--control-h) focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none';
 
 /**
  * The wordmark, as the route home (ADR-0098 M4).

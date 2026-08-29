@@ -1494,7 +1494,7 @@ export function ToolbarPlanWorkspace({
           already resolving `collapsed` at every viewport, harmlessly, because all four of its items
           are `showLabel: 'always'`. */}
             <ChromePortal name="mode">
-              <div className="flex shrink-0 items-center gap-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 {/* **The mode cluster is back on the identity line, beside the pen** (workspace
                 redesign, 2026-08-24) — where ADR-0091 D1 argued a mode belongs in the first place:
                 a mode is not a command, it sets how every command behaves, which is exactly the
@@ -1511,8 +1511,15 @@ export function ToolbarPlanWorkspace({
                 precedence, announcement and pen gating are all the registry's, and hand-rolling is
                 how one control gets a rule and its neighbour does not. `shrink-0` because the
                 identity block beside it carries `flex-1` and is the one that should give way — it
-                is text with a `title`, so shrinking truncates a name a reader can still reach. */}
-                <div className="flex shrink-0 items-center gap-2">
+                is text with a `title`, so shrinking truncates a name a reader can still reach.
+
+                **The `shrink-0` that stood on both of these divs is gone** (ADR-0118 M3): it made
+                the cluster `max-content` and unshrinkable, so at 390 px it laid out past the right
+                edge of the viewport with `Gantt` and `Stop editing` beyond it — painted, focusable,
+                and unclickable. They now wrap. The ADR-0112 ordering is unaffected, because the
+                identity slot beside this one carries `min-w-0` and therefore gives way first and
+                completely; see `chrome-slot.tsx`. */}
+                <div className="flex items-center gap-2">
                   <span
                     aria-hidden="true"
                     // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the

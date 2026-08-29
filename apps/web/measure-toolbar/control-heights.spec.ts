@@ -62,6 +62,17 @@ interface Target {
   /** Whether the rendered height traces to `var(--control-h*)` or to a literal — what M2's
    * structural test needs in order to know which call sites the token actually governs. */
   cssHeightSource: string;
+  /**
+   * What `elementFromPoint` returned when it was not the control — **absent when reachable**.
+   *
+   * Added at M3 rather than at M0, because M0's report said only that two plan-header controls at
+   * 390 were unreachable and every diagnosis then needed a second, hand-written run to ask what
+   * was on top of them. An instrument that can detect a defect and cannot describe it makes its
+   * own finding expensive to act on, which is how a finding gets deferred.
+   */
+  hitBy?: string;
+  /** Viewport-relative position, reported ONLY when unreachable — where it actually is. */
+  at?: string;
 }
 
 /** WCAG 2.2 §2.5.8 Target Size (Minimum), AA. 44 is §2.5.5 AAA and is the HOUSE rule, not this. */
@@ -87,9 +98,19 @@ async function sweep(page: Page, surface: string, root: string): Promise<Target[
         const r = el.getBoundingClientRect();
         const visible = r.width > 0 && r.height > 0;
         let reachable = false;
+        let hitBy: string | undefined;
         if (visible) {
           const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
           reachable = hit !== null && (hit === el || el.contains(hit) || hit.contains(el));
+          if (!reachable) {
+            // Enough to find it in the source: tag, id/class, and the accessible name if it has
+            // one. A bare "unreachable" sends the reader back to the browser.
+            hitBy = hit
+              ? `${hit.tagName.toLowerCase()}${hit.id ? `#${hit.id}` : ''}` +
+                `${typeof hit.className === 'string' && hit.className ? `.${hit.className.split(/\s+/).slice(0, 6).join('.')}` : ''}` +
+                `${hit.getAttribute('aria-label') ? ` [${hit.getAttribute('aria-label')}]` : ''}`
+              : '(nothing — the point is outside the viewport)';
+          }
         }
         // Which declaration produced the height.
         //
@@ -125,6 +146,7 @@ async function sweep(page: Page, surface: string, root: string): Promise<Target[
           visible,
           reachable,
           cssHeightSource: source,
+          ...(hitBy ? { hitBy, at: `${Math.round(r.left)},${Math.round(r.top)}` } : {}),
         });
       }
       return out;
