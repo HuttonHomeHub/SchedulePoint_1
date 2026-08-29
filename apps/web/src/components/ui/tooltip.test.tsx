@@ -212,6 +212,39 @@ describe('useTooltip', () => {
     expect(onCommand).toHaveBeenCalledTimes(1); // the command still works after the scroll
   });
 
+  it('unmounting mid-press strips the document listeners itself (red: pressCleanup call removed)', () => {
+    // The long-press wires three document-level listeners. The platform's own pointerup would
+    // remove them momentarily, but cleanup that depends on an external event rather than the
+    // component's lifecycle is a stale-closure hold — the M-G frontend-performance finding. The
+    // oracle is remove-calls matching add-calls for the three press events, asserted BY COUNT
+    // because the handlers are closures this test cannot reach.
+    const added: string[] = [];
+    const removed: string[] = [];
+    const addSpy = vi.spyOn(document, 'addEventListener');
+    const removeSpy = vi.spyOn(document, 'removeEventListener');
+    addSpy.mockImplementation((type) => void added.push(type as string));
+    removeSpy.mockImplementation((type) => void removed.push(type as string));
+    try {
+      const view = render(<Host />);
+      fireEvent.pointerDown(screen.getByRole('button'), {
+        pointerType: 'touch',
+        clientX: 10,
+        clientY: 10,
+      });
+      const pressEvents = ['pointermove', 'pointerup', 'pointercancel'];
+      expect(added.filter((t) => pressEvents.includes(t))).toHaveLength(3);
+      view.unmount(); // mid-press: no pointerup ever fires
+      for (const type of pressEvents) {
+        expect(removed.filter((t) => t === type).length).toBeGreaterThanOrEqual(
+          added.filter((t) => t === type).length,
+        );
+      }
+    } finally {
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    }
+  });
+
   it('disabled leaves the mechanism inert', () => {
     render(<Host disabled />);
     fireEvent.focus(screen.getByRole('button'));

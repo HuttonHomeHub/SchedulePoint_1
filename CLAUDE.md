@@ -3479,8 +3479,12 @@ progress` off the command surface because **an object action belongs on the obje
   `ICON_ONLY` glyphs named themselves to a mouse and to nobody else (#131). `useTooltip` is a
   hand-rolled APG **hook** (the `usePopoverPanel` trigger argument), meeting **WCAG 1.4.13 in
   full** with each clause a red-verified test: Dismissible (Escape claimed **only while open** —
-  the ADR-0080 ladder condition — with `preventDefault` **and** `stopPropagation`, #196a applied at
-  birth; focus unmoved), Hoverable (150 ms grace, pointer may rest on the tip), Persistent (no
+  the ADR-0080 ladder condition — via `preventDefault` **alone**: `stopPropagation` is
+  deliberately absent, because an ambient overlay must yield the press to the window/React rung it
+  was aimed at — the M-B pre-merge review blocked on the draft that had it, and this entry said
+  "and `stopPropagation`" until the M-G gate pass caught the same wrong claim here (ADR-0076
+  Class 3, in the register entry describing the decision); focus unmoved), Hoverable (150 ms
+  grace, pointer may rest on the tip), Persistent (no
   auto-dismiss timer exists). Hover opens at 400 ms, focus immediately, and a coarse-pointer
   **long-press** opens the name **without firing the command** — the following click swallowed in
   `onClickCapture`. **The load-bearing option is `purpose`, and it has no default**: `'name-echo'`

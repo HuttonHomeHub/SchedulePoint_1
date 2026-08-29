@@ -128,6 +128,8 @@ export function useTooltip({ content, purpose, disabled = false }: TooltipOption
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
   const suppressNextClick = useRef(false);
+  /** Strips the in-flight long-press's document listeners; set only while a press is live. */
+  const pressCleanup = useRef<(() => void) | null>(null);
 
   /**
    * One STABLE closure set per instance (a `useState` initializer, so it is minted exactly once):
@@ -151,10 +153,12 @@ export function useTooltip({ content, purpose, disabled = false }: TooltipOption
     return { clearTimers: clearTimersStable, close: tipHandle.close, handle: tipHandle };
   });
 
-  // Unmounting mid-delay clears every timer AND releases the token if this instance holds it.
+  // Unmounting mid-delay clears every timer, strips any in-flight long-press's document
+  // listeners, AND releases the token if this instance holds it.
   useEffect(
     () => () => {
       clearTimers();
+      pressCleanup.current?.();
       releaseTip(handle);
     },
     [clearTimers, handle],
@@ -292,9 +296,15 @@ export function useTooltip({ content, purpose, disabled = false }: TooltipOption
         document.removeEventListener('pointermove', onMove);
         document.removeEventListener('pointerup', clearMove);
         document.removeEventListener('pointercancel', clearMove);
+        pressCleanup.current = null;
       };
       document.addEventListener('pointerup', clearMove);
       document.addEventListener('pointercancel', clearMove);
+      // Unmounting mid-press must strip these three document listeners itself (the M-G
+      // frontend-performance review): the platform's own pointerup/pointercancel would fire
+      // momentarily and self-heal, but cleanup that depends on an external event rather than
+      // this component's lifecycle is the one place this file would hold a stale closure.
+      pressCleanup.current = clearMove;
     },
     onPointerUp: () => {
       // A lift before the threshold is a tap: the command proceeds and no tooltip shows.

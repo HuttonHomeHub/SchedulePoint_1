@@ -5748,3 +5748,30 @@ Two companions travel with the extraction:
   is byte-pinned by the golden log); and `HierarchyTree.tsx`'s `suppressClick` check-and-reset is
   duplicated between the row's and the name span's `onClick` (a `consumeSuppressedClick()` helper;
   no correctness bug today because `stopPropagation` means only one runs per click).
+
+## 211. Fix-slice M-G suggestions consciously not folded at the gate pass
+
+**Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
+items were the accessibility review's CLAUDE.md correction and the performance review's
+long-press listener cleanup, both landed with the pass) · **Size:** S ×3 · **Owner:** web
+
+Three suggestions judged real and filed rather than quietly dropped:
+
+- **The touch long-press has no visible affordance and no documentation a user would find** (ux).
+  `useTooltip`'s 500 ms long-press names an icon-only control without firing it, and nothing in
+  the product mentions the gesture — the shortcuts sheet is keyboard-shaped and unmounted from
+  the Gantt-less panels anyway. It degrades gracefully (a tap still fires the command exactly as
+  before), so this is an unadvertised affordance rather than a defect; the right home is
+  whatever touch-help surface exists when one does.
+- **A no-marks export shows a blank 22 px paper strip with no separator closing it off** (ux).
+  `EXPORT_MARKER_ROW` is reserved unconditionally (deliberate — geometry stability, see
+  DECISIONS.md 2026-08-29), so a plan with the data-date rule off and today outside the exported
+  span carries an empty strip between the title separator and the diagram. Cosmetic,
+  low-frequency, consistent with the on-screen ruler's own resting state.
+- **The export legend's group order differs from the DOM legend's** (ux, verified at the gate
+  pass rather than assumed): `TsldLegend` lists the marker entries (Data date, Today) before the
+  link entries; `EXPORT_LEGEND` lists links first. Pre-existing — M-F deliberately left
+  `EXPORT_LEGEND` untouched — and the relative Data-date-before-Today order the docblock pins
+  holds in both. The #48(e) hand-authored-mirror rule covers presence, not order; align order
+  the next time either legend is edited.
