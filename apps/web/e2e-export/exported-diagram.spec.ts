@@ -243,4 +243,69 @@ test.describe('The exported diagram', () => {
     const inkShare = toneShare(0, 200);
     expect(inkShare, 'no dark ink at all — bars and links are both missing').toBeGreaterThan(0.02);
   });
+
+  /**
+   * **Paper computes the product's typeface** (`docs/specs/typeface-outward-artefacts/`, M1-T6).
+   *
+   * The printed diagram and the printed programme both declared `font-family: 'Inter', …` in their
+   * own stylesheets — a face with no `@font-face` and no file in `src/assets/fonts/` — so the
+   * document fell through to `system-ui` while the diagram drawn inside it was IBM Plex Sans. One
+   * artefact, two typefaces, in the file a planner hands to a QS.
+   *
+   * **Only a browser can see this**, which is why the assertion is here and not in a unit suite.
+   * Every print unit suite runs in jsdom, where `getComputedStyle` resolves nothing — the same
+   * structural blindness recorded at the top of this file for the picture's layers. And the
+   * structural gate cannot see it either: it proves the STRINGS are right and can never prove a
+   * face resolved.
+   *
+   * `emulateMedia({ media: 'print' })` makes the browser evaluate `@media print`, so the computed
+   * value is what paper actually gets. **Verified red before the fix**: it returned a list
+   * beginning `Inter`. Measured at the same time, the two faces differ by 66 px on this fixture's
+   * plan name at 16 px, so this was a layout difference in the band and not only a cosmetic one.
+   */
+  test('the printed diagram computes the product typeface, not a face we have no file for', async ({
+    page,
+  }) => {
+    test.setTimeout(240_000);
+    // Its own fixture and its own plan: this file gives each test a fresh `page`, and a print
+    // document needs a plan behind it. One activity is enough — the assertion is about the
+    // document's computed family, not about what the diagram contains.
+    const orgSlug = await onboard(page, STAMP + 1);
+    await createHierarchy(page);
+    await newPlan(page, 'Print face');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
+    await recalculate(page, orgSlug);
+
+    await page
+      .getByRole('button', { name: /share.*export/i })
+      .first()
+      .click();
+    await page.getByRole('menuitem', { name: 'Print…', exact: true }).click();
+
+    const container = page.locator('.tsld-print-container');
+    await expect(container).toBeAttached({ timeout: 30_000 });
+
+    await page.emulateMedia({ media: 'print' });
+    try {
+      // The ROOT, not the container: the container is where the family is declared, and the root is
+      // where the two deleted overrides used to win. Asserting the root is what proves inheritance
+      // actually reaches the content rather than stopping at the box.
+      const family = await page
+        .locator('.tsld-print-root')
+        .first()
+        .evaluate((el) => getComputedStyle(el).fontFamily);
+
+      expect(
+        family,
+        `the printed diagram computes \`${family}\` — paper must lead with the product's own face`,
+      ).toMatch(/^"?IBM Plex Sans"?/);
+      expect(family, 'a face with no @font-face and no file must not appear at all').not.toContain(
+        'Inter',
+      );
+    } finally {
+      // Restore, or every later test in this serial file inherits print media.
+      await page.emulateMedia({ media: null });
+    }
+  });
 });

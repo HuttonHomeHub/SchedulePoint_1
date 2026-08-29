@@ -75,9 +75,14 @@ Status is never conveyed by colour alone — always pair with an icon and/or tex
 
 ### Typography
 
-- **Family:** `--font-sans` (Inter + system fallback); `--font-mono` for
-  numeric/code contexts. Numeric columns (amounts, counts) may use tabular
-  numerals.
+- **Family:** `--font-sans` (**IBM Plex Sans**, self-hosted); `--font-mono`
+  (**IBM Plex Mono**) for numeric/code contexts. Numeric columns (amounts,
+  counts) may use tabular numerals. **Never name a family anywhere else** — the
+  canvas and the print documents resolve nothing from the cascade and compose
+  `FONT_STACK` instead, which `typeface-reach.structural.test.ts` derives from
+  this token and pins. This line said "Inter + system fallback" until
+  2026-08-29, having been wrong through **both** deliberate face decisions; the
+  gate below exists because prose failed twice on this exact fact.
 - **Type scale** (Tailwind defaults; use these, don't invent sizes):
 
   | Token       | Size / line-height | Use                         |
@@ -320,10 +325,20 @@ Two consequences worth stating, because both were learnt the expensive way:
 Every pair that matters is asserted by `styles/token-contrast.test.ts` across the surface scopes
 below. **Do not quote a ratio here** — quote the gate.
 
-**The typeface is Space Grotesk** (ADR-0097), chosen from four candidates rendered on real product
-chrome. The palette's source description named Roboto; a per-theme typeface was rejected on the
-reasoning that it would shift layout and pull a second font at runtime for no accessibility or brand
-gain colour does not already deliver — and with one theme the question no longer arises.
+**The typeface is IBM Plex Sans**, with IBM Plex Mono for data — chosen by the product owner on
+2026-08-24 from three fully-realised directions rendered on the real workspace at 1646 px, and
+**self-hosted for privacy**: requesting a face from `fonts.gstatic.com` transmits every reader's IP
+to a third party on first paint, which a German court has found to breach the GDPR. A per-theme
+typeface was rejected on the reasoning that it would shift layout and pull a second font at runtime
+for no accessibility or brand gain colour does not already deliver — and with one theme the question
+no longer arises.
+
+**This paragraph said "The typeface is Space Grotesk" until 2026-08-29**, five days after the face
+changed, in the document that tells the next person what to author in. That is the drift class
+ADR-0058 exists for, and it had happened once before here — the Family line above named Inter
+through the Space Grotesk era as well. Two wrong answers, on one page, across two decisions. It is
+now gated: `typeface-reach.structural.test.ts` asserts that this document's stated family agrees
+with `--font-sans`, so a third face decision cannot leave this line behind.
 
 ### Surface scopes (ADR-0055)
 

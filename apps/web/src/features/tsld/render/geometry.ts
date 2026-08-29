@@ -251,6 +251,24 @@ export function dateLabelSlot(args: {
 /** Minimum clear room (px) to the same-lane neighbour before a beside label is worth drawing. */
 export const LABEL_BESIDE_MIN_PX = 24;
 /**
+ * **The product's typeface, as one string every canvas font composes** — the sans half of
+ * `--font-sans` in `globals.css`, spelled here because a canvas resolves nothing from the cascade
+ * and has to be told by hand.
+ *
+ * It lives in this leaf and not in a new module because `geometry-is-a-leaf.structural.test.ts`
+ * pins this file's imports with an exact `toEqual`: a constant imported from elsewhere would be a
+ * new edge in a graph that is deliberately closed. And it is a **string, not a token read at paint
+ * time**, because `measure.ts` keys its width memo by text alone and says so — that is sound only
+ * while the font is constant, and a per-paint token read would silently make it unsound.
+ *
+ * `typeface-reach.structural.test.ts` derives the leading family from `globals.css` and asserts
+ * this contains it, so the next face change fails a gate rather than shipping a third era of the
+ * drift `docs/TECH_DEBT.md` #173 records.
+ */
+export const FONT_STACK =
+  "'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+/**
  * The fixed label font. Constant so the width memo can key by text alone (font-stable).
  *
  * **It leads with the product's own face** (`docs/TECH_DEBT.md` #173, closed 2026-08-28): this
@@ -264,8 +282,7 @@ export const LABEL_BESIDE_MIN_PX = 24;
  * a width measured in the fallback face before the woff2 arrives would poison the memo for the
  * session.
  */
-export const LABEL_FONT =
-  "11px 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+export const LABEL_FONT = `11px ${FONT_STACK}`;
 
 /**
  * Discrete zoom stops → pixels per day. A continuous slider interpolates between them;

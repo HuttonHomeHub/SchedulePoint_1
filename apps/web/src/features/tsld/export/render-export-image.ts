@@ -1,4 +1,5 @@
 import { axisMarkers } from '../render/axis-markers';
+import { FONT_STACK } from '../render/geometry';
 import {
   DEFAULT_VIEW_TOGGLES,
   paintScene,
@@ -30,9 +31,21 @@ import { CANVAS_DATA_DATE_ENABLED } from '@/config/env';
  */
 
 /** Title-band typography (fixed, no domain string logic). */
-const TITLE_FONT = "600 16px system-ui, -apple-system, 'Segoe UI', sans-serif";
-const SUBTITLE_FONT = "12px system-ui, -apple-system, 'Segoe UI', sans-serif";
-const LEGEND_FONT = "11px system-ui, -apple-system, 'Segoe UI', sans-serif";
+/**
+ * **The band's four fonts compose `FONT_STACK`** — the product's face, the same one the diagram
+ * inside this picture is drawn in.
+ *
+ * They were `system-ui, -apple-system, 'Segoe UI', sans-serif` and received none of the 2026-08-24
+ * typeface decision, so an exported PNG had its diagram in IBM Plex Sans and the band around it in
+ * whatever the reader's machine resolved. Measured: at 16 px the two faces differ by **66 px** on
+ * this fixture's plan name, so the band was also laying out ~19 % wider than it should.
+ *
+ * `document.fonts.ready` is already awaited before any of these draw (`:136`), so there is no load
+ * race to solve here — that was checked rather than assumed.
+ */
+const TITLE_FONT = `600 16px ${FONT_STACK}`;
+const SUBTITLE_FONT = `12px ${FONT_STACK}`;
+const LEGEND_FONT = `11px ${FONT_STACK}`;
 
 /** Left inset (CSS px) of the band content. */
 const BAND_PAD = 16;
@@ -226,7 +239,7 @@ function drawTitleBand(
 }
 
 /** Marker-chip typography + geometry, matching the ruler's marker rows (`h-3.5` = 14 px, `px-1`). */
-const MARKER_FONT = "11px system-ui, -apple-system, 'Segoe UI', sans-serif";
+const MARKER_FONT = `11px ${FONT_STACK}`;
 const MARKER_CHIP_H = 14;
 const MARKER_CHIP_PAD_X = 4;
 
