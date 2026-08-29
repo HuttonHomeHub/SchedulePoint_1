@@ -99,3 +99,67 @@ this harness's `matchMedia` assertion exists to prevent one layer out.
 **exited 0**. The script maps `web:<name>` to `test:e2e:<name>`, and the measurement harnesses are
 `measure:<name>` — so the target does not exist and the runner reports success for having done
 nothing. A green run about nothing, in the tool used to prove things.
+
+---
+
+# M0-T2 — the vertical cost of 44 px, measured
+
+Instrument: `apps/web/measure-toolbar/control-height-cost.spec.ts`, at 1646 × 1097, three runs per
+figure. `aboveCanvas` is read from the **canvas's own `getBoundingClientRect().top`**, never by
+summing bands and never from the toolbar's `clientWidth` — the `vertical-stack` rule, and the
+reason ADR-0091 D4 was withdrawn.
+
+**Spread across all three runs was ZERO on every figure** (228–228, 244–244). That is worth stating
+because the protocol demanded three runs precisely because a single browser number has been wrong
+here before; on this measurement it was not.
+
+| treatment                                | fine: aboveCanvas | coarse: aboveCanvas | deck height | canvas    |
+| ---------------------------------------- | ----------------- | ------------------- | ----------- | --------- |
+| baseline                                 | 228               | 228                 | 108         | 808       |
+| **A** — 44 px globally, both pointers    | **244 (+16)**     | **244 (+16)**       | 124         | 792       |
+| **B** — 44 px coarse-only                | 228 (**+0**)      | **244 (+16)**       | 124 / 108   | 792 / 808 |
+| **C** — 44 px forms only, deck untouched | 228 (**+0**)      | 228 (**+0**)        | 108         | 808       |
+
+## F2 — the prediction is WRONG, and it lands EXACTLY on its own falsification boundary
+
+F2 predicted **≥ 36 px**, to be falsified **below 16 px**. The measurement is **+16.0 px** — which
+is neither: 16 is not ≥ 36, and it is not < 16.
+
+That is reported as it fell rather than rounded to the convenient side. Calling it "falsified"
+would overstate a condition written to be strict; calling it "not falsified" would imply the
+prediction survived, and it did not. **The honest reading is that the prediction was wrong by more
+than a factor of two, and the result sits on the exact pixel of the boundary drawn to catch it.**
+
+**Why 16 and not 44:** the deck holds **two rows** of controls (108 px = 2 × 36 + 36 of chrome;
+124 px = 2 × 44 + 36). Raising the control height does **not** force an extra wrapped line — it
+makes the two existing rows taller, so the cost is `2 × 8` and linear, not a line break. Every
+previous epic on this surface reasoned about wrapping; the arithmetic here is simpler than any of
+them assumed.
+
+## What this settles for the approved policy
+
+The product owner chose **44 px narrowed to `pointer: coarse` with named exceptions**. Treatment B
+is exactly that policy, measured:
+
+- a **mouse** user loses **0 px** of canvas — the ADR-0097 CQ-C 36 px decision is untouched;
+- a **touch** user loses **16 px** of 808, i.e. **2.0 %** of the diagram, and gains every target
+  going from 36 px to 44 px.
+
+**So CQ-2 does not fire.** Its default was to exempt the command surface if 44 px proved
+unaffordable; at 16 px on the touch path only, it is affordable, and the deck needs no exemption.
+
+## F3 — first half CONFIRMED, second half NOT MEASURED
+
+**Confirmed:** raising `--control-h` to 44 px coarse-only with the deck untouched (treatment C)
+costs **0 px** of diagram, on both pointers. Form controls live in dialogs and panels, so the form
+half of the contract is free and can ship independently of the deck half.
+
+**Not measured, and recorded as such rather than reported:** the harness queried
+`dialog[open], [role="dialog"]` at 390 × 844 and got an empty array — but it never **opened** a
+dialog, so the empty result means _nothing was open_, not _nothing overflowed_. Reporting "no
+dialog overflows" from that would be precisely the green-run-about-nothing this epic keeps
+catching in other instruments, so it is not reported.
+
+The question — does a 44 px form control push a dialog past a 844 px viewport — carries into **M3**,
+whose subject is the below-`md` surfaces anyway, and the harness needs a dialog-opening step before
+it can answer.
