@@ -372,7 +372,8 @@ export function TsldMinimap({
         <span className="text-sm font-medium">Overview</span>
         <Button
           variant="ghost"
-          size="icon-lg"
+          // `icon`, not the retired `icon-lg` — see `TsldLegendPanel.tsx` and ADR-0118 M3.
+          size="icon"
           aria-label="Hide overview"
           className="text-muted-foreground"
           onClick={handleClose}

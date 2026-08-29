@@ -2665,6 +2665,27 @@ native `Kind` filter, and the New-resource dialog's hand-rolled `Group` picker.
 | option height                        | —                                       | 32 px, every option clears 24 px |
 | covers its own field                 | —                                       | no (588 px of space below it)    |
 
+**CLOSED 2026-08-29 (ADR-0118 M3), by measurement rather than by argument.** This row's own
+conclusion — "the 44 px line is missed by **both**, so it is a product-wide control-height question
+(`--control-h`), not a reason to prefer one type over the other" — was exactly right, and giving
+`--control-h` a `pointer: coarse` axis answered it for both at once. Re-measured on the same screen
+with the same harness: the native `<select>` is **115 × 44** and the `Combobox` **303 × 44**, both
+reporting `clearsPlatformPreference: true` where both previously reported `false`. Neither control
+type is disadvantaged on touch, so the two held conversions have no coarse-pointer objection left.
+
+The re-run also found the half nobody had asked about: the OPEN list's **options were still 32 px**,
+and an option in an open listbox is a touch target like any other. Both the option rows and the
+"Load more" row now carry the same coarse floor (`shortestOption` 32 → **44**, list height 138 →
+186 px, still 17 % of the viewport). `Menu`'s items took it in the same pass — a menu is portalled
+and only exists while open, so it is the one control class the epic's surface sweeps structurally
+cannot see.
+
+What this still does not answer is unchanged: Chromium renders its own picker rather than the
+platform's, so how an iOS wheel or an Android sheet _feels_ against an in-flow listbox is a
+judgement, and nothing here has been driven with a real virtual keyboard taking half the viewport.
+
+<details><summary>The 2026-08-19 measurement, which set the question this row closed on</summary>
+
 **On this evidence there is no coarse-pointer penalty to the two held conversions**, and the two
 controls are indistinguishable closed. What the run **cannot** answer is unchanged and is why this
 row is narrowed rather than closed: Chromium renders its own picker rather than the platform's, so
@@ -2687,6 +2708,8 @@ moment it was created, only by editing it afterwards. It rendered, it looked rig
 covered the host. One correct pattern applied to one neighbour and not the other — the ADR-0064 §7
 shape, and the fifth epic running. Fixed with a regression test verified red first
 (`CreateResourceButton.test.tsx`).
+
+</details>
 
 ## 146. The `chrome` surface scope has no measured current-page state
 
@@ -3073,8 +3096,27 @@ buttons at two sizes. The tree holds **three** sizes in the same family of float
 `TsldViewControls.tsx:92,98` `icon` (40) — the third never mentioned here at all, which is why a
 reader picking this row up would have fixed two thirds of it and believed they were done. Written
 down because a row that names its own subject incompletely is the same defect class as one whose
-numbers have gone stale (#133), and only the second kind gets noticed. **Closes with ADR-0118 M3**,
-which migrates all three to the contract.
+numbers have gone stale (#133), and only the second kind gets noticed.
+
+**CLOSED 2026-08-29 (ADR-0118 M3) — and NOT the way this row and the epic's own plan said.** Both
+said the Legend's close moves **up to `icon-lg` (44)**, and the plan extended that to all three.
+That instruction was written before ADR-0118 **D2**, which narrowed the 44 px house rule to
+`pointer: coarse` — so following it would have applied a rule the same epic had already withdrawn,
+costing every fine-pointer planner 16 px of floating-panel chrome for no accessibility gain (28 and
+40 both clear the AA floor, and all three reach 44 under coarse through `--control-h` regardless).
+The §19 rule is to re-verify a plan's **problem**, and here it was the plan's **remedy** that had
+gone stale against its own epic three milestones later.
+
+So all three unify **downward-compatibly on `icon`** — 40 px fine, 44 px coarse — and `icon-lg` is
+**deleted**: its docblock cited a `docs/UX_STANDARDS.md` floor that ADR-0118 M1 had already
+rewritten, and it had exactly one consumer, which was the odd size out. A variant kept for a rule
+that no longer exists is this register's own drift class, living in the design system rather than
+in prose.
+
+The row's third correction stands and is worth keeping: the zoom steppers are a **stepper pair**,
+not a close affordance, so "three sizes in one family" was really two closes at two sizes beside an
+unrelated control class. Both closes now assert the shared size in their own suites, so they cannot
+part company again.
 
 ## 154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
 
@@ -5782,7 +5824,37 @@ Two companions travel with the extraction:
   duplicated between the row's and the name span's `onClick` (a `consumeSuppressedClick()` helper;
   no correctness bug today because `stopPropagation` means only one runs per click).
 
-## 213. Two controls are painted and not clickable at 390, and a breadcrumb is 20 px tall
+## 213. Two controls are painted and not clickable at 390, and a breadcrumb is 20 px tall — CLOSED
+
+**Raised:** 2026-08-29 (ADR-0118 M0-T1) · **Closed:** 2026-08-29 (ADR-0118 M3)
+
+**1 is fixed. 2 is a named exception, and the attempt to fix it made it worse — which is the more
+useful half.**
+
+The two unreachable controls were not covered by anything: they were **off-screen**, at x = 409 and
+x = 565 against a 390 px viewport. The mode cluster carried `shrink-0`, which takes `max-content`
+and can never be asked to give anything back, so the wrapping header row beside it was never asked
+to break a line — ADR-0114 M1's defect one surface along. Dropping `shrink-0` fixes it at **zero
+vertical cost**: the stack measures byte-identical at 1920, 1646, 1440 and 1280, because a flex
+item's default `min-width: auto` floors it at min-content while the identity slot carries `min-w-0`
+and still gives way first and completely (ADR-0112's ordering, unchanged).
+
+The **candidate** §2.5.8 ruling on the breadcrumb resolves as **compliant under that SC's Inline
+exception** — the crumb sits on a line of non-target text and its size is constrained by that
+line-height — and the house rule does not sensibly apply to it either. That is not a deferral: a
+`pointer-coarse:min-h-(--control-h)` box was built and measured, and the crumb came out at
+**16 × 44 at 390** — _worse_ on the axis that was already failing, because a truncated crumb's width
+IS the space left over. No CSS makes it 44 px wide, and the version that looks like it complies is
+the one that ships a 16 px target. It is excluded from the coarse gate structurally (by
+`nav[aria-label="Breadcrumb"]`, never by a size threshold), and the mitigation is that the same
+destinations are reachable at full size from the Explorer tree and the wordmark on the same row.
+
+**One consequence is recorded rather than left to be noticed**: the crumb at 390 is now **16 px
+wide instead of 23**, because the mode cluster shares the line differently. Both are below the AA
+floor and both rely on the same exemption, and the trade bought two controls going from
+_unreachable_ to _reachable_ at that exact width.
+
+<details><summary>The original row</summary>
 
 **Raised:** 2026-08-29 (ADR-0118 M0-T1) · **Size:** S · **Owner:** web
 
@@ -5810,6 +5882,8 @@ and had to correct it, so the call is deferred rather than asserted. What is not
 it is the smallest target in the product and nothing had ever measured it.
 
 Both are scheduled into **ADR-0118 M3**, whose subject is the below-`md` surfaces.
+
+</details>
 
 ## 214. An approved plan clause was never built, and its own risk table says it shipped
 

@@ -446,7 +446,10 @@ export function MenuItem({
         close?.();
       }}
       className={cn(
-        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none',
+        // `pointer-coarse:min-h-(--control-h)` (ADR-0118 M3): a menu item is a touch target, and
+        // at 32 px it was the one control class the epic's surface sweeps structurally cannot
+        // see — a menu is portalled and only exists while open. The fine 32 px is untouched.
+        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none pointer-coarse:min-h-(--control-h)',
         disabled
           ? [
               'text-muted-foreground cursor-default',

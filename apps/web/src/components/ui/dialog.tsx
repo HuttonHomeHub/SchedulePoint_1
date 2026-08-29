@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useEffect, useId, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -110,8 +111,19 @@ export function Dialog({
                 </p>
               ) : null}
             </div>
-            <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close dialog">
-              ✕
+            {/* **`size="icon"` and a Lucide `X`, matching `Sheet`'s close** (ADR-0118 M3).
+                It was `size="sm"` around a raw `✕` glyph, which made it **36 × 44** under a
+                coarse pointer — the height came from the token axis and the width came from
+                `px-3` plus one character, so it cleared the house rule on one axis only. Found by
+                the F3b measurement, which is the M0 falsification condition that had gone
+                unanswered because its first probe never opened a dialog.
+
+                Two primitives rendering the same affordance two ways is the shape this register
+                has recorded in six consecutive epics; `sheet.tsx` already used the icon button
+                and the icon. This is not a new decision, it is the existing one applied to its
+                neighbour. */}
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close dialog">
+              <X aria-hidden="true" className="size-4" />
             </Button>
           </div>
           {children}

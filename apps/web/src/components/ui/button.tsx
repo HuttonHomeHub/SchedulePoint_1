@@ -38,11 +38,12 @@ const buttonVariants = cva(
         // literal, because `size-(--control-h)` alone would take a mouse user's icon button from
         // 40 px DOWN to 36 — a regression bought while closing a touch gap.
         icon: 'size-10 pointer-coarse:size-(--control-h)',
-        // 44px icon button — the UX_STANDARDS floor for a NEW close/toggle affordance on a
-        // panel (minimap M2-T2; docs/UX_STANDARDS.md "Touch targets"). `icon` predates the
-        // floor at 40px; new panel chrome takes this one. Already at the house rule on both
-        // pointers, so it needs no coarse override.
-        'icon-lg': 'size-11',
+        // (`icon-lg`, `size-11`, was here and is **deleted** — ADR-0118 M3.) It existed because
+        // `docs/UX_STANDARDS.md` set an unconditional 44 px floor for a new panel close/toggle;
+        // ADR-0118 D2 narrowed that floor to `pointer: coarse`, which `icon` above now meets, so
+        // the variant's whole reason had lapsed and its one consumer — the minimap's close — was
+        // the odd size out in a family of three. A variant kept for a rule that no longer exists
+        // is the drift class this register tracks, in the design system rather than in prose.
         // Row-height icon button for dense lists (e.g. the Project Explorer tree, whose
         // rows are 28px).
         //

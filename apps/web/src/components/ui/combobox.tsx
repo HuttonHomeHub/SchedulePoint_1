@@ -409,7 +409,12 @@ export function Combobox({
           commit(option);
         }}
         className={cn(
-          'flex cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm',
+          // `pointer-coarse:min-h-(--control-h)` (ADR-0118 M3). Measured for `docs/TECH_DEBT.md`
+          // #145: closed, the combobox and the native `<select>` both clear 44 px under a coarse
+          // pointer once `--control-h` carries the input axis — but the OPEN list's options were
+          // still 32, and an option in an open listbox is a touch target like any other. The 32 px
+          // fine form is untouched: a picker's row rhythm is a density choice.
+          'flex cursor-pointer items-center justify-between gap-2 rounded-sm px-2 py-1.5 text-sm pointer-coarse:min-h-(--control-h)',
           option.disabled === true && 'text-muted-foreground cursor-default',
           // The active option is highlighted with a ring as well as a tint: `bg-accent` alone is
           // ~1.09:1 on the popover surface and fails WCAG 1.4.11 (the `MenuItem` precedent).
@@ -555,7 +560,9 @@ export function Combobox({
               loadMore();
             }}
             className={cn(
-              'text-muted-foreground hover:text-foreground w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm underline',
+              // Same coarse floor as the options above — this row is one of them in the sequence,
+              // and a "Load more" a thumb cannot hit is the ADR-0053 M6 finding one axis along.
+              'text-muted-foreground hover:text-foreground w-full cursor-pointer rounded-sm px-2 py-1.5 text-left text-sm underline pointer-coarse:min-h-(--control-h)',
               loadMoreActive && 'bg-accent text-accent-foreground ring-ring ring-2 ring-inset',
             )}
           >

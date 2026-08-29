@@ -58,6 +58,20 @@ describe('TsldLegendPanel', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  /**
+   * **The other half of the family contract** (ADR-0118 M3, closing `docs/TECH_DEBT.md` #153).
+   *
+   * This close was `icon-sm` (28) while the minimap's was `icon-lg` (44) and the zoom steppers
+   * were `icon` (40) — three sizes in one family of floating canvas panels, which the register's
+   * own row described as two, so a reader picking it up would have fixed two thirds of it and
+   * believed they were done. Asserted at both sites (`TsldMinimap.test.tsx` carries its half) so
+   * the two cannot part company again without something failing.
+   */
+  it('the close is the shared floating-panel icon size, matching the minimap', () => {
+    render(<TsldLegendPanel open position={null} onClose={vi.fn()} onPositionChange={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Hide legend' }).className).toContain('size-10');
+  });
+
   it('applies the saved drag position as an inline offset', () => {
     render(
       <TsldLegendPanel
