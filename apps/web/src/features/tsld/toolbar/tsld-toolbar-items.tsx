@@ -1870,8 +1870,13 @@ function UndoRedoControl({
   });
   return (
     <button
-      {...api.itemProps}
+      // Tooltip props FIRST, then the registry's — `ToolbarButton`'s documented order, and the
+      // safe direction: on any future overlap the roving-focus wiring wins over an ambient
+      // affordance rather than being silently dropped. Only `onFocus` overlaps today, and it is
+      // explicitly composed below. (This was the other way round until the M-G component review;
+      // it was accidentally safe, not chosen.)
       {...tipTrigger}
+      {...api.itemProps}
       type="button"
       aria-label={label}
       aria-keyshortcuts={keyShortcuts}
