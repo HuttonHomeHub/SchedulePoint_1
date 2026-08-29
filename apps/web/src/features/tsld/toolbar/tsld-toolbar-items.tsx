@@ -1050,7 +1050,15 @@ function SearchFieldControl({
         //
         // The coarse-pointer conditional goes with it rather than being kept as a floor. It existed
         // to raise a 32 px target for touch; the base is 36 px now, so it can only ever be a no-op.
-        className={cn('h-9 pl-8 text-sm', searchFieldWidth(layout))}
+        //
+        // **`h-(--control-h)` rather than `h-9`** (ADR-0118 M2). The literal was correct while the
+        // deck's controls were also a literal 36; giving `--control-h` a coarse axis made it wrong
+        // in exactly the way this comment already describes happening once — the first measurement
+        // after the axis landed found every deck control at 44 × 44 under coarse and this field
+        // alone at 240 × 36, "the ONE deck control sized outside" the rule, for the second time and
+        // for the same reason. A literal cannot follow a token; it can only agree with it until
+        // the token moves.
+        className={cn('h-(--control-h) pl-8 text-sm', searchFieldWidth(layout))}
       />
     </div>
   );
