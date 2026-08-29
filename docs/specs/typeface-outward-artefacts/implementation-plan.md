@@ -502,8 +502,36 @@ for the grid, and both halves go through one `openPrintDocument` helper that **a
 not shaded before clicking**. Verified red by forcing `hasDiagram` to `false` — it now fails in one
 second naming the real reason instead of timing out on a symptom.
 
-Worth carrying: this is the third time in this epic that something passed locally and could not
-have on a slower machine, and the tell each time was an assertion waiting on the wrong subject.
+**The second CI run then failed at the TSLD print, and it is worth reading how the first diagnosis
+was partly wrong.** The shaded-item guard was correct as a guard and was NOT the cause: it went
+green on the next run and the failure moved one line down, from "the item is shaded" to "the
+container never mounted". Re-reading the first run's stack showed it had been the TSLD half all
+along — the comment quoted beneath the failing line belonged to the diagram, not the programme —
+so the Gantt attribution was mine, not the log's.
+
+**What was measured rather than guessed.** A throwaway probe drove Print… on a fresh page and
+recorded the container count and `afterprint` at 0/50/200/800/2000 ms: `{containers: 1,
+afterprint: 0}` at every sample. So nothing tears the document down, and the container is not a
+race against teardown — the failure is that it is never created. The TSLD path builds the
+whole-plan PNG **before** it mounts anything and returns silently when that build cannot start
+(`buildDiagramImage` is null when the canvas handle or the data date is absent), or renders a
+`role="alert"` when the build rejects. The one thing CI's failing sequence had that the passing
+probe did not was **a PNG export already run in the same page**.
+
+Two changes, and the second is the one that matters if the cause is ever chased again:
+
+1. **The paper assertions are their own test with their own fixture.** Two artefacts related only
+   by being made from the same diagram do not need to share a page, and one test asserting two
+   things fails without saying which.
+2. **`openPrintDocument` races the error banner and reports what the app said.** The app answers a
+   failed build with a visible `role="alert"`; the test was waiting thirty seconds for a container
+   and reporting "element(s) not found", which names the symptom and hides the cause. It now fails
+   in seconds quoting the application's own sentence.
+
+Worth carrying: this is the third time in this epic that something passed locally and failed on a
+slower machine, and twice the first diagnosis was wrong in a way only running an instrument
+corrected. The guard added for the first diagnosis is kept — it is right on its own terms, and
+proving it green is what located the real failure one line further on.
 
 ##### Task M2-U3 — An ADR, only if the reviewer asks _(unscheduled)_
 

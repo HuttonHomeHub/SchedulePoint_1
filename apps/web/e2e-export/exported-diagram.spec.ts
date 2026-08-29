@@ -94,7 +94,26 @@ async function openPrintDocument(page: Page): Promise<void> {
   await print.click();
   // `attached`, not the default visibility: the container is `display: none` until the print
   // stylesheet shows it.
-  await expect(page.locator('.tsld-print-container')).toBeAttached({ timeout: 30_000 });
+  //
+  // **Racing the banner is the diagnosis, not belt-and-braces.** The TSLD path builds the
+  // whole-plan PNG first and only mounts on success; a build failure is caught, announced and
+  // rendered as a `role="alert"`. Without this the assertion waits the full thirty seconds, three
+  // times, and reports "element(s) not found" — which names the symptom and hides the cause, and
+  // is exactly what a CI run cost before this was here.
+  const container = page.locator('.tsld-print-container');
+  const banner = page.getByRole('alert').first();
+  await Promise.race([
+    container.waitFor({ state: 'attached', timeout: 30_000 }).catch(() => undefined),
+    banner.waitFor({ state: 'visible', timeout: 30_000 }).catch(() => undefined),
+  ]);
+  if ((await container.count()) === 0) {
+    const said = await banner.textContent().catch(() => null);
+    throw new Error(
+      said
+        ? `Print… was clicked and the app answered "${said.trim()}" instead of mounting a print document`
+        : 'Print… was clicked, no print document mounted, and the app reported nothing',
+    );
+  }
 }
 
 async function expectPaperFace(page: Page, selector: string, what: string): Promise<void> {
@@ -308,8 +327,8 @@ test.describe('The exported diagram', () => {
   });
 
   /**
-   * **The picture and the paper are both set in the product's typeface**
-   * (`docs/specs/typeface-outward-artefacts/`, M1-T6 + M2-U1).
+   * **The exported picture is DRAWN in the product's typeface**
+   * (`docs/specs/typeface-outward-artefacts/`, M2-U1; the paper half is the test below).
    *
    * Two artefacts leave the product carrying type that no cascade governs, and both had received
    * none of the face decision the product owner made on 2026-08-24:
@@ -341,7 +360,7 @@ test.describe('The exported diagram', () => {
    * Measured on this fixture's name once the guards were added: 66.32 px apart, eight times the
    * bar — so the wrong face was also laying the band out ~19 % wider.
    */
-  test('the picture and the paper are both set in the product typeface', async ({ page }) => {
+  test('the exported picture is drawn in the product typeface', async ({ page }) => {
     test.setTimeout(240_000);
     // Its own fixture and its own plan: this file gives each test a fresh `page`, and both a print
     // document and an export need a plan behind them. One activity is enough — neither assertion
@@ -454,6 +473,29 @@ test.describe('The exported diagram', () => {
         `and ${candidates.system} for the one the band used to name — the band was not drawn in ` +
         'the product face',
     ).toBeLessThan(Math.abs(drawn - candidates.system));
+  });
+
+  /**
+   * **Paper, in its own test and its own fixture, deliberately.**
+   *
+   * It began as the second half of the test above, and CI would not have it: the printed diagram
+   * never mounted, on three attempts running, while the same sequence passed on a developer
+   * machine every time. The one thing that differed was that the PNG export had already run in
+   * that page — and a throwaway probe against a fresh page (Print… clicked with nothing before it)
+   * mounted the container and held it, with `afterprint` never firing.
+   *
+   * Two artefacts related only by being made from the same diagram do not need to share a page,
+   * and one test asserting two things fails without saying which. So they are two tests, and this
+   * one starts clean.
+   */
+  test('paper is set in the product typeface — the diagram and the programme', async ({ page }) => {
+    test.setTimeout(240_000);
+    const orgSlug = await onboard(page, STAMP + 2);
+    await createHierarchy(page);
+    await newPlan(page, 'Paper face');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
+    await recalculate(page, orgSlug);
 
     // ── The paper. The printed document is a separate artefact with its own stylesheets, and
     // `emulateMedia({ media: 'print' })` makes the browser evaluate `@media print`, so the computed
