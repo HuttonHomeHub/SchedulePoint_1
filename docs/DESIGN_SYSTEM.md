@@ -111,6 +111,10 @@ groups, `8`–`12` between page sections.
 ### Sizing scale
 
 Controls share a height scale for alignment: **sm 32px**, **md 36px (default)**, **lg 44px**.
+**`md` is the default under a fine pointer; `lg` is the floor under `pointer: coarse`** — the input
+is an axis of the scale, not a separate set of sizes (ADR-0118 §D2). Measured, the coarse pointer
+moved **width only** on every control in the product and height on none, so this axis is a
+deliberate addition rather than a description of what was already there.
 Content width is capped with container utilities (e.g. `max-w-screen-xl`) rather than fixed pixel
 widths.
 
@@ -450,7 +454,10 @@ which would slip past the regex while changing nothing.
 - **Never colour alone** to convey meaning — pair with icon/text.
 - **Forms:** programmatic label per control; errors linked via
   `aria-describedby` + `aria-invalid`; first invalid field focused on submit.
-- **Targets:** ≥ 24×24px (prefer ≥ 44px on touch).
+- **Targets (ADR-0118):** ≥ 24×24px everywhere (WCAG 2.2 §2.5.8, AA — gated);
+  **≥ 44px under `pointer: coarse`** (§2.5.5 Enhanced, AAA — the house rule,
+  not the law), with any surface that cannot meet it named in ADR-0118 §D1
+  alongside its non-pointer equivalent. The fine-pointer default stays 36px.
 - **Motion:** honour reduced-motion. **Live regions** announce async updates
   (toasts, validation, loading completion).
 

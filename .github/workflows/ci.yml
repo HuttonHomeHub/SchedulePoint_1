@@ -581,7 +581,8 @@ jobs:
       # ever to run below `lg`: the off-canvas Sheet that IS the Project Explorer on a narrow
       # screen, the hamburger that opens it, the matchMedia effect that closes it on crossing
       # 1024, and the below-`md` facts fallback ADR-0114 M7 found broken. No flags to pin (default
-      # bundle = shipped surface); the pointer stays FINE deliberately — the coarse axis is #133's.
+      # bundle = shipped surface); the pointer stays FINE here deliberately — the coarse axis is
+      # ADR-0118's, gated by the coarse projection in `e2e-workspace-fit` (#133 closed 2026-08-28).
       # It earned its place on its first run: the sheet had NO ground at all (`bg-transparent`
       # dialog, no Surface at the call site), invisible to every suite because none had ever
       # opened it. Runs after the prior suites tear down.

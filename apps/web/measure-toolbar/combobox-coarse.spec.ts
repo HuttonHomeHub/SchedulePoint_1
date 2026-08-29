@@ -13,8 +13,10 @@ import { clearMeasurement, writeMeasurement } from './output';
  * the failure would be silent: a converted picker looks correct on every desktop and the only
  * person who meets the worse control is on a device nobody tested.
  *
- * This is #133 one surface along. That row records that **no toolbar measurement in this repository
- * had ever been taken with a coarse pointer**, because Playwright defaults to a fine one. #133 is
+ * This is #133 one surface along. That row recorded that **no toolbar measurement in this
+ * repository had ever been taken with a coarse pointer**, because Playwright defaults to a fine
+ * one — a claim true when written, falsified since by #133's own closing measurement and again by
+ * `control-heights.spec.ts` (ADR-0118 M0). #133 is
  * about control *sizing*; this is about whether a whole control *type* is the right choice on
  * touch.
  *

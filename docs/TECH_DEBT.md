@@ -3031,7 +3031,7 @@ after the fit (re-run the reveal for the current selection — smallest, command
 the oracle). The probe (`m0-t5-zoom-probe.mjs`, method recorded in
 `docs/specs/tsld-minimap/m0-measurement.md`) is kept with this row, not merged as a gate.
 
-## 153. Two close buttons, one corner, two target sizes
+## 153. THREE icon sizes in one family of canvas panels, not the two this row named
 
 **Raised 2026-08-21** (minimap M2/M4, beside #127). **Size:** S.
 
@@ -3042,6 +3042,15 @@ the other floating panel, sometimes parked in the same corner — closes with `i
 mass-migrating existing 40 px/28 px icon buttons is #127's scope, and doing it as a
 side-effect of the minimap would have put a dozen unrelated screens on this diff. What is
 owed: when #127 is picked up, the Legend's close moves to `icon-lg` in the same pass.
+
+**Re-derived 2026-08-29 (ADR-0118 M0-T4) and the row understated itself.** It describes _two_
+buttons at two sizes. The tree holds **three** sizes in the same family of floating canvas panels:
+`TsldLegendPanel.tsx:166` `icon-sm` (28), `TsldMinimap.tsx:375` `icon-lg` (44), and
+`TsldViewControls.tsx:92,98` `icon` (40) — the third never mentioned here at all, which is why a
+reader picking this row up would have fixed two thirds of it and believed they were done. Written
+down because a row that names its own subject incompletely is the same defect class as one whose
+numbers have gone stale (#133), and only the second kind gets noticed. **Closes with ADR-0118 M3**,
+which migrates all three to the contract.
 
 ## 154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
 
@@ -5748,6 +5757,56 @@ Two companions travel with the extraction:
   is byte-pinned by the golden log); and `HierarchyTree.tsx`'s `suppressClick` check-and-reset is
   duplicated between the row's and the name span's `onClick` (a `consumeSuppressedClick()` helper;
   no correctness bug today because `stopPropagation` means only one runs per click).
+
+## 213. Two controls are painted and not clickable at 390, and a breadcrumb is 20 px tall
+
+**Raised:** 2026-08-29 (ADR-0118 M0-T1) · **Size:** S · **Owner:** web
+
+Found by the first instrument in this repository to sweep every pointer target on every surface a
+touch user reaches. **Neither is a touch defect** — both reproduce identically under a fine
+pointer, which is the part worth carrying: a coarse-pointer investigation surfaced them, a narrow
+viewport causes them.
+
+**1. Painted, not clickable.** At 390 × 844, the plan header's `view-gantt` (82 × 36) and
+`Stop editing` (103 × 32) have a non-zero box and return **another element** from
+`elementFromPoint` at their own centre. A planner on a phone cannot switch to the Gantt or release
+the pen by touching them. This is the `#124` / ADR-0114 M1 shape — a control that is _painted_ is
+indistinguishable from one that _works_ until something calls `elementFromPoint` — and
+`apps/web/e2e-narrow-shell` already drives that exact viewport without seeing it, because it
+asserts sheet navigation rather than sweeping every target.
+
+**2. A 20 px breadcrumb.** The plan header's client link renders **58 × 20** at 1646 and
+**23 × 20** at 390 — under WCAG 2.2 §2.5.8's 24 px AA floor on the height axis at both widths, and
+on **both** axes on the phone.
+
+**Stated as a CANDIDATE failure, not a ruling.** §2.5.8 exempts a target "in a sentence or block of
+text", and whether a breadcrumb is inline text or a list of controls is exactly the judgement
+`accessibility-reviewer` exists for. This register overstated a success criterion once (ADR-0082)
+and had to correct it, so the call is deferred rather than asserted. What is not in doubt is that
+it is the smallest target in the product and nothing had ever measured it.
+
+Both are scheduled into **ADR-0118 M3**, whose subject is the below-`md` surfaces.
+
+## 214. An approved plan clause was never built, and its own risk table says it shipped
+
+**Raised:** 2026-08-29 (ADR-0118 M0) · **Size:** S · **Owner:** web
+
+`docs/specs/workspace-chrome-fit/implementation-plan.md:306` (approved) requires the target-size
+sweep to run "…at every width, **in both plan views, once with a coarse pointer**", and its US-5
+carries an approved acceptance criterion for the coarse minor axis. Its risk table at `:622` then
+lists that sweep as the **mitigation** for the named risk _"a touch target shrinks (TECH_DEBT
+#127/#133 are open)"_.
+
+The shipped `apps/web/e2e-workspace-fit/command-surface.spec.ts` contains **zero** occurrences of
+`hasTouch`, `pointerType` or `view=gantt`. Two clauses of an approved task were not built, one
+acceptance criterion was never asserted, and **the document asserts the mitigation as delivered**.
+
+This is the ADR-0090 M5 shape — _a document describing work correctly and the work not happening_ —
+with a risk table claiming otherwise on top, which is worse than the plain version: ADR-0058's rule
+is _verify the claim_, and here the claim is that something is already verified.
+
+Discharged by **ADR-0118 M2**, which builds the coarse projection the clause asked for; the Gantt
+half (`view=gantt`) is carried into M3 with the surfaces it belongs to.
 
 ## 212. An overlay's height ceiling must not be measured from its own output
 

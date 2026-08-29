@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1108 web
 > source files with 41 Playwright suites beside the base journey, and
-> 117 ADRs.
+> 118 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3500,6 +3500,37 @@ progress` off the command surface because **an object action belongs on the obje
   landed (ADR-0115 restored `zoom-to-selection`'s label) — corrected in the register rather than
   stepped over; the primitive still covers any future icon-only control by construction. **The CPM
   engine is not imported and no migration runs.**
+
+- **ADR-0118** _(Accepted; M0–M1 landed 2026-08-29)_ — A control height is one decision, and the
+  input is an axis of it. The product published **three different** target-size rules — 44 px
+  unconditional (`UX_STANDARDS.md`), ≥ 24 preferring 44 (`DESIGN_SYSTEM.md:453`), and a scale
+  defaulting to **36** (`:113`) — met by nothing, and **never measured, because no gate here had
+  ever run with a coarse pointer.** `e2e-toolbar-fit` once carried both a §2.5.8 sweep and a
+  coarse-geometry block; ADR-0109 D1 deleted that suite, `#186` noticed the sweep was gone and
+  lifted it into `e2e-workspace-fit`, and **nothing noticed the coarse half** — half a deleted gate
+  restored, half not, with no row recording the difference. 44 px is also **§2.5.5 AAA, not AA**,
+  which reviewers had been reading as a compliance requirement.
+  **Measured before anything was designed, against five conditions committed in their own commit
+  first.** The coarse pointer moves **width only** — 46 comparable targets, height differs on
+  **zero**, width on 29, every one the `px-2` → `px-3` swap worth exactly 8 px — so an input axis
+  **introduces** a distinction rather than formalising one, and D2 argues for it on those terms.
+  44 px costs the deck **+16 px, not the ≥ 36 predicted**: the deck holds **two rows**, so a taller
+  control makes them taller rather than wrapping a third, and the cost is `2 × 8`, linear. The
+  prediction was wrong by more than a factor of two and landed on the **exact pixel of its own
+  falsification boundary**, recorded that way rather than rounded to either side. Coarse-only 44 px
+  therefore costs a mouse user **0 px** and a touch user **16 of 808 (2.0 %)** — so CQ-2 does not
+  fire and the command surface needs no exemption — and a coarse projection of the existing sweep
+  costs **~2.5 s against a 90 s bar**, so CQ-3 does not escalate to a sibling suite.
+  Two defects it found are **not touch defects** and are recorded as such (`#213`): two plan-header
+  controls **painted and not clickable** at 390, and a **20 px** breadcrumb (a _candidate_ §2.5.8
+  failure — that SC exempts inline text, and this register overstated an SC once). An approved plan
+  clause was never built while its own risk table claims it shipped (`#214`). And **four instruments
+  were caught lying**, one of them mid-audit: a token comparison of `2.25rem` against `36px` that
+  reported "the token governs nothing"; `e2e-local.sh` exiting **0** having run no test; a dialog
+  probe that measured nothing while looking like a result; and a `grep … | head` that returned ten
+  of 26 references and nearly turned a true claim into a false correction. `command-surface.spec.ts`'s
+  "~25 s fixture" is **7.5 s**, a docblock number nobody had run and the plan quoted forward.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

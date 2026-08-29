@@ -13,8 +13,10 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * The default viewport is a phone (390 × 844, well under `md`); the breakpoint-crossing test sets
  * its own sizes with `setViewportSize`. **The pointer stays fine** (Playwright's default): the
- * coarse-pointer axis belongs to `docs/TECH_DEBT.md` #133 and `measure-toolbar`, and mixing the
- * two axes in one new suite would blur which failure means what.
+ * coarse-pointer axis belongs to **ADR-0118**, gated by the coarse projection in
+ * `e2e-workspace-fit`, and mixing the two axes in one new suite would blur which failure means
+ * what. (This named `docs/TECH_DEBT.md` #133 until 2026-08-29 — a live deferral pointing at a row
+ * closed on 2026-08-28, which reads exactly like one whose owner still exists.)
  *
  * **No `VITE_` pins at all** — the same choice `playwright.workspace-chrome.config.ts` makes and
  * for the same reason: a published image carries every flag at its default (ADR-0088 D1), so the
