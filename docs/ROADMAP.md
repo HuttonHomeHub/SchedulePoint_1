@@ -522,6 +522,17 @@ discriminators. Each becomes a spec/plan before build:
   answer rather than a deferral: the admissible window is under two points wide and the rule would
   enforce halation, which does not occur on the ground it would guard.
 
+- **One control height, with the input as an axis of it** — **in progress** (ADR-0118, 2026-08-29).
+  The product published "touch targets ≥ 44px" in `UX_STANDARDS.md`, "≥ 24, prefer 44" in
+  `DESIGN_SYSTEM.md`, and a scale defaulting to 36 — three statements, met by nothing, and never
+  measured, because **no gate here had ever run with a coarse pointer**. Measured first: the coarse
+  pointer moves **width only** on every control and height on none; 44 px costs the command deck
+  **16 px, not the ≥ 36 predicted**, because the deck's two rows grow taller rather than wrapping a
+  third. So the rule narrows to `pointer: coarse` with named exceptions — a mouse user loses 0 px of
+  diagram, a touch user 16 of 808 — and the coarse axis stops being deferred to a register row that
+  closed the day before. The epic also found two defects that are **not** touch defects (#213) and
+  an approved plan clause whose own risk table claims it shipped (#214).
+
 - **Icon-only commands name themselves everywhere** — **shipped** (ADR-0117, 2026-08-28, the
   fix-slice epic). The product's first Tooltip primitive: a hand-rolled APG hook meeting
   WCAG 1.4.13 in full, opening on hover, on focus, and on a coarse-pointer long-press that shows

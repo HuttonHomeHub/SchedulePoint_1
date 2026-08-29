@@ -7,9 +7,17 @@ const toggleChipVariants = cva(
   'focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-full border text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
+      // **`min-h-*` on the token, not a literal height** (ADR-0118 M4). A chip is a control — the
+      // canvas lens toggles are chips — and it was 32/28 px on both pointers, i.e. below the house
+      // rule on touch and invisible to every surface sweep, because a chip renders inside a panel
+      // rather than on the deck, the header or the Explorer. Found by the primitive gate this
+      // milestone built rather than by a reviewer reading the file.
+      //
+      // `min-h` rather than `h` so a chip whose label wraps grows instead of clipping; the fine
+      // values are unchanged at 32 and 28.
       size: {
-        default: 'h-8 px-3',
-        sm: 'h-7 px-2.5 text-xs',
+        default: 'min-h-8 px-3 pointer-coarse:min-h-(--control-h)',
+        sm: 'min-h-7 px-2.5 text-xs pointer-coarse:min-h-(--control-h)',
       },
       pressed: {
         // Pressed state is carried by fill AND border, never by colour alone — a chip that

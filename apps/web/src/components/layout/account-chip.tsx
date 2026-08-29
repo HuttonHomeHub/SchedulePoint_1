@@ -61,7 +61,10 @@ export function AccountChip({ className }: { className?: string }): React.ReactE
         aria-label={email ? `Account: ${email}` : 'Account'}
         onClick={toggle}
         className={cn(
-          'focus-visible:ring-ring hover:bg-accent flex shrink-0 items-center gap-1 rounded-full py-0.5 pr-1 pl-0.5 outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+          // `pointer-coarse:min-h-(--control-h)` (ADR-0118 M3) — measured 52 x 32 on touch, under
+          // the house rule. Fine is unchanged: the chip's height comes from its 28 px avatar, and
+          // the axis is the input device rather than the screen.
+          'focus-visible:ring-ring hover:bg-accent flex shrink-0 items-center gap-1 rounded-full py-0.5 pr-1 pl-0.5 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 pointer-coarse:min-h-(--control-h)',
           className,
         )}
       >

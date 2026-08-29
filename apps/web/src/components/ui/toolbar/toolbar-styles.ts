@@ -103,13 +103,18 @@ import { cva } from 'class-variance-authority';
  * export above — and because the ADR-0097 weight ratchet counts `font-*` placed outside the
  * primitives, so a screen that respells this line is both a drift risk and a ratchet hit.
  *
- * `min-h-9` is the control box (`toolbarControlVariants`' 36 px): captions centre beside real
- * controls, and a shorter box put their labels ~2 px adrift (the M1-T1 measurement). Consumers add
- * their own geometry — the deck its `gap-1` chevron seam and fold affordances, the selection bar
- * a `px-1`.
+ * The box is `--control-h`, which is what `toolbarControlVariants` uses: captions centre beside
+ * real controls, and a shorter box put their labels ~2 px adrift (the M1-T1 measurement). It was
+ * the literal `min-h-9` until ADR-0118 M2 gave that token a coarse axis — at which point a literal
+ * here would have held the caption at 36 px while its own controls went to 44, putting every
+ * caption 4 px adrift **on touch only**, which is the one place nobody was looking. One correct
+ * pattern applied to a control and not its neighbour is the shape this register has recorded in
+ * six consecutive epics; the fix is that both read the same token, not that both were remembered.
+ * Consumers add their own geometry — the deck its `gap-1` chevron seam and fold affordances, the
+ * selection bar a `px-1`.
  */
 export const TOOLBAR_CAPTION =
-  'text-primary text-micro flex min-h-9 shrink-0 items-center font-bold tracking-wider uppercase';
+  'text-primary text-micro flex min-h-(--control-h) shrink-0 items-center font-bold tracking-wider uppercase';
 
 export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2 rounded-md', {
   variants: {
@@ -124,8 +129,9 @@ export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2
      * context: the padding and the border cost a line **because the foot row is already the
      * container**, not because the card is denser.
      *
-     * `boxed` is the deck's own: a `border` and `px-2 py-1.5` around `min-h-9` content, right in a
-     * band the deck owns outright.
+     * `boxed` is the deck's own: a `border` and `px-2 py-1.5` around `--control-h` content (it read
+     * `min-h-9` until ADR-0118 M2 gave that token a coarse axis), right in a band the deck owns
+     * outright.
      *
      * `bare` is for a card inside a row that is already the container — the canvas selection bar in
      * the plan's foot row, where `selection-actions.tsx` records why the docked bar had no box at
@@ -142,21 +148,36 @@ export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2
   defaultVariants: { chrome: 'boxed' },
 });
 
-export const TOOLBAR_CARET_TARGET = 'min-w-6 justify-center pointer-coarse:px-2';
+/**
+ * A split button's caret is a pointer target in its own right and **not** a `[data-toolbar-item]`
+ * — the item attribute sits on the PRIMARY button, and its sibling caret is exactly the control
+ * ADR-0110 D5 records shipping at **23 × 36** past a sweep that descended per-item and could not
+ * see it. So its coarse floor is stated here rather than inherited: `min-w-(--control-h)` makes it
+ * 44 wide under a coarse pointer, matching the height the same token gives it.
+ */
+export const TOOLBAR_CARET_TARGET =
+  'min-w-6 justify-center pointer-coarse:px-2 pointer-coarse:min-w-(--control-h)';
 
 export const toolbarSplitCaretVariants = cva(
   `border-border ml-0.5 flex items-center self-stretch border-l pl-1.5 opacity-70 ${TOOLBAR_CARET_TARGET}`,
 );
 
 /**
- * **Touch** (ADR-0090 M3-T4). Under `@media (pointer: coarse)` the control keeps its `min-h-9` and
- * widens to `px-3`, taking an icon-only button from **32 × 36 to 40 × 36**.
+ * **Touch** (ADR-0090 M3-T4, completed by ADR-0118 M2). Under `@media (pointer: coarse)` the
+ * control widens to `px-3` **and** takes its height from `--control-h`, which the input axis
+ * re-values to 44 px — so an icon-only button goes **32 × 36 → 44 × 44**.
  *
- * *Toward* the house ≥ 44 px rule (`docs/UX_STANDARDS.md`), which today's 32 × 36 already fails on
- * **both** axes — and this closes one of them. **The 36 px minor axis is not claimed closed**: it is
- * `min-h-9` on a control whose row height the whole epic is trying to reduce, and raising it is a
- * vertical-space decision that belongs with M4's header merge, not a padding tweak. Recorded as
- * `docs/TECH_DEBT.md` #127.
+ * **The minor axis is now closed, and it was measured rather than argued.** ADR-0090 M3-T4 moved
+ * width only and this docblock recorded the height as owed (`docs/TECH_DEBT.md` #127), on the
+ * reasoning that raising `min-h-9` was "a vertical-space decision" too expensive for a padding
+ * tweak. Measured at 1646 (ADR-0118 M0-T2, three runs, zero spread) that decision costs **16 px of
+ * 808 — 2.0 % — and only on the touch path**; a mouse user loses nothing, because the axis is
+ * `pointer: coarse` and the fine default stays 36 px. The deck holds two rows, so a taller control
+ * makes those rows taller rather than wrapping a third: the cost is `2 × 8`, linear, not the
+ * ≥ 36 px the epic's own prediction expected.
+ *
+ * The height is `min-h-(--control-h)` rather than a `pointer-coarse:` utility of its own, so the
+ * input axis lives in ONE place (`globals.css`) and this file cannot drift from the forms.
  *
  * **The shared CVA is not densified in the other direction** (feature-spec §6 Q4): a global re-value
  * would degrade every touch user to satisfy a desktop complaint, and would buy ≈ 96 px against a
@@ -167,7 +188,7 @@ export const toolbarSplitCaretVariants = cva(
  * have absorbed 8 px each, and 28 can. That is a real benefit of M2 rather than a claim about it.
  */
 export const toolbarControlVariants = cva(
-  'focus-visible:ring-ring pointer-coarse:px-3 inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset',
+  'focus-visible:ring-ring pointer-coarse:px-3 pointer-coarse:min-w-(--control-h) inline-flex min-h-(--control-h) items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-inset',
   {
     variants: {
       tone: {

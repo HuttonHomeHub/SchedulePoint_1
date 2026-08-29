@@ -32,13 +32,38 @@ const buttonVariants = cva(
         default: 'h-(--control-h) px-4 py-2',
         sm: 'h-(--control-h-sm) px-3',
         lg: 'h-11 px-6',
-        icon: 'size-10',
-        // 44px icon button — the UX_STANDARDS floor for a NEW close/toggle affordance on a
-        // panel (minimap M2-T2; docs/UX_STANDARDS.md "Touch targets"). `icon` predates the
-        // floor at 40px; new panel chrome takes this one.
-        'icon-lg': 'size-11',
-        // Row-height icon button for dense lists (e.g. the Project Explorer tree, whose
-        // rows are 28px). Pair with a larger non-pointer target (long-press / keyboard).
+        // 40px on a fine pointer, 44 on a coarse one. The `pointer-coarse` half is ADR-0118 D2:
+        // the house rule is the input device's, not the screen's, and `--control-h` is the ONE
+        // place that axis is declared. Written as a coarse override rather than by replacing the
+        // literal, because `size-(--control-h)` alone would take a mouse user's icon button from
+        // 40 px DOWN to 36 — a regression bought while closing a touch gap.
+        icon: 'size-10 pointer-coarse:size-(--control-h)',
+        // (`icon-lg`, `size-11`, was here and is **deleted** — ADR-0118 M3.) It existed because
+        // `docs/UX_STANDARDS.md` set an unconditional 44 px floor for a new panel close/toggle;
+        // ADR-0118 D2 narrowed that floor to `pointer: coarse`, which `icon` above now meets, so
+        // the variant's whole reason had lapsed and its one consumer — the minimap's close — was
+        // the odd size out in a family of three. A variant kept for a rule that no longer exists
+        // is the drift class this register tracks, in the design system rather than in prose.
+        // Row-height icon button for dense lists. **Stays 28 px on BOTH pointers, and that is
+        // ADR-0118 D1's second named exception rather than an oversight** — see D6a.
+        //
+        // M3 gave it `pointer-coarse:size-(--control-h)` and had to take it back. Six of its eight
+        // consumers sit in a container whose height is fixed independently of it, and the sharpest
+        // is `HierarchyTree.tsx`: `ROW_HEIGHT = 28` is a **JavaScript constant** feeding both the
+        // absolute row style and the virtualizer's `estimateSize`, so a 44 px button centred in a
+        // 28 px row overflows 8 px into the row above and 8 px below — on a list whose rows are
+        // packed edge to edge, and whose trigger is `[@media(pointer:coarse)]:opacity-100`, i.e.
+        // permanently visible on exactly the device that would see it. Two independent reviews
+        // found it; the epic's own gate could not, because it asks whether a control's CENTRE hits
+        // itself and a control overflowing its container passes that.
+        //
+        // The exception's equivalent is stated per consumer rather than claimed for the variant,
+        // because the advice this docblock USED to carry — "pair with a larger non-pointer target
+        // (long-press / keyboard)" — turned out to be honoured by exactly ONE of the eight
+        // (`HierarchyTree`'s `startLongPress` on the whole row, plus Menu/Shift+F10 on the focused
+        // treeitem). Deleting that advice while introducing the size that needed it was the actual
+        // defect. Growing the dense rows themselves under a coarse pointer is a row-rhythm
+        // decision, not a padding one — `docs/TECH_DEBT.md` #215.
         'icon-sm': 'size-7',
       },
     },

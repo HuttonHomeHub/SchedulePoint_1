@@ -245,9 +245,10 @@ export function Deck<Ctx>({
                 caption; AT users hear the group.
 
                 `text-micro` is the ramp's smallest member and carries its own letter-spacing, and
-                `min-h-9` is the control box — a caption centred beside `min-h-9` buttons at a
+                the box is `--control-h` — a caption centred beside controls of that height at a
                 shorter box sat its label ~2 px adrift (the M1-T2 measurement, still true of a
-                span). The `border-r` that separated the caption from its buttons stays: the
+                span). It read `min-h-9` until ADR-0118 M2 gave the token a coarse axis; both the
+                caption and the controls now read the token, so they cannot part company at 44 px. The `border-r` that separated the caption from its buttons stays: the
                 grouping is the value the captions kept. */}
             <span
               aria-hidden="true"

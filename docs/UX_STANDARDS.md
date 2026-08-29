@@ -164,8 +164,22 @@ a bug:
   from split panes to a single-pane toggle below `md` (48rem);
   tables scroll horizontally within a bordered container; dialogs become
   full-height sheets on small screens where appropriate.
-- Touch targets ≥ 44px; hover-only affordances always have a non-hover
-  equivalent.
+- **Target size (ADR-0118).** WCAG 2.2 §2.5.8 (**24 px**, level AA) is the floor
+  everywhere and is gated by `e2e-workspace-fit`. Under **`pointer: coarse`** the
+  house rule is **≥ 44 px** — which is §2.5.5 _Enhanced_, level **AAA**, so it is
+  ours rather than the law's, and a trade made against it should know that. The
+  fine-pointer default stays **36 px** (`--control-h`, ADR-0097 CQ-C): measured,
+  coarse-only 44 px costs a mouse user **0 px** of diagram and a touch user 16 px
+  of 808. A surface that cannot meet the house rule is **named in ADR-0118 §D1
+  with the equivalent it offers a non-pointer user**, and the list has **two**
+  entries: a breadcrumb crumb (a truncated crumb's width is the space left over, so
+  no CSS makes it 44px wide — a box was built, measured **16 × 44**, and withdrawn),
+  and `icon-sm`'s dense-row consumers, whose containers are fixed independently of
+  them (`docs/TECH_DEBT.md` #215). This sentence read "that list is empty today"
+  until 2026-08-29 — written when it was true and left standing when ADR-0118 §D6
+  added the first entry, which is the drift class that ADR exists to close, in the
+  standards doc that states the rule.
+  Hover-only affordances always have a non-hover equivalent.
 - **The canvas is not exempt.** The TSLD surface must stay usable at every
   breakpoint the shell supports, and every canvas affordance needs a keyboard
   and screen-reader equivalent in the parallel DOM layer (ADR-0026).

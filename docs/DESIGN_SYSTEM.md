@@ -111,6 +111,10 @@ groups, `8`–`12` between page sections.
 ### Sizing scale
 
 Controls share a height scale for alignment: **sm 32px**, **md 36px (default)**, **lg 44px**.
+**`md` is the default under a fine pointer; `lg` is the floor under `pointer: coarse`** — the input
+is an axis of the scale, not a separate set of sizes (ADR-0118 §D2). Measured, the coarse pointer
+moved **width only** on every control in the product and height on none, so this axis is a
+deliberate addition rather than a description of what was already there.
 Content width is capped with container utilities (e.g. `max-w-screen-xl`) rather than fixed pixel
 widths.
 
@@ -450,7 +454,11 @@ which would slip past the regex while changing nothing.
 - **Never colour alone** to convey meaning — pair with icon/text.
 - **Forms:** programmatic label per control; errors linked via
   `aria-describedby` + `aria-invalid`; first invalid field focused on submit.
-- **Targets:** ≥ 24×24px (prefer ≥ 44px on touch).
+- **Targets (ADR-0118):** ≥ 24×24px everywhere (WCAG 2.2 §2.5.8, AA — gated);
+  **≥ 44px under `pointer: coarse`** (§2.5.5 Enhanced, AAA — the house rule,
+  not the law), with any surface that cannot meet it named in ADR-0118 §D1 and §D6
+  alongside its non-pointer equivalent — **two entries today**, a breadcrumb crumb
+  and `icon-sm`'s dense-row consumers. The fine-pointer default stays 36px.
 - **Motion:** honour reduced-motion. **Live regions** announce async updates
   (toasts, validation, loading completion).
 
@@ -503,10 +511,16 @@ one as though it were available; build it to the entry, then drop the marker.
 `ls apps/web/src/components/ui/` is the authoritative inventory.
 
 - **Buttons** — variants `primary | secondary | outline | ghost | destructive |
-link`; sizes `sm | md | lg | icon | icon-lg | icon-sm`; icon buttons require `aria-label`. One
-  primary action per view. **`icon-lg` (44px) is the size for a NEW close/toggle affordance
-  on a panel** — the UX_STANDARDS touch-target floor; `icon` (40px) predates it and existing
-  consumers are recorded rather than mass-migrated (minimap M2-T2, ADR-0100).
+link`; sizes `sm | md | lg | icon | icon-sm`; icon buttons require `aria-label`. One
+  primary action per view. **`icon` (40px fine / 44px coarse) is the size for a
+  close/toggle affordance** — it reaches the house rule through `--control-h`'s input
+  axis (ADR-0118 §D2), so a panel close needs no special size. `icon-lg` was that
+  special size and is **deleted**: it existed for an unconditional 44px floor that
+  ADR-0118 §D2 narrowed to the coarse pointer, and its one consumer was the odd size
+  out among three floating-panel controls (`docs/TECH_DEBT.md` #153, amending ADR-0100).
+  **`icon-sm` (28px, both pointers) is ADR-0118 §D1's second named exception**, for a
+  control inside a container whose height is fixed independently of it — a virtualized
+  row, a fixed-width spine. Do not reach for it to make something compact.
   **A control that blocks itself during its own mutation uses `aria-disabled`
   plus a submit/click guard — never the native `disabled` attribute.** A native
   disabled control is removed from the tab order the instant the request starts

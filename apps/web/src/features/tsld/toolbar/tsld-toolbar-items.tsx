@@ -555,7 +555,6 @@ function GoToTodayControl({
                 hint.markSeen();
               }
             }}
-            className="h-9"
           />
           <span
             id={GOTO_HINT_ID}
@@ -967,6 +966,20 @@ function searchFieldWidth(layout: ToolbarLayoutMode): string {
 }
 
 /**
+ * The search field's own geometry, shared by the two components that render one.
+ *
+ * **A constant rather than two comments promising to move together** (ADR-0118 M4). Both
+ * `SearchFieldControl` (disabled, "coming soon") and `LiveSearchControl` (the lenses flag's
+ * operable successor) carried this literal, and both carried a docblock saying that fixing one and
+ * not the other "is exactly how a correct pattern gets applied to a control and not its
+ * neighbour". M2 then did precisely that: it routed one through `--control-h` and left the other,
+ * so under a coarse pointer every deck control measured 44 × 44 and the live field measured
+ * 240 × 36. The comment had already been written and it did not work; a shared constant is the
+ * only version of that promise the compiler keeps.
+ */
+const SEARCH_FIELD_CLASS = 'h-(--control-h) pl-8 text-sm';
+
+/**
  * The shared shape of every canvas-viewport command's reason: no diagram, then not the diagram view,
  * then actionable. Extracted because four registry entries had written it out four times and M3-T2
  * was about to write it four more inside the fold — eight copies of one two-branch rule is how one
@@ -1050,7 +1063,15 @@ function SearchFieldControl({
         //
         // The coarse-pointer conditional goes with it rather than being kept as a floor. It existed
         // to raise a 32 px target for touch; the base is 36 px now, so it can only ever be a no-op.
-        className={cn('h-9 pl-8 text-sm', searchFieldWidth(layout))}
+        //
+        // **`h-(--control-h)` rather than `h-9`** (ADR-0118 M2). The literal was correct while the
+        // deck's controls were also a literal 36; giving `--control-h` a coarse axis made it wrong
+        // in exactly the way this comment already describes happening once — the first measurement
+        // after the axis landed found every deck control at 44 × 44 under coarse and this field
+        // alone at 240 × 36, "the ONE deck control sized outside" the rule, for the second time and
+        // for the same reason. A literal cannot follow a token; it can only agree with it until
+        // the token moves.
+        className={cn(SEARCH_FIELD_CLASS, searchFieldWidth(layout))}
       />
     </div>
   );
@@ -1167,11 +1188,19 @@ function LiveSearchControl({
         {...(describedById ? { 'aria-describedby': describedById } : {})}
         {...(disabled && api.disabledReason ? { title: api.disabledReason } : {})}
         className={cn(
-          // `h-9`, for the reason at the sibling control above: this was the deck's one control
-          // outside the shared `min-h-9`, and the cause of a label spread M1 measured twice without
-          // finding. Both sites move together — they are the same field in two states, and fixing
-          // one is exactly how a correct pattern gets applied to a control and not its neighbour.
-          'h-9 pl-8 text-sm',
+          // `h-(--control-h)`, for the reason at the sibling control above: this was the deck's one
+          // control outside the shared control box, and the cause of a label spread M1 measured
+          // twice without finding. Both sites move together — they are the same field in two
+          // states, and fixing one is exactly how a correct pattern gets applied to a control and
+          // not its neighbour.
+          //
+          // **That sentence caught its own author** (ADR-0118 M2). The literal became wrong the
+          // moment `--control-h` gained a coarse axis, and the first fix changed the disabled
+          // sibling above and left this one — so under a coarse pointer every deck control
+          // measured 44 x 44 and the live search field measured 240 x 36. It was the new coarse
+          // projection in `e2e-workspace-fit/command-surface.spec.ts` that named it, not a read of
+          // this file, which is why that gate exists.
+          SEARCH_FIELD_CLASS,
           searchFieldWidth(api.layout),
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is

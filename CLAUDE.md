@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1108 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1110 web
 > source files with 41 Playwright suites beside the base journey, and
-> 117 ADRs.
+> 118 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3500,6 +3500,61 @@ progress` off the command surface because **an object action belongs on the obje
   landed (ADR-0115 restored `zoom-to-selection`'s label) — corrected in the register rather than
   stepped over; the primitive still covers any future icon-only control by construction. **The CPM
   engine is not imported and no migration runs.**
+
+- **ADR-0118** _(Accepted; M0–M3 landed 2026-08-29)_ — A control height is one decision, and the
+  input is an axis of it. The product published **three different** target-size rules — 44 px
+  unconditional (`UX_STANDARDS.md`), ≥ 24 preferring 44 (`DESIGN_SYSTEM.md:453`), and a scale
+  defaulting to **36** (`:113`) — met by nothing, and **never measured, because no gate here had
+  ever run with a coarse pointer.** `e2e-toolbar-fit` once carried both a §2.5.8 sweep and a
+  coarse-geometry block; ADR-0109 D1 deleted that suite, `#186` noticed the sweep was gone and
+  lifted it into `e2e-workspace-fit`, and **nothing noticed the coarse half** — half a deleted gate
+  restored, half not, with no row recording the difference. 44 px is also **§2.5.5 AAA, not AA**,
+  which reviewers had been reading as a compliance requirement.
+  **Measured before anything was designed, against five conditions committed in their own commit
+  first.** The coarse pointer moves **width only** — 46 comparable targets, height differs on
+  **zero**, width on 29, every one the `px-2` → `px-3` swap worth exactly 8 px — so an input axis
+  **introduces** a distinction rather than formalising one, and D2 argues for it on those terms.
+  44 px costs the deck **+16 px, not the ≥ 36 predicted**: the deck holds **two rows**, so a taller
+  control makes them taller rather than wrapping a third, and the cost is `2 × 8`, linear. The
+  prediction was wrong by more than a factor of two and landed on the **exact pixel of its own
+  falsification boundary**, recorded that way rather than rounded to either side. Coarse-only 44 px
+  therefore costs a mouse user **0 px** and a touch user **16 of 808 (2.0 %)** — so CQ-2 does not
+  fire and the command surface needs no exemption — and a coarse projection of the existing sweep
+  costs **~2.5 s against a 90 s bar**, so CQ-3 does not escalate to a sibling suite.
+  Two defects it found are **not touch defects** and are recorded as such (`#213`): two plan-header
+  controls **painted and not clickable** at 390, and a **20 px** breadcrumb (a _candidate_ §2.5.8
+  failure — that SC exempts inline text, and this register overstated an SC once). An approved plan
+  clause was never built while its own risk table claims it shipped (`#214`). And **four instruments
+  were caught lying**, one of them mid-audit: a token comparison of `2.25rem` against `36px` that
+  reported "the token governs nothing"; `e2e-local.sh` exiting **0** having run no test; a dialog
+  probe that measured nothing while looking like a result; and a `grep … | head` that returned ten
+  of 26 references and nearly turned a true claim into a false correction. `command-surface.spec.ts`'s
+  "~25 s fixture" is **7.5 s**, a docblock number nobody had run and the plan quoted forward.
+  **M2–M3 built it, and three of the ADR's own dispositions did not survive the work** (D6).
+  Coarse-pointer controls under the house rule went **46 → 1**, the survivor being the breadcrumb —
+  the epic's ONE named exception, and the attempt to fix it is the finding: a
+  `pointer-coarse:min-h` box measured **16 × 44** at 390, worse on the axis already failing,
+  because a truncated crumb's width IS the space left over. **#153 closes against its own remedy
+  and against the plan**: both said the Legend's close moves up to `icon-lg` (44), written before
+  D2 narrowed the rule to `pointer: coarse`, so following it would have applied a rule this ADR had
+  already withdrawn; all three panel controls unify on `icon` and `icon-lg` is deleted, its docblock
+  having cited a `UX_STANDARDS.md` floor M1 rewrote. §19 says re-verify a plan's **problem** — here
+  the plan's **remedy** had gone stale against its own epic three milestones later. **#145 closed by
+  measurement**: its own conclusion was that 44 px is "a product-wide control-height question
+  (`--control-h`)", and the axis answered it for the native `<select>` and the `Combobox` at once —
+  then the re-run found the half nobody had asked about, the open list's 32 px options.
+  **D5's "painted and not clickable" turned out to be OFF-SCREEN**, at x = 409 and x = 565 against a
+  390 px viewport: the mode cluster's `shrink-0` takes `max-content` and can never be asked to give
+  anything back, so the wrapping row beside it was never asked to break a line — ADR-0114 M1 one
+  surface along, fixed at **zero** vertical cost. **F3b, the condition M0 left NOT MEASURED, is
+  answered** by a harness that opens a dialog rather than querying for one, and it found the dialog
+  close at 36 × 44 — a raw `✕` in a text-sized button beside a `Sheet` that had used the icon button
+  all along. Widening the gate exposed three holes in the gate itself, each fixed rather than worked
+  around: a failure naming `(unnamed)`; `display: none` read as "painted at zero size", which would
+  have retired the assertion that catches ADR-0090 M1's real defect; and a row below a scroller's
+  fold read as unreachable, where the discriminator is ADR-0114's own — whether there is anything
+  scrollable to move.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

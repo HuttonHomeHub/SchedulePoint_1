@@ -40,7 +40,12 @@ export function OrgSwitcher({
           void navigate({ to: '/orgs/$orgSlug', params: { orgSlug: event.target.value } })
         }
         className={cn(
-          'border-input bg-background h-9 min-w-0 rounded-md border px-2 text-sm',
+          // `h-(--control-h)`, not the literal `h-9` this carried (ADR-0118 M4). It sits in
+          // `<header>` — a surface the coarse gate names as swept — and was invisible to it,
+          // because the sweep queried `button,a,[role=button],input` and a `<select>` is none of
+          // those. Found by the architecture review reading the query rather than the result: the
+          // gate reported the header clean, and it was clean of everything it could see.
+          'border-input bg-background h-(--control-h) min-w-0 rounded-md border px-2 text-sm',
           'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
           className,
         )}

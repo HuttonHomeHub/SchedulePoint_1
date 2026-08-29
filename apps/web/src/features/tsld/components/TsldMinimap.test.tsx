@@ -156,9 +156,20 @@ describe('TsldMinimap', () => {
     surface.remove();
   });
 
-  it('the close button is the 44px icon-lg size (UX_STANDARDS floor for new panel chrome)', () => {
+  /**
+   * **The FAMILY contract, not a number** (ADR-0118 M3, closing `docs/TECH_DEBT.md` #153).
+   *
+   * This asserted `size-11` because `docs/UX_STANDARDS.md` set an unconditional 44 px floor for a
+   * new panel close. ADR-0118 D2 narrowed that floor to `pointer: coarse` — which `size-10` meets
+   * through `--control-h` — so the reason in the old test's own name had lapsed, and the minimap
+   * was left the odd size out among three closes at 28, 40 and 44.
+   *
+   * It asserts the shared size rather than a literal so that the two panel closes cannot part
+   * company again without something failing; `TsldLegendPanel.test.tsx` carries its half.
+   */
+  it('the close is the shared floating-panel icon size, matching the Legend', () => {
     mount();
-    expect(screen.getByRole('button', { name: 'Hide overview' }).className).toContain('size-11');
+    expect(screen.getByRole('button', { name: 'Hide overview' }).className).toContain('size-10');
   });
 
   it('the box is the fixed 200×120 (product Q3)', () => {

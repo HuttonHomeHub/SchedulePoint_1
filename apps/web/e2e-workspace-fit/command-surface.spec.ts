@@ -49,6 +49,13 @@ interface Target {
   h: number;
   reachable: boolean;
   visible: boolean;
+  /**
+   * What `elementFromPoint` returned when it was not the control — **absent when reachable**.
+   * Added at ADR-0118 M3 for the same reason as its twin in `measure-toolbar/control-heights`: a
+   * gate that can detect a defect and cannot describe it makes its own finding expensive to act
+   * on, which is how a finding gets deferred.
+   */
+  hitBy?: string;
 }
 
 /**
@@ -63,22 +70,53 @@ interface Target {
 async function sweep(
   page: Page,
   root = '[role="toolbar"][aria-label="Plan commands"]',
+  /**
+   * A selector for an ancestor whose descendants are excluded — the ONE named exception (see the
+   * coarse projection's docblock). Structural rather than an id list, because the ids this sweep
+   * reports depend on the fixture's data and an id list would silently stop matching when a plan
+   * is renamed, which is the quietest possible way for an exclusion to become a hole.
+   */
+  exemptWithin?: string,
 ): Promise<Target[]> {
   return page.evaluate(
-    ({ minTarget, root: rootSelector }) => {
+    ({ minTarget, root: rootSelector, exemptWithin: exempt }) => {
       const deck = document.querySelector(rootSelector);
       if (!deck) throw new Error(`command-surface: no surface matched ${rootSelector}`);
 
       const out: Target[] = [];
-      // **Every pointer target in the deck, in one pass — never per-`[data-toolbar-item]`.**
-      // `button`/`a`/`[role=button]` plus `input`, because a split button's caret is
-      // `tabIndex={-1}` and the search field is an `<input>`; both are things a planner clicks.
+      // **Every pointer target under the root, in one pass — never per-`[data-toolbar-item]`.**
+      //
+      // The list is the contract, and it was wrong until ADR-0118 M4. It read
+      // `button,a,[role=button]` plus `input` — written when this swept the deck, where those are
+      // everything — and M3 then pointed it at the plan header and the Project Explorer without
+      // widening it. `OrgSwitcher`'s `<select>` sat in `<header>` at 36 px and the gate reported
+      // the header clean: clean of everything it could see. That is ADR-0110 D5 exactly — a sweep
+      // whose blind spot is the control class it exists to protect — and it was found by a
+      // reviewer reading the query rather than the result.
+      //
+      // `[tabindex]` is deliberately NOT in the list: it would sweep the roving containers and
+      // every `tabIndex={-1}` wrapper, and the caret this gate exists for is already caught as a
+      // `button`.
       {
         const all = [
-          ...deck.querySelectorAll('button,a,[role="button"]'),
+          ...deck.querySelectorAll(
+            'button,a,[role="button"],select,textarea,summary,' +
+              '[role="treeitem"],[role="option"],[role="menuitem"],' +
+              '[role="menuitemcheckbox"],[role="menuitemradio"],[role="tab"],[role="switch"]',
+          ),
           ...deck.querySelectorAll('input'),
         ];
         for (const el of all) {
+          if (exempt && el.closest(exempt)) continue;
+          // **Not rendered is not the same as painted at zero, and the difference is the whole
+          // point of the zero-size assertion below.** An element with `display: none` — or an
+          // ancestor with it — returns NO client rects; one that is laid out and collapsed
+          // returns one rect of zero size, which is this defect class's exact shape (ADR-0090 M1
+          // found two controls at 0 px visible). Widening this sweep past the deck brought in
+          // `Show Project Explorer`, which is `lg:hidden` **by design** above 1024 and was
+          // reported as a zero-size defect on its first run. Skipping it here rather than
+          // relaxing the assertion keeps the assertion able to fail.
+          if (el.getClientRects().length === 0) continue;
           // Identify by the owning item where there is one. A caret has no `data-toolbar-item` of
           // its own — that is the whole reason the per-item version could not see it — so it
           // reports its accessible name instead, and the failure message still names something a
@@ -86,21 +124,75 @@ async function sweep(
           const item = el.closest('[data-toolbar-item]');
           const r = el.getBoundingClientRect();
           const visible = r.width > 0 && r.height > 0;
+          // **Scrolled out of a scrollable list is not the same defect as clipped by
+          // `overflow-hidden`, and the sweep has to tell them apart** (ADR-0118 M3). Widening past
+          // the deck brought in the Project Explorer's virtualized tree, whose lower rows sit
+          // below their scroller's fold: they have a real rect, so `elementFromPoint` at their
+          // centre returns whatever IS painted there, and they read as unreachable. A planner
+          // scrolls to them.
+          //
+          // The discriminator is the one ADR-0114 M1's defect turns on: that row was clipped by an
+          // ancestor's `overflow-hidden` with **nothing scrollable to move**, so no gesture could
+          // ever reveal it — and §C1d proved focusing it moved its rect by zero. So the skip is
+          // conditional on the ancestor genuinely having overflow to scroll (`scrollHeight >
+          // clientHeight`); a non-scrolling clip still fails, which is what keeps this assertion
+          // able to catch the thing it was written for.
+          let offFold = false;
+          for (let a = el.parentElement; a && !offFold; a = a.parentElement) {
+            const st = getComputedStyle(a);
+            const scrolls = /auto|scroll/.test(st.overflowY) && a.scrollHeight > a.clientHeight + 1;
+            const scrollsX = /auto|scroll/.test(st.overflowX) && a.scrollWidth > a.clientWidth + 1;
+            if (!scrolls && !scrollsX) continue;
+            const ar = a.getBoundingClientRect();
+            if (
+              r.bottom <= ar.top ||
+              r.top >= ar.bottom ||
+              r.right <= ar.left ||
+              r.left >= ar.right
+            )
+              offFold = true;
+            // A control straddling the fold has its centre outside the scroller's box; that is
+            // the case the tree's lower rows are actually in.
+            else if (
+              r.top + r.height / 2 < ar.top ||
+              r.top + r.height / 2 > ar.bottom ||
+              r.left + r.width / 2 < ar.left ||
+              r.left + r.width / 2 > ar.right
+            )
+              offFold = true;
+          }
+          if (offFold) continue;
+
           let reachable = false;
+          let hitBy: string | undefined;
           if (visible) {
             const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
             reachable = hit !== null && (hit === el || el.contains(hit) || hit.contains(el));
+            if (!reachable) {
+              hitBy = hit
+                ? `${hit.tagName.toLowerCase()}` +
+                  `${typeof hit.className === 'string' && hit.className ? `.${hit.className.split(/\s+/).slice(0, 5).join('.')}` : ''}` +
+                  `${hit.getAttribute('aria-label') ? ` [${hit.getAttribute('aria-label')}]` : ''}` +
+                  ` @${Math.round(r.left)},${Math.round(r.top)}`
+                : `(nothing at ${Math.round(r.left + r.width / 2)},${Math.round(r.top + r.height / 2)} — outside the viewport)`;
+            }
           }
           out.push({
+            // Text content is the third fallback, added at ADR-0118 M3: widening this sweep past
+            // the deck brought in links and buttons whose name IS their text, and the first
+            // failure it produced read `"id": "(unnamed)"` — a gate that can detect a defect and
+            // cannot name it sends its reader back to the browser.
             id:
               item?.getAttribute('data-toolbar-item') ??
               el.getAttribute('aria-label') ??
+              (el.textContent ?? '').trim().slice(0, 32) ??
               '(unnamed)',
             tag: el.tagName.toLowerCase(),
             w: Math.round(r.width),
             h: Math.round(r.height),
             reachable,
             visible,
+            ...(hitBy ? { hitBy } : {}),
           });
         }
       }
@@ -109,7 +201,7 @@ async function sweep(
       void minTarget;
       return out;
     },
-    { minTarget: MIN_TARGET, root },
+    { minTarget: MIN_TARGET, root, exemptWithin },
   );
 }
 
@@ -356,6 +448,182 @@ test.describe('The plan command surface', () => {
         unreachable,
         `object actions a pointer cannot reach at ${viewport.width}: ${JSON.stringify(unreachable)}`,
       ).toEqual([]);
+    }
+  });
+});
+
+/**
+ * **The house rule under a coarse pointer: every command clears 44 × 44** (ADR-0118 M2).
+ *
+ * The sweep above is WCAG 2.2 §2.5.8's **24 px AA floor**, which is a different and much weaker
+ * question. 44 px is §2.5.5 Target Size (Enhanced), level **AAA**, and it is this product's own
+ * house rule (`docs/UX_STANDARDS.md`) — ADR-0118 D2 narrows it to the coarse pointer, because
+ * measurement showed the input device is the axis that matters and the fine default stays 36 px.
+ * So this is a **second** projection of the same sweep rather than a raised constant: the AA floor
+ * has to keep binding on the fine path, where 44 is deliberately not required.
+ *
+ * **Its own context, and not `test.use({ hasTouch })`.** `hasTouch` is a context option that
+ * configures the page the *fixture* builds; the describe above builds its page with
+ * `browser.newPage()` in `beforeAll`, so a `test.use` here would configure a page nothing uses and
+ * this whole file would measure a fine pointer while reading as a touch gate. That is not
+ * hypothetical — `combobox-coarse.spec.ts` earned the rule by producing two plausible numbers
+ * about the wrong pointer, and ADR-0118 M0 records four instruments caught lying in one epic.
+ *
+ * **So the `matchMedia` assertion below is non-negotiable and runs before any measurement.**
+ * Without it a mis-built context yields a green run about nothing, which is strictly worse than no
+ * gate: a green gate stops anyone looking (ADR-0110 D5).
+ *
+ * **Scope is the command deck.** The object-action bar, the plan header, the Project Explorer and
+ * the panel chrome are M3's; `docs/TECH_DEBT.md` #153 carries what is still under the rule, and the
+ * pinned count below is what stops this narrowing quietly.
+ *
+ * **Verified red** against `TOOLBAR_CARET_TARGET` with its coarse `min-w` removed: it named all
+ * three carets at **31 × 44**, by accessible name rather than item id — the split button's caret is
+ * deliberately not a `[data-toolbar-item]`, and is the exact control ADR-0110 D5 records shipping
+ * at 23 × 36 past a gate that swept per item.
+ *
+ * **It also earned its place on its first run**, on something no read of the diff had found: the
+ * TSLD search field exists as **two components** — a disabled "coming soon" control and the live
+ * one behind the lenses flag — and `tsld-toolbar-items.tsx` carries a comment on each saying they
+ * must move together, "fixing one is exactly how a correct pattern gets applied to a control and
+ * not its neighbour". The token-axis commit changed one and left the other, so every deck control
+ * measured 44 × 44 under coarse and the live field measured **240 × 36**. The sentence warning
+ * against it was in the file being edited, three lines from the edit.
+ */
+const HOUSE_TARGET = 44;
+
+/**
+ * The surfaces this projection covers, with the floor each must clear so an empty one cannot pass.
+ * `plan header` and `Project Explorer` join the deck at M3 — between them they held 15 of the 16
+ * controls still under the house rule after M2, including the six Explorer destinations, which are
+ * how a planner LEAVES a plan.
+ */
+const COARSE_SURFACES = [
+  { name: 'command deck', root: '[role="toolbar"][aria-label="Plan commands"]', atLeast: 15 },
+  { name: 'plan header', root: 'header', atLeast: 5 },
+  // `minWidth` because below `lg` the pinned Explorer is not rendered at all — it becomes the
+  // off-canvas Sheet `e2e-narrow-shell` drives. Stated as a width rather than made "optional":
+  // an optional surface silently covers nothing the day its selector changes, which is the hole
+  // this file's pinned positives exist to close.
+  // 6, not 8: the tree became a named exception above, so the swept set is the six organisation
+  // destinations plus the rail's two controls. The floor still proves the destinations are there,
+  // which is the class M3 fixed and the reason this surface is swept at all.
+  { name: 'Project Explorer', root: '[data-panel-border]', atLeast: 6, minWidth: 1024 },
+] as const;
+
+/**
+ * **Two named exceptions, both excluded by an ANCESTOR SELECTOR rather than by a size threshold**,
+ * so each can hide exactly the class it names and never a regression elsewhere.
+ *
+ * The second is the Project Explorer's virtualized tree — its rows and their row-menu triggers are
+ * 28 px on both pointers. That is ADR-0118 D1's `icon-sm` exception plus the row rhythm that
+ * constrains it: `HierarchyTree`'s `ROW_HEIGHT` is a **JavaScript constant** feeding both the
+ * absolute row style and the virtualizer's `estimateSize`, so growing it under a coarse pointer is
+ * a row-rhythm decision with its own design pass rather than a padding change
+ * (`docs/TECH_DEBT.md` #215). It is excluded here rather than left unswept, so the class is named
+ * in one place with its equivalents: a long-press anywhere on the row opens the same menu on
+ * touch, and Menu/Shift+F10 opens it from the keyboard.
+ *
+ * The first is a breadcrumb crumb. See the projection's docblock — a truncated crumb's
+ * width IS the space left over, so no CSS makes it clear a width floor, and a 44 px box was built,
+ * measured at **16 × 44**, and withdrawn for making the failing axis worse. Compliant under WCAG
+ * 2.2 §2.5.8's Inline exception; `breadcrumbs.tsx` carries the reasoning.
+ */
+const EXEMPT_WITHIN = ['nav[aria-label="Breadcrumb"]', '[role="tree"]'].join(',');
+
+/**
+ * **390 is in the list, and it is the width this epic's own repair was made at** (ADR-0118 M4).
+ *
+ * M3 fixed two plan-header controls that laid out entirely outside a 390 px viewport, and shipped
+ * that fix with its narrowest gate at 834 — while `playwright.narrow-shell.config.ts` and
+ * `.github/workflows/ci.yml` both said the coarse axis was "gated by the coarse projection in
+ * `e2e-workspace-fit`". Three of the five gate-pass reviews raised it independently: the one
+ * viewport where the defect lived had no coarse cover, under a comment saying it had. That is
+ * `docs/TECH_DEBT.md` #214's exact shape inside the epic that filed #214.
+ *
+ * The Explorer is skipped below `lg` by its own `minWidth`, so 390 sweeps the deck and the header
+ * — which is where the repair is.
+ */
+const COARSE_WIDTHS = [
+  { width: 1646, height: 1097 },
+  { width: 1024, height: 768 },
+  { width: 834, height: 1112 },
+  { width: 390, height: 844 },
+];
+
+test.describe('The plan command surface, under a coarse pointer', () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage({
+      viewport: { width: 1646, height: 1097 },
+      hasTouch: true,
+    });
+    const orgSlug = await onboard(page, Date.now() + 7);
+    await createHierarchy(page);
+    await newPlan(page, 'Riverside Quarter — Touch');
+    await ensurePen(page);
+    await seedActivities(page, orgSlug, [
+      { name: 'Site setup', laneIndex: 0, durationDays: 12 },
+      { name: 'Excavate to formation', laneIndex: 1, durationDays: 18 },
+    ]);
+    await recalculate(page, orgSlug);
+    await ensurePen(page);
+    await expect(page.getByRole('toolbar', { name: 'Plan commands' })).toBeVisible();
+  });
+
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  test('every command clears 44 × 44 and a pointer can reach it, at every width', async () => {
+    test.setTimeout(240_000);
+
+    // **First, and before anything is measured.** See the docblock: a context without a coarse
+    // pointer makes every assertion below true of the wrong thing.
+    const pointer = await page.evaluate(() =>
+      window.matchMedia('(pointer: coarse)').matches ? 'coarse' : 'fine',
+    );
+    expect(
+      pointer,
+      'this context did not report a coarse pointer — every assertion below would be about the fine path, and green. `hasTouch` must be passed to the context that builds THIS page, never via test.use().',
+    ).toBe('coarse');
+
+    for (const viewport of COARSE_WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+
+      for (const surface of COARSE_SURFACES) {
+        if ('minWidth' in surface && viewport.width < surface.minWidth) continue;
+        const targets = await sweep(page, surface.root, EXEMPT_WITHIN);
+
+        // The pinned positive, per surface — the sweep passes just as happily against a surface
+        // rendering nothing at all (the ADR-0093 shape).
+        expect(
+          targets.length,
+          `no controls swept on ${surface.name} at ${viewport.width}`,
+        ).toBeGreaterThan(surface.atLeast);
+
+        const belowHouse = targets.filter(
+          (t) => t.visible && (t.w < HOUSE_TARGET || t.h < HOUSE_TARGET),
+        );
+        expect(
+          belowHouse,
+          `${surface.name}: below the ${HOUSE_TARGET}×${HOUSE_TARGET} house rule under a coarse pointer at ${viewport.width}: ${JSON.stringify(belowHouse)}`,
+        ).toEqual([]);
+
+        const invisible = targets.filter((t) => !t.visible);
+        expect(
+          invisible,
+          `${surface.name}: painted at zero size at ${viewport.width}: ${JSON.stringify(invisible)}`,
+        ).toEqual([]);
+
+        const unreachable = targets.filter((t) => t.visible && !t.reachable);
+        expect(
+          unreachable,
+          `${surface.name}: a pointer cannot reach these at ${viewport.width}: ${JSON.stringify(unreachable)}`,
+        ).toEqual([]);
+      }
     }
   });
 });

@@ -161,9 +161,12 @@ export function TsldLegendPanel({
       >
         <GripVertical aria-hidden="true" className="text-muted-foreground size-4 shrink-0" />
         <span className="text-sm font-medium">Legend</span>
+        {/* `icon` — the ONE size every floating-canvas-panel control now takes (ADR-0118 M3,
+            closing `docs/TECH_DEBT.md` #153). It was `icon-sm` (28) beside the minimap's
+            `icon-lg` (44) and the zoom steppers' `icon` (40): three sizes in one family. */}
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           onClick={handleClose}
           aria-label="Hide legend"
           className="text-muted-foreground ml-auto"

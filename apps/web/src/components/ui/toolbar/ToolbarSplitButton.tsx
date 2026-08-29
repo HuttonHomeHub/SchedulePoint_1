@@ -192,7 +192,7 @@ export function ToolbarSplitButton({
         // sweep immediately read `today` at **32 px against a 40 px floor** — a WCAG 2.5.8 failure
         // that had been one label away the whole time. ADR-0090 M3 records the caret failing the
         // same gate for the mirror-image reason.
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-l-md px-2 outline-none pointer-coarse:px-3"
+        className="inline-flex min-h-(--control-h) items-center gap-1.5 rounded-l-md px-2 outline-none pointer-coarse:px-3"
       >
         {icon}
         {compact ? null : <span className="truncate">{label}</span>}

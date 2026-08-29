@@ -45,8 +45,16 @@ import { cn } from '@/lib/utils';
 const DESTINATION_CLASS =
   'text-muted-foreground hover:text-foreground hover:bg-muted [&.active]:text-foreground [&.active]:bg-muted flex items-center rounded-md text-sm';
 
-const EXPANDED_CLASS = 'gap-2 px-2 py-1.5 [&.active]:font-medium';
-const COLLAPSED_CLASS = 'size-9 justify-center';
+/**
+ * `pointer-coarse:min-h-(--control-h)` on both forms (ADR-0118 M3). Measured at 1646 with a coarse
+ * pointer, these six rows were **259 x 32** — the largest single group of controls under the house
+ * rule anywhere in the product, and the one a planner reaches for first, since they are how you
+ * leave a plan. The fine form is unchanged at 32: the row rhythm is a density choice, and the axis
+ * is the input device rather than the screen.
+ */
+const EXPANDED_CLASS =
+  'gap-2 px-2 py-1.5 pointer-coarse:min-h-(--control-h) [&.active]:font-medium';
+const COLLAPSED_CLASS = 'size-9 pointer-coarse:size-(--control-h) justify-center';
 
 interface Destination {
   label: string;

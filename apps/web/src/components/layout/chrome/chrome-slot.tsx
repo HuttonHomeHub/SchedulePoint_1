@@ -124,11 +124,27 @@ export function ChromeSlot({
         // absorbs the line's slack never lets anything wrap, which is the single defect this row's
         // design turns on (`docs/specs/one-row-header/falsification.md`, third result).
         name === 'identity' && 'flex min-w-0 shrink items-center empty:hidden',
-        // The mode cluster is the row's middle section. `shrink-0`: it is four segmented controls
-        // and a pen badge, and squeezing it folds `Early | Visual | Diagram | Gantt` onto a second
-        // line INSIDE the row, turning one clean row into two ragged ones (ADR-0112 D4). The
-        // identity slot beside it is the one that gives way.
-        name === 'mode' && 'flex shrink-0 items-center empty:hidden',
+        // The mode cluster is the row's middle section. It is four segmented controls and a pen
+        // badge, and squeezing it folds `Early | Visual | Diagram | Gantt` onto a second line
+        // INSIDE the row, turning one clean row into two ragged ones (ADR-0112 D4). The identity
+        // slot beside it is the one that gives way.
+        //
+        // **That is `shrink` with the default `min-width: auto`, NOT `shrink-0`** (ADR-0118 M3).
+        // `shrink-0` takes `max-content` and can never be asked to give anything back — so at a
+        // 390 px viewport the cluster laid out 430 px wide and `Gantt` and `Stop editing` were
+        // measured at x = 409 and x = 565, painted, in the DOM, and **entirely outside the
+        // viewport**: on a phone a planner could neither switch view nor release the pen. It is
+        // ADR-0114 M1's defect one surface along — a row that cannot shrink is never asked to
+        // wrap — and it shipped unreported for the same reason, because a control that is not
+        // painted looks exactly like a control that does not exist.
+        //
+        // The ADR-0112 ordering survives without `shrink-0`, and that is why this is the fix
+        // rather than a compromise: a flex item's default `min-width: auto` floors it at
+        // min-content, while the identity slot one line up carries `min-w-0` and can shrink to
+        // nothing. So the identity still gives way FIRST and completely; this cluster gives way
+        // only once there is nothing left to take, which is a state that does not occur at any
+        // width a mouse user works at (measured: identical layout at 1920, 1646, 1440 and 1280).
+        name === 'mode' && 'flex items-center empty:hidden',
         className,
       )}
     />

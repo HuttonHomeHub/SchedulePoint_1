@@ -106,7 +106,10 @@ export function NavigatorRail({
                   size="sm"
                   aria-label="New client"
                   onClick={crud.onCreateClient}
-                  className="h-7 gap-1 px-2"
+                  // `h-7` overrides `size="sm"` for the rail's density; the coarse override restores the
+                  // house rule on touch (ADR-0118 M3 — measured 74 x 28, the last control in
+                  // the Project Explorer under it).
+                  className="h-7 gap-1 px-2 pointer-coarse:h-(--control-h)"
                 >
                   <Plus aria-hidden="true" className="size-4" />
                   Client
@@ -122,7 +125,15 @@ export function NavigatorRail({
         // In the drawer the subject's actions get a row of their own beneath the drawer's header,
         // because the drawer shell is content-agnostic by design: giving it an `actions` slot would
         // make every future subject's toolbar the shell's problem.
-        <div className="border-border flex h-10 shrink-0 items-center gap-1 border-b px-3">
+        //
+        // **`pointer-coarse:h-(--control-h)` on the ROW, not just its controls** (ADR-0118 M4).
+        // The row is a fixed `h-10` (40 px) and holds a 44 px control under a coarse pointer, so
+        // it overflowed 2 px into the border and the tree below — the same shape as `icon-sm`'s
+        // reverted floor one file over, and found by the same two reviews. Here the container CAN
+        // grow: it is `shrink-0` above a `flex-1 overflow-y-auto` tree, so it costs the tree 4 px
+        // of scroll height on touch and nothing at all on a mouse. That is why this one is fixed
+        // by growing the row and `icon-sm` is fixed by not growing the control.
+        <div className="border-border flex h-10 shrink-0 items-center gap-1 border-b px-3 pointer-coarse:h-(--control-h)">
           {/* Root create (CQ-2): an empty org has no node to right-click, so writers get
               a "New client" entry point here; hidden for non-writers and flag-off. */}
           {crud.canWrite ? (
@@ -139,7 +150,10 @@ export function NavigatorRail({
               size="sm"
               aria-label="New client"
               onClick={crud.onCreateClient}
-              className="h-7 gap-1 px-2"
+              // `h-7` overrides `size="sm"` for the rail's density; the coarse override restores the
+              // house rule on touch (ADR-0118 M3 — measured 74 x 28, the last control in
+              // the Project Explorer under it).
+              className="h-7 gap-1 px-2 pointer-coarse:h-(--control-h)"
             >
               <Plus aria-hidden="true" className="size-4" />
               Client
@@ -149,7 +163,10 @@ export function NavigatorRail({
             <Button
               ref={collapseRef}
               variant="ghost"
-              size="icon-sm"
+              // `icon`, not `icon-sm` (ADR-0118 M4): the row above now grows under a coarse
+              // pointer, so this control's container is no longer fixed independently of it and
+              // D1's `icon-sm` exception does not apply. It reaches 44 px on touch.
+              size="icon"
               className="ml-auto"
               aria-label="Hide Project Explorer"
               aria-expanded

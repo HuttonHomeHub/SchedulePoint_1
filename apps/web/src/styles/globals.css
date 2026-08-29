@@ -1015,6 +1015,48 @@
 }
 
 /* ------------------------------------------------------------------------- */
+/* The INPUT axis — the third kind of declaration (ADR-0118 D2)               */
+/*                                                                            */
+/* The rule this file states elsewhere is "no token outside a theme block",   */
+/* and this block is deliberately outside one. It is named here rather than   */
+/* left to be discovered, because it is a THIRD kind of declaration alongside */
+/* the theme block (which values a token) and the surface rebinds below       */
+/* (which re-point one per surface): this re-values one per INPUT DEVICE.     */
+/*                                                                            */
+/* It does not weaken the rule. A theme block answers "what is this value",   */
+/* a scope answers "whose value is it", and neither can answer "what is the   */
+/* reader pointing with" — the product had a vocabulary for the first two     */
+/* (ADR-0097, ADR-0055) and none for the third, which is why THREE sites      */
+/* across three files papered over it individually with `pointer-coarse:`     */
+/* utilities, plus one (`HierarchyTree.tsx`) with an arbitrary-variant query  */
+/* that a search for the others cannot even find. (This read "four            */
+/* components" until the ADR-0118 M4 gate pass: a wrong count copied from the */
+/* ADR, which had it wrong against its own measurement document.)             */
+/*                                                                            */
+/* **Measured before it was written** (ADR-0118 M0, three runs, zero spread): */
+/* the coarse pointer moved WIDTH on 29 of 46 controls and HEIGHT on NONE, so */
+/* this axis INTRODUCES a distinction rather than formalising one. 44 px      */
+/* under coarse costs a mouse user 0 px of diagram and a touch user 16 px of  */
+/* 808 (2.0 %) — the command deck holds two rows, so taller controls make     */
+/* those rows taller rather than wrapping a third, and the cost is 2 x 8.     */
+/*                                                                            */
+/* 44 px is WCAG 2.2 §2.5.5 Target Size (Enhanced), level AAA — the HOUSE     */
+/* rule. §2.5.8's 24 px (AA) is the floor everywhere and is separately gated. */
+/* ------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 2.75rem;
+    /* `--control-h-sm` rises to the same floor rather than staying 32 px: a   */
+    /* "small" control is a density choice, and density is exactly what a      */
+    /* coarse pointer cannot honour. Keeping it at 32 would leave the compact  */
+    /* variants below the house rule while their siblings cleared it — one     */
+    /* correct pattern applied to a control and not its neighbour, which this  */
+    /* register records shipping in six consecutive epics.                     */
+    --control-h-sm: 2.75rem;
+  }
+}
+
+/* ------------------------------------------------------------------------- */
 /* Surface scopes — the rebind rules (ADR-0055 §1)                            */
 /*                                                                            */
 /* A scope keeps every semantic NAME and changes what it resolves to. Because  */
