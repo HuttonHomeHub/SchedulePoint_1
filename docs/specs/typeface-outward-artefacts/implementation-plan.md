@@ -89,6 +89,51 @@ is what makes it a proof rather than an agreement. **No new Playwright config an
   3. Write the outcome into this file (M2's size) and into `feature-spec.md` §5 (the honest answer
      to "what proves it"), including if the answer is "nothing does".
 
+###### M1-T1 OUTCOME — measured 2026-08-29, Playwright Chromium, `playwright.export.config.ts`
+
+Both answers recorded rather than summarised, and **(b) inverted on the second run**.
+
+**(a) Print-media emulation reaches computed style — and the diagnosis is sharper than §4 assumed.**
+Under `page.emulateMedia({ media: 'print' })`:
+
+| element                 | computed `font-family`                         |
+| ----------------------- | ---------------------------------------------- |
+| `.tsld-print-container` | `"IBM Plex Sans", ui-sans-serif, system-ui, …` |
+| `.tsld-print-root`      | `Inter, ui-sans-serif, system-ui, …`           |
+
+So the print container **already** carries the product's face by inheritance, and the two feature
+stylesheets **override it away** to a face with no `@font-face` and no file. The spec framed this as
+a decision that never reached the layer; it is a decision that reached the layer and was then
+overridden. D1 is unchanged — declare at the scoped element **and** delete both overrides — because
+the declaration is what makes a future paper face a one-line change, and the probe shows that
+inheritance alone leaves it dependent on `body`.
+
+**(b) The raster's face is strongly assertable. M2-U1 IS worth building.**
+
+| measurement                            | width (px) |
+| -------------------------------------- | ---------- |
+| `600 16px 'IBM Plex Sans', …`          | **287.39** |
+| `600 16px system-ui, -apple-system, …` | **353.71** |
+| control: a face that cannot exist      | 366.05     |
+| **delta**                              | **66.32**  |
+
+Against the ≥ 8 px condition committed before the run: **8× over**. `document.fonts.check()`
+returned `true`, and the control differs from `system-ui`, so the harness can discriminate and these
+are not two readings of one fallback.
+
+**The first run of (b) reported a delta of exactly ZERO — 353.7109375 on both branches — and that
+was the instrument, not a finding.** An `OffscreenCanvas` created in `page.evaluate` gets no web face
+unless one is loaded, so both branches measured the same fallback. Taking it at face value would
+have deleted M2 on a number identical to seven decimal places, which is not what a real difference
+looks like. The corrected probe awaits `document.fonts.ready`, calls `document.fonts.load`,
+**asserts availability**, and carries a bogus-face control so that a future zero can only mean the
+faces genuinely measure alike. Recorded because the tell, each of the several times an instrument
+has lied in this repository, was a number too tidy to be true.
+
+One consequence for M2: at 66 px on a ~354 px string the band's title is currently **~19 % wider**
+than it will be once the face lands, so this is a layout change in the export and not only a
+cosmetic one. **M2-U1 asserts the face, never a width.**
+
 ##### Task M1-T2 — The gate, verified red
 
 - **Description:** Add `apps/web/src/styles/typeface-reach.structural.test.ts` with the four

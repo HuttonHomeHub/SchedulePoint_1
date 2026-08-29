@@ -668,6 +668,18 @@ Step 1 is a measurement, not a design, and it is **M1-T1's second half**. The fa
 condition is written before it runs: **a margin of ≥ 8 px on the fixture's plan name, at 16 px, is
 enough to build on; below that, do not build it.** Whichever way it goes is recorded.
 
+**MEASURED 2026-08-29: 66.32 px — eight times the condition. The assertion IS worth building.**
+Plex 287.39, `system-ui` 353.71, with `document.fonts.check()` true and a bogus-face control at
+366.05 proving the harness discriminates. The full numbers and the method are in the plan's
+M1-T1 OUTCOME.
+
+**And the first run of this measurement said the opposite, which is the part to carry.** It reported
+a delta of exactly **zero** — 353.7109375 on both branches — because an `OffscreenCanvas` created in
+`page.evaluate` gets no web face unless one is loaded, so it measured the same fallback twice.
+Believing it would have deleted M2-U1 on the authority of a number identical to seven decimal
+places. The rule this earns is narrow and reusable: **when a comparison returns exactly zero,
+suspect the instrument before the subject**, and give the probe a control that must differ.
+
 The existing `e2e-export` assertions are unaffected either way — they sample **below**
 `EXPORT_TOP_BAND + EXPORT_MARKER_ROW` (`exported-diagram.spec.ts:141-155`), i.e. the diagram, not
 the band. Which is itself worth stating: **the journey's current assertions structurally cannot see
@@ -695,7 +707,7 @@ had. Filed as M2-T3.
 | -------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
 | The constants and stylesheets carry the face | the structural gate                            | **Strong** — deterministic, verified red                            |
 | Paper computes the product's face            | `e2e-export` + `emulateMedia({media:'print'})` | **Strong** — real browser, verifiable red                           |
-| The raster's band is drawn in the face       | measured probe → assertion, or nothing         | **Conditional** — M1-T1 decides                                     |
+| The raster's band is drawn in the face       | decoded PNG vs the measured Plex extent        | **Strong** — M1-T1 measured 66.32 px of separation, so it builds    |
 | It looks right                               | `shoot.mjs` `export-diagram` + a human         | **Weak, and named as such** — this is the part where a person looks |
 
 ---
