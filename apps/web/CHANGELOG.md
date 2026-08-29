@@ -1,5 +1,36 @@
 # @repo/web
 
+## 0.114.0
+
+### Minor Changes
+
+- [#416](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/416) [`b499a97`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b499a9777dda668b3dafc6b0f5264f7213f8930e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The exported diagram (PNG/PDF, and the printed diagram that embeds it) now names its date rules
+  on its own axis: a reserved marker row under the title band carries the `Data date` and `Today`
+  chips, drawn from the same axis-marker model the screen's ruler uses — so culling, the merged
+  `Data date · today` case and the collision rule cannot differ between the screen and the
+  deliverable. Previously the two vertical rules reached the export unlabelled, explained only in
+  the legend (which is kept).
+
+- [#416](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/416) [`b499a97`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b499a9777dda668b3dafc6b0f5264f7213f8930e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Icon-only commands name themselves to every input: a new APG tooltip primitive (WCAG 1.4.13 in
+  full) opens on hover, on keyboard focus, and on a coarse-pointer long-press that shows the name
+  without firing the command — replacing the hover-only `title` on the deck's icon-only glyphs and
+  the Undo/Redo controls.
+
+### Patch Changes
+
+- [#416](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/416) [`b499a97`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b499a9777dda668b3dafc6b0f5264f7213f8930e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The native-dialog close guard exists once (`useNativeDialogClose`), and `Sheet` gains the
+  `confirmBeforeClose` clause `Dialog` already had — latent until a drawer hosts unsaved work, but
+  now a property of the primitive rather than a convention.
+
+- [#416](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/416) [`b499a97`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b499a9777dda668b3dafc6b0f5264f7213f8930e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - One viewport clamp for positioned overlays: the menu's measured clamp and top-layer portal target
+  move to a shared leaf, toolbar popovers measure themselves instead of guessing, both cap their
+  height with their own scroll at short viewports, and Escape inside a toolbar popover no longer
+  closes an enclosing dialog.
+
+- [#416](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/416) [`b499a97`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/b499a9777dda668b3dafc6b0f5264f7213f8930e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The panel ground+border pairing becomes one primitive (`PanelSurface`): seven call sites switched
+  — including three the debt row had not found — with the border half pinned through the primitive
+  and a structural gate against the next raw copy. No visual change.
+
 ## 0.113.0
 
 ### Minor Changes
