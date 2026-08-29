@@ -84,12 +84,26 @@ async function sweep(
       if (!deck) throw new Error(`command-surface: no surface matched ${rootSelector}`);
 
       const out: Target[] = [];
-      // **Every pointer target in the deck, in one pass — never per-`[data-toolbar-item]`.**
-      // `button`/`a`/`[role=button]` plus `input`, because a split button's caret is
-      // `tabIndex={-1}` and the search field is an `<input>`; both are things a planner clicks.
+      // **Every pointer target under the root, in one pass — never per-`[data-toolbar-item]`.**
+      //
+      // The list is the contract, and it was wrong until ADR-0118 M4. It read
+      // `button,a,[role=button]` plus `input` — written when this swept the deck, where those are
+      // everything — and M3 then pointed it at the plan header and the Project Explorer without
+      // widening it. `OrgSwitcher`'s `<select>` sat in `<header>` at 36 px and the gate reported
+      // the header clean: clean of everything it could see. That is ADR-0110 D5 exactly — a sweep
+      // whose blind spot is the control class it exists to protect — and it was found by a
+      // reviewer reading the query rather than the result.
+      //
+      // `[tabindex]` is deliberately NOT in the list: it would sweep the roving containers and
+      // every `tabIndex={-1}` wrapper, and the caret this gate exists for is already caught as a
+      // `button`.
       {
         const all = [
-          ...deck.querySelectorAll('button,a,[role="button"]'),
+          ...deck.querySelectorAll(
+            'button,a,[role="button"],select,textarea,summary,' +
+              '[role="treeitem"],[role="option"],[role="menuitem"],' +
+              '[role="menuitemcheckbox"],[role="menuitemradio"],[role="tab"],[role="switch"]',
+          ),
           ...deck.querySelectorAll('input'),
         ];
         for (const el of all) {
@@ -491,21 +505,50 @@ const COARSE_SURFACES = [
   // off-canvas Sheet `e2e-narrow-shell` drives. Stated as a width rather than made "optional":
   // an optional surface silently covers nothing the day its selector changes, which is the hole
   // this file's pinned positives exist to close.
-  { name: 'Project Explorer', root: '[data-panel-border]', atLeast: 8, minWidth: 1024 },
+  // 6, not 8: the tree became a named exception above, so the swept set is the six organisation
+  // destinations plus the rail's two controls. The floor still proves the destinations are there,
+  // which is the class M3 fixed and the reason this surface is swept at all.
+  { name: 'Project Explorer', root: '[data-panel-border]', atLeast: 6, minWidth: 1024 },
 ] as const;
 
 /**
- * The ONE named exception: a breadcrumb crumb. See the projection's docblock — a truncated crumb's
+ * **Two named exceptions, both excluded by an ANCESTOR SELECTOR rather than by a size threshold**,
+ * so each can hide exactly the class it names and never a regression elsewhere.
+ *
+ * The second is the Project Explorer's virtualized tree — its rows and their row-menu triggers are
+ * 28 px on both pointers. That is ADR-0118 D1's `icon-sm` exception plus the row rhythm that
+ * constrains it: `HierarchyTree`'s `ROW_HEIGHT` is a **JavaScript constant** feeding both the
+ * absolute row style and the virtualizer's `estimateSize`, so growing it under a coarse pointer is
+ * a row-rhythm decision with its own design pass rather than a padding change
+ * (`docs/TECH_DEBT.md` #215). It is excluded here rather than left unswept, so the class is named
+ * in one place with its equivalents: a long-press anywhere on the row opens the same menu on
+ * touch, and Menu/Shift+F10 opens it from the keyboard.
+ *
+ * The first is a breadcrumb crumb. See the projection's docblock — a truncated crumb's
  * width IS the space left over, so no CSS makes it clear a width floor, and a 44 px box was built,
  * measured at **16 × 44**, and withdrawn for making the failing axis worse. Compliant under WCAG
  * 2.2 §2.5.8's Inline exception; `breadcrumbs.tsx` carries the reasoning.
  */
-const EXEMPT_WITHIN = 'nav[aria-label="Breadcrumb"]';
+const EXEMPT_WITHIN = ['nav[aria-label="Breadcrumb"]', '[role="tree"]'].join(',');
 
+/**
+ * **390 is in the list, and it is the width this epic's own repair was made at** (ADR-0118 M4).
+ *
+ * M3 fixed two plan-header controls that laid out entirely outside a 390 px viewport, and shipped
+ * that fix with its narrowest gate at 834 — while `playwright.narrow-shell.config.ts` and
+ * `.github/workflows/ci.yml` both said the coarse axis was "gated by the coarse projection in
+ * `e2e-workspace-fit`". Three of the five gate-pass reviews raised it independently: the one
+ * viewport where the defect lived had no coarse cover, under a comment saying it had. That is
+ * `docs/TECH_DEBT.md` #214's exact shape inside the epic that filed #214.
+ *
+ * The Explorer is skipped below `lg` by its own `minWidth`, so 390 sweeps the deck and the header
+ * — which is where the repair is.
+ */
 const COARSE_WIDTHS = [
   { width: 1646, height: 1097 },
   { width: 1024, height: 768 },
   { width: 834, height: 1112 },
+  { width: 390, height: 844 },
 ];
 
 test.describe('The plan command surface, under a coarse pointer', () => {

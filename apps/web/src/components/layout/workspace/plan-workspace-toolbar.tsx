@@ -1469,9 +1469,15 @@ export function ToolbarPlanWorkspace({
                 facts, and it has gone there. This comment is kept rather than deleted so the two
                 moves read as one argument reaching its end. */}
                   {model.canWrite ? (
+                    // `icon`, not `icon-sm` (ADR-0118 M4). This is not a dense-list row — it sits
+                    // in the plan identity line, whose height is its content's — so it takes the
+                    // ordinary icon button and reaches 44 px under a coarse pointer. `icon-sm`
+                    // stays 28 px on both pointers as D1's second named exception, and that
+                    // exception is for consumers inside a container whose height is fixed
+                    // independently of them; this one is not, so it does not qualify.
                     <Button
                       variant="ghost"
-                      size="icon-sm"
+                      size="icon"
                       onClick={() => model.setEditing(true)}
                       title="Edit plan…"
                       aria-label="Edit plan"

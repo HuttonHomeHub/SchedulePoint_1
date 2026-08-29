@@ -44,17 +44,27 @@ const buttonVariants = cva(
         // the variant's whole reason had lapsed and its one consumer — the minimap's close — was
         // the odd size out in a family of three. A variant kept for a rule that no longer exists
         // is the drift class this register tracks, in the design system rather than in prose.
-        // Row-height icon button for dense lists (e.g. the Project Explorer tree, whose
-        // rows are 28px).
+        // Row-height icon button for dense lists. **Stays 28 px on BOTH pointers, and that is
+        // ADR-0118 D1's second named exception rather than an oversight** — see D6a.
         //
-        // **Its coarse form is 44, and the "pair it with a long-press" advice it used to carry
-        // is deleted rather than kept** (ADR-0118 M3). That advice was the exception this size
-        // existed to license, and measurement is what withdrew it: at 1646 with a coarse pointer
-        // the Project Explorer alone reported ELEVEN controls under the house rule, five of them
-        // this size at 28 x 28 — the three tree row menus, the rail's collapse toggle and
-        // `Edit plan`. A dense list is a DENSITY choice, and density is exactly what a coarse
-        // pointer cannot honour; the row grows on touch and is untouched on a mouse.
-        'icon-sm': 'size-7 pointer-coarse:size-(--control-h)',
+        // M3 gave it `pointer-coarse:size-(--control-h)` and had to take it back. Six of its eight
+        // consumers sit in a container whose height is fixed independently of it, and the sharpest
+        // is `HierarchyTree.tsx`: `ROW_HEIGHT = 28` is a **JavaScript constant** feeding both the
+        // absolute row style and the virtualizer's `estimateSize`, so a 44 px button centred in a
+        // 28 px row overflows 8 px into the row above and 8 px below — on a list whose rows are
+        // packed edge to edge, and whose trigger is `[@media(pointer:coarse)]:opacity-100`, i.e.
+        // permanently visible on exactly the device that would see it. Two independent reviews
+        // found it; the epic's own gate could not, because it asks whether a control's CENTRE hits
+        // itself and a control overflowing its container passes that.
+        //
+        // The exception's equivalent is stated per consumer rather than claimed for the variant,
+        // because the advice this docblock USED to carry — "pair with a larger non-pointer target
+        // (long-press / keyboard)" — turned out to be honoured by exactly ONE of the eight
+        // (`HierarchyTree`'s `startLongPress` on the whole row, plus Menu/Shift+F10 on the focused
+        // treeitem). Deleting that advice while introducing the size that needed it was the actual
+        // defect. Growing the dense rows themselves under a coarse pointer is a row-rhythm
+        // decision, not a padding one — `docs/TECH_DEBT.md` #215.
+        'icon-sm': 'size-7',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

@@ -1,6 +1,7 @@
 # ADR-0118 — A control height is one decision, and the input is an axis of it
 
-- **Status:** Accepted (M1 landed 2026-08-29)
+- **Status:** Accepted (M0–M4 landed 2026-08-29)
+- **Amends:** ADR-0100, whose `icon-lg` (`size-11`) size is deleted here — see D6
 - **Date:** 2026-08-29
 - **Spec:** [`docs/specs/touch-and-control-height/`](../specs/touch-and-control-height/)
 - **Measurement:** [`m0-measurement.md`](../specs/touch-and-control-height/m0-measurement.md),
@@ -68,9 +69,15 @@ Three things this deliberately does:
 - it requires an exception to state its **non-pointer equivalent**, because "this control is small"
   and "this control is unreachable" are different claims and only the second is a defect.
 
-**The exception list is empty at the time of writing**, and that is a measured result rather than
-an omission: the deck was the surface expected to need one, and at 16 px it does not. CQ-2's
+**The exception list was empty at the time of writing**, and that was a measured result rather
+than an omission: the deck was the surface expected to need one, and at 16 px it does not. CQ-2's
 fallback — exempt the command surface if 44 px proved unaffordable — therefore does not fire.
+
+**It has TWO entries now, both added by measurement rather than by a request for a carve-out, and
+both are in D6** — a breadcrumb crumb, and `icon-sm`'s dense-row consumers. This paragraph said
+"is empty" for one commit after the first entry landed, and `docs/UX_STANDARDS.md` repeated it;
+both are corrected, and the fact that a two-day-old ADR needed correcting on exactly the claim it
+exists to make is recorded rather than tidied away.
 
 ### D2 — The input becomes an axis of the metrics tokens, and the ADR owes the argument because the measurement removed the easy one
 
@@ -81,10 +88,14 @@ it does not: no control is a different height under a coarse pointer today. So t
 It is right because the alternative is worse in a specific way. Without an axis, 44 px is either
 applied to everyone — costing every desktop user 16 px of diagram to serve a device they are not
 using — or applied nowhere. The product already has a vocabulary for **which theme** (ADR-0097) and
-**which surface** (ADR-0055) a value belongs to; it has none for **which input**, which is why four
-components today paper over the gap individually with `pointer-coarse:` utilities and one
+**which surface** (ADR-0055) a value belongs to; it has none for **which input**, which is why
+**three sites across three files** (`toolbar-styles.ts:145`, `:170`, `ToolbarSplitButton.tsx:195`)
+paper over the gap individually with `pointer-coarse:` utilities, plus one
 (`HierarchyTree.tsx:483`) with an arbitrary-variant media query that a search for the others cannot
-find.
+find. That sentence read "four components… and one" until the M4 gate pass, and the wrong count had
+been copied verbatim into `globals.css` — a decision-bearing number, contradicting
+`m0-falsification.md:18-21` in the same epic's own measurement document (ADR-0076 Class 2, found by
+a reviewer opening the file rather than trusting the sentence).
 
 ### D3 — The gate is a coarse **projection** of the sweep that already exists
 
@@ -185,6 +196,44 @@ have gone stale is the drift class this epic keeps citing.
   past a phone viewport. It found one control that was: the dialog close, `size="sm"` around a raw
   `✕`, at **36 × 44** — height from the token, width from `px-3` plus one character — now the icon
   button and Lucide `X` its `Sheet` sibling has always used.
+
+### D7 — `pointer`, not `any-pointer`, and what that costs on a hybrid device
+
+The axis keys on the **primary** pointer. A Surface Pro with its keyboard attached reports
+`pointer: fine` and gets 36 px controls even though the screen is a touchscreen; folded back into
+tablet mode it reports `coarse` and gets 44. That matches the three `pointer-coarse:` utilities the
+product already shipped, so it is a continuation rather than a new inconsistency — and it is the
+right way round, because `any-pointer: coarse` would give **every** hybrid 44 px permanently,
+including the mouse-and-keyboard session that is how the product owner uses that exact device.
+
+It is stated here because it was reasoned in `implementation-plan.md` and nowhere else, and a
+reader consulting the ADR — which is what this repository's own conventions say to consult — would
+not have seen the trade named at all. The residual cost is real: a hybrid user who reaches past
+their keyboard to tap the screen gets the fine geometry. Nothing measures that; if it is ever
+reported, `any-pointer` is the one-line alternative.
+
+### D8 — What the gate cannot see, said in the gate
+
+The coarse projection asks three questions of each control: is its own box ≥ 44 × 44, is it painted
+at all, and does its own centre hit itself. **It has no notion of one target overlapping another**,
+and that is not an exclusion drawn too wide — it is a question the sweep does not ask.
+
+That blind spot is exactly what let M3's `icon-sm` change through: a 44 px button centred in a 28 px
+virtualized row is individually well-formed, its centre hits itself, and it overlaps its neighbour
+by 8 px at each end. Three of the five gate-pass reviews found it by reading the containers; the
+gate reported green throughout. It is recorded rather than fixed because a cross-sibling overlap
+assertion is a different instrument with its own false-positive surface (legitimately overlapping
+decoration, focus rings, tooltips), and building it under time pressure at a gate pass is how a gate
+gets written that everyone later routes around.
+
+The M4 pass widened what the sweep can see in the two ways that were cheap and certain: its element
+query gained `select`, `textarea`, `summary` and the interactive ARIA roles — it had been
+`button,a,[role=button],input`, written when this swept the deck and never widened when M3 pointed
+it at the plan header, so `OrgSwitcher`'s 36 px `<select>` sat inside a surface the gate names as
+covered and the gate reported that surface clean, of everything it could see — and **390 × 844
+joined the width list**, which is the viewport M3's own repair was made at and the one it shipped
+without covering, under a CI comment and a Playwright config both saying the coarse axis was gated
+here.
 
 ## Consequences
 

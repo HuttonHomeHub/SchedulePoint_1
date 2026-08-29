@@ -129,8 +129,9 @@ export const toolbarCardVariants = cva('bg-foreground/5 flex items-stretch gap-2
      * context: the padding and the border cost a line **because the foot row is already the
      * container**, not because the card is denser.
      *
-     * `boxed` is the deck's own: a `border` and `px-2 py-1.5` around `min-h-9` content, right in a
-     * band the deck owns outright.
+     * `boxed` is the deck's own: a `border` and `px-2 py-1.5` around `--control-h` content (it read
+     * `min-h-9` until ADR-0118 M2 gave that token a coarse axis), right in a band the deck owns
+     * outright.
      *
      * `bare` is for a card inside a row that is already the container — the canvas selection bar in
      * the plan's foot row, where `selection-actions.tsx` records why the docked bar had no box at

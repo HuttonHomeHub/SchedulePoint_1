@@ -1026,10 +1026,12 @@
 /* It does not weaken the rule. A theme block answers "what is this value",   */
 /* a scope answers "whose value is it", and neither can answer "what is the   */
 /* reader pointing with" — the product had a vocabulary for the first two     */
-/* (ADR-0097, ADR-0055) and none for the third, which is why four components  */
-/* papered over it individually with `pointer-coarse:` utilities and one      */
-/* (`HierarchyTree.tsx`) with an arbitrary-variant query that a search for    */
-/* the others cannot even find.                                              */
+/* (ADR-0097, ADR-0055) and none for the third, which is why THREE sites      */
+/* across three files papered over it individually with `pointer-coarse:`     */
+/* utilities, plus one (`HierarchyTree.tsx`) with an arbitrary-variant query  */
+/* that a search for the others cannot even find. (This read "four            */
+/* components" until the ADR-0118 M4 gate pass: a wrong count copied from the */
+/* ADR, which had it wrong against its own measurement document.)             */
 /*                                                                            */
 /* **Measured before it was written** (ADR-0118 M0, three runs, zero spread): */
 /* the coarse pointer moved WIDTH on 29 of 46 controls and HEIGHT on NONE, so */

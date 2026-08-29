@@ -82,8 +82,13 @@ export function Breadcrumbs({
                     // version that looks like it complies is the one that shipped a 16 px target.
                     //
                     // The mitigation is that this destination is never only here: the same
-                    // project and plan are reachable at full size from the Project Explorer tree
-                    // beside it, and the organisation from the wordmark on the same row.
+                    // project and plan are reachable at full size from the Project Explorer tree,
+                    // and the organisation from the wordmark on the same row. **"Beside it" holds
+                    // only at `lg`+**, where the Explorer is a docked column; below that it is an
+                    // off-canvas Sheet behind a hamburger, so the alternative costs a tap first.
+                    // Stated because 390 is the width where the crumb is at its worst (16 px) and
+                    // where touch is guaranteed — a mitigation that overstates itself at exactly
+                    // the width the finding is about is not a mitigation.
                     className={cn(
                       'hover:text-foreground rounded-sm underline-offset-4 hover:underline',
                       nowrap && 'block truncate',

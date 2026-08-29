@@ -178,7 +178,11 @@ export function ScheduleHealthPanel({
               variant="ghost"
               size="sm"
               onClick={() => printHealthReport(effectiveReport)}
-              className="h-7 px-2 text-xs"
+              // `pointer-coarse:h-(--control-h)` (ADR-0118 M4). `h-7` overrides `size="sm"` for the
+              // panel's density; its exact twin in `navigator-rail.tsx` took the coarse override in
+              // M3 and this one did not — one correct pattern applied to a control and not its
+              // neighbour, found by the architecture gate sweeping literals rather than by a read.
+              className="h-7 px-2 text-xs pointer-coarse:h-(--control-h)"
             >
               Print report
             </Button>

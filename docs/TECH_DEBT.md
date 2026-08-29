@@ -5966,3 +5966,45 @@ Three suggestions judged real and filed rather than quietly dropped:
   `EXPORT_LEGEND` untouched — and the relative Data-date-before-Today order the docblock pins
   holds in both. The #48(e) hand-authored-mirror rule covers presence, not order; align order
   the next time either legend is edited.
+
+## 215. Dense rows are 28 px on touch, and their height is a JavaScript constant
+
+**Raised:** 2026-08-29 (ADR-0118 M4 gate pass) · **Size:** M · **Owner:** a row-rhythm pass
+
+**ADR-0118 D1's second named exception, filed rather than solved.** `Button`'s `icon-sm` stays
+28 × 28 on both pointers, and the six of its eight consumers that sit in a dense row stay with it:
+`HierarchyTree`, `GanttRowMenu`, `ActivitiesTable`, `CalendarRowMenu`, `explorer-column`'s collapsed
+spine and `context-drawer`. Under the house rule they should be 44 on touch. They are not, and the
+reason is that **their containers are sized independently of them**.
+
+**M3 tried the obvious thing and it was wrong.** Giving `icon-sm` a `pointer-coarse` floor made
+every one of those buttons 44 px inside a container that did not grow. The sharpest case:
+`HierarchyTree.tsx:26` is `const ROW_HEIGHT = 28` — a **JavaScript constant** feeding both the
+absolute row style and the virtualizer's `estimateSize` — so a 44 px button centred in a 28 px row
+overflows 8 px into the row above and 8 px into the row below, on a list whose rows are packed edge
+to edge and whose trigger is `[@media(pointer:coarse)]:opacity-100`, i.e. permanently visible on
+exactly the device that would see it. `GanttPanel.tsx`'s `GANTT_ROW_HEIGHT = 28` is architecturally
+identical. `explorer-column.tsx`'s `SPINE_WIDTH = 34` is the same defect on the other axis.
+
+**Three of the five ADR-0118 gate-pass reviews found it independently, and the epic's own gate could
+not** — it asks whether a control's own box clears 44 and whether its own centre hits itself, and a
+control overflowing its container passes both. That blind spot is now stated in ADR-0118 **D8**.
+
+**What is owed, and why it is not a padding change.** A row height that must respond to the pointer
+cannot be a CSS media query while a virtualizer needs it as a number, so this needs either a live
+`matchMedia` hook feeding the row height (which introduces the first JS-side pointer read in the
+product — a real architectural decision, and one that must listen rather than sample at boot,
+because the value changes when a Surface Pro's keyboard folds back) or a decision that dense rows
+are 44 px for everyone. Both change the product's row rhythm on a surface a planner reads all day.
+That is a design pass, not a follow-up ticket.
+
+**The equivalents that exist today, stated because D1 requires it of an exception.** `HierarchyTree`
+alone honours the advice `icon-sm`'s docblock used to give: a long-press anywhere on the row opens
+the same menu on touch, and Menu/Shift+F10 opens it from the keyboard on the focused treeitem. The
+other five consumers have **no** large-target equivalent, which is the honest reason this is a
+register row and not a closed question.
+
+**Where it is exempted, so it cannot hide.** `e2e-workspace-fit/command-surface.spec.ts` excludes
+`[role="tree"]` from the coarse projection by ancestor selector — narrow, visible, and named — and
+`apps/web/src/styles/control-height.structural.test.ts` exempts `button.tsx::size-7` with the same
+reason. Neither hides anything else.

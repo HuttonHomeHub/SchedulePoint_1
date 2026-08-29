@@ -555,7 +555,6 @@ function GoToTodayControl({
                 hint.markSeen();
               }
             }}
-            className="h-9"
           />
           <span
             id={GOTO_HINT_ID}
@@ -967,6 +966,20 @@ function searchFieldWidth(layout: ToolbarLayoutMode): string {
 }
 
 /**
+ * The search field's own geometry, shared by the two components that render one.
+ *
+ * **A constant rather than two comments promising to move together** (ADR-0118 M4). Both
+ * `SearchFieldControl` (disabled, "coming soon") and `LiveSearchControl` (the lenses flag's
+ * operable successor) carried this literal, and both carried a docblock saying that fixing one and
+ * not the other "is exactly how a correct pattern gets applied to a control and not its
+ * neighbour". M2 then did precisely that: it routed one through `--control-h` and left the other,
+ * so under a coarse pointer every deck control measured 44 × 44 and the live field measured
+ * 240 × 36. The comment had already been written and it did not work; a shared constant is the
+ * only version of that promise the compiler keeps.
+ */
+const SEARCH_FIELD_CLASS = 'h-(--control-h) pl-8 text-sm';
+
+/**
  * The shared shape of every canvas-viewport command's reason: no diagram, then not the diagram view,
  * then actionable. Extracted because four registry entries had written it out four times and M3-T2
  * was about to write it four more inside the fold — eight copies of one two-branch rule is how one
@@ -1058,7 +1071,7 @@ function SearchFieldControl({
         // alone at 240 × 36, "the ONE deck control sized outside" the rule, for the second time and
         // for the same reason. A literal cannot follow a token; it can only agree with it until
         // the token moves.
-        className={cn('h-(--control-h) pl-8 text-sm', searchFieldWidth(layout))}
+        className={cn(SEARCH_FIELD_CLASS, searchFieldWidth(layout))}
       />
     </div>
   );
@@ -1187,7 +1200,7 @@ function LiveSearchControl({
           // measured 44 x 44 and the live search field measured 240 x 36. It was the new coarse
           // projection in `e2e-workspace-fit/command-surface.spec.ts` that named it, not a read of
           // this file, which is why that gate exists.
-          'h-(--control-h) pl-8 text-sm',
+          SEARCH_FIELD_CLASS,
           searchFieldWidth(api.layout),
           disabled && 'cursor-not-allowed opacity-50',
           // Suppress Chromium's native ✕ so the two clears can never both show. Flag-off the class is

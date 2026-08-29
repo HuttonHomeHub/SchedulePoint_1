@@ -99,7 +99,6 @@ export function CreateActivityPopover({
         // `readOnly`, not `disabled`, for the same reason as the submit below: a disabled input is
         // removed from the tab order mid-save, taking the user's focus with it.
         readOnly={saving}
-        className="h-9"
       />
       {error ? (
         <p id={errorId} role="alert" className="text-destructive-text text-xs">
