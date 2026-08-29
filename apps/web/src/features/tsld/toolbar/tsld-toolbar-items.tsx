@@ -72,6 +72,7 @@ import { toolbarControlVariants } from '@/components/ui/toolbar/toolbar-styles';
 import { ToolbarPopover } from '@/components/ui/toolbar/ToolbarPopover';
 import { ToolbarSplitButton } from '@/components/ui/toolbar/ToolbarSplitButton';
 import { usePopoverPanel } from '@/components/ui/toolbar/use-popover-panel';
+import { useTooltip } from '@/components/ui/tooltip';
 import {
   CANVAS_ACTIVITY_TYPES_ENABLED,
   CANVAS_AUTHORING_ENABLED,
@@ -1656,10 +1657,10 @@ function CurrentConflictStatus({
 }
 
 /** The checkbox body of the `View▾` popover — grouped into Structure / Markers / Insight overlays
- * (feature-spec.md §4.8), one `<fieldset>` + `<legend>` per non-empty group. `max-h-[60vh]
- * overflow-y-auto` is fixed locally here (not in `ToolbarPopover`, whose `ESTIMATED_HEIGHT` anchor
- * assumed a shorter, ungrouped panel) since the primitive is shared with `Summary` and `Legend`
- * and has no reason to change for this panel's height alone. */
+ * (feature-spec.md §4.8), one `<fieldset>` + `<legend>` per non-empty group. The panel's height
+ * cap and scroll live in `usePopoverPanel` itself since fix-slice M-C (#203) — the local
+ * `max-h-[60vh]` workaround this block used to carry named the estimate-only clamp as its cause,
+ * which stopped being true in the same commit that deleted it. */
 /**
  * The default colour mode (`use-tsld-canvas-ui-state.ts:149`). Named here rather than compared
  * against a literal so the two cannot drift apart silently — a drift that would show up only as the
@@ -1687,7 +1688,7 @@ function viewTriggerLabel(ctx: TsldToolbarContext): string {
 
 function ViewTogglesPanel({ ctx }: { ctx: TsldToolbarContext }): React.ReactElement {
   return (
-    <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
+    <div className="flex flex-col gap-3">
       {VIEW_TOGGLE_GROUP_ORDER.map(({ id, label }) => {
         const keys = viewToggleKeysFor(id, ctx.planView);
         const lenses = lensTogglesIn(id);
@@ -1858,16 +1859,34 @@ function UndoRedoControl({
   const liveLabel = stepLabel ? `${verb} ${stepLabel.toLowerCase()}` : verb;
   const label = disabled && api.disabledReason ? `${verb} — ${api.disabledReason}` : liveLabel;
   const keyShortcuts = direction === 'undo' ? 'Control+Z' : 'Control+Shift+Z';
+  // The visible name comes from the Tooltip primitive, not `title` (ADR-0117 — hover-only, so a
+  // keyboard or touch user could never read it). Found by the fix-slice M-B journey, which is the
+  // ADR-0064 §7 shape one more time: `ToolbarButton`'s icon-only branch got the treatment and this
+  // bespoke `render` control — the spec's own table said it went through ToolbarButton — did not.
+  // The dynamic aria-label (the control's reason for being bespoke) is unchanged.
+  const { triggerProps: tipTrigger, tooltip: tipNode } = useTooltip({
+    content: label,
+    purpose: 'name-echo',
+  });
   return (
     <button
+      // Tooltip props FIRST, then the registry's — `ToolbarButton`'s documented order, and the
+      // safe direction: on any future overlap the roving-focus wiring wins over an ambient
+      // affordance rather than being silently dropped. Only `onFocus` overlaps today, and it is
+      // explicitly composed below. (This was the other way round until the M-G component review;
+      // it was accidentally safe, not chosen.)
+      {...tipTrigger}
       {...api.itemProps}
       type="button"
       aria-label={label}
       aria-keyshortcuts={keyShortcuts}
       aria-disabled={disabled || undefined}
-      title={label}
       onClick={() => {
         if (!disabled) (direction === 'undo' ? ctx.undo : ctx.redo)();
+      }}
+      onFocus={(event) => {
+        tipTrigger.onFocus(event);
+        api.itemProps.onFocus?.();
       }}
       className={cn(toolbarControlVariants({ disabled }))}
     >
@@ -1876,6 +1895,7 @@ function UndoRedoControl({
       ) : (
         <Redo2 aria-hidden="true" className="size-4" />
       )}
+      {tipNode}
     </button>
   );
 }

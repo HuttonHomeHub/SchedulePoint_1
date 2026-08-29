@@ -522,6 +522,15 @@ discriminators. Each becomes a spec/plan before build:
   answer rather than a deferral: the admissible window is under two points wide and the rule would
   enforce halation, which does not occur on the ground it would guard.
 
+- **Icon-only commands name themselves everywhere** — **shipped** (ADR-0117, 2026-08-28, the
+  fix-slice epic). The product's first Tooltip primitive: a hand-rolled APG hook meeting
+  WCAG 1.4.13 in full, opening on hover, on focus, and on a coarse-pointer long-press that shows
+  the name **without** firing the command — so the deck's six icon-only glyphs stop being
+  hover-only `title`s that keyboard and touch users could never read. The `purpose` discriminant
+  (`name-echo` renders aria-hidden; `description` links `aria-describedby`) has no default, so the
+  double-announcement failure cannot be reached by omission. Positioned by the one overlay clamp
+  the same epic consolidated (a third clamp was the class being closed).
+
 - **The schedule health check** — **shipped** (ADR-0116, 2026-08-28). The DCMA 14-point
   assessment as a pure read model: `GET …/schedule/health-check` computes all fourteen metrics from
   persisted rows (no engine import, no lock, no schema change), a docked panel off

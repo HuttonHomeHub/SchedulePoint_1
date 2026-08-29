@@ -31,6 +31,9 @@ const ALLOWED = new Set([
   'components/ui/dialog.tsx',
   'components/ui/menu.tsx',
   'components/ui/toolbar/use-popover-panel.tsx',
+  // The tooltip portals through the SAME `portalTarget()` as the two above (fix-slice M-C's one
+  // overlay leaf), so it is outside every scope for exactly their reason.
+  'components/ui/tooltip.tsx',
   'features/tsld/components/TsldLegendPanel.tsx',
   'features/tsld/components/CreateActivityPopover.tsx',
   // Rendered inside a dialog, which is top-layer.

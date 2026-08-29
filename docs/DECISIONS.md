@@ -10,6 +10,31 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-08-29 — Fix-slice M-E/M-F: the small decisions the ADR does not carry
+
+Three calls from the fix-slice epic (`docs/specs/fix-slice-2026-08/`) worth a line each; the
+epic's primitive decision is ADR-0117 and the CAL-05 campaign is
+`specs/fix-slice-2026-08/m-e0-measurement.md`.
+
+**No changeset for the fixture amendment, on a structural ground.** `@repo/engine-conformance`
+sits in `.changeset/config.json`'s `ignore` list, so a changeset for it is not merely unneeded
+but impossible — and nothing releasable changes in M-E (the fixture is test infrastructure; the
+engine, the API and every image are untouched). Recorded because the plan said "changeset patch
+@repo/engine-conformance (confirm which packages version)" and the confirmation answered _none_.
+
+**The orphan `.xer` mirror was hand-amended rather than left or deleted.** The generator does not
+emit it and nothing in the repository reads it, but it encodes CAL-05's window (name + daily
+serials 46300–46311), so leaving it would create exactly the stale-mirror drift the epic's own
+consistency gate exists to stop — one file over, in the one artefact no gate covers. Amended in
+step (serials 46296–46325); deletion was not taken because the file is part of the vendored
+benchmark's provenance (ADR-0034).
+
+**The export marker row is reserved unconditionally.** With both marks off the strip is empty
+paper rather than absent, so the export's geometry never depends on which `View ▾` toggles a
+planner had on — a conditional row would make the WBS band's offset (and every downstream
+sampling constant) a function of scene state, which is how the journey's old restated `110`
+constant went wrong the first time.
+
 ## 2026-08-28 — Reconciliation pass: one register, two numbering styles, and a seam fixed once
 
 Run at the correctness programme's boundary (ADR-0116 + the polish pass + the four-phase

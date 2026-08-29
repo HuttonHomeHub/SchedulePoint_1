@@ -111,6 +111,76 @@ describe('Toolbar (APG primitive)', () => {
     expect(screen.getByRole('button', { name: 'Plain' })).not.toHaveAttribute('title');
   });
 
+  it('an icon-only button names itself with the Tooltip primitive, never title (fix-slice M-B)', () => {
+    // The `title` attribute is hover-only — invisible to keyboard focus and to touch — so the
+    // icon-only branch now speaks through `useTooltip` (#131). The accessible name stays exactly
+    // `label`, and no `title` remains on the branch (verified red against the pre-M-B button,
+    // which carried `title="Fit"`).
+    const items = defineToolbar<Ctx>([
+      {
+        id: 'fit',
+        group: 'frame',
+        tier: 1,
+        showLabel: 'never',
+        order: 0,
+        label: 'Fit',
+        onActivate: () => {},
+      },
+      {
+        id: 'undo',
+        group: 'frame',
+        tier: 1,
+        showLabel: 'never',
+        order: 1,
+        label: 'Undo',
+        isEnabled: () => false,
+        disabledReason: () => 'Nothing to undo',
+        onActivate: () => {},
+      },
+    ]);
+    render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
+    const fit = screen.getByRole('button', { name: 'Fit' });
+    expect(fit).not.toHaveAttribute('title');
+    fireEvent.focus(fit);
+    const tip = document.querySelector('[data-tooltip]');
+    expect(tip).toHaveTextContent('Fit');
+    expect(tip).toHaveAttribute('aria-hidden', 'true'); // name-echo: AT hears nothing twice
+    // The disabled icon-only string is CHARACTER-IDENTICAL to the title it replaces, or copy has
+    // silently changed — and the reason stays AT-reachable through aria-describedby as before.
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    expect(undo).not.toHaveAttribute('title');
+    fireEvent.focus(undo);
+    expect(document.querySelector('[data-tooltip]')).toHaveTextContent('Undo — Nothing to undo');
+    expect(undo).toHaveAccessibleDescription(/Nothing to undo/);
+  });
+
+  it("an icon-only control WITH a description derives purpose 'description' — AT keeps the channel", () => {
+    // The M-B accessibility review's finding 2: pre-M-B, an icon-only control's
+    // `title="label — description"` reached AT as the accessible description (title maps there
+    // when no aria-describedby is set). A hardcoded 'name-echo' would have stranded that text
+    // from AT the day an ICON_ONLY item gained a description; deriving the purpose keeps parity.
+    const items = defineToolbar<Ctx>([
+      {
+        id: 'fit',
+        group: 'frame',
+        tier: 1,
+        showLabel: 'never',
+        order: 0,
+        label: 'Fit',
+        description: 'Fit the diagram to the window',
+        onActivate: () => {},
+      },
+    ]);
+    render(<Toolbar items={items} context={{ count: 1 }} label="T" />);
+    const fit = screen.getByRole('button', { name: 'Fit' });
+    fireEvent.focus(fit);
+    const tip = document.querySelector('[data-tooltip]');
+    expect(tip).toHaveAttribute('role', 'tooltip');
+    expect(tip).toHaveTextContent('Fit — Fit the diagram to the window');
+    expect(fit).toHaveAccessibleDescription(/Fit the diagram to the window/);
+    expect(fit).toHaveAccessibleName('Fit'); // the name is still exactly the label
+  });
+
   describe('label policy — `showLabel` is presentation, `tier` is priority (TECH_DEBT #61)', () => {
     /**
      * Render with a stubbed container width; jsdom lays nothing out, so this is the only input.

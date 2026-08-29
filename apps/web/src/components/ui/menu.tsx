@@ -1,14 +1,13 @@
-import {
-  createContext,
-  useContext,
-  useId,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { createContext, useContext, useId, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import {
+  clampAnchor,
+  overlayMaxHeight,
+  portalTarget,
+  useMeasuredBox,
+  type OverlayAnchor,
+} from '@/components/ui/overlay-position';
 import { cn } from '@/lib/utils';
 
 /**
@@ -33,92 +32,32 @@ import { cn } from '@/lib/utils';
  * fork it.
  */
 
-interface MenuAnchor {
-  /** Viewport x (px) — the menu's inline-start edge, clamped to stay on-screen. */
-  x: number;
-  /** Viewport y (px) — the menu's block-start edge, clamped to stay on-screen. */
-  y: number;
-}
+type MenuAnchor = OverlayAnchor;
 
 const MenuCloseContext = createContext<(() => void) | null>(null);
 
 /**
- * The box used to clamp the anchor **before the menu has been measured** — the first paint only.
- *
- * **These were the only numbers this menu ever used, and that was a defect** with the shape this
- * codebase keeps recording: a control present in the DOM and unreachable by pointer. A row menu
- * opened near the bottom of the window was positioned as though it were 200 px tall; a taller one
- * ran off the viewport, and its last item — `Delete`, on every row — could be focused but not
- * clicked. That is **WCAG 2.4.11 Focus Not Obscured (Minimum, AA)**, and precisely for `Delete`
- * alone: measured, its top was already past the fold, so it was *entirely* hidden, which 2.4.11
- * prohibits. `Dissolve` above it was only partly clipped — permitted at AA, caught only by 2.4.12
- * (AAA). Stated that narrowly because this repository has recorded overstating an SC once
- * (ADR-0082) and correcting it. Found when the activities table gained a `Notes` item
- * (`docs/specs/object-bar-defects/` M2) and pushed a WBS summary's menu past 200 px, which made
- * `e2e-wbs` time out on a locator that **resolved**. Raising the constant was tried first and is
- * exactly the wrong fix: it moves the threshold and leaves the class.
- *
- * They remain as the pre-measurement estimate because the first render has nothing to measure, and
- * a menu that paints at the wrong place for one frame and jumps is worse than one that starts
- * close. {@link useClampedPosition} corrects them before the browser paints.
+ * The pre-measurement estimate box for a menu — the first paint only. The clamp itself, the
+ * measured correction and the reasons they exist moved verbatim to `overlay-position.ts`
+ * (TECH_DEBT #203(b) — one clamp), including this box's own defect record.
  */
-const CLAMP_MARGIN = 8;
-const ESTIMATED_WIDTH = 208;
-const ESTIMATED_HEIGHT = 200;
-
-function clampAnchor(
-  { x, y }: MenuAnchor,
-  width = ESTIMATED_WIDTH,
-  height = ESTIMATED_HEIGHT,
-): { left: number; top: number } {
-  const maxLeft = Math.max(CLAMP_MARGIN, window.innerWidth - width - CLAMP_MARGIN);
-  const maxTop = Math.max(CLAMP_MARGIN, window.innerHeight - height - CLAMP_MARGIN);
-  return {
-    left: Math.min(Math.max(CLAMP_MARGIN, x), maxLeft),
-    top: Math.min(Math.max(CLAMP_MARGIN, y), maxTop),
-  };
-}
+const MENU_ESTIMATE = { width: 208, height: 200 };
 
 /**
- * Clamp the menu against its **own measured box**, not an assumed one.
- *
- * `useLayoutEffect` rather than `useEffect`: it runs after the DOM is written and **before the
- * browser paints**, so a menu that would have overflowed is repositioned in the same frame rather
- * than appearing in the wrong place and moving.
- *
- * The dependency on `anchor` is what makes a re-open at a different row re-measure; the panel is
- * unmounted while closed (`if (!open) return null`), so there is no stale measurement to carry.
+ * Clamp the menu against its **own measured box**, not an assumed one — the shared
+ * {@link useMeasuredBox} + {@link clampAnchor}, with the menu's estimate for the first paint.
  */
 function useClampedPosition(
   panelRef: React.RefObject<HTMLDivElement | null>,
   anchor: MenuAnchor,
   open: boolean,
 ): { left: number; top: number } {
-  const [box, setBox] = useState<{ width: number; height: number } | null>(null);
-
-  useLayoutEffect(() => {
-    // **No reset on close, deliberately.** `setBox(null)` was here and `react-hooks/set-state-in-effect`
-    // refused it — rightly, and the honest fix was to delete it rather than suppress the rule,
-    // because it was redundant: the panel unmounts while closed, and the next open re-measures in
-    // this same layout effect BEFORE paint. A carried-over box can therefore only ever be the
-    // pre-measurement estimate for one commit that nobody sees — and a warm one at that.
-    //
-    // The `setBox` below stays, and is the case the rule's own text describes as legitimate:
-    // reading from an external system (layout) and syncing it into React. The updater returns
-    // `prev` unchanged when the box has not moved, so it costs one extra render per open and does
-    // not cascade.
-    if (!open) return;
-    const el = panelRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    setBox((prev) =>
-      prev && prev.width === rect.width && prev.height === rect.height
-        ? prev
-        : { width: rect.width, height: rect.height },
-    );
-  }, [panelRef, anchor, open]);
-
-  return clampAnchor(anchor, box?.width, box?.height);
+  const box = useMeasuredBox(panelRef, anchor, open);
+  return clampAnchor(
+    anchor,
+    box?.width ?? MENU_ESTIMATE.width,
+    box?.height ?? MENU_ESTIMATE.height,
+  );
 }
 
 /**
@@ -205,6 +144,16 @@ export function Menu({
    * confirmed the current order is correct by construction rather than by luck.
    */
   const { left, top } = useClampedPosition(ref, anchor, open);
+  /**
+   * The menu's height ceiling (#203(a), fix-slice M-C): a menu taller than the viewport used to
+   * pin its top at the margin and run its bottom off-screen with NO scroll — reachable at a short
+   * viewport or 200 % browser zoom, which roughly halves `innerHeight` in CSS px and is exactly
+   * the population WCAG 2.4.11 protects. The panel now scrolls inside the viewport instead of
+   * running off. Same rule as `usePopoverPanel`'s, from the same shared leaf — and deliberately
+   * NOT `innerHeight - top - CLAMP_MARGIN`, which is self-referential and shipped the very
+   * defect it was written to fix (see {@link overlayMaxHeight}).
+   */
+  const maxHeight = overlayMaxHeight();
 
   // Move focus to the first item on open (APG: opening with the pointer or the
   // menu key places focus on the first item).
@@ -293,35 +242,15 @@ export function Menu({
       // tabindex keeps it out of the sequential tab order.
       tabIndex={-1}
       onKeyDown={onKeyDown}
-      style={{ position: 'fixed', left, top }}
+      style={{ position: 'fixed', left, top, maxHeight }}
       className={cn(
-        'border-border bg-popover text-popover-foreground z-50 min-w-40 rounded-md border p-1 shadow-md',
+        'border-border bg-popover text-popover-foreground z-50 min-w-40 overflow-y-auto rounded-md border p-1 shadow-md',
       )}
     >
       <MenuCloseContext.Provider value={closeRestoring}>{children}</MenuCloseContext.Provider>
     </div>,
     portalTarget(),
   );
-}
-
-/**
- * Where the menu mounts: the **topmost open modal `<dialog>`** if there is one, else `document.body`.
- *
- * A modal `<dialog>` (opened with `showModal()`) lives in the browser's **top layer**, which sits
- * above the whole normal stacking context — `z-50` on a sibling of `<body>` is not merely lower, it
- * is in a different layer and no z-index can reach it. So a menu portalled to `document.body` from
- * inside a dialog renders *underneath* the dialog: visible in the DOM, entirely unclickable, and
- * silently so. Every consumer until now opened its menu from a page, which is why this went unseen
- * until a Playwright journey drove one from inside the calendar dialog and the click retried for
- * thirty seconds against "subtree intercepts pointer events".
- *
- * `position: fixed` stays viewport-relative inside a dialog (a dialog establishes no containing
- * block of its own), so the anchor maths above is unaffected. The **last** open dialog is chosen
- * because a nested one is the topmost.
- */
-function portalTarget(): HTMLElement {
-  const dialogs = document.querySelectorAll<HTMLDialogElement>('dialog[open]');
-  return dialogs[dialogs.length - 1] ?? document.body;
 }
 
 /**

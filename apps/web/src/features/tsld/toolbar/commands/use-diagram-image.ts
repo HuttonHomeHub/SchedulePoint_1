@@ -125,10 +125,12 @@ export function useDiagramImage(args: {
         dataDate,
         view: viewToggles,
         todayOffset: daysBetween(dataDate, todayIso),
-        // **The fractional Today marker and its pill** (ADR-0056 M4, default-on since
-        // 2026-07-27). The export drew a whole-day line and no pill at all, because `paint.ts`
-        // gates the pill on this key being non-null — so the deliverable disagreed with the
-        // screen about the one mark that says "you are here", unreported. `todayIso` is the
+        // **The fractional Today marker** (ADR-0056 M4, default-on since 2026-07-27). Absent,
+        // the export drew a whole-day line while the screen drew the interpolated one — the
+        // deliverable disagreeing with the screen about the one mark that says "you are here".
+        // (This comment described "a pill" until fix-slice M-F: ADR-0106 moved the labels off
+        // the painter into chrome — the ruler's DOM on screen, the reserved marker row in the
+        // export — so the fraction now moves only the dashed RULE.) `todayIso` is the
         // generation instant the title band already prints, so the picture and its caption
         // cannot name two different moments.
         todayFraction,

@@ -11,7 +11,7 @@ import {
 } from '@/components/layout/navigator/use-explorer-prefs';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
-import { Surface } from '@/components/ui/surface';
+import { PanelSurface, Surface } from '@/components/ui/surface';
 import type { UseExpansionState } from '@/features/navigator';
 
 /**
@@ -72,9 +72,8 @@ export function ExplorerColumn({
 
   if (prefs.collapsed) {
     return (
-      <Surface
-        tone="panel"
-        className="border-border flex h-full flex-col items-center border-r py-2"
+      <PanelSurface
+        className="flex h-full flex-col items-center py-2"
         style={{ width: SPINE_WIDTH }}
       >
         <Button
@@ -101,7 +100,7 @@ export function ExplorerColumn({
         <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
           <OrgDestinationsCollapsed orgSlug={orgSlug} />
         </div>
-      </Surface>
+      </PanelSurface>
     );
   }
 
@@ -113,10 +112,9 @@ export function ExplorerColumn({
           twice — the strict-mode duplicate ADR-0099 M10 found between the rail icons and the drawer
           list, one layer along. This component owns the width, the fold and the splitter, and
           nothing else. */}
-      <Surface
-        tone="panel"
+      <PanelSurface
         ref={panelRef}
-        className="border-border flex h-full min-h-0 flex-col border-r"
+        className="flex h-full min-h-0 flex-col"
         style={{ width: prefs.size }}
       >
         <NavigatorRail
@@ -128,10 +126,12 @@ export function ExplorerColumn({
           }}
           collapseRef={collapseRef}
         />
-      </Surface>
+      </PanelSurface>
       {/* `pointerToSize` is the pointer's distance from the panel's LEFT edge, read from the live
           box rather than from `prefs.size` — which is the value being changed, so using it would
           make each move relative to the last one and drift under a fast drag. */}
+      {/* Stays a raw `Surface` deliberately: `contents` gives the resizer the panel family with
+          no box of its own, and `PanelSurface`'s border needs a box (TECH_DEBT #210). */}
       <Surface tone="panel" className="contents">
         <PanelResizer
           orientation="vertical"

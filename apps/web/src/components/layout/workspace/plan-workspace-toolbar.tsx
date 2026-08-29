@@ -43,7 +43,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PanelResizer } from '@/components/ui/panel-resizer';
 import { SheetHeader } from '@/components/ui/sheet';
-import { Surface } from '@/components/ui/surface';
+import { PanelSurface, Surface } from '@/components/ui/surface';
 import { Deck, Toolbar, splitByRow } from '@/components/ui/toolbar';
 import { ToolbarBandProvider } from '@/components/ui/toolbar/toolbar-band';
 import { useMediaQuery } from '@/components/ui/use-media-query';
@@ -1739,13 +1739,13 @@ export function ToolbarPlanWorkspace({
                       now serves both edges: every token inside the docks rebinds to the panel
                       family with no component change, and `border-border` draws the seam in the
                       panel's own vocabulary. */}
-                      <Surface
-                        tone="panel"
+                      <PanelSurface
+                        border="start"
                         style={{ width: floatPathsWidth }}
-                        className="border-border shrink-0 border-l"
+                        className="shrink-0"
                       >
                         {floatPathsDockContent}
-                      </Surface>
+                      </PanelSurface>
                     </>
                   ) : null}
 
@@ -1763,13 +1763,13 @@ export function ToolbarPlanWorkspace({
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
                       {/* `panel` scope — see the Float paths dock above (item 7). */}
-                      <Surface
-                        tone="panel"
+                      <PanelSurface
+                        border="start"
                         style={{ width: healthWidth }}
-                        className="border-border shrink-0 border-l"
+                        className="shrink-0"
                       >
                         {healthDockContent}
-                      </Surface>
+                      </PanelSurface>
                     </>
                   ) : null}
 
@@ -1789,13 +1789,13 @@ export function ToolbarPlanWorkspace({
                         className="bg-border/60 hover:bg-border focus-visible:bg-ring"
                       />
                       {/* `panel` scope — see the Float paths dock above (item 7). */}
-                      <Surface
-                        tone="panel"
+                      <PanelSurface
+                        border="start"
                         style={{ width: notesWidth }}
-                        className="border-border shrink-0 border-l"
+                        className="shrink-0"
                       >
                         {notesDockContent}
-                      </Surface>
+                      </PanelSurface>
                     </>
                   ) : null}
                 </div>

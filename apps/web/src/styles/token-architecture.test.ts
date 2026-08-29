@@ -629,9 +629,11 @@ describe('the sizing rhythm ratchets down', () => {
    * `text-[10px]` / `text-[0.6875rem]` / `text-[0.625rem]`, all reaching for a size the scale
    * had no name for. They now use `text-micro`, which is the whole reason that step exists.
    *
-   * **The remaining 20 are mostly legitimate and this number should not be read as debt.**
-   * `w-[min(15rem,32vw)]`, `max-h-[60vh]`, `w-[calc(100vw-2rem)]` are responsive clamps that no
-   * design token can express — a token is one value and these are a relationship. What the
+   * **The remainder are mostly legitimate and this number should not be read as debt.**
+   * `w-[min(15rem,32vw)]` and `w-[calc(100vw-2rem)]` are responsive clamps that no
+   * design token can express — a token is one value and these are a relationship. (The
+   * `max-h-[60vh]` this list used to cite was a workaround for the popover's estimate-only clamp
+   * and left with fix-slice M-C, ratcheting 18 → 17.) What the
    * ratchet is for is the OTHER kind: a one-off pixel nudge that should have been a scale step,
    * which is how the seven above accumulated one at a time, each of them locally reasonable.
    *
@@ -642,7 +644,7 @@ describe('the sizing rhythm ratchets down', () => {
    * (see `countArbitrarySizing`) revealed that two of the twenty were prose all along. Re-measured
    * rather than left at the old figure, which would have quietly bought two units of slack.
    */
-  const ARBITRARY_SIZING_CEILING = 18;
+  const ARBITRARY_SIZING_CEILING = 17;
 
   it(`uses no more than ${ARBITRARY_SIZING_CEILING} arbitrary sizing values`, () => {
     const { total, sites } = countArbitrarySizing();

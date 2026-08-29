@@ -934,6 +934,20 @@ down rather than change a label. `ellipsis-convention.structural.test.ts` gates 
 can see — a disclosure item must never carry the character — and says in its own docblock that the
 converse is a review question, not something the gate covers.
 
+### Tooltips, and when `title` is still right (ADR-0117)
+
+**An icon-only control names itself with `useTooltip({ purpose: 'name-echo' })`, never with
+`title`.** The native attribute is hover-only — invisible to keyboard focus and to touch — so on
+an unlabelled control it names the command to a mouse and to nobody else; the primitive speaks the
+same string on hover, on focus, and on a coarse-pointer long-press that does **not** fire the
+command. The full authoring contract, the `purpose` discriminant (no default — `'name-echo'` is
+`aria-hidden` so a screen reader never hears the name twice) and the binding `title` discriminator
+table live in [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) §`useTooltip`.
+
+What `title` is still FOR: a truncated text's full value, and a supplementary clause on a control
+whose name is already visible. What it is never for again: being the only way to learn an
+icon-only control's name.
+
 ## Governance
 
 - Changing a token changes the whole app — token edits require review and a note

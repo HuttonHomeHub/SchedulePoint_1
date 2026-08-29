@@ -48,6 +48,37 @@ describe('Sheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * `confirmBeforeClose` (TECH_DEBT #197 item 1): the mechanism is asserted rather than the visual
+   * outcome, because jsdom's `<dialog>` never natively closes on `cancel` anyway — what keeps a
+   * real browser's sheet on screen is exactly `defaultPrevented`, so that is the observable fact.
+   */
+  it('confirmBeforeClose cancels the native close so the host decides, and still calls onClose', () => {
+    const onClose = vi.fn();
+    render(
+      <Sheet open onClose={onClose} title="Editor drawer" confirmBeforeClose>
+        <p>Drawer body</p>
+      </Sheet>,
+    );
+    const cancel = new Event('cancel', { cancelable: true });
+    fireEvent(screen.getByRole('dialog'), cancel);
+    expect(cancel.defaultPrevented).toBe(true);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('without confirmBeforeClose the native cancel proceeds unchanged', () => {
+    const onClose = vi.fn();
+    render(
+      <Sheet open onClose={onClose} title="Project Explorer">
+        <p>Drawer body</p>
+      </Sheet>,
+    );
+    const cancel = new Event('cancel', { cancelable: true });
+    fireEvent(screen.getByRole('dialog'), cancel);
+    expect(cancel.defaultPrevented).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('anchors to the inline-start edge by default (side="left")', () => {
     render(
       <Sheet open onClose={vi.fn()} title="Project Explorer">

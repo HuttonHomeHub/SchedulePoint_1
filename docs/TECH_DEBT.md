@@ -1764,8 +1764,14 @@ that reader about something they cannot do. It should land **with** (1), not bef
 **3. A shaded row-menu item's reason is `sr-only`; the canvas bar's is visible.** ADR-0082's premise
 is that one operation should not teach two mental models, and for a sighted mouse-only user it still
 does: the canvas prints the sentence, the row menu holds it for assistive technology only. The
-honest reason it is not fixed is that there is **no Tooltip primitive** in `components/ui/`, adding
-one is an ADR-level decision (CLAUDE.md §5), and a one-off `title` is what ADR-0082 just removed.
+honest reason it was not fixed then is that there was **no Tooltip primitive** in `components/ui/`,
+and a one-off `title` is what ADR-0082 just removed. _(Corrected 2026-08-28: this row's "adding one
+is an ADR-level decision (CLAUDE.md §5)" over-read that section — §5's clause is about adding a
+component LIBRARY; a hand-rolled primitive is the house pattern, and what actually made it
+ADR-shaped was ADR-0105's public-contract trigger. The primitive now exists — ADR-0117 — so the
+remaining question here is narrower and stands: should a shaded LABELLED control's reason become a
+visible `purpose: 'description'` tooltip? That changes ADR-0082's rule product-wide and was
+deliberately declined in the fix-slice epic (its CQ-2); it needs its own review, not a default.)_
 
 **4. `HierarchyTree` is a third bare-boolean menu.** _(Closed 2026-08-09 as correct by design —
 see #114's banner; the rule is now stated at `tree-actions.ts` rather than inferred.)_ `tree-actions.ts`'s `nodeActions` returns `[]`
@@ -2304,6 +2310,20 @@ acquiring two glyph vocabularies.
 ## 131. An icon-only toolbar control names itself only on hover, and the target device has none
 
 **Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** M · **Owner:** a design-system pass
+
+_**CLOSED 2026-08-28** (fix-slice M-B, ADR-0117). The Tooltip primitive this row asked for exists —
+`useTooltip` in `components/ui/tooltip.tsx`, hand-rolled to the APG with WCAG 1.4.13 in full
+(Dismissible/Hoverable/Persistent, each red-verified), opening on hover, on focus, and on a
+coarse-pointer **long-press that does not fire the command**. Adopted on `ToolbarButton`'s
+icon-only branch (title deleted there, character-identical content, `purpose: 'name-echo'` so AT
+hears nothing twice) — which covers every icon-only registry item including the collapsed band's —
+and on `UndoRedoControl`, whose bespoke render path the flag-on journey caught still carrying
+`title` on its first run. Reviewed by accessibility + component reviewers before merge (§19.13).
+One coupling recorded by that review: `ToolbarPopover`/`ToolbarSplitButton`'s compact (icon-only)
+branches still use `title` — NOT live today, because `Deck`/`Toolbar` pin `layout: 'comfortable'`
+(#193) so `compact` never resolves true — but ADR-0110 M5 deliberately kept the band machinery, so
+**reactivating the compact bands must adopt `useTooltip` on both controls in the same change**, or
+the day the bands return silently reopens the defect this row closed._
 
 Every icon-only toolbar control carries its name in `aria-label` and `title`. A screen-reader user
 gets it; a **sighted, touch-only** user does not, because `title` tooltips never fire on tap. That is
@@ -4050,7 +4070,20 @@ during a gate pass.
 
 ## 175. The exported diagram has never carried the date marks, and nobody decided that
 
-**Raised 2026-08-22**, established while fixing #148 rather than reported.
+**Raised 2026-08-22**, established while fixing #148 rather than reported. **Closed 2026-08-28**
+(fix-slice M-F): the product owner chose **marks on the axis** over legend-only. The export now
+reserves a marker row under the title band (`EXPORT_MARKER_ROW`, unconditional so the geometry
+never depends on which marks are on) and draws the chips from **the same `axisMarkers` model the
+screen's ruler renders from** — one implementation of culling, coincidence (`Data date · today`),
+clamping and the collision rule, per the ADR-0065 argument that module's docblock makes. The
+legend keeps naming both marks (also the product owner's call). The WBS band moves down with the
+row; `render-export-image.wbs-band.test.ts`'s offset expectation was the one existing assertion
+that legitimately changed, audited rather than accepted. The journey samples the reserved row of
+the decoded PNG and was verified red against a row-reserved-but-undrawn mutation; the printed
+diagram inherits by construction (PrintSurface embeds the same blob). **One correction to this
+row's own framing (spec F9):** the _rules_ always reached the export — what never appeared were
+the _labels_, and there was no axis band for them to sit on; "has never carried the date marks"
+over-read the defect by half a channel.
 
 `export/render-export-image.ts:127` calls `paint(...)`, and `:153` `drawTitleBand` then fills
 `palette.ground` **opaquely** over `(0, 0, width, EXPORT_TOP_BAND)` with `EXPORT_TOP_BAND = 96`
@@ -5150,6 +5183,13 @@ the real primitive — rather than by reading it. Neither was introduced by rece
 
 ### a. Escape inside a `Menu` or `Combobox` also closed the enclosing modal `<dialog>`
 
+_2026-08-28 (fix-slice M-C): the fix's **third copy** landed. `usePopoverPanel` carried the same
+capture-phase Escape listener with `stopPropagation()` alone — one directory from the two files
+fixed below, unfound because the contract existed three times (#197 item 3's exact argument). It
+now calls `preventDefault()` first, with a unit case red-verified against the stopPropagation-only
+version; the clamp consolidation that fixed it also makes a fourth copy fail
+`overlay-position.structural.test.ts`._
+
 Both primitives owned a capture-phase Escape listener calling `stopPropagation()` and **not**
 `preventDefault()`. `stopPropagation` withholds the key from other **listeners**; a modal
 `<dialog>`'s Escape-to-close is a **default action**, evaluated against `defaultPrevented` once the
@@ -5202,16 +5242,19 @@ toggle-to-close (mouse only).
 ## #197 — Three rules with two or three implementations each, agreeing by discipline
 
 _Filed 2026-08-26 by the ADR-0111 sweep's component half. None divergent enough to block; one
-already asymmetric._
+already asymmetric. **Item 1 closed 2026-08-28** (fix-slice M-A); item 3's `usePopoverPanel` copy
+is closed by the same epic's M-C._
 
-1. **`Dialog` and `Sheet` each carry a private `closeIfSelf`** — the guard that stops a nested
-   `<dialog>`'s non-bubbling `close`/`cancel` from tearing down its parent through React's
-   capture-phase root dispatch (`#50`'s fix). The two docblocks point at each other rather than
-   sharing code, **and they have already diverged**: `dialog.tsx` grew a `confirmBeforeClose` clause
-   for ADR-0108's unsaved-work guard that `sheet.tsx` never received. Nothing breaks today — no
-   `Sheet` consumer holds unsaved editable state — but the next confirm-before-close drawer either
-   duplicates the clause a third time or discovers the gap the hard way. **The closest to blocking,
-   and the one worth extracting first.**
+1. **CLOSED (2026-08-28, `docs/specs/fix-slice-2026-08/` M-A).** The guard now lives once in
+   `components/ui/native-dialog-close.ts` (`useNativeDialogClose`), adopted by both primitives, and
+   `Sheet` gained the `confirmBeforeClose` clause it never received — latent by design, no consumer
+   sets it (verified by grep), documented on the prop with this row's reasoning. A structural gate
+   (`native-dialog-close.structural.test.ts`, comment-stripped, pinned positive) fails the next
+   private copy; verified red against the pre-extraction tree, where it named both files. The two
+   pre-existing nesting tests passed unedited through the extraction, which is the ADR-0078
+   condition for calling a move a move. _Original finding:_ `dialog.tsx` and `sheet.tsx` each
+   carried a private `closeIfSelf`, and the copies had already diverged by exactly the
+   `confirmBeforeClose` clause.
 2. **`MenuItem` and `ToolbarButton` each hand-roll the reason-first `aria-describedby` composition**
    — reason before standing description, because "why you cannot use it outranks what it would tell
    you", plus the guard against a dangling `aria-describedby`. `form.tsx` has a third textually
@@ -5221,7 +5264,14 @@ already asymmetric._
    `Combobox`, and `usePopoverPanel`. The irony is on the record: `usePopoverPanel` was extracted
    **specifically** to stop this drift and cites ADR-0062's extraction argument, but only
    `ToolbarPopover` was migrated onto it. `#196a` is what that costs: the `preventDefault` fix had
-   to be made in two files, and a third implementation sat one directory away.
+   to be made in two files, and a third implementation sat one directory away. _2026-08-28
+   (fix-slice M-C): the `usePopoverPanel` copy's cost is paid — its Escape handler gained the
+   missing `preventDefault` and its positioning moved onto the shared `overlay-position` leaf. The
+   listener contract itself still exists three times — **four** since M-B, whose Tooltip spells the
+   Escape rung a fourth time with deliberately different semantics (no outside-press close, no
+   focus restore — 1.4.13's "focus unmoved"), which is exactly why a naive `useEscapeToClose` leaf
+   was not smuggled in mid-epic. Extracting the rung, accommodating that variance, stays this
+   item's remaining half._
 
 All three are ADR-0105 public-contract changes, so each wants a spec note rather than a quiet edit.
 Take them in the order above.
@@ -5451,6 +5501,19 @@ the pair rather than reasoning about it. Raised by the accessibility gate as a s
 
 **Raised:** 2026-08-27 (`docs/specs/object-bar-defects/` M2) · **Size:** S · **Owner:** unassigned
 
+_**CLOSED 2026-08-28** (fix-slice M-C, `docs/specs/fix-slice-2026-08/`), both halves. The clamp,
+the measured correction and the top-layer portal target moved verbatim to
+`components/ui/overlay-position.ts` — ONE implementation, with `menu.test.tsx` and
+`ToolbarPopover.test.tsx` passing untouched as the move's oracle and a structural gate (verified
+red naming both old hosts) against the next copy. **(a)**: both `Menu` and the popover now cap
+their height to the space below the clamped top and scroll inside it, `clampAnchor`'s boundary
+arithmetic gained the unit coverage this row asked for (red-verified against two deliberate
+breaks), and the short-viewport pointer sweep in `e2e-toolbar` was verified red against the
+estimate-only clamp. **(b)**: `usePopoverPanel` measures via the shared leaf; `View ▾`'s local
+`max-h-[60vh]` workaround is deleted with its docblock (the arbitrary-value ratchet fell 18 → 17),
+and the adoption also surfaced and fixed #196a's third copy — the Escape handler there still
+lacked `preventDefault`._
+
 `Menu` positioned its portalled panel from a hard-coded `ESTIMATED_HEIGHT = 200` and never measured
 the real box, so a taller menu opened low in the window ran off the viewport and its last item was
 **present, focusable and unclickable** — WCAG 2.4.11 for the item that was entirely below the fold.
@@ -5492,7 +5555,13 @@ component blocked on findings that were folded in the milestone. These four are 
 than rushed.
 
 **(a) An icon-only object action names itself only on hover, and the object bar is a new surface for
-that gap.** `zoom-to-selection` is `showLabel: 'never'` (foot-row-and-deck M1), so a sighted
+that gap.** _CLOSED 2026-08-28 (fix-slice M-B, ADR-0117), with the premise corrected: it had
+already lapsed before the fix landed — ADR-0115/M4 restored `zoom-to-selection`'s label
+(`selection-actions.tsx` records the round trip), so no icon-only control exists on the object bar
+today. The class is still closed durably rather than by accident: `ToolbarButton`'s icon-only
+branch now speaks through the Tooltip primitive (hover + focus + long-press), so any future
+`showLabel: 'never'` item on ANY toolbar inherits the treatment by construction — the "real fix"
+this row asked for._ `zoom-to-selection` is `showLabel: 'never'` (foot-row-and-deck M1), so a sighted
 touch-only reader gets no visible name: `aria-label` carries it for assistive technology and `title`
 carries it for a pointer, and a tap fires neither. **This is not a WCAG failure** — the accessible
 name is unconditional and independent of `title`, which the accessibility review checked rather than
@@ -5532,7 +5601,8 @@ claims in documents and this was a claim in a **choice**, and nothing currently 
 ## 205. The fixture plan is unschedulable as seeded, and the horizon guard was an untyped 500
 
 **Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Re-diagnosed:** 2026-08-28 ·
-**Size:** S (done) + decision · **Owner:** api / product owner
+**Closed:** 2026-08-28 (both halves — (b) `7aaf155c`, (a) fix-slice M-E fixture revision 2) ·
+**Size:** S (done) + decision (taken) · **Owner:** api / product owner
 
 **(b) is FIXED and proven live** (2026-08-28, `7aaf155c`). The engine's horizon guard is now a
 typed `WorkingTimeHorizonExceededError` mapped to `422 VALIDATION_FAILED` reason
@@ -5571,13 +5641,25 @@ the catalogue was dropped as a 422 finding**, and the Night Shift and Heavy Lift
 silently lost their non-working seasons. It now sends `isWorking: false`
 (`packages/seed-http/src/runner.ts`, regression in `runner.spec.ts`, verified red).
 
-**What remains is a decision, not code.** The catalogue's flagship plan cannot recalculate when
-freshly seeded, which strands `docs/TEST_PLAYBOOK.md` Tier 1 ("recalculate and read the row")
-and the ADR-0116 DCMA rows in any fresh environment. The options are ADR-0034-shaped: amend the
-versioned fixture (widen CAL-05's window or shorten the chain — a benchmark edit), or mark the
-fixture plan **expected-unschedulable** in the playbook and give the tiers a recalculable
-stand-in. In-window placement work does not help — the capacity is genuinely insufficient.
-Playbook annotated 2026-08-28; the decision goes to the product owner.
+**(a) is CLOSED — the product owner chose the amendment, and the measurement changed its shape**
+(2026-08-28, fix-slice M-E; the full campaign is
+`docs/specs/fix-slice-2026-08/m-e0-measurement.md`). CAL-05's window is now
+**2026-10-01 → 2026-10-30** as fixture **revision 2** (`fixture.revision` + `revision_note` are
+now required schema fields, so a content amendment cannot land undeclared). The spec's proposed
+end-only widening was **disproved by running it**: with the end at 30-Oct the recalculation
+still answered 422, because the **backward** pass starves independently — A10500's
+`MANDATORY_FINISH 2026-10-16T18:00` needs the chain's 9,360 working minutes at-or-before the
+pin and a window opening 05-Oct holds 8,610; on a window-only calendar there is no
+representable late date before the window exists. Widening the start to 01-Oct gives the late
+pass 11,490 minutes while **moving no forward date** (A10100's `MANDATORY_START` still pins the
+chain to 05-Oct), so the breaks-logic case lands exactly as the fixture intended: fresh seed +
+recalculate → **200**, A10400 EF 2026-10-17 past the pin, A10500 the plan's one flagged
+violation, −1 float on the chain. Zero conformance/golden changes (the §4.8 audit's right-hand
+column did not move — and could not, since the pure harness substitutes window-only calendars);
+the generator, JSON, CSVs and the orphan `.xer` mirror moved together, with
+`fixture-csv-consistency.spec.ts` now gating JSON↔CSV drift. Playbook Tier 1 and the ADR-0116
+DCMA rows re-read fresh: every structural metric held to the digit; metric 7 moved 65 → 67 (the
+chain's now-reachable negative float).
 
 ## 206. Health-check review suggestions consciously not folded at the M5 gate pass
 
@@ -5623,6 +5705,25 @@ rather than quietly dropped:
 
 **Raised:** 2026-08-28 (reconciliation-pass component review) · **Size:** S · **Owner:** web
 
+_**CLOSED 2026-08-28** (fix-slice M-D, `docs/specs/fix-slice-2026-08/`), with this row's own claims
+corrected on the way — recording the corrections is the ADR-0071 lesson:_
+
+- _**Seven pairings, not four.** The spec's re-derivation found six occurrences (four switchable +
+  two `className="contents"` resizer scopes that must NOT switch, because a border needs a box) —
+  and then the new structural gate's own first run found **three more** this row and the spec both
+  missed: the workspace's three right docks in `plan-workspace-toolbar.tsx` (ADR-0110's rule — the
+  gate found the defect its author could not enumerate). All seven switched to `PanelSurface`._
+- _**"Trailing-edge border" was wrong for one of them**: the context drawer and the three right
+  docks carry `border-l` (`border="start"`), not `border-r`. Building to this row's wording would
+  have put a wrong edge on four of seven sites._
+- _**Neither travelling minor was folded**, because neither trigger fired: nothing in the epic
+  edits `paint.ts`'s wash branch or `HierarchyTree.tsx`. They stand below as filed._
+
+_`PanelSurface` lives in `surface.tsx` with `panel-surface.test.tsx`, the missing border half is
+asserted through the primitive's `data-panel-border` stamp in `app-shell.test.tsx` (verified red
+against the raw-Surface call site), and `panel-surface.structural.test.ts` (comment-stripped,
+pinned positive) fails the next raw pairing._
+
 Every `tone="panel"` consumer pairs the `Surface` with a trailing-edge border, and the pairing is
 a copied literal rather than a primitive: `app-shell.tsx:549-551` is character-for-character
 `explorer-column.tsx:119`, `explorer-column.tsx:76-77` is the same pairing with the collapsed
@@ -5647,3 +5748,64 @@ Two companions travel with the extraction:
   is byte-pinned by the golden log); and `HierarchyTree.tsx`'s `suppressClick` check-and-reset is
   duplicated between the row's and the name span's `onClick` (a `consumeSuppressedClick()` helper;
   no correctness bug today because `stopPropagation` means only one runs per click).
+
+## 212. An overlay's height ceiling must not be measured from its own output
+
+**Raised and FIXED:** 2026-08-29 (fix-slice M-G gate pass) · **Size:** S · **Owner:** web
+
+Recorded rather than merely fixed, because the mechanism is a class this register keeps meeting
+and the shape is worth naming once more.
+
+M-C gave `Menu` and `usePopoverPanel` a height ceiling so a tall overlay scrolls inside itself
+instead of running off the viewport (`#203(a)`). Both derived it as
+`window.innerHeight - top - CLAMP_MARGIN` — **from their own clamped `top`** — which closes a
+loop: the ceiling is applied to the element, `useMeasuredBox` then measures the element it just
+constrained, and `useClampedPosition` clamps `top` against that constrained height. An overlay
+whose natural height would have pushed it upward therefore learns nothing and settles at a fixed
+point at the **pre-measurement estimate's** height, with its lower items in an internal scroll
+region **below the fold** — the exact WCAG 2.4.11 defect the measured clamp exists to prevent,
+reintroduced by the mechanism written to strengthen it. ADR-0090's _"the pass stopped measuring
+its own output"_, one primitive over.
+
+**Found by the sweep, not by a reviewer, and only because the anchor was low enough.** `e2e-wbs`'s
+row-menu pointer-reachability sweep reported `Dissolve` at 1101 and `Delete` at 1133 against a
+1080 viewport; re-run in isolation it **passed**, because the defect needs a row low enough
+(anchor y ≥ `innerHeight − estimate − margin`) for the ceiling to bind. That is why the numbers
+matter more than the pass/fail: they match the fixed-point arithmetic to the pixel, which is what
+established the diagnosis rather than a re-run.
+
+Fixed by one `overlayMaxHeight()` in the shared leaf — a **viewport-constant** ceiling, which
+binds only when the overlay is genuinely taller than the screen (then `top` clamps to the margin
+and it scrolls, `#203(a)`'s real case) and is inert otherwise. Guarded three ways, each verified
+red first: a structural gate forbidding `innerHeight - top` anywhere in `apps/web`, a pinned
+positive that both consumers call the leaf, and two unit cases pinning the ceiling's **value**
+and its independence from the anchor. The unit test that existed asserted only that a ceiling was
+`!== ''` — green against the looped derivation and the fixed one alike (the ADR-0093 shape),
+which is why it was strengthened rather than trusted.
+
+## 211. Fix-slice M-G suggestions consciously not folded at the gate pass
+
+**Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
+items were the accessibility review's CLAUDE.md correction and the performance review's
+long-press listener cleanup, both landed with the pass) · **Size:** S ×3 · **Owner:** web
+
+Three suggestions judged real and filed rather than quietly dropped:
+
+- **The touch long-press has no visible affordance and no documentation a user would find** (ux).
+  `useTooltip`'s 500 ms long-press names an icon-only control without firing it, and nothing in
+  the product mentions the gesture — the shortcuts sheet is keyboard-shaped and unmounted from
+  the Gantt-less panels anyway. It degrades gracefully (a tap still fires the command exactly as
+  before), so this is an unadvertised affordance rather than a defect; the right home is
+  whatever touch-help surface exists when one does.
+- **A no-marks export shows a blank 22 px paper strip with no separator closing it off** (ux).
+  `EXPORT_MARKER_ROW` is reserved unconditionally (deliberate — geometry stability, see
+  DECISIONS.md 2026-08-29), so a plan with the data-date rule off and today outside the exported
+  span carries an empty strip between the title separator and the diagram. Cosmetic,
+  low-frequency, consistent with the on-screen ruler's own resting state.
+- **The export legend's group order differs from the DOM legend's** (ux, verified at the gate
+  pass rather than assumed): `TsldLegend` lists the marker entries (Data date, Today) before the
+  link entries; `EXPORT_LEGEND` lists links first. Pre-existing — M-F deliberately left
+  `EXPORT_LEGEND` untouched — and the relative Data-date-before-Today order the docblock pins
+  holds in both. The #48(e) hand-authored-mirror rule covers presence, not order; align order
+  the next time either legend is edited.

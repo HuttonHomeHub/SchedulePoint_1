@@ -214,11 +214,17 @@ describe('AppShell', () => {
     // dialog and nav both `rgba(0, 0, 0, 0)`. Invisible to every suite before the narrow-shell
     // journey existed, because no browser had ever opened this sheet. Verified red against the
     // unwrapped call site.
-    expect(
-      within(drawer)
-        .getByRole('navigation', { name: 'Project Explorer' })
-        .closest('[data-surface="panel"]'),
-    ).not.toBeNull();
+    const panelScope = within(drawer)
+      .getByRole('navigation', { name: 'Project Explorer' })
+      .closest('[data-surface="panel"]');
+    expect(panelScope).not.toBeNull();
+    // **The border half, through the primitive** (TECH_DEBT #210). The first version of the #172
+    // fix copied only the ground half of the ground+border pairing — the half above pins the
+    // ground, and nothing pinned the border, which is exactly the half that broke. Asserted via
+    // `PanelSurface`'s own `data-panel-border` stamp rather than a raw class string, so the test
+    // survives the primitive changing how it paints the edge. Verified red against a ground-only
+    // render (raw `Surface tone="panel"` at this call site).
+    expect(panelScope).toHaveAttribute('data-panel-border', 'end');
 
     fireEvent.click(within(drawer).getByRole('button', { name: 'Close Project Explorer' }));
     expect(

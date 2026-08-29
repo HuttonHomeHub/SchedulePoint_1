@@ -125,3 +125,44 @@ export function Surface({
     </SurfaceToneContext>
   );
 }
+
+/**
+ * A `panel`-tone {@link Surface} WITH its edge border — the two halves of one visual fact, stated
+ * once (TECH_DEBT #210).
+ *
+ * Every painted `panel` consumer pairs the surface with a border on the edge that faces the
+ * workspace, and the pairing was a copied literal that had already drifted once: the first version
+ * of the `#172` fix copied only the ground half, and the panel's trailing edge faded into the
+ * scrim — caught by a ux reviewer reading a screenshot, not by any test (the class the ADR-0065
+ * "two implementations drift invisibly" argument names). This primitive renders both halves
+ * together and takes only the layout classes, so a fifth call site cannot copy half of it.
+ *
+ * `border` is which edge carries it: `'end'` (the default — the Explorer's three sites, whose
+ * panel sits at the leading edge with the workspace to its right) or `'start'` (the context
+ * drawer, which sits at the trailing edge — building to #210's original "trailing-edge border"
+ * wording would have put a wrong edge on it, which is why the prop is required reading).
+ *
+ * Deliberately NOT a route for the two `className="contents"` resizer scopes
+ * (`explorer-column.tsx`, `context-drawer.tsx`): those exist to give a `PanelResizer` the panel
+ * family with **no box of their own**, and a border needs a box.
+ *
+ * `data-panel-border` is stamped so tests assert the pairing through the primitive rather than
+ * against a raw class string — the half that broke once is the half the attribute pins.
+ */
+export function PanelSurface({
+  border = 'end',
+  className,
+  ...rest
+}: Omit<SurfaceProps, 'tone'> & {
+  /** Which edge carries the border — `'end'` (right, the default) or `'start'` (left). */
+  border?: 'end' | 'start';
+}): React.ReactElement {
+  return (
+    <Surface
+      tone="panel"
+      data-panel-border={border}
+      className={cn('border-border', border === 'end' ? 'border-r' : 'border-l', className)}
+      {...rest}
+    />
+  );
+}

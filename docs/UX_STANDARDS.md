@@ -66,6 +66,12 @@ a bug:
 ## Interaction standards
 
 - **Feedback within 100ms** for any interaction (press state, focus, spinner).
+- **An icon-only control names itself to every input** (ADR-0117): its name appears on hover, on
+  keyboard focus, and on a coarse-pointer long-press — via `useTooltip({ purpose: 'name-echo' })`,
+  never via `title`, which is hover-only and therefore names the control to a mouse and to nobody
+  else. A long-press shows the name **without** firing the command; a tap fires the command and
+  shows nothing. The binding `title` discriminator table is in
+  [`COMPONENT_LIBRARY.md`](COMPONENT_LIBRARY.md) §`useTooltip`.
 - **Destructive actions** require explicit confirmation (AlertDialog) and use
   the `destructive` intent; prefer reversible actions with undo.
 - **A confirmation must name what is actually destroyed — including what the user
