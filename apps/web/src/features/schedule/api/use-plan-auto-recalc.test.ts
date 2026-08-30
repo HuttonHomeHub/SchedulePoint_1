@@ -96,6 +96,67 @@ describe('usePlanAutoRecalc', () => {
     ).not.toHaveBeenCalled();
   });
 
+  /**
+   * **The stand-down must ask whether a settle is COMING, not whether a timer handle exists.**
+   *
+   * `timerRef.current` was never cleared when the debounce elapsed on its own — only `flush` and the
+   * unmount cleanup nulled it — so after any auto-recalculation that fired by itself, the handle
+   * stayed non-null and `editWasWaiting` read `true` for a window in which no edit was waiting at
+   * all. The manual confirmation stood down, and the settle announcer had already consumed its
+   * baseline on the earlier settle and said nothing either: the press produced **complete silence**.
+   *
+   * That is the commonest path there is — edit, let the debounce settle, press Recalculate — and it
+   * is a WCAG 4.1.3 failure, since the button's only feedback to a screen-reader user is that
+   * sentence. Verified red: both assertions below fail against the pre-fix hook, the first at 0.
+   */
+  it('confirms a press made after an auto-recalculation has settled', () => {
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+    act(() => {
+      result.current.notify();
+    });
+    act(() => {
+      vi.advanceTimersByTime(AUTO_RECALC_DEBOUNCE_MS); // the debounce elapses by itself
+    });
+    act(() => recalcMock.run.mock.calls[0]![0]?.onSuccess?.()); // …and that recalculation settles
+    act(() => {
+      result.current.flush(onSuccess); // quiet now; the planner presses Recalculate
+    });
+    act(() => recalcMock.run.mock.calls[1]![0]?.onSuccess?.());
+    expect(
+      onSuccess,
+      'no edit is waiting and no settle is coming — this press owns the region',
+    ).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * The other half of the same rule, and the reason the fix is not simply "clear the handle".
+   *
+   * An edit whose debounce has fired is no longer *waiting*, but its settle announcer is still going
+   * to speak that edit's new dates when the in-flight run lands. Registering the confirmation there
+   * would put two owners back on one settle — the exact defect the stand-down exists for — so the
+   * test is `a timer is pending OR a run is in flight`, not the presence of a timer handle.
+   */
+  it('still stands down while the edit it would collide with is in flight', () => {
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() => usePlanAutoRecalc('acme', 'p1', { enabled: true }));
+    act(() => {
+      result.current.notify();
+    });
+    act(() => {
+      vi.advanceTimersByTime(AUTO_RECALC_DEBOUNCE_MS); // run 1 is now in flight
+    });
+    act(() => {
+      result.current.flush(onSuccess); // pressed DURING that run
+    });
+    act(() => recalcMock.run.mock.calls[0]![0]?.onSuccess?.()); // run 1 settles — the announcer speaks
+    act(() => recalcMock.run.mock.calls[1]?.[0]?.onSuccess?.()); // the queued run settles
+    expect(
+      onSuccess,
+      "the edit's settle announcer owns this — a second owner would collapse the region",
+    ).not.toHaveBeenCalled();
+  });
+
   it('flush(onSuccess) does not confirm when the manual recalc fails', () => {
     const onSuccess = vi.fn();
     const { result } = renderHook(() =>
@@ -136,7 +197,9 @@ describe('usePlanAutoRecalc', () => {
     const { result, unmount } = renderHook(() =>
       usePlanAutoRecalc('acme', 'p1', { enabled: true }),
     );
-    act(() => result.current.notify());
+    act(() => {
+      result.current.notify();
+    });
     expect(recalcMock.run).not.toHaveBeenCalled();
     unmount();
     expect(recalcMock.run).toHaveBeenCalledTimes(1);

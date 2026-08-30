@@ -141,6 +141,12 @@ export function usePlanAutoRecalc(
   const pendingEditsRef = useRef(0);
 
   const fire = useCallback((): void => {
+    // **The handle is stale the moment this runs, so drop it first.** `timerRef` was only ever
+    // nulled by `flush` and the unmount cleanup, never when the debounce elapsed on its own — so
+    // after any self-firing auto-recalculation it held an elapsed id, and every reader of
+    // "is an edit waiting?" got `true` for a window in which none was. That silenced the manual
+    // Recalculate confirmation on the commonest path in the product (`docs/TECH_DEBT.md` #104).
+    timerRef.current = null;
     const { enabled, onMessage } = optsRef.current;
     if (!enabled) {
       queuedRef.current = false;
@@ -248,18 +254,27 @@ export function usePlanAutoRecalc(
 
   const flush = useCallback(
     (onSuccess?: () => void): void => {
-      // A waiting timer means an edit was made inside the debounce window, so the settle announcer
-      // is already going to speak that edit's new dates. Registering the manual confirmation as well
-      // would put two owners on one settle, and the polite region clears-and-re-sets on the next
-      // frame — so two utterances in a frame collapse to whichever lands last, non-deterministically
-      // dropping either the status word or the facts. One settle, one owner: when an edit is
-      // waiting, the informative sentence wins and this generic confirmation stands down.
-      const editWasWaiting = timerRef.current !== null;
+      // **One settle, one owner** — and the question is whether a settle is COMING, not whether a
+      // timer handle happens to exist.
+      //
+      // An edit made inside the debounce window means the settle announcer is going to speak that
+      // edit's new dates. Registering the manual confirmation as well would put two owners on one
+      // settle, and the polite region clears-and-re-sets on the next frame — so two utterances in a
+      // frame collapse to whichever lands last, non-deterministically dropping either the status
+      // word or the facts. When such a settle is coming, the informative sentence wins and this
+      // generic confirmation stands down.
+      //
+      // The edit is still owed that sentence once its debounce has FIRED and while the run is in
+      // flight, which is why `inFlightRef` is the second term rather than a tidier `timerRef` test.
+      // Reading the handle alone was the defect: it survived the elapsed timeout (see `fire`), so a
+      // press made after a settled auto-recalculation stood down against a settle that had already
+      // happened, and the planner heard nothing at all.
+      const settleIsComing = timerRef.current !== null || inFlightRef.current;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      if (onSuccess && !editWasWaiting) manualSuccessRef.current = onSuccess;
+      if (onSuccess && !settleIsComing) manualSuccessRef.current = onSuccess;
       // An explicit Recalculate is the user overruling the hold, not a coalesced edit: fire now and
       // drop the holds, so the surface that took one is told its gesture is no longer protected.
       if (holdsRef.current.size > 0) {
