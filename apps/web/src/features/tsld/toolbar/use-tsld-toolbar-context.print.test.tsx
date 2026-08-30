@@ -213,8 +213,12 @@ describe('useTsldToolbarContext — Browser Print (M4)', () => {
     ];
     expect(arg.blob).toBeInstanceOf(Blob);
     expect(arg.title).toBe('North Tower');
-    // The subtitle carries the plan's data date (formatted), not today's date.
-    expect(arg.subtitle).toBe('As of 01 Jan 2026');
+    // **The subtitle carries BOTH dates, in one format** (`docs/TECH_DEBT.md` #217). It used to
+    // carry the data date alone while the band painted into the image repeated the plan name and
+    // printed "As of <iso> · Generated <iso>" — so paper stated the plan's identity twice, six
+    // lines apart, in two date formats. The band is now legend-only on this path and the document
+    // is the single home for the identity and the dates.
+    expect(arg.subtitle).toBe('As of 01 Jan 2026 · Generated 20 Jul 2026');
     // "Preparing…" is announced synchronously on pick (B3), before the "Printing…" completion message.
     expect(announce).toHaveBeenCalledWith('Preparing the diagram to print…');
     expect(announce).toHaveBeenCalledWith('Printing North Tower.');

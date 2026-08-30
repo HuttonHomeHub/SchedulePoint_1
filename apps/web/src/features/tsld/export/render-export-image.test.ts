@@ -108,4 +108,50 @@ describe('renderExportImage', () => {
       renderExportImage(input(), { createCanvas: () => canvas, paint: vi.fn() }),
     ).rejects.toThrow(/2D context/);
   });
+
+  /**
+   * **The printed diagram's band drops the two lines its document already carries**
+   * (`docs/TECH_DEBT.md` #217).
+   *
+   * Asserted on the TEXT the band writes rather than on pixels, because the `fakeCtx` proxy records
+   * calls and has no raster — which is the same reason the export unit suites cannot see a face or
+   * a colour. What they CAN see is whether the plan's name was written into the picture at all,
+   * and that is exactly the fact this decision turns on.
+   *
+   * **Verified red before the branch existed**: `'legend-only'` wrote `North Tower` like `'full'`.
+   */
+  it('writes the plan name into the band for a standalone export and not for a printed one', async () => {
+    // **Awaited, not fire-and-forget.** The first version called `void renderExportImage(…)` and
+    // read the recorded text immediately; that passes only because jsdom has no `document.fonts`,
+    // so the `await document.fonts.ready` inside the renderer resolves in the same tick. On a real
+    // browser it would read an empty list and assert nothing. Caught by `require-await`.
+    const texts = async (mode: 'full' | 'legend-only'): Promise<string[]> => {
+      const written: string[] = [];
+      const ctx = fakeCtx();
+      // `fillText` is the only method we need to observe; the proxy returns a no-op for the rest.
+      Object.defineProperty(ctx, 'fillText', {
+        value: (text: string) => written.push(text),
+        writable: true,
+      });
+      const canvas = {
+        width: 0,
+        height: 0,
+        getContext: () => ctx,
+        toBlob: (cb: (b: Blob | null) => void) => cb(new Blob(['png'], { type: 'image/png' })),
+      } as unknown as HTMLCanvasElement;
+      await renderExportImage(input({ bandContent: mode }), {
+        createCanvas: () => canvas,
+        paint: vi.fn(),
+      });
+      return written;
+    };
+
+    expect((await texts('full')).join(' '), 'a standalone PNG must name itself').toContain(
+      'North Tower',
+    );
+    expect(
+      (await texts('legend-only')).join(' '),
+      'the printed diagram sits inside a document that already names the plan',
+    ).not.toContain('North Tower');
+  });
 });

@@ -10,6 +10,41 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-08-30 — Paper follows the reader, and the document owns the identity
+
+`docs/TECH_DEBT.md` #217. No ADR: this settles two questions about an existing deliverable and adds
+no surface.
+
+**A printed programme prints the columns the reader chose.** The print surface mapped over all of
+`GANTT_COLUMNS` while the screen hides Predecessors by default, so paper ignored the choice. That
+was invisible while the column printed an em dash on every row; the moment it carried real names it
+would have grown every existing plan's document a wide column overnight — the change that column's
+own docblock says nobody asked for. This is ADR-0103/#167's rule ("the export is MY picture, not a
+fixed one") applied one artefact along, and the alternative — a fixed column set — is a document
+that disagrees with the screen it was printed from.
+
+**Sort order is deliberately NOT included in that.** The surface takes the default WBS order
+whatever the grid is sorted by, and its docblock gives the reason: a programme two people print
+from the same plan should be the same document. Columns are "which facts do you want on the page";
+sort is reproducibility. Following the screen on one and not the other is a distinction worth
+stating, because "make paper match the screen" would have taken both.
+
+**The document owns the plan's identity; the picture owns the picture.** The printed diagram named
+the plan twice, six lines apart, in two date formats — the DOM heading and the band painted into
+the embedded PNG. `PrintSurface.tsx`'s docblock shows the duplication was deliberate when it
+shipped, and it survived because nothing photographed that document until 2026-08-29. The heading
+wins because it is real, selectable text that a browser's print outline can see; the band keeps the
+legend, which means nothing outside the picture, and the "scaled to fit" note, which is a fact
+about that raster alone. `renderExportImage`'s new `bandContent` is defaulted, so the standalone
+PNG and PDF — which leave the product and must name themselves — are unchanged.
+
+**Two new inputs are required rather than optional, and that is the finding.** `barDateSource`'s
+docblock in the same file records this exact failure once already: props threaded onto the surface
+while the input type stayed silent, so the only production caller could not pass them. The
+Predecessors defect is that shape a second time. Optional is what both have in common, so
+`dependencies` and `hiddenColumns` are required — the ADR-0070 `hoursPerDay` pattern, adopted for
+the same reason. It cost ~15 test call sites, which now each state what the reader chose.
+
 ## 2026-08-29 — Carrying the typeface to the layers that opt out of the cascade
 
 `docs/specs/typeface-outward-artefacts/`. No ADR: this applies an existing decision (IBM Plex Sans,

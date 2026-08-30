@@ -463,6 +463,27 @@ const SHOTS = [
     },
   },
   {
+    // **Predecessors ON**, which the reader's default hides (`gantt-view-state.ts`
+    // `DEFAULT_HIDDEN_COLUMNS`). The shot below it is the default document; this one is the fix
+    // for `docs/TECH_DEBT.md` #217, and it needs the column visible to show anything: paper now
+    // follows the reader's column choice, so the DEFAULT programme proves only that the column is
+    // correctly absent. A picture of an absence cannot show that the names arrived.
+    name: 'gantt-print-programme-predecessors',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}?view=gantt&ghide=none`),
+    after: async (p) => {
+      await stubPrintDialog(p);
+      await p
+        .getByRole('button', { name: /share.*export/i })
+        .first()
+        .click();
+      await p.getByRole('menuitem', { name: 'Print…', exact: true }).click();
+      await p.locator('.tsld-print-container').waitFor({ state: 'attached', timeout: 30_000 });
+      await revealPrintDocument(p);
+    },
+  },
+  {
     name: 'gantt-print-programme',
     programme: true,
     takePen: true,

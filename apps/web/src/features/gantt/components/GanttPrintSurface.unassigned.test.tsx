@@ -18,6 +18,9 @@ vi.mock('@/config/env', async (importOriginal) => ({
   WBS_IMPROVEMENTS_ENABLED: true,
 }));
 
+import { GANTT_COLUMNS } from '../layout/grid-columns';
+import { DEFAULT_HIDDEN_COLUMNS } from '../model/gantt-view-state';
+
 import { GanttPrintSurface } from './GanttPrintSurface';
 
 import { anActivity } from '@/test/activity-fixture';
@@ -50,8 +53,23 @@ const ACTIVITIES: ActivitySummary[] = [
 
 const printed = (activities: ActivitySummary[]): HTMLElement =>
   render(
-    <GanttPrintSurface title="North Tower" subtitle="As of 2026-01-01" activities={activities} />,
+    <GanttPrintSurface
+      columns={VISIBLE_COLUMNS}
+      dependencies={[]}
+      title="North Tower"
+      subtitle="As of 2026-01-01"
+      activities={activities}
+    />,
   ).container;
+
+/**
+ * The columns a reader sees by default — Predecessors off (`DEFAULT_HIDDEN_COLUMNS`).
+ *
+ * Stated rather than defaulted, because `columns` is a REQUIRED prop and that is the point: paper
+ * prints what the reader chose, and a fixture that could stay silent about the choice is the shape
+ * that let the Predecessors column print an em dash on every row (`docs/TECH_DEBT.md` #217).
+ */
+const VISIBLE_COLUMNS = GANTT_COLUMNS.filter((c) => !DEFAULT_HIDDEN_COLUMNS.includes(c.key));
 
 describe('GanttPrintSurface — the Unassigned bucket (flag on)', () => {
   it('prints the bucket row', () => {

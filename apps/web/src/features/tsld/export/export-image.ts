@@ -42,6 +42,18 @@ export const EXPORT_PADDING = 32;
 export const EXPORT_TOP_BAND = 96;
 
 /**
+ * The reserved band for the **printed** diagram, whose document already carries the plan name and
+ * the dates as real text (`docs/TECH_DEBT.md` #217).
+ *
+ * 48 px rather than 96: the band draws the legend and, when the raster was clamped, the
+ * "Scaled to fit" note — the two title lines move out because repeating them made paper state the
+ * plan's identity twice, six lines apart, in two date formats. Derived from
+ * `PRINT_LEGEND_BASELINE` + the swatch height + breathing space rather than chosen, and the 48 px
+ * saved is 48 px of chart the printed page did not have.
+ */
+export const EXPORT_PRINT_TOP_BAND = 48;
+
+/**
  * Reserved marker row (CSS px) under the title band, where the exported picture names its two
  * persistent date rules — `Data date` and `Today` — the way the screen's ruler does (ADR-0106:
  * a rule is a scene mark; its label is chrome). 14 px of chip (matching the ruler rows' `h-3.5`)

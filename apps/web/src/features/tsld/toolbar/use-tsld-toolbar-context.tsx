@@ -34,6 +34,7 @@ import {
   SCHEDULING_MODES_ENABLED,
 } from '@/config/env';
 import { DEFAULT_PLAN_VIEW_MODE, printGanttSchedule, type PlanViewMode } from '@/features/gantt';
+import { DEFAULT_HIDDEN_COLUMNS } from '@/features/gantt/model/gantt-view-state';
 import {
   EXPORT_FORMAT_LABELS,
   exportErrorMessage,
@@ -705,12 +706,33 @@ export function useTsldToolbarContext({
             // most expensive, because the reader has nothing to compare it against.
             ...(barDateSource ? { barDateSource } : {}),
             ...(hoursPerDayFor ? { hoursPerDayFor } : {}),
+            // **Paper follows the reader's column choice** (`docs/TECH_DEBT.md` #217) — ADR-0103
+            // /#167's "the export is MY picture" one artefact along.
+            //
+            // From the `ganttColumns` prop the workspace ALREADY threads for the columns chooser,
+            // not from `useGanttViewState`. The first version called that hook here and broke
+            // fifteen tests with `Cannot read properties of null (reading 'stores')`, because it
+            // needs the router and this one never has — which is the docblock two fields up
+            // ("passed IN rather than re-derived here", the rule `host-parity.structural.test.ts`
+            // exists to hold) being ignored. The failure was the design telling me so.
+            //
+            // The fallback is the screen's own default, so a host that wires no chooser prints the
+            // document its reader would see rather than every column there is.
+            hiddenColumns: ganttColumns?.hidden ?? new Set(DEFAULT_HIDDEN_COLUMNS),
+            // The edges the Predecessors column prints. Already in scope and memoised above; the
+            // surface derives the per-successor index from them with the SAME function the panel
+            // uses, so screen and paper cannot disagree about what an activity follows.
+            dependencies,
           });
           announce(`Printing ${plan.name}.`);
           return;
         }
 
-        const built = buildDiagramImage('whole');
+        // **The printed diagram's band drops the two lines this document already carries**
+        // (`docs/TECH_DEBT.md` #217): paper stated the plan's identity twice, six lines apart, in
+        // two date formats. The PNG and PDF are untouched — they leave the product alone and must
+        // name themselves.
+        const built = buildDiagramImage('whole', { bandContent: 'legend-only' });
         if (!built) return;
         setPrinting(true);
         // Announce synchronously on pick (B3): the whole-diagram image build is async, so this breaks
@@ -723,7 +745,11 @@ export function useTsldToolbarContext({
             printDiagramImage({
               blob,
               title: plan.name,
-              subtitle: `As of ${formatCalendarDate(plan.plannedStart ?? todayIso)}`,
+              // Both dates, in ONE place and one format. The band used to print "As of
+              // <iso> · Generated <iso>" under a repeat of the plan name; the document is the
+              // better home for them because it is real, selectable text a reader can copy, and
+              // `formatCalendarDate` is the format the rest of the product uses.
+              subtitle: `As of ${formatCalendarDate(plan.plannedStart ?? todayIso)} · Generated ${formatCalendarDate(todayIso)}`,
             });
             announce(`Printing ${plan.name}.`);
           })

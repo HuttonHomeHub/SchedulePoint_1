@@ -6039,7 +6039,7 @@ browser tab.
 ## 217. Two defects in the printed documents, found by photographing them for the first time
 
 **Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, M2-U2) · **Size:** S each ·
-**Status:** open
+**CLOSED 2026-08-30** — both, plus two more the fix's own photographs found
 
 The screenshot harness had **one** print shot — the health report — so the two documents a planner
 actually hands over, the printed diagram and the printed programme, had never been photographed by
@@ -6068,6 +6068,43 @@ photographed twelve screens and never once what the product PRODUCES; W1 added t
 `docs/TECH_DEBT.md` #158 recorded the gap. The print documents were the remainder of it, and the
 cost of that gap is measurable here: two defects in the deliverable, both plainly visible, neither
 reported by any test, sitting in the artefact that leaves the building.
+
+### How they closed, and what closing them turned up
+
+**(a) is a DECISION, not a bug, and the code said so before I did.** `PrintSurface.tsx`'s docblock
+records the duplication as deliberate — the image "is already self-describing… this surface adds
+the plan-name · date heading the plan calls for". Both halves are right alone; nobody had looked at
+the two together on a page, because nothing photographed the printed diagram until 2026-08-29.
+Resolved in favour of the **document**: it is the accessible, selectable carrier and the one a
+browser's print outline can see, so it keeps the name and now carries BOTH dates in one format,
+while the picture keeps the legend — meaningless outside it — and the "scaled to fit" note, which
+is a fact about that raster that nothing outside it knows. `renderExportImage` gains
+`bandContent: 'full' | 'legend-only'`, defaulted, so the standalone PNG and PDF are unchanged; the
+band shrinks 96 → 48 px and the printed diagram gets that back as chart.
+
+**(b) is the second instance of one failure in one file.** `barDateSource`'s own docblock in
+`GanttPrintSurface.tsx` records the first: props threaded onto the surface while `PrintGanttInput`
+stayed silent, so "the only production caller could not pass it and never did". `predecessorNames`
+is the same shape — the column has taken a fourth argument since it shipped and the entry point
+never had one to give it. **Optional is what both have in common**, so the two new inputs
+(`dependencies`, `hiddenColumns`) are required, the ADR-0070 `hoursPerDay` pattern. Fixing it by
+adding more optional parameters would have reproduced the cause.
+
+**A third thing fell out of (b): paper ignored the reader's column choice.** The surface mapped
+over all of `GANTT_COLUMNS` while the screen hides Predecessors by default — so once the column
+carried real names it would have grown every existing plan's document a wide column overnight,
+which is the change that column's own docblock says nobody asked for. Paper now follows the choice
+(ADR-0103/#167's "the export is MY picture", one artefact along). Recorded in `docs/DECISIONS.md`.
+
+**A fourth was visible only in the photograph after the fix.** With names arriving, the column
+printed `Site setup & h…` and `Excavate to fo…`: it had no `PRINT_COLUMN_WIDTHS` entry, so it took
+the 72 px default — on the column the screen calls the widest. It never mattered while every cell
+was an em dash. Now 132 px, which fits every single-predecessor name on the fixture and truncates
+only a genuine two-name list.
+
+The instrument point stands and is now doubled: the shots found the two defects, and re-running
+them **after** the fix found a fifth thing the tests could not see. A green suite says the names
+are in the DOM; only a picture says they are readable.
 
 ## 218. Two review suggestions from the typeface gate pass, not folded
 

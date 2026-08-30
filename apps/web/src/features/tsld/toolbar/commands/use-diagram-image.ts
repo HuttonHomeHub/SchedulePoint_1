@@ -1,7 +1,12 @@
 import type { ActivitySummary, DependencySummary } from '@repo/types';
 import { useCallback } from 'react';
 
-import { buildExportViewport, EXPORT_TOP_BAND, type ExportExtent } from '../../export/export-image';
+import {
+  buildExportViewport,
+  EXPORT_PRINT_TOP_BAND,
+  EXPORT_TOP_BAND,
+  type ExportExtent,
+} from '../../export/export-image';
 import { renderExportImage } from '../../export/render-export-image';
 import { useCanvasSurface } from '../../render/canvas-surface';
 import type { TsldViewToggles } from '../../render/paint';
@@ -17,6 +22,16 @@ import type { LoadedPlan } from '@/components/layout/workspace/use-plan-workspac
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { TsldCanvasHandle } from '@/features/tsld/components/TsldCanvas';
 import { deriveWbsBandSource } from '@/features/wbs';
+
+/** Options for {@link useDiagramImage}'s build callback. */
+export interface BuildDiagramImageOptions {
+  /**
+   * What the title band draws — `'full'` (default) for the standalone PNG/PDF, `'legend-only'` for
+   * the printed diagram, whose surrounding document already carries the plan name and the dates as
+   * real text (`docs/TECH_DEBT.md` #217).
+   */
+  bandContent?: 'full' | 'legend-only';
+}
 
 /**
  * The shared off-screen Diagram-image build (ADR-0078 S11, `VITE_EXPORT_PRINT`).
@@ -60,7 +75,10 @@ export function useDiagramImage(args: {
   todayFraction: number | undefined;
   lateOverlayActive: boolean;
   canvasControlRef: React.RefObject<TsldCanvasHandle | null>;
-}): (extent: ExportExtent) => {
+}): (
+  extent: ExportExtent,
+  options?: BuildDiagramImageOptions,
+) => {
   promise: Promise<{ blob: Blob; scaledToFit: boolean }>;
   imageWidth: number;
   imageHeight: number;
@@ -92,7 +110,12 @@ export function useDiagramImage(args: {
   // drift from the one on screen".
   const canvasSurface = useCanvasSurface();
   return useCallback(
-    (extent: ExportExtent) => {
+    (extent: ExportExtent, options: BuildDiagramImageOptions = {}) => {
+      // **`'legend-only'` is the printed diagram's band** (`docs/TECH_DEBT.md` #217). Defaulted, so
+      // the PNG and PDF deliverables — which are standalone files and must name themselves — are
+      // byte-for-byte what they were.
+      const bandContent = options.bandContent ?? 'full';
+      const topBand = bandContent === 'full' ? EXPORT_TOP_BAND : EXPORT_PRINT_TOP_BAND;
       const dataDate = plan.plannedStart;
       const live = canvasControlRef.current?.getViewport();
       if (dataDate === null || !live) return null;
@@ -167,7 +190,7 @@ export function useDiagramImage(args: {
         extent,
         liveViewport: live,
         dpr: globalThis.devicePixelRatio || 1,
-        topBand: EXPORT_TOP_BAND,
+        topBand,
         wbsBandHeight: band.height,
       });
       const promise = renderExportImage({
@@ -175,7 +198,8 @@ export function useDiagramImage(args: {
         viewport,
         size,
         dpr,
-        topBand: EXPORT_TOP_BAND,
+        topBand,
+        bandContent,
         palette: resolvePrintPalette(canvasSurface),
         scaledToFit,
         meta: { planName: plan.name, dataDate, generatedAtIso: todayIso },

@@ -52,6 +52,16 @@ const LEGEND_FONT = `11px ${FONT_STACK}`;
 
 /** Left inset (CSS px) of the band content. */
 const BAND_PAD = 16;
+/** The legend's text baseline in the FULL band, under the title and subtitle. */
+const LEGEND_BASELINE = 68;
+/**
+ * The legend's baseline in the **legend-only** band the printed diagram uses.
+ *
+ * Paired with {@link EXPORT_PRINT_TOP_BAND}: the band loses the two lines the surrounding document
+ * already carries, so the legend moves up and the reserved strip shrinks by the same 48 px, which
+ * the printed diagram gets back as chart.
+ */
+const PRINT_LEGEND_BASELINE = 20;
 /** Legend swatch box size (CSS px). */
 const SWATCH_W = 18;
 const SWATCH_H = 11;
@@ -86,6 +96,25 @@ export interface RenderExportImageInput {
   /** Whether the raster was scaled to fit the cap — the band notes it. */
   scaledToFit: boolean;
   meta: ExportImageMeta;
+  /**
+   * What the title band draws.
+   *
+   * `'full'` (the default, and the standalone PNG/PDF) is the self-describing band: plan name,
+   * "as of / generated" line, legend. **`'legend-only'` is for the PRINTED diagram**, where the
+   * document around the picture already carries the name and the dates as real, selectable text —
+   * so a full band made paper state the plan's identity twice, six lines apart, in two different
+   * date formats (`docs/TECH_DEBT.md` #217).
+   *
+   * The duplication was deliberate when it shipped: `PrintSurface.tsx`'s docblock says the image
+   * "is already self-describing… this surface adds the plan-name · date heading the plan calls
+   * for". Both halves are right on their own; what nobody had done was look at the two together on
+   * a page, because nothing photographed the printed diagram until 2026-08-29.
+   *
+   * The DOCUMENT keeps the identity rather than the picture, because it is the accessible and
+   * selectable carrier — a heading a reader can copy, and one the browser's own print outline can
+   * see. The picture keeps the legend, which is meaningless outside it.
+   */
+  bandContent?: 'full' | 'legend-only';
   /**
    * The **WBS band** (ADR-0063), when it is on. Placed directly under the title strip and above the
    * diagram, in the height `buildExportViewport` reserved for it — so a planner who turned the band
@@ -142,6 +171,7 @@ export async function renderExportImage(
 ): Promise<Blob> {
   const { scene, viewport, size, dpr, topBand, palette, scaledToFit, meta, wbsBand } = input;
   const markerRow = input.markerRow ?? EXPORT_MARKER_ROW;
+  const bandContent = input.bandContent ?? 'full';
   const createCanvas = deps.createCanvas ?? (() => document.createElement('canvas'));
   const paint = deps.paint ?? paintScene;
 
@@ -195,7 +225,7 @@ export async function renderExportImage(
   ctx.fillRect(0, 0, size.width, size.height);
   ctx.globalCompositeOperation = 'source-over';
 
-  drawTitleBand(ctx, size, topBand, palette, scaledToFit, meta);
+  drawTitleBand(ctx, size, topBand, palette, scaledToFit, meta, bandContent);
   drawAxisMarkerRow(ctx, viewport, size, topBand, markerRow, palette, scene);
 
   return canvasToPngBlob(canvas);
@@ -211,6 +241,7 @@ function drawTitleBand(
   palette: PrintPalette,
   scaledToFit: boolean,
   meta: ExportImageMeta,
+  bandContent: 'full' | 'legend-only',
 ): void {
   // Opaque band ground over the reserved region (covers any diagram drawn beneath it).
   ctx.fillStyle = palette.ground;
@@ -226,19 +257,33 @@ function drawTitleBand(
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  // Title.
-  ctx.fillStyle = palette.ink;
-  ctx.font = TITLE_FONT;
-  ctx.fillText(meta.planName, BAND_PAD, 28);
-  // Subtitle (data date · generated · scaled-to-fit note).
-  ctx.fillStyle = palette.mutedInk;
-  ctx.font = SUBTITLE_FONT;
-  const subtitle =
-    `As of ${meta.dataDate} · Generated ${meta.generatedAtIso}` +
-    (scaledToFit ? ' · scaled to fit' : '');
-  ctx.fillText(subtitle, BAND_PAD, 48);
+  if (bandContent === 'full') {
+    // Title.
+    ctx.fillStyle = palette.ink;
+    ctx.font = TITLE_FONT;
+    ctx.fillText(meta.planName, BAND_PAD, 28);
+    // Subtitle (data date · generated · scaled-to-fit note).
+    ctx.fillStyle = palette.mutedInk;
+    ctx.font = SUBTITLE_FONT;
+    const subtitle =
+      `As of ${meta.dataDate} · Generated ${meta.generatedAtIso}` +
+      (scaledToFit ? ' · scaled to fit' : '');
+    ctx.fillText(subtitle, BAND_PAD, 48);
+  } else if (scaledToFit) {
+    // **The one line paper still needs from the band.** The document heading carries the name and
+    // both dates; "scaled to fit" is a fact about THIS RASTER and nothing outside the picture
+    // knows it, so dropping it would lose the only warning that the diagram is not at true scale.
+    ctx.fillStyle = palette.mutedInk;
+    ctx.font = SUBTITLE_FONT;
+    ctx.fillText('Scaled to fit', BAND_PAD, LEGEND_BASELINE - 22);
+  }
 
-  drawLegend(ctx, palette, size.width);
+  drawLegend(
+    ctx,
+    palette,
+    size.width,
+    bandContent === 'full' ? LEGEND_BASELINE : PRINT_LEGEND_BASELINE,
+  );
 }
 
 /** Marker-chip typography + geometry, matching the ruler's marker rows (`h-3.5` = 14 px, `px-1`). */
@@ -316,8 +361,12 @@ function drawAxisMarkerRow(
 
 /** Draw the compact legend row inside the band. Uses `measureText` when available, falling back to a
  * character estimate so it stays robust in a context that doesn't measure (the test's fake ctx). */
-function drawLegend(ctx: CanvasRenderingContext2D, palette: PrintPalette, maxWidth: number): void {
-  const y = 68;
+function drawLegend(
+  ctx: CanvasRenderingContext2D,
+  palette: PrintPalette,
+  maxWidth: number,
+  y: number,
+): void {
   const swatchTop = y + 3;
   ctx.font = LEGEND_FONT;
   ctx.textBaseline = 'alphabetic';
