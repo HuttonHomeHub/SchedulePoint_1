@@ -291,8 +291,9 @@ It deliberately excludes the e2e half, which needs a database and a browser and 
 
 **What it costs, measured 2026-08-25** (one file changed in `apps/web`, turbo warm elsewhere):
 roughly **six minutes**, of which `pnpm test` is **345 s (94%)** — the whole 552-file web unit
-suite, every run — `typecheck` 6.5 s, `lint` 8 s, and all ten `check:*` gates **10.4 s between
-them**. Two things follow, and the second is the one people get wrong. The `check:*` scripts are
+suite, every run — `typecheck` 6.5 s, `lint` 8 s, and every `check:*` gate **10.4 s between
+them** (thirteen gates and **11.5 s** re-measured 2026-08-30, after the two drift gates and their
+fixture suite landed — the three additions cost about a second between them). Two things follow, and the second is the one people get wrong. The `check:*` scripts are
 **2%** of the gate and are the part that catches what a reviewer cannot see, so trimming _them_ to
 make the gate faster buys nothing and costs the drift control; and the gate is not saving wall
 clock against CI, whose equivalent job is **11 m 22 s** — it is saving a **round trip**, which is a
@@ -349,6 +350,23 @@ file did. Worth keeping as the reason the note sits above the table rather than 
 | 8   | `pnpm check:claims`                                         | you cited a dependency's source by file and line, or bumped `better-auth`/`better-call`           |
 | 9   | `pnpm check:nginx`                                          | you touched `apps/web/nginx.conf` or a `CSP_*` default in a compose file                          |
 | 10  | `git fetch origin main && pnpm check:frontend-only`         | always, and it is the one gate whose answer depends on **where the branch is**                    |
+| 11  | `pnpm check:debt-status`                                    | you added, closed or edited a `docs/TECH_DEBT.md` row (ADR-0120)                                  |
+| 12  | `pnpm check:doc-register`                                   | you changed `scripts/lib/doc-register.mjs` or either drift gate                                   |
+| 13  | `pnpm check:reconcile-due`                                  | **advisory** — never blocks; see below                                                            |
+
+**Step 13 is the only advisory gate, and `prepush.sh` prints it differently.** `check:reconcile-due`
+exits **2**, not 1: the rule is that **exit 1 is for an obligation whose remedy is an edit to the
+file that failed, and exit 2 for one whose remedy is somebody's judgement** (ADR-0120 D2). A missed
+reconciliation pass is the second kind, and blocking a push on a documentation chore is how a gate
+gets bypassed with `--no-verify` — after which it is bypassed always. So the run prints a yellow
+`WARN` line with the finding, names the warned gates in the summary, and **still exits 0**.
+
+That third state was a prerequisite rather than a preference: `run()` sends a passing gate's output
+to a log and prints nothing, so before it an advisory gate was **completely silent**. Note the one
+sharp edge — **`pnpm` itself treats exit 2 as a failed script**, so `pnpm check:reconcile-due` run on
+its own reports failure. The convention lives inside `scripts/prepush.sh`, which is why the gate is
+in no CI step; adding it to `ci.yml` by copying a neighbour would turn a product-owner decision into
+a blocking gate by the back door.
 
 **Step 4a is not covered by step 4**, and the difference cost a CI round on 2026-08-18. Every `web:`
 target maps to `test:e2e:<suite>`; the base journey is `test:e2e` with no suffix, so until that day
@@ -565,6 +583,17 @@ Two jobs in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml):
   and that no citation exists outside `scripts/dependency-claims.json`. Those
   citations are load-bearing (ADR-0074 and ADR-0075 both turn on them) and a
   minor bump moves every one while the prose keeps reading as authoritative.
+  `pnpm check:debt-status` asserts that every `docs/TECH_DEBT.md` row carries a
+  status a parser can find, that no row is annotated CLOSED in its heading while
+  still present in the file, and that the compact table cannot silently regrow —
+  because that file decides what gets picked up next, and **14 of its 138 rows**
+  carried a machine-readable status, so a candidate recommended from it had been
+  fixed three weeks earlier (ADR-0120). `pnpm check:doc-register` runs the
+  fixtures for the parser both drift gates read with; two of its own cases had
+  shipped **vacuous**, because Prettier normalised the malformation each fixture
+  was named for, so each fixture now asserts its own contents before any case
+  runs. `check:reconcile-due` is **deliberately not here**: it is advisory, and
+  listing it would make it blocking by the back door.
   **None of these checks needs a database.**
 - **e2e** — provisions a Postgres service, generates the Prisma client, applies
   migrations (`prisma migrate deploy`), checks for schema/migration drift, runs
