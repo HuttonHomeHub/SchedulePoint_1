@@ -452,11 +452,18 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
     }
   }
 
-  // The same guard one axis over, and for the same reason (ADR-0091 M1, B2). `companionsOf` resolves
-  // a pair from **one row's** `bar`, so a `demotionGroup` split across rows loses its companion
-  // entirely: each half then demotes on its own row's arithmetic, which is the split segment the
-  // block above exists to prevent — arrived at through a door that did not exist until now. Two rows
-  // made this impossible to express; a third makes it a one-character typo in `row`.
+  // The same guard one axis over, and for the same reason (ADR-0091 M1, B2). A `demotionGroup` split
+  // across rows used to lose its companion entirely — the pair was resolved from **one row's** `bar`,
+  // so each half demoted on its own row's arithmetic, which is the split segment the block above
+  // exists to prevent. Two rows made that impossible to express; a third makes it a one-character
+  // typo in `row`.
+  //
+  // **This paragraph named `companionsOf` until the 2026-08-30 verification sweep, and that function
+  // no longer exists** — it went with the width ladder at ADR-0109 D1, along with demotion itself
+  // (`docs/TECH_DEBT.md` #193). The invariant is KEPT rather than deleted with it: `demotionGroup`
+  // still declares that two controls are one unit, `defineToolbar` is the only thing asserting it,
+  // and a surface that wraps today may rank again tomorrow. What changed is that the justification
+  // is now historical, and says so.
   const rowByGroup = new Map<string, ToolbarRow>();
   for (const item of items) {
     if (!item.demotionGroup) continue;

@@ -1442,7 +1442,19 @@ blocked the epic.
 
 ---
 
-## #106 — `render-model.ts` cannot become "barrel + core model": the core must be its own module
+## #106 — `render-model.ts` cannot become "barrel + core model": the core must be its own module **(CLOSED 2026-08-30)**
+
+> **Closed by the 2026-08-30 verification sweep**, having shipped and never been ticked off.
+> `render/geometry.ts` exists, `render-model.ts` is **128 lines** rather than the 1,500 this row
+> recorded, and its own docblock cites this number for the move. Every consumer is unchanged —
+> ADR-0078 §3's barrel-preserving rule, which is what made each extraction reviewable.
+>
+> **One clause of the fix as written did not ship, and that is deliberate rather than missed.** The
+> row asked for "a barrel that re-exports and holds nothing"; the file still holds the ADR-0052 M4
+> bar-glyph model (radii, progress-band geometry, `barGlyphKind`). Its docblock owns that: the model
+> is coherent, ADR-0078 does not call for moving it, and moving it because the file was being touched
+> anyway is the drive-by churn §2 forbids. The **cycle** this row exists about is gone, which is the
+> claim that mattered.
 
 **Found:** 2026-08-07, doing ADR-0078 S8's first extraction.
 **Blocks:** the `link-routing`, `viewport` and `hit-test` extractions (ADR-0078 S8's remainder).
@@ -1542,7 +1554,27 @@ after. Writing it first also caught its own bug: the shared plan's bars have bee
 by earlier steps, so the one-column probe found one bar rather than three, which would have read as
 a product defect had the step been written after the fix.
 
-## #109 — `bulkDelete` cascades one activity at a time under the plan-wide advisory lock
+## #109 — `bulkDelete` cascades one activity at a time under the plan-wide advisory lock **(CLOSED 2026-08-30)**
+
+> **Closed by the 2026-08-30 verification sweep. It was fixed on 2026-08-09 and nobody came back
+> here** — which is the more useful half of the closure, because the reason is structural rather
+> than forgetfulness. The fix rode in `3cf27de4`, a commit whose title and body are about ADR-0082
+> (shade rather than hide), ADR-0083, ADR-0084 (flag expiry) and ADR-0085: a reader of that PR had
+> no cue to open this row, and a reader of this row had no cue to open that PR. **A fix that lands
+> inside an epic named for something else leaves its register row untouched by default.**
+>
+> `HierarchyLifecycleService.cascadeSoftDeleteActivityLeaves` is the row's **first** option taken
+> verbatim — the ADR-0053 M6 move applied set-wise — and it cites this number in its own docblock.
+> Four `updateMany` sweeps for the whole batch replace ~10,000 round trips at the DTO's ceiling. The
+> subtree walk is skipped safely because `bulkDelete` refuses a `WBS_SUMMARY` (422
+> `SUMMARY_NOT_BULK_ELIGIBLE`), so every id it passes is a leaf; that refusal is now load-bearing for
+> correctness and is **asserted rather than assumed** — a summary reaching the path throws.
+>
+> **What the row asked for and did not get: the measurement.** It required the choice between
+> batching and lowering the cap to rest on a reading at 500 / 2,000 rows. Batching was taken without
+> one. That is defensible — batching makes the cap question moot rather than trading against it, and
+> ADR-0053 M6 had already measured the identical shape at ~830 ms → ~13 ms — but it is not what the
+> row said, and recording the closure as unconditional would be the drift this sweep exists to find.
 
 **Found:** 2026-08-08, by the security review over the ADR-0080 diff (non-blocking, hardening).
 
@@ -2467,7 +2499,24 @@ and accepted cost, not an eviction. The 2.5.8 geometry stays gated (`pointer-coa
 `TOOLBAR_CARET_TARGET` are live); the tooltip-primitive question this row's siblings raise stays
 with #131/#204(a).
 
-## 134. A `render` item outranks every command on its row, and nothing says so
+## 134. A `render` item outranks every command on its row, and nothing says so **(CLOSED 2026-08-30 — the subject was deleted)**
+
+> **Closed by the 2026-08-30 verification sweep, and by deletion rather than by fix.** ADR-0109 D1
+> deleted `toolbar-ladder.ts`, `computeLadder`, `LadderItem`, `demotable` and the demotion pass
+> entirely: a command surface **wraps**, so nothing is ranked and nothing is shed. Verified —
+> `computeLadder`, `LadderItem`, `demotable` and `PINNED_FLOOR_WIDTH` have no definition anywhere in
+> `apps/web/src`.
+>
+> Both halves of what this row asked for are therefore unimplementable as written: there is no
+> `LadderItem.demotable` to document, and no ladder to teach about `render` ranks. **Its diagnosis
+> was right and its remedy expired**, which is a distinction worth keeping — the row predicted the
+> shape correctly twice (ADR-0094's `next-conflict`, ADR-0099 M5's `recalculate`) and both local
+> `priority` constants it complained about are now inert alongside the machinery that read them
+> (`#193`'s dead-export half).
+>
+> **The closing observation stands and outlived the mechanism.** Four consecutive epics whose width
+> expectation their own measurement contradicted became eight by ADR-0115 — always in the same
+> direction — which is why ADR-0109 stopped tuning the row and changed what a row is.
 
 **Raised:** 2026-08-14 (ADR-0094 M5) · **Size:** S · **Risk if left:** medium
 
@@ -2586,7 +2635,25 @@ than a quick patch.
 then take the shorter route, so their locators would keep working; the risk is in the tree's own
 keyboard model, not in its consumers.
 
-## 144. `e2e-multi-select`'s focus assertion fails under sweep load and passes alone
+## 144. `e2e-multi-select`'s focus assertion fails under sweep load and passes alone **(CLOSED 2026-08-30 — both halves)**
+
+> **Closed by the 2026-08-30 verification sweep.** Both halves shipped, each with a docblock naming
+> the mechanism this row named, and neither cited this number — which is why it stayed open.
+>
+> **The product's wait is now self-verifying** rather than a bet on frame ordering, which is the
+> second of the two fixes this row offered. `focusListboxAfterModal` focuses, **checks whether it
+> won**, and retries next frame if the dialog's own restoration landed after it — bounded at five
+> frames, with the announcement firing exactly once whether or not the cap is reached, so a planner
+> cannot lose the confirmation as well as the focus. The row's insistence that the assertion is
+> right and the wait is thin is exactly how it was resolved: the assertion is untouched. It is filed
+> under `#184`, not here.
+>
+> **The second suite is fixed at the same seam.** `e2e-overview`'s `createPlan` now waits for the
+> pen control — which renders only once the workspace has its plan — rather than for the click to
+> land, so `useRememberPlan`'s `planQuery.isSuccess` write cannot race the navigation away from it.
+> The helper's docblock records why the heading is **not** the signal: the identity line paints from
+> the route before the query resolves, so waiting on it would have looked like a fix and fixed
+> nothing.
 
 **Observed three times, 2026-08-19.** `multi-select.spec.ts:214` asserts that a bulk delete leaves
 focus on the activities listbox — a real assertion protecting a real defect (ADR-0080's gate pass
@@ -2711,7 +2778,26 @@ shape, and the fifth epic running. Fixed with a regression test verified red fir
 
 </details>
 
-## 146. The `chrome` surface scope has no measured current-page state
+## 146. The `chrome` surface scope has no measured current-page state **(CLOSED 2026-08-30 — the premise lapsed)**
+
+> **Closed by the 2026-08-30 verification sweep, and by neither of the two options it offered.**
+> This row's whole premise was Graphite M3 moving the wordmark off the top bar and into the tool
+> rail, which put both of D3's sites in `panel`. **ADR-0109 D2 deleted the rail and restored the
+> header at every width**, so the brand link is back inside `ChromeBandRow`'s `<Surface tone="chrome">`
+> and D3 measures two scopes again — brand in `chrome`, the organisation destination in `panel`,
+> which is what it was built to do.
+>
+> Verified by reading the composition rather than the suite: `chrome-band.tsx` wraps `AppHeaderRow`
+> in `Surface tone="chrome"`, and `org-destinations.tsx`'s `nav[aria-label="Organisation"]` renders
+> inside the docked navigator. Neither the expensive option (drive four theme variants through a
+> plan) nor the lossy one (measure the crumb in the token matrix, which cannot see which pair a
+> reader's eye lands on) was needed.
+>
+> **`designed-ui.spec.ts`'s D3 comment is now the stale artefact** and is corrected in the same
+> commit: it still says both sites are `panel` and that `chrome` has no current-state site. The
+> assertion beneath it silently became correct again when the header returned — a green test whose
+> explanation describes a world that ended, which is the failure mode this register keeps recording
+> in the other direction.
 
 **Raised 2026-08-20 (Graphite M3/M4).** `e2e-designed-ui`'s D3 measures the `aria-current="page"`
 treatment that axe never looks at, and it did so at **two** sites in **two** scopes: the wordmark in
@@ -2739,7 +2825,23 @@ Graphite M10's gate pass is the natural place to choose, with the epic's own scr
 band's ground is already gated by `token-contrast.test.ts`. What is missing is the _measurement of
 the state_, which is precisely the class of thing this suite exists to catch and axe does not.
 
-## 147. The merged command strip stops fitting below ~900 px, and the eleven items that pin it cannot demote
+## 147. The merged command strip stops fitting below ~900 px, and the eleven items that pin it cannot demote **(CLOSED 2026-08-30 — the subject was deleted)**
+
+> **Closed by the 2026-08-30 verification sweep, by deletion.** ADR-0109 D1 made the command surface
+> **wrap** rather than fit, and took `toolbar-ladder.ts`, the `⋯`, `PINNED_FLOOR_WIDTH` and the
+> `e2e-toolbar-fit` journey with it — so there is no floor to fall below and no pinned/demotable
+> distinction to be asymmetric about. Verified: none of those symbols has a definition in
+> `apps/web/src`.
+>
+> Neither of the two costed narrowings was taken, and neither is owed: folding `Filter` into the
+> search field (−56 px) and dropping the group rules in `collapsed` (−65 px) were both priced
+> against a budget that no longer exists.
+>
+> **What did not travel with the deletion is the coverage.** ADR-0110 M1 records that deleting the
+> fit journey took WCAG 2.5.8's only automated cover with it (`#186`), restored as a sweep in
+> `e2e-workspace-fit` — and that the restored sweep was itself blind to a split button's caret until
+> it was made to fail. A row closed because its subject was deleted is worth checking for exactly
+> that: what the deleted thing was also doing incidentally.
 
 **Raised 2026-08-20 (Graphite M5).** ADR-0099 M5 merges the two TSLD command rows into one
 `Plan commands` strip — the change that buys the canvas its last 49 px of height. The cost, measured
@@ -3846,7 +3948,29 @@ schema. So this row covered stages 1–2 and no spec was needed. What the fix do
 that `hidden lg:flex` genuinely hides the column in a browser; that is a Tailwind class, established
 by this defect existing, and the wider absence of any below-`lg` authenticated coverage is **#172**.
 
-## 169. The Project Explorer's actions row is an empty bordered strip for non-writers
+## 169. The Project Explorer's actions row is an empty bordered strip for non-writers **(HALF CLOSED 2026-08-30)**
+
+> **Corrected by the 2026-08-30 verification sweep, and the correction is this row's own warning
+> landing on it.** It was raised saying #165a's wording "will otherwise read as closed when it is
+> half closed" — and the sweep's first pass reported _this_ row as fixed. It is half fixed, and the
+> halves are not the ones the row predicted.
+>
+> **The empty strip is gone, incidentally rather than deliberately.** ADR-0109 D2 docks the Explorer
+> and gives it a fold-to-spine control, and that control lives in this actions row
+> (`navigator-rail.tsx` — `Hide Project Explorer`, `ml-auto`). So the drawer branch has a permanent
+> occupant and is no longer "40 px of bordered nothing" for anybody; the below-`lg` branch renders
+> `SheetHeader`, which carries a Close regardless. **Nothing was done about this defect — a feature
+> was added on top of it**, which is why no commit closed the row and why the fix has no test.
+>
+> **The second observation is still true, verbatim.** The `crud.canWrite` block is duplicated at
+> `navigator-rail.tsx:95` and `:139` — same gate, same button, same four-paragraph comment, twice —
+> and the row's reason for noting it is unchanged: the neighbouring copy is exactly how #165a
+> happened. That is what remains owed here, and it is now the _whole_ of what this row is about.
+>
+> **Worth keeping for the method rather than the defect.** A subagent sweep reported this row FIXED
+> and it was not; six sibling closures in the same batch were verified and held. Spot-checking the
+> claim you are about to act on is the cheap step, and a report about the register is a document
+> like any other (ADR-0076 Class 2).
 
 **Raised 2026-08-22** (found while fixing #165a). **Size:** S.
 
@@ -5177,6 +5301,32 @@ stopped at the two it had found. A `grep` for the deleted machinery finds more:
 `triggersAreCompact`/`searchFieldWidth` always take their roomy branch. They are exercised only by
 their own tests — the ADR-0081 shape: tests validating code nothing calls.
 
+### Two more, and how the first grep missed them (2026-08-30 verification sweep)
+
+**The four docblocks above are now all corrected** — each carries a paragraph naming what it used
+to say and citing this number. **The five dead exports all still stand**, re-verified: `priorityOf`
+has no reference of any kind outside its own definition, `partitionByTier` and
+`TOOLBAR_LAYOUT_HYSTERESIS_PX` are reached only by `toolbar-registry.test.ts`, and
+`resolveLayoutMode` + `TOOLBAR_LAYOUT_BANDS` form a closed loop with it.
+
+**Two citations of the same class were not on the list, because the list was a list of names.**
+
+- `toolbar-registry.ts:455` and `toolbar-registry.test.ts:308` both explain a guard in terms of
+  what **`companionsOf`** does. There is no `companionsOf` — it went with the ladder. Two comments
+  justify live code by the behaviour of a function that does not exist.
+- `app-header.tsx:197` cites **`isWidthConstrained` (`Toolbar.tsx:81-84`)** for why a
+  width-unconstrained row is charged no chrome. `Toolbar.tsx` exists; that symbol does not, at those
+  lines or anywhere.
+
+**The transferable part is why the 2026-08-25 grep could not have found them.** It searched for the
+machinery it knew had been deleted — `ToolbarOverflow`, `toolbar-ladder.ts`, `computeLadder` — and
+both of these cite something _else_. A grep for known-deleted names finds citations of names you
+remember deleting; it is structurally blind to a citation of a name nobody remembers existed. The
+instrument that does work is the opposite direction — resolve every backticked identifier in a
+comment against the tree — which is `#177`/`#183`'s shape one layer in, applied to this repository's
+own symbols rather than a dependency's. Recorded rather than built: it is a shared gate, so it needs
+a spec (ADR-0105).
+
 **Not deleted here deliberately.** ADR-0110 M5's own decision was to KEEP the ladder machinery
 because the reduced strip does not fit at 1280 or 1440, so `resolveLayoutMode` may yet be needed;
 and removing exports is a public-contract change (ADR-0105). The docblocks, though, are simply wrong
@@ -6130,3 +6280,71 @@ correction prose the same bullet carries by design. What it still cannot see is 
 into a different shape: the regex is `**Family:** … (**<name>**`, and an edit that drops the
 parenthesis fails the "no claim at all" assertion rather than a wrong-family one. That is the right
 way round (loud, not silent), but the failure message would name the wrong cause.
+
+---
+
+## 219. The register's own rows go stale, and nothing measures how much
+
+**Raised:** 2026-08-30 (the verification sweep this row is the output of) · **Size:** M ·
+**Status:** open
+
+The product owner asked what was worth doing for polish and correctness, and the recommendation was
+drawn from three register rows. **One of them — `#109` — had been fixed three weeks earlier**, which
+was discovered only after it was recommended, by opening the code. That is ADR-0076 Class 3
+committed against this file, in the same message that warned the reader this file drifts. So the
+sweep that followed was not a tidy-up: it was an attempt to find out how big the error is.
+
+### What was verified, and what it cost to verify it
+
+Seven rows were checked against the code by hand. **Six were fixed and never closed** — `#106`,
+`#109`, `#134`, `#144`, `#146`, `#147` — and each closure above carries the evidence that settled it.
+**One, `#169`, was reported fixed by an automated sweep and is half fixed**, which is the calibration
+worth keeping: an unverified report about the register is a document like any other.
+
+Three distinct causes, none of them forgetfulness:
+
+1. **The fix landed inside an epic named for something else.** `#109` shipped in `3cf27de4`, a
+   commit about ADR-0082/0083/0084/0085. Nothing in either artefact pointed at the other.
+2. **The subject was deleted rather than fixed.** `#134` and `#147` describe a width ladder ADR-0109
+   D1 removed entirely. Their diagnoses were right; their remedies expired with the machinery.
+3. **The premise lapsed under a later decision.** `#146` exists because Graphite M3 moved the
+   wordmark into a rail; ADR-0109 D2 deleted the rail. Nobody was wrong at any point.
+
+Cause 3 is the one with no available cue at all. A register row is a claim about the product frozen
+at the moment it was written, and every subsequent epic is a chance for it to stop being true —
+silently, because a milestone that fixes something does not go back and edit the rows that complained
+about it. That is `docs/RECONCILE.md`'s rule stated for the register rather than for prose, and
+ADR-0058's failure one artefact along.
+
+### The measurement that makes this a row rather than an anecdote
+
+**Status is not machine-readable, and nothing can count what has gone stale.** Of ~105 rows, only
+**35 make a status claim a parser can find**; the other 70 say nothing, or say it in prose. Three
+classifiers were written against the file and returned three different answers — and the second was
+wrong in an instructive way: it matched the word "closed" inside `#169`'s own sentence explaining
+that a neighbouring row _would read as_ closed when half closed. Scanning prose for a verdict is the
+fourth instance of that mistake in this repository, and this one was made while auditing the register
+for exactly this class of error.
+
+So the residue is a **known-unknown of about 70 rows**, and the honest thing is to say that rather
+than to have an agent classify them and write the answers in as fact.
+
+### What is owed
+
+**(a) A `**Status:**` line on every row, and `pnpm check:debt-status` to parse it.** Rows written
+since roughly `#205` already carry one; the older ones do not. A gate would make a row that claims
+`open` while its subject is deleted a build failure rather than a discovery three weeks later. This
+is a **shared gate**, so it fires ADR-0105 and needs a spec and approval before any of it is built —
+which is why it is recorded here instead of being slipped in with the closures.
+
+**(b) The ~70 unclassified rows, verified in batches against the code.** Not by reading them: the
+whole finding is that reading a row tells you what was true when it was written. The verification
+unit is "open the file the row cites and see", which is what produced all seven results above.
+
+**(c) A rule for cause 1**, which is the cheapest of the three to close: a commit that fixes a
+register row says so, and the row says which commit. Every closure written above had to reconstruct
+that link by `git log` on the file the row named.
+
+**Why it is debt and not a defect:** nothing is broken in the product. What is broken is the register's
+usefulness as an input to "what should we do next", which is the one job it has — and the cost has now
+been paid once, in a recommendation to the product owner for work that was already done.

@@ -193,12 +193,16 @@ export function AppHeaderRow({
     // toolbar with no provider above it resolves its DENSITY from its own `clientWidth` — which for
     // a `shrink-0` row is its content width, landing it in a narrow band on a wide screen.
     //
-    // It is NOT protection against the fit trap. That one is already closed by
-    // `isWidthConstrained` (`Toolbar.tsx:81-84`): a width-unconstrained row is charged no chrome and
-    // never demotes, because its `clientWidth` is an *output* of the demotion decision. The first
-    // answer here was "the mode items are `render`, so they cannot demote", and that is false —
-    // `mode-early` has an `onActivate` and a `demotionGroup`, which is exactly what
-    // `Toolbar.tsx:352` calls demotable. Recorded because it was nearly built on.
+    // It is NOT protection against the fit trap — a width-unconstrained row's `clientWidth` is an
+    // *output* of a fit decision, so charging it chrome makes the pass measure itself. That trap is
+    // moot since ADR-0109 D1: the surface wraps, nothing demotes, and the guard this paragraph
+    // named — `isWidthConstrained` (`Toolbar.tsx:81-84`) — went with the ladder and does not exist
+    // at those lines or anywhere (`docs/TECH_DEBT.md` #193, 2026-08-30 verification sweep).
+    //
+    // The first answer here was "the mode items are `render`, so they cannot demote", and that was
+    // false even then: `mode-early` has an `onActivate` and a `demotionGroup`. Recorded because it
+    // was nearly built on, and it is the more durable half — the density reading above is what this
+    // provider is actually for.
     //
     // `toolbar-band.tsx`'s invariant is honoured either way: the band width says how roomy the
     // surface is and never answers whether a row's content fits.
