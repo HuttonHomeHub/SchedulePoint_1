@@ -82,6 +82,24 @@ const RESERVED_PX = EXPORT_TOP_BAND + EXPORT_MARKER_ROW;
  * guard, and it fails in one second naming the real reason instead of timing out on a symptom.
  */
 async function openPrintDocument(page: Page): Promise<void> {
+  // **Stop the print dialog opening, or the document is gone before it can be read.**
+  // `mountPrintDocument` tears the container down on `afterprint` — whichever of that event and a
+  // 60 s fallback comes first — so in a browser that fires `afterprint` for a headless `print()`
+  // the document exists for microseconds. `scripts/shoot.mjs` has stubbed `print` for exactly this
+  // reason since it was written, and its comment says so; this journey did not, and paid for it
+  // over four CI rounds.
+  //
+  // **The local probe that argued against this was a true measurement of the wrong browser.** On
+  // this container's Chromium it recorded `{containers: 1, afterprint: 0}` at every sample, which
+  // is why teardown was ruled out; CI's build fires it. What settled it was the diagnostic
+  // reporting `live region: "… | Printing Paper face."` with `containers: 0` — that sentence is
+  // announced INSIDE the success branch, after `mountPrintDocument` has run, so the document had
+  // been created and removed rather than never made.
+  //
+  // Re-applied on every call because a navigation resets it.
+  await page.evaluate(() => {
+    globalThis.print = () => {};
+  });
   await page
     .getByRole('button', { name: /share.*export/i })
     .first()

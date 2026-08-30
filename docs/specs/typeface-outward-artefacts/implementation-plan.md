@@ -550,10 +550,30 @@ the throw. Verified by forcing the silent return: it reports in 29 s with
 discriminator, since the TSLD path announces "Preparing the diagram to print…" only **after** the
 build starts.
 
-Worth carrying: this is the fourth time in this epic that something passed locally and failed on a
-slower machine, and three of the four first diagnoses were wrong in a way only running an
-instrument corrected. Each guard is kept — every one is right on its own terms, and proving each
-green is what located the next failure one line further on.
+**The fourth run gave the answer, and the diagnostic is what produced it.** The message came back
+`live region: "No one is editing this plan. | Printing Paper face."; canvases: 2; containers: 0`.
+`Printing Paper face.` is announced **inside the success branch**, after `mountPrintDocument` has
+run — so the document had been created and then removed, not never made. Every earlier hypothesis
+had it never being made.
+
+**`mountPrintDocument` tears the container down on `afterprint`**, whichever of that event and its
+60 s fallback comes first, so in a browser that fires `afterprint` for a headless `print()` the
+document exists for microseconds. `scripts/shoot.mjs` has stubbed `print` for exactly this reason
+since it was written and its comment says so; this journey did not.
+
+**The probe that ruled teardown out was a true measurement of the wrong browser.** On this
+container's Chromium it recorded `{containers: 1, afterprint: 0}` at every sample — correct, and
+about a build CI does not run. What it could still establish locally is the _mechanism_: dispatching
+`afterprint` by hand takes the container from **1 to 0**, so a browser that fires it produces
+precisely the CI signature. That is the executable half of the claim; the half about CI's browser
+rests on its own log line.
+
+Worth carrying, because it is the epic's sharpest lesson: **a local measurement is evidence about
+the machine that ran it.** Four CI rounds, four diagnoses, three of them wrong — and each wrong one
+was wrong because an instrument run here was treated as a fact about there. The guards added along
+the way are all kept: every one is right on its own terms, and proving each green is what exposed
+the next failure one line further on. What finally worked was not a better hypothesis but a
+diagnostic that made the application say where it had got to.
 
 ##### Task M2-U3 — An ADR, only if the reviewer asks _(unscheduled)_
 
