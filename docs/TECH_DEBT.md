@@ -6377,3 +6377,53 @@ that link by `git log` on the file the row named.
 **Why it is debt and not a defect:** nothing is broken in the product. What is broken is the register's
 usefulness as an input to "what should we do next", which is the one job it has — and the cost has now
 been paid once, in a recommendation to the product owner for work that was already done.
+
+---
+
+## 220. The reconciliation trigger is an epic boundary, and nothing observes an epic boundary
+
+**Raised:** 2026-08-30 (the pass this row is the output of) · **Size:** S ·
+**Status:** open
+
+`docs/RECONCILE.md` says the pass runs **at each epic boundary**, with a three-month hard floor. The
+floor works, because a date is a fact a person can check. The trigger does not, and there are now two
+measurements of it failing rather than one:
+
+| pass       | gap it found                                          |
+| ---------- | ----------------------------------------------------- |
+| 2026-08-25 | **eleven** epics (ADR-0100–0110), no pass since 08-20 |
+| 2026-08-30 | **nine** epics (ADR-0111–0119), no pass since 08-25   |
+
+The second happened **five days after** a pass whose own headline finding was that the cadence had
+stopped, written by the same hand, in a file that opens with the rule. That is enough to stop calling
+it a lapse in diligence.
+
+**Why it fails is structural, and the 2026-08-25 row states it exactly:** _"nothing noticed, because
+each epic looked complete on its own."_ An epic ends with a release, and a release is a satisfying
+terminal state — the tag is cut, the image publishes, the register row closes. Nothing in that
+sequence asks "and how many boundaries have gone by since the last pass?", because the answer is not
+a property of the epic that just ended. It is a property of the _gap between_ epics, and no artefact
+owns a gap.
+
+**What is owed is a computed trigger, not another resolution.** The obvious shape: derive the count
+of ADRs filed since the date at the top of `RECONCILE.md`'s table, and fail — or warn loudly — past a
+threshold. `pnpm check:adr-coverage` already reads every ADR and `RECONCILE.md`'s table already
+carries the date, so both inputs exist and neither needs a new convention.
+
+Three things to settle before building it, none of them obvious:
+
+1. **What is the threshold?** Both observed gaps were 9 and 11. A threshold of 3 would fire
+   constantly during a run of small epics; one of 10 would have caught neither promptly. It should be
+   derived from the historical table rather than picked — the same discipline the coverage ratchets
+   used (ADR-0058: a gate that fails on day one gets deleted rather than fixed).
+2. **Fail or warn?** A hard failure blocks a release on a documentation chore, which is how a gate
+   gets bypassed with `--no-verify`. A warning is ignorable, which is how this row happened.
+3. **An ADR is a proxy, not the thing.** Some epics file no ADR and some file two. The trigger would
+   be counting the wrong noun, which is acceptable only if it is written down.
+
+**This is a shared gate**, so it fires ADR-0105 and needs a spec and approval before any of it is
+built — which is why this row records the problem and the three questions rather than a script.
+
+**Related, and the reason both should be decided together:** `#219(a)` proposes a `check:debt-status`
+gate over the register. Both are the same shape — a documented obligation with no computed observer —
+and both would be cheap to build once and awkward to build twice.

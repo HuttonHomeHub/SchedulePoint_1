@@ -21,23 +21,36 @@ Product direction lives in [ROADMAP.md](ROADMAP.md) and
 the ADR-0034 capability matrix. Listed here only when a candidate is neither —
 a product idea that has not yet earned a roadmap line:
 
-- `S` **The activity editor's docked panel — the part ADR-0099 did not close.** This entry described
-  the whole thing as unbuilt until the 2026-08-20 reconciliation pass, **on the day it shipped**. It
-  read "The editor is a modal dialog today; the proposal is a panel docked into the workspace, so a
-  planner can see the diagram while editing the activity they picked from it." That is ADR-0099 M6,
-  released in `web-v0.95.0`: at `lg`+ the three ADR-0060 intents open the editor in the trailing
-  context drawer, and the modal is now the chrome for narrow viewports only. Left standing, it was
-  the top line of the file that decides what gets built next, pointing at work that exists — which
-  is the same failure four Graphite milestones spent themselves discovering.
+- `S` **The activity editor's docked panel — WITHDRAWN, and the guard it named has SHIPPED.**
 
-  **What the entry got right, and what it therefore still owes.** It said the unsaved-work question
-  was "a real design question rather than an implementation detail", and the epic proved it three
-  times: closing the drawer dropped focus to `<body>` (WCAG 2.4.3), Escape stopped closing the editor
-  because the modal had been getting that from the platform, and a modal opened for one commit and
-  took focus with it. All three are fixed. What is genuinely **left** is the case that entry named
-  and the epic did not reach: **there is still no guard on navigating away** from a plan with unsaved
-  scope edits. Verified 2026-08-23 — `beforeunload`, `useBlocker` and any router blocker return
-  **zero** matches across `apps/web/src`.
+  **This entry has now been wrong three times, in three different directions, and it is the top line
+  of the file that decides what gets built next.** It is rewritten rather than patched, because
+  patching is what produced the second and third.
+
+  1. It described the docked panel as unbuilt until the 2026-08-20 pass — **on the day it shipped**.
+  2. The correction then said the editor opens in the trailing context drawer at `lg`+ and the modal
+     is narrow-viewport chrome. **ADR-0101 reversed that on 2026-08-21**, one day later: an editor is
+     a dialog, not a drawer. The 420 px drawer was a third of the `xl` width ADR-0061 gave this form
+     _because 448 px had already proved unusable_, so it shipped four scrollbars. Verified
+     2026-08-30 — `registerDrawerSubject` has **no production registrant at all**
+     (`docs/TECH_DEBT.md` #156).
+  3. It closed by naming the genuinely-owed part: "there is still no guard on navigating away from a
+     plan with unsaved scope edits. Verified 2026-08-23 — `beforeunload`, `useBlocker` and any router
+     blocker return **zero** matches." **ADR-0108 shipped exactly that on 2026-08-24**, the day after
+     the verification. `components/layout/unsaved-work/navigation-guard.tsx` registers one
+     `useBlocker` covering both the in-app and the unload channel, on a report of dirty **scopes**
+     rather than a boolean, because ADR-0060 saves per write scope and an `isDirty` flag cannot name
+     what is at risk.
+
+  **So nothing here is owed.** The docked editor is a withdrawn decision, not deferred work; the
+  guard exists. What survives is one recorded gap and it is already filed: the drawer-subject
+  mechanism has no registrant (#156), and a browser Back does not reach the blocker in this app,
+  established by instrumenting rather than by reading (ADR-0108).
+
+  **Kept in full rather than deleted, because the shape is the point.** Every correction to this
+  entry was made by someone who had just done the work, and each was overtaken within days by the
+  next epic — which is `docs/RECONCILE.md`'s rule (_verify the claim; do not trust the document_)
+  failing on the one document whose whole job is to be trusted about what is unbuilt.
 
   **SHIPPED 2026-08-23 (ADR-0108).** Four surfaces now register what they hold — the activity
   editor, `ActivityCreateDialog`, `CalendarFormDialog` and the calendar exceptions editor — and a
