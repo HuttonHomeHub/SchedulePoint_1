@@ -1486,7 +1486,7 @@ consumer is unchanged. This is the shape of the remaining work, written down whi
 
 ## #108 — The plural drag: model, command and endpoint landed; the gesture did not
 
-**Found:** 2026-08-08, by the component review over the ADR-0080 diff.
+**Status:** unverified · **Found:** 2026-08-08, by the component review over the ADR-0080 diff.
 
 `model/bulk-move.ts` (`movedPlacement`, `bulkMoveSnapshots`, `isLaneOnly`), `bulkPlacementCommand`
 in `features/undo-redo/commands.ts`, `useBatchPlacements`, and the `PATCH …/activities/placements`
@@ -1860,6 +1860,8 @@ observation on the host, not by a test.
 
 ## 118. Staff-console M6 review findings that were not folded
 
+**Status:** unverified
+
 Six specialists reviewed the combined M1–M5 diff. Eight blocking findings were folded with
 regression tests verified red first (the denial audit row, the missing `nextCursor`, the undeclared
 OpenAPI auth/404/429, the absent document title, four hand-rolled tables, the un-announced settled
@@ -1918,6 +1920,8 @@ not reopened from scratch.
 
 ## 118a. `audit_events`' 12-month `auth.*` period is still unenforced, and the sweep may never enforce it
 
+**Status:** unverified
+
 The half of #118 item 1 that the retention sweep **cannot** close, split out rather than quietly
 carried along with the half it did close — because "retention is enforced" is now true of two tables
 and false of a third, and four documents were about to say the first thing without the second.
@@ -1944,6 +1948,8 @@ same place. Recorded here so the next reader meets the conflict rather than the 
 
 ## 118b. The CSP period bounds staleness, not data age — and the sweep does not change that
 
+**Status:** unverified
+
 Carried forward from #118 item 1 unchanged, because building the sweep neither fixed it nor made it
 worse, and closing item 1 without saying so would have read as a fix.
 
@@ -1964,6 +1970,8 @@ bounds a sustained flood and the sweep bounds the residue after one stops.
 
 ## 123. One create-dialog earned-value case failed once in a full run and has not repeated
 
+**Status:** unverified
+
 `ActivityCreateDialog.earned-value.test.tsx` → "creates an activity carrying the %-complete type
 and expense (major → minor)" failed exactly once, during a full `pnpm test` on 2026-08-11, and has
 not reproduced: the same file passes in isolation five times over, the feature suite passes, and
@@ -1983,6 +1991,8 @@ counter assertion on `apiFetch` calls rather than on the last call's body, which
 double-submit apart from a slow one. Left open rather than guessed at.
 
 ## 122. Two Class A flags are deferred, and the payoff is not where the register said it was
+
+**Status:** unverified
 
 **CLOSED 2026-08-17.** `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089 (2026-08-11);
 `VITE_CANVAS_WORKSPACE` retired in the dedicated flag-cleanup pass the product owner called for.
@@ -2068,6 +2078,8 @@ throughout.
 
 ## 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
+**Status:** unverified
+
 `apps/web/playwright.config.ts` pins `VITE_PLAN_EDIT_LOCK` and `VITE_TSLD_EDITING` **off** for the
 whole base journey, so its six editing specs — `activities.spec.ts`, `baselines.spec.ts`,
 `dependencies.spec.ts` (×2), `schedule.spec.ts` (×2) — run with `penManaged: false`: the client pen
@@ -2098,6 +2110,8 @@ dated flag work precisely because the date was the wrong instrument.
 
 ## 120. The first retention drain leaves 10–20% dead tuples for several ticks, and nothing says so
 
+**Status:** unverified
+
 Measured, not suspected. The backend-performance review seeded `csp_reports` to 500,000 rows
 (~207 MB), vacuumed, then drove a full `RUN_CAP`-bounded drain — 50 sequential 1,000-row batches,
 exactly the runner's loop — and watched `pg_stat_user_tables`:
@@ -2126,6 +2140,8 @@ first — the last one trades a bounded connection hold for a faster vacuum, whi
 what `RUN_CAP` exists for.
 
 ## 119a. The API e2e suite fails intermittently, and the failure has never been captured
+
+**Status:** unverified
 
 **Captured and diagnosed 2026-08-28 (reconciliation pass), and the mechanism explains why every
 prior occurrence destroyed its own evidence.** The full log (kept, per this row's instruction)
@@ -2287,7 +2303,7 @@ floor there is the one-line change that proves this closed.
 
 ## 128. The multi-select journey's post-delete focus assertion is flaky, ~1 run in 4
 
-**Raised:** 2026-08-12 (ADR-0090 M3) · **Size:** M · **Owner:** whoever next touches the bulk delete
+**Status:** unverified · **Raised:** 2026-08-12 (ADR-0090 M3) · **Size:** M · **Owner:** whoever next touches the bulk delete
 
 `e2e-multi-select/multi-select.spec.ts:214` — `expect(list).toBeFocused()` after a bulk delete —
 fails intermittently with `Received: inactive`. Everything downstream of it depends on that focus:
@@ -2337,7 +2353,7 @@ is the right configuration and it is also why the rate can drift a long way befo
 
 ## 130. The zoom trigger's icon says "date range", and it now owns the viewport
 
-**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** S · **Owner:** a design pass ·
+**Status:** unverified · **Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** S · **Owner:** a design pass ·
 **Status: CLOSED 2026-08-28 — overtaken.** The control this row describes no longer exists:
 `ZoomPresetControl` and the `comfortable`-band fold were deleted with the width ladder (ADR-0109
 D1 — a command surface wraps; it never hides), zoom presets moved into `View ▾` (ADR-0099), and
@@ -2365,7 +2381,7 @@ acquiring two glyph vocabularies.
 
 ## 131. An icon-only toolbar control names itself only on hover, and the target device has none
 
-**Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** M · **Owner:** a design-system pass
+**Status:** unverified · **Raised:** 2026-08-12 (ADR-0090 M5, ux gate) · **Size:** M · **Owner:** a design-system pass
 
 _**CLOSED 2026-08-28** (fix-slice M-B, ADR-0117). The Tooltip primitive this row asked for exists —
 `useTooltip` in `components/ui/tooltip.tsx`, hand-rolled to the APG with WCAG 1.4.13 in full
@@ -2416,6 +2432,8 @@ pass rather than alone.
 
 ## 132. `mail-alerting.e2e-spec.ts` sees its own writes late, and the two cases then swap answers
 
+**Status:** unverified
+
 **Observed in CI, 2026-08-12**, on a branch that changes **zero files under `apps/api`** (verified:
 `git diff --name-only origin/main...HEAD | grep -c '^apps/api'` → 0). So it is a pre-existing flake
 surfacing, not a regression from the change under review — worth recording precisely because the
@@ -2447,6 +2465,8 @@ about isolation, not about waiting, and does not cover this.
 expected count in test 1, and give test 2 a wait that is specific to its own row.
 
 ## 133. A coarse pointer costs the merged strip two commands, and one of them is Next conflict
+
+**Status:** unverified
 
 `toolbarControlVariants` carries `pointer-coarse:px-3` (`toolbar-styles.ts`), which takes every
 toolbar control from 32 px to 40 px. A Surface Pro — the device this toolbar is judged on — reports
@@ -2552,7 +2572,7 @@ enough to stop calling it coincidence and start calling it a property of the sur
 
 ## 142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
 
-**Raised:** 2026-08-19 (ADR-0098 M2, seen in the base and overview journeys) · **Size:** S ·
+**Status:** unverified · **Raised:** 2026-08-19 (ADR-0098 M2, seen in the base and overview journeys) · **Size:** S ·
 **Risk if left:** low
 
 Every navigation to the client list logs:
@@ -2580,6 +2600,8 @@ The fix is either a route-tree correction or an explicit `from`, and which one d
 not guess.
 
 ## 143. The Project Explorer cannot open a client or a project — two of ADR-0029's three levels
+
+**Status:** unverified
 
 **CLOSED 2026-08-28 (correctness programme, Phase 1).** The row's own shape was followed: the
 meanings are split rather than merged. `activate` — the name's click and the APG tree's Enter,
@@ -2689,6 +2711,8 @@ re-triaging: the Graphite M5 sweep returned **31 green, 2 red, and one of the tw
 A gate that cries wolf once per run trains its reader to open the log expecting noise.
 
 ## 145. A hand-rolled `Combobox` takes the platform picker away on touch, and nobody has measured what that costs
+
+**Status:** unverified
 
 **Raised 2026-08-19**, blocking the last two conversions of ADR-0097 Landing F1.
 
@@ -3028,6 +3052,8 @@ presets, with and without the pen). The second is the one that could not have ex
 
 ## 149. The Graphite M10 gate pass's non-blocking findings
 
+**Status:** unverified
+
 **Raised 2026-08-20.** Five specialists over the ADR-0099 epic diff. Security and
 frontend-performance passed outright, both having re-derived the epic's own numbers from the code
 rather than trusting them (performance built both refs: **+1.9 kB gzip JS** for 163 files, and the
@@ -3086,6 +3112,8 @@ the ADR-0058 rule doing its job on a document written about instruments not bein
 
 ## 150. The drawer overloads "Close", and the editor's Close leaves an empty panel open
 
+**Status:** unverified
+
 **CLOSED 2026-08-28 (correctness programme, Phase 1) — overtaken, verified rather than assumed.**
 ADR-0101 (2026-08-21, the day after this was raised) returned the activity editor to `modalShell`,
 so the state this row describes — an editor in the drawer with its own second "Close" — is
@@ -3120,6 +3148,8 @@ because it is copy-and-behaviour rather than a defect, and the product owner has
 
 ## 151. The Gantt grid splitter has no browser-level coverage
 
+**Status:** unverified
+
 **Raised 2026-08-20** (reconciliation pass, step 7 — component review). **Size:** S.
 
 `grid-width.structural.test.ts` pins the arithmetic — the columns fill the pane exactly at and above
@@ -3142,6 +3172,8 @@ browser-level proof "belongs to `e2e-gantt`", which reads as coverage held elsew
 checked when written.
 
 ## 152. `zoomToSelection` frames the time axis and discards the lane axis
+
+**Status:** unverified
 
 **CLOSED 2026-08-28 (correctness programme, Phase 1) — candidate fix (a), command-local.** The
 reveal arithmetic is extracted from the selection-reveal effect to a pure `revealOffset` in
@@ -3181,6 +3213,8 @@ the oracle). The probe (`m0-t5-zoom-probe.mjs`, method recorded in
 `docs/specs/tsld-minimap/m0-measurement.md`) is kept with this row, not merged as a gate.
 
 ## 153. THREE icon sizes in one family of canvas panels, not the two this row named
+
+**Status:** unverified
 
 **Raised 2026-08-21** (minimap M2/M4, beside #127). **Size:** S.
 
@@ -3222,6 +3256,8 @@ part company again.
 
 ## 154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
 
+**Status:** unverified
+
 **Raised 2026-08-21** (minimap M4-T3). **Size:** S.
 
 The accessibility input report marked two claims as reasoned from specification, and the
@@ -3244,6 +3280,8 @@ the magnification half. Recorded rather than quietly re-deferred; flagged to the
 with the Phase 2 report so the row has an owner outside this environment.
 
 ## 155. The minimap M4 gate pass's non-blocking findings
+
+**Status:** unverified
 
 _Triage 2026-08-28 (correctness programme Phase 4): re-filed consciously. Items 1–3 are design
 judgements for a minimap design pass, not defects; item 4's focus-chain last resort is real and
@@ -3274,6 +3312,8 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
    decision 3 so the gate is not over-read.
 
 ## 156. The drawer-subject mechanism has no registrant
+
+**Status:** unverified
 
 **Raised 2026-08-21** (ADR-0101). **Size:** M to delete, or it becomes ADR-0097 D2's foundation.
 
@@ -3517,6 +3557,8 @@ widening the glob is not the fix (`globals.css` declares the aliases).
 
 ## 160. `resolveLensPalette` is resolved twice per cycle
 
+**Status:** unverified
+
 **Raised 2026-08-21** (ADR-0102's performance gate). **Size:** XS.
 
 `TsldPanel.tsx` calls `resolveLensPalette(canvasSurface)` twice — once for the bar fills and once
@@ -3533,6 +3575,8 @@ The fix is to pull one resolve into a single `useMemo` and derive both maps from
 when that file is next open; not worth a commit of its own.
 
 ## 161. Four screens the harness photographed for the first time, and one question for the product owner
+
+**Status:** unverified
 
 **Raised 2026-08-21** (ADR-0102's UX gate). **Size:** S each, none blocking, none introduced by the
 light theme — they became visible because the shot list went 12 → 25 and started covering states
@@ -3570,6 +3614,8 @@ The accepted cost is recorded at the declaration: a floating card gets much of i
 surround, so the login reads calmer.
 
 ## 162. The legend's slack chip does not match what the canvas paints
+
+**Status:** unverified
 
 **CLOSED 2026-08-28 (correctness programme, Phase 1).** The swatch names `--primary` + `--border` —
 what the painter actually draws the chip with (`palette.bar` / `palette.barStroke`, confirmed at
@@ -3715,6 +3761,8 @@ print but is a deliberate divergence rather than parity.
 
 ## 165. Five screens photographed for the first time, and what they showed
 
+**Status:** unverified
+
 **Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **(a) is CLOSED
 2026-08-22; (b)–(e) remain open.** The product owner's decision was to shoot, report and choose;
 they chose (a).
@@ -3821,6 +3869,8 @@ rather than done inside a catalogue-only slice.
 
 ## 166. A whole-plan export of a long programme loses weekends entirely
 
+**Status:** unverified
+
 **Raised 2026-08-22** (TECH_DEBT #164's remaining half, identified by the accessibility review of
 the W3 plan). **Size:** S–M. Filed separately because it is a different defect from #164: that row
 was about layers the export never composed, and this is about a layer it composes and then culls.
@@ -3854,6 +3904,8 @@ screen, and this is the one place that distinction bites. Not addressed in W3-M2
 the layer rather than changing how it culls.
 
 ## 167. The exported diagram is the default picture, not the planner's picture
+
+**Status:** unverified
 
 **Raised 2026-08-22** (the W3-M2 component review). **Size:** M. The spec's CQ-5 promised this row
 and it was never filed — the enumeration lived only in a `SCREEN_ONLY` record whose reasons were
@@ -3993,6 +4045,8 @@ be one derivation rather than two — the neighbouring copy is exactly how #165a
 
 ## 170. Three axe scans run every rule, because `.options()` replaces `.withTags()`
 
+**Status:** unverified
+
 **Raised 2026-08-22** (found while closing #165a). **Size:** S.
 
 `@axe-core/playwright`'s builder is not a merge. `dist/index.js:170-172` is
@@ -4067,6 +4121,8 @@ neighbourhood:
 
 ## 171. `schedulepoint-active-org` is never cleared, and carries no user id
 
+**Status:** unverified
+
 **Raised 2026-08-22** (found by the #165a spec check while costing a rejected option). **Size:** S.
 
 `apps/web/src/lib/active-org.ts` writes and reads `schedulepoint-active-org` in `localStorage` and
@@ -4091,6 +4147,8 @@ Both halves in one change, since keying without sweeping leaves orphans and swee
 still shows the wrong slug to a second reader in the same session.
 
 ## 172. No authenticated journey has ever run below `lg` — the shell's narrow half is unexercised
+
+**Status:** unverified
 
 **Raised 2026-08-22** (found while scoping #168). **Size:** M if actioned. **Filed, deliberately not
 scheduled** — the product owner's call, and the right one: they work at 1646 px, so nothing is
@@ -4151,6 +4209,8 @@ blind container click COLLAPSES the branch — the spec now reads `aria-expanded
 with the reason recorded in the file.
 
 ## 173. The canvas painter draws every glyph in a typeface the product does not use
+
+**Status:** unverified
 
 **Raised 2026-08-22**, found while measuring for #148 rather than reported.
 
@@ -4213,6 +4273,8 @@ paints once.
 
 ## 174. The axis-markers gate pass's non-blocking findings
 
+**Status:** unverified
+
 **Raised 2026-08-22.** Four specialists over the ADR-0106 epic diff. Frontend-performance passed
 outright, having built both refs and measured **+0.79 kB gzip** for the whole epic, and having
 re-derived the cache-miss analysis from the code rather than from the M0 numbers. Component,
@@ -4269,6 +4331,8 @@ during a gate pass.
 
 ## 175. The exported diagram has never carried the date marks, and nobody decided that
 
+**Status:** unverified
+
 **Raised 2026-08-22**, established while fixing #148 rather than reported. **Closed 2026-08-28**
 (fix-slice M-F): the product owner chose **marks on the axis** over legend-only. The export now
 reserves a marker row under the title band (`EXPORT_MARKER_ROW`, unconditional so the geometry
@@ -4318,6 +4382,8 @@ quotes that too. Caught by re-reading my own check-in notes against the register
 gate: **`check:doc-links` verifies that a link resolves, not that a claim about filing is true.**
 
 ## 176. Better Auth 1.7 needs a schema migration, and a minor bump is how we found out
+
+**Status:** unverified
 
 > **CLOSED 2026-08-23 — ADR-0107.** Both workspaces run `^1.7.1`; the pin is gone. `accounts.issuer`
 > shipped first, alone, in `api-v0.52.0` (migration `20260823120000_account_issuer`), with the
@@ -4382,6 +4448,8 @@ outstanding** — whoever picks this up inherits a verified register, not a cold
 
 ## 177. A compound citation is invisible to `check:claims`
 
+**Status:** unverified
+
 **Raised 2026-08-22.** The completeness scan's regex is
 `\b([a-z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b`, which matches `sign-up.mjs:163` inside
 `sign-up.mjs:163,169-207` and stops. The second range was therefore **never registered**, never
@@ -4400,6 +4468,8 @@ So the convention "one citation, one range" now holds everywhere, and the regex 
 enforcement rather than coverage. That is worth doing and worth doing on its own.
 
 ## 178. `check:claims` resolves a package by the first store entry it finds
+
+**Status:** unverified
 
 **Raised 2026-08-22** while bumping `react-hook-form`, and it produced a **wrong answer**, not a
 missing one — which is the reason it is worth a row.
@@ -4468,6 +4538,8 @@ That is the same shared-gate change as the resolver fix and belongs with it.
 
 ## 179. Changesets v3 stops versioning private packages, and says nothing
 
+**Status:** unverified
+
 **Raised 2026-08-23**, found while bumping `@changesets/cli` (Dependabot #318) and closed in the
 same change. Recorded because the **failure mode** is the interesting part, not the fix.
 
@@ -4519,6 +4591,8 @@ this row is where to look first.
 The old range admitted 22.0–22.10, on which v3 refuses to run.
 
 ## 180. A workflow's renamed INPUTS have no equivalent of the output guard
+
+**Status:** unverified
 
 **Raised 2026-08-23** while migrating `changesets/action` v1 → v2 (Dependabot #323), and it is a
 finding about **what can be guarded**, not about that upgrade, which is done.
@@ -4575,6 +4649,8 @@ repository had no hyphenated output anywhere to copy from.
 
 ## 181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
 
+**Status:** unverified
+
 _Found 2026-08-23, by the gate accepting a citation it should have refused._
 
 `scripts/check-claims.mjs` scans the tree for citation-shaped strings and requires each one to
@@ -4617,6 +4693,8 @@ then be changing underneath the citations it is checking.
 ---
 
 ## 182. Three base-journey sign-up specs sit close enough to a 5 s timeout that Firefox tips under load
+
+**Status:** unverified
 
 _A second, em-dash-styled row briefly shared this number (the deck's folded groups); it is now **#207**._
 
@@ -4683,6 +4761,8 @@ re-run.
 
 ## 183. `check:claims` cannot see a camelCase basename in its colon form
 
+**Status:** unverified
+
 _A second, em-dash-styled row briefly shared this number (API-seeding journeys); it is now **#208**._
 
 _Found 2026-08-23 by the `ui-architect` while designing the unsaved-work guard, and confirmed here._
@@ -4709,6 +4789,8 @@ carries no version) — three holes in one gate, all found by using it rather th
 ---
 
 ## 184. Unsaved-work guard: the findings its gate pass did not block on
+
+**Status:** unverified
 
 _A second, em-dash-styled row briefly shared this number (the bulk-delete focus race); it is now **#209**._
 
@@ -4771,6 +4853,8 @@ not change — so something other than this guard reverts the pop. Recorded rath
 
 ## #207 — The deck's folded groups are unreachable by any journey
 
+**Status:** unverified
+
 _Renumbered from #182 on the 2026-08-28 reconciliation pass: the number collided with the
 dot-style row `## 182.` filed the same week, and a register whose ids are ambiguous fails at its
 one job. Every reference that meant THIS row now says #207._
@@ -4812,6 +4896,8 @@ Cost: one journey that folds a group, tabs through the strip, and unfolds it.
 
 ## #208 — A journey that seeds through the API must tell the client itself
 
+**Status:** unverified
+
 _Renumbered from #183 on the 2026-08-28 reconciliation pass (the #207 note explains why)._
 
 _Filed 2026-08-24 with ADR-0109 M5, from the estate sweep._
@@ -4846,6 +4932,8 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 ---
 
 ## #209 — The bulk-delete focus restoration is a race, and it failed once under load
+
+**Status:** unverified
 
 _Renumbered from #184 on the 2026-08-28 reconciliation pass (the #207 note explains why)._
 
@@ -4900,6 +4988,8 @@ the failure mode rather than one of its possible causes.
 ---
 
 ## #185 — The command deck is 182 px tall, and nobody measured it before building it
+
+**Status:** unverified
 
 _Filed 2026-08-24 with ADR-0109. **Cause ESTABLISHED 2026-08-25** by workspace-chrome-fit M0
 (`docs/specs/workspace-chrome-fit/m0-measurement.md`), and it is not the one this row expected._
@@ -4962,6 +5052,8 @@ test; changing the test would be hiding the finding.
 
 ## #186 — WCAG 2.5.8 lost its only automated cover when the fit gate was deleted
 
+**Status:** unverified
+
 _Filed 2026-08-24 with ADR-0109 M5. **CLOSED 2026-08-25** by workspace-chrome-fit M1-T3:
 `apps/web/e2e-workspace-fit/command-surface.spec.ts`, its own CI step, green at 1280 / 1440 /
 1646 / 1920 on its first run. The replacement is cheaper than the original, exactly as this row
@@ -5004,6 +5096,8 @@ width has zero overhang and is still in the DOM.
 
 ## #187 — The deck's labels sit 3 px apart and three hypotheses are falsified
 
+**Status:** unverified
+
 _Filed 2026-08-25 with workspace-chrome-fit M1. **Not a regression** — the spread was 12 px before
 this epic and is 3 px after. This row exists so the next person does not re-run the experiments that
 have already been run._
@@ -5040,6 +5134,8 @@ read from `distinctControlHeights` rather than from the label tops.
 ---
 
 ## #188 — Eight of fourteen measurement harnesses cannot run
+
+**Status:** unverified
 
 _Filed 2026-08-25 with ADR-0110 M4. **CLOSED 2026-08-26** — seven deleted, one repaired, estate
 green. **And the row's own inventory was wrong in three ways**, which is worth more than the fix._
@@ -5087,6 +5183,8 @@ name in ADR-0090/0091's own reasoning and removing them would break those citati
 
 ## #189 — The command deck's search field made 18 of its 27 commands unreachable by keyboard
 
+**Status:** unverified
+
 _Filed and **FIXED** 2026-08-25 (ADR-0110 M4). WCAG 2.2 §2.1.1 Keyboard, level A._
 
 `Deck`'s roving-tabindex handler vetoed **all six** navigation keys whenever focus sat on a form
@@ -5131,6 +5229,8 @@ the caret keys the field must keep, and the vertical ones it must not.
 
 ## #190 — `Toolbar`'s vertical variant has no consumer, and a standard still documents it
 
+**Status:** unverified
+
 _Filed 2026-08-25 by the reconciliation pass. **CLOSED 2026-08-26** — the product owner chose
 deletion over keeping it. The prop, its three branches, its `showLabel` clause and the
 `DESIGN_SYSTEM.md` rule went in **one commit**, which was the point: the standard and the code could
@@ -5161,6 +5261,8 @@ the standard and the code go in one commit.
 ---
 
 ## #191 — The local pre-push gate costs 8 minutes and 96% of it is two steps
+
+**Status:** unverified
 
 _Filed 2026-08-25 by the reconciliation pass, at the product owner's request to check whether we
 over-test locally._
@@ -5232,6 +5334,8 @@ of the gate that catches what a reviewer cannot see.
 
 ## #192 — The fix for #189 broke the shipped `Go to date` field, and shipped that way
 
+**Status:** unverified
+
 _Filed and **FIXED** 2026-08-25 by RECONCILE step 7 — two independent specialist reviews reached it
 separately, one reproducing it in real Chromium._
 
@@ -5280,6 +5384,8 @@ the deck's permanent stop is the trigger button.
 ---
 
 ## #193 — Four more toolbar docblocks and five exports describe deleted machinery
+
+**Status:** unverified
 
 _Filed 2026-08-25 by RECONCILE step 7 (component review), which swept further than the pass had._
 
@@ -5336,6 +5442,8 @@ and should be corrected whether or not the code goes. Decide the two questions s
 
 ## #194 — "The epic's own gate pass removes it" has now failed twice as an instruction
 
+**Status:** unverified
+
 _Filed 2026-08-26 by the reconciliation pass, after the declaration it describes blocked this pass's
 own commit._
 
@@ -5377,6 +5485,8 @@ instance is not also fixed by writing a fourth sentence.
 
 ## #195 — `pnpm prepush` cannot see uncommitted work in its diff-based checks
 
+**Status:** unverified
+
 _Filed 2026-08-26 by the reconciliation pass, from a false pass it produced._
 
 `check:frontend-only` diffs `origin/main...HEAD` (`check-frontend-only.mjs:93`) — **committed HEAD,
@@ -5401,6 +5511,8 @@ with `#194` because both are about this gate, and both should be settled in one 
 ---
 
 ## #196 — Two primitive keyboard defects the ADR-0111 sweep found, one of them a data-loss path
+
+**Status:** unverified
 
 _Filed and **FIXED** 2026-08-26. Found by the first sweep run under ADR-0111, which the product owner
 approved the same morning; both verified by **executing** code — one in real Chromium, one against
@@ -5466,6 +5578,8 @@ toggle-to-close (mouse only).
 
 ## #197 — Three rules with two or three implementations each, agreeing by discipline
 
+**Status:** unverified
+
 _Filed 2026-08-26 by the ADR-0111 sweep's component half. None divergent enough to block; one
 already asymmetric. **Item 1 closed 2026-08-28** (fix-slice M-A); item 3's `usePopoverPanel` copy
 is closed by the same epic's M-C._
@@ -5504,6 +5618,8 @@ Take them in the order above.
 ---
 
 ## #198 — `inkOf` measured a span, not ink — and my first framing of why was wrong
+
+**Status:** unverified
 
 _Filed and **FIXED** 2026-08-26 while preparing the one-row header decision. Recorded with its own
 correction, because the correction is the more useful half._
@@ -5545,6 +5661,8 @@ instead. Left in place rather than deleted so the next reader can see why it is 
 ---
 
 ## #199 — `shoot.mjs` cannot photograph three of its own shots, and has not been able to for some time
+
+**Status:** unverified
 
 **Filed 2026-08-26** (the one-row header, M2-T5). **Pre-existing — verified against the stashed
 pre-change tree, where it fails identically.**
@@ -5601,6 +5719,8 @@ skip.
 ---
 
 ## #200 — Two named-slot registries, one of them the better pattern, neither shared
+
+**Status:** unverified
 
 **Filed 2026-08-26** (the one-row header, from the component review). **Not a defect — both are
 correct and tested.** A duplication that will charge the next named slot a tax it need not pay.
@@ -5697,6 +5817,8 @@ a rendering meaning is a `Toolbar` contract change — ADR-0105's trigger, so it
 
 ## 202. Six non-blocking findings from the foot-row gate pass
 
+**Status:** unverified
+
 _Triage 2026-08-28 (Phase 4): (e) closed as STALE — its coverage exists (see the item). The other
 five re-filed consciously: (a) is a distance cost whose order matches the visual arrangement, (b)
 and (d) are refactors of working code, (c) is an instrument-widening task with its own scope, (f)'s
@@ -5753,7 +5875,7 @@ the pair rather than reasoning about it. Raised by the accessibility gate as a s
 
 ## 203. Two menu-positioning clamps, one now measured and one still guessing
 
-**Raised:** 2026-08-27 (`docs/specs/object-bar-defects/` M2) · **Size:** S · **Owner:** unassigned
+**Status:** unverified · **Raised:** 2026-08-27 (`docs/specs/object-bar-defects/` M2) · **Size:** S · **Owner:** unassigned
 
 _**CLOSED 2026-08-28** (fix-slice M-C, `docs/specs/fix-slice-2026-08/`), both halves. The clamp,
 the measured correction and the top-layer portal target moved verbatim to
@@ -5796,6 +5918,8 @@ and outside the stated scope of the change that found it — but the two clamps 
 Both raised by the accessibility gate on the `Menu` fix, which passed it with no blocking finding.
 
 ## 204. Four things the foot-row-and-deck epic found and did not fix
+
+**Status:** unverified
 
 _Triage 2026-08-28 (Phase 4): re-filed consciously. (a) is #131's tooltip-primitive question,
 narrowed there the same day (six universal glyphs; ADR-0105 spec item); (b) is a gated pairing;
@@ -5854,7 +5978,7 @@ claims in documents and this was a claim in a **choice**, and nothing currently 
 
 ## 205. The fixture plan is unschedulable as seeded, and the horizon guard was an untyped 500
 
-**Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Re-diagnosed:** 2026-08-28 ·
+**Status:** unverified · **Raised:** 2026-08-27 (schedule-health-check M0-T1, F-M0-2) · **Re-diagnosed:** 2026-08-28 ·
 **Closed:** 2026-08-28 (both halves — (b) `7aaf155c`, (a) fix-slice M-E fixture revision 2) ·
 **Size:** S (done) + decision (taken) · **Owner:** api / product owner
 
@@ -5917,6 +6041,8 @@ chain's now-reachable negative float).
 
 ## 206. Health-check review suggestions consciously not folded at the M5 gate pass
 
+**Status:** unverified
+
 _Triage 2026-08-28 (Phase 4): re-filed consciously. The print-header convention spans two print
 documents and wants one decision, not a fold; the Badge swap changes a shipped panel's look (a ux
 call, not a correctness fix); the two AT listens are environment-blocked exactly as #154 records
@@ -5957,7 +6083,7 @@ rather than quietly dropped:
 
 ## 210. The panel-Surface-plus-border pairing is a literal in four places, and it has already drifted once
 
-**Raised:** 2026-08-28 (reconciliation-pass component review) · **Size:** S · **Owner:** web
+**Status:** unverified · **Raised:** 2026-08-28 (reconciliation-pass component review) · **Size:** S · **Owner:** web
 
 _**CLOSED 2026-08-28** (fix-slice M-D, `docs/specs/fix-slice-2026-08/`), with this row's own claims
 corrected on the way — recording the corrections is the ADR-0071 lesson:_
@@ -6066,7 +6192,7 @@ Both are scheduled into **ADR-0118 M3**, whose subject is the below-`md` surface
 
 ## 214. An approved plan clause was never built, and its own risk table says it shipped
 
-**Raised:** 2026-08-29 (ADR-0118 M0) · **Size:** S · **Owner:** web
+**Status:** unverified · **Raised:** 2026-08-29 (ADR-0118 M0) · **Size:** S · **Owner:** web
 
 `docs/specs/workspace-chrome-fit/implementation-plan.md:306` (approved) requires the target-size
 sweep to run "…at every width, **in both plan views, once with a coarse pointer**", and its US-5
@@ -6086,6 +6212,8 @@ Discharged by **ADR-0118 M2**, which builds the coarse projection the clause ask
 half (`view=gantt`) is carried into M3 with the surfaces it belongs to.
 
 ## 212. An overlay's height ceiling must not be measured from its own output
+
+**Status:** unverified
 
 **Raised and FIXED:** 2026-08-29 (fix-slice M-G gate pass) · **Size:** S · **Owner:** web
 
@@ -6121,7 +6249,7 @@ which is why it was strengthened rather than trusted.
 
 ## 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
-**Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+**Status:** unverified · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
 long-press listener cleanup, both landed with the pass) · **Size:** S ×3 · **Owner:** web
@@ -6148,7 +6276,7 @@ Three suggestions judged real and filed rather than quietly dropped:
 
 ## 215. Dense rows are 28 px on touch, and their height is a JavaScript constant
 
-**Raised:** 2026-08-29 (ADR-0118 M4 gate pass) · **Size:** M · **Owner:** a row-rhythm pass
+**Status:** unverified · **Raised:** 2026-08-29 (ADR-0118 M4 gate pass) · **Size:** M · **Owner:** a row-rhythm pass
 
 **ADR-0118 D1's second named exception, filed rather than solved.** `Button`'s `icon-sm` stays
 28 × 28 on both pointers, and the six of its eight consumers that sit in a dense row stay with it:
@@ -6190,7 +6318,7 @@ reason. Neither hides anything else.
 
 ## 216. The favicon's brand glyph is set in `system-ui`, and no gate can reach it
 
-**Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, CQ-1) · **Size:** S ·
+**Status:** unverified · **Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, CQ-1) · **Size:** S ·
 **Disposition: a NAMED EXCEPTION the product owner took, not an oversight**
 
 `apps/web/public/favicon.svg:16` draws the brand `S` with
@@ -6217,7 +6345,7 @@ browser tab.
 
 ## 217. Two defects in the printed documents, found by photographing them for the first time
 
-**Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, M2-U2) · **Size:** S each ·
+**Status:** unverified · **Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, M2-U2) · **Size:** S each ·
 **CLOSED 2026-08-30** — both, plus two more the fix's own photographs found
 
 The screenshot harness had **one** print shot — the health report — so the two documents a planner
@@ -6382,7 +6510,7 @@ been paid once, in a recommendation to the product owner for work that was alrea
 
 ## 220. The reconciliation trigger's input is unsorted prose, and a careful reader misread it
 
-**Raised:** 2026-08-30 · **Size:** S · **Status:** open
+**Status:** unverified · **Raised:** 2026-08-30 · **Size:** S · **Status:** open
 
 > **This row's first version was built on a false claim and is rewritten rather than patched.** It
 > opened with a table asserting the cadence had failed **twice** — eleven epics before the
