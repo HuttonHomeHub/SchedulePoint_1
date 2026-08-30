@@ -1,5 +1,19 @@
 # @repo/web
 
+## 0.115.3
+
+### Patch Changes
+
+- [#426](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/426) [`d68b734`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/d68b734291d57850378c565509417b8a77a04dae) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The plan header's mode row now says which of its buttons are alternatives.
+  
+  `Early mode | Visual mode` and `Diagram | Gantt` are two independent two-way switches, and the
+  toolbar taxonomy put all four in one group — one region, one name, four identical gaps, so nothing
+  said where one switch ended. They are now two named groups, `Scheduling mode` and `Plan view`,
+  separated by the hairline the toolbar already draws between groups.
+  
+  The divider was measured before it shipped: `aboveCanvas` is unchanged at every width, as an
+  equality rather than a bound.
+
 ## 0.115.2
 
 ### Patch Changes
