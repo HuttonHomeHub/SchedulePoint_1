@@ -1092,55 +1092,56 @@ dangling.
 
 One line each. The story lives where the link points, not here.
 
-| #   | What it was                                                                     | Closed     | Where the record is                                                                                                                        |
-| --- | ------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| 106 | `render-model.ts` could not be barrel + core model without a cycle              | 2026-08-30 | ADR-0078 S8. `render/geometry.ts` exists; the barrel is 128 lines.                                                                         |
-| 109 | `bulkDelete` cascaded one activity at a time under the plan lock                | 2026-08-30 | `cascadeSoftDeleteActivityLeaves`, shipped in `3cf27de4` (an ADR-0082/0083/0084/0085 commit).                                              |
-| 104 | The manual Recalculate confirmation stood down against a settle that never came | 2026-08-30 | The row's own scenario was already guarded in the commit it was raised from; the real defect was the inverse. `settleIsComing`, two tests. |
-| 127 | Toolbar touch targets were 40 × 36 against a 44 × 44 house rule                 | 2026-08-29 | ADR-0118 — the rule became per-pointer, and the coarse gate enforces it.                                                                   |
-| 134 | A `render` item outranked every command on its row                              | 2026-08-30 | ADR-0109 D1 deleted the ladder; the diagnosis was right and the remedy expired with it.                                                    |
-| 144 | `e2e-multi-select`'s focus assertion failed under sweep load                    | 2026-08-30 | `focusListboxAfterModal` self-verifies; `e2e-overview`'s `createPlan` waits for the pen. Filed under #184.                                 |
-| 146 | The `chrome` surface scope had no measured current-page state                   | 2026-08-30 | ADR-0109 D2 restored the header, so `e2e-designed-ui` D3 measures two scopes again.                                                        |
-| 147 | The merged command strip stopped fitting below ~900 px                          | 2026-08-30 | ADR-0109 D1 — the surface wraps; the ladder, the `⋯` and the floor are gone.                                                               |
-| 148 | Canvas date pills were painted on top of the first two lanes                    | 2026-08-22 | ADR-0106.                                                                                                                                  |
-| 157 | Every colour gate was a floor and none a ceiling                                | 2026-08-21 | ADR-0102 — ANSWERED, deliberately no gate: the window is two points wide and tuned to two samples.                                         |
-| 158 | The printed and exported diagram was painted on a near-black ground             | 2026-08-21 | ADR-0102.                                                                                                                                  |
-| 159 | `--color-*` aliases were frozen at `:root`                                      | 2026-08-21 | ADR-0102 — the canvas painter had never once used the canvas surface scope.                                                                |
-| 163 | The print palette was a surface family truncated to three members               | 2026-08-22 | ADR-0103 — `[data-surface="print"]` is all 31 members.                                                                                     |
-| 164 | The exported diagram silently dropped seven default-on view layers              | 2026-08-22 | ADR-0103. One half remains open as **#166**.                                                                                               |
-| 168 | Below `lg`, Escape closed and announced a drawer the reader could not see       | 2026-08-22 | ADR-0104.                                                                                                                                  |
-| 201 | Two independent mode toggles read as one four-way group                         | 2026-08-30 | ADR-0119; released in `web-v0.115.3`.                                                                                                      |
-| 213 | Two controls painted and not clickable at 390, and a 20 px breadcrumb           | 2026-08-29 | ADR-0118 M3 — the first was off-screen; the second is a named exception.                                                                   |
-| 115 | The pen sentence named a button the reader could not see                        | 2026-08-09 | ADR-0083 M7 — one refusal sentence chosen from the live role and pen state.                                                                |
-| 124 | The selection bar's `<Toolbar>` had no fit coverage                             | 2026-08-27 | ADR-0114 M1 — and the row's own reasoning was wrong: the bar could overflow, by 408 px.                                                    |
-| 219 | The register's rows went stale and nothing measured how much                    | 2026-08-30 | ADR-0120 — `check:debt-status`; every row now carries a machine-readable status.                                                           |
-| 220 | The reconciliation trigger's input was unsorted prose, and a reader misread it  | 2026-08-30 | ADR-0120 — `check:reconcile-due`, advisory at T = 8 ADRs; the pass table is sorted.                                                        |
-| 98  | The guest share view scrolled sideways at 320 px (WCAG 1.4.10)                  | 2026-08-08 | ADR-0051 F-M4 era; closed by the guest-share responsive fix.                                                                               |
-| 29  | Released images not pulled — "shipped but not live"                             | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                                                          |
-| 59  | The device-authoritative draw measurement was never made                        | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                                                                   |
-| 77  | The demo Unit 300 file was a lossy rendering of the fixture                     | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                                                                         |
-| 78  | Public activity/dependency API was day-denominated                              | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                                                               |
-| 79  | A window-only calendar was rejected by the API                                  | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                                                                 |
-| 80  | Intraday shift patterns had no write path                                       | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                                                                     |
-| 82  | Shift-editor epic — the non-blocking half of five gates                         | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                                                                   |
-| 87  | Import rejected a file with two activities of the same name                     | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                                                                   |
-| 90  | `idx_audit_events_actor_occurred` was never measured                            | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                                                             |
-| 91  | A failed sign-in was recorded and readable by nobody                            | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                                                             |
-| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                            | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites.                                           |
-| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo                 | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                                                             |
-| 94  | A verification email that never sends is invisible to everyone                  | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                                                               |
-| 111 | The row menu hid pen-gated actions instead of shading them                      | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                                                              |
-| 103 | ADR-0064's recalculation hold was not wired on the shipped host                 | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                                                           |
-| 107 | ADR-0080 shipped without the specialist-agent review pass                       | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                                                               |
-| 113 | Redo unavailable after undoing a band copy                                      | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                                                                  |
-| 119 | The API e2e suite "fails intermittently"                                        | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                                                                 |
-| 125 | `View ▾` held one toggle that ejects you from it                                | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                                                           |
-| 83¹ | A typed duration overwritten by the calendar factor landing                     | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                                                                |
-| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns                 | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                                                               |
-| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                                       | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                                                               |
-| 137 | The shortcuts sheet was inert while the Gantt was on screen                     | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                                                                   |
-| 126 | The two segmented pairs had no icons, so they could not go icon-only            | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.                                                        |
-| 129 | The 56 px app header row was the last recoverable band above the canvas         | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.                                                |
+| #   | What it was                                                                     | Closed     | Where the record is                                                                                                                                                                        |
+| --- | ------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 106 | `render-model.ts` could not be barrel + core model without a cycle              | 2026-08-30 | ADR-0078 S8. `render/geometry.ts` exists; the barrel is 128 lines.                                                                                                                         |
+| 109 | `bulkDelete` cascaded one activity at a time under the plan lock                | 2026-08-30 | `cascadeSoftDeleteActivityLeaves`, shipped in `3cf27de4` (an ADR-0082/0083/0084/0085 commit).                                                                                              |
+| 104 | The manual Recalculate confirmation stood down against a settle that never came | 2026-08-30 | The row's own scenario was already guarded in the commit it was raised from; the real defect was the inverse. `settleIsComing`, two tests.                                                 |
+| 114 | Two menus hid rather than shaded, for want of a reason to show                  | 2026-08-30 | Verified in code: `menu.tsx:316-325` shades with `aria-disabled` and keeps roving focus; `plan-actions-menu.tsx:70` passes `disabledReason`; `tree-actions.ts` states the no-trigger rule. |
+| 127 | Toolbar touch targets were 40 × 36 against a 44 × 44 house rule                 | 2026-08-29 | ADR-0118 — the rule became per-pointer, and the coarse gate enforces it.                                                                                                                   |
+| 134 | A `render` item outranked every command on its row                              | 2026-08-30 | ADR-0109 D1 deleted the ladder; the diagnosis was right and the remedy expired with it.                                                                                                    |
+| 144 | `e2e-multi-select`'s focus assertion failed under sweep load                    | 2026-08-30 | `focusListboxAfterModal` self-verifies; `e2e-overview`'s `createPlan` waits for the pen. Filed under #184.                                                                                 |
+| 146 | The `chrome` surface scope had no measured current-page state                   | 2026-08-30 | ADR-0109 D2 restored the header, so `e2e-designed-ui` D3 measures two scopes again.                                                                                                        |
+| 147 | The merged command strip stopped fitting below ~900 px                          | 2026-08-30 | ADR-0109 D1 — the surface wraps; the ladder, the `⋯` and the floor are gone.                                                                                                               |
+| 148 | Canvas date pills were painted on top of the first two lanes                    | 2026-08-22 | ADR-0106.                                                                                                                                                                                  |
+| 157 | Every colour gate was a floor and none a ceiling                                | 2026-08-21 | ADR-0102 — ANSWERED, deliberately no gate: the window is two points wide and tuned to two samples.                                                                                         |
+| 158 | The printed and exported diagram was painted on a near-black ground             | 2026-08-21 | ADR-0102.                                                                                                                                                                                  |
+| 159 | `--color-*` aliases were frozen at `:root`                                      | 2026-08-21 | ADR-0102 — the canvas painter had never once used the canvas surface scope.                                                                                                                |
+| 163 | The print palette was a surface family truncated to three members               | 2026-08-22 | ADR-0103 — `[data-surface="print"]` is all 31 members.                                                                                                                                     |
+| 164 | The exported diagram silently dropped seven default-on view layers              | 2026-08-22 | ADR-0103. One half remains open as **#166**.                                                                                                                                               |
+| 168 | Below `lg`, Escape closed and announced a drawer the reader could not see       | 2026-08-22 | ADR-0104.                                                                                                                                                                                  |
+| 201 | Two independent mode toggles read as one four-way group                         | 2026-08-30 | ADR-0119; released in `web-v0.115.3`.                                                                                                                                                      |
+| 213 | Two controls painted and not clickable at 390, and a 20 px breadcrumb           | 2026-08-29 | ADR-0118 M3 — the first was off-screen; the second is a named exception.                                                                                                                   |
+| 115 | The pen sentence named a button the reader could not see                        | 2026-08-09 | ADR-0083 M7 — one refusal sentence chosen from the live role and pen state.                                                                                                                |
+| 124 | The selection bar's `<Toolbar>` had no fit coverage                             | 2026-08-27 | ADR-0114 M1 — and the row's own reasoning was wrong: the bar could overflow, by 408 px.                                                                                                    |
+| 219 | The register's rows went stale and nothing measured how much                    | 2026-08-30 | ADR-0120 — `check:debt-status`; every row now carries a machine-readable status.                                                                                                           |
+| 220 | The reconciliation trigger's input was unsorted prose, and a reader misread it  | 2026-08-30 | ADR-0120 — `check:reconcile-due`, advisory at T = 8 ADRs; the pass table is sorted.                                                                                                        |
+| 98  | The guest share view scrolled sideways at 320 px (WCAG 1.4.10)                  | 2026-08-08 | ADR-0051 F-M4 era; closed by the guest-share responsive fix.                                                                                                                               |
+| 29  | Released images not pulled — "shipped but not live"                             | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                                                                                                          |
+| 59  | The device-authoritative draw measurement was never made                        | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                                                                                                                   |
+| 77  | The demo Unit 300 file was a lossy rendering of the fixture                     | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                                                                                                                         |
+| 78  | Public activity/dependency API was day-denominated                              | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                                                                                                               |
+| 79  | A window-only calendar was rejected by the API                                  | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                                                                                                                 |
+| 80  | Intraday shift patterns had no write path                                       | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                                                                                                                     |
+| 82  | Shift-editor epic — the non-blocking half of five gates                         | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                                                                                                                   |
+| 87  | Import rejected a file with two activities of the same name                     | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                                                                                                                   |
+| 90  | `idx_audit_events_actor_occurred` was never measured                            | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                                                                                                             |
+| 91  | A failed sign-in was recorded and readable by nobody                            | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                                                                                                             |
+| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                            | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites.                                                                                           |
+| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo                 | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                                                                                                             |
+| 94  | A verification email that never sends is invisible to everyone                  | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                                                                                                               |
+| 111 | The row menu hid pen-gated actions instead of shading them                      | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                                                                                                              |
+| 103 | ADR-0064's recalculation hold was not wired on the shipped host                 | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                                                                                                           |
+| 107 | ADR-0080 shipped without the specialist-agent review pass                       | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                                                                                                               |
+| 113 | Redo unavailable after undoing a band copy                                      | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                                                                                                                  |
+| 119 | The API e2e suite "fails intermittently"                                        | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                                                                                                                 |
+| 125 | `View ▾` held one toggle that ejects you from it                                | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                                                                                                           |
+| 83¹ | A typed duration overwritten by the calendar factor landing                     | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                                                                                                                |
+| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns                 | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                                                                                                               |
+| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                                       | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                                                                                                               |
+| 137 | The shortcuts sheet was inert while the Gantt was on screen                     | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                                                                                                                   |
+| 126 | The two segmented pairs had no icons, so they could not go icon-only            | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.                                                                                                        |
+| 129 | The 56 px app header row was the last recoverable band above the canvas         | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.                                                                                                |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
@@ -1600,56 +1601,6 @@ Non-blocking findings from the six specialist reviews over the W5 diff, recorded
 and only by activating twice inside one round trip.
 
 ---
-
-## 114. Two menus still hide rather than shade, for want of a reason to show
-
-**Status:** open ·
-
-**114.1 and 114.2 closed 2026-08-09** (ADR-0083 M7 — `scheduleRefusal`). What remains is **114.3**, and the heading is about that.
-**Owner:** web · **Raised:** 2026-08-08 (ADR-0082)
-
-> **Closed, and the blocker turned out not to exist.** This entry says the fix needs "a small piece
-> of gating work" because `canWrite` "cannot say whether the planner lacks the role or merely lacks
-> the pen". `derivePlanGating` has returned **`penReadOnly`** — exactly that distinction — since
-> ADR-0028. What was missing was never the data; it was that every caller assembled its own string
-> from the **fused** `canEditSchedule` and could therefore only guess. One shared
-> `scheduleRefusal(gating, holder, action)` now picks the frame from the live state, and eleven
-> hand-written sentences across the TSLD toolbar and the selection bar were deleted in favour of it.
->
-> And the `plan-actions-menu` case is **more** exact than this entry allowed for: `model.canWrite`
-> is `canManageHierarchy(role)`, role only and never pen-gated, so there is no pen branch there to
-> get wrong. That was checkable in one grep, and the entry's own premise had not been checked —
-> ADR-0076 Class 3, in the register rather than in a spec.
->
-> `#116.4` (the `HierarchyTree` row menu, filed as the third case) is closed **as correct by
-> design**: every action on a hierarchy node is a write, so for a Viewer _every_ item would shade,
-> and ADR-0082's own clause says such a menu renders no trigger. Changing it would give a Viewer a
-> menu of nothing but refusals on every row and reintroduce the focus trap the clause removes. The
-> rule is now written at `tree-actions.ts` so it is not rediscovered as an oversight a third time.
-
-ADR-0082 made a shaded menu item keep its place in the keyboard order and carry an
-`aria-describedby` reason, and applied it to the activities-table row menu. Two consumers are
-knowingly left behind, both recorded here rather than discovered again later — the ADR-0071 rule.
-
-**1. `plan-actions-menu.tsx:62-66` hides "Edit plan…" on `!model.canWrite`.** The blocker is not the
-markup, it is that **there is no sentence to show**. `canWrite` is a bare boolean; it cannot say
-whether the planner lacks the role or merely lacks the pen, and a sentence that guesses — telling
-someone "your role cannot do this" when they simply need the edit lock — is the exact false-statement
-defect ADR-0082 §2 records shipping twice. The fix is to give the plan scope a `ScopeGate` carrying
-its own reason, the way `deriveActivityEditorGating` does for activities, and then shade from it.
-Doing that properly is a small piece of gating work, not a markup change, which is why it is not
-folded into ADR-0082.
-
-**2. `Combobox` still skips disabled options by arrow key.** The APG's _Developing a Keyboard
-Interface_ practice names "Options in a Listbox" in the same keep-focusable list it names menu items
-in, so the argument transfers exactly. It is a separate primitive with `aria-activedescendant`,
-in-flow rendering, its own consumers and its own tests, and changing it inside ADR-0082 would widen
-the blast radius well past what the row menu needed. The decision to leave it is deliberate; the
-inconsistency between two APG primitives in one product is the cost.
-
-**Risk:** low for both. Nobody is blocked — the plan edit is reachable for anyone entitled to it, and
-a combobox's disabled options are not actions. Both are discoverability and consistency defects
-against ADR-0062 M6, which is a real reason to close them and not an urgent one.
 
 ## 116. Consolidation-pass findings that were not folded
 
