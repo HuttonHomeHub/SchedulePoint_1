@@ -18,6 +18,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css}\"",
     "typecheck": "turbo run typecheck",
+    "check:doc-register": "node scripts/lib/doc-register.test.mjs",
     "check:doc-links": "node scripts/check-doc-links.mjs",
     "check:playbook": "node scripts/check-playbook.mjs",
     "check:build-contract": "node scripts/check-build-contract.mjs",
