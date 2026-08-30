@@ -1,5 +1,23 @@
 # @repo/web
 
+## 0.115.1
+
+### Patch Changes
+
+- [#420](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/420) [`4a3d88e`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/4a3d88ecfc7e33f1c70af8ba2949b5b9552c85a3) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The printed programme, the printed diagram and the exported picture are set in the product's own
+  typeface.
+  
+  SchedulePoint is set in IBM Plex Sans. Six places set type by hand and had never received that
+  decision: both print stylesheets named `Inter` — a face this repository has no font file for, so
+  paper fell through to whatever the reader's machine defaulted to — and the four fonts in the
+  exported picture's title band named `system-ui`. The diagram inside an export was in the product's
+  face and the band around it was not, which is the one place the typeface is seen by someone other
+  than the planner who made it.
+  
+  A structural gate now derives the family from the design token and fails on any hand-set font in the
+  canvas or a stylesheet, so the next typeface decision cannot miss these layers again. It records
+  what it cannot see, including the favicon.
+
 ## 0.115.0
 
 ### Minor Changes
