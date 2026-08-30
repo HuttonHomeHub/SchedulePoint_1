@@ -49,8 +49,20 @@ The frontend is not a blank slate; most "new" structure has a precedent.
 
 - **A canvas-first plan workspace** (ADR-0030) with a shared orientation-aware
   resizable-panel primitive, and a declarative **toolbar registry** (ADR-0031) —
-  a 7-group taxonomy, three prominence tiers, responsive overflow. New plan
-  commands are registry entries, not new chrome.
+  a closed 7-group taxonomy. New plan commands are registry entries, not new chrome.
+  - **A command surface WRAPS; it never hides** (ADR-0109 D1). This bullet said
+    "three prominence tiers, responsive overflow" until 2026-08-30. There is no
+    overflow: `ToolbarOverflow`, `computeOverflow`, `computeLadder` and
+    `toolbar-ladder.ts` were all deleted, and `tier` survives as a declared field
+    that **nothing branches on at render** — so "three prominence tiers" described
+    a prominence the product does not paint. The 2026-08-25 pass corrected the
+    shell bullet directly above this one and left this one, which is the
+    "one control and not its neighbour" shape in a document.
+  - **A taxonomy group may render as N named sub-groups** (ADR-0119) when its items
+    declare a `segment` and the host passes `segmentLabels`. All-or-nothing: one
+    item without a named segment and the whole group falls back to a single region.
+    Reach for it when one taxonomy group holds two unrelated switches; see
+    `COMPONENT_LIBRARY.md` "Toolbar — when a group partitions".
 - **Surface scopes** (ADR-0055): one token vocabulary rebound per surface by
   `[data-surface]`. A new surface gets the **complete** family or it gets a trap
   — the original bug was a three-token stub. Do not quote the size here: it was

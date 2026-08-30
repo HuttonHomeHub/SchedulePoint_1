@@ -6377,3 +6377,59 @@ that link by `git log` on the file the row named.
 **Why it is debt and not a defect:** nothing is broken in the product. What is broken is the register's
 usefulness as an input to "what should we do next", which is the one job it has — and the cost has now
 been paid once, in a recommendation to the product owner for work that was already done.
+
+---
+
+## 220. The reconciliation trigger's input is unsorted prose, and a careful reader misread it
+
+**Raised:** 2026-08-30 · **Size:** S · **Status:** open
+
+> **This row's first version was built on a false claim and is rewritten rather than patched.** It
+> opened with a table asserting the cadence had failed **twice** — eleven epics before the
+> 2026-08-25 pass, then nine more before 2026-08-30. **The second half was wrong.** There was a pass
+> on **2026-08-28**; the real gap was **three** ADRs over two days, which is a healthy cadence. The
+> argument below is narrower and, unlike the version it replaces, is demonstrated by the mistake that
+> produced it.
+
+`docs/RECONCILE.md` says the pass runs **at each epic boundary**, with a three-month hard floor. The
+floor works, because a date is a fact a person can check. The trigger is weaker, and the reason is
+not that anybody forgets.
+
+**The evidence is this row's own history.** Auditing that file _specifically for staleness_, with the
+question "when was the last pass?" explicitly in mind, I read the pass table with `tail -8` and got
+2026-08-19. I noticed line order was not date order, corrected to 2026-08-25 — **and stopped at the
+first correction instead of sorting the column.** The table ran 08-20, 08-28, 08-30, 08-25, 08-19,
+08-18, and 08-28 was two rows above where I was looking. The banner at `:7` said "Last full pass:
+2026-08-28" and disagreed with the table's newest row, under a paragraph whose own rule is _record
+the pass, add the row, update the date — all three, in the same commit_.
+
+So the honest statement of the problem is **not** "people forget to run the pass". It is:
+
+> **The only record of when the pass last ran is unsorted prose with a contradicting summary line,
+> and reading it correctly is harder than it looks.**
+
+That is a much better argument for a computed observer than a missed deadline, because it does not
+depend on anyone's diligence. Both defects are repaired — the table is sorted newest-first and the
+banner agrees with it — which removes the tripwire and leaves the underlying fact: nothing computes
+the gap, and the answer still has to be derived by hand from two places that can disagree.
+
+**One measured failure survives, not two.** The 2026-08-25 pass found **eleven** epics with no pass
+since 08-20. That is real and quoted from the file. A gate is still worth building on one instance
+plus a demonstrated misreading — but "it happened twice" was the claim, and it was not true.
+
+**What is owed.** A `check:reconcile-due` deriving the gap from ADRs filed since the table's newest
+date, **warning loudly in the pre-push gate and never blocking CI** (product-owner decision,
+2026-08-30). Three things to settle, none obvious:
+
+1. **The threshold must be derived, not picked** — from the realised inter-pass intervals, with the
+   working shown. A threshold that fires constantly during a run of small epics gets ignored.
+2. **Warn, not fail — with the weakness written down.** A hard failure blocks a release on a
+   documentation chore, which is how a gate gets bypassed with `--no-verify`; once bypassed it is
+   bypassed always. The honest cost of warning is that **a warning is ignorable**, which is a real
+   objection and not one to design away.
+3. **An ADR is a proxy for an epic, not the thing.** Some epics file none and some file two, so the
+   trigger counts the wrong noun — acceptable only if stated.
+
+**This is a shared gate**, so it fires ADR-0105. Spec and plan are at `docs/specs/drift-gates/`,
+covering this and `#219(a)` as one epic — they are the same shape, a documented obligation with no
+computed observer, and share their parser.
