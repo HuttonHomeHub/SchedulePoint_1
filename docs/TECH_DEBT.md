@@ -65,7 +65,7 @@ Doing this after each epic, while the context is fresh, is cheaper than a sweep.
 
 | 28 | **TSLD canvas ring/stroke colour treatment** | From the D5 link-legality UX + a11y reviews. **(a)** The **legal** drop-target ring during a link-draw is visually identical to the ordinary **selection** ring (`paint.ts` — both `palette.selection`, solid, 2px), so two rings with different meanings can appear in the same style at once (predates D5). **(b)** The **illegal** ring reuses `palette.critical` (`--color-destructive`), the same token as the CPM critical-path **bar fill** (`paint.ts`), so an illegal drop hovered over a critical-path activity draws red-on-red — weaker contrast exactly where the signal matters, and overloads one colour for two meanings. **(c)** `--color-destructive` is documented (`globals.css`) as tuned for button surfaces; its use as a **state-border/stroke** on the canvas (the critical-bar outline too) wants a contrast check vs `--color-destructive-text` in both themes. | Cosmetic/robustness; the illegal ring is still distinguishable by its dash (colour + pattern, WCAG 1.4.1 holds), so not an AA failure. | Give the legal drop-target ring a distinct treatment from selection; pick a canvas "danger stroke" token distinct from the critical-bar fill; verify destructive-token stroke contrast in both themes when the canvas palette is next revised. |
 
-| **ADR-0031 toolbar fast-follows — three left** — _retitled 2026-08-17: this row was called "`VITE_CANVAS_TOOLBAR` ships dark during build" and described BOTH that flag and `VITE_CANVAS_WORKSPACE` as default-off and awaiting a flip. Both are **retired** (ADR-0088 D3, 2026-08-10 and 2026-08-17) and neither exists in `env.ts`. The whole rollout narrative, the flip-awaits-sign-off line and the "three layered flags" impact were expired premise; what is actually left is (c), (d) and (e) below._ | The ADR-0031 canvas-maximal toolbar layout is **the only plan workspace there is** — shipped, flipped, and its flag retired along with the alternative it selected. Three deferred fast-follows survive that history and are the entire content of this row: **(c)** the toolbar layout's **collapsed** state is session-local — `use-resizable-panel-prefs.ts:22,45` already persists `collapsed`, and `plan-workspace-toolbar.tsx` simply uses a local `useState(true)` instead, so this is one line rather than a hook rework; **(d)** on an **empty/uncalculated** plan the frame/lens/help commands are **hidden** (`isVisible: hasDiagram`) rather than shown-disabled-with-reason as the spec prefers — note this is now the minority answer in its own codebase, since ADR-0082 (menus) and ADR-0083 (fields) both settled on shade-with-a-reason, so reconcile spec↔code rather than leaving it as taste; **(e)** non-blocking a11y from the M5 audit — the toolbar does not `.focus()` the new roving stop when a `ResizeObserver` demote unmounts the focused button mid-session (falls back to `<body>`), `aria-orientation="horizontal"` is declared while Up/Down are also wired (a harmless superset), the segmented zoom presets are `aria-pressed` buttons rather than a `radiogroup`, and a manual NVDA/VoiceOver pass on the `CompactPenStatus` live region + Start/Stop/Take-over sequence is still owed. **(a) and (b) are closed** — the floating `SelectionActionsBar` stopped overlaying the scene entirely and joined the reserved chrome (workspace-chrome M3, 2026-08-13), and the three plan-chrome dialogs were deduped into `plan-chrome-dialogs.tsx` (2026-07-13). | (c) a planner's collapsed choice is forgotten on reload. (d) an empty plan gives no reason why commands are absent, which is the dead-end shape ADR-0082/0083 exist to prevent. (e) a keyboard user can lose focus to `<body>` on a resize. | Persist the collapsed state (one line); reconcile the empty-state hide-vs-shade against ADR-0082/0083 and update whichever of spec or code is wrong; clear the four a11y items, the NVDA/VoiceOver pass included. | Flip `VITE_CANVAS_TOOLBAR` default-on once signed off (**done**); mount the selection bar (**done**), dedup the dialogs (**done**); still to do: persist the collapsed state, reconcile the empty-state hide-vs-disable, and clear the non-blocking a11y recommendations as fast-follows once the layout has soaked. Rollout tracked in the flag comment (`env.ts`). |
+| 221 | **ADR-0031 toolbar fast-follows — three left** — _retitled 2026-08-17: this row was called "`VITE_CANVAS_TOOLBAR` ships dark during build" and described BOTH that flag and `VITE_CANVAS_WORKSPACE` as default-off and awaiting a flip. Both are **retired** (ADR-0088 D3, 2026-08-10 and 2026-08-17) and neither exists in `env.ts`. The whole rollout narrative, the flip-awaits-sign-off line and the "three layered flags" impact were expired premise; what is actually left is (c), (d) and (e) below._ | The ADR-0031 canvas-maximal toolbar layout is **the only plan workspace there is** — shipped, flipped, and its flag retired along with the alternative it selected. Three deferred fast-follows survive that history and are the entire content of this row: **(c)** the toolbar layout's **collapsed** state is session-local — `use-resizable-panel-prefs.ts:22,45` already persists `collapsed`, and `plan-workspace-toolbar.tsx` simply uses a local `useState(true)` instead, so this is one line rather than a hook rework; **(d)** on an **empty/uncalculated** plan the frame/lens/help commands are **hidden** (`isVisible: hasDiagram`) rather than shown-disabled-with-reason as the spec prefers — note this is now the minority answer in its own codebase, since ADR-0082 (menus) and ADR-0083 (fields) both settled on shade-with-a-reason, so reconcile spec↔code rather than leaving it as taste; **(e)** non-blocking a11y from the M5 audit — the toolbar does not `.focus()` the new roving stop when a `ResizeObserver` demote unmounts the focused button mid-session (falls back to `<body>`), `aria-orientation="horizontal"` is declared while Up/Down are also wired (a harmless superset), the segmented zoom presets are `aria-pressed` buttons rather than a `radiogroup`, and a manual NVDA/VoiceOver pass on the `CompactPenStatus` live region + Start/Stop/Take-over sequence is still owed. **(a) and (b) are closed** — the floating `SelectionActionsBar` stopped overlaying the scene entirely and joined the reserved chrome (workspace-chrome M3, 2026-08-13), and the three plan-chrome dialogs were deduped into `plan-chrome-dialogs.tsx` (2026-07-13). | (c) a planner's collapsed choice is forgotten on reload. (d) an empty plan gives no reason why commands are absent, which is the dead-end shape ADR-0082/0083 exist to prevent. (e) a keyboard user can lose focus to `<body>` on a resize. | Persist the collapsed state (one line); reconcile the empty-state hide-vs-shade against ADR-0082/0083 and update whichever of spec or code is wrong; clear the four a11y items, the NVDA/VoiceOver pass included. | Flip `VITE_CANVAS_TOOLBAR` default-on once signed off (**done**); mount the selection bar (**done**), dedup the dialogs (**done**); still to do: persist the collapsed state, reconcile the empty-state hide-vs-disable, and clear the non-blocking a11y recommendations as fast-follows once the layout has soaked. Rollout tracked in the flag comment (`env.ts`). |
 
 | 32 | **`btree_gist` extension install needs `CREATE`-on-database at deploy (ADR-0036, M1)** | The M1 calendar-shift migration (`20260715120100_calendar_shift_model`) runs `CREATE EXTENSION IF NOT EXISTS "btree_gist"` — the **first** `CREATE EXTENSION` in the project — to back the GiST `EXCLUDE` non-overlap constraints on shifts/exception windows. Under ADR-0018 the self-migrating container runs `prisma migrate deploy` as the app DB role; a least-privilege managed Postgres role may lack `CREATE`-on-database. `btree_gist` is a **trusted** extension on PG13+, so a role with `CREATE` can install it, and the CI `image` smoke-boot exercises the whole migration via the entrypoint successfully — but this has not been run against a locked-down managed instance. | If the prod migration role lacks `CREATE`-on-database, `migrate deploy` aborts at container startup, blocking the entire release (not just calendars). | Before the first M1 deploy to a managed host, confirm the migration role has `CREATE`-on-database, or pre-install `btree_gist` out-of-band (superuser) so `IF NOT EXISTS` is a no-op. Record the chosen approach in `docs/DEPLOYMENT.md`. |
 
@@ -1048,33 +1048,51 @@ dangling.
 
 One line each. The story lives where the link points, not here.
 
-| #   | What it was                                                             | Closed     | Where the record is                                                                              |
-| --- | ----------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------ |
-| 29  | Released images not pulled — "shipped but not live"                     | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                |
-| 59  | The device-authoritative draw measurement was never made                | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                         |
-| 77  | The demo Unit 300 file was a lossy rendering of the fixture             | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                               |
-| 78  | Public activity/dependency API was day-denominated                      | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                     |
-| 79  | A window-only calendar was rejected by the API                          | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                       |
-| 80  | Intraday shift patterns had no write path                               | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                           |
-| 82  | Shift-editor epic — the non-blocking half of five gates                 | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                         |
-| 87  | Import rejected a file with two activities of the same name             | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                         |
-| 90  | `idx_audit_events_actor_occurred` was never measured                    | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                   |
-| 91  | A failed sign-in was recorded and readable by nobody                    | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                   |
-| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                    | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites. |
-| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo         | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                   |
-| 94  | A verification email that never sends is invisible to everyone          | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                     |
-| 111 | The row menu hid pen-gated actions instead of shading them              | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                    |
-| 103 | ADR-0064's recalculation hold was not wired on the shipped host         | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                 |
-| 107 | ADR-0080 shipped without the specialist-agent review pass               | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                     |
-| 113 | Redo unavailable after undoing a band copy                              | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                        |
-| 119 | The API e2e suite "fails intermittently"                                | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                       |
-| 125 | `View ▾` held one toggle that ejects you from it                        | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                 |
-| 83¹ | A typed duration overwritten by the calendar factor landing             | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                      |
-| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns         | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                     |
-| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                               | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                     |
-| 137 | The shortcuts sheet was inert while the Gantt was on screen             | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                         |
-| 126 | The two segmented pairs had no icons, so they could not go icon-only    | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.              |
-| 129 | The 56 px app header row was the last recoverable band above the canvas | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.      |
+| #   | What it was                                                               | Closed     | Where the record is                                                                                        |
+| --- | ------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------- |
+| 106 | `render-model.ts` could not be barrel + core model without a cycle        | 2026-08-30 | ADR-0078 S8. `render/geometry.ts` exists; the barrel is 128 lines.                                         |
+| 109 | `bulkDelete` cascaded one activity at a time under the plan lock          | 2026-08-30 | `cascadeSoftDeleteActivityLeaves`, shipped in `3cf27de4` (an ADR-0082/0083/0084/0085 commit).              |
+| 127 | Toolbar touch targets were 40 × 36 against a 44 × 44 house rule           | 2026-08-29 | ADR-0118 — the rule became per-pointer, and the coarse gate enforces it.                                   |
+| 134 | A `render` item outranked every command on its row                        | 2026-08-30 | ADR-0109 D1 deleted the ladder; the diagnosis was right and the remedy expired with it.                    |
+| 144 | `e2e-multi-select`'s focus assertion failed under sweep load              | 2026-08-30 | `focusListboxAfterModal` self-verifies; `e2e-overview`'s `createPlan` waits for the pen. Filed under #184. |
+| 146 | The `chrome` surface scope had no measured current-page state             | 2026-08-30 | ADR-0109 D2 restored the header, so `e2e-designed-ui` D3 measures two scopes again.                        |
+| 147 | The merged command strip stopped fitting below ~900 px                    | 2026-08-30 | ADR-0109 D1 — the surface wraps; the ladder, the `⋯` and the floor are gone.                               |
+| 148 | Canvas date pills were painted on top of the first two lanes              | 2026-08-22 | ADR-0106.                                                                                                  |
+| 157 | Every colour gate was a floor and none a ceiling                          | 2026-08-21 | ADR-0102 — ANSWERED, deliberately no gate: the window is two points wide and tuned to two samples.         |
+| 158 | The printed and exported diagram was painted on a near-black ground       | 2026-08-21 | ADR-0102.                                                                                                  |
+| 159 | `--color-*` aliases were frozen at `:root`                                | 2026-08-21 | ADR-0102 — the canvas painter had never once used the canvas surface scope.                                |
+| 163 | The print palette was a surface family truncated to three members         | 2026-08-22 | ADR-0103 — `[data-surface="print"]` is all 31 members.                                                     |
+| 164 | The exported diagram silently dropped seven default-on view layers        | 2026-08-22 | ADR-0103. One half remains open as **#166**.                                                               |
+| 168 | Below `lg`, Escape closed and announced a drawer the reader could not see | 2026-08-22 | ADR-0104.                                                                                                  |
+| 201 | Two independent mode toggles read as one four-way group                   | 2026-08-30 | ADR-0119; released in `web-v0.115.3`.                                                                      |
+| 213 | Two controls painted and not clickable at 390, and a 20 px breadcrumb     | 2026-08-29 | ADR-0118 M3 — the first was off-screen; the second is a named exception.                                   |
+| 115 | The pen sentence named a button the reader could not see                  | 2026-08-09 | ADR-0083 M7 — one refusal sentence chosen from the live role and pen state.                                |
+| 124 | The selection bar's `<Toolbar>` had no fit coverage                       | 2026-08-27 | ADR-0114 M1 — and the row's own reasoning was wrong: the bar could overflow, by 408 px.                    |
+| 29  | Released images not pulled — "shipped but not live"                       | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                          |
+| 59  | The device-authoritative draw measurement was never made                  | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                                   |
+| 77  | The demo Unit 300 file was a lossy rendering of the fixture               | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                                         |
+| 78  | Public activity/dependency API was day-denominated                        | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                               |
+| 79  | A window-only calendar was rejected by the API                            | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                                 |
+| 80  | Intraday shift patterns had no write path                                 | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                                     |
+| 82  | Shift-editor epic — the non-blocking half of five gates                   | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                                   |
+| 87  | Import rejected a file with two activities of the same name               | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                                   |
+| 90  | `idx_audit_events_actor_occurred` was never measured                      | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                             |
+| 91  | A failed sign-in was recorded and readable by nobody                      | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                             |
+| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                      | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites.           |
+| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo           | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                             |
+| 94  | A verification email that never sends is invisible to everyone            | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                               |
+| 111 | The row menu hid pen-gated actions instead of shading them                | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                              |
+| 103 | ADR-0064's recalculation hold was not wired on the shipped host           | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                           |
+| 107 | ADR-0080 shipped without the specialist-agent review pass                 | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                               |
+| 113 | Redo unavailable after undoing a band copy                                | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                                  |
+| 119 | The API e2e suite "fails intermittently"                                  | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                                 |
+| 125 | `View ▾` held one toggle that ejects you from it                          | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                           |
+| 83¹ | A typed duration overwritten by the calendar factor landing               | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                                |
+| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns           | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                               |
+| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                                 | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                               |
+| 137 | The shortcuts sheet was inert while the Gantt was on screen               | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                                   |
+| 126 | The two segmented pairs had no icons, so they could not go icon-only      | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.                        |
+| 129 | The 56 px app header row was the last recoverable band above the canvas   | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.                |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
@@ -1288,7 +1306,7 @@ open-ended rather than bounded by a poll interval, because there is no poll.
 
 ## 101. `check:claims` completeness has structural blind spots
 
-**Status:** open, narrowed · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
+**Status:** open (narrowed) · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
 **Narrowed:** 2026-08-08 (W5 M2-T4)
 
 `pnpm check:claims` (ADR-0076) shipped matching one citation form, `<base>.mjs:<line>`, and passed
@@ -1440,50 +1458,6 @@ blocked the epic.
    listbox row text one producer (`composeListboxRowText`, consumed by both the row and the
    announcement). The export legend is the third instance of the same shape, left alone.
 
----
-
-## #106 — `render-model.ts` cannot become "barrel + core model": the core must be its own module **(CLOSED 2026-08-30)**
-
-> **Closed by the 2026-08-30 verification sweep**, having shipped and never been ticked off.
-> `render/geometry.ts` exists, `render-model.ts` is **128 lines** rather than the 1,500 this row
-> recorded, and its own docblock cites this number for the move. Every consumer is unchanged —
-> ADR-0078 §3's barrel-preserving rule, which is what made each extraction reviewable.
->
-> **One clause of the fix as written did not ship, and that is deliberate rather than missed.** The
-> row asked for "a barrel that re-exports and holds nothing"; the file still holds the ADR-0052 M4
-> bar-glyph model (radii, progress-band geometry, `barGlyphKind`). Its docblock owns that: the model
-> is coherent, ADR-0078 does not call for moving it, and moving it because the file was being touched
-> anyway is the drive-by churn §2 forbids. The **cycle** this row exists about is gone, which is the
-> claim that mattered.
-
-**Found:** 2026-08-07, doing ADR-0078 S8's first extraction.
-**Blocks:** the `link-routing`, `viewport` and `hit-test` extractions (ADR-0078 S8's remainder).
-
-The decomposition plan (`docs/specs/canvas-decomposition/plan.md` §3.2) describes the end state as
-`render-model.ts` = **barrel + what is genuinely the model** — the types, `activityRect`, the glyph
-geometry — with `link-routing.ts` and friends beside it. That shape does not work, and the reason is
-countable rather than a matter of taste: the link-routing region uses `activityRect` **eight times**
-plus `screenXOfDay`, `BAR_HEIGHT`, `RectCache` and the core types, so `link-routing.ts` must import
-from `render-model.ts`, which re-exports `link-routing.ts`. A genuine import cycle.
-
-ES modules tolerate cycles, so this would have compiled and passed — which is exactly why it is
-worth recording rather than discovering later. A cycle at the foundation of a decomposition is the
-wrong thing for four more modules to be built on.
-
-**The fix** is that the core model becomes a module of its own (`geometry.ts` or similar), leaving
-`render-model.ts` a **pure** barrel over `geometry` / `working-time` / `link-routing` / `viewport` /
-`hit-test` — a barrel that re-exports and holds nothing. Then every module depends only on
-`geometry`, and nothing depends on the barrel.
-
-**Why it is not done here.** It is a bigger move than one step, and ADR-0078's own rule is that a
-step which needs more than a move is wrong and must be split. `working-time.ts` was extractable
-today precisely because its whole surface needs only `DependencyType`; it went first for that
-reason, and the ordering rule it demonstrates — _lift only what depends on nothing that will be
-re-exported around it_ — is the thing the next step needs to follow.
-
-**Not urgent.** Nothing is broken: `render-model.ts` is 1,500 lines rather than 1,660 and every
-consumer is unchanged. This is the shape of the remaining work, written down while it is fresh.
-
 ## #108 — The plural drag: model, command and endpoint landed; the gesture did not
 
 **Status:** unverified · **Found:** 2026-08-08, by the component review over the ADR-0080 diff.
@@ -1554,51 +1528,9 @@ after. Writing it first also caught its own bug: the shared plan's bars have bee
 by earlier steps, so the one-column probe found one bar rather than three, which would have read as
 a product defect had the step been written after the fix.
 
-## #109 — `bulkDelete` cascades one activity at a time under the plan-wide advisory lock **(CLOSED 2026-08-30)**
-
-> **Closed by the 2026-08-30 verification sweep. It was fixed on 2026-08-09 and nobody came back
-> here** — which is the more useful half of the closure, because the reason is structural rather
-> than forgetfulness. The fix rode in `3cf27de4`, a commit whose title and body are about ADR-0082
-> (shade rather than hide), ADR-0083, ADR-0084 (flag expiry) and ADR-0085: a reader of that PR had
-> no cue to open this row, and a reader of this row had no cue to open that PR. **A fix that lands
-> inside an epic named for something else leaves its register row untouched by default.**
->
-> `HierarchyLifecycleService.cascadeSoftDeleteActivityLeaves` is the row's **first** option taken
-> verbatim — the ADR-0053 M6 move applied set-wise — and it cites this number in its own docblock.
-> Four `updateMany` sweeps for the whole batch replace ~10,000 round trips at the DTO's ceiling. The
-> subtree walk is skipped safely because `bulkDelete` refuses a `WBS_SUMMARY` (422
-> `SUMMARY_NOT_BULK_ELIGIBLE`), so every id it passes is a leaf; that refusal is now load-bearing for
-> correctness and is **asserted rather than assumed** — a summary reaching the path throws.
->
-> **What the row asked for and did not get: the measurement.** It required the choice between
-> batching and lowering the cap to rest on a reading at 500 / 2,000 rows. Batching was taken without
-> one. That is defensible — batching makes the cap question moot rather than trading against it, and
-> ADR-0053 M6 had already measured the identical shape at ~830 ms → ~13 ms — but it is not what the
-> row said, and recording the closure as unconditional would be the drift this sweep exists to find.
-
-**Found:** 2026-08-08, by the security review over the ADR-0080 diff (non-blocking, hardening).
-
-`ActivitiesService.bulkDelete` loops `cascadeSoftDelete` once per id, each doing several
-`updateMany`/`findMany` calls, **while holding `acquirePlanWriteLock`**. The sibling batch writes
-(`updatePlacements`, `updateLanePositions`, `updateParents`) are single set-based `unnest`
-statements. At the DTO's `@ArrayMaxSize(2000)` that is on the order of 10,000 queries with the
-plan-wide lock held, so any Planner can lock out every other structural writer on that plan for the
-duration. Not an authorisation defect — a self-service availability one.
-
-This is the shape ADR-0053 M6 already fixed once, measuring **~830 ms → ~13 ms** for a 2,000-row
-GROUP delete by batching the per-descendant advisory-lock loop into one `unnest`. Reintroduced here
-because the cascade helper is per-entity by design.
-
-**The fix** is either to batch the cascade's sweeps set-wise (the ADR-0053 M6 move, applied to
-`HierarchyLifecycleService`), or to lower `bulk-delete`'s cap well below 2,000 — with the choice
-made on a **measurement** at 500 / 2,000 rows rather than on instinct, since the catalogue's scale
-plans make that cheap to take.
-
----
-
 ## 110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
 
-**Status:** open, deferred on a measured trigger · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4)
+**Status:** deferred (on a measured trigger) · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4)
 
 `docs/specs/activity-copy-paste/` planned an optional **Milestone B** — `POST
 …/plans/:planId/activities/duplicate`, making a band copy atomic: one transaction, one pen
@@ -1681,7 +1613,9 @@ and only by activating twice inside one round trip.
 
 ## 114. Two menus still hide rather than shade, for want of a reason to show
 
-**Status:** **114.1/114.2 closed 2026-08-09** (ADR-0083 M7 — `scheduleRefusal`); 114.3 open ·
+**Status:** open ·
+
+**114.1 and 114.2 closed 2026-08-09** (ADR-0083 M7 — `scheduleRefusal`). What remains is **114.3**, and the heading is about that.
 **Owner:** web · **Raised:** 2026-08-08 (ADR-0082)
 
 > **Closed, and the blocker turned out not to exist.** This entry says the fix needs "a small piece
@@ -1726,50 +1660,6 @@ inconsistency between two APG primitives in one product is the cost.
 **Risk:** low for both. Nobody is blocked — the plan edit is reachable for anyone entitled to it, and
 a combobox's disabled options are not actions. Both are discoverability and consistency defects
 against ADR-0062 M6, which is a real reason to close them and not an urgent one.
-
----
-
-## 115. The pen sentence names a button the reader cannot see when a peer holds the lock
-
-> **Closed 2026-08-09** (ADR-0083 M7). `penReason(action, holder)` landed first for the activity
-> editor; M7 routed the remaining eleven sites — nine on the TSLD toolbar, five on the selection
-> bar (sharing one phrase) — through `scheduleRefusal`, which wraps it and adds the **role** branch
-> this entry did not cover. The verb stayed per-site, because the nine never said the same thing:
-> a shared constant could not have fixed it and a shared builder could.
-
-**Status:** CLOSED (the line above said so since 2026-08-09; this line said `open` until the
-2026-08-28 correctness pass verified the closure against the code — `penReason(action, holder)`
-exists, is exported from `features/plan-lock`, and `plan-gating.ts:75` routes the pen branch
-through it — and removed the contradiction. Two status lines disagreeing is worse than either.)
-· **Owner:** web · **Raised:** 2026-08-08 (found by the ADR-0082 journey step)
-
-`deriveActivityEditorGating`'s `NO_PEN` sentence is **"Start editing to change this activity."**, and
-the TSLD toolbar shades its pen-gated commands with the same form in eight places
-(`tsld-toolbar-items.tsx:248,435,1824,1840,2197,2247,2281,2326`). That sentence is right in the
-common case — the plan is open, nobody holds the pen, and **Start editing** is on screen.
-
-It is **wrong when a peer holds the pen**, and the ADR-0082 journey step demonstrates it in one run
-rather than by argument: in `e2e-edit/pen-handoff.spec.ts` the same page asserts, within a few lines
-of each other, that B sees a **Request control** button (`New activity` is absent) and that B's row
-menu explains the refusal with _"Start editing to change this activity."_ There is no **Start
-editing** button on that screen. The reader is told to press something that is not there, and the
-control that would actually help them — Request control — is not named.
-
-**Why it was not fixed with ADR-0082.** The sentence is a year old and shared by nine call sites; the
-row menu is the tenth consumer, not the origin. Fixing it means threading the held-by-other state
-into the gate so it can pick between two sentences, then re-wording eight toolbar reasons in step —
-which changes shipped copy across the whole canvas toolbar and deserves its own slice rather than
-riding a primitive's accessibility fix. ADR-0060's own record warns against the other failure mode
-here: an earlier draft invented _"Someone else is editing this plan. Take over the edit lock…"_,
-which was **false** in the common case, so this must be a branch on real state and not a re-wording.
-
-**The point ADR-0082 does close** is that both surfaces now say the _same_ thing, so this is one
-sentence to correct rather than two mental models to reconcile.
-
-**Risk:** low. A planner in this state has a lit **Request control** button in the chrome; the
-sentence sends them looking for the wrong one first. Worth a slice, not urgent.
-
----
 
 ## 116. Consolidation-pass findings that were not folded
 
@@ -2199,108 +2089,6 @@ independently. But a gate that fails one run in three and is green on the retry 
 learn to re-run rather than read, which is the failure mode `docs/RECONCILE.md` describes for
 documentation and applies just as well here.
 
----
-
-## 124. The selection bar's `<Toolbar>` has no fit coverage, and its failure mode is a different one
-
-**Status:** CLOSED 2026-08-27 by the foot-row epic's M1 — **and the row's own reasoning was wrong
-about why it was safe, in a way that let a live defect ship.**
-
-`e2e-workspace-fit/command-surface.spec.ts` now sweeps the bar at every targeted width with the same
-`elementFromPoint` descent the deck sweep uses, verified red first.
-
-Everything below the line is preserved as written. Two of its claims had stopped being true and
-nobody re-read them:
-
-- **"The floating bar … is clamped to the viewport, not to a container it can overflow. It cannot
-  fail S1/S2/S4 because there is nothing for it to overflow."** The bar has not floated since
-  ADR-0092 docked it. Measured at M0, its content is 1753 px against containers of 1619 px at 1920
-  and 1345 px at 1646, and it overflowed **by 134 and 408 px** — putting one control off-screen on
-  the 24″ monitor and four at 1646.
-- **"this is a coverage gap rather than a correctness one."** It was both, for as long as this row
-  said otherwise.
-
-The lesson is the row's status, not its content: a deferral whose reason has expired reads exactly
-like a deferral whose reason still holds, and nothing re-checks it. This is ADR-0058's rule applied
-to the register itself.
-
----
-
-**Status (original):** open. Opened by ADR-0090 M1.
-
-`apps/web/e2e-toolbar-fit/` gates the two persistent command rows: at every targeted width, every
-control is a ≥ 24 px target that a pointer can actually land on. `selection-actions.tsx:395` mounts a
-**third** `<Toolbar>` on the identical `measure()` / `computeOverflow` path, so M1's repair reaches it
-by construction — there is one primitive and this consumer instantiates it, which is why this is a
-coverage gap rather than a correctness one.
-
-**But the gate's assertions would be meaningless about it.** The floating bar shrink-wraps to its
-content and is clamped to the **viewport** (`:358-361`), not to a container it can overflow. It
-cannot fail S1/S2/S4 because there is nothing for it to overflow; what it _can_ do is run off a
-viewport edge, which none of those assertions describe. Post-M2 it may carry 8–9
-`showLabel: 'always'` items with entry-route + WBS + copy-paste flags on, so the question is real.
-
-**A test for it was written during M1 and removed.** It located the bar by a guessed accessible name
-(`/selection|selected/i`), matched nothing, and `test.skip`ped — reporting success for never having
-run, which is worse than no coverage because it looks like coverage. The bar's real name is built
-from its target (`Actions for <activity>`), and it mounts from a canvas selection rather than a table
-click, so exercising it needs a canvas gesture the fit gate has no other reason to perform.
-
-**What to do:** cover it when M3 does the responsive/touch work, where viewport-edge behaviour is the
-subject anyway, and assert the thing that can actually go wrong — that the bar stays fully inside the
-viewport at 960 and 768 with its widest plausible item set. Raised by `component-reviewer` during the
-ADR-0090 pre-approval pass as a suggestion, and recorded rather than silently left out of scope.
-
-## 127. The toolbar's touch targets are 40 × 36, and the house rule is 44 × 44 — CLOSED
-
-**Raised:** 2026-08-12 (ADR-0090 M3-T4) · **Size:** M · **Closed:** 2026-08-29 (ADR-0118 M2)
-
-**Closed by giving `--control-h` a coarse-pointer axis** rather than by a padding tweak: under
-`@media (pointer: coarse)` the token re-values to 44 px, the command deck reads it instead of a
-literal `min-h-9`, and `pointer-coarse:min-w-(--control-h)` closes the minor axis too. An icon-only
-deck control goes **32 × 36 → 44 × 44** on touch and is unchanged on a fine pointer.
-
-**The reasoning below was answered by measurement, and it was wrong about the size of its own
-objection.** It says raising the height "adds 16 px to the vertical stack for every user", and that
-is exactly what the axis avoids: measured at 1646 (ADR-0118 M0-T2, three runs, zero spread) the
-change costs a mouse user **0 px** — the fine default stays 36 — and a touch user **16 px of 808,
-2.0 %**. It also expected ≥ 36 px: the deck holds **two** rows, so a taller control makes those rows
-taller rather than wrapping a third, and the cost is `2 × 8`, linear. The prediction was wrong by
-more than a factor of two and landed on the exact pixel of its own falsification boundary.
-
-Its closing instruction — "raising the floor in `e2e-toolbar-fit`'s coarse test is the one-line
-change that proves this closed" — could not be followed: ADR-0109 D1 deleted that suite. The proof
-is instead a **second projection** of `e2e-workspace-fit`'s sweep under its own `hasTouch` context,
-asserting ≥ 44 on both axes and verified red against a caret with its coarse floor removed.
-
-<details><summary>The original row</summary>
-
-**Raised:** 2026-08-12 (ADR-0090 M3-T4) · **Size:** M · **Owner:** M4, or a vertical-rhythm pass
-
-`docs/UX_STANDARDS.md` says **"Touch targets ≥ 44px"**. Under `@media (pointer: coarse)` a toolbar
-control is now **40 × 36** — M3-T4 widened `px-2` → `px-3`, taking an icon-only button from 32 to 40.
-So one axis moved and the other did not, and this row exists so that is stated rather than implied by
-a milestone that says "touch" in its title.
-
-**It is not a regression and it is not new**: 32 × 36 failed the same rule on both axes before this
-epic, and nothing here made it worse. WCAG 2.2 §2.5.8 (24 px) is met and gated by
-`e2e-toolbar-fit`'s S5/S7; the house rule is stricter than the standard, deliberately, and it is the
-part still owed.
-
-**Why the minor axis was not simply raised.** It is `min-h-9` on the control whose row height this
-entire epic is trying to reduce — the reported defect was a two-row band eating canvas on a 24"
-monitor. Raising 36 → 44 adds 16 px to the vertical stack for every user, including the desktop users
-who reported the problem, and it can be done under `pointer-coarse` alone only if the band's height
-is allowed to differ by input device, which changes how much canvas a planner has depending on
-whether they are touching the screen. That is a layout decision with a measurement attached, and M4
-is the milestone that measures the vertical stack (`M4-T1 — Measure the vertical stack **first**`).
-
-**What to do:** take it with M4's numbers in hand. The assertion in `e2e-toolbar-fit`'s coarse-pointer
-test is deliberately written against 40 and 36 — the figures actually delivered — so raising the
-floor there is the one-line change that proves this closed.
-
-</details>
-
 ## 128. The multi-select journey's post-delete focus assertion is flaky, ~1 run in 4
 
 **Status:** unverified · **Raised:** 2026-08-12 (ADR-0090 M3) · **Size:** M · **Owner:** whoever next touches the bulk delete
@@ -2519,57 +2307,6 @@ and accepted cost, not an eviction. The 2.5.8 geometry stays gated (`pointer-coa
 `TOOLBAR_CARET_TARGET` are live); the tooltip-primitive question this row's siblings raise stays
 with #131/#204(a).
 
-## 134. A `render` item outranks every command on its row, and nothing says so **(CLOSED 2026-08-30 — the subject was deleted)**
-
-> **Closed by the 2026-08-30 verification sweep, and by deletion rather than by fix.** ADR-0109 D1
-> deleted `toolbar-ladder.ts`, `computeLadder`, `LadderItem`, `demotable` and the demotion pass
-> entirely: a command surface **wraps**, so nothing is ranked and nothing is shed. Verified —
-> `computeLadder`, `LadderItem`, `demotable` and `PINNED_FLOOR_WIDTH` have no definition anywhere in
-> `apps/web/src`.
->
-> Both halves of what this row asked for are therefore unimplementable as written: there is no
-> `LadderItem.demotable` to document, and no ladder to teach about `render` ranks. **Its diagnosis
-> was right and its remedy expired**, which is a distinction worth keeping — the row predicted the
-> shape correctly twice (ADR-0094's `next-conflict`, ADR-0099 M5's `recalculate`) and both local
-> `priority` constants it complained about are now inert alongside the machinery that read them
-> (`#193`'s dead-export half).
->
-> **The closing observation stands and outlived the mechanism.** Four consecutive epics whose width
-> expectation their own measurement contradicted became eight by ADR-0115 — always in the same
-> direction — which is why ADR-0109 stopped tuning the row and changed what a row is.
-
-**Raised:** 2026-08-14 (ADR-0094 M5) · **Size:** S · **Risk if left:** medium
-
-`computeLadder`'s Stage 2 demotes by `priority`, defaulting to `-order`. A **`render` item has no
-rank at all** — it is not demotable, so it never enters the queue — which means every pinned
-read-out, popover trigger and segmented control on a row implicitly outranks every plain command on
-it, at every width, whatever their relative importance.
-
-That is usually harmless and once was not. ADR-0094 promoted `next-conflict` to tier 1 and put a
-count chip beside it; the chip is a `render` item, so the ~130 px it takes the instant a plan HAS a
-conflict pushed the button it labels into the `⋯` — a count on the row beside no way to act on it,
-in the only state that epic exists for. The fix was `priority: 90` on that one command, which is
-correct and local and does nothing for the next occurrence.
-
-**It happened again, and the row predicted the shape exactly.** ADR-0099 M5 merged the two rows onto
-one budget and `recalculate` fell into the `⋯` at **every** width from 768 to 2133 — ranked **−7
-because it registered eighth**, not because anyone judged it eighth. The fix was `priority: 95` on
-that one command: the second local constant, applied for the second time, by an author who had this
-row available and did not reach for it. `docs/TECH_DEBT.md` #133 then found a **third** eviction of
-the same class under a coarse pointer, which no `priority` can answer at all.
-
-**What is owed is a rule, not a constant.** Either a `render` item declares a rank and the ladder
-honours it when deciding what to shed (which needs a way for a non-demotable item to _withdraw_, as
-the Project-finish chip and the conflict read-out both do by hand with `bandIsAtLeast`), or the
-asymmetry is documented at `LadderItem.demotable` so the next author reaches for `priority` on
-purpose rather than after a journey finds it. Prefer the second first: it is a docblock and a test,
-and the first is a ladder change with three consumers.
-
-**Related, and the reason this is worth a row rather than a comment:** ADR-0094's own record notes
-this is the **fourth consecutive epic** whose width expectation its own measurement contradicted
-(ADR-0091 D4, ADR-0092 M4, ADR-0093's withdrawn width argument, ADR-0094 M0-T1 and this). Four is
-enough to stop calling it coincidence and start calling it a property of the surface.
-
 ## 142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
 
 **Status:** unverified · **Raised:** 2026-08-19 (ADR-0098 M2, seen in the base and overview journeys) · **Size:** S ·
@@ -2656,59 +2393,6 @@ than a quick patch.
 **Blast radius if fixed:** every journey that reaches a client or project through `Clients` could
 then take the shorter route, so their locators would keep working; the risk is in the tree's own
 keyboard model, not in its consumers.
-
-## 144. `e2e-multi-select`'s focus assertion fails under sweep load and passes alone **(CLOSED 2026-08-30 — both halves)**
-
-> **Closed by the 2026-08-30 verification sweep.** Both halves shipped, each with a docblock naming
-> the mechanism this row named, and neither cited this number — which is why it stayed open.
->
-> **The product's wait is now self-verifying** rather than a bet on frame ordering, which is the
-> second of the two fixes this row offered. `focusListboxAfterModal` focuses, **checks whether it
-> won**, and retries next frame if the dialog's own restoration landed after it — bounded at five
-> frames, with the announcement firing exactly once whether or not the cap is reached, so a planner
-> cannot lose the confirmation as well as the focus. The row's insistence that the assertion is
-> right and the wait is thin is exactly how it was resolved: the assertion is untouched. It is filed
-> under `#184`, not here.
->
-> **The second suite is fixed at the same seam.** `e2e-overview`'s `createPlan` now waits for the
-> pen control — which renders only once the workspace has its plan — rather than for the click to
-> land, so `useRememberPlan`'s `planQuery.isSuccess` write cannot race the navigation away from it.
-> The helper's docblock records why the heading is **not** the signal: the identity line paints from
-> the route before the query resolves, so waiting on it would have looked like a fix and fixed
-> nothing.
-
-**Observed three times, 2026-08-19.** `multi-select.spec.ts:214` asserts that a bulk delete leaves
-focus on the activities listbox — a real assertion protecting a real defect (ADR-0080's gate pass
-found a bulk delete dropping focus to `<body>`, which is a WCAG 2.4.3 failure **and** silently
-disables Ctrl+Z, because the undo accelerator is a React `onKeyDown` on the workspace root).
-
-It fails whenever the suite runs inside `scripts/e2e-sweep.sh` and **passes every time the suite is
-run alone**. Verified by running it both ways on the same commit rather than inferred from a rerun.
-
-**The mechanism is a race the product wins with one frame of margin.** A native `<dialog>` restores
-focus to whatever held it when `showModal()` ran, from inside the effect that calls `close()` — i.e.
-_after_ the handler that asked for the listbox. `TsldPanel.tsx:674-679` therefore defers with a
-single `requestAnimationFrame`. Under sweep load — thirty-three suites in series, servers restarting
-between each — that one frame is not reliably after the dialog's restoration.
-
-**So the assertion is right and the wait is thin.** The fix is not to relax the assertion (it is the
-only thing standing between a planner and an unreachable undo) but to make the product's own wait
-robust: wait for the dialog's `close` event, or poll until `document.activeElement` is not `<body>`,
-rather than betting on frame ordering. Until then this costs triage time on every sweep, which is
-how a suite ends up being ignored.
-
-### A second suite joined it, 2026-08-20 (Graphite M5's sweep)
-
-`e2e-overview/overview.spec.ts:129` — "the landing offers the plans this browser was recently in" —
-went red under the sweep and **passes alone**, verified by running it both ways on the same commit
-rather than inferred. Its `createPlan` helper clicks through to the plan and navigates straight back
-to the landing without waiting for the workspace to settle, so the "remember this plan" write races
-the navigation away from it. Same shape as the row above and the same cost: a red line in a sweep
-that means nothing about the product, which is exactly how a real red gets waved through.
-
-Worth noting what this pair costs together, because it is the case for fixing them rather than
-re-triaging: the Graphite M5 sweep returned **31 green, 2 red, and one of the two reds was noise.**
-A gate that cries wolf once per run trains its reader to open the log expecting noise.
 
 ## 145. A hand-rolled `Combobox` takes the platform picker away on touch, and nobody has measured what that costs
 
@@ -2801,254 +2485,6 @@ shape, and the fifth epic running. Fixed with a regression test verified red fir
 (`CreateResourceButton.test.tsx`).
 
 </details>
-
-## 146. The `chrome` surface scope has no measured current-page state **(CLOSED 2026-08-30 — the premise lapsed)**
-
-> **Closed by the 2026-08-30 verification sweep, and by neither of the two options it offered.**
-> This row's whole premise was Graphite M3 moving the wordmark off the top bar and into the tool
-> rail, which put both of D3's sites in `panel`. **ADR-0109 D2 deleted the rail and restored the
-> header at every width**, so the brand link is back inside `ChromeBandRow`'s `<Surface tone="chrome">`
-> and D3 measures two scopes again — brand in `chrome`, the organisation destination in `panel`,
-> which is what it was built to do.
->
-> Verified by reading the composition rather than the suite: `chrome-band.tsx` wraps `AppHeaderRow`
-> in `Surface tone="chrome"`, and `org-destinations.tsx`'s `nav[aria-label="Organisation"]` renders
-> inside the docked navigator. Neither the expensive option (drive four theme variants through a
-> plan) nor the lossy one (measure the crumb in the token matrix, which cannot see which pair a
-> reader's eye lands on) was needed.
->
-> **`designed-ui.spec.ts`'s D3 comment is now the stale artefact** and is corrected in the same
-> commit: it still says both sites are `panel` and that `chrome` has no current-state site. The
-> assertion beneath it silently became correct again when the header returned — a green test whose
-> explanation describes a world that ended, which is the failure mode this register keeps recording
-> in the other direction.
-
-**Raised 2026-08-20 (Graphite M3/M4).** `e2e-designed-ui`'s D3 measures the `aria-current="page"`
-treatment that axe never looks at, and it did so at **two** sites in **two** scopes: the wordmark in
-`chrome` and the rail's current destination in `panel`. Its own comment said measuring one and
-calling it D3 "would leave whichever scope was dropped unmeasured for exactly the state axe never
-looks at".
-
-Graphite M3 deleted the top bar and moved the wordmark into the tool rail, so **both sites are now
-`panel`** and the argument for having two has collapsed into having one twice. The selector was
-re-pointed rather than deleted — the measurement follows the control — but the gap is real: on the
-screens that suite visits, the `chrome` scope paints no current state at all.
-
-Its only remaining site is the **breadcrumb's final crumb** (`breadcrumbs.tsx:58`, a
-`text-foreground font-medium` span carrying `aria-current="page"`), which renders solely inside a
-plan's identity row. Reaching it means driving each of the suite's four theme variants through a
-client, a project and a plan — real cost for one token pair, on a suite that already onboards four
-times.
-
-**Two ways to close it, neither obviously right yet.** Extend the theme sweep to a plan screen
-(honest, slow), or measure the crumb pair in the token contrast matrix instead (fast, but the matrix
-computes token-to-token ratios and cannot see that this pair is the one a reader's eye lands on).
-Graphite M10's gate pass is the natural place to choose, with the epic's own screenshots in hand.
-
-**Why it is debt rather than a defect:** the pair is very likely fine — `--foreground` on the chrome
-band's ground is already gated by `token-contrast.test.ts`. What is missing is the _measurement of
-the state_, which is precisely the class of thing this suite exists to catch and axe does not.
-
-## 147. The merged command strip stops fitting below ~900 px, and the eleven items that pin it cannot demote **(CLOSED 2026-08-30 — the subject was deleted)**
-
-> **Closed by the 2026-08-30 verification sweep, by deletion.** ADR-0109 D1 made the command surface
-> **wrap** rather than fit, and took `toolbar-ladder.ts`, the `⋯`, `PINNED_FLOOR_WIDTH` and the
-> `e2e-toolbar-fit` journey with it — so there is no floor to fall below and no pinned/demotable
-> distinction to be asymmetric about. Verified: none of those symbols has a definition in
-> `apps/web/src`.
->
-> Neither of the two costed narrowings was taken, and neither is owed: folding `Filter` into the
-> search field (−56 px) and dropping the group rules in `collapsed` (−65 px) were both priced
-> against a budget that no longer exists.
->
-> **What did not travel with the deletion is the coverage.** ADR-0110 M1 records that deleting the
-> fit journey took WCAG 2.5.8's only automated cover with it (`#186`), restored as a sweep in
-> `e2e-workspace-fit` — and that the restored sweep was itself blind to a split button's caret until
-> it was made to fail. A row closed because its subject was deleted is worth checking for exactly
-> that: what the deleted thing was also doing incidentally.
-
-**Raised 2026-08-20 (Graphite M5).** ADR-0099 M5 merges the two TSLD command rows into one
-`Plan commands` strip — the change that buys the canvas its last 49 px of height. The cost, measured
-rather than predicted, is that `e2e-toolbar-fit`'s `PINNED_FLOOR_WIDTH` rises **768 → 960**: below
-about 900 px of viewport the strip lays out wider than its container and scrolls horizontally.
-
-**Why, exactly.** ADR-0090 M3 earned the 768 floor by _removing pinned items_ from Row 1, and the
-pinned load it left was split across two rows. One row makes it additive. An item is pinned when it
-is a `render` item, and that is a sound rule rather than an oversight: a `render` item paints
-bespoke chrome and therefore has no `menuitem` form to demote **into**. Instrumented at 768 (a
-temporary `__ladderDebug` hook on `computeLadder`'s input, since removed), the ladder had already
-demoted **all twelve** demotable commands into the `⋯`, and the eleven survivors —
-
-| item           | px  |     | item       | px  |
-| -------------- | --- | --- | ---------- | --- |
-| `today`        | 58  |     | `undo`     | 32  |
-| `view`         | 52  |     | `redo`     | 32  |
-| `search`       | 156 |     | `summary`  | 52  |
-| `filter`       | 52  |     | `analysis` | 52  |
-| `add-activity` | 91  |     | `export`   | 52  |
-| `link-tool`    | 92  |     |            |     |
-
-— sum **720 px** against a **752 px** container that also owes 40 px of item gaps, 81 px of derived
-chrome and 41 px of `⋯`. The row laid out at **866**. Modelled minimum container is 882 px ⇒ ~898 px
-of viewport.
-
-**The first attempt was wrong, and the probe is why it did not ship.** `recalculate` carries
-`showLabel: 'always'` with a ~110 px label, so narrowing it to `{ atLeast: 'condensed' }` looked like
-the whole 114 px. The instrumented input showed `recalculate` has been in the `⋯` at _every_ width in
-the gate's list for the entire epic: pinning its label cost nothing and releasing it bought nothing.
-The change was reverted rather than kept as harmless, because its comment asserted a measurement that
-was false (ADR-0076 Class 3).
-
-**What still holds below the floor**, and it is the part that matters: the row is `overflow-x-auto`
-(ADR-0090 M1-T5), and at 768 the gate's S1 (nothing past the right edge after scrolling), S5 and S7
-(every target ≥ 24 px) all **pass**. The strip scrolls; no command becomes unreachable. 768 stays in
-`WIDTHS` and keeps being asserted for reachability — only the fits-outright claim moved.
-
-**Two candidate narrowings, with what each was measured to be worth.** Fold `Filter` into the search
-field (the narrowing ADR-0099 M5-T1 already named): **−56 px** (52 + one gap), leaving 810. Drop the
-five group rules (`ml-1 border-l pl-2`) in the `collapsed` band only, where a hairline separator is
-decoration the row cannot afford: **−65 px**, leaving 801. Both together reach 745 and clear 752, but
-only just, and each is a design change rather than a tune — which is why neither was taken under M5
-and both are recorded here with their numbers instead.
-
-**Corroborated by a second, independent instrument.** `measure-toolbar/graphite-strip.spec.ts`
-composes the strip from cloned real controls rather than reading the live row, and it puts the same
-boundary in the same place: `768` reports `fits: false` at **−40 px** of slack and every width from
-`960` up reports `fits: true` (`apps/web/measure-output/graphite-strip.json`). The absolute totals
-differ from the live row's — 760 against 866, because the clone models a _reduced_ strip — so the
-agreement worth having is the verdict boundary, not the number.
-
-**Why it is debt rather than a defect:** 768 is iPad portrait, where the TSLD workspace is already
-marginal (`#133` records that every toolbar measurement in this repository until ADR-0091 assumed a
-mouse), and the degradation is a scroll rather than a loss. Revisit with Graphite M10's screenshots,
-or the first time a planner works at that width.
-
-### Found alongside it: `priority` had never been a ranking
-
-`ToolbarItem.priority` defaults to `-order`, so most of the authoring cluster was ranked by
-**registration position**. On ADR-0031's two rows that was harmless — Row 2 had room for the whole
-cluster, so an unranked field is indistinguishable from a ranked one. The merge turns it into a
-decision about what a planner can reach, and two commands fell out of the row on it:
-`next-conflict` (ranked 90 for a rule about Row 1) and `Recalculate` (ranked −7 for registering
-eighth). Both are now ranked deliberately — 110 and 95 — with the reason in the registry.
-
-**The rest of the cluster is still on `-order`** and has not been re-examined: `marquee-select` −2,
-`auto-arrange` −3, `add-note` −4. None is currently causing a defect, and inventing ranks for them
-without a reported problem would be guessing. What is worth knowing is that on a single strip
-`-order` is a live default with consequences, not the inert convenience it was on two rows.
-
-### Found alongside it: the fit gate measured ordering in two frames of reference
-
-Raising the floor unmasked a **latent instrument bug** in `readRow`, which S4 had been failing before
-and therefore hiding. S9 ("the `⋯` is the row's rightmost control") compared `getBoundingClientRect`
-values gathered _inside_ the reachability sweep — and that sweep calls `scrollIntoView` on every
-item, which is its whole purpose. Once the row genuinely scrolled, scrolling `export` into view
-shifted the `⋯` 73 px left before its box was read, so the button that really ends the row measured
-a smaller `right` than its neighbour and S9 reported `export`. The product was correct throughout.
-
-It was invisible until now because the row had never overflowed at any width in `WIDTHS`, so every
-`scrollIntoView` was a no-op and every box happened to be read at the same offset. `readRow` is now
-two passes — ordering at one fixed scroll position, then reachability, which may scroll freely —
-and the reasoning is recorded in the function so the next reader does not merge them back.
-
-### Measured again at M10, at a width nobody had probed
-
-`Recalculate` was found in the `⋯` at **1646 and 1920** while it was **inline at 1280** — backwards,
-and not a ranking bug. Its `showLabel: 'always'` made it a 163 px command: cheap next to a row of
-icons at the narrow band, ruinous next to a row of words at the wide one. Dropping the pin puts it
-inline at 1920 and 1280.
-
-**At 1646 it is still in the menu, and that is this row's entry rather than that item's.** The row
-there is 1582 px and every other inline control is a pinned `render` item wearing its label, so the
-demotable budget is zero however cheap a demotable command becomes. #147 has been read as a narrow-
-width problem since it was raised; it is a _labelled_-width problem, and 1646 — the one screen this
-work is judged on — is where both conditions meet.
-
-## 148. The canvas date pills are painted on top of the first two lanes **(CLOSED 2026-08-22 — ADR-0106)**
-
-> **Three claims below were checked in August 2026 and two of them are wrong.** They are corrected
-> here in place rather than rewritten, because the wrong version is the more instructive artefact
-> (`docs/RECONCILE.md`: verify the claim; do not trust the document).
->
-> 1. **The table is ONE pan position, and so is the title.** It reads `view.originY = 0`, which is
->    the value at no viewport a planner arrives at: `fitToContent` pins `originY = 32`
->    (`render/viewport.ts:180`, `:196`), `DEFAULT_VIEWPORT` is 40 (`:124`), and `pan()` is unclamped
->    (`:82-84`). At the arrival viewport it is **Today and Data date** that strike lane 0, not the
->    cursor chip, and at other pan positions it is other lanes. "The first two lanes" names one
->    frame of a continuum; the defect is that a **screen-fixed** label is painted on a **scrolling**
->    surface at all.
-> 2. **The pills are already chrome, so this is not a geometry change.** Their y is a constant, not
->    a function of `view` — so `screenYOfLane` and everything reading it (hit-testing, dragging,
->    link routing, the a11y layer) is **not** in the blast radius the deferral paragraph feared.
->    That paragraph is why this sat for two days.
-> 3. **The export does not carry the defect.** `EXPORT_TOP_BAND = 96` and `drawTitleBand` fills
->    `palette.ground` opaquely over y 0–96 (`export/render-export-image.ts:153`), painted _after_
->    `paint()` at `:127` — so the Today and Data date pills have never reached a PNG or a PDF at
->    all, only the legend. That converts into a strong parity claim for the fix rather than a second
->    site to change, and the question it raises — should the deliverable carry these marks? — is
->    **#175**, beside the ADR-0103 family (#164/#166/#167), not here. That line said "filed with the
->    ADR-0103 family" for several hours while no such row existed: the ADR-0071 failure inside the
->    epic that quotes it.
->
-> What survives unchanged is the finding itself, which is the third paragraph below: the pills are
-> meticulous about each other and blind to what is underneath.
-
-**Raised 2026-08-20 (Graphite M9), pre-existing since 2026-08-07.** The TSLD paints three date
-pills at the top of the scene — the cursor date chip, the Today pill and the Data date pill — and
-all three sit in the same vertical space as the first two lanes' bars. On the flagship screen at
-1646 the words `Data date` print across the first activity's name.
-
-In scene coordinates:
-
-|                  | occupies                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------ |
-| cursor date chip | y 4 – 20                                                                                         |
-| Today pill       | y 24 – 40                                                                                        |
-| Data date pill   | y 44 – 60                                                                                        |
-| **lane 0's bar** | y 5 – 23 — `screenYOfLane(0, view) = view.originY = 0`, `+ (LANE_HEIGHT 28 − BAR_HEIGHT 18) / 2` |
-| **lane 1's bar** | y 33 – 51                                                                                        |
-
-So every plan with an activity in lane 0 or 1 has a pill over a bar, and the packer fills lanes from
-0 upward, so that is every plan.
-
-**What makes it interesting rather than merely untidy** is that the pills are meticulous about each
-other and blind to what is underneath. `TODAY_CHIP_TOP` is derived as `CURSOR_CHIP_TOP +
-CURSOR_CHIP_H + 4` and `DATA_DATE_CHIP_TOP` from the row above it, each with a docblock explaining
-that a literal offset would let a future edit "silently reintroduce the collision" — and both
-collisions they guard against are between two pills. Nothing in the reasoning asks what the scene
-does at y 4.
-
-**Not a Graphite regression**, established rather than assumed: `git log -S "DATA_DATE_CHIP_TOP"`
-dates the constant to `779a5b3`, 2026-08-07, twelve days before that epic began, and
-`git log --since` over `src/features/tsld/render/` returns **zero** commits for the whole of it.
-
-**Why it was deferred rather than fixed in M9.** The fix is a canvas _geometry_ change, and
-`screenYOfLane` is read by hit-testing, dragging, link routing, the parallel a11y layer and the
-export path. Two shapes are plausible and they are not equivalent:
-
-1. **Reserve a band at the top of the scene** — the content origin starts below the pill stack.
-   Costs 60 px of diagram on every plan, forever, in an epic whose thesis is diagram height.
-2. **Move the permanent pills into the ruler** — where a date marker arguably belongs, since the
-   ruler is what the x-axis means. The ruler is 40 px and already carries two tiers of date labels,
-   so this needs a design pass rather than a constant.
-
-(1) is cheap and wrong for this product; (2) is right and is not a one-line change. Choosing between
-them at the end of another epic is how the wrong one gets picked, so it is written down instead.
-
-**Closed by ADR-0106** (`docs/specs/canvas-axis-markers/`), which took option (2) — and the design
-pass it needed turned out to be about the ruler's _own_ content rather than about height. All three
-labels are DOM on two rows inside the existing 40 px band (transient y 12–26, persistent 26–40);
-`RULER_HEIGHT` and `sceneTopOffset` are unchanged, so option (1)'s 60 px cost was never paid. The
-rules stay on the canvas, because a full-height vertical means something at every lane and a date
-label means nothing at any of them.
-
-The row y is an output of measurement, not of arithmetic: the band's rows measure y 0–12 (years),
-12–26 (months) and 25–39 (days), and the **year** label is pinned at x = 0 and is the one thing in
-the band a reader cannot reconstruct from a neighbour — so no marker row reaches it. The two derived
-row constants this row calls "meticulous about each other and blind to what is underneath" are
-deleted, and replaced by a unit guard (both rows inside the band, clear of the year row) and a
-browser guard (no visible marker's rect intersects the scene canvas's, at two pan positions, two
-presets, with and without the pen). The second is the one that could not have existed before.
 
 ## 149. The Graphite M10 gate pass's non-blocking findings
 
@@ -3340,221 +2776,6 @@ registrant. It proves the shell _can_ show a subject; it never proved anything d
 docblock now says so. That is ADR-0081's shape one level along, and worth remembering when
 reading any "the entry point works" test.
 
-## 157. Every colour gate is a floor; none is a ceiling — ANSWERED, no gate
-
-**Raised 2026-08-21** (ADR-0101, from first contact with the shipped dark theme). **Size:** S,
-inside the light-theme epic.
-
-`token-contrast.test.ts` asserts `>= 3:1` and `>= 4.5:1` across the matrix. Nothing anywhere
-asserts that a pair is not too FAR apart. The consequence is one-directional drift: every fix in
-this register's history moved a value toward a floor from below, and the pair a planner reads
-all day — page foreground on the canvas ground — sat unquestioned at **14.62:1**, more than
-triple AA and more than double AAA. On a near-black ground that is the halation profile, and it
-is what "hard on the eyes over a long period" was reporting.
-
-ADR-0101 softened it to 10.84:1 as a labelled stopgap. The gate is deliberately **not** added
-there: a contrast ceiling is a dark-ground instrument, because halation does not work the same
-way on light, and the product is moving to a light corporate theme. Building the gate for a
-theme being deleted is work thrown away.
-
-**ANSWERED 2026-08-21 at the light-theme epic's M0-T4, and the answer is that there is no gate
-to build.** Working in `docs/specs/light-corporate-theme/m0-ceiling.md`.
-
-A ratio ceiling must sit **below 14.61** to have caught the defect and **above 12.64** not to
-reject the recovered light palette's own card body text — an ordinary near-`#333`-on-white value.
-The whole admissible window is under two points, tuned to exactly two data points. And inside it
-the rule would be enforcing the wrong quantity: what made 14.61:1 uncomfortable is **halation**, a
-property of light ink on a dark ground rather than of the separation, which a ratio cannot see.
-
-The second candidate — a ground-luminance band, "off-white, never paper-white" — is **withdrawn**
-before writing: it fails on day one against the recovered palette's `--card` at L = 1.000, which
-is paper-white by construction and correct. A gate that fails on the values it protects gets
-deleted rather than fixed (ADR-0058).
-
-What removes the defect is the ground flip itself. The surviving risk on a light ground is the
-opposite one — washed-out values — and the floors already catch that.
-
-**The surviving requirement, if a dark theme ever returns:** it needs a _polarity-aware_ comfort
-check on light-ink-on-dark-ground separation, not a ratio ceiling, and the lever is more likely to
-be the ink's lightness than the ground's, because the ground carries the diagram. 14.61:1 was too
-much and 10.84:1 drew no complaint; that is two points, enough to know what to measure and not
-enough to set a number. Recorded in `m0-ceiling.md` and in the epic's ADR so it outlives this row.
-
-## 158. The printed and exported diagram is painted on a near-black ground **(CLOSED 2026-08-21)**
-
-**Raised 2026-08-21** (found while specifying the light-corporate theme). **Size:** S. **This is a
-live defect on `main`, not a theme preference** — it is filed separately for exactly that reason.
-
-`resolvePrintPalette` (`apps/web/src/features/tsld/render/palette.ts:120`) resolves the print
-ground from the live `--color-background` token and falls back to `#ffffff` only when the token
-cannot be read. `PrintSurface.css:29` pins the surrounding print chrome to `#ffffff` / `#1a1a1a`
-and its own comment says the hexes are "PINNED to `resolvePrintPalette()`'s own light fallbacks so
-the two can't drift". They have drifted: since Graphite the token resolves to Graphite's ground, so
-an exported PNG/PDF and the printed programme carry a near-black diagram panel inside white paper
-chrome.
-
-**Confirmed by capturing the artefact itself**, not inferred from the token chain: the harness now
-saves the real downloaded PNG (`export-diagram`, added at the light-theme epic's M0-T2), and it
-comes out with a near-black diagram ground under a title band whose ink was derived for white
-paper. The picture is the evidence; the token chain below is why.
-
-The same run measured, in Chromium against the running app:
-
-```
---color-background  →  oklch(0.177 0.011 260.6)      (root and the canvas surface alike)
---color-foreground  →  oklch(0.82 0.012 252.1)
-PrintSurface.css    →  #ffffff / #1a1a1a  (pinned)
-```
-
-**The escape hatch was written and then not taken.** `resolvePrintPalette`'s docblock records that
-the function used to force light by momentarily clearing a `.dark` class, says ADR-0097 removed the
-trick because the working surfaces were "already light", and ends: _"If a dark theme returns, this
-is one of the places that needs it back."_ ADR-0099 made the whole product dark two days later. The
-condition fired and nothing acted on it — a correct comment naming its own trigger is not a gate,
-which is ADR-0058's rule in the one form it keeps taking.
-
-**Why no test caught it.** The export suites run in jsdom, where `getComputedStyle` yields nothing
-and the function takes its light fallbacks — so the tests exercise the branch that is correct and
-can never reach the branch that ships. Paper wants light whatever the screen is doing, so the fix
-is to force it rather than to resolve it: a `PRINT_GROUND` the function does not read from the DOM
-at all, which also removes the drift `PrintSurface.css` was trying to pin against.
-
-**Do not let the light-theme epic absorb this.** That epic will make the symptom disappear by
-turning the ground light, and a defect that vanishes as a side-effect of unrelated work is one that
-returns the moment anything reintroduces a dark surface — an export preview, a presentation mode, a
-dark theme brought back on ADR-0097's own stated terms. Fix it on its own or close it on its own.
-
----
-
-**Closed on its own, as this row demanded — and the fix is NOT the one prescribed above.**
-
-**Freezing is the wrong SHAPE of fix, not merely the wrong numbers — and that is the durable half
-of this argument, so it goes first.** A printed diagram must not be able to drift from the one on
-screen; that is a structural property, it survives any re-valuing of the theme, and it is why the
-diagram fields keep resolving from the canvas scope. The staleness finding below is the proof the
-prescription was already unsafe; it is **not** the reason for the split. Stated the other way round
-— as an earlier draft of this note did — a reader takes away "the prescription was rejected because
-its numbers had gone stale", which is an open invitation to re-freeze with fresh numbers and
-reintroduce exactly the drift this commit closed on the CSS side.
-
-**And the prescription had gone stale, which is how we know.** "A `PRINT_GROUND` the function does
-not read from the DOM at all" was written before the light corporate theme landed. Measured against
-the shipped tokens before implementing (`compositeOver`/`relativeLuminance` over the canvas scope
-resolved from `globals.css`), freezing the palette to its existing literals would have shipped **two
-inverted label pairings**: white ink on the on-schedule fill at **3.56:1**, a WCAG 1.4.3 failure on
-the commonest bar in any programme, and near-black on the warning amber. Those literals predate
-ADR-0102's criticality ladder, which put dark ink on the lightest fill precisely because white
-measured 3.56:1 there. The diagnosis in this row was right; its remedy would have made the
-deliverable worse than the state it was filed against. ADR-0076 Class 3, in the debt register.
-
-**What shipped instead — two rules, split by what the field is.**
-
-- **Paper** (`ground`, `canvasGround`, `ink`, `mutedInk`, `dataDateInk`, `handleHalo`) reads three
-  new `--print-*` tokens declared light at `:root` and rebound by **no** surface. Paper is light
-  because it is declared light, not because the current theme agrees.
-- **The diagram** keeps resolving from the canvas surface scope, which is the property
-  `resolvePrintPalette`'s docblock has always promised — a printed diagram that cannot drift from
-  the one on screen — and the reason freezing it is the wrong shape of fix.
-
-**The CSS half was a second, still-live drift, and this row had not spotted it.**
-`PrintSurface.css` carried hex literals under a comment saying they were "PINNED to
-`resolvePrintPalette()`'s own light fallbacks so the two can't drift". They had: the CSS said
-`#ffffff`/`#1a1a1a`/`#6b7280` while the runtime resolved `oklch(0.958)`/`oklch(0.321)`/`oklch(0.51)`
-— so even after the light theme, the printed programme put white chrome around a near-white diagram
-panel with two different inks. The escape that comment missed is in its own last sentence: a
-`@media print` rule cannot read a runtime JS value, but it **can** read a custom property. Both
-sides now read the same three tokens, which is what actually pins them.
-
-**The guarantee is a gate, not a comment** — `print-palette.structural.test.ts`, verified red four
-ways (a paper field reading `--background`; a dark ground; the frozen-literal label pairing at its
-exact 3.56:1; a dark non-working wash). The unit suites could never have caught the original,
-because they run in jsdom where `getComputedStyle` yields nothing and the resolver takes its
-fallbacks — they exercise the branch that is correct and can never reach the branch that ships. The
-gate reads `globals.css` and replays the cascade instead. When it fires, the fix is a
-`[data-surface="print"]` scope with paper values of its own.
-
-**`GanttPrintSurface.css` was called out of scope, and that was wrong — twice.** The original note
-here read: "a self-consistent hard-coded greyscale sheet with no token reads and no dependence on
-the theme, so it has neither the defect nor the drift. It is not touched, and that is a decision
-rather than an oversight." Both halves failed the deferred review, which found it independently
-from two directions.
-
-It **did** have the drift, before this fix: its docblock claimed its greys were "pinned to the same
-light-token fallbacks `PrintSurface.css` uses — ink #1a1a1a, muted #6b7280 — so the two printed
-artefacts look like one product", and the TSLD image had been baking at `oklch(0.321)` (#333333)
-since the light theme. The two sheets agreed with each other and neither agreed with the artefact.
-
-And moving `PrintSurface.css` to the tokens while leaving this one **made that claim newly false in
-the CSS as well** — a false comment created in the commit closing a row about false comments, which
-is the defect class this row exists to remove, committed while removing it. Its stated reason for
-hard-coding was the same mistaken belief corrected next door: "a `@media print` sheet cannot read a
-runtime token". A `@media print` rule cannot read a runtime _JS value_; a custom property is CSS.
-
-Both sheets now read the same three `--print-*` tokens, so the exported diagram and the printed
-programme share one source rather than agreeing by hand. The sheet's remaining greys — rules,
-baseline outlines, float dashes — stay literal: they are its own greyscale chart vocabulary, have
-no sibling in the token vocabulary, and nothing else draws them.
-
-## 159. `--color-*` aliases are frozen at `:root` — CLOSED
-
-**Raised 2026-08-21** (light-corporate theme, M2). **Size:** S.
-
-An `@theme inline` alias is declared at `:root` as `--color-primary: var(--primary)`. A custom
-property's `var()` is substituted at computed-value time **on the element that declares it**, and the
-already-substituted value is what inherits — so a `[data-surface]` rebind of `--primary` can never
-reach `--color-primary`. Verified in Chromium on a four-line page rather than reasoned from the spec:
-
-```
-:root { --plot-primary: rgb(1,2,3); --primary: rgb(9,9,9); --color-primary: var(--primary); }
-[data-surface="canvas"] { --primary: var(--plot-primary); }
-→ --primary at the scope       rgb(1,2,3)   (follows the rebind)
-→ --color-primary at the scope rgb(9,9,9)   (frozen at :root)
-```
-
-**Tailwind utilities are unaffected**, and that is why this went unnoticed for so long: `inline` is
-precisely what makes `bg-primary` compile to `var(--primary)` instead of the alias, so every DOM
-surface has always been correct. Only readers that name the alias are affected.
-
-`resolveTsldPalette`'s 88 reads were fixed in the same commit that found this — the light theme made
-it visible by giving the page a navy `--primary` and the diagram a blue one, so every non-critical
-bar painted navy. **What remains is three inline `var(--color-*)` styles in `TsldMinimap.tsx`**
-(`:416-417`, `:427`, `:439-440`). Two name the minimap frame pair, which is not scope-rebound and is
-therefore correct either way. The third is `var(--color-destructive)` for the minimap's Today line,
-which now differs from the scene's Today marker — both reds, visually near-identical today, and a
-real inconsistency waiting for the two families to diverge further.
-
-**The minimap half is now CLOSED.** The scope was established by probe rather than reasoned about:
-the minimap sits inside `[data-surface="canvas"]`, where `--color-destructive` gives the page's red
-(`oklch(0.505 0.19 27.5)`) and `--destructive` gives the diagram's (`oklch(0.439 0.175 27)`). So the
-plain rename was correct after all, and it shipped. The two frame reads stay on the alias because
-that pair is not scope-rebound and the alias is the only name Tailwind emits for it.
-
-**The LEGEND is closed too, and "visually marginal" was wrong.** It renders outside the
-`tone="canvas"` Surface, and its 38 swatch styles plus `lensLegendVarPalette`'s 18 var strings all
-named the alias — so the legend painted the PAGE's family beside bars painting the diagram's. On the
-light theme the "On schedule" swatch was near-black navy next to blue bars: a legend misdescribing
-the thing it exists to explain, on the one screen a person outside the organisation sees. It is
-wrapped in `<Surface tone="canvas" className="contents">` — the `context-drawer.tsx` precedent, so
-the element supplies the scope and generates no box, making this a colour correction with no layout
-consequence — and every var re-pointed.
-
-**A third instance was found the same way and is also fixed**: `GuestPlanView` mounted `TsldPanel`
-without `CanvasSurfaceProvider`, so `useRegisterCanvasSurface` returned its no-op, nothing was
-published, and every resolver took the documented fallback to `document.documentElement`.
-`canvas-surface.tsx`'s docblock names that fallback "the honest weak point of this design" and
-predicts the cause in as many words — _"a future host mounts the canvas outside the provider"_. That
-host existed already.
-
-**The gate is built, and this paragraph said it was owed until 2026-08-22.**
-`token-contrast.test.ts` resolves a scope by reading the CSS text and following the rebind itself,
-so it asserts a mapping the browser does not perform for alias readers: right about what the values
-should be, silent about what the painter actually got. The missing half is
-`apps/web/src/styles/token-alias-reads.structural.test.ts` — every `.ts`/`.tsx` read must name the
-unprefixed token, with one narrow exemption for the un-rebound minimap frame pair — and it shipped
-in the SAME commit as the fixes above (`fdb93d7`), so this row asked for something that was already
-beside it. Its own docblock records its blind spot (it scans `.ts`/`.tsx`, not `.css`) and why
-widening the glob is not the fix (`globals.css` declares the aliases).
-
 ## 160. `resolveLensPalette` is resolved twice per cycle
 
 **Status:** unverified
@@ -3648,116 +2869,6 @@ by a structural seam test verified red against the unwrapped panel; the card's o
 page-scoped deliberately. The mechanism is the validated one — the swatches read `--primary`
 directly (custom properties inherit through the rebind), not the frozen `@theme inline` aliases
 that defeated the painter in ADR-0102.
-
-## 163. The print palette is a surface family truncated to three members **(CLOSED 2026-08-22)**
-
-**Raised 2026-08-21** (the TECH_DEBT #158 deferred review, reached independently by the
-architecture and component gates). **Size:** M — mostly design judgement, not code.
-
-**Closed by `[data-surface="print"]`.** The family is all 31 members: three literal (paper is light
-because it is _declared_ light), nine aliasing `--plot-*` — exactly the members
-`PRINT_TOKEN_SOURCES` reads, so a printed diagram still cannot drift from the one on screen — and
-nineteen aliasing `--page-*`. That last split is the architecture review's, and it matters because
-the scope governs the **shared print container** (`lib/print-document.ts`), whose subtree includes
-the Gantt programme's `<table>`: `--border`, `--muted` and `--accent` resolving to diagram values
-there would be wrong, and "cannot drift from the screen" only ever applied to the painter's own
-members.
-
-Proven inert on landing, both halves: every pre-existing suite passed unchanged, and two real
-exported PNGs captured minutes apart in one session differ by **zero pixels across 246,430** in the
-diagram region, with the title band masked because it carries a generated date and a per-run tenant.
-
-Applying it found a hole in `surface-seams.structural.test.ts`: the first version wrote
-`container.dataset.surface = 'print'` and the suite stayed green, because the DOM property is
-camelCase and the regex tested for the hyphenated attribute — so a file applied a surface scope
-outside the allowlist and the gate built to forbid exactly that saw nothing. The call site uses
-`setAttribute` now, the gate matches both spellings, and the widening is verified red.
-
-`--print-ground` / `--print-ink` / `--print-muted-ink` were introduced as a "pack", on the
-`--ground`/`--ground-end` precedent (ADR-0077 M7: "a PAIR rather than a family member"). **The
-precedent does not authorise them, and the discriminator that settles it is written in this
-repository.** `token-architecture.test.ts` states it verbatim: _"if the thing has a semantic
-sibling in the base vocabulary, rebind it; if it does not, pack it."_ A gradient's second stop has
-no sibling, which is what made `--ground-end` a pack. These three have exact siblings —
-`--background`, `--foreground`, `--muted-foreground`. By the repo's own rule they are family
-members, and the shape is precisely ADR-0055 §1's founding three-token header stub, one medium
-along: latent rather than live only because the print document renders no `Badge`, no
-`text-muted-foreground`, no footer. That is one component away.
-
-**What the full fix is:** a `[data-surface="print"]` scope with a complete family, which
-`ADR-0097`'s closure rules would then govern like every other scope. The real cost is the design
-decision — which of the 31 members genuinely differ on paper — not the plumbing. A claim that the
-plumbing was itself a blocker (that the image export has no DOM node to carry the attribute) was
-checked and is **false**: `use-diagram-image.ts:111` resolves against the live attached
-`<Surface tone="canvas">` element, and `lib/print-document.ts` already creates and appends a real
-container. It is recorded here because it was asserted before it was checked, and would otherwise
-have been cited later as evidence the scope is expensive.
-
-**Why deferring is a decision rather than debt-in-disguise:** the trigger is a gate, not a comment.
-`print-palette.structural.test.ts` fails the build if paper stops resolving light, if a scope
-rebinds a `--print-*` token, or if any mark drawn on paper falls under its contrast floor. The
-previous arrangement was a correct comment naming its own trigger, and the trigger fired past it
-two days later.
-
-## 164. The exported diagram silently drops SEVEN default-on view layers **(CLOSED 2026-08-22, with one half open as #166)**
-
-**Raised 2026-08-21** (the #158 deferred ux gate). **Size:** S. **Pre-existing** — not introduced
-by the print-palette work, and found while reviewing it.
-
-`paintScene` draws month bands only `if (scene.monthBands)` and the non-working wash only
-`if (toggles.nonWorking && scene.isWorkingDay && …)`. `TsldCanvas` composes both. The export's
-scene (`use-diagram-image.ts:85-95`) sets **neither key** — it sets `dataDateLine` explicitly,
-under a comment saying it mirrors `TsldCanvas`'s composition, and stops there.
-
----
-
-**Two corrections to this row, both found by the deferred plan review rather than by acting on it.**
-
-**It was SEVEN layers, not two, and the count needed enumerating both compositions rather than
-reading one.** `TsldCanvas` builds **25** scene keys; the export built six. Missing:
-`isWorkingDay`, `monthBands`, `gridTiers`, `timeTrueLinks`, `visualRefresh`, `linkRouting` and
-`todayFraction`. That last was named in no document at all until the review — the screen draws a
-fractional Today line **with a pill**, the deliverable drew a whole-day line with none, because
-`paint.ts` gates the pill on the key being non-null. Nobody decided any of this: nine features each
-added correctly to the screen and nobody re-read the export.
-
-**That sentence went stale within a day, and the correction matters for anyone reading this row as
-a description of the export.** ADR-0106 (#148, 2026-08-22) moved all three date labels off the
-canvas into the ruler band, so **the screen no longer draws a Today pill at all** and `paint.ts`
-gates nothing on `todayFraction` but the line's x. What this row fixed — the export drawing the
-**fractional** line rather than the whole-day one — still holds and is what the shared derivation
-carries. The pill half of the sentence describes code that no longer exists, and the deeper point
-it was reaching for is now its own row: see **#175**.
-
-**"The printed programme" names the wrong artefact.** Three were affected — the exported PNG, the
-PDF and the printed _diagram_, all via `buildDiagramImage`. The printed **programme** is the Gantt,
-which has no month-band or non-working concept at all and lost nothing.
-
-**Closed by W3-M2.** All seven compose from one shared derivation, and the recurrence gate is
-**derived rather than a list**: `scene-parity.structural.test.ts` parses both scene literals,
-computes the difference and asserts it against a `SCREEN_ONLY` record carrying a reason per entry,
-so a key added to the canvas tomorrow fails until somebody classifies it. It refuses rather than
-answers when it cannot see its input — its first version assumed both files spelled the composition
-alike and would have reported an empty canvas roster, i.e. green.
-
-Measured in the artefact: pure white fell from ~100% of the non-bar area to 30%, with the band, the
-wash and its hatch present. `apps/web/e2e-export/` decodes the real download and asserts pixel
-properties, verified red against the pre-fix export.
-
-**What remains is filed as #166** — it is a different defect from the one this row describes.
-
-**Established by sampling the artefact, not by reading the code:** every pixel in the exported
-PNG outside a gridline or a bar is pure white. So the exported and printed diagram has never shown
-weekends or month banding, and differs from the screen in a way nothing reports — while
-`resolvePrintPalette` carries four fields (`nonWorking`, `nonWorkingHatch`, `monthBand`,
-`gridLineDay`) that exist to colour layers the export never runs. Those fields are gated by
-`print-palette.structural.test.ts` against the day this is fixed; the gate's docblock says so
-rather than implying the artefact contains them.
-
-Worth noting when it is fixed: on screen the wash sits ΔL 0.007 from the canvas ground and is
-nearly invisible; on the now-true-white paper the same token sits ΔL 0.035, five times the
-separation. Paper will show it more strongly than the screen ever has, which is probably right for
-print but is a deliberate divergence rather than parity.
 
 ## 165. Five screens photographed for the first time, and what they showed
 
@@ -3952,55 +3063,9 @@ planner performs in order to show something, so the honest default may differ pe
 is. That is why it is deferred rather than done — but deferred with the enumeration attached, which
 is the part CQ-5 called durable and did not deliver.
 
-## 168. Below `lg`, Escape closes and announces a drawer the reader cannot see **(CLOSED 2026-08-22)**
+## 169. The Project Explorer's actions row duplicates its writer gate in two branches
 
-**Raised 2026-08-22** (found while fixing #165a, deliberately excluded from it). **Size:** S.
-
-The context drawer's column is `hidden lg:flex` (`app-shell.tsx`), so below 1024 px it is in the
-DOM and invisible. The shell's Escape rung does not carry the viewport term — `showingContext` does
-(and that term was added for exactly this class of defect, when a planner who narrowed the window
-portalled the editor into a `display: none` slot) but the Explorer half does not. So on a narrow
-viewport, with an organisation and the drawer preference set to open, Escape:
-
-- writes `{collapsed: true}` to `localStorage` through `use-resizable-panel-prefs.ts`'s effect, and
-- announces **"Project Explorer closed."** into the live region,
-
-for a panel the reader cannot see and did not open. Below `lg` the Explorer's actual surface is the
-`Sheet`, which is separate state (`drawerOpen`) and is a native modal the browser closes on Escape
-by itself.
-
-**Why it was excluded from #165a rather than folded in.** #165a rewrites that exact guard, so the
-term is one `&&` away — but adding it changes behaviour on a viewport that epic's journey does not
-drive (`playwright.shell.config.ts` runs at 1646, deliberately, because below `lg` every absence
-assertion would pass for the wrong reason). It is a different defect: a guard disagreeing with a
-CSS class, not navigation that cannot navigate. `app-shell.tsx`'s `drawerOnScreen` docblock records
-the exclusion and points here.
-
-The fix is the term plus a unit case, and the unit case needs `useMediaQuery` mocked: jsdom has no
-`matchMedia`, so `isDesktop` takes its `true` fallback and a test written without the mock would
-assert the fix while exercising the desktop path.
-
-**Closed 2026-08-22, and the fix renamed the thing that hid it.** `drawerOnScreen` meant "has
-content and is not collapsed" — not "is on screen" — and that overstatement is most of why a guard
-disagreeing with a CSS class read as correct. It splits into `drawerHasContent`, which the **render**
-keeps (the column must still mount below `lg` and be hidden by CSS; not rendering it would change
-remount behaviour across a resize, which is a different question), and `drawerVisible`
-(`drawerHasContent && isDesktop`), which the Escape rung and `selectSubject` take. `LG_QUERY` is
-`(min-width: 64rem)` and the class's breakpoint is the same `64rem`, so the two track by
-construction rather than by anyone keeping them in step — checked, not assumed.
-
-Both directions are asserted, because a case that only pins the narrow viewport passes equally
-against a rung that never fires at all, which would undo what ADR-0104 shipped. Verified red first:
-the narrow case failed against the old guard while the desktop case stayed green.
-
-**This is the first change made under ADR-0105, and its trigger determination is recorded rather
-than implicit**: it fires none of the four — no new user-facing entry point, no Playwright config or
-CI step, no component public-contract change (`AppShell` takes no props) and no shared gate, no
-schema. So this row covered stages 1–2 and no spec was needed. What the fix does **not** prove is
-that `hidden lg:flex` genuinely hides the column in a browser; that is a Tailwind class, established
-by this defect existing, and the wider absence of any below-`lg` authenticated coverage is **#172**.
-
-## 169. The Project Explorer's actions row is an empty bordered strip for non-writers **(HALF CLOSED 2026-08-30)**
+**Status:** open · **Raised:** 2026-08-22 · **Size:** S
 
 > **Corrected by the 2026-08-30 verification sweep, and the correction is this row's own warning
 > landing on it.** It was raised saying #165a's wording "will otherwise read as closed when it is
@@ -5756,65 +4821,6 @@ eleven call sites.
 **Trigger:** the next named chrome slot. Adding a fifth this way pays the threading tax again, with
 the better pattern sitting one directory over.
 
----
-
-## #201 — Two independent mode toggles read as one four-way group **(CLOSED 2026-08-30 — ADR-0119)**
-
-> **Closed in full — both halves.** The row is now
-> `MODE  Early mode | Visual mode ⎪ Diagram | Gantt`: two `role="group"`s named **Scheduling mode**
-> and **Plan view**, separated by the same hairline the primitive already draws between taxonomy
-> groups. The compound override it replaces (`{ lens: 'Scheduling and view' }`) is deleted rather
-> than left beside the new names.
->
-> **The visible half nearly did not ship, and the reason it did is a measurement.** The hairline
-> costs width on a row that _wraps_, so its failure mode is a second line — 48 px of canvas, on the
-> surface eight consecutive epics have contradicted their own width expectations about. The verdict
-> rule was committed **before** the run (`docs/specs/mode-toggles/falsification.md`) and the product
-> owner pre-approved shipping the accessible names alone if it cost a line. It does not:
-> `aboveCanvas` is **228.0 px at 1646 with and without it**, asserted as an equality rather than a
-> bound, and the shipped figures match the pre-build prediction to the pixel
-> (`m0-measurement.md`, `m3-measurement.md`).
->
-> **The instrument was wrong first**, and that is the part worth keeping. It reported +5 px against a
-> predicted +13 — which passes every rule just as 13 does, so the verdict would have been identical
-> and the recorded number wrong. It had applied the chrome to a **button**, whose existing `px-2` an
-> inline `padding-left` replaces rather than adds to; the real candidate is a `role="group"` div.
-> Caught because the prediction was written down first and the probe prints the node it touched.
->
-> **`demotionGroup` is renamed `segment`** — it had no runtime consumer since ADR-0109 D1 deleted the
-> demotion pass, and its two surviving invariants cited `companionsOf`, which does not exist
-> (`#193`). Both invariants are kept on narrower, still-true ground.
->
-> **No WCAG success criterion applied, and the row was not filed as one** — the register overstated a
-> citation once (ADR-0082) and this one says plainly that it is a design-system and usability defect.
-> ADR-0119 records the analysis of 1.3.1, 4.1.2 and 2.4.6 rather than asserting a failure.
-
-**Filed 2026-08-26** (the one-row header, from the ux review). **Pre-existing** — the grouping dates
-from ADR-0091 M0 (`ab8c2201`), not from the header merge, which only moved the cluster into the
-header row.
-
-`Early mode` / `Visual mode` (ADR-0033's scheduling mode) and `Diagram` / `Gantt` (ADR-0059's view)
-are **two unrelated binary switches**. Both are declared `group: 'lens'`
-(`tsld-toolbar-items.tsx`), so one `<Toolbar>` renders all four under one caption, and
-`plan-workspace-toolbar.tsx`'s `ROW_MODE_GROUP_LABELS = { lens: 'Scheduling and view' }` is that
-group's **accessible name too**. A screen-reader user gets one region named "Scheduling and view"
-holding four buttons with nothing saying which two are mutually exclusive with which.
-
-`demotionGroup` already distinguishes them (`'scheduling-mode'` vs `'view-mode'`) and has **no visual
-or ARIA expression at all** — it only ever affected width-fit demotion, and ADR-0109 D1 deleted the
-ladder that consumed it. Measured on the shipped screenshot: the gap between `Visual mode` and
-`Diagram` is identical to the gap between `Early mode` and `Visual mode`. No divider, no margin,
-nothing.
-
-**What a planner experiences:** four adjacent buttons under one amber `MODE` caption, with no reason
-to expect that pressing `Gantt` leaves `Early mode` untouched rather than being part of the same set.
-
-**Two candidate fixes**, neither costing width: give each `demotionGroup` its own `role="group"` and
-label, or split the group name and use the divider the command deck already uses between distinct
-groups (`ml-1 border-l pl-2`). **Not done here** because it is a change to the mode cluster's own
-grouping semantics rather than to the header that now hosts it, and because `demotionGroup` acquiring
-a rendering meaning is a `Toolbar` contract change — ADR-0105's trigger, so it wants its own spec.
-
 ## 202. Six non-blocking findings from the foot-row gate pass
 
 **Status:** unverified
@@ -6128,67 +5134,6 @@ Two companions travel with the extraction:
   is byte-pinned by the golden log); and `HierarchyTree.tsx`'s `suppressClick` check-and-reset is
   duplicated between the row's and the name span's `onClick` (a `consumeSuppressedClick()` helper;
   no correctness bug today because `stopPropagation` means only one runs per click).
-
-## 213. Two controls are painted and not clickable at 390, and a breadcrumb is 20 px tall — CLOSED
-
-**Raised:** 2026-08-29 (ADR-0118 M0-T1) · **Closed:** 2026-08-29 (ADR-0118 M3)
-
-**1 is fixed. 2 is a named exception, and the attempt to fix it made it worse — which is the more
-useful half.**
-
-The two unreachable controls were not covered by anything: they were **off-screen**, at x = 409 and
-x = 565 against a 390 px viewport. The mode cluster carried `shrink-0`, which takes `max-content`
-and can never be asked to give anything back, so the wrapping header row beside it was never asked
-to break a line — ADR-0114 M1's defect one surface along. Dropping `shrink-0` fixes it at **zero
-vertical cost**: the stack measures byte-identical at 1920, 1646, 1440 and 1280, because a flex
-item's default `min-width: auto` floors it at min-content while the identity slot carries `min-w-0`
-and still gives way first and completely (ADR-0112's ordering, unchanged).
-
-The **candidate** §2.5.8 ruling on the breadcrumb resolves as **compliant under that SC's Inline
-exception** — the crumb sits on a line of non-target text and its size is constrained by that
-line-height — and the house rule does not sensibly apply to it either. That is not a deferral: a
-`pointer-coarse:min-h-(--control-h)` box was built and measured, and the crumb came out at
-**16 × 44 at 390** — _worse_ on the axis that was already failing, because a truncated crumb's width
-IS the space left over. No CSS makes it 44 px wide, and the version that looks like it complies is
-the one that ships a 16 px target. It is excluded from the coarse gate structurally (by
-`nav[aria-label="Breadcrumb"]`, never by a size threshold), and the mitigation is that the same
-destinations are reachable at full size from the Explorer tree and the wordmark on the same row.
-
-**One consequence is recorded rather than left to be noticed**: the crumb at 390 is now **16 px
-wide instead of 23**, because the mode cluster shares the line differently. Both are below the AA
-floor and both rely on the same exemption, and the trade bought two controls going from
-_unreachable_ to _reachable_ at that exact width.
-
-<details><summary>The original row</summary>
-
-**Raised:** 2026-08-29 (ADR-0118 M0-T1) · **Size:** S · **Owner:** web
-
-Found by the first instrument in this repository to sweep every pointer target on every surface a
-touch user reaches. **Neither is a touch defect** — both reproduce identically under a fine
-pointer, which is the part worth carrying: a coarse-pointer investigation surfaced them, a narrow
-viewport causes them.
-
-**1. Painted, not clickable.** At 390 × 844, the plan header's `view-gantt` (82 × 36) and
-`Stop editing` (103 × 32) have a non-zero box and return **another element** from
-`elementFromPoint` at their own centre. A planner on a phone cannot switch to the Gantt or release
-the pen by touching them. This is the `#124` / ADR-0114 M1 shape — a control that is _painted_ is
-indistinguishable from one that _works_ until something calls `elementFromPoint` — and
-`apps/web/e2e-narrow-shell` already drives that exact viewport without seeing it, because it
-asserts sheet navigation rather than sweeping every target.
-
-**2. A 20 px breadcrumb.** The plan header's client link renders **58 × 20** at 1646 and
-**23 × 20** at 390 — under WCAG 2.2 §2.5.8's 24 px AA floor on the height axis at both widths, and
-on **both** axes on the phone.
-
-**Stated as a CANDIDATE failure, not a ruling.** §2.5.8 exempts a target "in a sentence or block of
-text", and whether a breadcrumb is inline text or a list of controls is exactly the judgement
-`accessibility-reviewer` exists for. This register overstated a success criterion once (ADR-0082)
-and had to correct it, so the call is deferred rather than asserted. What is not in doubt is that
-it is the smallest target in the product and nothing had ever measured it.
-
-Both are scheduled into **ADR-0118 M3**, whose subject is the below-`md` surfaces.
-
-</details>
 
 ## 214. An approved plan clause was never built, and its own risk table says it shipped
 
