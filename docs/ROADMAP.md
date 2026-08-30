@@ -522,6 +522,21 @@ discriminators. Each becomes a spec/plan before build:
   answer rather than a deferral: the admissible window is under two points wide and the rule would
   enforce halation, which does not occur on the ground it would guard.
 
+- **The mode row says which of its buttons are alternatives** — **shipped** (ADR-0119, 2026-08-30,
+  `docs/TECH_DEBT.md` #201). `Early mode | Visual mode` and `Diagram | Gantt` are two independent
+  two-way switches, and the seven-group taxonomy put all four in one region with one name and four
+  identical gaps — so a planner who read it as one four-way choice, and expected `Gantt` to replace
+  `Visual mode`, was reading the picture correctly. A taxonomy group may now render as N named
+  sub-groups when its items declare one; the taxonomy itself stays closed at seven. **No WCAG
+  success criterion applies and the ADR says so plainly** — this register overstated such a citation
+  once (ADR-0082) — it is a design-system and usability defect, which is reason enough.
+  The visible hairline nearly did not ship: it costs width on a row that _wraps_, so its failure
+  mode is 48 px of canvas, and the verdict rule was committed **before** the run. Measured,
+  `aboveCanvas` is unchanged at every width as an **equality**, and the shipped figures match the
+  pre-build prediction to the pixel. The instrument was wrong first — +5 px against a predicted +13,
+  because the probe styled a button whose `px-2` an inline `padding-left` replaces rather than adds
+  to — caught only because the prediction had been written down first.
+
 - **One control height, with the input as an axis of it** — **in progress** (ADR-0118, 2026-08-29).
   The product published "touch targets ≥ 44px" in `UX_STANDARDS.md`, "≥ 24, prefer 44" in
   `DESIGN_SYSTEM.md`, and a scale defaulting to 36 — three statements, met by nothing, and never

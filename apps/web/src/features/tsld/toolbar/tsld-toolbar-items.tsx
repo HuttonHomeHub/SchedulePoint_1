@@ -2332,7 +2332,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // than dropped: it is still the rule for any host that has a row (TECH_DEBT #61).
       showLabel: 'always',
       order: 1,
-      demotionGroup: 'scheduling-mode',
+      segment: 'scheduling-mode',
       label: 'Early mode',
       icon: <ArrowLeftToLine className="size-4" aria-hidden="true" />,
       isVisible: () => SCHEDULING_MODES_ENABLED,
@@ -2352,7 +2352,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Icon-only on the rail; see `mode-early` above (TECH_DEBT #61).
       showLabel: 'always',
       order: 2,
-      demotionGroup: 'scheduling-mode',
+      segment: 'scheduling-mode',
       label: 'Visual mode',
       icon: <Hand className="size-4" aria-hidden="true" />,
       isVisible: () => SCHEDULING_MODES_ENABLED,
@@ -2383,7 +2383,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       // Icon-only on the rail; see `mode-early` above (TECH_DEBT #61).
       showLabel: 'always',
       order: 10,
-      demotionGroup: 'view-mode',
+      segment: 'view-mode',
       label: 'Diagram',
       icon: <Waypoints className="size-4" aria-hidden="true" />,
       isVisible: () => GANTT_VIEW_ENABLED,
@@ -2397,7 +2397,7 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 1,
       showLabel: 'always',
       order: 11,
-      demotionGroup: 'view-mode',
+      segment: 'view-mode',
       label: 'Gantt',
       icon: <ChartGantt className="size-4" aria-hidden="true" />,
       isVisible: () => GANTT_VIEW_ENABLED,

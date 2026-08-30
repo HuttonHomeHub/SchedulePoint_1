@@ -5,6 +5,7 @@ import { makeTsldToolbarContext } from './test-helpers';
 import type { TsldToolbarContext } from './tsld-toolbar-context';
 import { buildTsldToolbarItems } from './tsld-toolbar-items';
 
+import { PLAN_MODE_SEGMENT_LABELS } from '@/components/layout/workspace/plan-workspace-toolbar';
 import { Toolbar, splitByRow } from '@/components/ui/toolbar';
 
 /**
@@ -51,14 +52,39 @@ function renderModeRow(context: TsldToolbarContext, authoringEnabled = true) {
     <Toolbar
       items={rows.mode}
       context={context}
-      label="Plan mode"
+      label="Plan mode and view"
       authoringEnabled={authoringEnabled}
-      groupLabels={{ lens: 'Scheduling and view' }}
+      // The host's own map, imported rather than restated — a second copy here would let this
+      // surface and the product disagree about what the row is called, which only a reader who
+      // opened both would ever see (`docs/TECH_DEBT.md` #201).
+      segmentLabels={PLAN_MODE_SEGMENT_LABELS}
     />,
   );
 }
 
 describe('TSLD toolbar — scheduling modes (flag on)', () => {
+  /**
+   * **The mode row names its two switches** (`docs/TECH_DEBT.md` #201). Verified red against the
+   * pre-M3 build, which rendered one region called "Scheduling and view" holding all four.
+   *
+   * The compound name was the honest thing to do while the primitive could only name a whole
+   * taxonomy group — it at least stopped the cluster announcing itself as "Display", which is also
+   * the deck's `lens` group name. What it could not do is say where one switch ends, because
+   * nothing in the markup knew. The negative assertion is here rather than implied: leaving the old
+   * name behind beside the new ones would give the row three names and be invisible on screen.
+   */
+  it('renders two named groups, and the old compound name is gone', () => {
+    renderModeRow(ctx());
+
+    const scheduling = screen.getByRole('group', { name: 'Scheduling mode' });
+    const view = screen.getByRole('group', { name: 'Plan view' });
+    expect(within(scheduling).getAllByRole('button').length).toBeGreaterThanOrEqual(2);
+    expect(within(view).getAllByRole('button').length).toBeGreaterThanOrEqual(2);
+
+    expect(screen.queryByRole('group', { name: 'Scheduling and view' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Display' })).toBeNull();
+  });
+
   it('has no persisted data-date control on the toolbar (moved to Edit plan)', () => {
     renderToolbar(ctx());
     expect(screen.queryByLabelText(/Project start/)).not.toBeInTheDocument();

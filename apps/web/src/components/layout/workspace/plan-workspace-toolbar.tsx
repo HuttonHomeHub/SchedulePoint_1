@@ -114,11 +114,32 @@ import { cn } from '@/lib/utils';
 const MD_QUERY = '(min-width: 48rem)';
 
 /**
- * The mode row's `lens` group name (ADR-0091 D1). Overridden because the shared default is
- * "Display", which is simultaneously Row 1's `lens` group name — leaving two on-screen regions with
- * one name, and announcing "Plan mode, toolbar" then "Display, group" for a cluster that is neither.
+ * The mode row's two switches, named (`docs/TECH_DEBT.md` #201).
+ *
+ * `Early mode | Visual mode` and `Diagram | Gantt` are **two independent two-way switches**, and the
+ * seven-group taxonomy puts all four in `lens` — one region, one name, four identical gaps. A
+ * planner who reads that as one four-way choice and expects `Gantt` to replace `Visual mode` is
+ * reading the picture correctly.
+ *
+ * This replaces a single override, `{ lens: 'Scheduling and view' }`, which was the honest thing to
+ * do while the primitive could only name a whole taxonomy group: a compound name at least stopped
+ * the cluster announcing itself as "Display" (also the deck's `lens` group name — two regions, one
+ * word). It could not say where one switch ended, because there was nothing in the markup that
+ * knew.
+ *
+ * **"Plan view", not "View"** — `Toolbar.tsx:44-46` records a UX review rejecting exactly that
+ * collision once already: `View ▾` is the deck's display-toggles trigger and `Display` is the
+ * `lens` default, so a third "View" would give a screen-reader user one word for a mode group, a
+ * menu of lenses and a trigger. Confirmed by the product owner, 2026-08-30.
+ *
+ * `plan-mode-segments.structural.test.ts` asserts this map covers every segment on the row, and
+ * that every item on the row has one — so an item added without a segment fails CI rather than
+ * silently reinstating the undifferentiated group.
  */
-const ROW_MODE_GROUP_LABELS = { lens: 'Scheduling and view' } as const;
+export const PLAN_MODE_SEGMENT_LABELS = {
+  'scheduling-mode': 'Scheduling mode',
+  'view-mode': 'Plan view',
+} as const;
 
 /**
  * **The row-purpose captions are gone** (ADR-0090 M2-T6, landed at M5 — see below).
@@ -1525,28 +1546,37 @@ export function ToolbarPlanWorkspace({
                 and unclickable. They now wrap. The ADR-0112 ordering is unaffected, because the
                 identity slot beside this one carries `min-w-0` and therefore gives way first and
                 completely; see `chrome-slot.tsx`. */}
+                {/* **The `MODE` caption is gone** (ADR-0119, ux gate). It was one `aria-hidden`
+                    word spanning what are now two hairline-separated switches, so it asserted the
+                    single umbrella this change exists to remove — and ADR-0119's first draft cited
+                    it as *evidence the visual half was carried*, which is the opposite of what it
+                    did. Deleting it costs no information (it was `aria-hidden`, so no AT user ever
+                    received it), removes the false statement, and BUYS width on a width-critical
+                    row. ADR-0090 M2-T6 set the precedent by deleting this surface's other
+                    row-purpose captions. */}
                 <div className="flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the
-                    // navy and measured 4.48:1 — under the 4.5 bar by 0.02, which no token matrix
-                    // could see because the failing colour does not exist until the alpha is
-                    // composited. axe found it in a real browser on the first journey run. At full
-                    // strength amber on navy is 7.9:1, and the caption is a label rather than a
-                    // decoration, so there was never a reason to fade it.
-                    className="text-primary text-micro font-bold tracking-wider uppercase"
-                  >
-                    Mode
-                  </span>
                   <Toolbar
                     items={rows.mode}
                     context={ctx}
-                    label="Plan mode"
+                    // **"Plan mode and view", not "Plan mode"** (ADR-0119, ux gate). A region named
+                    // `Plan mode` containing a group named `Plan view` contradicts itself, and an AT
+                    // user heard "Plan mode, toolbar → Plan view, group" — the container denying its
+                    // own child. A compound name is **wrong for a group and right for a container of
+                    // two groups**: the group could not say where one switch ended, which is why
+                    // `Scheduling and view` had to go; this names two things that really are two.
+                    label="Plan mode and view"
                     authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                    // All four are `group: 'lens'`, whose default label is "Display" — also the deck's
-                    // `lens` group name, so unoverridden this announces a second, unrelated name for
-                    // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
-                    groupLabels={ROW_MODE_GROUP_LABELS}
+                    // Two named sub-groups — see the map's docblock.
+                    //
+                    // **`groupLabels` is defence in depth, not decoration** (accessibility gate).
+                    // The partition is all-or-nothing, so an item arriving without a `segment` makes
+                    // the whole group fall back to one region named from here. Omitting this left
+                    // that fallback rendering `Display` — the deck's `lens` group name, i.e. exactly
+                    // the collision `Toolbar.tsx:44-46` records a UX review rejecting once already.
+                    // It costs nothing while the structural gate holds and only matters the one day
+                    // it does not.
+                    groupLabels={{ lens: 'Scheduling mode and view' }}
+                    segmentLabels={PLAN_MODE_SEGMENT_LABELS}
                   />
                 </div>
                 <CompactPenStatus

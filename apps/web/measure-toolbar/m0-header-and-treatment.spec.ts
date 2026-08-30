@@ -58,7 +58,7 @@ test('M0: header merge budget, bottom bands, and the toolbar label treatment', a
     { name: 'Blind and reinforce', laneIndex: 2, durationDays: 16 },
   ]);
   await recalculate(page, orgSlug);
-  await expect(page.getByRole('toolbar', { name: 'Plan mode' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan mode and view' })).toBeVisible();
 
   const report: Record<string, unknown> = { planName: PLAN_NAME };
 
@@ -97,7 +97,9 @@ test('M0: header merge budget, bottom bands, and the toolbar label treatment', a
       const headerInk = headerCells.reduce((sum, c) => sum + Math.max(0, c.w), 0);
 
       // ── Row 2: the identity/mode row — located by the toolbar it contains, never by class.
-      const modeToolbar = document.querySelector('[role="toolbar"][aria-label="Plan mode"]');
+      const modeToolbar = document.querySelector(
+        '[role="toolbar"][aria-label="Plan mode and view"]',
+      );
       let identityRow: Element | null = modeToolbar;
       while (identityRow && identityRow.parentElement) {
         const p: Element = identityRow.parentElement;

@@ -281,18 +281,24 @@ export interface ToolbarItem<Ctx> {
    */
   priority?: number;
   /**
-   * Items sharing a `demotionGroup` demote **together or not at all**.
+   * Items sharing a `segment` are **alternatives to one another** — one two-state switch, not two
+   * independent commands. `Early mode | Visual mode` is one segment; `Diagram | Gantt` is another.
    *
-   * For a two-state segment — Early | Visual, Diagram | Gantt — where each half is an independently
-   * demotable button with adjacent `order` values. Without this the higher `order` goes first and
-   * the planner is left with a lone "Diagram" button on the bar and "Gantt" inside a menu: a
-   * two-state switch with one state hidden. Declared on the item rather than special-cased by id in
-   * the primitive, which is TSLD knowledge the primitive must not carry.
+   * Declared on the item rather than special-cased by id in the primitive, which is TSLD knowledge
+   * the primitive must not carry.
    *
-   * Recorded as **latent, not observed** (`docs/specs/workspace-layout/m0-measurement.md`): no
-   * measured width reproduced the split. The test is what keeps it latent.
+   * **It was `demotionGroup` until 2026-08-30, and the rename is the point** (`docs/TECH_DEBT.md`
+   * #201). The old name described the one thing it was ever consumed for — keeping a pair together
+   * through the width ladder's demotion pass — and ADR-0109 D1 deleted that pass, leaving a field
+   * named for a mechanism that no longer exists and read by nothing. What it always *declared* is
+   * the durable fact: these items are one switch. {@link ToolbarProps.segmentLabels} is the first
+   * consumer to use it for that.
+   *
+   * Two invariants guard it in {@link defineToolbar} — a segment may not span a `tier` or a `row`.
+   * Both were written for demotion and are retained on the narrower ground that a split segment is
+   * wrong however it is rendered; see their comments.
    */
-  demotionGroup?: string;
+  segment?: string;
   /** Accessible name — always required (icon-only buttons still need it). */
   label: string;
   /**
@@ -433,47 +439,54 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
       }
     }
   }
-  // **A `demotionGroup`'s companions must share a `tier`** (ADR-0090 M5, component gate). D3's "a
-  // segment is one demotion unit" guarantee only holds while both halves are on the bar: a `tier: 3`
-  // companion is in `partitionByTier`'s static overflow and never enters `computeOverflow`'s pair
-  // map at all, so the pairing would degrade silently to "one always overflows, the other sometimes
-  // does" — a split segment, which is the exact state `demotionGroup` exists to prevent. Both
-  // current pairs happen to agree, so this has shipped no defect; it is a guard for the next author.
-  const tierByGroup = new Map<string, ToolbarTier>();
+  // **A segment's members must share a `tier`** (ADR-0090 M5, component gate).
+  //
+  // Written for demotion: a `tier: 3` member sat in the static overflow while its partner stayed on
+  // the bar, so the pair degraded silently to "one always hidden, the other sometimes" — a split
+  // segment, which is the state the field exists to prevent.
+  //
+  // **That pass was deleted at ADR-0109 D1, and `tier` now has no rendering effect at all**: nothing
+  // in `Toolbar` or `Deck` branches on it, and `partitionByTier` — the one function that would act
+  // on it — has no production caller (`docs/TECH_DEBT.md` #193). So this guard is **speculative and
+  // forward-only**, not protection for a live property: it is kept because `tier` still declares
+  // prominence and a surface may rank again, not because anything today would break.
+  //
+  // The previous version of this comment said the rule holds "however the surface renders", which
+  // implies a live protection that does not exist — ADR-0076 Class 2, inside a comment written the
+  // same day to fix a different stale one (component review, 2026-08-30).
+  const tierBySegment = new Map<string, ToolbarTier>();
   for (const item of items) {
-    if (!item.demotionGroup) continue;
-    const seen = tierByGroup.get(item.demotionGroup);
-    if (seen === undefined) tierByGroup.set(item.demotionGroup, item.tier);
+    if (!item.segment) continue;
+    const seen = tierBySegment.get(item.segment);
+    if (seen === undefined) tierBySegment.set(item.segment, item.tier);
     else if (seen !== item.tier) {
       throw new Error(
-        `defineToolbar: demotionGroup "${item.demotionGroup}" mixes tier ${seen} and tier ${item.tier} — ` +
-          'companions must share a tier, or they cannot demote as one unit.',
+        `defineToolbar: segment "${item.segment}" mixes tier ${seen} and tier ${item.tier} — ` +
+          'the members of one switch must share a tier.',
       );
     }
   }
 
-  // The same guard one axis over, and for the same reason (ADR-0091 M1, B2). A `demotionGroup` split
-  // across rows used to lose its companion entirely — the pair was resolved from **one row's** `bar`,
-  // so each half demoted on its own row's arithmetic, which is the split segment the block above
-  // exists to prevent. Two rows made that impossible to express; a third makes it a one-character
-  // typo in `row`.
+  // The same guard one axis over (ADR-0091 M1, B2). A segment split across rows used to lose its
+  // partner entirely — the pair was resolved from **one row's** `bar`, so each half demoted on its
+  // own row's arithmetic. Two rows made that impossible to express; a third makes it a
+  // one-character typo in `row`.
   //
-  // **This paragraph named `companionsOf` until the 2026-08-30 verification sweep, and that function
-  // no longer exists** — it went with the width ladder at ADR-0109 D1, along with demotion itself
-  // (`docs/TECH_DEBT.md` #193). The invariant is KEPT rather than deleted with it: `demotionGroup`
-  // still declares that two controls are one unit, `defineToolbar` is the only thing asserting it,
-  // and a surface that wraps today may rank again tomorrow. What changed is that the justification
-  // is now historical, and says so.
-  const rowByGroup = new Map<string, ToolbarRow>();
+  // **Retained for a reason the deleted pass no longer supplies, and now with a second one.** The
+  // demotion argument went with the ladder (ADR-0109 D1); what remains is that a segment renders as
+  // ONE named sub-group ({@link ToolbarProps.segmentLabels}), and a sub-group cannot straddle two
+  // toolbars. So this check now guards something the product actually does, rather than something
+  // it used to do.
+  const rowBySegment = new Map<string, ToolbarRow>();
   for (const item of items) {
-    if (!item.demotionGroup) continue;
+    if (!item.segment) continue;
     const row = item.row ?? 'strip';
-    const seen = rowByGroup.get(item.demotionGroup);
-    if (seen === undefined) rowByGroup.set(item.demotionGroup, row);
+    const seen = rowBySegment.get(item.segment);
+    if (seen === undefined) rowBySegment.set(item.segment, row);
     else if (seen !== row) {
       throw new Error(
-        `defineToolbar: demotionGroup "${item.demotionGroup}" spans rows "${seen}" and "${row}" — ` +
-          'companions must share a row, or they cannot demote as one unit.',
+        `defineToolbar: segment "${item.segment}" spans rows "${seen}" and "${row}" — ` +
+          'the members of one switch must share a row.',
       );
     }
   }
@@ -494,6 +507,39 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
  * failure** at the seed instead. The mis-partition would have been invisible to the type system,
  * which is what makes it worth the extra three lines (ADR-0091 M1, B1).
  */
+/**
+ * Split a taxonomy group's items into named sub-groups, or refuse.
+ *
+ * Returns `null` — meaning "render as one group, as today" — unless **every** item carries a
+ * {@link ToolbarItem.segment} that `labels` names. That refusal is the load-bearing half: see
+ * {@link ToolbarProps.segmentLabels}.
+ *
+ * Order is **first appearance**, taken from the already-sorted `items` and never re-sorted, so a
+ * sub-group cannot reorder the row. Pure and DOM-free so the rule can be tested without rendering.
+ */
+export function partitionBySegment<T extends { item: { segment?: string } }>(
+  items: readonly T[],
+  labels: Record<string, string> | undefined,
+): { segment: string; label: string; items: T[] }[] | null {
+  if (!labels || items.length === 0) return null;
+  const out: { segment: string; label: string; items: T[] }[] = [];
+  const index = new Map<string, number>();
+  for (const entry of items) {
+    const segment = entry.item.segment;
+    if (!segment) return null;
+    const label = labels[segment];
+    if (label === undefined) return null;
+    const at = index.get(segment);
+    if (at === undefined) {
+      index.set(segment, out.length);
+      out.push({ segment, label, items: [entry] });
+    } else {
+      out[at]!.items.push(entry);
+    }
+  }
+  return out;
+}
+
 export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, ToolbarItem<Ctx>[]> {
   const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { mode: [], strip: [] };
   for (const item of items) rows[item.row ?? 'strip'].push(item);

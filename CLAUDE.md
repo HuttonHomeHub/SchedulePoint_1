@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1110 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1112 web
 > source files with 41 Playwright suites beside the base journey, and
-> 118 ADRs.
+> 119 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3555,6 +3555,54 @@ progress` off the command surface because **an object action belongs on the obje
   fold read as unreachable, where the discriminator is ADR-0114's own — whether there is anything
   scrollable to move.
   **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0119** _(Accepted; landed 2026-08-30)_ — A group of buttons says which of them are
+  alternatives. The plan header's mode row held four controls — `Early mode | Visual mode |
+Diagram | Gantt` — which are **two independent two-way switches**, and ADR-0031's closed
+  seven-group taxonomy put all four in `lens`, so `Toolbar` rendered **one region, one accessible
+  name, four identical gaps**. That last part is provable rather than photographic: `gap-1` is
+  applied uniformly to every child of a group and the only differentiating chrome is gated on
+  `i > 0`, i.e. it separates _taxonomy_ groups — there was no code path by which the gap between
+  `Visual mode` and `Diagram` could differ from the gap between `Early mode` and `Visual mode`. **A
+  planner who read it as one four-way choice, and expected `Gantt` to replace `Visual mode`, was
+  reading the picture correctly.** A taxonomy group may now render as N named sub-groups when its
+  items declare one; the taxonomy stays closed, which is the smaller amendment. The precondition is
+  **all-or-nothing** and the refusal is the load-bearing half — a partial partition leaves an
+  unnamed region, a container a reader must enter to discover holds nothing they were told about.
+  `demotionGroup` becomes **`segment`**: it had no runtime consumer since ADR-0109 D1 deleted the
+  demotion pass, and its two surviving invariants cited `companionsOf`, a function that went with
+  it (`#193`). **No WCAG success criterion applies and the ADR says so plainly** — 1.3.1 does not
+  apply because both channels were equally silent, 4.1.2 is met, 2.4.6 is strained not failed; this
+  register overstated such a citation once (ADR-0082) and the correction is recorded rather than
+  quietly dropped.
+  **The divider nearly did not ship, and the instrument was wrong before the product was.** It
+  costs width on a row that _wraps_, so its failure mode is 48 px of canvas — the surface eight
+  consecutive epics have contradicted their own width expectations about. The verdict rule was
+  committed **before** the run and the product owner pre-approved shipping the accessible names
+  alone if it cost a line. Measured, `aboveCanvas` is **228.0 px at 1646 with and without it, as an
+  equality**, and the shipped figures match the pre-build prediction to the pixel. But the first run
+  reported **+5 px against a predicted +13** — which passes every rule just as 13 does, so the
+  verdict would have been identical and the recorded number wrong. The probe had styled a _button_,
+  whose existing `px-2` an inline `padding-left` replaces rather than adds to; the real candidate is
+  a `role="group"` div. Caught only because the prediction was written down first and the probe
+  prints the node it touched.
+  **The gate pass earned its place for the eighth epic running, and its sharpest finding was in the
+  ADR.** ADR-0119's first draft rejected visible per-pair captions on the ground that "the hairline
+  plus the existing caption `MODE` already carry the visual half" — and that caption is one
+  `aria-hidden` word spanning both switches, so it asserted the single umbrella the change exists to
+  remove. **A false claim used as evidence for a decision**, ADR-0076 Class 3, inside the document
+  making the decision. The same contradiction ran through the accessible channel: a region named
+  `Plan mode` containing a group named `Plan view`, which an AT user heard as the container denying
+  its own child. Both fixed — the caption deleted (it carried no information, and deleting it _buys_
+  width), the toolbar renamed `Plan mode and view` — on the rule that **a compound name is wrong for
+  a group and right for a container of two groups**. Also folded: `partitionBySegment` moved into
+  `toolbar-registry.ts` beside its field rather than living in a React module a pure-rule test had
+  to import; a development-only warning when a partition is refused, because the next consumer
+  inherits no structural test; `groupLabels` restored as defence in depth, since the fallback
+  otherwise names the region `Display` and reintroduces the collision; a one-segment case, because
+  the spec's "byte-identical apart from the group's name" was **not quite true** with one flag off;
+  and two docblocks corrected for overstating what they protect. **The CPM engine is not imported
+  and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

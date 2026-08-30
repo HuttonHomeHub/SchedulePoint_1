@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { containerShouldStandDown, vetoesKey } from './toolbar-keyboard';
 import {
   groupRank,
+  partitionBySegment,
   resolveItems,
   TOOLBAR_GROUPS,
   type ResolvedToolbarItem,
@@ -28,6 +29,28 @@ export interface ToolbarProps<Ctx> {
   /** Human labels for each `role="group"`; falls back to a humanised group id. */
   groupLabels?: Partial<Record<ToolbarGroupId, string>>;
   /**
+   * Render a taxonomy group as **N named sub-groups**, keyed by {@link ToolbarItem.segment}.
+   *
+   * The problem it solves (`docs/TECH_DEBT.md` #201): the plan's mode row holds
+   * `Early mode | Visual mode | Diagram | Gantt` — **two independent two-way switches** — and the
+   * taxonomy puts all four in one `lens` group. One `role="group"`, one accessible name, four
+   * identical `gap-1` gaps: nothing in the markup or on the screen says where one switch ends and
+   * the next begins, so it reads as one four-way choice. A reader who picks `Gantt` expecting it to
+   * replace `Visual mode` is reading the picture correctly.
+   *
+   * **The precondition is all-or-nothing: EVERY item in the group must carry a `segment` that this
+   * map names.** Otherwise the group renders exactly as it does today. A partial partition would
+   * put some items in a named region and leave the rest in an unnamed one, which is worse than the
+   * defect — an unnamed region is a container a screen-reader user must enter to discover holds
+   * nothing they were told about. {@link partitionBySegment} is the pure form of that rule.
+   *
+   * The outer wrapper then carries **no role**. Nesting `role="group"` inside `role="group"` is
+   * avoided rather than reasoned about: no screen reader runs in this repository's build container
+   * (`docs/TECH_DEBT.md` #154), so real AT behaviour for nested groups is not observable here and
+   * the design does not depend on a guess.
+   */
+  segmentLabels?: Record<string, string>;
+  /**
    * Push this group (and any groups after it) to the trailing edge with `margin-inline-start: auto`.
    *
    * **At most one auto margin per line, and that is a shipped defect rather than a tidiness rule.**
@@ -38,6 +61,40 @@ export interface ToolbarProps<Ctx> {
    */
   alignEndGroup?: ToolbarGroupId;
   className?: string;
+}
+
+/**
+ * Group ids already warned about, so a refused partition says so **once** rather than on every
+ * render. Bounded by the taxonomy — seven entries at most.
+ */
+const warnedSegmentGroups = new Set<string>();
+
+/**
+ * Say out loud, in development, when a caller asked for a partition and did not get one.
+ *
+ * {@link ToolbarProps.segmentLabels} is deliberately **all-or-nothing**: one item without a labelled
+ * segment and the whole group falls back to today's single named region. That is the right failure
+ * direction — a partial partition leaves an unnamed region — but it is **silent**, and silence is
+ * how a capability regresses without anything saying so (`docs/TECH_DEBT.md` #219 is a register full
+ * of that shape).
+ *
+ * The only consumer today is protected by a structural test written for it
+ * (`plan-mode-segments.structural.test.ts`). **The next consumer inherits none of that**, which is
+ * the gap this closes: a shared primitive should tell its caller it was configured wrong rather than
+ * leave the fact to prose in a docblock (component review, 2026-08-30).
+ *
+ * Development only, and it does not throw: a refused partition renders a correct, if less
+ * differentiated, toolbar, so failing the build over it would be worse than the defect.
+ */
+function warnRefusedPartition(group: string, items: readonly { item: { id: string } }[]): void {
+  if (!import.meta.env.DEV || warnedSegmentGroups.has(group)) return;
+  warnedSegmentGroups.add(group);
+  // eslint-disable-next-line no-console -- a development-only diagnostic for a silent misconfiguration
+  console.warn(
+    `Toolbar: segmentLabels was passed but group "${group}" was not partitioned. Every item in a ` +
+      'group must carry a `segment` the map names, or the whole group falls back to one region. ' +
+      `Items: ${items.map((r) => r.item.id).join(', ')}.`,
+  );
 }
 
 const DEFAULT_GROUP_LABELS: Record<ToolbarGroupId, string> = {
@@ -95,6 +152,7 @@ export function Toolbar<Ctx>({
   label,
   authoringEnabled = true,
   groupLabels,
+  segmentLabels,
   alignEndGroup,
   className,
 }: ToolbarProps<Ctx>): React.ReactElement {
@@ -171,6 +229,51 @@ export function Toolbar<Ctx>({
 
   const labels = { ...DEFAULT_GROUP_LABELS, ...groupLabels };
 
+  /**
+   * One item's control, extracted so the grouped and the sub-grouped branches render **the same
+   * markup**. A second copy is how a tab index, a `disabledReason` or a busy state comes to exist
+   * on one path and not its neighbour — the shape this register records shipping five times.
+   */
+  const renderItem = (r: (typeof resolved)[number]): React.ReactElement =>
+    r.item.render ? (
+      <span key={r.item.id} className="inline-flex items-center">
+        {r.item.render(context, {
+          disabled: !r.enabled,
+          disabledReason: r.disabledReason,
+          active: r.active,
+          layout: 'comfortable',
+          itemProps: r.item.presentational
+            ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
+            : {
+                tabIndex: tabIndexFor(r.item.id),
+                'data-toolbar-focusable': '',
+                'data-toolbar-item': r.item.id,
+                onFocus: () => setActiveId(r.item.id),
+              },
+        })}
+      </span>
+    ) : (
+      <ToolbarButton
+        key={r.item.id}
+        itemId={r.item.id}
+        label={r.item.label}
+        {...(r.item.description ? { description: r.item.description } : {})}
+        icon={r.icon}
+        {...(r.busy ? { busy: true } : {})}
+        // The item's own policy decides, with `'auto'` now meaning "yes": under the
+        // ladder `'auto'` meant "if the row can afford it", and a row that wraps can
+        // always afford it.
+        showLabel={(r.item.showLabel ?? 'auto') !== 'never'}
+        {...(r.item.isActive ? { pressed: r.active } : {})}
+        disabled={!r.enabled}
+        disabledReason={r.disabledReason}
+        srDescription={r.srDescription}
+        tabIndex={tabIndexFor(r.item.id)}
+        onActivate={() => r.item.onActivate!(context)}
+        onFocus={() => setActiveId(r.item.id)}
+      />
+    );
+
   return (
     <div
       ref={containerRef}
@@ -188,60 +291,45 @@ export function Toolbar<Ctx>({
         className,
       )}
     >
-      {groups.map(({ group, items: groupItems }, i) => (
-        <div
-          key={group}
-          role="group"
-          aria-label={labels[group]}
-          className={cn(
-            'flex flex-wrap items-center gap-1',
-            // A hairline separates groups along the axis the toolbar runs.
-            i > 0 && 'border-border ml-1 border-l pl-2',
-            group === alignEndGroup && 'ml-auto',
-          )}
-        >
-          {groupItems.map((r) =>
-            r.item.render ? (
-              <span key={r.item.id} className="inline-flex items-center">
-                {r.item.render(context, {
-                  disabled: !r.enabled,
-                  disabledReason: r.disabledReason,
-                  active: r.active,
-                  layout: 'comfortable',
-                  itemProps: r.item.presentational
-                    ? { tabIndex: -1, 'data-toolbar-item': r.item.id }
-                    : {
-                        tabIndex: tabIndexFor(r.item.id),
-                        'data-toolbar-focusable': '',
-                        'data-toolbar-item': r.item.id,
-                        onFocus: () => setActiveId(r.item.id),
-                      },
-                })}
-              </span>
-            ) : (
-              <ToolbarButton
-                key={r.item.id}
-                itemId={r.item.id}
-                label={r.item.label}
-                {...(r.item.description ? { description: r.item.description } : {})}
-                icon={r.icon}
-                {...(r.busy ? { busy: true } : {})}
-                // The item's own policy decides, with `'auto'` now meaning "yes": under the
-                // ladder `'auto'` meant "if the row can afford it", and a row that wraps can
-                // always afford it.
-                showLabel={(r.item.showLabel ?? 'auto') !== 'never'}
-                {...(r.item.isActive ? { pressed: r.active } : {})}
-                disabled={!r.enabled}
-                disabledReason={r.disabledReason}
-                srDescription={r.srDescription}
-                tabIndex={tabIndexFor(r.item.id)}
-                onActivate={() => r.item.onActivate!(context)}
-                onFocus={() => setActiveId(r.item.id)}
-              />
-            ),
-          )}
-        </div>
-      ))}
+      {groups.map(({ group, items: groupItems }, i) => {
+        const segments = partitionBySegment(groupItems, segmentLabels);
+        if (segmentLabels && !segments) warnRefusedPartition(group, groupItems);
+        // The group's own box, whether or not it is subdivided. When it IS, it keeps the layout and
+        // the inter-group chrome and gives up its `role` — see `segmentLabels`.
+        const outerClass = cn(
+          'flex flex-wrap items-center gap-1',
+          // A hairline separates groups along the axis the toolbar runs.
+          i > 0 && 'border-border ml-1 border-l pl-2',
+          group === alignEndGroup && 'ml-auto',
+        );
+        const body = segments
+          ? segments.map(({ segment, label: segmentLabel, items: segmentItems }, j) => (
+              <div
+                key={segment}
+                role="group"
+                aria-label={segmentLabel}
+                className={cn(
+                  'flex flex-wrap items-center gap-1',
+                  // The same hairline, one level in: it is the same statement ("these are a
+                  // different thing from those") and giving it a second treatment would say that
+                  // the two boundaries mean different things.
+                  j > 0 && 'border-border ml-1 border-l pl-2',
+                )}
+              >
+                {segmentItems.map(renderItem)}
+              </div>
+            ))
+          : groupItems.map(renderItem);
+        return segments ? (
+          <div key={group} className={outerClass}>
+            {body}
+          </div>
+        ) : (
+          <div key={group} role="group" aria-label={labels[group]} className={outerClass}>
+            {body}
+          </div>
+        );
+      })}
     </div>
   );
 }
