@@ -10,6 +10,51 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-08-29 — Carrying the typeface to the layers that opt out of the cascade
+
+`docs/specs/typeface-outward-artefacts/`. No ADR: this applies an existing decision (IBM Plex Sans,
+chosen 2026-08-24) to layers it never reached, and the gate is ADR-0058's standing instruction
+rather than a new position.
+
+**The mechanism, and why not the obvious alternatives.**
+
+- **Print: one declaration on `.tsld-print-container`, not `body` inheritance and not per-sheet.**
+  The finding worth keeping is the one a future reader would otherwise re-derive: `body`'s own
+  `font-family: var(--font-sans)` resolves **on body**, so a later `[data-surface="print"]` rebind
+  of that token — the obvious way to give paper its own face — is **silently ignored**. That is
+  ADR-0102's alias trap in a new costume, and it is why the family is declared at the element
+  `print-document.ts` already stamps the scope on. The two feature stylesheets that used to name
+  `'Inter'` are deleted rather than corrected; a DOM surface should declare nothing.
+- **Canvas: one `FONT_STACK` string, not a token read at paint time.** `measure.ts` keys its width
+  memo by text alone and says so — sound only while the font is constant. A per-paint token read
+  would make that unsound silently. It lives in `geometry.ts` because
+  `geometry-is-a-leaf.structural.test.ts` pins that file's imports with an exact `toEqual`.
+
+**A deviation from the plan, taken on the product owner's instruction.** The plan's T7 said the
+authoring document should name **no face inline** — a document that does not restate a value cannot
+disagree with it. Asked directly, the product owner chose "fix it **and** gate it". So
+`DESIGN_SYSTEM.md` names the face and `typeface-reach.structural.test.ts` parses its claim and
+asserts it against `--font-sans`. Both designs are drift-proof; this one keeps the document useful
+to read at the cost of a gate, and the gate is what makes the naming safe. Recorded because the
+shipped shape differs from the approved plan and the reason is not in the plan.
+
+**The favicon is a named exception**, also the product owner's call: one glyph at 16 px in browser
+chrome, and the one outward artefact a gate scoped to `apps/web/src` structurally cannot reach
+(`docs/TECH_DEBT.md` #216).
+
+**And the harness that photographs paper was not photographing paper.** `shoot.mjs` revealed the
+print container with `display: block` in page script and never emulated print media, so `@media
+print` never applied — it had been showing the SCREEN's treatment of a print document, and would
+have shown the RIGHT face throughout the whole time this defect existed. Fixed, and the shot list
+gained the two print documents it had never had: the printed diagram and the printed programme, the
+two artefacts a planner actually hands over. Both reported a content defect in their first picture
+(`docs/TECH_DEBT.md` #217). The emulation reset is unconditional at the top of the shot loop rather
+than paired with each reveal, because `emulateMedia` is a **context** setting that survives
+navigation and this harness shares one page across the list — so the one-line fix leaked paper media
+into four later shots before the two new ones made it visible.
+
+---
+
 ## 2026-08-29 — Fix-slice M-E/M-F: the small decisions the ADR does not carry
 
 Three calls from the fix-slice epic (`docs/specs/fix-slice-2026-08/`) worth a line each; the

@@ -430,25 +430,56 @@ const SHOTS = [
     go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
     after: async (p) => {
       await openHealthPanel(p);
-      // Stub print so the dialog never opens; the detached container stays mounted (teardown waits
-      // on `afterprint`, which a stub never fires) long enough to reveal and photograph.
-      await p.evaluate(() => {
-        globalThis.print = () => {};
-      });
+      await stubPrintDialog(p);
       await p.getByRole('button', { name: 'Print report' }).click();
-      await p.evaluate(() => {
-        const node = globalThis.document.querySelector('.tsld-print-container');
-        if (!(node instanceof globalThis.HTMLElement))
-          throw new Error('no print container mounted');
-        // Reveal what the print stylesheet only shows on paper, and hide the app behind it.
-        node.style.display = 'block';
-        node.style.background = '#fff';
-        node.style.position = 'fixed';
-        node.style.inset = '0';
-        node.style.overflow = 'auto';
-        node.style.zIndex = '99999';
-      });
-      await p.waitForTimeout(400);
+      await revealPrintDocument(p);
+    },
+  },
+  // **The other two print documents, which nothing had ever photographed** (M2-U2). The shot list
+  // had exactly one — the health report — and the two artefacts a planner actually hands over,
+  // the printed diagram and the printed programme, were absent. That is `docs/TECH_DEBT.md` #158's
+  // shape one level in: the list stopped at the deliverable it had thought of. It is also where
+  // this epic's defect lived, since `PrintSurface.css` and `GanttPrintSurface.css` are the two
+  // stylesheets that named a face with no file — so the two documents nobody could see were the
+  // two that were wrong.
+  {
+    name: 'tsld-print-diagram',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+    after: async (p) => {
+      await stubPrintDialog(p);
+      await p
+        .getByRole('button', { name: /share.*export/i })
+        .first()
+        .click();
+      await p.getByRole('menuitem', { name: 'Print…', exact: true }).click();
+      // The diagram path rasterises the whole-plan PNG before it mounts anything, so unlike the
+      // other two this one is asynchronous — wait for the container rather than for a timeout.
+      // `attached`, not the default `visible`: the container is `display: none` until the print
+      // stylesheet or the reveal below shows it, so waiting for visibility waits forever.
+      await p.locator('.tsld-print-container').waitFor({ state: 'attached', timeout: 30_000 });
+      await revealPrintDocument(p);
+    },
+  },
+  {
+    name: 'gantt-print-programme',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}?view=gantt`),
+    after: async (p) => {
+      await stubPrintDialog(p);
+      await p
+        .getByRole('button', { name: /share.*export/i })
+        .first()
+        .click();
+      // The SAME menu item: `printDiagram` branches on the live view mode (ADR-0059 M4), so the
+      // programme is what `Print…` produces while the Gantt is the current view.
+      await p.getByRole('menuitem', { name: 'Print…', exact: true }).click();
+      // `attached`, not the default `visible`: the container is `display: none` until the print
+      // stylesheet or the reveal below shows it, so waiting for visibility waits forever.
+      await p.locator('.tsld-print-container').waitFor({ state: 'attached', timeout: 30_000 });
+      await revealPrintDocument(p);
     },
   },
   // **The guest share view** — the only screen in the product a person outside the organisation
@@ -501,6 +532,48 @@ async function openHealthPanel(page) {
     .getByText(/failed · /)
     .first()
     .waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Stop the browser's print dialog opening, so the detached container stays mounted long enough to
+ * photograph. Teardown waits on `afterprint`, which a stub never fires.
+ */
+async function stubPrintDialog(page) {
+  await page.evaluate(() => {
+    globalThis.print = () => {};
+  });
+}
+
+/**
+ * Reveal the mounted print document and photograph it **as paper**.
+ *
+ * **Emulate the medium, or the shot is not of the medium it names.** The one print shot this
+ * harness had revealed its container with `display: block` in page script and never called
+ * `emulateMedia`, so `@media print` never applied: every rule that exists only on paper was absent
+ * from the picture, and the shot showed the SCREEN's treatment of a print document. Found while
+ * carrying the typeface to the print stylesheets (`docs/specs/typeface-outward-artefacts/` §5) —
+ * those sheets set the family inside `@media print`, so the harness photographed the inherited
+ * face while paper got the overridden one. It would have shown the RIGHT face throughout the whole
+ * time the defect existed, which is worse than showing nothing.
+ *
+ * One helper rather than three copies: the three print documents share `mountPrintDocument`'s
+ * container (`lib/print-document.ts`), and three reveals would drift in exactly the way the
+ * `emulateMedia` omission did — silently, in the direction of looking correct.
+ */
+async function revealPrintDocument(page) {
+  await page.emulateMedia({ media: 'print' });
+  await page.evaluate(() => {
+    const node = globalThis.document.querySelector('.tsld-print-container');
+    if (!(node instanceof globalThis.HTMLElement)) throw new Error('no print container mounted');
+    // Reveal what the print stylesheet only shows on paper, and hide the app behind it.
+    node.style.display = 'block';
+    node.style.background = '#fff';
+    node.style.position = 'fixed';
+    node.style.inset = '0';
+    node.style.overflow = 'auto';
+    node.style.zIndex = '99999';
+  });
   await page.waitForTimeout(400);
 }
 
@@ -593,6 +666,14 @@ for (const width of widths) {
     // judge. An instrument that produces nothing must say so (the ADR-0100 rule); it must not
     // also destroy its neighbours' output.
     try {
+      // **Reset the medium before every shot, unconditionally.** `emulateMedia` is a CONTEXT
+      // setting that survives navigation, and this loop shares one page across the whole list — so
+      // a print shot that emulated paper and did not restore it would photograph every LATER shot
+      // as paper, silently and in the direction of looking plausible. Reset here rather than in
+      // `revealPrintDocument`, because the screenshot is taken after `after` returns: the helper
+      // cannot restore what the camera still needs. Unconditional, so the next print shot inherits
+      // the protection instead of having to remember it.
+      await page.emulateMedia({ media: null });
       if (shot.exportPng) {
         if (!ids) ids = await seedProgramme(page, slug);
         await page.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`);

@@ -75,9 +75,32 @@ Status is never conveyed by colour alone — always pair with an icon and/or tex
 
 ### Typography
 
-- **Family:** `--font-sans` (Inter + system fallback); `--font-mono` for
-  numeric/code contexts. Numeric columns (amounts, counts) may use tabular
-  numerals.
+- **Family:** `--font-sans` (**IBM Plex Sans**, self-hosted); `--font-mono`
+  (**IBM Plex Mono**) for numeric/code contexts. Numeric columns (amounts,
+  counts) may use tabular numerals. **Never name a family anywhere else** — the
+  canvas and the print documents resolve nothing from the cascade and compose
+  `FONT_STACK` instead, which `typeface-reach.structural.test.ts` derives from
+  this token and pins. This line said "Inter + system fallback" until
+  2026-08-29, having been wrong through **both** deliberate face decisions; the
+  gate below exists because prose failed twice on this exact fact.
+- **Outside the DOM cascade — compose `FONT_STACK`.** A canvas or a file-served
+  SVG resolves nothing from the cascade, so it is handed the family explicitly:
+  the TSLD painter and the export band both compose that one constant, and
+  `typeface-reach.structural.test.ts` refuses a hand-set one.
+- **At a surface-scope boundary — declare `var(--font-sans)` on that element.**
+  This is a **different** case, and the distinction matters because the obvious
+  reading is wrong: a print container inside the DOM inherits the face from
+  `body` perfectly well, so "does my surface resolve nothing from the cascade?"
+  answers "no" and skips the rule it still needs. The reason is that `body`'s own
+  `font-family: var(--font-sans)` resolves _on body_ — so a future
+  `[data-surface="…"]` rebind of `--font-sans`, the obvious way to give paper its
+  own face, would be silently ignored. That is ADR-0102's alias trap in a new
+  costume, and it is why `.tsld-print-container` declares the family rather than
+  leaning on inheritance. Any new `[data-surface]` root gets the same treatment.
+- **Every other DOM surface inherits and declares nothing.** A named family in a
+  feature stylesheet overrides the product face for that whole subtree, which is
+  exactly how both print sheets came to name a face this repository has no file
+  for.
 - **Type scale** (Tailwind defaults; use these, don't invent sizes):
 
   | Token       | Size / line-height | Use                         |
@@ -320,10 +343,20 @@ Two consequences worth stating, because both were learnt the expensive way:
 Every pair that matters is asserted by `styles/token-contrast.test.ts` across the surface scopes
 below. **Do not quote a ratio here** — quote the gate.
 
-**The typeface is Space Grotesk** (ADR-0097), chosen from four candidates rendered on real product
-chrome. The palette's source description named Roboto; a per-theme typeface was rejected on the
-reasoning that it would shift layout and pull a second font at runtime for no accessibility or brand
-gain colour does not already deliver — and with one theme the question no longer arises.
+**The typeface is IBM Plex Sans**, with IBM Plex Mono for data — chosen by the product owner on
+2026-08-24 from three fully-realised directions rendered on the real workspace at 1646 px, and
+**self-hosted for privacy**: requesting a face from `fonts.gstatic.com` transmits every reader's IP
+to a third party on first paint, which a German court has found to breach the GDPR. A per-theme
+typeface was rejected on the reasoning that it would shift layout and pull a second font at runtime
+for no accessibility or brand gain colour does not already deliver — and with one theme the question
+no longer arises.
+
+**This paragraph said "The typeface is Space Grotesk" until 2026-08-29**, five days after the face
+changed, in the document that tells the next person what to author in. That is the drift class
+ADR-0058 exists for, and it had happened once before here — the Family line above named Inter
+through the Space Grotesk era as well. Two wrong answers, on one page, across two decisions. It is
+now gated: `typeface-reach.structural.test.ts` asserts that this document's stated family agrees
+with `--font-sans`, so a third face decision cannot leave this line behind.
 
 ### Surface scopes (ADR-0055)
 

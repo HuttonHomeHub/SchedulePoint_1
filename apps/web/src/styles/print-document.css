@@ -25,8 +25,23 @@
  * Found by a deferred review.
  */
 
+/**
+ * **The product's typeface, declared AT the scoped element rather than inherited from `body`.**
+ *
+ * Both feature stylesheets used to override this to `'Inter'` — a face this repository has no
+ * `@font-face` and no file for — so paper fell through to `system-ui` while the diagram inside it
+ * was drawn in IBM Plex Sans. Measured under `emulateMedia({media:'print'})` before the fix:
+ * `.tsld-print-container` resolved to Plex by inheritance and `.tsld-print-root` to `Inter`.
+ *
+ * Declared here rather than left to inherit because `body`'s own `font-family: var(--font-sans)`
+ * resolves ON BODY: a future `[data-surface="print"]` rebind of `--font-sans` — the obvious way to
+ * give paper its own face — would be silently ignored, which is ADR-0102's alias trap in a new
+ * costume. `print-document.ts` already stamps the surface scope on this element, so declaring the
+ * family here makes a paper face a one-line change instead of a debugging session.
+ */
 .tsld-print-container {
   display: none;
+  font-family: var(--font-sans);
 }
 
 @media print {
