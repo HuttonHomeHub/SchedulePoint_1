@@ -47,7 +47,15 @@ function main(argv) {
   const warnings = [];
 
   // ── Parse ────────────────────────────────────────────────────────────────────────────────────
-  const all = sections(md, 2);
+  //
+  // **BOTH heading levels, and reading only one was a live defect in this gate's first version.**
+  // `docs/TECH_DEBT.md:100-103` states the document's own convention — "Headings are
+  // `### <number>. <title>`, ALWAYS. Three rows had drifted to `##`" — so `###` is canonical and
+  // `##` is the drift. The first version called `sections(md, 2)` and therefore read **only the
+  // drifted rows**: 31 numbered rows invisible, 29 of them with no status, while the gate reported
+  // "88 rows, all with a status" over a document where that was false. It survived a red run, a
+  // repair and an arming, because A9's control counted the same level as the parser — see below.
+  const all = [...sections(md, 2), ...sections(md, 3)].sort((a, b) => a.line - b.line);
   const items = all.filter(
     (s) => !NOT_ITEMS.has(s.heading.trim()) && rowNumber(s.heading) !== null,
   );
@@ -82,11 +90,17 @@ function main(argv) {
     problems.push('A9: no detailed rows parsed at all — the parse is broken, not the register.');
   if (compact.length === 0)
     problems.push('A9: no compact-table rows parsed at all — the parse is broken.');
-  const naiveHeadings = md.split('\n').filter((l) => l.startsWith('## ')).length;
-  if (all.length !== naiveHeadings) {
+  // **The control must not share the parser's blind spot — which is how this assertion missed the
+  // biggest instance of exactly what it exists for.** Its first version counted `^## `, the same
+  // level `sections(md, 2)` read, so BOTH sides of "did we read less than we think?" were blind to
+  // the 31 `###` rows: A9 agreed with itself and reported OK. The scan now counts a numbered
+  // heading at EITHER level, derived independently of `sections()`.
+  const naiveRows = md.split('\n').filter((l) => /^#{2,3} #?\d+[a-z]?[.\s\u2014-]/.test(l)).length;
+  if (items.length !== naiveRows) {
     problems.push(
-      `A9: the parser sees ${all.length} level-2 headings but a naive scan sees ${naiveHeadings}. ` +
-        'One of them is wrong; a gate that reads less than it thinks reports green over the gap.',
+      `A9: the parser sees ${items.length} numbered rows but a naive scan of both heading levels ` +
+        `sees ${naiveRows}. One of them is wrong; a gate that reads less than it thinks reports ` +
+        'green over the gap.',
     );
   }
 

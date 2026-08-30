@@ -104,6 +104,8 @@ of its peers.
 
 ### 58. The tiered ruler and TODAY chip (ADR-0055 S4, deferred)
 
+**Status:** unverified
+
 > **Half done 2026-08-08 — in a different shape than specified.** The **TODAY chip shipped** as
 > ADR-0056's canvas Today pill (`render/paint.ts:1339-1364`, `TODAY_CHIP_TOP`), not as the DOM chip
 > this row describes. Only the **tiered ruler** remains (`TsldCanvas.tsx:1714-1722` is still three
@@ -130,6 +132,8 @@ own slice without re-opening anything S4 shipped.
 
 ### 60. The Gantt's scroll behaviour is unmeasured on real hardware
 
+**Status:** unverified
+
 The Gantt's substrate decision (ADR-0059 §1) rests on one claim: the live node count is bounded by
 the viewport, not by the plan. That claim **is** measured — the flag-on Playwright journey
 (`apps/web/e2e-gantt/gantt-scale.spec.ts`) seeds two plans an order of magnitude apart through the
@@ -149,6 +153,8 @@ the numbers in ADR-0059. Deliberately **not** turned into a CI gate: a milliseco
 measured on a runner would be noise dressed as a guarantee.
 
 ### 62. `canReadCost` is derived from the role because the DTO cannot say
+
+**Status:** unverified
 
 The activity DTO returns `null` for a cost field that is **unset** and `null` for one the caller
 **may not read** — the two are indistinguishable on the wire. So the tabbed activity editor
@@ -175,6 +181,8 @@ fields (not `null`). Until then, treat the permission sets as coupled: changing 
 other is a client bug in a different file.
 
 ### 63. The Progress tab carries no unsaved marker for its three panels
+
+**Status:** unverified
 
 > **The confirmation half is CLOSED (2026-08-23, ADR-0108 D2); the tab-marker half remains open.**
 > The three panels now report dirtiness up to the editor via one `onDirtyChange` callback each —
@@ -204,6 +212,8 @@ tabs use, plus into `dirtyScopeNames` for the confirmation.
 
 ### 64. Fields still use native `disabled`, so a mid-session pen loss can drop focus
 
+**Status:** unverified
+
 ADR-0060's Save buttons were moved to `aria-disabled` + a pointer-events guard (`ScopeSaveBar`),
 because a natively-disabled button is blurred to `<body>` the instant it flips — and they flip on
 every save. The **fields** they sit beside were not: they are still natively `disabled` when the
@@ -229,6 +239,8 @@ rather than a possible one. Raised by the ADR-0062 accessibility gate.
 
 ### 65. A link's lag or type edited from the dialog is not recorded for undo
 
+**Status:** unverified
+
 The undo stack now covers a dependency **add** and **remove** symmetrically (the convergence epic's
 M5, `recordDependencyAdd` / `recordDependencyRemove`), and the canvas lag-anchor drag records its
 own change. What is still missing is the third way a link changes: the **Edit link** dialog, where a
@@ -246,6 +258,8 @@ line in the epic that noticed it.
 
 ### 66. A shaded create form still accepts input it cannot submit
 
+**Status:** unverified
+
 The house rule is shade-with-a-reason, and `ScopeSaveBar` implements it correctly: the Save is
 `aria-disabled` with the reason `aria-describedby`-linked. But on the two create forms this epic
 shipped — **Add a link** (`AddLinkSection`) and **Assign a resource** (`ActivityResourcesPanel`) —
@@ -262,6 +276,8 @@ accessibility gate as a nit, and by its ux gate as "the form should say so befor
 
 ### 67. The Logic panel's post-remove focus target is the whole panel
 
+**Status:** unverified
+
 After removing a dependency, `ActivityLogicPanel` moves focus to a wrapper around **everything** —
 both tables, the add form and the cross-plan/notes slots. It is not a regression (it is what
 `DependencyEditor` always did, and it beats dropping focus to `<body>`), but this epic shipped a
@@ -275,6 +291,8 @@ list. Raised by the ADR-0062 accessibility gate.
 
 ### 68. **Add note** lands on the Notes tab but not in its composer
 
+**Status:** unverified
+
 `openActivityEditor`'s `steps` intent carries `focusSteps`, which the editor wires to the steps
 heading. The `notes` intent carries only the tab, on the reasoning that "the intent IS the reveal" —
 true visually, but the native `<dialog>`'s initial focus is the ✕ close button regardless of which
@@ -286,6 +304,8 @@ with the composer exposing a ref. Raised by the ADR-0062 accessibility gate.
 
 ### 69. Two idioms for editing a row in place
 
+**Status:** unverified
+
 `AssignmentRow` saves each field with its own inline button; `DependencyTable` opens a dialog per
 row. Both are defensible on their own and they now sit two tabs apart in one editor, so the
 inconsistency is visible in a way it was not when each lived in its own pop-out.
@@ -295,6 +315,8 @@ list/manage archetype is the natural home), then move whichever surface loses. R
 ADR-0062 component gate as a suggestion — deliberately not rushed inside the epic that noticed it.
 
 ### 70. The API e2e harness cannot reproduce a same-plan write race
+
+**Status:** unverified
 
 The WBS re-parent path takes the plan advisory lock so two mirror re-parents cannot both pass a
 still-acyclic ancestor walk (ADR-0038 invariant (a), fixed in the WBS-improvements M0). The natural
@@ -317,6 +339,8 @@ guarantee. Until then, do not add another "serialises concurrent …" e2e test a
 
 ### 71. The WBS band's derived bucket is distinguished by colour and label, not shape
 
+**Status:** unverified
+
 `paintWbsBand` draws the derived **Unassigned** bucket as the same rounded rect as a real summary,
 in a different fill (`--color-muted-foreground` vs `--color-primary`) with its label on top. Every
 pairing clears 4.5:1 in all three themes today, so this is not a contrast failure — but at a zoom
@@ -331,6 +355,8 @@ pairing is not one of the design system's validated pairs and has no contrast te
 
 ### 72. Bulk-selection checkboxes are a 16px target, and hand-rolled
 
+**Status:** unverified
+
 The activities table's new selection column renders a bare `size-4` `<input type="checkbox">` per
 row. `ActivityMembersPanel` does better for the same job — the whole row is a clickable `<label>` —
 and `CheckboxField` (`components/ui/form.tsx`) exists to stop the chrome being hand-assembled at
@@ -344,6 +370,8 @@ make the table row itself the hit target. Raised by the ADR-0063 M6 component an
 
 ### 73. `Column.srHeader` is dead once `headerCell` is set
 
+**Status:** unverified
+
 `DataTable`'s render ternary takes `headerCell` first, so a column declaring both (the activities
 table's Select column does) silently ignores `srHeader`. Harmless today — the checkbox carries its
 own `aria-label` — but it is a prop that looks load-bearing and is not.
@@ -353,6 +381,8 @@ own `aria-label` — but it is a prop that looks load-bearing and is not.
 the ADR-0063 M6 component gate.
 
 ### 74. The plan advisory lock's contention headroom is unmeasured
+
+**Status:** unverified
 
 > **Narrowed 2026-08-09 (programme M5), and the largest input changed.** This row asked what happens
 > when a writer waits on a plan lock held by a long transaction. The longest such transaction — a
@@ -387,6 +417,8 @@ Related: the parent-chain walk inside that lock has **no depth cap**, unlike the
 documented ≤ 10 (ADR-0053 §3).
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
+
+**Status:** unverified
 
 > **Correction, 2026-08-03 — read this before the rest of the row.** This entry was opened as "is
 > ≤ 4 ms p95 the right draw budget?", and ADR-0065, the runbook and every discussion since have
@@ -598,6 +630,8 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
+**Status:** unverified
+
 > **Re-verified 2026-08-08 — half of this is done.** The triple `activityRect` computation was fixed
 > by the per-frame `RectCache` (`render/render-model.ts:446`, consumed at `paint.ts:793`), and
 > `render/paint-frame.ts:47-54` now says in its own docblock that the remaining hoist "reduces to a
@@ -648,6 +682,8 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
 
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 
+**Status:** unverified
+
 CodeQL flags `writeFileSync(args.out, JSON.stringify(results))` in `apps/seed-cli/src/main.ts` as
 "network data written to file" — the negative tier's report contains the API's own response codes
 and messages, which are network-sourced, and they land on disk.
@@ -688,6 +724,8 @@ contained, found by taking the finding seriously rather than by trying to satisf
 
 ### 84. Levelling is quadratic in the number of activities contending on ONE resource
 
+**Status:** unverified
+
 **Found by** the backend-performance review of ADR-0071 M2, which measured `level.ts` before and
 after the join-lag rework and reported the honest result: the new implementation is marginally
 **faster** than the old at every size tested (500 → 16,000 activities), and both are quadratic in
@@ -720,7 +758,7 @@ expected to take.
 
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
-**Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
+**Status:** unverified · **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
 inherited it rather than introducing it.
 
 `effectiveHoursPerDay()` (`apps/web/src/lib/effective-hours-per-day.ts`) resolves the factor as the
@@ -747,6 +785,8 @@ exists, else today's answer — so every caller is corrected at once rather than
 engine is not involved and the recalc parity gate is untouched.
 
 ### 88. An email link scanner reaches the verification URL before the recipient
+
+**Status:** unverified
 
 > **Narrowed 2026-08-08.** The row says a fix should "cover the invitation accept path at the same
 > time". That path is **already safe**: `AcceptInvitationCard.tsx:243-256` requires a real button
@@ -806,7 +846,7 @@ verify/invite stays this row's own, separate remediation.
 
 ### 89. The reverse proxy forwards `X-Forwarded-Proto: http` on an HTTPS request
 
-**Found:** 2026-08-03, reading production request logs during the Theme B2 verification test.
+**Status:** unverified · **Found:** 2026-08-03, reading production request logs during the Theme B2 verification test.
 
 Every request arriving through Cloudflare → Nginx Proxy Manager → web → api carries:
 
@@ -867,6 +907,8 @@ is the ADR-0058 rule finding two of its own instances in the file that cites it.
 
 ### 92. An undone delete leaves a deletion with no matching restore
 
+**Status:** unverified
+
 > **Re-verified 2026-08-08 — the stated blocker is gone.** This row says the fix waits on "ADR-0048
 > M4 — the optional id-stable restore endpoint". That endpoint **shipped** when #113 closed:
 > `DELETE …/activities/:activityId` now returns `{ deleteBatchId }`
@@ -903,7 +945,7 @@ the log is not wrong, only incomplete in a way a reader cannot see.
 
 ### 93. The audit epic's non-blocking review findings (ADR-0073 C4.1)
 
-**Found:** 2026-08-04, from six specialist reviews over the combined C1–C3.4 diff. The six blocking
+**Status:** unverified · **Found:** 2026-08-04, from six specialist reviews over the combined C1–C3.4 diff. The six blocking
 findings were folded with regression tests; these are the remainder, recorded rather than rushed.
 
 (a) **Two producers read one extra row inside a held lock** to label their audit event —
@@ -941,7 +983,7 @@ disappear" may not think to try it. The label predates the widened scope.
 
 ### 95. `apps/api`'s Vite configs are ESM in a CommonJS package, and a future Vite major will stop loading them
 
-**Found:** 2026-08-04, by accepting the Dependabot vite bump (8.1.4 → 8.2.0), which added the
+**Status:** unverified · **Found:** 2026-08-04, by accepting the Dependabot vite bump (8.1.4 → 8.2.0), which added the
 warning. It is a new warning, not a new defect — the mismatch predates the bump.
 
 ```
@@ -969,6 +1011,8 @@ checking one at a time against the API e2e suite. Alternatively rename the three
 major that flips the default, not after.
 
 ### 96. The router JSON-parses every search param, so a foreign one can arrive as the wrong type
+
+**Status:** unverified
 
 > **Corrected 2026-08-08.** The body below says `/accept-invite` has "the same latent shape" and is
 > not normalised. **It is** — `app/router.tsx:409-413`. The remaining work is the router-level
@@ -1004,7 +1048,7 @@ that is the other half of the row: `/accept-invite?token=` has the same latent s
 
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
-**Found:** 2026-08-05, by the five specialist gates over the M0–M5 diff. Each was raised as
+**Status:** unverified · **Found:** 2026-08-05, by the five specialist gates over the M0–M5 diff. Each was raised as
 non-blocking by its reviewer and is recorded rather than rushed, per the ADR-0064/0073 precedent.
 
 - **(a) `AUDIT_ACTION_CATEGORY` files the three new password actions under `sign-ins`**
@@ -1070,6 +1114,7 @@ One line each. The story lives where the link points, not here.
 | 124 | The selection bar's `<Toolbar>` had no fit coverage                            | 2026-08-27 | ADR-0114 M1 — and the row's own reasoning was wrong: the bar could overflow, by 408 px.                    |
 | 219 | The register's rows went stale and nothing measured how much                   | 2026-08-30 | ADR-0120 — `check:debt-status`; every row now carries a machine-readable status.                           |
 | 220 | The reconciliation trigger's input was unsorted prose, and a reader misread it | 2026-08-30 | ADR-0120 — `check:reconcile-due`, advisory at T = 8 ADRs; the pass table is sorted.                        |
+| 98  | The guest share view scrolled sideways at 320 px (WCAG 1.4.10)                 | 2026-08-08 | ADR-0051 F-M4 era; closed by the guest-share responsive fix.                                               |
 | 29  | Released images not pulled — "shipped but not live"                            | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                          |
 | 59  | The device-authoritative draw measurement was never made                       | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                                   |
 | 77  | The demo Unit 300 file was a lossy rendering of the fixture                    | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                                         |
@@ -1100,52 +1145,9 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
-### 98. The guest share view scrolls sideways at 320 px (WCAG 1.4.10) **(CLOSED 2026-08-08)**
-
-**Closed by the debt-paydown programme M1-T3.** `TsldViewControls`' zoom group gained `flex-wrap` —
-on the **shared** control, with the member workspace re-checked at the same widths, rather than
-branched by surface (a control that behaves differently depending on who is looking at it is how two
-surfaces drift). The assertion this row exists for is now written and enabled in
-`e2e-share/share.spec.ts` at **320 and 360 px**, and was verified red by removing the wrap: 436 px
-against a 320 px viewport, exactly as first measured.
-
-**Found:** 2026-08-05, by the ADR-0075 M3 accessibility gate — but not the way the finding was
-written. The reviewer reasoned from the CSS that nothing on the guest view's chain sets
-`overflow-hidden`, concluded the page would simply scroll vertically and pass, and **suggested a
-test to confirm it**. The test was written and **failed on its first run**. That sequence is the
-row's real subject: a correct-sounding chain of CSS reasoning, from a specialist, about a property
-that takes one browser measurement to settle.
-
-**Measured** (`apps/web/e2e-share`, Chromium, 320 × 720): `documentElement.scrollWidth` is **436**
-against a 320 px viewport. The overflowing node is the TSLD zoom-preset row —
-`flex items-center gap-1` with no `flex-wrap`, containing Day / Week / Month / Quarter / Year, the
-−/+ buttons and **Fit to plan** — which measures **420 px** and cannot shrink.
-
-**It is pre-existing, and that is the uncomfortable part.** The height fix in PR #238 did not cause
-it; it made it _observable_. While the canvas rendered at 1 px nobody scrolled this screen, and no
-gate looked. The share view has been publicly reachable since 2026-07-21.
-
-**Why it is not fixed here.** The offending row is `TsldViewControls`, shared with the member plan
-workspace, which has its own responsive story — ADR-0031's three prominence tiers and responsive
-overflow, plus ADR-0030's below-`md` single-pane toggle. Adding `flex-wrap` is a two-word change
-and might well be right, but it is a change to a shared control's layout at exactly the widths
-another ADR governs, and it needs the member workspace re-checked at 320 px in a browser rather
-than reasoned about — which is the mistake this row exists to record.
-
-**Remediation:** decide whether the guest view should get the member workspace's responsive
-treatment or its own reduced control set (a guest cannot edit, so several controls are arguably
-noise on a phone), then fix and re-enable the assertion in `apps/web/e2e-share/share.spec.ts`,
-which currently checks only that the canvas keeps its height at that width.
-
-**Risk:** moderate-frequency, low-severity. A recipient on a phone gets a horizontally scrolling
-page; nothing is unreachable, but 1.4.10 is a WCAG 2.2 AA criterion this project claims to meet
-(`CLAUDE.md` §13), so the claim is currently wrong for this surface.
-
----
-
 ### 99. `/request-password-reset` leaks account existence through timing
 
-**Found:** 2026-08-05, by the ADR-0075 M4 backend-performance and security gates independently.
+**Status:** unverified · **Found:** 2026-08-05, by the ADR-0075 M4 backend-performance and security gates independently.
 
 The endpoint is uniform in **everything the caller can read** — same status, same body, whether the
 address exists or not (ADR-0074, and the property `sendPasswordReset` holds rather than borrows).
@@ -1198,7 +1200,9 @@ register exists for.
 
 ---
 
-### 100. The operator-facing mail signal has no operator-facing channel **(code half CLOSED 2026-08-09)**
+### 100. The operator-facing mail signal still has no operator-facing channel
+
+**Status:** open · **Raised:** 2026-08-09 · **Size:** S
 
 > **Programme M3-T2/T3 shipped both halves that live in this repository.**
 > `scripts/watch-mail-failures.sh` greps `mail.send_failed` from the API container and POSTs to a
