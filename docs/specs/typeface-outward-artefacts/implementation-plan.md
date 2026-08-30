@@ -528,10 +528,32 @@ Two changes, and the second is the one that matters if the cause is ever chased 
    and reporting "element(s) not found", which names the symptom and hides the cause. It now fails
    in seconds quoting the application's own sentence.
 
-Worth carrying: this is the third time in this epic that something passed locally and failed on a
-slower machine, and twice the first diagnosis was wrong in a way only running an instrument
-corrected. The guard added for the first diagnosis is kept — it is right on its own terms, and
-proving it green is what located the real failure one line further on.
+**The third CI run then falsified the export-first hypothesis, and the diagnostic earned its keep
+by saying so.** The paper test now starts on a clean page with no export before it, and the print
+still did not mount — with the message's SECOND branch: _"no print document mounted, and the app
+reported nothing"_. No banner means no rejected build; it means `printDiagram` returned before it
+started, and only three exits do that (the flag off, `printing` already true, or
+`buildDiagramImage` null for want of a canvas handle or a data date).
+
+`recalculate` ends in a reload, and the TSLD print path reads the **live canvas handle** while
+`hasDiagram` — which gates the menu item — comes from the activities query and says nothing about
+whether the canvas has mounted. So the paper test now waits for the canvas's own parallel listbox
+(ADR-0026 D7) to hold a row before printing: the honest proof that the scene is live, rather than
+that its data has arrived.
+
+**And the diagnostic itself had to be fixed before it could be trusted.** Its first version raced
+two thirty-second waits and only then evaluated the page — so when the test hit its own 240 s
+budget the evaluate reported `Target page … has been closed`, a diagnostic that had replaced the
+diagnosis with an artefact of itself. Every read is now short-timeout and caught, gathered before
+the throw. Verified by forcing the silent return: it reports in 29 s with
+`live region: "No one is editing this plan."; canvases: 2; containers: 0` — which is exactly the
+discriminator, since the TSLD path announces "Preparing the diagram to print…" only **after** the
+build starts.
+
+Worth carrying: this is the fourth time in this epic that something passed locally and failed on a
+slower machine, and three of the four first diagnoses were wrong in a way only running an
+instrument corrected. Each guard is kept — every one is right on its own terms, and proving each
+green is what located the next failure one line further on.
 
 ##### Task M2-U3 — An ADR, only if the reviewer asks _(unscheduled)_
 

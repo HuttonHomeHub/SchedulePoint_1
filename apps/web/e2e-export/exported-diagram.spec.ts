@@ -102,18 +102,42 @@ async function openPrintDocument(page: Page): Promise<void> {
   // is exactly what a CI run cost before this was here.
   const container = page.locator('.tsld-print-container');
   const banner = page.getByRole('alert').first();
-  await Promise.race([
-    container.waitFor({ state: 'attached', timeout: 30_000 }).catch(() => undefined),
-    banner.waitFor({ state: 'visible', timeout: 30_000 }).catch(() => undefined),
-  ]);
-  if ((await container.count()) === 0) {
-    const said = await banner.textContent().catch(() => null);
-    throw new Error(
-      said
-        ? `Print… was clicked and the app answered "${said.trim()}" instead of mounting a print document`
-        : 'Print… was clicked, no print document mounted, and the app reported nothing',
-    );
-  }
+  const attached = await container
+    .waitFor({ state: 'attached', timeout: 20_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (attached) return;
+
+  // **Report which silent return it was, and gather it BEFORE throwing.** `printDiagram` has three
+  // exits that render nothing — the flag is off, `printing` is already true, or
+  // `buildDiagramImage` returned null because the canvas handle or the data date was absent —
+  // and only the fourth, a rejected build, shows a banner. The discriminator is the live region:
+  // the TSLD path announces "Preparing the diagram to print…" **after** the build starts, so its
+  // absence puts the return before that line and its presence with no container puts the failure
+  // after it.
+  //
+  // Every read here is short-timeout and `.catch`ed. The first version raced two 30 s waits and
+  // then evaluated, and when the test hit its own timeout the evaluate reported "Target page …
+  // has been closed" — a diagnostic that replaced the diagnosis with an artefact of itself.
+  const said = await banner.textContent({ timeout: 2000 }).catch(() => null);
+  const state = await page
+    .evaluate(() => ({
+      announced: [...document.querySelectorAll('[role="status"], [aria-live]')]
+        .map((n) => (n.textContent ?? '').trim())
+        .filter(Boolean)
+        .join(' | '),
+      canvases: document.querySelectorAll('canvas').length,
+      containers: document.querySelectorAll('.tsld-print-container').length,
+    }))
+    .catch(() => null);
+  throw new Error(
+    (said
+      ? `Print… was clicked and the app answered "${said.trim()}" instead of mounting a print document`
+      : 'Print… was clicked, no print document mounted, and the app reported nothing') +
+      (state
+        ? ` — live region: "${state.announced}"; canvases: ${state.canvases}; containers: ${state.containers}`
+        : ' — and the page closed before its state could be read'),
+  );
 }
 
 async function expectPaperFace(page: Page, selector: string, what: string): Promise<void> {
@@ -496,6 +520,17 @@ test.describe('The exported diagram', () => {
     await ensurePen(page);
     await seedActivities(page, orgSlug, [{ name: 'Site setup', laneIndex: 0, durationDays: 12 }]);
     await recalculate(page, orgSlug);
+
+    // **Wait for the SCENE, not only for the data.** `recalculate` ends in a reload, and the TSLD
+    // print path reads the live canvas handle (`buildDiagramImage` returns null without it) and
+    // then returns **silently** — no container and no banner, which is exactly the signature CI
+    // reported. `hasDiagram`, which gates the menu item, comes from the activities query and says
+    // nothing about whether the canvas has mounted, so waiting on the item alone waits for the
+    // wrong thing. The canvas's own parallel listbox (ADR-0026 D7) having a row is the honest
+    // proof that the scene is live.
+    await expect(
+      page.getByRole('listbox', { name: 'Activities in the diagram' }).getByRole('option').first(),
+    ).toBeAttached({ timeout: 30_000 });
 
     // ── The paper. The printed document is a separate artefact with its own stylesheets, and
     // `emulateMedia({ media: 'print' })` makes the browser evaluate `@media print`, so the computed
