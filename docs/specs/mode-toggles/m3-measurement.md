@@ -79,3 +79,32 @@ contradicted, always in the same direction. This one held — and the honest ver
 
 The prior that 13 px on this row is not free was reasonable and was wrong here. It was wrong for a
 checkable reason, which is the only kind worth recording.
+
+---
+
+# Re-measured after the M4 gate pass (2026-08-30)
+
+The ux gate found the visible `MODE` caption asserting the single umbrella this change removes, and
+it was deleted (ADR-0119 D7). That changes the row's width, so the figures above are re-derived
+rather than carried:
+
+| width | container | `headerRowRequired` | `perOccupant.mode` | header `lines` | `aboveCanvas` |
+| ----- | --------- | ------------------- | ------------------ | -------------- | ------------- |
+| 1920  | 1888      | **1468**            | **417**            | 1              | 228.0         |
+| 1646  | 1614      | **1468**            | **417**            | 1              | 228.0         |
+| 1440  | 1408      | **1468**            | **417**            | 2              | 326.0         |
+| 1280  | 1248      | **1468**            | **417**            | 2              | 326.0         |
+
+**The caption cost 39 px** (1507 → 1468 required; 456 → 417 for the cluster), so slack at 1646 goes
+107 → **146 px**. Every clause of `falsification.md` still passes, and `aboveCanvas` is untouched at
+all four widths.
+
+**39 px bought no line, and that is the expected shape rather than a disappointment.** At 1440 the
+row needs 1468 against a 1408 container, so it was over by 99 px and is now over by 60 — still two
+lines. A wrapping row breaks **between items**, not by total width; ADR-0114 records freeing 164 px
+and gaining zero height for the same reason. The gain here is slack, which is what protects the row
+against the next thing added to it.
+
+**What this does NOT change:** the divider's own cost is still +13 px, measured identically before
+and after the caption went. The two changes are independent, and the probe's candidate column
+(which now double-injects) still reports 13.

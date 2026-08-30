@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { partitionBySegment, Toolbar } from './Toolbar';
-import { defineToolbar, type ToolbarItem } from './toolbar-registry';
+import { Toolbar } from './Toolbar';
+import { defineToolbar, partitionBySegment, type ToolbarItem } from './toolbar-registry';
 
 /**
  * **`Toolbar.segmentLabels` — a taxonomy group rendered as N named sub-groups**
@@ -56,7 +56,7 @@ function renderToolbar(props: Partial<React.ComponentProps<typeof Toolbar<Ctx>>>
     <Toolbar<Ctx>
       items={twoSwitches()}
       context={{ active: 'early' }}
-      label="Plan mode"
+      label="Plan mode and view"
       {...props}
     />,
   );
@@ -158,7 +158,7 @@ describe('Toolbar — segmentLabels', () => {
       <Toolbar<Ctx>
         items={items}
         context={{ active: 'early' }}
-        label="Plan mode"
+        label="Plan mode and view"
         groupLabels={{ lens: 'Scheduling and view' }}
         segmentLabels={LABELS}
       />,
@@ -168,6 +168,44 @@ describe('Toolbar — segmentLabels', () => {
     expect(groups).toHaveLength(1);
     expect(groups[0]).toHaveAttribute('aria-label', 'Scheduling and view');
     expect(within(groups[0]!).getAllByRole('button')).toHaveLength(4);
+  });
+
+  /**
+   * **One segment still takes the partition branch, and the spec claimed otherwise.**
+   *
+   * `feature-spec.md` said the flag-off states are "byte-identical to today apart from the group's
+   * name". They are not: with one flag off, every surviving item still carries a labelled segment,
+   * so `partitionBySegment` returns a **one-entry** array and the segmented branch renders — an
+   * extra roleless `<div>` around a single `role="group"`, where today there is one `role="group"`
+   * directly. Found by the ux gate, not by a test, because no case reached the path: the
+   * `no segmentLabels` case short-circuits on `!labels` and never gets there.
+   *
+   * It is inert — a roleless div is flattened out of the accessibility tree, and a one-child flex
+   * container lays out identically — but "inert" was an assumption until this case existed, and an
+   * unverified claim about behaviour is the defect class this register names (ADR-0076). So the
+   * claim is corrected in the spec and the path is covered here.
+   */
+  it('renders ONE named group when only one segment survives a flag', () => {
+    const items = twoSwitches().filter((item) => item.segment === 'scheduling-mode');
+    render(
+      <Toolbar<Ctx>
+        items={items}
+        context={{ active: 'early' }}
+        label="Plan mode and view"
+        segmentLabels={LABELS}
+      />,
+    );
+
+    const groups = screen.getAllByRole('group');
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toHaveAttribute('aria-label', 'Scheduling mode');
+    expect(
+      within(groups[0]!)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Early mode', 'Visual mode']);
+    // The name is the segment's, never the taxonomy group's — the fallback did not fire.
+    expect(screen.queryByRole('group', { name: 'Display' })).toBeNull();
   });
 
   /**

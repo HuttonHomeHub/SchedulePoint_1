@@ -289,6 +289,69 @@ The reference consumer is the **working-days picker** in `CalendarFormDialog`'s
 form-field case above. It is deliberately not a `SegmentedControl`: turning Monday on says
 nothing about Tuesday, so "one of a set of N" would misdescribe it.
 
+## Primitive: `Toolbar` — when a group partitions (`components/ui/toolbar/Toolbar.tsx`)
+
+`Toolbar` renders a {@link ToolbarItem} registry as an APG `role="toolbar"`, with items
+partitioned into the **closed seven-group taxonomy** (ADR-0031) and one `role="group"` per
+taxonomy group. Sometimes one taxonomy group holds **two unrelated things**: the plan header's
+mode row holds `Early mode | Visual mode` (a scheduling mode) and `Diagram | Gantt` (a view), all
+four declared `group: 'lens'`.
+
+Left alone that renders as one region, one accessible name and four identical gaps — so nothing
+says where one switch ends and the next begins, in either channel (ADR-0119, `docs/TECH_DEBT.md`
+#201).
+
+**Declare a `segment` on each item and pass `segmentLabels`.**
+
+```tsx
+// on the items
+{ id: 'mode-early', group: 'lens', segment: 'scheduling-mode', … }
+{ id: 'view-tsld',  group: 'lens', segment: 'view-mode',       … }
+
+// at the host
+<Toolbar
+  items={rows.mode}
+  label="Plan mode and view"
+  groupLabels={{ lens: 'Scheduling mode and view' }}
+  segmentLabels={{ 'scheduling-mode': 'Scheduling mode', 'view-mode': 'Plan view' }}
+/>
+```
+
+**The precondition is all-or-nothing.** Every item in the group must carry a `segment` that the
+map names, or the whole group renders exactly as it does without the prop. That refusal is the
+load-bearing half: a partial partition would put some items in a named region and leave the rest
+in an unnamed one — a container a screen-reader user must enter to discover holds nothing they
+were told about, which is worse than the undifferentiated group. `partitionBySegment`
+(`toolbar-registry.ts`) is that rule in pure form; in development, a refused partition logs a
+`console.warn` naming the group and its items, because a silent fallback is how a capability
+regresses with nothing saying so.
+
+**Three rules for a consumer:**
+
+1. **Still pass `groupLabels`.** It is defence in depth, not decoration. If the precondition ever
+   fails, the fallback names the region from there — and without it the region falls back to the
+   taxonomy default (`Display` for `lens`), which is also the deck's `View ▾` neighbourhood: the
+   exact collision a UX review rejected once already.
+2. **Name the toolbar for what it contains, not for one of its groups.** A region named
+   `Plan mode` holding a group named `Plan view` contradicts itself. A compound name is **wrong
+   for a group** — it cannot say where one switch ends — and **right for a container of two
+   groups**, which is naming two things that really are two.
+3. **Add a structural test at the call site.** The all-or-nothing rule is correct and invisible:
+   an item added later without a `segment` silently reinstates the single region.
+   `plan-mode-segments.structural.test.ts` is the reference — assert that every item on the row
+   has a segment and every segment is named, **against the real registry and the real map** rather
+   than restatements of them, and carry a pinned positive, because both assertions are vacuously
+   true of an empty array.
+
+**Segments are not radio buttons.** `SegmentedControl` above is the APG radiogroup, where focus
+follows selection. That is wrong here: arrowing through the mode row would _change the plan's
+scheduling mode_ on the way past, on a control that recalculates. Toolbar items stay
+`aria-pressed` toggle buttons — a weaker description than a radiogroup, not an incorrect one.
+
+Two invariants in `defineToolbar` guard the field: a segment may not span a `tier` or a `row`. The
+row one is live (each row renders its own `<Toolbar>`, so a split segment becomes two disconnected
+one-item switches); the tier one is speculative and forward-only, and its comment says so.
+
 ## Primitive: `Tabs` (`components/ui/tabs.tsx`)
 
 The WAI-ARIA APG `tablist` pattern, hand-rolled like `Menu` and `Combobox`. Controlled:

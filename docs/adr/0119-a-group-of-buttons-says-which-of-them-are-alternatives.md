@@ -110,6 +110,24 @@ display-toggles trigger and `Display` is the `lens` default. A third "View" woul
 screen-reader user one word for a mode group, a menu of lenses and a trigger. Confirmed by the
 product owner, 2026-08-30.
 
+### D7 — The row's umbrella labels said "one mode", in both channels
+
+Two things above the switches still asserted the unity the split denies, and **neither was reasoned
+about** — unlike D5, which was careful about a collision one level down:
+
+- The visible caption read `MODE`: one `aria-hidden` word spanning both switches. **Deleted.** It
+  carried no information (an `aria-hidden` label reaches no AT user), removing it removes a false
+  statement, and it _buys_ width on a width-critical row. ADR-0090 M2-T6 set the precedent by
+  deleting this surface's other row-purpose captions.
+- The toolbar's accessible name read `Plan mode` — a region containing a group named `Plan view`,
+  so an AT user heard the container denying its own child, and "mode" three times at three nesting
+  levels. Now **`Plan mode and view`**.
+
+The rule the second one turns on is worth stating, because it looks like a reversal and is not: **a
+compound name is wrong for a group and right for a container of two groups.** `Scheduling and view`
+had to go because it named two switches as one region and could not say where either ended. Naming
+a container by the two named groups inside it is the opposite — it describes what is really there.
+
 ### D6 — No feature flag
 
 ADR-0088 D1: a `VITE_` constant is inlined at build time and has never been an operator rollback —
@@ -178,5 +196,13 @@ written down first, and the probe prints the text of the node it touched.
   rejected because it costs a **second tab stop** in the header for a naming fix, each toolbar would
   still render its own `lens` group inside itself (the same override problem twice), and
   `authoringEnabled` would be split across two components that must not disagree.
-- **Visible per-pair captions as well as names.** Rejected: real width on the row this product is
-  judged on, when the hairline plus the existing `MODE` caption already carry the visual half.
+- **Visible per-pair captions as well as names.** Rejected on width: this row is the one the
+  product is judged on, and the hairline carries the visual half at a measured zero cost.
+
+  **This bullet's first version said "the hairline plus the existing `MODE` caption already carry
+  the visual half", and that was false in a way that decided something.** The caption was one
+  `aria-hidden` word spanning _both_ switches, so it asserted the single umbrella this decision
+  exists to remove — it pulled against the split rather than reinforcing it. A claim about
+  behaviour, unverified, used as evidence for a rejection: ADR-0076 Class 3, inside the document
+  making the choice. Found by the ux gate. **The caption is now deleted** (D7), which is why the
+  rejection still stands — on the hairline alone, which is what was actually measured.

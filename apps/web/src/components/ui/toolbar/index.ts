@@ -7,6 +7,7 @@ export {
   TOOLBAR_GROUPS,
   defineToolbar,
   groupRank,
+  partitionBySegment,
   splitByRow,
   type ToolbarGroupId,
   type ToolbarItem,

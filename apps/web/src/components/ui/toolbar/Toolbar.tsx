@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { containerShouldStandDown, vetoesKey } from './toolbar-keyboard';
 import {
   groupRank,
+  partitionBySegment,
   resolveItems,
   TOOLBAR_GROUPS,
   type ResolvedToolbarItem,
@@ -63,36 +64,37 @@ export interface ToolbarProps<Ctx> {
 }
 
 /**
- * Split a taxonomy group's items into named sub-groups, or refuse.
- *
- * Returns `null` — meaning "render as one group, as today" — unless **every** item carries a
- * {@link ToolbarItem.segment} that `labels` names. That refusal is the load-bearing half: see
- * {@link ToolbarProps.segmentLabels}.
- *
- * Order is **first appearance**, taken from the already-sorted `items` and never re-sorted, so a
- * sub-group cannot reorder the row. Pure and DOM-free so the rule can be tested without rendering.
+ * Group ids already warned about, so a refused partition says so **once** rather than on every
+ * render. Bounded by the taxonomy — seven entries at most.
  */
-export function partitionBySegment<T extends { item: { segment?: string } }>(
-  items: readonly T[],
-  labels: Record<string, string> | undefined,
-): { segment: string; label: string; items: T[] }[] | null {
-  if (!labels || items.length === 0) return null;
-  const out: { segment: string; label: string; items: T[] }[] = [];
-  const index = new Map<string, number>();
-  for (const entry of items) {
-    const segment = entry.item.segment;
-    if (!segment) return null;
-    const label = labels[segment];
-    if (label === undefined) return null;
-    const at = index.get(segment);
-    if (at === undefined) {
-      index.set(segment, out.length);
-      out.push({ segment, label, items: [entry] });
-    } else {
-      out[at]!.items.push(entry);
-    }
-  }
-  return out;
+const warnedSegmentGroups = new Set<string>();
+
+/**
+ * Say out loud, in development, when a caller asked for a partition and did not get one.
+ *
+ * {@link ToolbarProps.segmentLabels} is deliberately **all-or-nothing**: one item without a labelled
+ * segment and the whole group falls back to today's single named region. That is the right failure
+ * direction — a partial partition leaves an unnamed region — but it is **silent**, and silence is
+ * how a capability regresses without anything saying so (`docs/TECH_DEBT.md` #219 is a register full
+ * of that shape).
+ *
+ * The only consumer today is protected by a structural test written for it
+ * (`plan-mode-segments.structural.test.ts`). **The next consumer inherits none of that**, which is
+ * the gap this closes: a shared primitive should tell its caller it was configured wrong rather than
+ * leave the fact to prose in a docblock (component review, 2026-08-30).
+ *
+ * Development only, and it does not throw: a refused partition renders a correct, if less
+ * differentiated, toolbar, so failing the build over it would be worse than the defect.
+ */
+function warnRefusedPartition(group: string, items: readonly { item: { id: string } }[]): void {
+  if (!import.meta.env.DEV || warnedSegmentGroups.has(group)) return;
+  warnedSegmentGroups.add(group);
+  // eslint-disable-next-line no-console -- a development-only diagnostic for a silent misconfiguration
+  console.warn(
+    `Toolbar: segmentLabels was passed but group "${group}" was not partitioned. Every item in a ` +
+      'group must carry a `segment` the map names, or the whole group falls back to one region. ' +
+      `Items: ${items.map((r) => r.item.id).join(', ')}.`,
+  );
 }
 
 const DEFAULT_GROUP_LABELS: Record<ToolbarGroupId, string> = {
@@ -291,6 +293,7 @@ export function Toolbar<Ctx>({
     >
       {groups.map(({ group, items: groupItems }, i) => {
         const segments = partitionBySegment(groupItems, segmentLabels);
+        if (segmentLabels && !segments) warnRefusedPartition(group, groupItems);
         // The group's own box, whether or not it is subdivided. When it IS, it keeps the layout and
         // the inter-group chrome and gives up its `role` — see `segmentLabels`.
         const outerClass = cn(

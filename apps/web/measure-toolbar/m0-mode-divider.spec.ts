@@ -84,7 +84,7 @@ test('M0-T2: the mode divider, baseline and candidate, at four widths', async ({
   // records every figure in that epic being read in the one state where the pen region renders
   // nothing, and `falsification.md` makes a missing pen a VOID condition for this run.
   await ensurePen(page);
-  await expect(page.getByRole('toolbar', { name: 'Plan mode' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Plan mode and view' })).toBeVisible();
 
   const report: Record<string, unknown> = {
     planName: PLAN_NAME,
@@ -101,7 +101,9 @@ test('M0-T2: the mode divider, baseline and candidate, at four widths', async ({
       const round = (n: number): number => Math.round(n);
 
       const header = document.querySelector('header');
-      const modeToolbar = document.querySelector('[role="toolbar"][aria-label="Plan mode"]');
+      const modeToolbar = document.querySelector(
+        '[role="toolbar"][aria-label="Plan mode and view"]',
+      );
       const canvas = document.querySelector('canvas');
       if (!header || !modeToolbar)
         throw new Error('m0-mode-divider: header or mode toolbar absent');

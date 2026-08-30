@@ -138,7 +138,7 @@ test('a planner reads the float paths into an activity, in both views', async ({
   // which no unit suite could have caught: the items still exist, still carry the same names, and
   // only their host toolbar changed.
   await page
-    .getByRole('toolbar', { name: 'Plan mode' })
+    .getByRole('toolbar', { name: 'Plan mode and view' })
     .getByRole('button', { name: 'Gantt', exact: true })
     .click();
   await expect(page.getByRole('treegrid', { name: 'Schedule as a bar chart' })).toBeVisible();

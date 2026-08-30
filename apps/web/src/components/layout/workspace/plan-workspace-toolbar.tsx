@@ -1546,28 +1546,36 @@ export function ToolbarPlanWorkspace({
                 and unclickable. They now wrap. The ADR-0112 ordering is unaffected, because the
                 identity slot beside this one carries `min-w-0` and therefore gives way first and
                 completely; see `chrome-slot.tsx`. */}
+                {/* **The `MODE` caption is gone** (ADR-0119, ux gate). It was one `aria-hidden`
+                    word spanning what are now two hairline-separated switches, so it asserted the
+                    single umbrella this change exists to remove — and ADR-0119's first draft cited
+                    it as *evidence the visual half was carried*, which is the opposite of what it
+                    did. Deleting it costs no information (it was `aria-hidden`, so no AT user ever
+                    received it), removes the false statement, and BUYS width on a width-critical
+                    row. ADR-0090 M2-T6 set the precedent by deleting this surface's other
+                    row-purpose captions. */}
                 <div className="flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    // **Full `text-primary`, not `/70`.** The 70% form composited to #b67c20 on the
-                    // navy and measured 4.48:1 — under the 4.5 bar by 0.02, which no token matrix
-                    // could see because the failing colour does not exist until the alpha is
-                    // composited. axe found it in a real browser on the first journey run. At full
-                    // strength amber on navy is 7.9:1, and the caption is a label rather than a
-                    // decoration, so there was never a reason to fade it.
-                    className="text-primary text-micro font-bold tracking-wider uppercase"
-                  >
-                    Mode
-                  </span>
                   <Toolbar
                     items={rows.mode}
                     context={ctx}
-                    label="Plan mode"
+                    // **"Plan mode and view", not "Plan mode"** (ADR-0119, ux gate). A region named
+                    // `Plan mode` containing a group named `Plan view` contradicts itself, and an AT
+                    // user heard "Plan mode, toolbar → Plan view, group" — the container denying its
+                    // own child. A compound name is **wrong for a group and right for a container of
+                    // two groups**: the group could not say where one switch ended, which is why
+                    // `Scheduling and view` had to go; this names two things that really are two.
+                    label="Plan mode and view"
                     authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                    // Two named sub-groups rather than one compound name — see the map's docblock.
-                    // `groupLabels` is deliberately absent: with every item carrying a labelled
-                    // `segment` the outer `lens` name is never rendered, so supplying one would be a
-                    // string nothing reads.
+                    // Two named sub-groups — see the map's docblock.
+                    //
+                    // **`groupLabels` is defence in depth, not decoration** (accessibility gate).
+                    // The partition is all-or-nothing, so an item arriving without a `segment` makes
+                    // the whole group fall back to one region named from here. Omitting this left
+                    // that fallback rendering `Display` — the deck's `lens` group name, i.e. exactly
+                    // the collision `Toolbar.tsx:44-46` records a UX review rejecting once already.
+                    // It costs nothing while the structural gate holds and only matters the one day
+                    // it does not.
+                    groupLabels={{ lens: 'Scheduling mode and view' }}
                     segmentLabels={PLAN_MODE_SEGMENT_LABELS}
                   />
                 </div>

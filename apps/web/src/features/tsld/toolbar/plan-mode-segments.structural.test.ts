@@ -23,12 +23,21 @@ describe('the plan mode row is fully segmented', () => {
   const rows = splitByRow(buildTsldToolbarItems());
 
   /**
-   * **The pinned positive, and it is not decoration.** Both assertions below are vacuously true of
-   * an empty row — `[].every(...)` is `true` — so with the view items behind `GANTT_VIEW_ENABLED`
-   * and the scheduling items behind their own flag, a build that rendered no mode row at all would
-   * pass this file perfectly. A green suite must not be able to mean "the capability is gone"
-   * (ADR-0093's duplication gate carries its second assertion for exactly this reason; ADR-0108's
-   * census passed its "nothing unclassified" check because its glob matched zero files).
+   * **The pinned positive, and it is not decoration** — though its first docblock was wrong about
+   * why, and the correction is worth keeping.
+   *
+   * Both assertions below are vacuously true of an empty row (`[].every(...)` is `true`), so a green
+   * run must not be able to mean "the capability is gone" (ADR-0093's duplication gate carries its
+   * second assertion for exactly this reason; ADR-0108's census passed its "nothing unclassified"
+   * check because its glob matched zero files). This case closes that path.
+   *
+   * What the first version claimed was that the flags could empty the row — that with
+   * `GANTT_VIEW_ENABLED` off "a build that rendered no mode row at all would pass this file
+   * perfectly". **That is false today**: `rows.mode` comes from `splitByRow`, which partitions on
+   * the static `row` field alone and never consults `isVisible`, so all four items are always here
+   * whatever the flags say. The guard is against a future refactor that filters at registration
+   * time, not against today's mechanism — which is a weaker reason, and the real one (component
+   * review, 2026-08-30).
    */
   it('has at least the four items the epic is about', () => {
     expect(rows.mode.length).toBeGreaterThanOrEqual(4);

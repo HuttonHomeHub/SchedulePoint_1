@@ -52,7 +52,7 @@ function renderModeRow(context: TsldToolbarContext, authoringEnabled = true) {
     <Toolbar
       items={rows.mode}
       context={context}
-      label="Plan mode"
+      label="Plan mode and view"
       authoringEnabled={authoringEnabled}
       // The host's own map, imported rather than restated — a second copy here would let this
       // surface and the product disagree about what the row is called, which only a reader who

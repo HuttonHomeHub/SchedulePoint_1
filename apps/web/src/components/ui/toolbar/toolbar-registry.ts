@@ -443,11 +443,17 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
   //
   // Written for demotion: a `tier: 3` member sat in the static overflow while its partner stayed on
   // the bar, so the pair degraded silently to "one always hidden, the other sometimes" — a split
-  // segment, which is the state the field exists to prevent. **That pass was deleted at ADR-0109
-  // D1** and this check is retained on the narrower ground that outlives it: a segment is one
-  // switch, and a rule that lets its halves sit at different prominences is wrong however the
-  // surface renders. Both current pairs agree, so this has shipped no defect; it is a guard for the
-  // next author.
+  // segment, which is the state the field exists to prevent.
+  //
+  // **That pass was deleted at ADR-0109 D1, and `tier` now has no rendering effect at all**: nothing
+  // in `Toolbar` or `Deck` branches on it, and `partitionByTier` — the one function that would act
+  // on it — has no production caller (`docs/TECH_DEBT.md` #193). So this guard is **speculative and
+  // forward-only**, not protection for a live property: it is kept because `tier` still declares
+  // prominence and a surface may rank again, not because anything today would break.
+  //
+  // The previous version of this comment said the rule holds "however the surface renders", which
+  // implies a live protection that does not exist — ADR-0076 Class 2, inside a comment written the
+  // same day to fix a different stale one (component review, 2026-08-30).
   const tierBySegment = new Map<string, ToolbarTier>();
   for (const item of items) {
     if (!item.segment) continue;
@@ -501,6 +507,39 @@ export function defineToolbar<Ctx>(items: ToolbarItem<Ctx>[]): ToolbarItem<Ctx>[
  * failure** at the seed instead. The mis-partition would have been invisible to the type system,
  * which is what makes it worth the extra three lines (ADR-0091 M1, B1).
  */
+/**
+ * Split a taxonomy group's items into named sub-groups, or refuse.
+ *
+ * Returns `null` — meaning "render as one group, as today" — unless **every** item carries a
+ * {@link ToolbarItem.segment} that `labels` names. That refusal is the load-bearing half: see
+ * {@link ToolbarProps.segmentLabels}.
+ *
+ * Order is **first appearance**, taken from the already-sorted `items` and never re-sorted, so a
+ * sub-group cannot reorder the row. Pure and DOM-free so the rule can be tested without rendering.
+ */
+export function partitionBySegment<T extends { item: { segment?: string } }>(
+  items: readonly T[],
+  labels: Record<string, string> | undefined,
+): { segment: string; label: string; items: T[] }[] | null {
+  if (!labels || items.length === 0) return null;
+  const out: { segment: string; label: string; items: T[] }[] = [];
+  const index = new Map<string, number>();
+  for (const entry of items) {
+    const segment = entry.item.segment;
+    if (!segment) return null;
+    const label = labels[segment];
+    if (label === undefined) return null;
+    const at = index.get(segment);
+    if (at === undefined) {
+      index.set(segment, out.length);
+      out.push({ segment, label, items: [entry] });
+    } else {
+      out[at]!.items.push(entry);
+    }
+  }
+  return out;
+}
+
 export function splitByRow<Ctx>(items: ToolbarItem<Ctx>[]): Record<ToolbarRow, ToolbarItem<Ctx>[]> {
   const rows: Record<ToolbarRow, ToolbarItem<Ctx>[]> = { mode: [], strip: [] };
   for (const item of items) rows[item.row ?? 'strip'].push(item);
