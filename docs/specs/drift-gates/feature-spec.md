@@ -861,6 +861,37 @@ through.
 
 ---
 
+---
+
+## Approvals — all five decisions settled (product owner, 2026-08-30)
+
+**Shaping questions, answered before the spec was written:**
+
+1. **Build both gates as one epic.** They are the same shape — a documented obligation with no
+   computed observer — and share their parser.
+2. **Gate B warns loudly in the pre-push gate and never blocks CI.** A missed pass is a documentation
+   debt, not a broken build; blocking a release on it is how a gate gets bypassed with `--no-verify`,
+   and once bypassed it is bypassed always. **Its weakness is recorded rather than designed away: a
+   warning is ignorable.** Escalation-to-failure is explicitly refused — that is a blocking gate with
+   extra steps.
+3. **`unverified` is a valid status.** The rows without one are marked and verified opportunistically
+   when next touched (ADR-0058: a gate that fails on day one gets deleted rather than fixed). Honest
+   cost: `unverified` may sit for months. The count prints on every run, and if it has not fallen by
+   the next pass, that is a finding for that pass.
+
+**The spec's own two critical questions, answered after it was written:**
+
+4. **`scripts/prepush.sh` MAY gain a third result state (`WARN`, exit 2).** Establishing a reusable
+   advisory-gate convention was preferred to either of the alternatives: a silent gate (the failure
+   mode this repository has shipped at least three times) or a script printing to stderr on its own,
+   which leaves prepush unable to summarise or count advisory gates and makes the next one solve this
+   from scratch.
+5. **The compact table is frozen with a decreasing ratchet at 66.** Those rows convert
+   opportunistically; no new row may join that format. Accepted cost, stated: two row formats coexist
+   and the register is not filterable in one pass until the ratchet reaches zero.
+
+**Nothing else was escalated.** Everything not listed here is a stated default in the sections above.
+
 ## 5. Links
 
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
