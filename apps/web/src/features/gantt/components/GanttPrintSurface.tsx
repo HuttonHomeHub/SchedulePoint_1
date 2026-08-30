@@ -1,10 +1,11 @@
-import type { ActivitySummary, BaselineVarianceRow } from '@repo/types';
+import type { ActivitySummary, BaselineVarianceRow, DependencySummary } from '@repo/types';
 
 import './GanttPrintSurface.css';
 
 import { barLabelMode, constraintBadge } from '../layout/bar-annotations';
 import { barGeometry, baselineGeometry, chartAnchor, fitPxPerDay } from '../layout/bar-geometry';
-import { GANTT_COLUMNS, varianceText } from '../layout/grid-columns';
+import { GANTT_COLUMNS, varianceText, type GanttColumn } from '../layout/grid-columns';
+import { predecessorNamesBySuccessor } from '../layout/link-paths';
 import {
   buildRows,
   rowId,
@@ -14,6 +15,7 @@ import {
   type GanttBucketRow,
 } from '../layout/row-model';
 import { buildRulerTicks } from '../layout/ruler-ticks';
+import type { GanttColumnKey } from '../model/gantt-view-state';
 
 import { WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import type { BarDateSource } from '@/lib/bar-dates';
@@ -58,6 +60,17 @@ const PRINT_COLUMN_WIDTHS: Record<string, number> = {
   earlyStart: 72,
   earlyFinish: 72,
   totalFloat: 44,
+  /**
+   * **Wider than the 72 px default, because it is the widest column and it is a LIST.**
+   *
+   * It had no entry here at all while it printed an em dash on every row (`docs/TECH_DEBT.md`
+   * #217), so the fallback was never wrong about anything. The first photograph after the names
+   * arrived showed `Site setup & h…` and `Excavate to fo…` — a column made to carry the
+   * programme's logic, truncating it. 132 px holds two short names or one long one; beyond that it
+   * truncates honestly, and the chart pays for every pixel taken (`chartPx = PRINT_DOCUMENT_WIDTH
+   * - gridWidth`), which is why it is not wider still.
+   */
+  predecessors: 132,
 };
 
 const PRINT_VARIANCE_WIDTH = 66;
@@ -80,6 +93,35 @@ export interface GanttPrintSurfaceProps {
   barDateSource?: BarDateSource;
   /** The activity's working-hours factor for the Duration column — host-resolved, as on screen. */
   hoursPerDayFor?: (activity: ActivitySummary) => number | undefined;
+  /**
+   * The columns to print, already filtered — **required, with no default**.
+   *
+   * Paper follows the reader's column choice, which is the ADR-0103 / `docs/TECH_DEBT.md` #167 rule
+   * for the exported diagram applied one artefact along: the deliverable is MY document, not a
+   * fixed one. It matters most for `predecessors`, which the screen hides by default precisely
+   * because it is the widest column — so a paper document that printed it regardless would grow a
+   * column of names overnight for every existing plan, which is the change that column's own
+   * docblock says nobody asked for.
+   *
+   * **Required rather than defaulted, and that is the lesson of the defect below.** Either default
+   * is wrong for somebody, and a silently-omitted optional parameter is exactly how the
+   * `predecessorNames` bug shipped. The compiler now makes a caller say what the reader chose —
+   * the ADR-0070 `hoursPerDay` pattern, for the same reason.
+   */
+  columns: readonly GanttColumn[];
+  /**
+   * The plan's dependency edges — **required**, and the fix for `docs/TECH_DEBT.md` #217.
+   *
+   * The `predecessors` column's `value` takes a fourth argument and this file passed three, so
+   * `predecessorNames` was `undefined` and every printed row read `—`: paper asserted, in a column
+   * of its own, that a linked programme has no logic. It typechecked because the parameter is
+   * optional, and it survived because nothing had ever photographed the printed programme.
+   *
+   * Derived here through the SAME `predecessorNamesBySuccessor` the panel uses, so screen and paper
+   * cannot answer "what does this follow?" differently — the one-implementation argument
+   * `link-paths.ts` and `bar-dates.ts` were both created to settle.
+   */
+  dependencies: readonly DependencySummary[];
 }
 
 export function GanttPrintSurface({
@@ -89,6 +131,8 @@ export function GanttPrintSurface({
   barDateSource,
   hoursPerDayFor,
   varianceByActivityId,
+  columns,
+  dependencies,
 }: GanttPrintSurfaceProps): React.ReactElement {
   // Printing is a snapshot, so the document takes the default order rather than whatever the
   // on-screen grid happened to be sorted by: a WBS-ordered programme is what a progress meeting
@@ -96,6 +140,11 @@ export function GanttPrintSurface({
   // The bucket prints too (WBS improvements M3). A programme whose grouping differs from the
   // screen it was printed from is the kind of divergence a progress meeting discovers out loud;
   // the collapse set is empty here, so every member prints under it.
+  // Built once for the document, never per row — the measured reason in
+  // `predecessorNamesBySuccessor`'s own docblock, where filtering per row cost 128,000 comparisons
+  // a render. A printed programme renders every row rather than ~40, so the shape matters more here
+  // than on the screen that found it.
+  const predecessorNames = predecessorNamesBySuccessor(dependencies);
   const rows = buildRows(activities, DEFAULT_GANTT_SORT, new Set(), {
     unassignedBucket: WBS_IMPROVEMENTS_ENABLED,
     barDateSource,
@@ -104,7 +153,7 @@ export function GanttPrintSurface({
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
   const gridWidth =
-    GANTT_COLUMNS.reduce((sum, c) => sum + printColumnWidth(c.key), 0) +
+    columns.reduce((sum, c) => sum + printColumnWidth(c.key), 0) +
     (showVariance ? PRINT_VARIANCE_WIDTH : 0);
   const chartPx = PRINT_DOCUMENT_WIDTH - gridWidth;
 
@@ -132,7 +181,7 @@ export function GanttPrintSurface({
                 page four still says which column is Finish and where March is. */}
             <thead>
               <tr>
-                {GANTT_COLUMNS.map((column) => (
+                {columns.map((column) => (
                   <th
                     key={column.key}
                     scope="col"
@@ -176,6 +225,7 @@ export function GanttPrintSurface({
                     row={row}
                     chartPx={chartPx}
                     showVariance={showVariance}
+                    columnCount={columns.length}
                   />
                 ) : (
                   <PrintRow
@@ -188,6 +238,8 @@ export function GanttPrintSurface({
                     chartPx={chartPx}
                     variance={varianceByActivityId?.get(rowId(row))}
                     showVariance={showVariance}
+                    columns={columns}
+                    predecessorNames={predecessorNames}
                   />
                 ),
               )}
@@ -218,6 +270,8 @@ interface PrintRowProps {
   chartPx: number;
   variance: BaselineVarianceRow | undefined;
   showVariance: boolean;
+  columns: readonly GanttColumn[];
+  predecessorNames: ReadonlyMap<string, readonly string[]>;
 }
 
 function PrintRow({
@@ -229,6 +283,8 @@ function PrintRow({
   chartPx,
   variance,
   showVariance,
+  columns,
+  predecessorNames,
 }: PrintRowProps): React.ReactElement {
   const { activity, depth } = row;
   const geometry = barGeometry(activity, anchorIso, pxPerDay, barDateSource);
@@ -250,14 +306,19 @@ function PrintRow({
 
   return (
     <tr style={{ height: PRINT_ROW_HEIGHT }}>
-      {GANTT_COLUMNS.map((column, i) => (
+      {columns.map((column, i) => (
         <td
           key={column.key}
           className={column.align === 'right' ? 'gantt-print-right' : undefined}
           style={i === 0 ? { paddingLeft: 4 + depth * 10 } : undefined}
         >
           <span className={activity.type === 'WBS_SUMMARY' ? 'gantt-print-summary' : undefined}>
-            {column.value(activity, barDateSource, hoursPerDayFor?.(activity))}
+            {column.value(
+              activity,
+              barDateSource,
+              hoursPerDayFor?.(activity),
+              predecessorNames.get(activity.id),
+            )}
           </span>
         </td>
       ))}
@@ -336,6 +397,21 @@ export interface PrintGanttInput {
   barDateSource?: BarDateSource | undefined;
   /** The Duration column's per-activity day factor (ADR-0068), for the same reason. */
   hoursPerDayFor?: ((activity: ActivitySummary) => number | undefined) | undefined;
+  /**
+   * The columns the reader has switched OFF — **required**, and this is the seam where paper is
+   * told what they chose. The filtering happens here rather than in the surface so the policy has
+   * exactly one home.
+   *
+   * The two fields below are required while every other field on this type is optional, and that
+   * asymmetry is deliberate. Read `barDateSource`'s docblock above: props threaded onto the surface
+   * while this input type stayed silent is how #135's fix went dead, and `dependencies` is the SAME
+   * failure a second time in the same file (#217) — the surface's `predecessors` column has taken a
+   * fourth argument since it shipped and this entry point never had one to give it. Optional is what
+   * both defects have in common, so these are not.
+   */
+  hiddenColumns: ReadonlySet<GanttColumnKey>;
+  /** The plan's dependency edges, so the Predecessors column has something to print (#217). */
+  dependencies: readonly DependencySummary[];
 }
 
 /**
@@ -349,6 +425,8 @@ export function printGanttSchedule(input: PrintGanttInput, deps: PrintDocumentDe
       title={input.title}
       subtitle={input.subtitle}
       activities={input.activities}
+      columns={GANTT_COLUMNS.filter((column) => !input.hiddenColumns.has(column.key))}
+      dependencies={input.dependencies}
       {...(input.varianceByActivityId ? { varianceByActivityId: input.varianceByActivityId } : {})}
       {...(input.barDateSource ? { barDateSource: input.barDateSource } : {})}
       {...(input.hoursPerDayFor ? { hoursPerDayFor: input.hoursPerDayFor } : {})}
@@ -367,14 +445,16 @@ function PrintBucketRow({
   row,
   chartPx,
   showVariance,
+  columnCount,
 }: {
   row: GanttBucketRow;
   chartPx: number;
   showVariance: boolean;
+  columnCount: number;
 }): React.ReactElement {
   return (
     <tr style={{ height: PRINT_ROW_HEIGHT }}>
-      <td colSpan={GANTT_COLUMNS.length + (showVariance ? 1 : 0)} style={{ paddingLeft: 4 }}>
+      <td colSpan={columnCount + (showVariance ? 1 : 0)} style={{ paddingLeft: 4 }}>
         <span className="gantt-print-summary">
           {row.label} ({row.count})
         </span>
