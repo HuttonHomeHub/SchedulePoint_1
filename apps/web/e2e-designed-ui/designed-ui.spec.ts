@@ -145,20 +145,24 @@ for (const { choice, colorScheme } of THEMES) {
 
       // D3 — the current-page state (`aria-current="page"`), likewise unmeasured by axe.
       //
-      // **Two sites, and since Graphite M3 they are in the SAME scope — which is a loss recorded
-      // rather than a locator updated.** ADR-0098 M4 made the wordmark the route home, carrying
-      // `aria-current` on the landing, and this comment called it "the `chrome` scope's only
-      // current-state left" against the rail's destination in `panel`. M3 deleted the top bar and
-      // moved the wordmark into the rail, so the header still exists but is `lg:hidden` and this
-      // locator resolved to a hidden element. The measurement follows the control (ADR-0097 D1a's
-      // rule, which this file already applies to D1 one screen up), and both sites are now `panel`.
+      // **Two sites in two scopes — brand in `chrome`, rail destination in `panel`.** That is what
+      // this case was built for, and it spent one epic not doing it: ADR-0098 M4 made the wordmark
+      // the route home carrying `aria-current` on the landing, then Graphite M3 deleted the top bar
+      // and moved it onto a 48 px tool rail, so BOTH sites became `panel` and the `chrome` scope had
+      // no current-state site left (`docs/TECH_DEBT.md` #146). ADR-0109 D2 docks the Explorer in
+      // that column and restores the header at every width, so the brand link sits inside
+      // `ChromeBandRow`'s `<Surface tone="chrome">` again and the two scopes are back.
       //
-      // **The `chrome` scope therefore has no current-state site on the screens this suite
-      // visits.** Its only remaining one is the breadcrumb's final crumb (`breadcrumbs.tsx:58`),
-      // which renders solely inside a plan's identity row — and driving four theme variants through
-      // a project and a plan to reach one token pair is real cost for one measurement.
-      // `docs/TECH_DEBT.md` #146 carries it rather than a silent gap. Both sites are still measured
-      // because they are different components: a link that IS the brand and a link in a list.
+      // **The assertion below did not change when that happened, and nothing said so** — a green
+      // test whose comment described a world that had ended. That is why #146 closed on a reading of
+      // `chrome-band.tsx` rather than on this file: a locator that still resolves tells you nothing
+      // about which scope it landed in.
+      //
+      // Both sites stay measured because they are different components: a link that IS the brand and
+      // a link in a list. The `chrome` scope's other current-state site — the breadcrumb's final
+      // crumb (`breadcrumbs.tsx:58`) — is still unreached here, and deliberately: it renders only
+      // inside a plan's identity row, and driving four theme variants through a project and a plan
+      // for one token pair is real cost on a suite that already onboards four times.
       // **Each site is measured where it is actually current**, which this case did not do and got
       // away with for a reason worth keeping: TanStack's `Link` marks itself active on a PREFIX
       // match, so `/orgs/:slug` was "current" on every org route and the wordmark carried

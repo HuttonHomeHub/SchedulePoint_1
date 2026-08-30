@@ -10,6 +10,56 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-08-30 — A register row is a claim frozen at the moment it was written
+
+`docs/TECH_DEBT.md` #219. No ADR: this records a finding and a method, and the one thing it points
+at that would need building is a shared gate, which needs its own spec (ADR-0105).
+
+**The trigger was recommending work that was already done.** Asked what was worth doing for polish
+and correctness, three candidates were drawn from the register and put to the product owner. One of
+them — `#109`, `bulkDelete` under the plan-wide lock — had been fixed three weeks earlier. It was
+recommended without opening the code, in the same message that warned the reader the register
+drifts. ADR-0076 Class 3, against this repository's own register.
+
+**So the sweep was a measurement, not a tidy-up.** Seven rows were checked against the code by hand:
+six were fixed and never closed, one was reported fixed by an automated pass and is half fixed.
+Three distinct causes, none of them forgetfulness — the fix landed inside an epic named for
+something else (`#109`); the subject was deleted rather than fixed (`#134`, `#147`, both describing
+a width ladder ADR-0109 D1 removed); or the premise lapsed under a later decision (`#146`, which
+exists because Graphite M3 moved a control ADR-0109 D2 moved back).
+
+**Cause 3 has no available cue, and that is the transferable part.** Nobody was wrong at any point
+in `#146`'s life. A milestone that fixes something does not go back and edit the rows that
+complained about it, so a row goes stale silently and by default. `docs/RECONCILE.md`'s rule —
+verify the claim, do not trust the document — has been applied to prose and to specs' problem
+statements; this is the same rule for the register, which is the artefact that decides what gets
+picked up next.
+
+**The residue is stated as a known-unknown rather than classified.** Only 35 of ~105 rows make a
+status claim a parser can find. Three classifiers were written and returned three different
+answers — and the second matched the word "closed" inside `#169`'s own sentence explaining that a
+neighbouring row would _read as_ closed when half closed. Scanning prose for a verdict is the
+fourth instance of that mistake here, made while auditing the register for exactly this class of
+error. So ~70 rows are recorded as unverified rather than having an agent classify them and the
+answers written in as fact.
+
+**One calibration worth keeping.** An automated sweep reported `#169` FIXED and it is half fixed:
+the empty strip is gone because ADR-0109 D2 put a fold control in that row, and the duplicated gate
+the row also names is untouched, verbatim, at two lines of one file. Six sibling closures in the
+same batch verified and held. **A report about the register is a document like any other** — the
+cheap step is opening the file the row cites, and it is what produced all seven results.
+
+**Also found: a grep for known-deleted names cannot find a citation of a name nobody remembers
+deleting.** `#193`'s 2026-08-25 pass searched for `ToolbarOverflow`, `toolbar-ladder.ts` and
+`computeLadder` and corrected four docblocks. Two more citations of the same class were sitting
+beside them — `companionsOf` (justifying a live invariant in two places, in `defineToolbar` and in
+its own test) and `isWidthConstrained` (cited with a `Toolbar.tsx:81-84` that resolves to neither
+that symbol nor anything like it). Both went with the ladder. The instrument that would find them is
+the opposite direction — resolve every backticked identifier in a comment against the tree — which
+is `#177`/`#183`'s shape turned on this repository's own symbols instead of a dependency's.
+
+---
+
 ## 2026-08-30 — Paper follows the reader, and the document owns the identity
 
 `docs/TECH_DEBT.md` #217. No ADR: this settles two questions about an existing deliverable and adds

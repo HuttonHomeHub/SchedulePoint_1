@@ -305,8 +305,12 @@ describe('defineToolbar — demotionGroup companions share a tier', () => {
  * **The `demotionGroup` row invariant** (ADR-0091 M1, B2). The same guard one axis over, added with
  * the `mode` row because a third row is the first thing that makes splitting a pair across rows
  * expressible at all — before it, `row` had two values and both companions were always on one of
- * them. `companionsOf` resolves a pair from ONE row's `bar`, so a split pair loses its companion
- * entirely and each half demotes on its own row's arithmetic.
+ * them. A pair was resolved from ONE row's `bar`, so a split pair lost its companion entirely and
+ * each half demoted on its own row's arithmetic.
+ *
+ * **That resolution — `companionsOf` — no longer exists** (deleted with the width ladder, ADR-0109
+ * D1; `docs/TECH_DEBT.md` #193). The guard stays because `demotionGroup` still declares a unit and
+ * this is the only thing that asserts it; the sentence above is now history rather than mechanism.
  *
  * Verified red by removing the row check from `defineToolbar`.
  */
