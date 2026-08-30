@@ -5638,7 +5638,36 @@ the better pattern sitting one directory over.
 
 ---
 
-## #201 — Two independent mode toggles read as one four-way group
+## #201 — Two independent mode toggles read as one four-way group **(CLOSED 2026-08-30 — ADR-0119)**
+
+> **Closed in full — both halves.** The row is now
+> `MODE  Early mode | Visual mode ⎪ Diagram | Gantt`: two `role="group"`s named **Scheduling mode**
+> and **Plan view**, separated by the same hairline the primitive already draws between taxonomy
+> groups. The compound override it replaces (`{ lens: 'Scheduling and view' }`) is deleted rather
+> than left beside the new names.
+>
+> **The visible half nearly did not ship, and the reason it did is a measurement.** The hairline
+> costs width on a row that _wraps_, so its failure mode is a second line — 48 px of canvas, on the
+> surface eight consecutive epics have contradicted their own width expectations about. The verdict
+> rule was committed **before** the run (`docs/specs/mode-toggles/falsification.md`) and the product
+> owner pre-approved shipping the accessible names alone if it cost a line. It does not:
+> `aboveCanvas` is **228.0 px at 1646 with and without it**, asserted as an equality rather than a
+> bound, and the shipped figures match the pre-build prediction to the pixel
+> (`m0-measurement.md`, `m3-measurement.md`).
+>
+> **The instrument was wrong first**, and that is the part worth keeping. It reported +5 px against a
+> predicted +13 — which passes every rule just as 13 does, so the verdict would have been identical
+> and the recorded number wrong. It had applied the chrome to a **button**, whose existing `px-2` an
+> inline `padding-left` replaces rather than adds to; the real candidate is a `role="group"` div.
+> Caught because the prediction was written down first and the probe prints the node it touched.
+>
+> **`demotionGroup` is renamed `segment`** — it had no runtime consumer since ADR-0109 D1 deleted the
+> demotion pass, and its two surviving invariants cited `companionsOf`, which does not exist
+> (`#193`). Both invariants are kept on narrower, still-true ground.
+>
+> **No WCAG success criterion applied, and the row was not filed as one** — the register overstated a
+> citation once (ADR-0082) and this one says plainly that it is a design-system and usability defect.
+> ADR-0119 records the analysis of 1.3.1, 4.1.2 and 2.4.6 rather than asserting a failure.
 
 **Filed 2026-08-26** (the one-row header, from the ux review). **Pre-existing** — the grouping dates
 from ADR-0091 M0 (`ab8c2201`), not from the header merge, which only moved the cluster into the

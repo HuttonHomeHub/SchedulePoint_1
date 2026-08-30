@@ -142,3 +142,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0116](0116-a-health-finding-is-not-a-conflict.md)                          | A health finding is not a conflict, and a report never omits a check    | Accepted           |
 | [0117](0117-an-icon-only-control-names-itself.md)                           | An icon-only control names itself, and a tooltip states its purpose     | Accepted           |
 | [0118](0118-a-control-height-is-one-decision-with-an-input-axis.md)         | A control height is one decision, and the input is an axis of it        | Accepted           |
+| [0119](0119-a-group-of-buttons-says-which-of-them-are-alternatives.md)      | A group of buttons says which of them are alternatives                  | Accepted           |

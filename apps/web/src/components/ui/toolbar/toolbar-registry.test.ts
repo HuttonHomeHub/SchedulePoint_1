@@ -282,12 +282,12 @@ describe('resolveLayoutMode', () => {
 });
 
 /**
- * **The `demotionGroup` tier invariant** (ADR-0090 M5, component gate). Verified red by removing the
+ * **The `segment` tier invariant** (ADR-0090 M5, component gate). Verified red by removing the
  * check from `defineToolbar`.
  */
-describe('defineToolbar — demotionGroup companions share a tier', () => {
+describe('defineToolbar — a segment’s members share a tier', () => {
   const seg = (id: string, tier: 1 | 2 | 3): ToolbarItem<Ctx> =>
-    base({ id, tier, demotionGroup: 'view-mode', isActive: () => false });
+    base({ id, tier, segment: 'view-mode', isActive: () => false });
 
   it('accepts a pair on the same tier', () => {
     expect(() => defineToolbar([seg('left', 1), seg('right', 1)])).not.toThrow();
@@ -296,27 +296,27 @@ describe('defineToolbar — demotionGroup companions share a tier', () => {
   it('rejects a pair whose tiers disagree, naming the group', () => {
     // A tier-3 companion is in the STATIC overflow and never enters `computeLadder`'s companion lookup, so
     // the segment would split: one half always in the `⋯`, the other only sometimes. That is the
-    // exact state `demotionGroup` exists to prevent, and it would look correct in the registry.
+    // exact state `segment` exists to prevent, and it would look correct in the registry.
     expect(() => defineToolbar([seg('left', 1), seg('right', 3)])).toThrow(/view-mode/);
   });
 });
 
 /**
- * **The `demotionGroup` row invariant** (ADR-0091 M1, B2). The same guard one axis over, added with
+ * **The `segment` row invariant** (ADR-0091 M1, B2). The same guard one axis over, added with
  * the `mode` row because a third row is the first thing that makes splitting a pair across rows
  * expressible at all — before it, `row` had two values and both companions were always on one of
  * them. A pair was resolved from ONE row's `bar`, so a split pair lost its companion entirely and
  * each half demoted on its own row's arithmetic.
  *
  * **That resolution — `companionsOf` — no longer exists** (deleted with the width ladder, ADR-0109
- * D1; `docs/TECH_DEBT.md` #193). The guard stays because `demotionGroup` still declares a unit and
+ * D1; `docs/TECH_DEBT.md` #193). The guard stays because `segment` still declares a unit and
  * this is the only thing that asserts it; the sentence above is now history rather than mechanism.
  *
  * Verified red by removing the row check from `defineToolbar`.
  */
-describe('defineToolbar — demotionGroup companions share a row', () => {
+describe('defineToolbar — a segment’s members share a row', () => {
   const seg = (id: string, row: 'mode' | 'strip'): ToolbarItem<Ctx> =>
-    base({ id, tier: 1, row, demotionGroup: 'view-mode', isActive: () => false });
+    base({ id, tier: 1, row, segment: 'view-mode', isActive: () => false });
 
   it('accepts a pair on the same row', () => {
     expect(() => defineToolbar([seg('left', 'mode'), seg('right', 'mode')])).not.toThrow();
@@ -324,7 +324,7 @@ describe('defineToolbar — demotionGroup companions share a row', () => {
 
   it('treats an absent row as `strip`, so a bare pair still agrees', () => {
     const bare = (id: string): ToolbarItem<Ctx> =>
-      base({ id, tier: 1, demotionGroup: 'view-mode', isActive: () => false });
+      base({ id, tier: 1, segment: 'view-mode', isActive: () => false });
     expect(() => defineToolbar([bare('left'), seg('right', 'strip')])).not.toThrow();
   });
 

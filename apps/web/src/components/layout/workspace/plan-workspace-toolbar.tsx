@@ -114,11 +114,32 @@ import { cn } from '@/lib/utils';
 const MD_QUERY = '(min-width: 48rem)';
 
 /**
- * The mode row's `lens` group name (ADR-0091 D1). Overridden because the shared default is
- * "Display", which is simultaneously Row 1's `lens` group name — leaving two on-screen regions with
- * one name, and announcing "Plan mode, toolbar" then "Display, group" for a cluster that is neither.
+ * The mode row's two switches, named (`docs/TECH_DEBT.md` #201).
+ *
+ * `Early mode | Visual mode` and `Diagram | Gantt` are **two independent two-way switches**, and the
+ * seven-group taxonomy puts all four in `lens` — one region, one name, four identical gaps. A
+ * planner who reads that as one four-way choice and expects `Gantt` to replace `Visual mode` is
+ * reading the picture correctly.
+ *
+ * This replaces a single override, `{ lens: 'Scheduling and view' }`, which was the honest thing to
+ * do while the primitive could only name a whole taxonomy group: a compound name at least stopped
+ * the cluster announcing itself as "Display" (also the deck's `lens` group name — two regions, one
+ * word). It could not say where one switch ended, because there was nothing in the markup that
+ * knew.
+ *
+ * **"Plan view", not "View"** — `Toolbar.tsx:44-46` records a UX review rejecting exactly that
+ * collision once already: `View ▾` is the deck's display-toggles trigger and `Display` is the
+ * `lens` default, so a third "View" would give a screen-reader user one word for a mode group, a
+ * menu of lenses and a trigger. Confirmed by the product owner, 2026-08-30.
+ *
+ * `plan-mode-segments.structural.test.ts` asserts this map covers every segment on the row, and
+ * that every item on the row has one — so an item added without a segment fails CI rather than
+ * silently reinstating the undifferentiated group.
  */
-const ROW_MODE_GROUP_LABELS = { lens: 'Scheduling and view' } as const;
+export const PLAN_MODE_SEGMENT_LABELS = {
+  'scheduling-mode': 'Scheduling mode',
+  'view-mode': 'Plan view',
+} as const;
 
 /**
  * **The row-purpose captions are gone** (ADR-0090 M2-T6, landed at M5 — see below).
@@ -1543,10 +1564,11 @@ export function ToolbarPlanWorkspace({
                     context={ctx}
                     label="Plan mode"
                     authoringEnabled={model.canEditSchedule && !lateOverlayActive}
-                    // All four are `group: 'lens'`, whose default label is "Display" — also the deck's
-                    // `lens` group name, so unoverridden this announces a second, unrelated name for
-                    // the cluster AND collides with a region below (the ADR-0090 M5 `output` rename).
-                    groupLabels={ROW_MODE_GROUP_LABELS}
+                    // Two named sub-groups rather than one compound name — see the map's docblock.
+                    // `groupLabels` is deliberately absent: with every item carrying a labelled
+                    // `segment` the outer `lens` name is never rendered, so supplying one would be a
+                    // string nothing reads.
+                    segmentLabels={PLAN_MODE_SEGMENT_LABELS}
                   />
                 </div>
                 <CompactPenStatus

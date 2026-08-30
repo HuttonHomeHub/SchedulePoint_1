@@ -199,6 +199,26 @@ test.describe('the merged header row', () => {
         Math.round((modeBox?.height ?? 0) / (firstMode?.height ?? 1)),
         `mode cluster lines at ${width}`,
       ).toBe(1);
+
+      /**
+       * **The two switches are named, at both line counts** (`docs/TECH_DEBT.md` #201).
+       *
+       * The row holds two independent two-way switches and the seven-group taxonomy put all four
+       * items in one `lens` group — one region, one name, four identical gaps — so nothing said
+       * where one switch ended. `segmentLabels` splits it, and the split is **all-or-nothing**: an
+       * item added later without a `segment` makes the whole group fall back to one region, silently
+       * and correctly. `plan-mode-segments.structural.test.ts` fails CI on that; this is the half a
+       * structural test cannot reach, which is that the names survive a real render at a width where
+       * the row has wrapped.
+       *
+       * Located by role and name inside the toolbar, never by copy — ADR-0091 M7's standing rule
+       * after three journeys broke on a label change.
+       */
+      await expect(modes.getByRole('group', { name: 'Scheduling mode' })).toBeVisible();
+      await expect(modes.getByRole('group', { name: 'Plan view' })).toBeVisible();
+      // The compound name it replaces is gone rather than left beside the new ones — three names for
+      // one row would be invisible on screen and audible to nobody but a screen-reader user.
+      await expect(modes.getByRole('group', { name: 'Scheduling and view' })).toHaveCount(0);
     }
   });
 

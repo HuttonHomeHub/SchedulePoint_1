@@ -200,7 +200,7 @@ export function AppHeaderRow({
     // at those lines or anywhere (`docs/TECH_DEBT.md` #193, 2026-08-30 verification sweep).
     //
     // The first answer here was "the mode items are `render`, so they cannot demote", and that was
-    // false even then: `mode-early` has an `onActivate` and a `demotionGroup`. Recorded because it
+    // false even then: `mode-early` has an `onActivate` and a `segment`. Recorded because it
     // was nearly built on, and it is the more durable half — the density reading above is what this
     // provider is actually for.
     //
