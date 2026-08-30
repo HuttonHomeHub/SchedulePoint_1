@@ -10,10 +10,12 @@
  * weeks earlier. A sweep then verified seven rows against the code — six were fixed and never
  * closed.
  *
- * **Report-only until M4.** This is deliberately not a `package.json` `check:*` script yet, because
- * `scripts/prepush.sh` derives its roster from those keys and registering it before M3 has repaired
- * the file would make it blocking on day one — which is how a gate gets deleted rather than fixed
- * (ADR-0058). Run it as `node scripts/check-debt-status.mjs [--report]`.
+ * **Armed at M4, and only because M3 repaired the file first.** It was report-only through M2-M3:
+ * `scripts/prepush.sh` derives its roster from `package.json`'s `check:*` keys, so registering it
+ * against a register with 118 findings would have made it blocking on day one — which is how a gate
+ * gets deleted rather than fixed (ADR-0058). The red run against the un-repaired file is committed
+ * at `docs/specs/drift-gates/red-run.md`; the repair took it to zero; this key was added after.
+ * `--report` prints the summary line as well as the findings.
  *
  * **Every match is anchored at column 0**, via `scripts/lib/doc-register.mjs`. See that module's
  * docblock for the six recorded instances of a scan matching its own prose — the sixth of which is
