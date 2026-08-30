@@ -95,6 +95,12 @@ function main(argv) {
   // level `sections(md, 2)` read, so BOTH sides of "did we read less than we think?" were blind to
   // the 31 `###` rows: A9 agreed with itself and reported OK. The scan now counts a numbered
   // heading at EITHER level, derived independently of `sections()`.
+  //
+  // It scans the RAW document, fences included, which is deliberate: sharing `stripFences` would
+  // re-introduce a common mode, and the failure directions are not symmetric. A fenced example
+  // heading here produces a **false positive** — loud, and fixed the day it appears. Sharing the
+  // parser's machinery produces a **false negative**, which is silent and is the defect this
+  // assertion exists to catch.
   const naiveRows = md.split('\n').filter((l) => /^#{2,3} #?\d+[a-z]?[.\s\u2014-]/.test(l)).length;
   if (items.length !== naiveRows) {
     problems.push(
