@@ -101,7 +101,13 @@ export function sections(md, level = 2) {
  */
 export function fieldValue(body, field) {
   for (const raw of body.split('\n')) {
-    if (raw.includes('`')) continue; // a line quoting the field is discussing it, not declaring it
+    // **The `^` anchor is the whole guard, and a broader one was actively wrong.**
+    // This first skipped any line containing a backtick, reasoning that a row quoting the field is
+    // discussing it rather than declaring it. That over-matched: it ate two REAL declarations whose
+    // value happens to cite a symbol (`**Status:** ... (ADR-0083 M7 — \`scheduleRefusal\`)`), and the
+    // gate then under-reported the register by two rows. The prose case it was defending against —
+    // #219's "a \`**Status:**\` line on every row" — does not begin at column 0, so the anchor
+    // already excludes it. Verified by fixture: `Row two` stays null with this guard gone.
     const m = new RegExp(`^\\*\\*${field}:\\*\\*\\s*(.*)$`).exec(raw);
     if (m) return m[1].trim();
   }

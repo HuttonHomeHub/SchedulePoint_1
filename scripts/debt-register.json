@@ -1,0 +1,13 @@
+{
+  "compactTableRatchet": 42,
+  "_compactTableRatchet": [
+    "The compact one-line table is FROZEN (product-owner decision, 2026-08-30): no new row may join",
+    "that format, and the existing ones convert to detailed rows opportunistically. This number may",
+    "only ever DECREASE — check:debt-status fails if the table grows, and fails if this number is",
+    "above the measured count, so a conversion must be recorded here in the same commit.",
+    "",
+    "It is 42, not the 66 the spec stated. 66 was 42 compact rows PLUS the 24 rows of the",
+    "Closed-numbers ledger, which is a permanent record that only ever grows — so a ratchet of 66",
+    "would have permitted 24 new compact rows before it ever fired. Measured 2026-08-30."
+  ]
+}

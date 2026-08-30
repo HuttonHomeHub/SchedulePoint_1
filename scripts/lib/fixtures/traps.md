@@ -16,7 +16,7 @@ returns 14 where the truth is 13 (`docs/TECH_DEBT.md` #219, live at the time thi
 
 ## Row three — the field indented, which is not a declaration
 
-**Status:** open
+  **Status:** open
 
 ## Row four — a heading inside a fence is not a heading
 
