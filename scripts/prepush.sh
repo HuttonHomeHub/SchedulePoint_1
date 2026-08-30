@@ -35,10 +35,37 @@ CHECKS_ONLY=0
 [ "${1:-}" = "--checks" ] && CHECKS_ONLY=1
 
 failed=()
+warned=()
+# **Three result states, not two** (`docs/specs/drift-gates/`, product-owner decision 2026-08-30).
+#
+#   0  ok    — clean.
+#   2  WARN  — advisory. Printed loudly, does NOT fail the push.
+#   *  FAIL  — blocking.
+#
+# The discriminator is written down because the tempting one ("how important is it?") has no stable
+# answer: **exit 1 is for an obligation whose remedy is an edit to the file that failed; exit 2 is
+# for one whose remedy is somebody's judgement.** A missed reconciliation pass is the second kind —
+# blocking a release on a documentation chore is how a gate gets bypassed with `--no-verify`, and
+# once bypassed it is bypassed always.
+#
+# **The honest weakness, recorded rather than designed away: a warning is ignorable, and that is
+# exactly how `docs/TECH_DEBT.md` #220 happened.** Escalating to a failure after N ignored warnings
+# was considered and refused — that is a blocking gate with extra steps, and it would arrive at the
+# same bypass by a longer route.
+#
+# Note that a passing gate's output goes to a log and is never printed, so before this a warn-only
+# `check:*` script was COMPLETELY SILENT. There is no design in which an advisory gate is visible
+# without this branch.
 run() {
   local label="$1"; shift
-  if "$@" >/tmp/prepush-last.log 2>&1; then
+  "$@" >/tmp/prepush-last.log 2>&1
+  local code=$?
+  if [ $code -eq 0 ]; then
     printf '  \033[32mok\033[0m    %s\n' "$label"
+  elif [ $code -eq 2 ]; then
+    printf '  \033[33mWARN\033[0m  %s\n' "$label"
+    tail -12 /tmp/prepush-last.log | sed 's/^/        /'
+    warned+=("$label")
   else
     printf '  \033[31mFAIL\033[0m  %s\n' "$label"
     tail -12 /tmp/prepush-last.log | sed 's/^/        /'
@@ -71,8 +98,15 @@ done
 
 echo
 if [ ${#failed[@]} -eq 0 ]; then
-  echo "All green."
+  if [ ${#warned[@]} -eq 0 ]; then
+    echo "All green."
+  else
+    # Named, not counted — "1 warning" is a number somebody scrolls past.
+    printf '\033[33mAll green, with advisory findings: %s\033[0m\n' "${warned[*]}"
+    echo "These do not block the push. They are obligations whose remedy is a judgement, not an edit."
+  fi
   exit 0
 fi
 printf 'FAILED: %s\n' "${failed[*]}"
+[ ${#warned[@]} -gt 0 ] && printf 'WARNED: %s\n' "${warned[*]}"
 exit 1
