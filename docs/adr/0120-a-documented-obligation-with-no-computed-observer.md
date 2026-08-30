@@ -10,7 +10,17 @@ Two obligations in this repository were written down, agreed, and unobserved.
 is actually still open?" required reading all of it. On 2026-08-30 three candidates were recommended
 to the product owner from that file and one — `#109` — had been fixed three weeks earlier, in a
 commit whose title names four unrelated ADRs. A sweep then verified seven rows against the code:
-**six were fixed and never closed.** Only 12 of 107 rows carried a status a parser could find.
+**six were fixed and never closed.** Only **14 of 138** rows carried a status a parser could find.
+
+> **That sentence read "12 of 107" until the gate could see the whole file, and the correction is
+> this ADR's own subject landing on it.** `check:debt-status` shipped calling `sections(md, 2)` —
+> and `docs/TECH_DEBT.md:100-103` states the document's own convention, `### <number>. <title>`,
+> **always**, with `##` as drift three rows had picked up. So the gate read _only the drifted rows_:
+> 31 numbered rows invisible, 29 of them with no status at all. It survived a red run, a repair and
+> an arming because **A9 — the assertion that exists to answer "did we read less than we think?" —
+> counted `^## ` too**, so both sides of the comparison shared one blind spot and it agreed with
+> itself. The seventh recorded instance in this repository of a check whose subject was not what it
+> believed, and the first where the check was the one written to close that class.
 
 **`docs/RECONCILE.md` says its pass runs "at each epic boundary"**, with a three-month hard floor.
 The floor works, because a date is a fact a person can check. The trigger did not — and the reason
@@ -70,7 +80,7 @@ claim than "this cannot happen again", and it is the true one.
 
 ### D4 — `unverified` is a status, not a guess
 
-The 78 rows without one were marked **`unverified`**, not `open`. Writing `open` on a row nobody has
+The 106 rows without one were marked **`unverified`**, not `open`. Writing `open` on a row nobody has
 checked against the code asserts a claim that has not been established — which is precisely the
 defect this epic exists to remove, and precisely how the `#109` recommendation happened.
 `unverified` is what those rows are. They convert as they are touched, and the count prints on every
@@ -85,6 +95,12 @@ Gate A was **report-only** through M2–M3. The red run against the un-repaired 
 findings — is committed at `docs/specs/drift-gates/red-run.md`, the repair took it to zero, and only
 then was the `package.json` key added. Arming first would have produced a gate failing on day one.
 
+**118 is an undercount, and the file says so rather than being re-run.** Against the same commit
+with the fixed parser the register held 138 numbered rows and 14 statuses, so the honest figure is
+124 A1 findings. Re-running it now would produce a tidier document and destroy what it is for: it is
+the record of what the gate _did_ report on the day it ran, and the gap between that and the truth
+is the D5 lesson stated in numbers.
+
 The red state is now gone from the file, so **that committed output is the only record that the gate
 ever had anything to find** (ADR-0110 D5).
 
@@ -95,13 +111,56 @@ ever had anything to find** (ADR-0110 D5).
 A **14-day backstop** is kept and labelled honestly: it has never fired and never would have on this
 history; it exists because a quiet period with no ADRs sits below every count threshold.
 
-**An ADR is a proxy for an epic, not the thing** — 119 ADRs against 70 spec directories, about 1.7
+**An ADR is a proxy for an epic, not the thing** — 120 ADRs against 70 spec directories, about 1.7
 per epic — so this counts the wrong noun. That is acceptable only because it is stated.
 
 **The threshold and D2 are not independent, and the spec treated them as if they were.** T = 10
 fires on exactly the two intervals somebody complained about, which is tuning to two data points;
 T = 8 fires on one more. That extra firing is affordable **because the gate warns**. Had it blocked,
 T = 10 would be right.
+
+### D7 — The gate's own input is compared across all three recording sites
+
+`docs/RECONCILE.md:9-13` instructs the owner of a pass to record it in three places — the banner
+date, a Passes-run row, and a `docs/DECISIONS.md` entry — "**all three, in the same commit**". That
+instruction is prose, and prose is what failed: the banner said `2026-07-28` while the table recorded
+`2026-07-31`, so the drift-control document had drifted about its own drift control.
+
+So Gate B parses all three and reports any disagreement, naming the line. The **effective date is the
+newest of the three**, deliberately: the failure to avoid is a forgotten update making the pass look
+older and firing a warning about work already done, which is precisely how a reader learns to ignore
+a gate. Erring towards silence, with the disagreement reported separately, hides nothing either way.
+
+**Its blind spot is stated rather than closed.** The `DECISIONS.md` clause knows only that an entry
+carrying that date exists, never that it is about the pass. Matching the word "Reconciliation" in a
+heading would be prose-scanning — the failure this whole module is built against — and would be wrong
+in both directions, since two of that file's real pass entries do not carry it in a form a regex
+could rely on. A same-day entry about something else therefore satisfies it: a knowingly weak check,
+not an accidental one.
+
+**The live repository is now consistent, which is why fixtures exist.** A check that cannot be made
+to fail by the defect it names is not finished (ADR-0110 D5), and the red case this was specified
+against has been repaired, so `scripts/check-reconcile-due.test.mjs` carries it — including a
+fixture whose findings column holds a later date than any pass row, because reading a row's text and
+taking the first date is exactly how the wrong answer was reached.
+
+### D8 — "It never blocks" is enforced in one place, not by four exits remembering
+
+Gate B's one contractual promise is that it warns and never fails a push. It shipped with four exit
+paths and one of them broke that promise: `execFileSync` was called bare, so `git` absent from PATH —
+or a checkout that is not a work tree — produced an uncaught exception, exit **1**, reported by
+`prepush.sh` as **FAIL**, under a docblock stating that outcome was impossible.
+
+A promise kept by each branch remembering to keep it is not kept. `report()` therefore takes
+`advisory: true` and has **no path that returns 1** for such a gate; the git calls return `null`
+rather than throwing, and "git could not be read" is reported as its own finding instead of
+collapsing into a reassuring `0 ADRs since`. A **shallow clone is refused rather than guessed**:
+`--diff-filter=A` dates every file to the boundary commit, so a `fetch-depth: 1` checkout would warn
+that the entire register had been filed since the last pass.
+
+The same pass replaced 122 `git log` subprocesses with one `--name-only` walk — **2.9 s to 0.11 s**,
+against this gate's own sub-second budget. That budget is not decoration: a pre-push step slow enough
+to notice is a step somebody starts skipping, which is the `--no-verify` route D3 already refuses.
 
 ## Consequences
 

@@ -4,6 +4,25 @@
 the evidence of what was wrong has to exist before it is fixed, or the gate's value is a
 claim rather than a record (ADR-0110 D5).
 
+> ## ⚠ Every number below is an UNDERCOUNT, and the file is kept that way on purpose
+>
+> The gate that produced this output read `sections(md, 2)` — level-2 headings only — while
+> `docs/TECH_DEBT.md:100-103` states the register's own convention as `### <number>. <title>`,
+> **always**, with `##` being drift three rows had picked up. So this run saw _only the drifted
+> rows_. Re-measured against the same commit (`a83a3302`) with the corrected parser:
+>
+> | figure                 | this run reported | truth   |
+> | ---------------------- | ----------------- | ------- |
+> | numbered detailed rows | 107               | **138** |
+> | with a status          | 12                | **14**  |
+> | A1 findings            | 95                | **124** |
+> | total findings         | 118               | **147** |
+>
+> **This is not corrected in place, and re-running it would destroy the point.** The file records
+> what the gate _reported_ on the day it ran; the gap between that and the truth is the D5 lesson in
+> numbers, and it is the only surviving artefact of the defect. See ADR-0120 D5, and the fix in
+> `806f4a7f`.
+
 ```
 check:debt-status — REPORT ONLY (not yet armed; see M4)
 107 detailed rows (12 with a status, 95 without), 42 compact-table rows, 24 ledgered, 3 section headings.

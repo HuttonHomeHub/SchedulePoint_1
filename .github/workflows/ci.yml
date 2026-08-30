@@ -62,6 +62,22 @@ jobs:
       - name: Check documentation links
         run: pnpm check:doc-links
 
+      # The parser both documentation-register gates read with. It has no journey, no browser and no
+      # user behind it, so if it silently drops half a document both gates report green over less
+      # than they think. Two of its own cases shipped vacuous — a fixture Prettier had normalised no
+      # longer contained the malformation it was named for — which is why each fixture now asserts
+      # its own contents before a case runs.
+      - name: Check the register parser
+        run: pnpm check:doc-register
+
+      # `docs/TECH_DEBT.md` is what decides what gets worked on next, and 106 of its rows carried no
+      # status at all: a reader could not tell an open row from one whose remedy shipped months ago.
+      # ADR-0120. Deliberately absent from this list: `check:reconcile-due`, which is ADVISORY by
+      # product-owner decision (2026-08-30) — it warns in `scripts/prepush.sh` and never blocks, and
+      # adding it here would convert that decision into a blocking gate by the back door.
+      - name: Check the tech-debt register
+        run: pnpm check:debt-status
+
       # The playbook says which plan proves what. Its rows name plans by id, and a row pointing at
       # a plan that no longer exists sends a reader to seed nothing and conclude the feature is
       # broken. The reverse — a plan nobody documented — is worse: it gets seeded, looks plausible

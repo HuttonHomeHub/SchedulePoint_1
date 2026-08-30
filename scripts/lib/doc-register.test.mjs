@@ -27,6 +27,27 @@ const here = dirname(fileURLToPath(import.meta.url));
 const traps = readRepoDoc(join(here, 'fixtures/traps.md'));
 const unterminated = readRepoDoc(join(here, 'fixtures/unterminated.md'));
 
+// ── Fixture preconditions ──────────────────────────────────────────────────────────────────────
+//
+// **A fixture asserts what it still contains, because two of these cases shipped vacuous.**
+// `traps.md`'s "a tilde fence, and a longer-than-three fence" contained neither: Prettier had
+// normalised both to plain ``` before `.prettierignore` covered this directory, so
+// `assert.ok(!stripped.includes('## Also not a row'))` passed for the ordinary reason and proved
+// nothing about tildes. `unterminated.md`'s fence was *balanced* for the same reason, so the case
+// named for an unterminated fence tested a terminated one. Both were green, both were meaningless,
+// and nothing could say so — the exact "a gate whose subject is not what it believes" failure this
+// module was written about, inside its own test suite.
+//
+// These run FIRST and hard-`throw`, rather than going through `it()`: a suite whose inputs are
+// wrong is not reporting failures, it is reporting nothing.
+assert.ok(traps.includes('\n~~~\n'), 'traps.md must contain a real ~~~ fence');
+assert.ok(traps.includes('\n`````md\n'), 'traps.md must contain a fence longer than three');
+assert.equal(
+  (unterminated.match(/^```/gm) ?? []).length,
+  1,
+  'unterminated.md must hold exactly one fence marker — a second one terminates it',
+);
+
 let run = 0;
 const it = (what, fn) => {
   run += 1;
@@ -48,7 +69,18 @@ it('strips ``` fences but preserves line numbering', () => {
 it('strips ~~~ fences and fences longer than three characters', () => {
   const stripped = stripFences(traps);
   assert.ok(!stripped.includes('## Also not a row'), '~~~ fence');
-  assert.ok(!stripped.includes('## Still not a row'), '```` fence');
+  assert.ok(!stripped.includes('## Still not a row'), 'fence longer than three');
+});
+
+it('a nested fence closes only at its own length', () => {
+  // A ``` block *documented inside* a ````` block must not end the outer fence. Get this wrong and
+  // the parser resumes mid-example: it reads the example's prose as document, and — worse — treats
+  // the outer fence's real close as an *opening*, inverting every fence after it in the file.
+  const stripped = stripFences(traps);
+  assert.ok(!stripped.includes('Not a row, and the'), 'the inner ``` must stay swallowed');
+  assert.ok(stripped.includes('Row seven'), 'the heading before the outer fence survives');
+  // Everything after the outer fence must still be visible, which is the inversion check.
+  assert.equal(sections(stripped, 2).length, sections(traps, 2).length);
 });
 
 it('an unterminated fence swallows the rest, as a renderer would', () => {
@@ -60,7 +92,7 @@ it('an unterminated fence swallows the rest, as a renderer would', () => {
 // ── sections ───────────────────────────────────────────────────────────────────────────────────
 it('counts only real headings, and never one inside a fence', () => {
   const found = sections(traps, 2).map((s) => s.heading);
-  assert.equal(found.length, 6, `expected 6 rows, got ${found.length}: ${found.join(' | ')}`);
+  assert.equal(found.length, 7, `expected 7 rows, got ${found.length}: ${found.join(' | ')}`);
   assert.ok(!found.some((h) => h.includes('Not a row')));
 });
 
@@ -132,6 +164,45 @@ it('REFUSES to report success over an empty population', () => {
   assert.equal(
     quiet(() => report({ name: 't', population: 0 })),
     1,
+  );
+});
+
+it('advisory has no path that returns 1', () => {
+  // `check:reconcile-due` promises it never blocks. That promise cannot be kept by each of its four
+  // exits remembering to keep it — one of them (an uncaught `git` failure) did not, and `prepush`
+  // reported FAIL. The floor lives in one place, so it holds for reasons nobody enumerated.
+  for (const args of [
+    { population: 0 },
+    { population: 5, problems: ['x'] },
+    { population: 5, problems: ['x'], warnings: ['y'] },
+  ]) {
+    assert.equal(
+      quiet(() => report({ name: 't', advisory: true, ...args })),
+      2,
+      JSON.stringify(args),
+    );
+  }
+  assert.equal(
+    quiet(() => report({ name: 't', advisory: true, population: 5 })),
+    0,
+    'clean is still clean',
+  );
+});
+
+it('a caller-authored problem is printed even when the population is empty', () => {
+  // It used to be discarded: the population-0 branch returned above the problems loop, so a gate
+  // that had composed "the parse is broken, or the table is" watched the generic line print instead.
+  const lines = [];
+  const write = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (s) => (lines.push(String(s)), true);
+  try {
+    report({ name: 't', population: 0, problems: ['the table is unreadable'] });
+  } finally {
+    process.stdout.write = write;
+  }
+  assert.ok(
+    lines.some((l) => l.includes('the table is unreadable')),
+    `caller message missing: ${lines.join('')}`,
   );
 });
 

@@ -26,10 +26,28 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-/** Read a repository document as text. Kept here so both gates resolve paths the same way. */
+/** The repository root, resolved from this file rather than from `process.cwd()`. */
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** Exported so a gate's subprocesses run against the same tree its documents were read from. */
+export const REPO_ROOT = ROOT;
+
+/**
+ * Read a repository document as text, by a path **relative to the repository root** — never to the
+ * caller's working directory.
+ *
+ * This is the shape `check-counts.mjs` and `check-doc-links.mjs` already use, and it is not
+ * housekeeping: `prepush.sh` exists because the same ten gates run from `apps/web` produced ten
+ * "command not found" failures indistinguishable from ten real ones. A relative read is the quieter
+ * version of that — run from the wrong directory it does not fail, it reads a *different file*, or
+ * a stale copy, and reports confidently about it. Proven while testing this module: run from a
+ * scratch directory holding a copy of `docs/RECONCILE.md`, the gate read the copy.
+ */
 export function readRepoDoc(path) {
-  return readFileSync(path, 'utf8');
+  return readFileSync(resolve(ROOT, path), 'utf8');
 }
 
 /**
@@ -155,19 +173,52 @@ export function tableRows(md, headingText) {
  * passed its "nothing unclassified" assertion because its glob matched zero files, and ADR-0093
  * records a suite that could not distinguish "the duplicate is gone" from "the capability is gone".
  * Passing `population: 0` is therefore a *blocking* finding, not a pass.
+ *
+ * **`advisory: true` lowers every blocking exit to 2 and is the only way a gate is allowed to
+ * promise it never blocks.** Not because an advisory gate's findings matter less — the empty
+ * population above still prints, and still refuses to say OK — but because a promise kept by each
+ * branch remembering to keep it is not kept. Note the cost, since `prepush.sh` is the only consumer
+ * that reads 2 as WARN: **pnpm itself treats exit 2 as failure**, so `pnpm check:reconcile-due` run
+ * directly reports a failed script. That is a fair reading of "this needs attention" and a poor
+ * reading of "this does not block"; the convention lives inside the pre-push runner.
  */
-export function report({ name, problems = [], warnings = [], population = null, summary = '' }) {
+export function report({
+  name,
+  problems = [],
+  warnings = [],
+  population = null,
+  summary = '',
+  advisory = false,
+}) {
   const say = (s) => process.stdout.write(`${s}\n`);
-  if (population === 0) {
-    say(`${name}: FAIL — the population is empty, so this run checked nothing.`);
-    say('  A gate with no subject reports green and reads as "checked". Refusing to.');
-    return 1;
-  }
+  // **`advisory` is enforced here, once, rather than at every return.** A gate whose contract is
+  // "this never blocks" cannot keep that promise by having each of its own branches remember to —
+  // `check:reconcile-due` had four exits and one of them (an uncaught `git` failure) returned 1,
+  // reported by `prepush` as FAIL, which is precisely the outcome its docblock promised was
+  // impossible. Declaring the gate advisory makes the floor structural: this function has no path
+  // that returns 1 for it.
+  const blocking = advisory ? 2 : 1;
+
+  // **Findings print BEFORE the population verdict, and printing them after was a live defect.**
+  // The first version returned on `population === 0` above this loop, so a caller that had composed
+  // a precise problem message for exactly that case — "the parse is broken, or the table is" —
+  // watched it discarded in favour of the generic line. The caller knows why its population is
+  // empty; this function only knows that it is.
   for (const p of problems) say(`  ✗ ${p}`);
   for (const w of warnings) say(`  ⚠ ${w}`);
+
+  if (population === 0) {
+    say(
+      `${name}: ${advisory ? 'WARN' : 'FAIL'} — the population is empty, so this run checked nothing.`,
+    );
+    say('  A gate with no subject reports green and reads as "checked". Refusing to.');
+    return blocking;
+  }
   if (problems.length > 0) {
-    say(`${name}: FAIL — ${problems.length} finding(s). ${summary}`.trimEnd());
-    return 1;
+    say(
+      `${name}: ${advisory ? 'WARN' : 'FAIL'} — ${problems.length} finding(s). ${summary}`.trimEnd(),
+    );
+    return blocking;
   }
   if (warnings.length > 0) {
     say(`${name}: WARN — ${warnings.length} finding(s). ${summary}`.trimEnd());

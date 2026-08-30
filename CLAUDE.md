@@ -3559,7 +3559,7 @@ progress` off the command surface because **an object action belongs on the obje
 - **ADR-0120** _(Accepted; M0–M7 landed 2026-08-30)_ — A documented obligation with no computed
   observer. Two rules in this repository were written down, agreed and unobserved, and both decayed
   in the direction hardest to notice: the document keeps reading as authoritative.
-  `docs/TECH_DEBT.md` decides what gets picked up next, and **12 of its 107 rows carried a status a
+  `docs/TECH_DEBT.md` decides what gets picked up next, and **14 of its 138 rows carried a status a
   parser could find** — so three candidates went to the product owner and one had been fixed three
   weeks earlier, in a commit naming four unrelated ADRs; a sweep then found **six of seven** verified
   rows fixed and never closed. `docs/RECONCILE.md`'s pass ran "at each epic boundary", and its own
@@ -3575,12 +3575,26 @@ progress` off the command surface because **an object action belongs on the obje
   was refused as a blocking gate with extra steps, reaching the same `--no-verify` bypass by a longer
   route. What it buys is that the state is computed and visible instead of requiring someone to read
   an unsorted table correctly — a smaller claim than "this cannot recur", and the true one.
-  The 78 rows without a status became **`unverified`, not `open`**: writing `open` on a row nobody
+  The 106 rows without a status became **`unverified`, not `open`**: writing `open` on a row nobody
   has checked asserts the very claim this epic exists to remove, and accepting `unverified` is what
   let the gate be armed at all (ADR-0058 — a gate that fails on day one gets deleted rather than
   fixed). Gate A was **report-only until the repair was done**; the red run against the un-repaired
-  register (**118 findings**) is committed, because the red state is now gone and that output is the
-  only record the gate ever had anything to find.
+  register is committed, because the red state is now gone and that output is the only record the
+  gate ever had anything to find.
+  **The epic's own subject then landed on it, and this entry is the corrected version.** Gate A
+  shipped calling `sections(md, 2)` — level-2 headings only — while `docs/TECH_DEBT.md:100-103`
+  states the register's own convention as `### <number>. <title>`, **always**, with `##` as drift
+  three rows had picked up. So it read _only the drifted rows_: **31 numbered rows invisible, 29 of
+  them with no status**, while it printed "88 detailed rows (88 with a status, 0 without)" over a
+  document where that was false — and I reported that line to the product owner as proof the
+  register was clean. It survived a red run, a repair pass and an arming because **A9, the assertion
+  written to answer "did we read less than we think?", counted `^## ` too**: both sides of the
+  comparison shared one blind spot, so it agreed with itself. A9's control is now derived
+  independently, and every figure this entry once carried was an undercount — the red run's 118
+  findings were really 147, and `red-run.md` is **headed with that correction rather than re-run**,
+  because the file records what the gate reported and the gap is the D5 lesson in numbers. Seventh
+  recorded instance of a check whose subject was not what it believed; first where the check was the
+  one written to close that class.
   **The threshold is derived and coupled to the enforcement choice**: T = 8 filed since the last pass, from p75 = 7.50,
   firing on 3 of 11 intervals and catching both recorded failures. T = 10 fires on exactly the two
   intervals somebody complained about — tuning to two data points — and T = 8's extra firing is

@@ -28,13 +28,29 @@ returns 14 where the truth is 13 (`docs/TECH_DEBT.md` #219, live at the time thi
 
 ## Row five — a tilde fence, and a longer-than-three fence
 
-```
+~~~
 ## Also not a row
-```
+
+**Status:** open
+~~~
+
+`````md
+## Still not a row
+
+**Status:** open
+`````
+
+## Row seven — a nested fence closes only at its own length
+
+`````md
+Documenting a fenced block requires an outer fence longer than the inner one:
 
 ```
-## Still not a row
+## Not a row, and the ``` above does not end the outer fence
 ```
+
+**Status:** open
+`````
 
 ## Row six — a table whose prose column contains a date
 
