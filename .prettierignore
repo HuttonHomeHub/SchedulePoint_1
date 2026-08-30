@@ -18,3 +18,11 @@ CHANGELOG.md
 
 # Vendored conformance fixtures — an upstream contract, not ours to reformat
 packages/engine-conformance/fixtures/**
+
+# **Gate fixtures are malformed on purpose — formatting them destroys what they pin.**
+# `scripts/lib/fixtures/traps.md` carries a two-space-indented `**Status:**` line to prove the
+# parser treats an indented field as prose rather than a declaration. Prettier de-indented it at
+# commit time, so the fixture kept its heading ("the field indented") and lost its content — it then
+# asserted the opposite of its name and would have passed against a broken parser. Nothing ran it
+# between the reformat and the next edit, which is how a fixture rots silently.
+scripts/lib/fixtures/

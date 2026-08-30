@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1112 web
 > source files with 41 Playwright suites beside the base journey, and
-> 119 ADRs.
+> 120 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3555,6 +3555,63 @@ progress` off the command surface because **an object action belongs on the obje
   fold read as unreachable, where the discriminator is ADR-0114's own — whether there is anything
   scrollable to move.
   **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0120** _(Accepted; M0–M7 landed 2026-08-30)_ — A documented obligation with no computed
+  observer. Two rules in this repository were written down, agreed and unobserved, and both decayed
+  in the direction hardest to notice: the document keeps reading as authoritative.
+  `docs/TECH_DEBT.md` decides what gets picked up next, and **14 of its 138 rows carried a status a
+  parser could find** — so three candidates went to the product owner and one had been fixed three
+  weeks earlier, in a commit naming four unrelated ADRs; a sweep then found **six of seven** verified
+  rows fixed and never closed. `docs/RECONCILE.md`'s pass ran "at each epic boundary", and its own
+  record of when that last happened was an **unsorted table with a banner contradicting its newest
+  row** — a reader auditing that file _specifically for staleness_ got it wrong on the first attempt.
+  **The load-bearing decision is the exit convention, and it is written into the script because the
+  tempting discriminator has no stable answer**: exit 1 is for an obligation whose remedy is an edit
+  to the file that failed, exit 2 for one whose remedy is somebody's judgement. `check:debt-status`
+  blocks (type a status); `check:reconcile-due` warns (run a pass and think). `prepush.sh` gains a
+  third result state, which was a **prerequisite rather than a preference** — `run()` sends a passing
+  gate's output to a log, so an advisory gate was previously **completely silent**.
+  **The warning is ignorable and the ADR says so** rather than designing it away; escalation-to-failure
+  was refused as a blocking gate with extra steps, reaching the same `--no-verify` bypass by a longer
+  route. What it buys is that the state is computed and visible instead of requiring someone to read
+  an unsorted table correctly — a smaller claim than "this cannot recur", and the true one.
+  The 106 rows without a status became **`unverified`, not `open`**: writing `open` on a row nobody
+  has checked asserts the very claim this epic exists to remove, and accepting `unverified` is what
+  let the gate be armed at all (ADR-0058 — a gate that fails on day one gets deleted rather than
+  fixed). Gate A was **report-only until the repair was done**; the red run against the un-repaired
+  register is committed, because the red state is now gone and that output is the only record the
+  gate ever had anything to find.
+  **The epic's own subject then landed on it, and this entry is the corrected version.** Gate A
+  shipped calling `sections(md, 2)` — level-2 headings only — while `docs/TECH_DEBT.md:100-103`
+  states the register's own convention as `### <number>. <title>`, **always**, with `##` as drift
+  three rows had picked up. So it read _only the drifted rows_: **31 numbered rows invisible, 29 of
+  them with no status**, while it printed "88 detailed rows (88 with a status, 0 without)" over a
+  document where that was false — and I reported that line to the product owner as proof the
+  register was clean. It survived a red run, a repair pass and an arming because **A9, the assertion
+  written to answer "did we read less than we think?", counted `^## ` too**: both sides of the
+  comparison shared one blind spot, so it agreed with itself. A9's control is now derived
+  independently, and every figure this entry once carried was an undercount — the red run's 118
+  findings were really 147, and `red-run.md` is **headed with that correction rather than re-run**,
+  because the file records what the gate reported and the gap is the D5 lesson in numbers. Seventh
+  recorded instance of a check whose subject was not what it believed; first where the check was the
+  one written to close that class.
+  **The threshold is derived and coupled to the enforcement choice**: T = 8 filed since the last pass, from p75 = 7.50,
+  firing on 3 of 11 intervals and catching both recorded failures. T = 10 fires on exactly the two
+  intervals somebody complained about — tuning to two data points — and T = 8's extra firing is
+  affordable **only because the gate warns**; had it blocked, 10 would be right. The spec treated
+  those as independent decisions. An ADR is a **proxy for an epic** (~1.7 per epic), so it counts the
+  wrong noun, which is acceptable only because it is stated.
+  **The ratchet's history is the argument for having one.** Specified 66, measured 42, shipped 43:
+  66 conflated the compact table with the 24-row Closed-numbers ledger — a permanent record that only
+  grows — so it would have permitted 24 new rows before firing, a gate that exists, passes and
+  protects nothing. Then numbering an orphan row whose number cell was **prose** made it countable,
+  42 → 43, and **A7 refused the stale value in the same commit that changed the count**. Along the
+  way: `#169` was nearly deleted because its heading said `HALF CLOSED`, and half closed is open;
+  three apparent vocabulary violations were vocabulary words wearing punctuation, so the rows were
+  made readable rather than the gate widened; and prettier **de-indented a fixture**, which kept its
+  name, lost the property it pinned, and would have passed against a broken parser
+  (`scripts/lib/fixtures/` is now in `.prettierignore`). **The CPM engine is not imported and no
+  migration runs.**
 
 - **ADR-0119** _(Accepted; landed 2026-08-30)_ — A group of buttons says which of them are
   alternatives. The plan header's mode row held four controls — `Early mode | Visual mode |

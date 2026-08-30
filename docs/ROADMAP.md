@@ -537,6 +537,12 @@ discriminators. Each becomes a spec/plan before build:
   because the probe styled a button whose `px-2` an inline `padding-left` replaces rather than adds
   to — caught only because the prediction had been written down first.
 
+- **Two documented obligations gain computed observers** — **shipped** (ADR-0120, 2026-08-30,
+  `docs/specs/drift-gates/`). `check:debt-status` blocks a register row with no machine-readable
+  status; `check:reconcile-due` warns when 8+ ADRs have shipped since the last reconciliation pass.
+  `scripts/prepush.sh` gains a third result state so an advisory gate is visible at all. The
+  register went from 12 statuses across 107 rows to 89 across 89, with 18 closed rows deleted and
+  ledgered. Closes `docs/TECH_DEBT.md` #219 and #220.
 - **One control height, with the input as an axis of it** — **in progress** (ADR-0118, 2026-08-29).
   The product published "touch targets ≥ 44px" in `UX_STANDARDS.md`, "≥ 24, prefer 44" in
   `DESIGN_SYSTEM.md`, and a scale defaulting to 36 — three statements, met by nothing, and never

@@ -1,0 +1,19 @@
+{
+  "compactTableRatchet": 43,
+  "_compactTableRatchet": [
+    "The compact one-line table is FROZEN (product-owner decision, 2026-08-30): no new row may join",
+    "that format, and the existing ones convert to detailed rows opportunistically. This number may",
+    "only ever DECREASE \u2014 check:debt-status fails if the table grows, AND fails if this number sits",
+    "above the measured count, so a conversion must be recorded here in the same commit.",
+    "",
+    "It is NOT the 66 the spec stated. 66 was 42 compact rows plus the 24 rows of the Closed-numbers",
+    "ledger \u2014 a permanent record that only ever grows \u2014 so a ratchet of 66 would have permitted 24",
+    "new compact rows before it ever fired.",
+    "",
+    "It is 43 rather than the 42 first measured, and the one-row difference is A7 working. The",
+    "register held a compact row whose number cell was PROSE (`**ADR-0031 toolbar fast-follows**`),",
+    "so it was uncountable, uncitable and invisible to the uniqueness check. Giving it the number 221",
+    "made it countable, the table went 42 -> 43, and the gate refused the stale ratchet in the same",
+    "commit that changed the count. That is the failure mode this field exists to catch, caught."
+  ]
+}
