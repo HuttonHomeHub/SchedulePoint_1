@@ -180,36 +180,6 @@ changing its nature — one derivation, two surfaces.
 fields (not `null`). Until then, treat the permission sets as coupled: changing one without the
 other is a client bug in a different file.
 
-### 63. The Progress tab carries no unsaved marker for its three panels
-
-**Status:** unverified
-
-> **The confirmation half is CLOSED (2026-08-23, ADR-0108 D2); the tab-marker half remains open.**
-> The three panels now report dirtiness up to the editor via one `onDirtyChange` callback each —
-> which is the lift this row prescribed — and the editor composes a six-scope report that the
-> discard confirmation reads. So closing the editor with a changed weighted step now confirms and
-> names the scope; before, `requestClose` called `onClose()` outright and the work went in silence.
-> That was the more consequential half, and this row was right that the lift closes it.
->
-> **Still open:** the tab LABEL still carries no dirty marker for Progress, so switching to General
-> with unsaved step edits shows nothing on the tab itself. The report now exists to drive it, so what
-> is left is presentation rather than plumbing.
-
-Every other tab in the activity editor shows a dirty/error marker in its tab label (ADR-0060 §4).
-**Progress does not** — its three panels (Reported progress / How value is measured / Weighted
-steps) own independent forms, and none of their state reaches the tab.
-
-So: edit the weighted steps, switch to General, and nothing anywhere says the Progress tab has
-unsaved work. The discard confirmation on close has the same blind spot — it names General,
-Scheduling and Cost, never Progress. Neither is data loss with consequences (each panel is one
-Save from durable, and the panels are visible the moment you return to the tab), which is why this
-is debt and not a defect — but it is an inconsistency the tab strip's own rationale argues against,
-found by the M6 UX gate.
-
-**What would close it:** lift the three panels' `isDirty`/`errorCount` to the dialog — a callback
-prop per panel, or a small shared context — and fold them into the same `marker()` the other three
-tabs use, plus into `dirtyScopeNames` for the confirmation.
-
 ### 64. Fields still use native `disabled`, so a mid-session pen loss can drop focus
 
 **Status:** unverified
@@ -258,49 +228,22 @@ line in the epic that noticed it.
 
 ### 66. A shaded create form still accepts input it cannot submit
 
-**Status:** unverified
+**Status:** open
 
 The house rule is shade-with-a-reason, and `ScopeSaveBar` implements it correctly: the Save is
-`aria-disabled` with the reason `aria-describedby`-linked. But on the two create forms this epic
-shipped — **Add a link** (`AddLinkSection`) and **Assign a resource** (`ActivityResourcesPanel`) —
-only the Save is gated. The fields above it stay fully interactive, so a member who cannot write can
-fill in an entire form and meet the refusal at the end of it.
+`aria-disabled` with the reason `aria-describedby`-linked. But on the two create forms the ADR-0062
+epic shipped — **Add a link** (`AddLinkSection`) and **Assign a resource**
+(`ActivityResourcesPanel`) — only the Save is gated. The fields above it stay fully interactive, so
+a member who cannot write can fill in an entire form and meet the refusal at the end of it.
 
 Not a WCAG failure (the reason is announced, and the control is reachable), and deliberately not
-"fixed" by adding native `disabled` — that is #64's defect, reintroduced. It is the same question as
-#64 from the other side: what the shaded _state_ of a whole form should look like.
+"fixed" by adding native `disabled` — that is #64's defect, reintroduced.
 
-**What would close it:** decide the pattern once — a `readOnly` pass-through on the form primitives,
-or a section-level treatment — and apply it to both forms together. Raised by the ADR-0062
-accessibility gate as a nit, and by its ux gate as "the form should say so before the last click".
-
-### 67. The Logic panel's post-remove focus target is the whole panel
-
-**Status:** unverified
-
-After removing a dependency, `ActivityLogicPanel` moves focus to a wrapper around **everything** —
-both tables, the add form and the cross-plan/notes slots. It is not a regression (it is what
-`DependencyEditor` always did, and it beats dropping focus to `<body>`), but this epic shipped a
-better pattern one file over: `ActivityResourcesPanel` falls back to a narrow region around just the
-assigned list, and lets its host override the target — which the dialog uses to focus its Close
-button.
-
-**What would close it:** narrow `regionRef` to the two `<section>`s and add the same host-override
-seam Resources has, so removing a link from the dialog lands on Close and from the tab lands on the
-list. Raised by the ADR-0062 accessibility gate.
-
-### 68. **Add note** lands on the Notes tab but not in its composer
-
-**Status:** unverified
-
-`openActivityEditor`'s `steps` intent carries `focusSteps`, which the editor wires to the steps
-heading. The `notes` intent carries only the tab, on the reasoning that "the intent IS the reveal" —
-true visually, but the native `<dialog>`'s initial focus is the ✕ close button regardless of which
-tab is active (the pre-existing gap in #17c). So a keyboard or screen-reader user who chose **Add
-note** still traverses ✕ → the Notes tab → the panel before reaching the composer.
-
-**What would close it:** a `focusNotes` flag on the intent, mirroring `focusSteps` one line above it,
-with the composer exposing a ref. Raised by the ADR-0062 accessibility gate.
+**The pattern is already decided and not yet applied**: ADR-0083 says a gated form field is
+**read-only, not disabled**, with the mechanism differing per control because the platform offers
+different states. So what is left here is not a decision but the application of one — to both forms
+together, with the two claims ADR-0083 marks "reasoned from specification, not observed" checked
+first. It belongs with #64, which is the same question from the other side.
 
 ### 69. Two idioms for editing a row in place
 
@@ -367,18 +310,6 @@ the design system has a primitive for.
 **What would close it:** widen `CheckboxField` to support a visually-hidden label and trailing row
 content — the two reasons a straight swap is not free today — then move all five call sites, and
 make the table row itself the hit target. Raised by the ADR-0063 M6 component and UX gates.
-
-### 73. `Column.srHeader` is dead once `headerCell` is set
-
-**Status:** unverified
-
-`DataTable`'s render ternary takes `headerCell` first, so a column declaring both (the activities
-table's Select column does) silently ignores `srHeader`. Harmless today — the checkbox carries its
-own `aria-label` — but it is a prop that looks load-bearing and is not.
-
-**What would close it:** either drop the redundant `srHeader` at the call site and say so in the
-`Column` docblock, or make the two compose (render the sr-only text _beside_ the control). Raised by
-the ADR-0063 M6 component gate.
 
 ### 74. The plan advisory lock's contention headroom is unmeasured
 
@@ -905,44 +836,6 @@ is the ADR-0058 rule finding two of its own instances in the file that cites it.
 
 ---
 
-### 92. An undone delete leaves a deletion with no matching restore
-
-**Status:** unverified
-
-> **Re-verified 2026-08-08 — the stated blocker is gone.** This row says the fix waits on "ADR-0048
-> M4 — the optional id-stable restore endpoint". That endpoint **shipped** when #113 closed:
-> `DELETE …/activities/:activityId` now returns `{ deleteBatchId }`
-> (`activities.controller.ts:140-153`) and `bulkDeleteCommand` already restores by batch. What is
-> left is pointing `deleteActivityCommand`'s undo at `restoreDeleteBatch` instead of `createActivity`
-> (`commands.ts:376-386`) — **hours of client work, not an epic**.
-
-**Found:** 2026-08-04, writing ADR-0073 C3.1. Named in the feature spec (CQ-D / §2.5) as the honest
-cost of a decision rather than discovered afterwards.
-
-`activity.deleted` and `activity.restored` are a pair, and a reader's question — "what happened to
-the Northgate piling activity?" — is answerable because both halves are recorded. **Undo does not
-produce the second half.** ADR-0048's undo of a delete is a **re-create** (M1–M3: a new row, a new
-id), and `activity.created` is deliberately absent from the catalogue because a create is already
-durably attributed by `created_by`/`created_at`. So a planner who deletes an activity and
-immediately presses Undo leaves a `activity.deleted` row, a live activity, and nothing in the log
-tying the two together.
-
-Dependencies do **not** have this problem: their undo re-creates too, but `dependency.created` IS in
-the catalogue (it earns its row on the blast-radius test), so the pair closes.
-
-**Why it is not patched by auditing creates.** That would add a row per created activity — the
-largest single class in the excluded catalogue, and the one whose exclusion makes the whole
-coverage rung affordable (ADR-0073 §2.4). Recording thousands of rows to close one gap of
-interpretation is the wrong trade, and it would be irreversible: the table refuses `DELETE`.
-
-**The fix when it is taken:** ADR-0048 **M4** — the optional id-stable restore endpoint, reusing
-the existing soft-delete `delete_batch_id`. Undo then calls **restore** rather than create, the
-existing `activity.restored` producer fires with the original id, and the pair closes with no new
-audit action and no new rows on the common path. Until then the screens say what they record and
-the log is not wrong, only incomplete in a way a reader cannot see.
-
----
-
 ### 93. The audit epic's non-blocking review findings (ADR-0073 C4.1)
 
 **Five of six folded 2026-08-31** (register verification sweep), leaving only (a):
@@ -1085,18 +978,18 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
   brand-surface epic was about to add a sixth. It is now `components/ui/text-link.tsx` —
   a `className` factory rather than a component, so the router's type-safe `to`/`search` inference
   survives, and it gained the visible focus ring the five copies never had.
-- **(c) `password-reset.parity.test.tsx` overstates itself, and one of its assertions is vacuous**
-  (test-engineer). Its docblock calls the suite "the only gate" on the flag structure, which was
-  true when written and is not now — `router-search.test.ts` and the flag-on journey both cross it.
-  And its `redirectTo` origin assertion checks the value against `window.location.origin`, which is
-  what produced it: it cannot fail. Both are documentation defects in a test rather than missing
-  coverage, which is why they are here and not in the fix.
+- **(c) ~~`password-reset.parity.test.tsx` overstates itself, and one of its assertions is
+  vacuous~~ — CLOSED 2026-08-31.** The docblock no longer calls the suite "the only gate" (it was,
+  when written; `router-search.test.ts` and the flag-on journey both cross it now), and the
+  `redirectTo` assertion — which lived in `forgot-password.test.tsx`, not in the parity suite, so
+  the finding named the wrong file — stops restating the implementation. It captures the origin
+  before rendering and asserts a parsed `URL`'s origin and pathname, which is the contract; reading
+  `window.location.origin` inside the expectation meant the test and the source consulted the same
+  global and the assertion described itself.
 
-**Risk:** neither remaining item is user-visible. (a) makes one audit question unaskable; (c) is a
-test that reads as stronger than it is, which is the failure mode this register exists to name.
+**Risk:** the remaining item is not user-visible — (a) makes one audit question unaskable.
 
-**Remediation:** (a) with the next audit-coverage slice; (c) whenever that file is next touched — it
-is a comment and one assertion. (b) is closed.
+**Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
 ## Closed numbers
 
@@ -1112,98 +1005,104 @@ dangling.
 
 One line each. The story lives where the link points, not here.
 
-| #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                                 |
-| --- | -------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 160 | `resolveLensPalette` was resolved twice per cycle                                      | 2026-08-31 | One memo, both maps derived from it — which also makes the `barFill`/`barInk` pairing come from one resolve, as it must.                                                                            |
-| 171 | `schedulepoint-active-org` was never cleared and carried no user id                    | 2026-08-31 | Keyed `<prefix>:<userId>` matching `recent-plans`, and swept beside `forgetAllForUser` at sign-out. On a shared machine the next person in was silently sent to the previous person's organisation. |
-| 108 | The plural drag: model, command and endpoint landed, the gesture did not               | 2026-08-28 | `useBatchPlacements`/`moveMany`/`bulkPlacementCommand` plus `livePeerGhostRects` drawn into the overlay.                                                                                            |
-| 128 | The multi-select journey's post-delete focus assertion was flaky                       | 2026-08-24 | `focusListboxAfterModal` is a bounded self-verifying retry, not one rAF — a different remedy from the one this row prescribed.                                                                      |
-| 179 | Changesets v3 stopped versioning private packages silently                             | 2026-08-23 | `privatePackages: { version: true, tag: false }`. The residual it called untestable has since been exercised by a real bot-cut release.                                                             |
-| 185 | The command deck was 182 px tall and nobody measured it first                          | 2026-08-25 | Stacked geometry and its `!important` overrides deleted, every control inline. The row's height table was superseded three times (ADR-0110/0112/0115).                                              |
-| 189 | The command deck's search field made 18 of 27 commands unreachable by key              | 2026-08-25 | One shared `toolbar-keyboard.ts` consumed by `Deck` and `Toolbar`; `containerShouldStandDown` called first in both.                                                                                 |
-| 192 | The fix for #189 broke the shipped `Go to date` field                                  | 2026-08-25 | `toolbar-keyboard.ts` discriminates on `HTMLInputElement.type`, not `tagName`, and both containers import it.                                                                                       |
-| 196 | Two primitive keyboard defects, one a data-loss path                                   | 2026-08-28 | Fixed in the primitives. Two latent residuals carried out to #229 rather than closed with it.                                                                                                       |
-| 198 | `inkOf` measured a span, not ink                                                       | 2026-08-27 | `coveredWidth` merges leaf x-intervals; `spanOf` kept separately under a name that says what it is.                                                                                                 |
-| 199 | `shoot.mjs` could not photograph three of its own shots                                | 2026-08-28 | Located by `[data-toolbar-item]` rather than by copy, and a per-shot catch exits non-zero naming every missing picture.                                                                             |
-| 212 | An overlay's height ceiling was measured from its own output                           | 2026-08-28 | `overlayMaxHeight()` is viewport-constant with no `top` term; both consumers call it and a structural test pins that they do.                                                                       |
-| 186 | WCAG 2.5.8 lost its only automated cover when the fit gate was deleted                 | 2026-08-25 | `e2e-workspace-fit/command-surface.spec.ts`, its own CI step. ADR-0110 D5 later found that sweep blind to a split button's caret and fixed it.                                                      |
-| 188 | Eight of fourteen measurement harnesses could not run                                  | 2026-08-26 | Seven deleted, one repaired, estate green — and the row's own inventory was wrong in three ways, which the close records.                                                                           |
-| 190 | `Toolbar`'s vertical variant had no consumer, and a standard documented it             | 2026-08-26 | Deleted on the product owner's call — the prop, its three branches and the `DESIGN_SYSTEM.md` rule in ONE commit, so code and standard could not drift apart.                                       |
-| 207 | The deck's folded groups were unreachable by any journey                               | 2026-08-25 | ADR-0110 M4 — and the subject was then removed entirely on the product owner's steer, so the fold no longer exists.                                                                                 |
-| 209 | The bulk-delete focus restoration was a race that failed once under load               | 2026-08-24 | Reproduced under load the same day and hardened; `focusListboxAfterModal` self-verifies.                                                                                                            |
-| 183 | `check:claims` could not see a camelCase basename in its colon form                    | 2026-08-31 | The class carries `A-Z`. It hid 15 citations resolving to **seven** unregistered claims into `useBlocker.js`/`Transitioner.js` — the behaviour ADR-0108 rests on. All seven read and registered.    |
-| 178 | `check:claims` resolved a package by the first store entry it found                    | 2026-08-31 | Resolved through the LINK, with `resolveVia` naming the dependent for a transitive package. It was live on `axe-core`: the register was pinned to 4.12.1 while the journeys run 4.13.0.             |
-| 217 | Two defects in the printed documents, found by photographing them                      | 2026-08-30 | Both, plus two more the fix's own photographs found. The harness had one print shot; the two documents a planner hands over had never been photographed.                                            |
-| 153 | Three icon sizes in one family of canvas panels                                        | 2026-08-29 | ADR-0118 M3, and not the way this row or its epic's plan said: `icon-lg` was deleted and all three panels unify on `icon`.                                                                          |
-| 145 | A hand-rolled `Combobox` took the platform picker away on touch                        | 2026-08-29 | ADR-0118 M3, closed by measurement rather than argument — including the open list's 32 px options, which nobody had asked about.                                                                    |
-| 210 | The panel-Surface-plus-border pairing was a literal in four places                     | 2026-08-28 | Fix-slice M-D — **seven** pairings, not four; the new structural gate's first run found three the row and the spec both missed.                                                                     |
-| 205 | The fixture plan was unschedulable as seeded, and the horizon guard was an untyped 500 | 2026-08-28 | Both halves — `7aaf155c` and fix-slice M-E's fixture revision.                                                                                                                                      |
-| 203 | Two menu-positioning clamps, one measured and one guessing                             | 2026-08-28 | Fix-slice M-C. Both moved verbatim to `components/ui/overlay-position.ts`, with a structural gate against the next copy.                                                                            |
-| 182 | Three base-journey sign-up specs sat close to a 5 s timeout                            | 2026-08-28 | Correctness programme Phase 2 — the row's own first candidate: an explicit `{ timeout: 15_000 }` with the reason at each site.                                                                      |
-| 175 | The exported diagram had never carried the date marks                                  | 2026-08-28 | Fix-slice M-F. `EXPORT_MARKER_ROW`, drawn from the same `axisMarkers` model the screen's ruler uses.                                                                                                |
-| 173 | The canvas painter drew every glyph in a typeface the product does not use             | 2026-08-28 | Correctness programme Phase 3 — and the row had itself gone stale: the face is IBM Plex Sans, not Space Grotesk.                                                                                    |
-| 172 | No authenticated journey had ever run below `lg`                                       | 2026-08-28 | `apps/web/e2e-narrow-shell/`, its own CI step. Its first run found the sheet had no ground at all.                                                                                                  |
-| 170 | Three axe scans ran every rule, because `.options()` replaces `.withTags()`            | 2026-08-28 | Correctness programme Phase 4 — and the siblings were **two**, not three: the third died with the width ladder.                                                                                     |
-| 167 | The exported diagram was the default picture, not the planner's                        | 2026-08-28 | Correctness programme Phase 3. `TsldCanvasHandle.getSceneLenses()` reads all five lens keys off the live scene ref.                                                                                 |
-| 166 | A whole-plan export of a long programme lost weekends entirely                         | 2026-08-28 | Correctness programme Phase 3. `paintScene` gains a `minNonWorkingPx` seam; the export passes `0`, so a weekend is one crisp band.                                                                  |
-| 162 | The legend's slack chip did not match what the canvas paints                           | 2026-08-28 | Correctness programme Phase 1. The swatch names `--primary` + `--border`, confirmed at `palette.ts` rather than recalled.                                                                           |
-| 152 | `zoomToSelection` framed the time axis and discarded the lane axis                     | 2026-08-28 | Correctness programme Phase 1. `revealOffset` in `render/viewport.ts` — one implementation, shared with `zoomToActivity`.                                                                           |
-| 150 | The drawer overloaded "Close", and the editor's Close left an empty panel open         | 2026-08-28 | Correctness programme Phase 1 — overtaken by ADR-0101, verified rather than assumed.                                                                                                                |
-| 143 | The Project Explorer could not open a client or a project                              | 2026-08-28 | Correctness programme Phase 1. `activate` now navigates for every kind; the container toggle keeps its own surface.                                                                                 |
-| 133 | A coarse pointer cost the merged strip two commands, one of them Next conflict         | 2026-08-28 | Overtaken — ADR-0109 D1 deleted the width ladder and the `⋯`, so nothing can leave the row. Re-measured at 1646.                                                                                    |
-| 131 | An icon-only toolbar control named itself only on hover                                | 2026-08-28 | ADR-0117 (fix-slice M-B). `useTooltip` in `components/ui/tooltip.tsx`, WCAG 1.4.13 in full.                                                                                                         |
-| 130 | The zoom trigger's icon said "date range" while owning the viewport                    | 2026-08-28 | Overtaken — ADR-0109/0110 deleted the control this row describes.                                                                                                                                   |
-| 176 | Better Auth 1.7 needed a schema migration, and a minor bump is how we found out        | 2026-08-23 | ADR-0107. Both workspaces run `^1.7.1`; `accounts.issuer` migrated in two releases.                                                                                                                 |
-| 122 | Two Class A flags were deferred, and the payoff was not where the register said        | 2026-08-17 | `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE` in the flag-cleanup pass. `classACap` is now **0**.                                                                      |
-| 112 | Copy/paste follow-ups from the W5 enablement gate                                      | 2026-08-08 | `ActivitiesTable.row-gate-identity.test.tsx` and `use-clipboard-keybindings.test.ts` pin both, each saying so in its own docblock.                                                                  |
-| 106 | `render-model.ts` could not be barrel + core model without a cycle                     | 2026-08-30 | ADR-0078 S8. `render/geometry.ts` exists; the barrel is 128 lines.                                                                                                                                  |
-| 109 | `bulkDelete` cascaded one activity at a time under the plan lock                       | 2026-08-30 | `cascadeSoftDeleteActivityLeaves`, shipped in `3cf27de4` (an ADR-0082/0083/0084/0085 commit).                                                                                                       |
-| 104 | The manual Recalculate confirmation stood down against a settle that never came        | 2026-08-30 | The row's own scenario was already guarded in the commit it was raised from; the real defect was the inverse. `settleIsComing`, two tests.                                                          |
-| 114 | Two menus hid rather than shaded, for want of a reason to show                         | 2026-08-30 | Verified in code: `menu.tsx:316-325` shades with `aria-disabled` and keeps roving focus; `plan-actions-menu.tsx:70` passes `disabledReason`; `tree-actions.ts` states the no-trigger rule.          |
-| 127 | Toolbar touch targets were 40 × 36 against a 44 × 44 house rule                        | 2026-08-29 | ADR-0118 — the rule became per-pointer, and the coarse gate enforces it.                                                                                                                            |
-| 134 | A `render` item outranked every command on its row                                     | 2026-08-30 | ADR-0109 D1 deleted the ladder; the diagnosis was right and the remedy expired with it.                                                                                                             |
-| 144 | `e2e-multi-select`'s focus assertion failed under sweep load                           | 2026-08-30 | `focusListboxAfterModal` self-verifies; `e2e-overview`'s `createPlan` waits for the pen. Filed under #184.                                                                                          |
-| 146 | The `chrome` surface scope had no measured current-page state                          | 2026-08-30 | ADR-0109 D2 restored the header, so `e2e-designed-ui` D3 measures two scopes again.                                                                                                                 |
-| 147 | The merged command strip stopped fitting below ~900 px                                 | 2026-08-30 | ADR-0109 D1 — the surface wraps; the ladder, the `⋯` and the floor are gone.                                                                                                                        |
-| 148 | Canvas date pills were painted on top of the first two lanes                           | 2026-08-22 | ADR-0106.                                                                                                                                                                                           |
-| 157 | Every colour gate was a floor and none a ceiling                                       | 2026-08-21 | ADR-0102 — ANSWERED, deliberately no gate: the window is two points wide and tuned to two samples.                                                                                                  |
-| 158 | The printed and exported diagram was painted on a near-black ground                    | 2026-08-21 | ADR-0102.                                                                                                                                                                                           |
-| 159 | `--color-*` aliases were frozen at `:root`                                             | 2026-08-21 | ADR-0102 — the canvas painter had never once used the canvas surface scope.                                                                                                                         |
-| 163 | The print palette was a surface family truncated to three members                      | 2026-08-22 | ADR-0103 — `[data-surface="print"]` is all 31 members.                                                                                                                                              |
-| 164 | The exported diagram silently dropped seven default-on view layers                     | 2026-08-22 | ADR-0103. One half remains open as **#166**.                                                                                                                                                        |
-| 168 | Below `lg`, Escape closed and announced a drawer the reader could not see              | 2026-08-22 | ADR-0104.                                                                                                                                                                                           |
-| 201 | Two independent mode toggles read as one four-way group                                | 2026-08-30 | ADR-0119; released in `web-v0.115.3`.                                                                                                                                                               |
-| 213 | Two controls painted and not clickable at 390, and a 20 px breadcrumb                  | 2026-08-29 | ADR-0118 M3 — the first was off-screen; the second is a named exception.                                                                                                                            |
-| 115 | The pen sentence named a button the reader could not see                               | 2026-08-09 | ADR-0083 M7 — one refusal sentence chosen from the live role and pen state.                                                                                                                         |
-| 124 | The selection bar's `<Toolbar>` had no fit coverage                                    | 2026-08-27 | ADR-0114 M1 — and the row's own reasoning was wrong: the bar could overflow, by 408 px.                                                                                                             |
-| 219 | The register's rows went stale and nothing measured how much                           | 2026-08-30 | ADR-0120 — `check:debt-status`; every row now carries a machine-readable status.                                                                                                                    |
-| 220 | The reconciliation trigger's input was unsorted prose, and a reader misread it         | 2026-08-30 | ADR-0120 — `check:reconcile-due`, advisory at T = 8 ADRs; the pass table is sorted.                                                                                                                 |
-| 98  | The guest share view scrolled sideways at 320 px (WCAG 1.4.10)                         | 2026-08-08 | ADR-0051 F-M4 era; closed by the guest-share responsive fix.                                                                                                                                        |
-| 29  | Released images not pulled — "shipped but not live"                                    | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                                                                                                                   |
-| 59  | The device-authoritative draw measurement was never made                               | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                                                                                                                            |
-| 77  | The demo Unit 300 file was a lossy rendering of the fixture                            | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                                                                                                                                  |
-| 78  | Public activity/dependency API was day-denominated                                     | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                                                                                                                        |
-| 79  | A window-only calendar was rejected by the API                                         | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                                                                                                                          |
-| 80  | Intraday shift patterns had no write path                                              | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                                                                                                                              |
-| 82  | Shift-editor epic — the non-blocking half of five gates                                | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                                                                                                                            |
-| 87  | Import rejected a file with two activities of the same name                            | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                                                                                                                            |
-| 90  | `idx_audit_events_actor_occurred` was never measured                                   | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                                                                                                                      |
-| 91  | A failed sign-in was recorded and readable by nobody                                   | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                                                                                                                      |
-| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                                   | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites.                                                                                                    |
-| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo                        | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                                                                                                                      |
-| 94  | A verification email that never sends is invisible to everyone                         | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                                                                                                                        |
-| 111 | The row menu hid pen-gated actions instead of shading them                             | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                                                                                                                       |
-| 103 | ADR-0064's recalculation hold was not wired on the shipped host                        | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                                                                                                                    |
-| 107 | ADR-0080 shipped without the specialist-agent review pass                              | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                                                                                                                        |
-| 113 | Redo unavailable after undoing a band copy                                             | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                                                                                                                           |
-| 119 | The API e2e suite "fails intermittently"                                               | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                                                                                                                          |
-| 125 | `View ▾` held one toggle that ejects you from it                                       | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                                                                                                                    |
-| 83¹ | A typed duration overwritten by the calendar factor landing                            | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                                                                                                                         |
-| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns                        | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                                                                                                                        |
-| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                                              | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                                                                                                                        |
-| 137 | The shortcuts sheet was inert while the Gantt was on screen                            | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                                                                                                                            |
-| 126 | The two segmented pairs had no icons, so they could not go icon-only                   | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.                                                                                                                 |
-| 129 | The 56 px app header row was the last recoverable band above the canvas                | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.                                                                                                         |
+| #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                                                                                       |
+| --- | -------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 63  | The Progress tab carried no unsaved marker for its three panels                        | 2026-08-31 | The confirmation half closed with ADR-0108 D2; this is the tab's own dot, which the lifted six-scope report already had the state for. Never a padlock — the pen does not gate Progress.                                                                  |
+| 67  | The Logic panel's post-remove focus target was the whole panel                         | 2026-08-31 | Narrowed to the two dependency tables. No host-override seam: the Logic dialog owns no Close button to land on, so it would have shipped with no registrant (#156's shape).                                                                               |
+| 68  | **Add note** landed on the Notes tab but not in its composer                           | 2026-08-31 | `focusNotes` on the intent, mirroring `focusSteps`, through to a `NoteComposer` `autoFocus`. Both entry points require `canWriteNotes`, so there is no reader-without-a-composer case.                                                                    |
+| 73  | `Column.srHeader` was dead once `headerCell` was set                                   | 2026-08-31 | Dropped at its one double-declaring call site; the `Column` docblock now says which wins and why a `headerCell` control needs no hidden text.                                                                                                             |
+| 169 | The Project Explorer's actions row duplicated its writer gate in two branches          | 2026-08-31 | One `NewClientButton`, rendered by both the `SheetHeader` and drawer branches. The empty-strip half had already been closed incidentally by ADR-0109 D2's fold control.                                                                                   |
+| 92  | An undone delete left a deletion with no matching restore                              | 2026-08-31 | The inverse is now the id-stable `restore-batch` rather than a re-create, so `activity.restored` fires with the original id and the pair closes. It also stopped the re-create silently dropping every dependency the activity had. Cascade undo is #230. |
+| 160 | `resolveLensPalette` was resolved twice per cycle                                      | 2026-08-31 | One memo, both maps derived from it — which also makes the `barFill`/`barInk` pairing come from one resolve, as it must.                                                                                                                                  |
+| 171 | `schedulepoint-active-org` was never cleared and carried no user id                    | 2026-08-31 | Keyed `<prefix>:<userId>` matching `recent-plans`, and swept beside `forgetAllForUser` at sign-out. On a shared machine the next person in was silently sent to the previous person's organisation.                                                       |
+| 108 | The plural drag: model, command and endpoint landed, the gesture did not               | 2026-08-28 | `useBatchPlacements`/`moveMany`/`bulkPlacementCommand` plus `livePeerGhostRects` drawn into the overlay.                                                                                                                                                  |
+| 128 | The multi-select journey's post-delete focus assertion was flaky                       | 2026-08-24 | `focusListboxAfterModal` is a bounded self-verifying retry, not one rAF — a different remedy from the one this row prescribed.                                                                                                                            |
+| 179 | Changesets v3 stopped versioning private packages silently                             | 2026-08-23 | `privatePackages: { version: true, tag: false }`. The residual it called untestable has since been exercised by a real bot-cut release.                                                                                                                   |
+| 185 | The command deck was 182 px tall and nobody measured it first                          | 2026-08-25 | Stacked geometry and its `!important` overrides deleted, every control inline. The row's height table was superseded three times (ADR-0110/0112/0115).                                                                                                    |
+| 189 | The command deck's search field made 18 of 27 commands unreachable by key              | 2026-08-25 | One shared `toolbar-keyboard.ts` consumed by `Deck` and `Toolbar`; `containerShouldStandDown` called first in both.                                                                                                                                       |
+| 192 | The fix for #189 broke the shipped `Go to date` field                                  | 2026-08-25 | `toolbar-keyboard.ts` discriminates on `HTMLInputElement.type`, not `tagName`, and both containers import it.                                                                                                                                             |
+| 196 | Two primitive keyboard defects, one a data-loss path                                   | 2026-08-28 | Fixed in the primitives. Two latent residuals carried out to #229 rather than closed with it.                                                                                                                                                             |
+| 198 | `inkOf` measured a span, not ink                                                       | 2026-08-27 | `coveredWidth` merges leaf x-intervals; `spanOf` kept separately under a name that says what it is.                                                                                                                                                       |
+| 199 | `shoot.mjs` could not photograph three of its own shots                                | 2026-08-28 | Located by `[data-toolbar-item]` rather than by copy, and a per-shot catch exits non-zero naming every missing picture.                                                                                                                                   |
+| 212 | An overlay's height ceiling was measured from its own output                           | 2026-08-28 | `overlayMaxHeight()` is viewport-constant with no `top` term; both consumers call it and a structural test pins that they do.                                                                                                                             |
+| 186 | WCAG 2.5.8 lost its only automated cover when the fit gate was deleted                 | 2026-08-25 | `e2e-workspace-fit/command-surface.spec.ts`, its own CI step. ADR-0110 D5 later found that sweep blind to a split button's caret and fixed it.                                                                                                            |
+| 188 | Eight of fourteen measurement harnesses could not run                                  | 2026-08-26 | Seven deleted, one repaired, estate green — and the row's own inventory was wrong in three ways, which the close records.                                                                                                                                 |
+| 190 | `Toolbar`'s vertical variant had no consumer, and a standard documented it             | 2026-08-26 | Deleted on the product owner's call — the prop, its three branches and the `DESIGN_SYSTEM.md` rule in ONE commit, so code and standard could not drift apart.                                                                                             |
+| 207 | The deck's folded groups were unreachable by any journey                               | 2026-08-25 | ADR-0110 M4 — and the subject was then removed entirely on the product owner's steer, so the fold no longer exists.                                                                                                                                       |
+| 209 | The bulk-delete focus restoration was a race that failed once under load               | 2026-08-24 | Reproduced under load the same day and hardened; `focusListboxAfterModal` self-verifies.                                                                                                                                                                  |
+| 183 | `check:claims` could not see a camelCase basename in its colon form                    | 2026-08-31 | The class carries `A-Z`. It hid 15 citations resolving to **seven** unregistered claims into `useBlocker.js`/`Transitioner.js` — the behaviour ADR-0108 rests on. All seven read and registered.                                                          |
+| 178 | `check:claims` resolved a package by the first store entry it found                    | 2026-08-31 | Resolved through the LINK, with `resolveVia` naming the dependent for a transitive package. It was live on `axe-core`: the register was pinned to 4.12.1 while the journeys run 4.13.0.                                                                   |
+| 217 | Two defects in the printed documents, found by photographing them                      | 2026-08-30 | Both, plus two more the fix's own photographs found. The harness had one print shot; the two documents a planner hands over had never been photographed.                                                                                                  |
+| 153 | Three icon sizes in one family of canvas panels                                        | 2026-08-29 | ADR-0118 M3, and not the way this row or its epic's plan said: `icon-lg` was deleted and all three panels unify on `icon`.                                                                                                                                |
+| 145 | A hand-rolled `Combobox` took the platform picker away on touch                        | 2026-08-29 | ADR-0118 M3, closed by measurement rather than argument — including the open list's 32 px options, which nobody had asked about.                                                                                                                          |
+| 210 | The panel-Surface-plus-border pairing was a literal in four places                     | 2026-08-28 | Fix-slice M-D — **seven** pairings, not four; the new structural gate's first run found three the row and the spec both missed.                                                                                                                           |
+| 205 | The fixture plan was unschedulable as seeded, and the horizon guard was an untyped 500 | 2026-08-28 | Both halves — `7aaf155c` and fix-slice M-E's fixture revision.                                                                                                                                                                                            |
+| 203 | Two menu-positioning clamps, one measured and one guessing                             | 2026-08-28 | Fix-slice M-C. Both moved verbatim to `components/ui/overlay-position.ts`, with a structural gate against the next copy.                                                                                                                                  |
+| 182 | Three base-journey sign-up specs sat close to a 5 s timeout                            | 2026-08-28 | Correctness programme Phase 2 — the row's own first candidate: an explicit `{ timeout: 15_000 }` with the reason at each site.                                                                                                                            |
+| 175 | The exported diagram had never carried the date marks                                  | 2026-08-28 | Fix-slice M-F. `EXPORT_MARKER_ROW`, drawn from the same `axisMarkers` model the screen's ruler uses.                                                                                                                                                      |
+| 173 | The canvas painter drew every glyph in a typeface the product does not use             | 2026-08-28 | Correctness programme Phase 3 — and the row had itself gone stale: the face is IBM Plex Sans, not Space Grotesk.                                                                                                                                          |
+| 172 | No authenticated journey had ever run below `lg`                                       | 2026-08-28 | `apps/web/e2e-narrow-shell/`, its own CI step. Its first run found the sheet had no ground at all.                                                                                                                                                        |
+| 170 | Three axe scans ran every rule, because `.options()` replaces `.withTags()`            | 2026-08-28 | Correctness programme Phase 4 — and the siblings were **two**, not three: the third died with the width ladder.                                                                                                                                           |
+| 167 | The exported diagram was the default picture, not the planner's                        | 2026-08-28 | Correctness programme Phase 3. `TsldCanvasHandle.getSceneLenses()` reads all five lens keys off the live scene ref.                                                                                                                                       |
+| 166 | A whole-plan export of a long programme lost weekends entirely                         | 2026-08-28 | Correctness programme Phase 3. `paintScene` gains a `minNonWorkingPx` seam; the export passes `0`, so a weekend is one crisp band.                                                                                                                        |
+| 162 | The legend's slack chip did not match what the canvas paints                           | 2026-08-28 | Correctness programme Phase 1. The swatch names `--primary` + `--border`, confirmed at `palette.ts` rather than recalled.                                                                                                                                 |
+| 152 | `zoomToSelection` framed the time axis and discarded the lane axis                     | 2026-08-28 | Correctness programme Phase 1. `revealOffset` in `render/viewport.ts` — one implementation, shared with `zoomToActivity`.                                                                                                                                 |
+| 150 | The drawer overloaded "Close", and the editor's Close left an empty panel open         | 2026-08-28 | Correctness programme Phase 1 — overtaken by ADR-0101, verified rather than assumed.                                                                                                                                                                      |
+| 143 | The Project Explorer could not open a client or a project                              | 2026-08-28 | Correctness programme Phase 1. `activate` now navigates for every kind; the container toggle keeps its own surface.                                                                                                                                       |
+| 133 | A coarse pointer cost the merged strip two commands, one of them Next conflict         | 2026-08-28 | Overtaken — ADR-0109 D1 deleted the width ladder and the `⋯`, so nothing can leave the row. Re-measured at 1646.                                                                                                                                          |
+| 131 | An icon-only toolbar control named itself only on hover                                | 2026-08-28 | ADR-0117 (fix-slice M-B). `useTooltip` in `components/ui/tooltip.tsx`, WCAG 1.4.13 in full.                                                                                                                                                               |
+| 130 | The zoom trigger's icon said "date range" while owning the viewport                    | 2026-08-28 | Overtaken — ADR-0109/0110 deleted the control this row describes.                                                                                                                                                                                         |
+| 176 | Better Auth 1.7 needed a schema migration, and a minor bump is how we found out        | 2026-08-23 | ADR-0107. Both workspaces run `^1.7.1`; `accounts.issuer` migrated in two releases.                                                                                                                                                                       |
+| 122 | Two Class A flags were deferred, and the payoff was not where the register said        | 2026-08-17 | `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE` in the flag-cleanup pass. `classACap` is now **0**.                                                                                                                            |
+| 112 | Copy/paste follow-ups from the W5 enablement gate                                      | 2026-08-08 | `ActivitiesTable.row-gate-identity.test.tsx` and `use-clipboard-keybindings.test.ts` pin both, each saying so in its own docblock.                                                                                                                        |
+| 106 | `render-model.ts` could not be barrel + core model without a cycle                     | 2026-08-30 | ADR-0078 S8. `render/geometry.ts` exists; the barrel is 128 lines.                                                                                                                                                                                        |
+| 109 | `bulkDelete` cascaded one activity at a time under the plan lock                       | 2026-08-30 | `cascadeSoftDeleteActivityLeaves`, shipped in `3cf27de4` (an ADR-0082/0083/0084/0085 commit).                                                                                                                                                             |
+| 104 | The manual Recalculate confirmation stood down against a settle that never came        | 2026-08-30 | The row's own scenario was already guarded in the commit it was raised from; the real defect was the inverse. `settleIsComing`, two tests.                                                                                                                |
+| 114 | Two menus hid rather than shaded, for want of a reason to show                         | 2026-08-30 | Verified in code: `menu.tsx:316-325` shades with `aria-disabled` and keeps roving focus; `plan-actions-menu.tsx:70` passes `disabledReason`; `tree-actions.ts` states the no-trigger rule.                                                                |
+| 127 | Toolbar touch targets were 40 × 36 against a 44 × 44 house rule                        | 2026-08-29 | ADR-0118 — the rule became per-pointer, and the coarse gate enforces it.                                                                                                                                                                                  |
+| 134 | A `render` item outranked every command on its row                                     | 2026-08-30 | ADR-0109 D1 deleted the ladder; the diagnosis was right and the remedy expired with it.                                                                                                                                                                   |
+| 144 | `e2e-multi-select`'s focus assertion failed under sweep load                           | 2026-08-30 | `focusListboxAfterModal` self-verifies; `e2e-overview`'s `createPlan` waits for the pen. Filed under #184.                                                                                                                                                |
+| 146 | The `chrome` surface scope had no measured current-page state                          | 2026-08-30 | ADR-0109 D2 restored the header, so `e2e-designed-ui` D3 measures two scopes again.                                                                                                                                                                       |
+| 147 | The merged command strip stopped fitting below ~900 px                                 | 2026-08-30 | ADR-0109 D1 — the surface wraps; the ladder, the `⋯` and the floor are gone.                                                                                                                                                                              |
+| 148 | Canvas date pills were painted on top of the first two lanes                           | 2026-08-22 | ADR-0106.                                                                                                                                                                                                                                                 |
+| 157 | Every colour gate was a floor and none a ceiling                                       | 2026-08-21 | ADR-0102 — ANSWERED, deliberately no gate: the window is two points wide and tuned to two samples.                                                                                                                                                        |
+| 158 | The printed and exported diagram was painted on a near-black ground                    | 2026-08-21 | ADR-0102.                                                                                                                                                                                                                                                 |
+| 159 | `--color-*` aliases were frozen at `:root`                                             | 2026-08-21 | ADR-0102 — the canvas painter had never once used the canvas surface scope.                                                                                                                                                                               |
+| 163 | The print palette was a surface family truncated to three members                      | 2026-08-22 | ADR-0103 — `[data-surface="print"]` is all 31 members.                                                                                                                                                                                                    |
+| 164 | The exported diagram silently dropped seven default-on view layers                     | 2026-08-22 | ADR-0103. One half remains open as **#166**.                                                                                                                                                                                                              |
+| 168 | Below `lg`, Escape closed and announced a drawer the reader could not see              | 2026-08-22 | ADR-0104.                                                                                                                                                                                                                                                 |
+| 201 | Two independent mode toggles read as one four-way group                                | 2026-08-30 | ADR-0119; released in `web-v0.115.3`.                                                                                                                                                                                                                     |
+| 213 | Two controls painted and not clickable at 390, and a 20 px breadcrumb                  | 2026-08-29 | ADR-0118 M3 — the first was off-screen; the second is a named exception.                                                                                                                                                                                  |
+| 115 | The pen sentence named a button the reader could not see                               | 2026-08-09 | ADR-0083 M7 — one refusal sentence chosen from the live role and pen state.                                                                                                                                                                               |
+| 124 | The selection bar's `<Toolbar>` had no fit coverage                                    | 2026-08-27 | ADR-0114 M1 — and the row's own reasoning was wrong: the bar could overflow, by 408 px.                                                                                                                                                                   |
+| 219 | The register's rows went stale and nothing measured how much                           | 2026-08-30 | ADR-0120 — `check:debt-status`; every row now carries a machine-readable status.                                                                                                                                                                          |
+| 220 | The reconciliation trigger's input was unsorted prose, and a reader misread it         | 2026-08-30 | ADR-0120 — `check:reconcile-due`, advisory at T = 8 ADRs; the pass table is sorted.                                                                                                                                                                       |
+| 98  | The guest share view scrolled sideways at 320 px (WCAG 1.4.10)                         | 2026-08-08 | ADR-0051 F-M4 era; closed by the guest-share responsive fix.                                                                                                                                                                                              |
+| 29  | Released images not pulled — "shipped but not live"                                    | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                                                                                                                                                                         |
+| 59  | The device-authoritative draw measurement was never made                               | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                                                                                                                                                                                  |
+| 77  | The demo Unit 300 file was a lossy rendering of the fixture                            | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                                                                                                                                                                                        |
+| 78  | Public activity/dependency API was day-denominated                                     | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                                                                                                                                                                              |
+| 79  | A window-only calendar was rejected by the API                                         | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                                                                                                                                                                                |
+| 80  | Intraday shift patterns had no write path                                              | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                                                                                                                                                                                    |
+| 82  | Shift-editor epic — the non-blocking half of five gates                                | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                                                                                                                                                                                  |
+| 87  | Import rejected a file with two activities of the same name                            | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                                                                                                                                                                                  |
+| 90  | `idx_audit_events_actor_occurred` was never measured                                   | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                                                                                                                                                                            |
+| 91  | A failed sign-in was recorded and readable by nobody                                   | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                                                                                                                                                                            |
+| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                                   | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites.                                                                                                                                                          |
+| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo                        | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                                                                                                                                                                            |
+| 94  | A verification email that never sends is invisible to everyone                         | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                                                                                                                                                                              |
+| 111 | The row menu hid pen-gated actions instead of shading them                             | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                                                                                                                                                                             |
+| 103 | ADR-0064's recalculation hold was not wired on the shipped host                        | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                                                                                                                                                                          |
+| 107 | ADR-0080 shipped without the specialist-agent review pass                              | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                                                                                                                                                                              |
+| 113 | Redo unavailable after undoing a band copy                                             | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                                                                                                                                                                                 |
+| 119 | The API e2e suite "fails intermittently"                                               | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                                                                                                                                                                                |
+| 125 | `View ▾` held one toggle that ejects you from it                                       | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                                                                                                                                                                          |
+| 83¹ | A typed duration overwritten by the calendar factor landing                            | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                                                                                                                                                                               |
+| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns                        | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                                                                                                                                                                              |
+| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                                              | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                                                                                                                                                                              |
+| 137 | The shortcuts sheet was inert while the Gantt was on screen                            | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                                                                                                                                                                                  |
+| 126 | The two segmented pairs had no icons, so they could not go icon-only                   | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.                                                                                                                                                                       |
+| 129 | The 56 px app header row was the last recoverable band above the canvas                | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.                                                                                                                                                               |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
@@ -1960,11 +1859,27 @@ is the console — a permanent warning on the commonest link in the product trai
 console output, which is exactly how the ADR-0074 CSP violation went unnoticed on the deployed origin
 for a release.
 
-**Not diagnosed yet, and the diagnosis is most of the work.** The message says TanStack resolved the
-`to` against the `$clientId` template and then matched the parent — so the two templates are
-generating the same URL, most likely because the child route's path segment allows an empty value.
-The fix is either a route-tree correction or an explicit `from`, and which one depends on that; do
-not guess.
+**Half-diagnosed 2026-08-31, and the half that was written down above was wrong.** The trigger was
+reproduced exactly — same message, character for character — by calling `router.buildLocation` on
+the real route tree with the **`$clientId` template and an empty-string `clientId`**:
+
+| `to`                               | `params`                      | result                                 |
+| ---------------------------------- | ----------------------------- | -------------------------------------- |
+| `/orgs/$orgSlug/clients`           | `{ orgSlug }`                 | `/orgs/acme/clients`, silent           |
+| `/orgs/$orgSlug/clients/$clientId` | `{ orgSlug, clientId: 'c1' }` | `/orgs/acme/clients/c1`, silent        |
+| `/orgs/$orgSlug/clients/$clientId` | `{ orgSlug }` (absent)        | `/orgs/acme/clients/undefined`, silent |
+| `/orgs/$orgSlug/clients/$clientId` | `{ orgSlug, clientId: '' }`   | `/orgs/acme/clients/`, **warns**       |
+
+So the five call sites this row named are **not** the cause: the list link is silent from every
+`from` in the tree (all five were tried). Only an **empty-string** `clientId` reaches it, and an
+absent one does not — the trailing slash in the logged path was the tell, and nobody had read it.
+
+**What is still unknown is which render supplies the `''`.** A static sweep of `apps/web/src` finds
+no call site passing one: the three `$clientId` links (`HierarchyTree`, `ClientsTable`, the
+project-detail crumb) all pass a real id, and the `'clientId' in params ? … : ''` fallbacks are
+reads, never link params. So the next step is a browser: run a journey with console capture and
+print the stack at the warning. **Do not change the route tree on the strength of the paragraph this
+one replaced** — it was written from the call sites rather than from the message.
 
 ## 149. The Graphite M10 gate pass's non-blocking findings
 
@@ -2284,51 +2199,6 @@ indistinguishable from coverage, which is the failure W1 exists to correct. What
 generated per-run one. That is a second onboarding path, not a shot entry, which is why it is filed
 rather than done inside a catalogue-only slice.
 
-## 169. The Project Explorer's actions row duplicates its writer gate in two branches
-
-**Status:** open · **Raised:** 2026-08-22 · **Size:** S
-
-> **Corrected by the 2026-08-30 verification sweep, and the correction is this row's own warning
-> landing on it.** It was raised saying #165a's wording "will otherwise read as closed when it is
-> half closed" — and the sweep's first pass reported _this_ row as fixed. It is half fixed, and the
-> halves are not the ones the row predicted.
->
-> **The empty strip is gone, incidentally rather than deliberately.** ADR-0109 D2 docks the Explorer
-> and gives it a fold-to-spine control, and that control lives in this actions row
-> (`navigator-rail.tsx` — `Hide Project Explorer`, `ml-auto`). So the drawer branch has a permanent
-> occupant and is no longer "40 px of bordered nothing" for anybody; the below-`lg` branch renders
-> `SheetHeader`, which carries a Close regardless. **Nothing was done about this defect — a feature
-> was added on top of it**, which is why no commit closed the row and why the fix has no test.
->
-> **The second observation is still true, verbatim.** The `crud.canWrite` block is duplicated at
-> `navigator-rail.tsx:95` and `:139` — same gate, same button, same four-paragraph comment, twice —
-> and the row's reason for noting it is unchanged: the neighbouring copy is exactly how #165a
-> happened. That is what remains owed here, and it is now the _whole_ of what this row is about.
->
-> **Worth keeping for the method rather than the defect.** A subagent sweep reported this row FIXED
-> and it was not; six sibling closures in the same batch were verified and held. Spot-checking the
-> claim you are about to act on is the cheap step, and a report about the register is a document
-> like any other (ADR-0076 Class 2).
-
-**Raised 2026-08-22** (found while fixing #165a). **Size:** S.
-
-`navigator-rail.tsx` gives the Explorer a 40 px actions row below the drawer's header, whose only
-child — the **New client** button — is gated on `orgSlug && crud.canWrite`. For a Contributor or a
-Viewer the gate is false, and the row renders anyway: 40 px of bordered nothing above the tree, on
-every organisation route, for every reader who cannot create a client.
-
-#165a removed it from the three org-less routes by removing the whole rail there, and that row's
-own wording ("above an EMPTY 40 px actions row") will otherwise read as closed when it is half
-closed. The remaining case is the role one, which is the commoner of the two.
-
-ADR-0082's rule points at omission rather than shading: there is no action to shade — the row is a
-container whose contents are absent, not a control that is shut. The empty container is the thing
-to remove, on the same clause as "a menu whose every item would be shaded renders no trigger".
-
-Note the shape before fixing: the row is rendered twice, once in the below-`lg` `SheetHeader`
-branch and once in the drawer branch, with the same gate duplicated. Whatever the fix, it wants to
-be one derivation rather than two — the neighbouring copy is exactly how #165a happened.
-
 ## 174. The axis-markers gate pass's non-blocking findings
 
 **Status:** unverified
@@ -2549,24 +2419,29 @@ rest, recorded rather than carried in someone's head._
   user is left wherever the removed dialog left them. This is a **systemic router gap** the guard
   exposes rather than causes: it is the first feature that deliberately interposes itself in a
   navigation. Worth its own look at where focus should land after any route change.
-- **`describeUnsavedWork` has no upper-bound treatment.** All six editor scopes dirty produces
-  `"General, Scheduling, Cost, Reported progress, How value is measured, Weighted steps have
-unsaved changes."` — a comma list with no "and", delivered as one sentence with no structure. The
-  multi-surface branch two lines away _does_ use "and", so the two read inconsistently. Consider a
-  count past two or three ("6 sections have unsaved changes: …"), which is what ADR-0094 did with a
-  list for the same reason. No test has ever read the six-scope sentence.
+- ~~**`describeUnsavedWork` has no upper-bound treatment.**~~ **CLOSED 2026-08-31.** Both branches
+  now share one `joinWithAnd`, so the sentence reads the same way whether one surface or two hold
+  work; past four names the count leads (`6 sections have unsaved changes: …`), which is ADR-0094's
+  move for the same reason. The six-scope sentence — which no test had ever read, which is how it
+  shipped unpunctuated — is now asserted, with three pinned beside it so the threshold has both
+  sides.
 - **Silent auto-proceed.** If the registry goes clean while the confirmation is open, the guard
   calls `proceed()` and the navigation completes with no announcement — an unexpected context change
   while the reader may be mid-sentence. Low likelihood; nothing currently guards it.
 
 **From the component review**
 
-- **`useUnsavedWorkReports` has no production caller.** Only tests import it. It is documented as
-  future-facing, and it is exactly the ADR-0081 shape — a capability with no entry point — one
-  register along. Either wire a consumer or say plainly that it is dormant.
-- **The `onDirtyChange` effect is authored three times** in `ActivityProgressPanels.tsx`, identical
-  body and deps. `WeightedStepsPanel` does not use `useScopeForm`, so a shared two-line hook is a
-  better home than a `useScopeForm` option.
+- ~~**`useUnsavedWorkReports` has no production caller.**~~ **CLOSED 2026-08-31 — it says so.**
+  Re-verified (only its own suite and the editor's registration suite import it) and the docblock now
+  states it, with the reason both current readers do not need it: they are _called_ rather than
+  rendered. Kept rather than deleted, because the `useSyncExternalStore` + version-counter shape is
+  the non-obvious part a painting consumer would need — but that is a reason, not a caller, and the
+  distinction is now on the page.
+- ~~**The `onDirtyChange` effect is authored three times**~~ **CLOSED 2026-08-31.** One
+  `useReportDirty` in the same file, and the reason it is a hook rather than a `useScopeForm` option
+  is now written where the next reader will reach for that option: `WeightedStepsPanel` does not use
+  `useScopeForm`, so an option there would cover two panels of three — the one-and-not-its-neighbour
+  shape.
 - **Thirteen conditional array spreads** across the four report builders
   (`...(cond ? [{ key, label, savable }] : [])`). A pure `buildReport(subject, scopes)` helper in the
   already-React-free `lib/unsaved-work/report.ts` would read declaratively and be independently
@@ -3518,3 +3393,28 @@ a commit.
 **Why it is debt and not a defect:** the gate is over-eager, never under-eager — it cannot miss a
 real stale count, only invent one. The cost is that an author writing about counts must phrase around
 it, without being told why until the gate fires.
+
+## 230. A cascade delete's undo still truncates the history, and its reason has lapsed
+
+**Status:** open · **Raised:** 2026-08-31 (closing #92) · **Size:** S
+
+Deleting a WBS summary with a subtree clears the undo stack
+(`use-plan-workspace-model.ts` `recordActivityDelete`). That is ADR-0048 M2's decision, and its
+stated reason was that a re-create could only rebuild the summary — "a partial re-create would be a
+broken undo".
+
+**That reason is now false.** #92 pointed the leaf inverse at
+`POST …/activities/restore-batch/:batchId`, and a cascade delete stamps **one** `deleteBatchId`
+across the whole subtree (`activities.service.ts:1191-1221`), which `restoreDeleteBatch` restores in
+one call with ids and links intact. So the cascade case would work with the code that is already
+there — the branch that refuses it is the only thing stopping it.
+
+**It is filed rather than done**, because it is a capability change and not a defect fix: a planner
+who deletes a phase today loses their history and would then keep it, which is a different product
+behaviour, reversing a decision an accepted ADR records. ADR-0105's rule says a register row covers
+stages 1–2 only while the change adds no new surface; this reverses an ADR decision, so it wants an
+ADR-0048 amendment naming the M4 restore as what changed.
+
+**One thing to check before building it**, rather than assume: the restore is top-down
+parent-active, so a subtree whose summary's OWN parent was deleted afterwards is a case the
+amendment has to answer — refuse, or restore what it can and say so.

@@ -117,8 +117,11 @@ describe('ActivityCrudDialogs', () => {
 
   it('confirms delete against the targeted activity id and, on success, closes + announces', () => {
     const setDeleteActivityId = vi.fn();
-    // Drive the mutation's success path synchronously.
-    mutateSpy.mockImplementation((_id, opts) => opts.onSuccess?.());
+    // Drive the mutation's success path synchronously, **with the body the route actually
+    // returns**. `DELETE …/activities/:id` answers `200 { deleteBatchId }` (`docs/TECH_DEBT.md`
+    // #113), and the undo now keys its restore on it (#92). This mock resolved with nothing until
+    // that landed, which made it a weaker contract than the hook it stands in for.
+    mutateSpy.mockImplementation((_id, opts) => opts.onSuccess?.({ deleteBatchId: 'batch-1' }));
     render(
       <ActivityCrudDialogs model={makeModel({ deleteActivityId: 'a1', setDeleteActivityId })} />,
     );

@@ -108,13 +108,14 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
     if (!deleting) return;
     const name = deleting.name;
     // Snapshot the pre-delete row for the undo command (ADR-0048 M2) — captured before the mutation so
-    // the inverse can re-create its whole definition.
+    // the inverse can name what it restored.
     const snapshot = deleting;
     deleteActivity.mutate(deleting.id, {
-      onSuccess: () => {
-        // Record the delete for undo (leaf → reversible; cascade → history truncation). Only the user
-        // edit is recorded here, never the follow-up recalc. A no-op when `VITE_UNDO_REDO` is off.
-        model.recordActivityDelete(snapshot);
+      onSuccess: (result) => {
+        // Record the delete for undo (leaf → id-stable restore of `result.deleteBatchId`; cascade →
+        // history truncation). Only the user edit is recorded here, never the follow-up recalc. A
+        // no-op when `VITE_UNDO_REDO` is off.
+        model.recordActivityDelete(snapshot, result.deleteBatchId);
         // Close synchronously before the announcement so focus/AT state settles in one paint (as
         // ActivitiesTable does); the canvas then reconciles the selection to the nearest survivor.
         flushSync(() => {
@@ -246,6 +247,11 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
                         planId={planId}
                         activity={intended}
                         canWrite={model.canWriteNotes}
+                        // The **Add note** entry point asks for focus in the composer, not on the
+                        // tab (`docs/TECH_DEBT.md` #68). Read from the intent here rather than
+                        // inside the editor, because the slot is a `ReactNode` the editor cannot
+                        // reach into.
+                        autoFocusComposer={model.editorIntent?.focusNotes === true}
                         // Same reasoning as the cross-plan slot above: `intended` is already
                         // narrowed truthy by this branch's own condition (`NOTES_ENABLED &&
                         // intended`).

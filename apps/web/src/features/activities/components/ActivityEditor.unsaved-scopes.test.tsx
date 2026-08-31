@@ -132,3 +132,33 @@ describe('the editor reports every dirty scope, not only the three it used to', 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });
+
+/**
+ * `docs/TECH_DEBT.md` #63's remaining half. The lift above closed the CONSEQUENTIAL half — closing
+ * with a changed weighted step now confirms instead of discarding in silence. What stayed open was
+ * the tab itself: switch to General with unsaved Progress work and the strip said nothing, while
+ * every other tab in it would have shown a dot.
+ *
+ * Verified red: before `progressMarker`, the tab's accessible name stayed plain "Progress".
+ */
+describe('the Progress tab carries the unsaved dot its neighbours carry (#63)', () => {
+  it('marks the tab once one of its three panels is dirty, and not before', async () => {
+    mount();
+    await openProgressTab();
+
+    expect(screen.getByRole('tab', { name: 'Progress' })).toBeInTheDocument();
+
+    fireEvent.change(await screen.findByLabelText(/% complete/i), { target: { value: '40' } });
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: 'Progress, unsaved changes' })).toBeInTheDocument(),
+    );
+  });
+
+  it('is a dot and never a padlock — the pen does not gate Progress (ADR-0028 Q-C)', () => {
+    mount();
+    // Read-only would be a lie here in exactly the situation the marker exists to clarify, so the
+    // resting state carries no marker at all rather than a locked one.
+    expect(screen.getByRole('tab', { name: 'Progress' })).toBeInTheDocument();
+  });
+});

@@ -152,4 +152,50 @@ describe('NavigatorRail', () => {
     fireEvent.click(create);
     expect(onCreateClient).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * `docs/TECH_DEBT.md` #169. The button was written out twice — once in the `SheetHeader` branch
+   * and once in the drawer branch — with the same gate, the same props and the same four-paragraph
+   * comment. That is not a tidiness complaint: #165a IS the defect of a rule applied to one copy
+   * and not its neighbour, and this row was raised while fixing it.
+   *
+   * So the assertion is that BOTH shapes behave identically, which is what a shared component buys
+   * and what two copies can only promise. Verified red is not available here — two verbatim copies
+   * pass it too, which is the point: this pins the contract the extraction has to keep, and the
+   * single definition is what makes it stay true.
+   */
+  it('offers the same root create in both shapes, and withholds it from a reader in both', () => {
+    const write = {
+      canWrite: true,
+      onCreateClient: vi.fn(),
+      onNodeAction: vi.fn(),
+      afterDelete: null,
+    };
+    const read = {
+      canWrite: false,
+      onCreateClient: vi.fn(),
+      onNodeAction: vi.fn(),
+      afterDelete: null,
+    };
+
+    for (const props of [{}, { onClose: vi.fn() }]) {
+      const writer = renderRail(
+        <NavigatorCrudProvider value={write}>
+          <NavigatorRail orgSlug="acme" {...props} />
+        </NavigatorCrudProvider>,
+      );
+      expect(screen.getByRole('button', { name: 'New client' })).toBeInTheDocument();
+      writer.unmount();
+
+      // Omitted, not shaded (ADR-0082): there is no action to shade, only a container whose
+      // contents are absent.
+      const reader = renderRail(
+        <NavigatorCrudProvider value={read}>
+          <NavigatorRail orgSlug="acme" {...props} />
+        </NavigatorCrudProvider>,
+      );
+      expect(screen.queryByRole('button', { name: 'New client' })).not.toBeInTheDocument();
+      reader.unmount();
+    }
+  });
 });

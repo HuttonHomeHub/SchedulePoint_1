@@ -110,7 +110,22 @@ export function useUnsavedWorkRegistry(): Registry | null {
   return useContext(UnsavedWorkContext);
 }
 
-/** Re-render when the registry changes. Only for consumers that must paint from it. */
+/**
+ * Re-render when the registry changes. Only for consumers that must paint from it.
+ *
+ * **Dormant: nothing in the application calls this** — only its own suite and
+ * `ActivityEditor.registers-unsaved-work.test.tsx` do (`docs/TECH_DEBT.md` #184, re-verified
+ * 2026-08-31 by `rg useUnsavedWorkReports apps/web/src`). Both current readers of the registry are
+ * *called* rather than rendered — the navigation blocker asks `hasUnsavedWork` at the moment of
+ * navigating, and the editor's confirmation reads its own report — so neither needs to repaint when
+ * the registry changes.
+ *
+ * It is kept rather than deleted because a surface that PAINTS from the registry (a "you have
+ * unsaved work" indicator in the chrome) needs exactly this, and the `useSyncExternalStore` +
+ * version-counter shape below is the non-obvious part; but that is a reason, not a caller. Stated
+ * here rather than left to be inferred, because a documented-as-future-facing export reads to the
+ * next reader as one that is in use (ADR-0081, one register along).
+ */
 export function useUnsavedWorkReports(): readonly UnsavedWorkReport[] {
   const registry = useContext(UnsavedWorkContext);
   const subscribe = useCallback(

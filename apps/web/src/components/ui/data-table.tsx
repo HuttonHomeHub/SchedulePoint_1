@@ -17,7 +17,14 @@ export interface Column<T> {
    * column's key and its identity in code.
    */
   headerCell?: () => React.ReactNode;
-  /** Visually hide the header (e.g. an actions column). */
+  /**
+   * Visually hide the header (e.g. an actions column).
+   *
+   * **Ignored when {@link headerCell} is set** — the render takes `headerCell` first, so a column
+   * declaring both gets the control and never the hidden text. Declaring both looks load-bearing
+   * and is not (`docs/TECH_DEBT.md` #73), so don't: a `headerCell` control carries its own
+   * accessible name, which is what the hidden text would have been for.
+   */
   srHeader?: boolean;
   headClassName?: string;
   cellClassName?: string;

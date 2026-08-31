@@ -497,7 +497,8 @@ export function ActivitiesTable({
       ? [
           {
             header: 'Select',
-            srHeader: true,
+            // No `srHeader`: `headerCell` wins the render, so it was never reachable
+            // (`docs/TECH_DEBT.md` #73). `SelectAllCheckbox` carries its own accessible name.
             headClassName: 'py-2 pr-3 font-medium',
             cellClassName: 'py-2 pr-3',
             headerCell: () => (

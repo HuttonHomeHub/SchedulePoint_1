@@ -22,6 +22,7 @@ export function ActivityNotesSection({
   canWrite = false,
   enabled,
   headingRef,
+  autoFocusComposer = false,
 }: {
   orgSlug: string;
   planId: string;
@@ -37,6 +38,13 @@ export function ActivityNotesSection({
    * {@link PlanNotesSection}'s `headingRef`. Absent ⇒ unchanged (no ref, no tabindex).
    */
   headingRef?: Ref<HTMLHeadingElement>;
+  /**
+   * Focus the composer once this renders — set when the host was opened by **Add note** rather than
+   * by a reader (`docs/TECH_DEBT.md` #68). Distinct from {@link headingRef}, which is the Logic
+   * dialog's older scroll-and-announce seam: landing on the heading tells you where you are, landing
+   * in the composer lets you do the thing you asked for.
+   */
+  autoFocusComposer?: boolean;
 }): React.ReactElement {
   const session = useSession();
   const currentUserId = session.data?.user.id ?? null;
@@ -53,7 +61,9 @@ export function ActivityNotesSection({
       <p className="text-muted-foreground text-sm">
         Attributed notes on this activity — the reasoning behind its dates. Newest first.
       </p>
-      {canWrite ? <NoteComposer orgSlug={orgSlug} target={target} /> : null}
+      {canWrite ? (
+        <NoteComposer orgSlug={orgSlug} target={target} takeFocus={autoFocusComposer} />
+      ) : null}
       <NoteThread
         orgSlug={orgSlug}
         target={target}

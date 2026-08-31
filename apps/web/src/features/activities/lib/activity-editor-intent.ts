@@ -55,6 +55,18 @@ export interface ActivityEditorIntent {
    * the action feel like it opened the wrong thing.
    */
   focusSteps?: true;
+  /**
+   * Move focus to the Notes composer once the tab renders. Set only by the **Notes** entry point,
+   * for the same reason as {@link focusSteps} one line above — and because without it the reveal was
+   * visual only: a native `<dialog>` puts initial focus on its ✕ regardless of which tab is active,
+   * so a keyboard or screen-reader user who chose **Add note** traversed ✕ → the tab → the panel
+   * before reaching the composer (`docs/TECH_DEBT.md` #68).
+   *
+   * **The composer is always there when this fires.** Both entry points — the selection action and
+   * the table's row menu — require `canWriteNotes`, so there is no reader-without-a-composer case to
+   * fall back for, and a fallback branch would be one nothing could reach.
+   */
+  focusNotes?: true;
 }
 
 /**
@@ -79,9 +91,10 @@ export function openActivityEditor(
     case 'members':
       return { activityId: activity.id, tab: 'members' };
     // **Add note** used to open the Logic dialog and then scroll + focus its Notes section, because
-    // notes had no home of their own. With a tab, the intent IS the reveal.
+    // notes had no home of their own. With a tab, the intent is the reveal *visually* — the focus
+    // half still has to be asked for, which is what `focusNotes` does (`docs/TECH_DEBT.md` #68).
     case 'notes':
-      return { activityId: activity.id, tab: 'notes' };
+      return { activityId: activity.id, tab: 'notes', focusNotes: true };
     case 'progress':
       return { activityId: activity.id, tab: 'progress' };
     case 'steps':

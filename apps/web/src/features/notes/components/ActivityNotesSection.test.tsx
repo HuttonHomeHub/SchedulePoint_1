@@ -21,7 +21,7 @@ vi.mock('@/features/auth', () => ({
 
 const activity = { id: 'act1' } as ActivitySummary;
 
-function renderSection(canWrite: boolean) {
+function renderSection(canWrite: boolean, autoFocusComposer = false) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -31,6 +31,7 @@ function renderSection(canWrite: boolean) {
           planId="pl1"
           activity={activity}
           canWrite={canWrite}
+          autoFocusComposer={autoFocusComposer}
           enabled
         />
       </AnnouncerProvider>
@@ -51,6 +52,23 @@ describe('ActivityNotesSection role gating', () => {
     renderSection(true);
     expect(await screen.findByText('No notes yet.')).toBeInTheDocument();
     expect(screen.getByLabelText('Add a note')).toBeInTheDocument();
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #68. **Add note** landed on the tab and left the reader at the dialog's ✕,
+   * so a keyboard user traversed ✕ → the tab → the panel before reaching the thing the action is
+   * named for. Verified red against the section before `autoFocusComposer` existed: focus stayed on
+   * `<body>`.
+   */
+  it('focuses the composer when the host was opened to write a note', async () => {
+    renderSection(true, true);
+    const composer = await screen.findByLabelText('Add a note');
+    expect(composer).toHaveFocus();
+  });
+
+  it('leaves focus alone when the host was opened to READ (the default)', async () => {
+    renderSection(true);
+    expect(await screen.findByLabelText('Add a note')).not.toHaveFocus();
   });
 
   it('hides the composer for a read-only viewer (thread only)', async () => {

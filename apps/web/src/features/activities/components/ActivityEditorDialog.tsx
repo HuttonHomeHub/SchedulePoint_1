@@ -562,8 +562,10 @@ export function ActivityEditor({
       ? [{ id: 'members' as const, label: 'Members', ...collectionMarker(gating.members) }]
       : []),
     // Progress is never marked read-only: it is the one scope the pen does not gate (ADR-0028 Q-C),
-    // so a padlock here would be a lie in exactly the situation the rail exists to clarify.
-    { id: 'progress', label: 'Progress' },
+    // so a padlock here would be a lie in exactly the situation the rail exists to clarify. It DOES
+    // carry the unsaved dot now (`docs/TECH_DEBT.md` #63): its three panels own their forms, and
+    // until the unsaved-work guard lifted their dirtiness up there was nothing here to read.
+    { id: 'progress', label: 'Progress', ...progressMarker(progressDirty) },
     ...(gating.cost.readable
       ? [
           {
@@ -1045,6 +1047,23 @@ function collectionMarker(gate: { writable: boolean }): Pick<TabDescriptor<strin
   return gate.writable
     ? {}
     : { marker: { kind: 'locked', label: 'read-only' } satisfies TabMarker };
+}
+
+/**
+ * The marker for **Progress**, whose three panels own their own forms and their own Saves.
+ *
+ * Deliberately not {@link marker}: Progress can never be `locked` (the pen does not gate it,
+ * ADR-0028 Q-C — a padlock would be false for exactly the reader it is meant to inform), and it has
+ * no error COUNT to show, because each panel validates and reports its own problems at its own Save
+ * rather than through one scope form. So the only marker it can honestly carry is the dot — which
+ * is the whole of what `docs/TECH_DEBT.md` #63 was missing: switch to General with a changed
+ * weighted step and the tab said nothing, while every other tab in the strip would have.
+ */
+function progressMarker(
+  dirty: Record<ProgressScopeKey, boolean>,
+): Pick<TabDescriptor<string>, 'marker'> {
+  const anyDirty = Object.values(dirty).some(Boolean);
+  return anyDirty ? { marker: { kind: 'dot', label: 'unsaved changes' } satisfies TabMarker } : {};
 }
 
 function marker(

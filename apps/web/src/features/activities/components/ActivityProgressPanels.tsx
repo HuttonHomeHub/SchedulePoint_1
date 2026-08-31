@@ -67,6 +67,24 @@ import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
  * which is P6-faithful and deliberately unchanged here — see ADR-0060's rejected alternatives.
  */
 
+/**
+ * Report this panel's dirtiness to its host.
+ *
+ * **Reported rather than derived**: only the panel owns the form that knows, and the editor's
+ * unsaved-work report has to name six scopes it does not itself hold (ADR-0108, `docs/TECH_DEBT.md`
+ * #63).
+ *
+ * A two-line hook rather than three identical effects (`docs/TECH_DEBT.md` #184). Deliberately NOT
+ * an option on `useScopeForm`: `WeightedStepsPanel` does not use that hook at all, so folding it in
+ * there would cover two of the three panels — which is the one-and-not-its-neighbour shape this
+ * register keeps recording.
+ */
+function useReportDirty(report: ((dirty: boolean) => void) | undefined, isDirty: boolean): void {
+  useEffect(() => {
+    report?.(isDirty);
+  }, [report, isDirty]);
+}
+
 /** Reported progress — the Contributor path. Moves the activity's dates. */
 export function ReportedProgressPanel({
   orgSlug,
@@ -114,10 +132,7 @@ export function ReportedProgressPanel({
     open,
   );
 
-  // Reported rather than derived by the host: only this panel owns the form that knows.
-  useEffect(() => {
-    onDirtyChange?.(isDirty);
-  }, [onDirtyChange, isDirty]);
+  useReportDirty(onDirtyChange, isDirty);
 
   const values = useWatch({ control: form.control }) as ProgressFormValues;
 
@@ -266,10 +281,7 @@ export function ValueMeasurePanel({
 }): React.ReactElement {
   const { form, isDirty } = useScopeForm(activityMeasureSchema, seedMeasure, activity, open);
 
-  // Reported rather than derived by the host: only this panel owns the form that knows.
-  useEffect(() => {
-    onDirtyChange?.(isDirty);
-  }, [onDirtyChange, isDirty]);
+  useReportDirty(onDirtyChange, isDirty);
   const steps = useActivitySteps(orgSlug, activity.id);
   const measure = useWatch({ control: form.control, name: 'percentCompleteType' });
   const manual = useWatch({ control: form.control, name: 'physicalPercentComplete' });
@@ -438,10 +450,7 @@ export function WeightedStepsPanel({
     defaultValues: { steps: [] },
   });
 
-  // Reported rather than derived by the host: only this panel owns the form that knows.
-  useEffect(() => {
-    onDirtyChange?.(isDirty);
-  }, [onDirtyChange, isDirty]);
+  useReportDirty(onDirtyChange, isDirty);
   const { fields, append, remove, move } = useFieldArray({ control, name: 'steps' });
 
   // Seeded on open / target / load change — a late-arriving fetch still populates. Unlike the
