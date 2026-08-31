@@ -2649,8 +2649,10 @@ stopped at the two it had found. A `grep` for the deleted machinery finds more:
 - `toolbar-registry.ts:40-44` — `ToolbarTier` still describes tier-2 demoting before tier-1.
 - `toolbar-band.tsx:1-33` — cites `computeLadder` as the live consumer.
 
-**Five exports have no production caller**: `priorityOf`, `partitionByTier`, `resolveLayoutMode`,
-`TOOLBAR_LAYOUT_BANDS`, `TOOLBAR_LAYOUT_HYSTERESIS_PX`. Both `Deck` and `Toolbar` now hard-code
+**~~Five~~ FOUR exports have no production caller**: `priorityOf`, `partitionByTier`,
+`resolveLayoutMode`, `TOOLBAR_LAYOUT_HYSTERESIS_PX`. (This sentence named `TOOLBAR_LAYOUT_BANDS`
+too, and was wrong twice over — see the correction below. It is left struck rather than rewritten,
+because a reader who acted on the original is the risk this row now exists to describe.) Both `Deck` and `Toolbar` now hard-code
 `layout: 'comfortable'` as a literal, so `resolveLayoutMode`'s other three bands are unreachable and
 `triggersAreCompact`/`searchFieldWidth` always take their roomy branch. They are exercised only by
 their own tests — the ADR-0081 shape: tests validating code nothing calls.
@@ -2658,10 +2660,28 @@ their own tests — the ADR-0081 shape: tests validating code nothing calls.
 ### Two more, and how the first grep missed them (2026-08-30 verification sweep)
 
 **The four docblocks above are now all corrected** — each carries a paragraph naming what it used
-to say and citing this number. **The five dead exports all still stand**, re-verified: `priorityOf`
-has no reference of any kind outside its own definition, `partitionByTier` and
-`TOOLBAR_LAYOUT_HYSTERESIS_PX` are reached only by `toolbar-registry.test.ts`, and
-`resolveLayoutMode` + `TOOLBAR_LAYOUT_BANDS` form a closed loop with it.
+to say and citing this number.
+
+> **The list of five was wrong about one of them, and acting on it would have broken production**
+> (corrected 2026-08-31, verified by reading rather than by anything failing). **`TOOLBAR_LAYOUT_BANDS`
+> is not an export and is not dead.** It is a module-private `const` (`toolbar-registry.ts:72`), and
+> `bandIsAtLeast` (`:161-165`) reads it — a function called in live code at
+> `features/tsld/toolbar/tsld-toolbar-items.tsx:2570`, inside an `isVisible` predicate that runs on
+> every render. Deleting it deletes a working feature. That its _value_ is constant today (`env.layout`
+> is hard-coded `'comfortable'`) is a different claim from "no production caller", and this row
+> conflated the two.
+>
+> Calling it an export also weakened the row's own closing argument, which rests on removal being a
+> public-contract change: removing a module-private const is not one.
+>
+> The corrected list is **four**: `priorityOf` (no reference of any kind, including tests),
+> `partitionByTier` and `resolveLayoutMode` (test-only), and `TOOLBAR_LAYOUT_HYSTERESIS_PX` (read
+> only inside `resolveLayoutMode`). The row's summary "they are exercised only by their own tests"
+> is false for `priorityOf`, which has no test either — the sweep paragraph below gets that right,
+> so the row contradicted itself.
+>
+> **Worth keeping for the method.** This was found by spot-checking a subagent's report against the
+> code before acting on it — the same rule the register applies to its own rows, one document out.
 
 **Two citations of the same class were not on the list, because the list was a list of names.**
 
@@ -2858,6 +2878,20 @@ panel traverses the heading, **New activity** and every rendered table row to re
 activities panel**. `focusCollapseOnMount` only covers the expand-by-user path. Not a 2.4.3 failure
 (order matches the visual arrangement); it is a distance cost. Raised by the architecture gate.
 
+> **Assessed 2026-08-31 and confirmed present** (`activity-bottom-panel.tsx` renders the header,
+> then the scrolling table region, then `PlanActivitiesFootRow`, whose `{toggle}` is its last
+> child; `focusCollapseOnMount` fires only when its prop is passed). **It needs a spec, and that is
+> the finding**: this row names no remedy, and all three candidates are different products — a skip
+> link is a NEW user-facing entry point, a keyboard shortcut is a new binding on a surface that
+> already has an Escape ladder, and moving the control back to the header **reverses a decision
+> recorded in the file itself** ("the collapse control rides here rather than in the header … a
+> planner should not have to look in two places for it") and re-opens ADR-0114's juggle argument.
+>
+> **No regression test is writable either**, which is the discriminator rather than an excuse: the
+> DOM order is _correct_ and matches the visual arrangement. A test asserting "the toggle precedes
+> the table" would pin the behaviour ADR-0114 M4 deliberately removed; a test asserting a skip link
+> exists would be encoding the chosen remedy, which is the decision, not a regression.
+
 **(b) The dock's precedence is three independent guards, one of them a conjunct.** `TsldPanel` spells
 it `conflict ?`, `conflict ? null :` and `!conflict` inside a five-term `&&`, and the invariant holds
 partly because `CanvasModeBand` returns `null` for a null statement two hundred lines away. A fourth
@@ -2871,6 +2905,24 @@ gate "in both panel states, on TSLD and Gantt"; the shipped case covers the coll
 That is where the measured defect was, and the expanded state is the one M4 created, so the gap is
 real. This is the ADR-0090 M5 drift class — a plan describing work correctly and the work not
 happening — recorded here so it is a decision rather than an omission.
+
+> **Half closed 2026-08-31: the panel states, not the views.** The four assertions moved into a
+> `sweepObjectBar(state)` helper and now run in the **expanded** state as well as the collapsed one,
+> at every width. It **passed** — so no product defect was surfaced, which is worth saying because
+> ADR-0115 M1 records that expanding the panel makes this row wrap, and the honest expectation was
+> that this might go red.
+>
+> **The expanded case carries its own pinned positive**, and that is the part worth copying: it ran
+> in 2.3 s against its collapsed sibling's 2.1 s, which is exactly what a click that silently did
+> nothing would also look like — a sweep of an unchanged workspace reads as coverage while testing
+> the state that was already covered. It now asserts the panel's table is visible before sweeping,
+> the table being the thing that is not rendered at all while collapsed. Both labels were read from
+> `activity-bottom-panel.tsx:155,317` rather than guessed.
+>
+> **The Gantt half is still owed.** The bar exists there (`plan-workspace-toolbar.tsx:1151` renders
+> the same `SelectionActionsBar` for the Gantt selection), but selecting a row is a different route
+> — the canvas's parallel listbox does not exist in that view — so it is its own piece of work
+> rather than a third `await` on the end of this one.
 
 **(d) `LockView.badgeName` and `messageVisible` are optional fields on a flat interface.** Both are
 governed by rules about the tone ("only on `locked`", "only on `lost` and the incoming-request
@@ -2888,12 +2940,23 @@ anywhere. This is the seam that produced the milestone's largest blocking findin
 slots on `hostsPlanSlots`, never just one"; "renders the toggle when given one, and nothing in its
 place when not"), 4/4 green. Added after this row was filed; the row was not updated. Item closed.
 
-**(f) `bg-foreground/5` now paints on the canvas-dock surface scope for the first time.** The token
-pairing is unchanged from `Deck`'s pre-existing use, and the card is decorative grouping with every
-control inside carrying its own boundary, so 1.4.11 does not apply to the card itself. But
-`token-contrast.test.ts` has no pair for this background on that scope, and ADR-0102's finding was
-precisely that a scope can go unreached for a long time without anything reporting it. Worth adding
-the pair rather than reasoning about it. Raised by the accessibility gate as a suggestion.
+**(f) ~~`bg-foreground/5` now paints on the canvas-dock surface scope for the first time.~~
+WITHDRAWN 2026-08-31 — the premise lapsed within twelve hours of the row being filed.** There is no
+"canvas-dock surface scope": the foot row that hosts the object bar is
+`<Surface tone="chrome">` (`activity-bottom-panel.tsx:217`), which is the same scope `Deck` already
+sits in, so the pairing paints exactly where it always did. The row was filed on 2026-08-27 from
+ADR-0114 M7, when the foot row genuinely had no scope at all; ADR-0115 gave it `chrome` that
+evening, and nothing went back to re-read this item.
+
+The residual observation is still true and is **already filed as #204(b)**: an alpha-composited
+utility like `bg-foreground/5` is invisible to `token-contrast.test.ts` whatever scope it sits in.
+Not re-filed here, because the same finding in two places is how a register starts disagreeing with
+itself.
+
+**Not worth a test either, and that is the decisive half.** The row concedes 1.4.11 does not apply
+to the card; a contrast assertion asserts a **floor**, and a floor on a 5 % decorative wash would
+fail by design. The pair that matters — control ink over the composited card — is already covered by
+the chrome scope's existing text pairs.
 
 ## 204. Four things the foot-row-and-deck epic found and did not fix
 
@@ -3037,12 +3100,13 @@ Three suggestions judged real and filed rather than quietly dropped:
   DECISIONS.md 2026-08-29), so a plan with the data-date rule off and today outside the exported
   span carries an empty strip between the title separator and the diagram. Cosmetic,
   low-frequency, consistent with the on-screen ruler's own resting state.
-- **The export legend's group order differs from the DOM legend's** (ux, verified at the gate
-  pass rather than assumed): `TsldLegend` lists the marker entries (Data date, Today) before the
-  link entries; `EXPORT_LEGEND` lists links first. Pre-existing — M-F deliberately left
-  `EXPORT_LEGEND` untouched — and the relative Data-date-before-Today order the docblock pins
-  holds in both. The #48(e) hand-authored-mirror rule covers presence, not order; align order
-  the next time either legend is edited.
+- ~~**The export legend's group order differs from the DOM legend's**~~ — **CLOSED 2026-08-31.**
+  `EXPORT_LEGEND` now runs Critical → Near-critical → On schedule → **Data date → Today** →
+  Driving link → Non-driving link, which is `SHARED_CUES`' grouping. Its docblock had claimed to
+  match "the DOM legend's order" and that was true only of Data-date-before-Today — the sentence
+  that made the row worth filing, and it is corrected in place. The new assertion states the
+  **rule** (markers precede links) rather than one expected array, because re-ordering both halves
+  together would satisfy an array and lose the grouping; verified red first.
 
 ## 215. Dense rows are 28 px on touch, and their height is a JavaScript constant
 
@@ -3220,7 +3284,8 @@ product depends on, rather than unlocking a cap that something else is holding d
 
 ### 224. `plan:scale-500` is described as fully unassigned and its spec assigns 168 activities
 
-**Status:** open · **Owner:** repo · **Raised:** 2026-08-31 (stacked-histogram spec fold)
+**Status:** open (numerator resolved and the playbook corrected 2026-08-31; the LOE denominator is
+the only part left, and it needs a seeded run) · **Owner:** repo · **Raised:** 2026-08-31 (stacked-histogram spec fold)
 
 `docs/TEST_PLAYBOOK.md:193` describes `plan:scale-500` for DCMA metric 10 as **"478 of 478
 unassigned"**. Computed from the pure `scaleSpec({ activities: 500 })` — no database, no API:
@@ -3235,11 +3300,27 @@ So **478 is the right denominator** — it is exactly the `TASK` count — and "
 `generator.ts:76` declares `assignedFraction: 0.35` and `:203` applies it, giving 168 assigned and
 310 unassigned tasks.
 
-**Three readings survive and this row does not pick one**, because distinguishing them needs the
-health check run against a seeded database rather than the pure spec: (a) the playbook row is simply
-wrong; (b) the assignments do not reach the database, which would be a seeding defect and a much
-worse one; (c) DCMA metric 10 counts something narrower than "a task with a resource assignment",
-in which case the row is right and its wording is misleading.
+**Resolved 2026-08-31 to reading (a) — the playbook row was simply wrong — and the playbook is
+corrected.** The row expected this to need a seeded database; two of its three readings fall to the
+code instead:
+
+- **(c) is disproved.** `compute-health.ts:467-476` counts **assignment existence only**
+  (`!a.hasAssignment` over non-milestone, positive-duration rows, with `acts` already excluding
+  `WBS_SUMMARY` at `:207`), and the narrowing it publishes is literally `RESOURCE_ASSIGNMENT_ONLY`
+  (`thresholds.ts:104`). Nothing narrower is counted, so the metric and the phrase "a task with a
+  resource assignment" mean the same thing.
+- **(b) has no mechanism.** `seed-http/runner.ts:382-399` posts every `spec.assignments` entry; the
+  only silent path is a `continue` when a key does not resolve, and both keys here come from the
+  same builder (`generator.ts:203-213` uses `activity.key` and the declared `SCALE_CREW`). A failed
+  POST is recorded, not swallowed.
+- **(a) stands**, and the numbers are re-derived from the pure spec rather than quoted from this
+  row: 540 activities — 478 `TASK`, 40 `WBS_SUMMARY`, 18 milestones, 4 `LEVEL_OF_EFFORT` — with
+  **168 tasks assigned and 310 unassigned**.
+
+**One detail is still unobserved and the playbook now says so**: only the 478 tasks carry
+`durationMinutes > 0` in the spec, so the denominator is 478 _if_ the engine leaves the four
+`LEVEL_OF_EFFORT` rows at zero, and 482 if it writes a duration back to them. That needs the health
+check run against a seeded plan; the numerator does not, and the numerator was the harm.
 
 **Why it matters beyond tidiness.** The playbook is the document that says which plan proves what
 and _what wrong looks like_, so a reader checking metric 10 against this row would accept a

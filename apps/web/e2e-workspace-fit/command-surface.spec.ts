@@ -410,27 +410,32 @@ test.describe('The plan command surface', () => {
    *
    * **Verified red before the fix**, naming exactly those controls.
    */
-  test('every object action a pointer can see, it can also reach', async () => {
-    test.setTimeout(240_000);
-
-    // Select through the canvas's own parallel listbox (ADR-0026 D7): focusing it default-selects,
-    // which is a real keyboard route and needs no bar coordinates. Clicking an option does not
-    // work — the listbox is `sr-only`, and that is what made an earlier probe silently skip.
-    await page.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
-    await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
-
+  /**
+   * Sweep the object bar at every width, in whatever state the caller has put the workspace in.
+   *
+   * **Extracted so the same four assertions run in more than one state** (`docs/TECH_DEBT.md`
+   * #202c). M1-T1 specified this gate "in both panel states, on TSLD and Gantt" and what shipped
+   * covered the collapsed TSLD state only — the panel defaults collapsed and nothing here ever
+   * expanded it or switched view. That is not a small gap: ADR-0115 M1 records that expanding the
+   * panel or selecting an activity makes this row WRAP, so the untested states are exactly the
+   * ones where the row is under pressure.
+   */
+  async function sweepObjectBar(state: string): Promise<void> {
     for (const viewport of WIDTHS) {
       await page.setViewportSize(viewport);
       await page.waitForTimeout(500);
       const targets = await sweep(page, '[role="toolbar"][aria-label^="Actions for"]');
 
       // The pinned positive — without it this passes equally against a bar rendering nothing.
-      expect(targets.length, `no object actions swept at ${viewport.width}`).toBeGreaterThan(5);
+      expect(
+        targets.length,
+        `no object actions swept at ${viewport.width} (${state})`,
+      ).toBeGreaterThan(5);
 
       const undersized = targets.filter((t) => t.visible && (t.w < MIN_TARGET || t.h < MIN_TARGET));
       expect(
         undersized,
-        `object actions below ${MIN_TARGET}×${MIN_TARGET} at ${viewport.width}: ${JSON.stringify(undersized)}`,
+        `object actions below ${MIN_TARGET}×${MIN_TARGET} at ${viewport.width} (${state}): ${JSON.stringify(undersized)}`,
       ).toEqual([]);
 
       // **The zero-size filter, which this case shipped without** (M7, architecture gate B7). Both
@@ -440,15 +445,54 @@ test.describe('The plan command surface', () => {
       const invisible = targets.filter((t) => !t.visible);
       expect(
         invisible,
-        `object actions painted at zero size at ${viewport.width}: ${JSON.stringify(invisible)}`,
+        `object actions painted at zero size at ${viewport.width} (${state}): ${JSON.stringify(invisible)}`,
       ).toEqual([]);
 
       const unreachable = targets.filter((t) => t.visible && !t.reachable);
       expect(
         unreachable,
-        `object actions a pointer cannot reach at ${viewport.width}: ${JSON.stringify(unreachable)}`,
+        `object actions a pointer cannot reach at ${viewport.width} (${state}): ${JSON.stringify(unreachable)}`,
       ).toEqual([]);
     }
+  }
+
+  /**
+   * Select through the canvas's own parallel listbox (ADR-0026 D7): focusing it default-selects,
+   * which is a real keyboard route and needs no bar coordinates. Clicking an option does not work —
+   * the listbox is `sr-only`, and that is what made an earlier probe silently skip.
+   */
+  async function selectOnCanvas(): Promise<void> {
+    await page.getByRole('listbox', { name: 'Activities in the diagram' }).focus();
+    await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+  }
+
+  test('every object action a pointer can see, it can also reach', async () => {
+    test.setTimeout(240_000);
+    await selectOnCanvas();
+    await sweepObjectBar('TSLD, panel collapsed');
+  });
+
+  /**
+   * The **expanded** panel, which is the state M1-T1 named and nobody had driven
+   * (`docs/TECH_DEBT.md` #202c). The bar shares its row with the plan's facts, so expanding the
+   * panel is what puts that row under width pressure.
+   */
+  test('the same, with the activities panel expanded', async () => {
+    test.setTimeout(240_000);
+    // Names read from `activity-bottom-panel.tsx:155,317` rather than guessed — this repository
+    // records three journeys broken by a locator matching copy nobody checked.
+    await page.getByRole('button', { name: 'Expand activities panel' }).click();
+
+    // **The pinned positive for the STATE**, not just for the sweep's result. This case runs in
+    // about the same time as its collapsed sibling, which is exactly what a click that silently did
+    // nothing would also look like — and a sweep of an unchanged workspace reads as coverage while
+    // testing the state that was already covered. The panel's own table is the discriminator: it is
+    // not rendered at all while collapsed.
+    await expect(page.getByRole('table', { name: /activit/i }).first()).toBeVisible();
+
+    await selectOnCanvas();
+    await sweepObjectBar('TSLD, panel expanded');
+    await page.getByRole('button', { name: 'Collapse activities panel' }).click();
   });
 });
 
