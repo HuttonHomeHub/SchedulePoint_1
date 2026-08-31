@@ -18,6 +18,35 @@ import { CATEGORICAL_CYCLE_LENGTH, categoricalCycleVars } from '@/features/tsld/
 /** How many resources get their own colour before the rest are aggregated. */
 export const DEFAULT_STACK_CAP = 8;
 
+/**
+ * **The canvas strip's cap, lower than the dialog's — and it is a measured remedy, not a taste.**
+ *
+ * `apps/web/scripts/measure-strip-stack.mjs` ran the committed condition and the strip FAILED it at
+ * Fit zoom: nine segments over a 104-bucket programme cost **+10.1 ms p95** against a +2.0 ms bar,
+ * reproduced three times (+14.7, +14.2, +10.5). The spec's written remedy is "cap the segments,
+ * then withdraw the strip stack", so this is the first of those.
+ *
+ * **The cliff is at nine and its mechanism is NOT understood**, which is why this leaves clearance
+ * rather than sitting on the edge:
+ *
+ * | segments | 2 | 3 | 4 | 6 | 7 | 8 | 9 | 10 |
+ * | delta p95 | 0.1 | 0.1 | 0.2 | 0.3 | 0.1 | 0.5 | **10.0** | 9.7 |
+ *
+ * p50 barely moves across the whole sweep (0.3 → 0.4 ms), so it is a tail, not fill-rate. Two
+ * hypotheses were tested and **falsified**: sub-pixel bands (an even split fails identically) and
+ * the number of distinct fill colours (nine segments with four colours still fails). The
+ * arithmetic does not explain it either — nine segments is ~13 % more fills than eight, not 20×.
+ *
+ * So: six named plus the aggregate is seven, two steps clear of a discontinuity nobody has
+ * explained. `docs/TECH_DEBT.md` #226 carries the unknown. Sitting at eight would pass the
+ * condition on today's numbers and put the strip one segment from a cliff, which is the kind of
+ * margin that disappears when somebody changes something unrelated.
+ *
+ * The DIALOG keeps {@link DEFAULT_STACK_CAP}: it is DOM and SVG, not the canvas painter, it was
+ * measured separately, and it has the vertical room the strip does not.
+ */
+export const STRIP_STACK_CAP = 6;
+
 /** One band of the stack: a resource, or the aggregate that stands for the rest. */
 export interface StackSegment {
   /** The resource's id, or `null` for the aggregate — which is not a resource and has no id. */

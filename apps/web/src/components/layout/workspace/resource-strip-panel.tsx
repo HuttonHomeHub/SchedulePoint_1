@@ -11,7 +11,12 @@ import {
   useResources,
 } from '@/features/resources';
 import { StackByControl } from '@/features/resources/components/StackByControl';
-import { type StackBy, groupSeries, stackSeries } from '@/features/resources/model/stack-series';
+import {
+  STRIP_STACK_CAP,
+  type StackBy,
+  groupSeries,
+  stackSeries,
+} from '@/features/resources/model/stack-series';
 import { RESOURCE_STRIP_HEIGHT } from '@/features/tsld/components/TsldCanvas';
 import { resolveResourceStripPalette } from '@/features/tsld/render/palette';
 import {
@@ -131,12 +136,13 @@ export function ResourceStripPanel({
   const stacked = useMemo(() => {
     const neutral = { fill: stripPalette.tick, ink: stripPalette.ground };
     if (stackBy !== 'group') {
-      return stackSeries(series, buckets.length, { resourceName, neutral });
+      return stackSeries(series, buckets.length, { resourceName, neutral, cap: STRIP_STACK_CAP });
     }
     const partitioned = groupSeries(series, buckets.length, parentOf, resourceName);
     return stackSeries(partitioned.series, buckets.length, {
       resourceName: partitioned.nameOf,
       neutral,
+      cap: STRIP_STACK_CAP,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `resourceName` closes over a per-render map
   }, [series, buckets.length, stripPalette, stackBy, resources.data]);

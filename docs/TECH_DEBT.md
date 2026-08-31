@@ -5354,6 +5354,48 @@ not a constant.
 **Trigger:** a real report that colours moved, or the resource library gaining any other per-resource
 display attribute (at which point the column is no longer this feature's cost alone).
 
+## 226. The strip painter has an unexplained 20x cost cliff at nine stacked segments
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram M2-T5)
+
+Measured by `apps/web/scripts/measure-strip-stack.mjs` — the real `paintResourceStrip` against a
+real Chromium 2D context, 1646 CSS px, DPR 1.75, 72 px band, 300 frames, a 104-bucket (two-year,
+weekly) programme at **Fit** zoom where nothing is culled:
+
+| segments  |   2 |   3 |   4 |   6 |   7 |   8 |        9 |  10 |
+| --------- | --: | --: | --: | --: | --: | --: | -------: | --: |
+| delta p95 | 0.1 | 0.1 | 0.2 | 0.3 | 0.1 | 0.5 | **10.0** | 9.7 |
+
+(ms over a one-segment baseline measured in the same session. Reproduced at nine three times:
++14.7, +14.2, +10.5.)
+
+**`p50` barely moves across the whole sweep — 0.3 to 0.4 ms.** So this is a tail, not fill rate: a
+handful of frames in every hundred cost ~10 ms while the median frame stays cheap.
+
+**Two hypotheses were tested and FALSIFIED, and the arithmetic does not explain it either.**
+
+1. _Sub-pixel bands._ The skewed fixture gives its ninth segment a vanishing height, so the obvious
+   candidate was Chromium's antialiased fill of sub-pixel rects. An **even** split at nine segments
+   costs the same 10.2 ms. Not it.
+2. _Distinct fill colours._ Nine segments drawn with only **four** colours still costs 9.7 ms. Not
+   it.
+3. _Volume._ Nine segments is roughly 13 % more `fillRect` calls than eight, not 20 % more, and
+   certainly not 20x.
+
+**Why this is filed rather than chased.** `#75` records the same discipline for the main painter's
+own unattributed ~8 ms: where the time goes "is not yet measured, and must not be guessed". A
+DevTools Performance recording of one of these runs would attribute it; nothing short of that
+should be written down as the cause.
+
+**What was done meanwhile.** The strip caps at `STRIP_STACK_CAP = 6` named segments plus the
+aggregate — **seven**, two steps clear of the cliff, which passes the committed condition at
++0.3 ms. Eight would also pass on today's numbers and would sit one segment from a discontinuity
+nobody has explained; that is the kind of margin that vanishes when somebody changes something
+unrelated. The dialog keeps its cap of eight: it is DOM and SVG, not this painter.
+
+**Remedy:** attribute the tail (DevTools Performance over one Fit-zoom run), then decide whether the
+cap can rise. Until then the cap is the mitigation and this row is the reason it is 6 and not 8.
+
 ## 224. `plan:scale-500` is described as fully unassigned and its spec assigns 168 activities
 
 **Status:** open · **Owner:** repo · **Raised:** 2026-08-31 (stacked-histogram spec fold)
