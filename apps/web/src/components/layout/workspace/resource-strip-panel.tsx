@@ -10,7 +10,8 @@ import {
   useResourceHistogram,
   useResources,
 } from '@/features/resources';
-import { stackSeries } from '@/features/resources/model/stack-series';
+import { StackByControl } from '@/features/resources/components/StackByControl';
+import { type StackBy, groupSeries, stackSeries } from '@/features/resources/model/stack-series';
 import { RESOURCE_STRIP_HEIGHT } from '@/features/tsld/components/TsldCanvas';
 import { resolveResourceStripPalette } from '@/features/tsld/render/palette';
 import {
@@ -66,6 +67,8 @@ export function ResourceStripPanel({
   const histogram = useResourceHistogram(orgSlug, planId, granularity);
   const resources = useResources(orgSlug);
   const bucketSizeId = useId();
+  const stackById = useId();
+  const [stackBy, setStackBy] = useState<StackBy>('resource');
   const resourcePickerId = useId();
 
   const nameById = useMemo(
@@ -73,6 +76,13 @@ export function ResourceStripPanel({
     [resources.data],
   );
   const resourceName = (id: string): string => nameById.get(id) ?? 'Unknown resource';
+  const parentById = useMemo(
+    () => new Map((resources.data ?? []).map((r) => [r.id, r.parentId])),
+    [resources.data],
+  );
+  const parentOf = (id: string): string | null => parentById.get(id) ?? null;
+  /** Grouping is offered only when a group exists — otherwise the control would do nothing. */
+  const groupsExist = (resources.data ?? []).some((r) => r.parentId !== null);
 
   const series = histogram.data?.series ?? [];
   // Canvas 2D `fillStyle` cannot take a `var()`, so the strip's fills are resolved here — off the
@@ -118,15 +128,18 @@ export function ResourceStripPanel({
    * The scale is the peak STACKED total, not the tallest single series (ADR-0049 §6's whole-series
    * max, amended for a stack): otherwise the tallest bucket would overflow the band.
    */
-  const stacked = useMemo(
-    () =>
-      stackSeries(series, buckets.length, {
-        resourceName,
-        neutral: { fill: stripPalette.tick, ink: stripPalette.ground },
-      }),
+  const stacked = useMemo(() => {
+    const neutral = { fill: stripPalette.tick, ink: stripPalette.ground };
+    if (stackBy !== 'group') {
+      return stackSeries(series, buckets.length, { resourceName, neutral });
+    }
+    const partitioned = groupSeries(series, buckets.length, parentOf, resourceName);
+    return stackSeries(partitioned.series, buckets.length, {
+      resourceName: partitioned.nameOf,
+      neutral,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `resourceName` closes over a per-render map
-    [series, buckets.length, stripPalette],
-  );
+  }, [series, buckets.length, stripPalette, stackBy, resources.data]);
 
   const snapshot = useMemo<ResourceStripSnapshot | null>(() => {
     if (buckets.length === 0) return null;
@@ -200,6 +213,12 @@ export function ResourceStripPanel({
             </Select>
           </div>
         ) : null}
+        <StackByControl
+          id={stackById}
+          value={stackBy}
+          onChange={setStackBy}
+          disabled={!groupsExist}
+        />
         <BucketSizeSelect id={bucketSizeId} value={granularity} onChange={setGranularity} />
       </div>
 

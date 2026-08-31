@@ -2,10 +2,11 @@ import type { HistogramGranularity } from '@repo/types';
 import { useId, useMemo, useState } from 'react';
 
 import { useResourceHistogram, useResources } from '../api/use-resources';
-import { stackSeries } from '../model/stack-series';
+import { type StackBy, groupSeries, stackSeries } from '../model/stack-series';
 
 import { BucketSizeSelect, ResourceLoadingTable } from './ResourceLoadingTable';
 import { ResourceStackChart } from './ResourceStackChart';
+import { StackByControl } from './StackByControl';
 
 import { Button } from '@/components/ui/button';
 
@@ -28,6 +29,8 @@ export function ResourceHistogram({
   planId: string;
 }): React.ReactElement {
   const [granularity, setGranularity] = useState<HistogramGranularity>('WEEK');
+  const [stackBy, setStackBy] = useState<StackBy>('resource');
+  const stackById = useId();
   const histogram = useResourceHistogram(orgSlug, planId, granularity);
   const resources = useResources(orgSlug);
   const granularityId = useId();
@@ -35,28 +38,37 @@ export function ResourceHistogram({
 
   const nameById = new Map((resources.data ?? []).map((r) => [r.id, r.name]));
   const resourceName = (id: string): string => nameById.get(id) ?? 'Unknown resource';
+  const parentById = new Map((resources.data ?? []).map((r) => [r.id, r.parentId]));
+  const parentOf = (id: string): string | null => parentById.get(id) ?? null;
+  /** True once at least one resource has a parent — otherwise grouping would be a no-op control. */
+  const groupsExist = (resources.data ?? []).some((r) => r.parentId !== null);
 
   const buckets = histogram.data?.buckets ?? [];
   const series = histogram.data?.series ?? [];
   // The derivation both surfaces share — capped, ranked, aggregated, with the per-bucket totals the
   // stack's height is measured against. Memoised on the inputs it actually reads, so an unrelated
   // re-render of this dialog (focus, hover, a granularity control's own state) does not re-rank.
-  const stacked = useMemo(
-    () =>
-      stackSeries(series, buckets.length, {
-        resourceName,
-        // Resolved as `var()` so the swatch re-colours on a theme change with no JS, matching the
-        // fills. `--muted-foreground` rather than a ramp member: the aggregate is not a resource,
-        // and a categorical colour would say that it is.
-        neutral: { fill: 'var(--muted-foreground)', ink: 'var(--background)' },
-      }),
+  const stacked = useMemo(() => {
+    const partitioned =
+      stackBy === 'group' ? groupSeries(series, buckets.length, parentOf, resourceName) : null;
+    return partitioned
+      ? stackSeries(partitioned.series, buckets.length, {
+          resourceName: partitioned.nameOf,
+          neutral: { fill: 'var(--muted-foreground)', ink: 'var(--background)' },
+        })
+      : stackSeries(series, buckets.length, {
+          resourceName,
+          // Resolved as `var()` so the swatch re-colours on a theme change with no JS, matching the
+          // fills. `--muted-foreground` rather than a ramp member: the aggregate is not a resource,
+          // and a categorical colour would say that it is.
+          neutral: { fill: 'var(--muted-foreground)', ink: 'var(--background)' },
+        });
     // `resourceName` closes over `nameById`, which is rebuilt per render; depending on it would
     // defeat the memo. The names only change when `resources.data` does, which changes `series`
     // in the same fetch cycle in practice — and a stale NAME is a cosmetic miss, never a wrong
     // number, because every value here comes from `series`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [series, buckets.length],
-  );
+  }, [series, buckets.length, stackBy, resources.data]);
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby={tableCaptionId}>
@@ -64,7 +76,15 @@ export function ResourceHistogram({
         <h3 id={tableCaptionId} className="text-sm font-semibold">
           Resource loading histogram
         </h3>
-        <BucketSizeSelect id={granularityId} value={granularity} onChange={setGranularity} />
+        <div className="flex flex-wrap items-end gap-3">
+          <StackByControl
+            id={stackById}
+            value={stackBy}
+            onChange={setStackBy}
+            disabled={!groupsExist}
+          />
+          <BucketSizeSelect id={granularityId} value={granularity} onChange={setGranularity} />
+        </div>
       </div>
 
       {histogram.isPending ? (

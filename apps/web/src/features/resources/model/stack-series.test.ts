@@ -1,7 +1,7 @@
 import type { ResourceHistogramSeries } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_STACK_CAP, stackOffsets, stackSeries } from './stack-series';
+import { DEFAULT_STACK_CAP, groupSeries, stackOffsets, stackSeries } from './stack-series';
 
 import { CATEGORICAL_CYCLE_LENGTH } from '@/features/tsld/render/palette';
 
@@ -120,5 +120,70 @@ describe('stackOffsets', () => {
     const lastIdx = out.segments.length - 1;
     const top = offsets[lastIdx]! + out.segments[lastIdx]!.values[0]!;
     expect(top).toBe(out.bucketTotals[0]);
+  });
+});
+
+describe('groupSeries', () => {
+  const parents: Record<string, string | null> = {
+    a: 'g-steel',
+    b: 'g-steel',
+    c: 'g-conc',
+    solo: null,
+  };
+  const parentOf = (id: string): string | null => parents[id] ?? null;
+  const names: Record<string, string> = {
+    'g-steel': 'Steelwork',
+    'g-conc': 'Concrete',
+    solo: 'Tower crane',
+  };
+  const nameOf = (id: string): string => names[id] ?? `Res ${id}`;
+
+  it('folds resources into their parent group, summing per bucket and overall', () => {
+    const out = groupSeries([s('a', [1, 2]), s('b', [3, 4]), s('c', [5, 6])], 2, parentOf, nameOf);
+    const steel = out.series.find((x) => x.resourceId === 'g-steel')!;
+    expect(steel.values).toEqual([4, 6]);
+    expect(steel.total).toBe(10);
+    expect(out.nameOf('g-steel')).toBe('Steelwork');
+  });
+
+  it('a resource with no parent stands for ITSELF, not for an "Ungrouped" bucket', () => {
+    // Deliberate: a standalone tower crane is a thing in the plan, not an absence. Burying it in a
+    // word for "no group" would hide a real resource behind a category that does not exist.
+    const out = groupSeries([s('solo', [7, 8]), s('a', [1, 1])], 2, parentOf, nameOf);
+    const own = out.series.find((x) => x.resourceId === 'solo')!;
+    expect(own.values).toEqual([7, 8]);
+    expect(out.nameOf('solo')).toBe('Tower crane');
+    expect(out.series.map((x) => x.resourceId).sort()).toEqual(['g-steel', 'solo']);
+  });
+
+  it('conserves units across the regrouping', () => {
+    const input = [s('a', [1, 2]), s('b', [3, 4]), s('c', [5, 6]), s('solo', [7, 8])];
+    const out = groupSeries(input, 2, parentOf, nameOf);
+    const before = input.reduce((acc, x) => acc + x.total, 0);
+    const after = out.series.reduce((acc, x) => acc + x.total, 0);
+    expect(after).toBe(before);
+    for (let b = 0; b < 2; b += 1) {
+      expect(out.series.reduce((acc, x) => acc + (x.values[b] ?? 0), 0)).toBe(
+        input.reduce((acc, x) => acc + (x.values[b] ?? 0), 0),
+      );
+    }
+  });
+
+  it('turns an over-cap resource stack into named groups with no aggregate at all', () => {
+    // The point of the feature: 40 resources stacked by resource is 8 bands + "Other (32)"; by
+    // group it is a handful of named trades and no aggregate.
+    const many = Array.from({ length: 40 }, (_, i) => s(`r${String(i)}`, [1]));
+    const twoGroups = (id: string): string => (Number(id.slice(1)) % 2 === 0 ? 'g-a' : 'g-b');
+    const byResource = stackSeries(many, 1, { ...opts, cap: 8 });
+    expect(byResource.aggregated).toBe(true);
+
+    const grouped = groupSeries(many, 1, twoGroups, (id) => id);
+    const byGroup = stackSeries(grouped.series, 1, {
+      ...opts,
+      cap: 8,
+      resourceName: grouped.nameOf,
+    });
+    expect(byGroup.aggregated).toBe(false);
+    expect(byGroup.segments).toHaveLength(2);
   });
 });

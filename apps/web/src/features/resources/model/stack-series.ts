@@ -56,6 +56,56 @@ export interface StackSeriesOptions {
   neutral: { fill: string; ink: string };
 }
 
+/** How the segments are formed: one band per resource, or one band per parent group. */
+export type StackBy = 'resource' | 'group';
+
+/**
+ * **Grouping — where this beats P6 outright, and it is a re-partition rather than a new pipeline.**
+ *
+ * P6 stacks by adding one filter dialog per segment, which its own advocates call "really tedious"
+ * for exactly the case a real programme has: dozens of trades. ADR-0053 M3 already gave resources
+ * an adjacency-list `parentId` and a non-assignable `GROUP` kind, so a group here is a dropdown
+ * rather than five dialogs.
+ *
+ * It also fixes the feature's weakest state rather than papering over it. A forty-resource
+ * programme stacked by resource is eight named bands and "Other (32 resources)"; stacked by trade
+ * group it is five named trades and no aggregate at all — which is the picture a planner was asking
+ * for in the first place.
+ *
+ * Resources with no parent stand for themselves. That is deliberate and not a fallback: a
+ * standalone crane is not "ungrouped", it is a thing in the plan, and burying it in an "Ungrouped"
+ * bucket would hide a real resource behind a word for an absence.
+ */
+export function groupSeries(
+  series: readonly ResourceHistogramSeries[],
+  bucketCount: number,
+  parentOf: (resourceId: string) => string | null,
+  nameOf: (id: string) => string,
+): { series: ResourceHistogramSeries[]; nameOf: (id: string) => string } {
+  const byKey = new Map<string, { values: number[]; total: number }>();
+  const labels = new Map<string, string>();
+
+  for (const s of series) {
+    // A resource with no parent IS its own band — see the docblock. Keying on the resource's own id
+    // in that case also keeps `nameOf` working without a second lookup table.
+    const key = parentOf(s.resourceId) ?? s.resourceId;
+    labels.set(key, nameOf(key));
+    const bucket = byKey.get(key) ?? { values: new Array<number>(bucketCount).fill(0), total: 0 };
+    for (let i = 0; i < bucketCount; i += 1) bucket.values[i]! += s.values[i] ?? 0;
+    bucket.total += s.total;
+    byKey.set(key, bucket);
+  }
+
+  return {
+    series: [...byKey].map(([resourceId, v]) => ({
+      resourceId,
+      values: v.values,
+      total: v.total,
+    })),
+    nameOf: (id) => labels.get(id) ?? nameOf(id),
+  };
+}
+
 /**
  * Rank the series, cap them, aggregate the remainder, and compute the per-bucket totals.
  *
