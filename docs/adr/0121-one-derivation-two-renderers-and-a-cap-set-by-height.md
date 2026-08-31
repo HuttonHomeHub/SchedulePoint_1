@@ -136,6 +136,56 @@ Recorded because "the agent was not run" should never be readable as an oversigh
 `apps/api/` is untouched by this epic. The ADR-0034 recalculation parity gate is untouched by
 construction — in its honest form: there is nothing here to hold parity for.
 
+### D8 — What the gate pass found, and why two of them are the same defect
+
+Six specialists over the combined diff. Security passed, having re-derived this ADR's parity claim
+from the diff rather than citing it — and independently establishing that the server's DTO enforces
+`@Max(200)` on the limit this epic raised, so the client change stays inside an already-enforced
+ceiling. Frontend-performance passed, having independently reproduced the nine-segment cliff
+(+9.8 ms) and the shipped cap (+0.2 ms) in this environment. **The other four blocked, on eleven
+findings.**
+
+**The two largest are decisions that were written down and not built** — the ADR-0081 shape, twice
+in one epic, and both reached independently by two reviewers.
+
+The **strip's legend** was decided by name in the spec's D5 (_"the chrome panel already exists …
+the legend joins them"_), listed as a development step in the plan, and never written. So the
+canvas strip — an `aria-hidden` element by ADR-0049 — carried up to four coloured bands with
+**nothing on screen naming any of them**, and no way to learn the top one was an aggregate. Colour
+as the sole channel with no alternative anywhere: a live WCAG 1.4.1 failure on the surface this
+epic exists to improve.
+
+The **dialog chart's segment boundary** is the same story inverted. The entire 1.4.11 argument for
+a stack is that two adjacent fills never have to clear 3:1 against **each other**, because a
+ground-coloured boundary always sits between them and every fill is gated at ≥ 3:1 against that
+ground. The canvas painter implements it. The DOM chart drew bare backgrounds — so the argument was
+true of one renderer and asserted of both, with the ramp's worst adjacent pair measuring 1.46:1.
+The suppression threshold now lives in one module both renderers import, so they cannot disagree
+about when a band is too thin to separate.
+
+**Four more were mine, and one is this register's favourite shape aimed at me.** The panel resolved
+its palette from `document.documentElement` — ADR-0102's exact defect — under a comment _I wrote in
+the `var()` fix_ saying it read the canvas surface element, citing ADR-0102 by number. The code and
+the comment describing it landed in the same commit and disagreed. jsdom returns `''` from either
+root and falls through to identical fallbacks, so nothing could have caught it. Alongside: the
+painter re-summing bucket totals (D1's own rule broken by D1's own author, agreeing only because
+segment order happens to survive the trip); `groupSeries` grouping by immediate parent where US-8
+and the control's label both say top-level; and the table's caption claiming _"ordered by total,
+largest first"_ over a table that rendered whatever order it was handed, with both unit fixtures
+coincidentally already descending so the false caption shipped green.
+
+**And the coverage gaps were the plan's own written requirements.** `ResourceStackChart` had no
+test file at all; the multi-segment paint path and its suppression boundary had none;
+`stack-record.structural.test.ts` asserted against a **private mirror** of the table's summing
+logic and imported no component, so the regression its own docblock described — wiring the table to
+the chart's aggregated segments — would have left it passing unchanged. It renders the real
+components now, verified red against a truncating table.
+
+Every fix carries a regression test verified red against the defect first. The journey found two
+more things by being run: the sibling spec broke because the picker gained an option and nobody had
+run it (§19.8's rule, demonstrated), and `Stack by` is correctly shaded when an organisation has no
+groups, which the new journey had assumed otherwise.
+
 ## Alternatives considered
 
 - **A second server-side aggregation for the stack.** Rejected: `getResourceHistogram` already

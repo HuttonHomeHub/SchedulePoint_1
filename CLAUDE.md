@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1120 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1124 web
 > source files with 41 Playwright suites beside the base journey, and
 > 121 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -3668,7 +3668,29 @@ progress` off the command surface because **an object action belongs on the obje
   was not run" cannot read as an oversight. Filing the epic's rows also found **#227**: 70 of 100
   detailed register rows use a heading form `docs/TECH_DEBT.md` itself forbids, and
   `check:debt-status` cannot report it because ADR-0120's correct fix widened the parser to read
-  both levels. **The CPM engine is not imported and no migration runs.**
+  both levels.
+  **The gate pass blocked on four of six reviews, and its two largest findings are decisions that
+  were written down and not built** — the ADR-0081 shape twice in one epic, each reached
+  independently by two reviewers. The strip's **legend** was decided by name in the spec (_"the
+  chrome panel already exists … the legend joins them"_), listed as a development step, and never
+  written: so an `aria-hidden` canvas carried four coloured bands with **nothing on screen naming
+  any of them**, colour as the sole channel with no alternative — WCAG 1.4.1, on the surface the
+  epic exists to improve. And the dialog chart's **segment boundary** is that inverted: the whole
+  1.4.11 case for a stack is that adjacent fills never clear 3:1 against each other because a
+  ground-coloured rule sits between them, the canvas painter drew one, the DOM chart drew bare
+  backgrounds — the argument true of one renderer and asserted of both, with the ramp's worst
+  adjacent pair at 1.46:1. Four more were the author's, one of them this register's favourite shape
+  aimed squarely back: the panel resolved its palette from `document.documentElement` under a
+  comment written **in the `var()` fix commit** claiming it read the canvas surface and citing
+  ADR-0102 by number — code and comment landing together and disagreeing, invisible to every test
+  because jsdom returns `''` from either root. Plus the painter re-summing bucket totals (D1's rule
+  broken by D1's own author), `groupSeries` walking one level where the spec and the control's label
+  both say top-level, and a table caption claiming _"ordered by total, largest first"_ over a table
+  that sorted nothing — both fixtures coincidentally descending, so the false caption shipped green.
+  The coverage gaps were the plan's own written requirements, and one of them is sharper than a
+  gap: `stack-record.structural.test.ts` asserted against a **private mirror** of the table's
+  logic and imported no component, so the regression its own docblock describes would have left it
+  passing. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0119** _(Accepted; landed 2026-08-30)_ — A group of buttons says which of them are
   alternatives. The plan header's mode row held four controls — `Early mode | Visual mode |
