@@ -5326,6 +5326,34 @@ way round (loud, not silent), but the failure message would name the wrong cause
 
 ---
 
+## 225. A resource's histogram colour follows its rank, so re-ranking repaints the chart
+
+**Status:** deferred · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram, spec Q9)
+
+The stacked histogram assigns cycle member _n_ to segment _n_ **by rank** — biggest total gets the
+first colour. So when two resources swap totals (an assignment edit, a recalculation, an exact tie
+under a granularity change) **their colours swap**, and a planner who has learnt "the steel crew is
+the purple one" sees purple move.
+
+**P6 is the opposite**, and that is what a planner arriving from it expects: colour is assigned by
+hand, per filter, and is therefore permanent — one of the reasons its setup is the tedious thing its
+own advocates complain about.
+
+**The product owner was told this plainly and chose rank-assignment (2026-08-31).** Two properties
+paid for the choice: no two visible bands can ever share a colour, and the dialog and the canvas
+strip agree by construction because both derive rank from the same query. The reshuffle is also
+**visible rather than silent** — the legend re-orders with it, on screen, in the same frame.
+
+**Why the alternative is a different epic, not a fast-follow.** Stability cannot be had by hashing
+the resource id: a hash can collide among the _shown_ set, which is the failure rank-assignment
+structurally cannot have. Genuine stability needs a colour **persisted against each resource** —
+a schema change, a picker to assign it, a default for the unassigned, and a rule for what happens
+when two resources are given the same one. That is an epic with a database-architect engagement,
+not a constant.
+
+**Trigger:** a real report that colours moved, or the resource library gaining any other per-resource
+display attribute (at which point the column is no longer this feature's cost alone).
+
 ## 224. `plan:scale-500` is described as fully unassigned and its spec assigns 168 activities
 
 **Status:** open · **Owner:** repo · **Raised:** 2026-08-31 (stacked-histogram spec fold)

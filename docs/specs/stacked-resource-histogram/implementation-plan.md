@@ -606,58 +606,18 @@ trades instead of "top 8 + Other".
 
 ---
 
-## Milestone 4 — Cumulative S-curve overlay
+## Milestone 4 — Cumulative S-curve overlay — WITHDRAWN FROM THIS EPIC
 
-> **Reordered (was M3), and its existence is spec Q8.** The product owner's supplied source singles
-> this out as the one option worth having, so it is not dropped on an analyst's judgement — but it is
-> the epic's least certain milestone and it now runs last. **If Q8 is answered "defer it", this
-> milestone leaves the epic and M5 follows M3.**
-
-**Outcome:** a planner enables one option and reads the programme's cumulative loading trend over the
-stack.
-
-**Entry point:** a checkbox in the **`View ▾`** popover for the strip and an inline toggle in the
-dialog, both labelled **`Cumulative curve`**, **off by default**.
-
-**Journey:** one step in the existing `e2e-resource-view` suite — enable it, assert the line's
-`<path>`/canvas call and the table's **Cumulative** column.
-
-#### Feature: the cumulative overlay
-
-> **Description:** `Σ(bucketTotals[0..i])`, its own right-hand axis with a labelled maximum, drawn
-> over the stack; plus a **Cumulative** column on the table so the line is text.
-> **Complexity:** M
-> **Dependencies:** M1 (dialog), M2 (strip)
-> **Risks:** the overlay's scale is confused with the stack's → the right axis carries its own
-> labelled maximum and the legend names the line. **Off ⇒ the paint is unchanged**, which is the
-> milestone's own parity condition and is asserted as one.
-> **Testing:** unit on the cumulative derivation (monotonic non-decreasing; last value equals the
-> grand total); component on both surfaces; a paint-unchanged assertion with the overlay off.
-
-##### Task M4-T1 — the derivation and the table column
-
-- **Complexity:** S · **Dependencies:** M1-T1 · **Testing:** unit — monotonicity, last-equals-grand-
-  total, empty input.
-
-##### Task M4-T2 — the dialog overlay
-
-- **Complexity:** S · **Dependencies:** M4-T1 · **Testing:** component; axe over the dialog with the
-  overlay on.
-
-##### Task M4-T3 — the strip overlay
-
-- **Complexity:** M · **Dependencies:** M4-T1, M2-T3 · **Risks:** a second axis in a 72 px band is
-  unreadable → if the labelled maximum does not fit, the overlay is **dialog-only** and that is
-  recorded as a decision, not dropped silently. **If spec §3 Condition 2 (legibility) has already
-  forced the strip's cap down or withdrawn the strip stack, this task does not start** — an overlay
-  on a picture judged unreadable is a second answer to a question already settled. · **Testing:**
-  counting-stub gate; paint-unchanged when off.
-
-##### Task M4-T4 — the journey step
-
-- **Complexity:** S · **Dependencies:** M4-T2, M4-T3
-
----
+> **The product owner deferred this on 2026-08-31 (spec Q8), against the analyst's default of
+> keeping it.** It becomes its own slice, taken up straight after this epic's release.
+>
+> The tasks that were here are deliberately **deleted rather than commented out** — a milestone
+> kept in a plan as struck-through text is the shape this register keeps finding, where a document
+> reads as authoritative about work nobody is doing. The decision, its reasoning and its deferral
+> trigger live in the spec's Q8; git holds the tasks.
+>
+> Nothing else moves: the derivation M1 builds already produces the array this milestone would sum,
+> so the slice needs no prerequisite beyond a merged M1.
 
 ## Milestone 5 — Gate pass
 

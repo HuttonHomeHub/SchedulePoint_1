@@ -318,9 +318,19 @@ unchanged on both surfaces.
 > sequencing call an analyst can make; dropping a milestone the product owner's own supplied source
 > singles out as the one option worth having is not.
 >
-> **My default if unanswered:** keep it, as M4, after grouping. The dialog half is cheap
-> (`Σ` over an array the derivation already produces, plus one table column) and it is the only
-> milestone that reads a **trend** rather than a snapshot.
+> **ANSWERED 2026-08-31 — the product owner deferred it out of the epic**, against my default of
+> keeping it. It becomes its own slice, taken up straight after this epic merges.
+>
+> The reasoning I put to them was the architecture review's: the S-curve adds a second scale, a
+> right-hand axis, another column to the shared table and a `View ▾` control, all for something off
+> by default, and it widens the diff the gate pass has to cover — while its strip half is already
+> pre-flagged as probably not fitting a 72 px band. My own default was wrong on the balance of that,
+> and is left above rather than replaced.
+>
+> **Deferral trigger, so this is a decision rather than a drift:** it is picked up as the next slice
+> after this epic's release, and needs no new prerequisite — the derivation M1 builds already
+> produces the array it sums. If it has not been built by the time a third milestone lands on either
+> surface, that is the signal it was quietly dropped rather than deferred.
 
 > **Q9 — colour follows rank, so a re-ranking reshuffles colours. P6 does not do this.**
 >
@@ -336,10 +346,16 @@ unchanged on both surfaces.
 > (D2's recorded reason), so stability would need a **persisted** per-resource colour, which is a
 > schema change and a different epic.
 >
-> **My default if unanswered:** keep rank-assignment. The reshuffle is **visible rather than
+> **ANSWERED 2026-08-31 — the product owner kept rank-assignment**, having been told plainly that
+> it differs from the P6 behaviour they are used to. The reshuffle is **visible rather than
 > silent** — the legend re-orders with it, on screen, in the same frame — and ties are the only case
 > a granularity change can produce (each series' `total` is invariant across granularities,
 > `engine/resource-histogram.ts:330`).
+>
+> The stable-per-resource alternative is filed as `docs/TECH_DEBT.md` **#225** rather than left in
+> this document, because it is a schema change and a different epic: a hash can collide among the
+> shown set, so genuine stability needs a colour persisted against each resource. Recording it there
+> means the question survives this spec being archived.
 
 ---
 
