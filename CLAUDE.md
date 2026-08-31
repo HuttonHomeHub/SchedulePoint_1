@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1119 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1120 web
 > source files with 41 Playwright suites beside the base journey, and
-> 120 ADRs.
+> 121 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3612,6 +3612,63 @@ progress` off the command surface because **an object action belongs on the obje
   name, lost the property it pinned, and would have passed against a broken parser
   (`scripts/lib/fixtures/` is now in `.prettierignore`). **The CPM engine is not imported and no
   migration runs.**
+
+- **ADR-0121** _(Accepted; M0–M4 landed 2026-08-31)_ — One stack derivation, two renderers, and a
+  cap set by height rather than cost. The resource histogram showed **one resource at a time**; the
+  product owner noticed while using the app and asked two falsifiable things — whether that was
+  really the limit, and whether P6 stacks with colour. Both were true, and the source they supplied
+  is worth reading for what it **complains** about: P6 stacks by adding one filter dialog per
+  segment, which its own advocates call "really tedious" for the case every real programme has.
+  ADR-0053 M3 already gave resources a `parentId` and a non-assignable `GROUP` kind, so stacking by
+  **trade group** is a re-partition of the same derivation rather than a second pipeline — a
+  dropdown where P6 wants five dialogs, which is where this beats it outright. **Three claims in my
+  own brief were wrong and were corrected before it became a spec** (§19.11): the ramp has twelve
+  members, not the ten I reported from a truncated `grep`; over-allocation shading **is** built, as
+  an ADR-0041-driven lens; and the limit-line framing the brief leaned on is not supported by the
+  source at all.
+  **The load-bearing decision is the one that nearly did not get made, because the code looked
+  right: a colour has two forms, and which one a renderer gets is that renderer's business.**
+  `stackSeries` emits `var(--chart-n)`, correct for its first consumer, since a `var()` follows the
+  ADR-0055 surface scope and re-values with the token. The canvas strip then indexed the same ramp
+  and published it straight to the painter — and **Canvas 2D's `fillStyle` setter discards an
+  unparseable value and keeps the previous colour**, with no throw, no warning and no visual error
+  state. Verified in Chromium rather than reasoned about. So the stack would have painted as **one
+  solid block**: the feature's entire premise, telling the trades apart by colour, silently absent,
+  with every unit test green because jsdom has no canvas and a test asserting the `fill` string
+  passes on exactly the value a browser refuses. That is ADR-0100 M4's minimap defect in this same
+  token family, and `resolveLensPalette` has resolved this **exact ramp** correctly since ADR-0049
+  — so it is one correct pattern applied to a control and not its neighbour, the **sixth** recorded
+  instance. The fix goes where the indexing rule already lives (the ramp is a `stackSeries`
+  parameter), because resolving at the call site would be a second copy of the `i % length` rule;
+  the painter additionally **throws in development** on an unresolved fill.
+  **Both committed falsification conditions FAILED, and both remedies were applied rather than
+  either criterion softened.** Condition 1, paint cost, failed on a **discontinuity nobody
+  expected** — +14.7 ms against a +2.0 ms bar at Fit, and a sweep found a cliff at **nine** segments
+  (0.5 ms at eight, ~10 ms at nine) with `p50` flat across the whole range, so a tail rather than
+  fill rate. Two hypotheses were **falsified** by experiment (sub-pixel bands: an even split fails
+  identically; distinct fill colours: nine segments in four colours still fails) and the arithmetic
+  does not explain it either, nine being ~13 % more fills than eight and not 20×. Unattributed and
+  filed as `docs/TECH_DEBT.md` **#226** rather than guessed at. Condition 2, legibility at 72 px,
+  then cut the cap much further — **height, not cost, was the binding constraint**: on the spec's
+  skewed profile six named bands put the fifth trade at 1.04 px and the aggregate at **0.52 px**,
+  below a pixel and unidentifiable in the screenshot the condition is judged against. `6 → 0.52`,
+  `5 → 1.05`, `4 → 2.13`, `3 → 4.40` px, so `STRIP_STACK_CAP` is **3** against the dialog's **8**.
+  The two surfaces differ in **how many** segments they name and never in what a segment means —
+  the divergence the remedy ladder sanctions, and why `cap` was a parameter from the first commit.
+  **What the cap costs is stated rather than left to be rediscovered**: on an EVEN six-trade split
+  every band is 9.43 px and all six would have been legible, so three trades are folded for no
+  visual reason. A data-driven cap was rejected because it makes a segment's presence a property of
+  the plan rather than of its rank, and a constant tuned to whichever profile reads best is the
+  number-tuned-to-the-answer the condition exists to prevent.
+  The harness needed one correction before its answer was worth anything: at the Week preset ~15 of
+  104 buckets fit and the scale is the whole plan's peak, so framing from day zero grades the
+  quietest fortnight of a two-year programme against a scale set by its busiest. The first run did
+  exactly that. **`database-architect` was deliberately not engaged** — there is no model, column,
+  index, constraint or migration, confirmed against the diff — and that is recorded so "the agent
+  was not run" cannot read as an oversight. Filing the epic's rows also found **#227**: 70 of 100
+  detailed register rows use a heading form `docs/TECH_DEBT.md` itself forbids, and
+  `check:debt-status` cannot report it because ADR-0120's correct fix widened the parser to read
+  both levels. **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0119** _(Accepted; landed 2026-08-30)_ — A group of buttons says which of them are
   alternatives. The plan header's mode row held four controls — `Early mode | Visual mode |

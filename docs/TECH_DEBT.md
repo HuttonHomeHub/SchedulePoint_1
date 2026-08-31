@@ -5326,7 +5326,7 @@ way round (loud, not silent), but the failure message would name the wrong cause
 
 ---
 
-## 225. A resource's histogram colour follows its rank, so re-ranking repaints the chart
+### 225. A resource's histogram colour follows its rank, so re-ranking repaints the chart
 
 **Status:** deferred · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram, spec Q9)
 
@@ -5354,7 +5354,7 @@ not a constant.
 **Trigger:** a real report that colours moved, or the resource library gaining any other per-resource
 display attribute (at which point the column is no longer this feature's cost alone).
 
-## 226. The strip painter has an unexplained 20x cost cliff at nine stacked segments
+### 226. The strip painter has an unexplained 20x cost cliff at nine stacked segments
 
 **Status:** open · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram M2-T5)
 
@@ -5396,7 +5396,7 @@ unrelated. The dialog keeps its cap of eight: it is DOM and SVG, not this painte
 **Remedy:** attribute the tail (DevTools Performance over one Fit-zoom run), then decide whether the
 cap can rise. Until then the cap is the mitigation and this row is the reason it is 6 and not 8.
 
-## 224. `plan:scale-500` is described as fully unassigned and its spec assigns 168 activities
+### 224. `plan:scale-500` is described as fully unassigned and its spec assigns 168 activities
 
 **Status:** open · **Owner:** repo · **Raised:** 2026-08-31 (stacked-histogram spec fold)
 
@@ -5429,7 +5429,49 @@ could not have caught this.
 epic needed a plan with many resources and this one declares exactly one, which would have measured
 a stacked chart's cost as zero.
 
-## 223. The canvas resource strip does not export or print, and the gate for that cannot see it
+### 227. Seventy of a hundred detailed rows use the heading form this file forbids
+
+**Status:** open · **Raised:** 2026-08-31 (filing the stacked-histogram rows) · **Size:** M
+
+`docs/TECH_DEBT.md:101` states the convention: _"Headings are `### <number>. <title>`, always.
+Three rows had drifted to `##`."_ Measured on the day this row was filed:
+
+```
+## rows:  70
+### rows: 30
+```
+
+**The "three" is wrong by a factor of 23, and it was already wrong when ADR-0120 was written** —
+that ADR's entire subject was this file. A `##` row is a sibling of `## Detailed items` rather than
+a child of it, so two-thirds of the register sits outside the section that contains it, and the
+document tree says the opposite of what the file says about itself.
+
+**The gate structurally cannot report it, and that is a consequence of a correct fix.** ADR-0120's
+Finding 0 was that `check-debt-status.mjs` read `## ` only, so 31 numbered rows were invisible and
+29 of them had no status — while the gate printed a clean verdict over a document where that was
+false. The repair widened the parser to read BOTH levels, which is right: the gate's job is to find
+every row, and a row in the wrong form is still a row. But nothing then asserts the form, so the
+widening that stopped the gate missing rows also stopped anyone noticing the drift, and it has been
+accumulating in every epic since.
+
+Its own explanatory sentence is also backwards — it says `##` "made every detailed item a child of
+Principles for managing debt … rather than a sibling of its peers", and the nesting works the other
+way round. So a reader who checks the rule against the document is told two things, one false and
+one inverted.
+
+**Not fixed here, deliberately, and not half-fixed either.** Normalising seventy headings is a large
+mechanical diff in the middle of a feature epic (the campsite rule's own exception for drive-by
+churn), and adding a form assertion to `check-debt-status.mjs` is a change to a **shared gate**,
+which ADR-0105 makes a spec-and-plan trigger rather than something to slip into a release. Rows
+223–226 were written in the documented form rather than the majority one, because deepening a drift
+knowingly is worse than leaving it.
+
+**What closing it needs:** one decision (is `###` still the rule?), then either normalise and assert
+the form, or change the convention line to describe what the file does. Whichever, the count in that
+line has to be derived rather than restated — it is an ADR-0076 Class 1 claim sitting in the
+register that ADR-0120 built a computed observer for.
+
+### 223. The canvas resource strip does not export or print, and the gate for that cannot see it
 
 **Status:** open · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram UX review)
 

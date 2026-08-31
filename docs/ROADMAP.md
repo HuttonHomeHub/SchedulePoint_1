@@ -537,6 +537,18 @@ discriminators. Each becomes a spec/plan before build:
   because the probe styled a button whose `px-2` an inline `padding-left` replaces rather than adds
   to — caught only because the prediction had been written down first.
 
+- **The resource histogram stacks** — **shipped** (ADR-0121, 2026-08-31,
+  `docs/specs/stacked-resource-histogram/`). The histogram showed one resource at a time; it now
+  stacks every resource in the dialog, and stacks by **trade group** as well as by resource — which
+  is where it beats P6 outright, since ADR-0053 M3's resource hierarchy makes that a dropdown where
+  P6 wants one filter dialog per segment. The canvas strip stacks too, capped lower than the dialog.
+  Both of the spec's committed falsification conditions **failed** and both remedies were applied:
+  paint cost hit an unexplained 20x cliff at nine segments (#226), and then legibility at 72 px cut
+  the strip's cap much further — **height, not cost, was the binding constraint**. Building the
+  legibility harness exposed a defect the cost measurement structurally could not see: the strip's
+  segments carried `var(--chart-n)` to a canvas, which silently discards it and keeps the previous
+  fill, so the whole stack would have painted as one block with every unit test green. Frontend-only
+  — the CPM engine is not imported and no migration runs.
 - **Two documented obligations gain computed observers** — **shipped** (ADR-0120, 2026-08-30,
   `docs/specs/drift-gates/`). `check:debt-status` blocks a register row with no machine-readable
   status; `check:reconcile-due` warns when 8+ ADRs have shipped since the last reconciliation pass.
