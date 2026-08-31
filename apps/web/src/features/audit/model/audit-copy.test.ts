@@ -34,11 +34,14 @@ describe('auditEventCopy', () => {
     }
   });
 
+  // A screen reader announces nothing at all for `→`, so a before/after pair read as one
+  // undifferentiated phrase. The word carries the same meaning to every reader
+  // (`docs/TECH_DEBT.md` #93e).
   it('names both sides of a role change', () => {
     const { detail } = auditEventCopy(
       event({ changes: { before: { role: 'PLANNER' }, after: { role: 'VIEWER' } } }),
     );
-    expect(detail).toBe('Planner → Viewer');
+    expect(detail).toBe('Planner to Viewer');
   });
 
   it('says nothing rather than half of a role change', () => {
@@ -62,7 +65,7 @@ describe('auditEventCopy', () => {
     const { detail } = auditEventCopy(
       event({ changes: { before: { role: 'FUTURE_ROLE' }, after: { role: 'VIEWER' } } }),
     );
-    expect(detail).toBe('FUTURE_ROLE → Viewer');
+    expect(detail).toBe('FUTURE_ROLE to Viewer');
   });
 });
 

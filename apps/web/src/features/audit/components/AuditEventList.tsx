@@ -21,15 +21,7 @@ interface AuditPage {
  * The actor column is shown only where it varies: on `/me` every row is the same person, and a
  * column repeating the reader's own email 50 times is noise wearing the costume of information.
  */
-export function AuditEventList({
-  query,
-  caption,
-  showActor,
-  emptyMessage,
-  emptyFilteredMessage,
-  onClearFilter,
-  describedById,
-}: {
+export interface AuditEventListProps {
   query: UseInfiniteQueryResult<{ pages: AuditPage[] }>;
   caption: string;
   showActor: boolean;
@@ -53,7 +45,17 @@ export function AuditEventList({
   onClearFilter?: (() => void) | undefined;
   /** Id of prose qualifying what these rows mean — see `DataTable`'s own docblock. */
   describedById?: string | undefined;
-}): React.ReactElement {
+}
+
+export function AuditEventList({
+  query,
+  caption,
+  showActor,
+  emptyMessage,
+  emptyFilteredMessage,
+  onClearFilter,
+  describedById,
+}: AuditEventListProps): React.ReactElement {
   const events = query.data?.pages.flatMap((page) => page.events) ?? [];
 
   const columns: Column<AuditEvent>[] = [
@@ -156,6 +158,14 @@ export function AuditEventList({
               if (!query.hasNextPage || query.isFetchingNextPage) return;
               void query.fetchNextPage();
             }}
+            // **Shaded, because `button.tsx` shades only native `disabled`.** Its CVA carries
+            // `disabled:opacity-50` and no `aria-disabled:` variant, so an `aria-disabled` control
+            // — which this deliberately is, to stay focusable — rendered at FULL strength: a
+            // filled secondary button whose label is the fact "All events shown". Same treatment
+            // `AuditFilterBar`'s Clear filters already uses. Kept as a button rather than swapped
+            // for text, because pressing Load more until exhausted would otherwise unmount the
+            // control holding focus (WCAG 2.4.3).
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
           >
             {loadMoreLabel(query)}
           </Button>

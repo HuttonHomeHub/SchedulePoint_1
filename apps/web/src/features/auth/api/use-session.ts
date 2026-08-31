@@ -10,6 +10,7 @@ import {
 import type { SignInValues, SignUpValues } from '../schemas/auth-schemas';
 
 import { forgetAllForUser } from '@/features/overview/model/recent-plans';
+import { forgetLastActiveOrg } from '@/lib/active-org';
 import { ApiFetchError, apiFetch } from '@/lib/api/client';
 import { authClient } from '@/lib/auth-client';
 
@@ -427,7 +428,13 @@ export function useSignOut() {
     },
     onSettled: () => {
       const userId = queryClient.getQueryData<MeResponse | null>(sessionKeys.session)?.user.id;
-      if (userId !== undefined) forgetAllForUser(window.localStorage, userId);
+      if (userId !== undefined) {
+        forgetAllForUser(window.localStorage, userId);
+        // The active-org hint is the other per-user thing in `localStorage`, and it was neither
+        // keyed by user nor swept — so on a shared machine the next person in was silently
+        // redirected to the previous person's organisation (`docs/TECH_DEBT.md` #171).
+        forgetLastActiveOrg(window.localStorage, userId);
+      }
       queryClient.setQueryData(sessionKeys.session, null);
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' });
     },

@@ -94,7 +94,18 @@ export function DataTable<T>({
   }
 
   const rows = query.data ?? [];
-  if (rows.length === 0) return <>{empty}</>;
+  if (rows.length === 0) {
+    // **The empty state carries `describedById` too.** It used to return before the region below,
+    // so the prose qualifying what these rows mean — the safety caveat on `/me/activity`, say —
+    // reached a reader with rows and not a reader with none, which is the state where an
+    // unexplained absence is most likely to be misread. No `role="region"` here: there is nothing
+    // to scroll and nothing to label, so this associates the description with the copy itself.
+    return (
+      <div {...(describedById === undefined ? {} : { 'aria-describedby': describedById })}>
+        {empty}
+      </div>
+    );
+  }
 
   return (
     // Focusable + labelled so a keyboard-only user can scroll a wide table

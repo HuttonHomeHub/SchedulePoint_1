@@ -156,7 +156,10 @@ const indexRoute = createRoute({
     const organizations = await context.queryClient.ensureQueryData(organizationsQueryOptions);
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
     if (organizations.length === 0) throw redirect({ to: '/onboarding' });
-    const lastActive = getLastActiveOrg();
+    // The hint is per user (`docs/TECH_DEBT.md` #171), so it is read with the id the `_authed`
+    // guard has already resolved — `beforeLoad` runs below that guard, so the session is loaded.
+    const session = await context.queryClient.ensureQueryData(sessionQueryOptions);
+    const lastActive = session ? getLastActiveOrg(session.user.id) : null;
     const target = organizations.find((o) => o.slug === lastActive) ?? organizations[0]!;
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
     throw redirect({ to: '/orgs/$orgSlug', params: { orgSlug: target.slug } });
@@ -178,7 +181,8 @@ async function ensureOrgMembership(queryClient: QueryClient, orgSlug: string): P
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- router redirect
     throw redirect({ to: '/' });
   }
-  setLastActiveOrg(organization.slug);
+  const session = await queryClient.ensureQueryData(sessionQueryOptions);
+  if (session) setLastActiveOrg(session.user.id, organization.slug);
 }
 
 /** Organisation-scoped home. */

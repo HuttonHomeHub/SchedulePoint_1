@@ -1132,16 +1132,25 @@ export function TsldPanel({
   // maps from the token palette. Re-resolved on a theme switch (`themeVersion`) so the recoloured bars
   // and their labels track light/dark, like the base painter (C1/U3). `barInk` is paired 1:1 with
   // `barFill` so an inside-bar label clears 4.5:1 on the recoloured hue (WCAG 1.4.3; U2/A1).
+  //
+  // **Resolved ONCE and shared.** The two maps used to call `resolveLensPalette` separately from
+  // memos with identical dependency arrays, so every theme bump or activity change read ~20 CSS
+  // custom properties twice over to build two halves of one pairing — and the pairing is the point:
+  // `barInk[id]` must be the ink chosen for `barFill[id]`, which is only guaranteed while both come
+  // from the same resolve (`docs/TECH_DEBT.md` #160).
+  const lensPalette = useMemo(
+    () => (CANVAS_LENSES_ENABLED ? resolveLensPalette(canvasSurface) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
+    [themeVersion, canvasSurface],
+  );
   const barFill = useMemo<Map<string, string> | undefined>(() => {
-    if (!CANVAS_LENSES_ENABLED || colourMode === 'criticality') return undefined;
-    return buildColourMap(activities, colourMode, resolveLensPalette(canvasSurface));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
-  }, [colourMode, activities, themeVersion, canvasSurface]);
+    if (lensPalette === null || colourMode === 'criticality') return undefined;
+    return buildColourMap(activities, colourMode, lensPalette);
+  }, [colourMode, activities, lensPalette]);
   const barInk = useMemo<Map<string, string> | undefined>(() => {
-    if (!CANVAS_LENSES_ENABLED || colourMode === 'criticality') return undefined;
-    return buildColourInkMap(activities, colourMode, resolveLensPalette(canvasSurface));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- themeVersion re-resolves the token palette
-  }, [colourMode, activities, themeVersion, canvasSurface]);
+    if (lensPalette === null || colourMode === 'criticality') return undefined;
+    return buildColourInkMap(activities, colourMode, lensPalette);
+  }, [colourMode, activities, lensPalette]);
   // The baseline ghost bars — the captured baseline spans joined to the live lanes. Absent unless the
   // overlay is on AND there are variance rows to draw (and at least one joins a live activity).
   const baselineGhosts = useMemo(() => {

@@ -124,7 +124,7 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       const after = field(changes?.after, 'role');
       // Both sides or neither: "changed to Planner" without saying from what invites the reader
       // to assume it was the role they remember, which is the question they came here to answer.
-      return before !== null && after !== null ? `${roleName(before)} → ${roleName(after)}` : null;
+      return before !== null && after !== null ? `${roleName(before)} to ${roleName(after)}` : null;
     }
     case 'member.joined':
     case 'member.removed': {
@@ -210,7 +210,7 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       const to = field(changes?.after, 'successorName') ?? field(changes?.before, 'successorName');
       if (from === null || to === null) return null;
       const type = field(changes?.after, 'type') ?? field(changes?.before, 'type');
-      return type === null ? `${from} → ${to}` : `${from} → ${to} (${type})`;
+      return type === null ? `${from} to ${to}` : `${from} to ${to} (${type})`;
     }
     case 'plan.settings_changed': {
       // The FIELDS, named. A reader arriving here is asking "what changed about how this plan
@@ -243,7 +243,7 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
       const from = field(changes?.before, 'scope');
       const to = field(changes?.after, 'scope');
       if (from === null || to === null) return null;
-      return `${CALENDAR_SCOPES[from] ?? from} → ${CALENDAR_SCOPES[to] ?? to}`;
+      return `${CALENDAR_SCOPES[from] ?? from} to ${CALENDAR_SCOPES[to] ?? to}`;
     }
     case 'resource.deleted': {
       const swept = count(changes?.before, 'resourceCount');
@@ -311,7 +311,10 @@ function count(side: Record<string, unknown> | undefined, key: string): number |
 }
 
 function plural(n: number, one: string, many: string): string {
-  return `${String(n)} ${n === 1 ? one : many}`;
+  // `toLocaleString`, because a cascade count reaches four figures on a real programme and
+  // "1423 activities" is harder to read at a glance than "1,423". The dates in this feature are
+  // already `Intl`-formatted (`AuditEventList`), so a bare count was the one number that was not.
+  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
 }
 
 /**
@@ -451,7 +454,10 @@ export const AUDIT_CATEGORY_LABELS: Record<AuditCategory, string> = {
   access: 'Access',
   deletions: 'Deletions',
   'plan-structure': 'Plan structure',
-  settings: 'Settings & calendars',
+  // Widened from 'Settings & calendars': ADR-0073 C3.2 added baseline capture and C3.3 the
+  // library-governance actions (archive, unarchive, tier move), so the old label named two of
+  // the four kinds of thing this filter now returns.
+  settings: 'Settings, calendars & library',
   'sign-ins': 'Sign-ins',
 };
 
