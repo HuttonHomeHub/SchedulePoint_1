@@ -1,6 +1,10 @@
 import type { ResourceHistogramSeries } from '@repo/types';
 
-import { CATEGORICAL_CYCLE_LENGTH, categoricalCycleVars } from '@/features/tsld/render/palette';
+import {
+  CATEGORICAL_CYCLE_LENGTH,
+  categoricalCycleVars,
+  type CategoricalCycleMember,
+} from '@/features/tsld/render/palette';
 
 /**
  * **The stacked-histogram derivation — ONE implementation, two renderers.**
@@ -83,6 +87,18 @@ export interface StackSeriesOptions {
   resourceName: (id: string) => string;
   /** The neutral fill and ink for the aggregate, resolved by whichever renderer paints it. */
   neutral: { fill: string; ink: string };
+  /**
+   * The categorical ramp to index, in ramp order. Defaults to the `var()` form, which is what the
+   * DOM chart wants — a `var()` follows the surface scope and re-values with the token.
+   *
+   * **The canvas must pass the resolved form** ({@link categoricalCycleResolved}): `fillStyle`
+   * silently discards a `var()` and keeps the previous fill, so the stack paints as one block.
+   * The ramp is a parameter rather than a second lookup at the call site because the `i % length`
+   * rule lives here; re-indexing outside would be a second copy of it, and the drift would be
+   * invisible — each renderer looks right alone, and only somebody holding the legend against the
+   * diagram would ever see segment 3 painted two different colours.
+   */
+  cycle?: readonly CategoricalCycleMember[];
 }
 
 /** How the segments are formed: one band per resource, or one band per parent group. */
@@ -151,9 +167,9 @@ export function groupSeries(
 export function stackSeries(
   series: readonly ResourceHistogramSeries[],
   bucketCount: number,
-  { cap = DEFAULT_STACK_CAP, resourceName, neutral }: StackSeriesOptions,
+  { cap = DEFAULT_STACK_CAP, resourceName, neutral, cycle: ramp }: StackSeriesOptions,
 ): StackedSeries {
-  const cycle = categoricalCycleVars();
+  const cycle = ramp ?? categoricalCycleVars();
   // A cap above the palette's length would give two visible bands the same colour, which is the one
   // failure rank-assignment structurally cannot have. Clamp rather than trust the caller.
   const effectiveCap = Math.max(1, Math.min(cap, CATEGORICAL_CYCLE_LENGTH));

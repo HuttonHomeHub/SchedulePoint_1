@@ -73,6 +73,33 @@ export function categoricalCycleVars(): readonly CategoricalCycleMember[] {
 }
 
 /**
+ * The same ramp, in the same order, **resolved to paintable colours**.
+ *
+ * Canvas 2D's `fillStyle` cannot take a `var()`: the assignment is silently discarded and the
+ * PREVIOUS fill persists, so a stack whose segments carry `var(--chart-n)` paints as one solid
+ * block with nothing thrown and nothing logged. Verified in Chromium rather than reasoned about
+ * (`fillStyle = 'var(--chart-1)'` after `'#ff0000'` reads back `'#ff0000'`, and the pixel is red).
+ *
+ * That is the ADR-0100 M4 minimap-frame defect in this same token family, and it very nearly
+ * shipped here for the same reason: jsdom has no canvas, so a unit test asserting the segment's
+ * `fill` string passes on exactly the value a browser refuses.
+ *
+ * `resolveLensPalette`'s `wbsCycle` has resolved this ramp correctly since ADR-0049. This is that
+ * pattern applied to its neighbour — which is the failure shape this register has now recorded six
+ * times — so the two share `WBS_CYCLE_TOKENS` and cannot disagree about which member is which.
+ * The jsdom fallbacks travel with it, so a unit test paints the same hex a browser resolves.
+ */
+export function categoricalCycleResolved(root: Element): readonly CategoricalCycleMember[] {
+  const styles = getComputedStyle(root);
+  const token = (name: string, fallback: string): string =>
+    styles.getPropertyValue(name).trim() || fallback;
+  return WBS_CYCLE_TOKENS.map(([fill, fallback, ink]) => ({
+    fill: token(fill, fallback),
+    ink: token(ink, ink === WHITE_INK ? '#ffffff' : '#1a1a1a'),
+  }));
+}
+
+/**
  * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006), so the canvas
  * takes its colour from the design system rather than hardcoding it — the tokens stay the single
  * source of truth and the canvas is just another consumer. Reads the computed `--color-*` custom

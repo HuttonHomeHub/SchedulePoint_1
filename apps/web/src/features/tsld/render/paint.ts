@@ -2125,6 +2125,22 @@ export function paintResourceStrip(
 
   if (!snapshot || snapshot.max <= 0 || snapshot.segments.length === 0) return;
 
+  // **Fail loud in development on an unresolved fill.** `fillStyle` discards a `var()` and keeps
+  // the previous colour, so the whole stack paints as one block with nothing thrown, nothing
+  // logged, and a jsdom test asserting the `fill` string passing on the exact value a browser
+  // refuses. That defect reached this painter once; this is what turns the next one into a
+  // failing test rather than a screenshot somebody has to notice.
+  if (import.meta.env.DEV) {
+    const unresolved = snapshot.segments.find((seg) => seg.fill.startsWith('var('));
+    if (unresolved) {
+      throw new Error(
+        `paintResourceStrip: segment fill "${unresolved.fill}" is a CSS variable. Canvas 2D ` +
+          'cannot paint one — resolve the ramp with categoricalCycleResolved() before publishing ' +
+          'the snapshot.',
+      );
+    }
+  }
+
   // **x, w and the cull come from ONE projector, called once on the bucket totals.** Every segment
   // in a bucket shares them by definition, so delegating rather than projecting per segment makes
   // co-alignment definitional — a sibling projector would be a second copy of the same affine, and

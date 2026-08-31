@@ -18,7 +18,10 @@ import {
   stackSeries,
 } from '@/features/resources/model/stack-series';
 import { RESOURCE_STRIP_HEIGHT } from '@/features/tsld/components/TsldCanvas';
-import { resolveResourceStripPalette } from '@/features/tsld/render/palette';
+import {
+  categoricalCycleResolved,
+  resolveResourceStripPalette,
+} from '@/features/tsld/render/palette';
 import {
   projectBucketDays,
   seriesMax,
@@ -135,13 +138,22 @@ export function ResourceStripPanel({
    */
   const stacked = useMemo(() => {
     const neutral = { fill: stripPalette.tick, ink: stripPalette.ground };
+    // The RESOLVED ramp, because these segments are handed to a canvas: `fillStyle` discards a
+    // `var()` silently and keeps the previous fill, so the whole stack would paint one colour.
+    const cycle = categoricalCycleResolved(document.documentElement);
     if (stackBy !== 'group') {
-      return stackSeries(series, buckets.length, { resourceName, neutral, cap: STRIP_STACK_CAP });
+      return stackSeries(series, buckets.length, {
+        resourceName,
+        neutral,
+        cycle,
+        cap: STRIP_STACK_CAP,
+      });
     }
     const partitioned = groupSeries(series, buckets.length, parentOf, resourceName);
     return stackSeries(partitioned.series, buckets.length, {
       resourceName: partitioned.nameOf,
       neutral,
+      cycle,
       cap: STRIP_STACK_CAP,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `resourceName` closes over a per-render map
