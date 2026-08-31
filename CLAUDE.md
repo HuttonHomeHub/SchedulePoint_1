@@ -3816,14 +3816,32 @@ A lighter-weight running log of smaller decisions is in
   Do not reason about this product as if it were unused (corrected 2026-07-30).
 - Cross-browser e2e coverage is Chromium-first: the Playwright config defines
   firefox/webkit projects but the journeys are exercised mainly on Chromium.
-- The canvas draw-performance budget (ADR-0026 §16) has never been measured on
-  the hardware envelope it names — a mid-tier laptop and iPad-class Safari. CI
-  runners cannot stand in for that. What **has** been measured, in Chromium, is
-  that the painter runs 4–6× over the stated ≤ 4 ms p95 (ADR-0065), so the
-  budget itself is under review rather than merely unverified —
-  `docs/TECH_DEBT.md` **#75**, which also records that §16 was misquoted for
-  months. (#59 was folded into #75 on 2026-08-03; this bullet still cited it
-  until the 2026-08-04 pass.)
+- **The canvas draw budget: this bullet was wrong on every count until 2026-08-31,
+  and it is worth reading why.** It said the painter "runs 4–6× over the stated
+  ≤ 4 ms p95 (ADR-0026 §16)". `docs/TECH_DEBT.md` **#75** had corrected all of
+  that on **2026-08-03** — four weeks earlier — and nothing propagated the
+  correction here, so the operating manual kept teaching the superseded version
+  to every reader and every agent briefed from it. It was caught only when a
+  performance reviewer, handed this framing as established fact, went and read
+  the row.
+  What #75 actually establishes: **there is no §16 in ADR-0026** (its sections
+  run to §9a, and every "§16" citation in this repository points at a section
+  that does not exist); **4 ms was never a budget** but the measured p95 of a
+  throwaway prototype, recorded as a PASS against a ≤ 16 ms frame; and the real
+  gate in §9 is **frames per second** — ≥ 45 fps @ 500, ≥ 30 fps @ 2,000 under
+  sustained pan.
+  Measured on real hardware (2026-08-03, 2,016 activities): at **Week** zoom
+  3.9 ms p95 with **0 of 600 frames dropped** — genuinely smooth, and that is the
+  zoom a planner works at. At **Fit** (whole-plan) zoom 8.9 ms p95, comfortably
+  inside a 16.7 ms frame, and yet **10.2 % of frames dropped** with the interval
+  p95 at 33.4 ms — whole missed vsyncs. So the fps gate is met and **a planner
+  panning that plan still sees judder**, which is a stronger finding than the row
+  set out to make: a budget expressed as paint duration is the wrong **quantity**,
+  not merely the wrong number. Roughly 8 ms per frame is unattributed and #75 says
+  plainly it must not be guessed. The headless figures (16.7–23.1 ms) are
+  software-rasterised and explicitly not the target envelope.
+  Do not restate either the alarming or the reassuring half of this alone — both
+  are half-truths, which is how the wrong one survived here for four weeks.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 
