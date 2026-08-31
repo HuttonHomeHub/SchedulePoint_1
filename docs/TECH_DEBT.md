@@ -1092,79 +1092,81 @@ dangling.
 
 One line each. The story lives where the link points, not here.
 
-| #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                        |
-| --- | -------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 217 | Two defects in the printed documents, found by photographing them                      | 2026-08-30 | Both, plus two more the fix's own photographs found. The harness had one print shot; the two documents a planner hands over had never been photographed.                                   |
-| 153 | Three icon sizes in one family of canvas panels                                        | 2026-08-29 | ADR-0118 M3, and not the way this row or its epic's plan said: `icon-lg` was deleted and all three panels unify on `icon`.                                                                 |
-| 145 | A hand-rolled `Combobox` took the platform picker away on touch                        | 2026-08-29 | ADR-0118 M3, closed by measurement rather than argument — including the open list's 32 px options, which nobody had asked about.                                                           |
-| 210 | The panel-Surface-plus-border pairing was a literal in four places                     | 2026-08-28 | Fix-slice M-D — **seven** pairings, not four; the new structural gate's first run found three the row and the spec both missed.                                                            |
-| 205 | The fixture plan was unschedulable as seeded, and the horizon guard was an untyped 500 | 2026-08-28 | Both halves — `7aaf155c` and fix-slice M-E's fixture revision.                                                                                                                             |
-| 203 | Two menu-positioning clamps, one measured and one guessing                             | 2026-08-28 | Fix-slice M-C. Both moved verbatim to `components/ui/overlay-position.ts`, with a structural gate against the next copy.                                                                   |
-| 182 | Three base-journey sign-up specs sat close to a 5 s timeout                            | 2026-08-28 | Correctness programme Phase 2 — the row's own first candidate: an explicit `{ timeout: 15_000 }` with the reason at each site.                                                             |
-| 175 | The exported diagram had never carried the date marks                                  | 2026-08-28 | Fix-slice M-F. `EXPORT_MARKER_ROW`, drawn from the same `axisMarkers` model the screen's ruler uses.                                                                                       |
-| 173 | The canvas painter drew every glyph in a typeface the product does not use             | 2026-08-28 | Correctness programme Phase 3 — and the row had itself gone stale: the face is IBM Plex Sans, not Space Grotesk.                                                                           |
-| 172 | No authenticated journey had ever run below `lg`                                       | 2026-08-28 | `apps/web/e2e-narrow-shell/`, its own CI step. Its first run found the sheet had no ground at all.                                                                                         |
-| 170 | Three axe scans ran every rule, because `.options()` replaces `.withTags()`            | 2026-08-28 | Correctness programme Phase 4 — and the siblings were **two**, not three: the third died with the width ladder.                                                                            |
-| 167 | The exported diagram was the default picture, not the planner's                        | 2026-08-28 | Correctness programme Phase 3. `TsldCanvasHandle.getSceneLenses()` reads all five lens keys off the live scene ref.                                                                        |
-| 166 | A whole-plan export of a long programme lost weekends entirely                         | 2026-08-28 | Correctness programme Phase 3. `paintScene` gains a `minNonWorkingPx` seam; the export passes `0`, so a weekend is one crisp band.                                                         |
-| 162 | The legend's slack chip did not match what the canvas paints                           | 2026-08-28 | Correctness programme Phase 1. The swatch names `--primary` + `--border`, confirmed at `palette.ts` rather than recalled.                                                                  |
-| 152 | `zoomToSelection` framed the time axis and discarded the lane axis                     | 2026-08-28 | Correctness programme Phase 1. `revealOffset` in `render/viewport.ts` — one implementation, shared with `zoomToActivity`.                                                                  |
-| 150 | The drawer overloaded "Close", and the editor's Close left an empty panel open         | 2026-08-28 | Correctness programme Phase 1 — overtaken by ADR-0101, verified rather than assumed.                                                                                                       |
-| 143 | The Project Explorer could not open a client or a project                              | 2026-08-28 | Correctness programme Phase 1. `activate` now navigates for every kind; the container toggle keeps its own surface.                                                                        |
-| 133 | A coarse pointer cost the merged strip two commands, one of them Next conflict         | 2026-08-28 | Overtaken — ADR-0109 D1 deleted the width ladder and the `⋯`, so nothing can leave the row. Re-measured at 1646.                                                                           |
-| 131 | An icon-only toolbar control named itself only on hover                                | 2026-08-28 | ADR-0117 (fix-slice M-B). `useTooltip` in `components/ui/tooltip.tsx`, WCAG 1.4.13 in full.                                                                                                |
-| 130 | The zoom trigger's icon said "date range" while owning the viewport                    | 2026-08-28 | Overtaken — ADR-0109/0110 deleted the control this row describes.                                                                                                                          |
-| 176 | Better Auth 1.7 needed a schema migration, and a minor bump is how we found out        | 2026-08-23 | ADR-0107. Both workspaces run `^1.7.1`; `accounts.issuer` migrated in two releases.                                                                                                        |
-| 122 | Two Class A flags were deferred, and the payoff was not where the register said        | 2026-08-17 | `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE` in the flag-cleanup pass. `classACap` is now **0**.                                                             |
-| 112 | Copy/paste follow-ups from the W5 enablement gate                                      | 2026-08-08 | `ActivitiesTable.row-gate-identity.test.tsx` and `use-clipboard-keybindings.test.ts` pin both, each saying so in its own docblock.                                                         |
-| 106 | `render-model.ts` could not be barrel + core model without a cycle                     | 2026-08-30 | ADR-0078 S8. `render/geometry.ts` exists; the barrel is 128 lines.                                                                                                                         |
-| 109 | `bulkDelete` cascaded one activity at a time under the plan lock                       | 2026-08-30 | `cascadeSoftDeleteActivityLeaves`, shipped in `3cf27de4` (an ADR-0082/0083/0084/0085 commit).                                                                                              |
-| 104 | The manual Recalculate confirmation stood down against a settle that never came        | 2026-08-30 | The row's own scenario was already guarded in the commit it was raised from; the real defect was the inverse. `settleIsComing`, two tests.                                                 |
-| 114 | Two menus hid rather than shaded, for want of a reason to show                         | 2026-08-30 | Verified in code: `menu.tsx:316-325` shades with `aria-disabled` and keeps roving focus; `plan-actions-menu.tsx:70` passes `disabledReason`; `tree-actions.ts` states the no-trigger rule. |
-| 127 | Toolbar touch targets were 40 × 36 against a 44 × 44 house rule                        | 2026-08-29 | ADR-0118 — the rule became per-pointer, and the coarse gate enforces it.                                                                                                                   |
-| 134 | A `render` item outranked every command on its row                                     | 2026-08-30 | ADR-0109 D1 deleted the ladder; the diagnosis was right and the remedy expired with it.                                                                                                    |
-| 144 | `e2e-multi-select`'s focus assertion failed under sweep load                           | 2026-08-30 | `focusListboxAfterModal` self-verifies; `e2e-overview`'s `createPlan` waits for the pen. Filed under #184.                                                                                 |
-| 146 | The `chrome` surface scope had no measured current-page state                          | 2026-08-30 | ADR-0109 D2 restored the header, so `e2e-designed-ui` D3 measures two scopes again.                                                                                                        |
-| 147 | The merged command strip stopped fitting below ~900 px                                 | 2026-08-30 | ADR-0109 D1 — the surface wraps; the ladder, the `⋯` and the floor are gone.                                                                                                               |
-| 148 | Canvas date pills were painted on top of the first two lanes                           | 2026-08-22 | ADR-0106.                                                                                                                                                                                  |
-| 157 | Every colour gate was a floor and none a ceiling                                       | 2026-08-21 | ADR-0102 — ANSWERED, deliberately no gate: the window is two points wide and tuned to two samples.                                                                                         |
-| 158 | The printed and exported diagram was painted on a near-black ground                    | 2026-08-21 | ADR-0102.                                                                                                                                                                                  |
-| 159 | `--color-*` aliases were frozen at `:root`                                             | 2026-08-21 | ADR-0102 — the canvas painter had never once used the canvas surface scope.                                                                                                                |
-| 163 | The print palette was a surface family truncated to three members                      | 2026-08-22 | ADR-0103 — `[data-surface="print"]` is all 31 members.                                                                                                                                     |
-| 164 | The exported diagram silently dropped seven default-on view layers                     | 2026-08-22 | ADR-0103. One half remains open as **#166**.                                                                                                                                               |
-| 168 | Below `lg`, Escape closed and announced a drawer the reader could not see              | 2026-08-22 | ADR-0104.                                                                                                                                                                                  |
-| 201 | Two independent mode toggles read as one four-way group                                | 2026-08-30 | ADR-0119; released in `web-v0.115.3`.                                                                                                                                                      |
-| 213 | Two controls painted and not clickable at 390, and a 20 px breadcrumb                  | 2026-08-29 | ADR-0118 M3 — the first was off-screen; the second is a named exception.                                                                                                                   |
-| 115 | The pen sentence named a button the reader could not see                               | 2026-08-09 | ADR-0083 M7 — one refusal sentence chosen from the live role and pen state.                                                                                                                |
-| 124 | The selection bar's `<Toolbar>` had no fit coverage                                    | 2026-08-27 | ADR-0114 M1 — and the row's own reasoning was wrong: the bar could overflow, by 408 px.                                                                                                    |
-| 219 | The register's rows went stale and nothing measured how much                           | 2026-08-30 | ADR-0120 — `check:debt-status`; every row now carries a machine-readable status.                                                                                                           |
-| 220 | The reconciliation trigger's input was unsorted prose, and a reader misread it         | 2026-08-30 | ADR-0120 — `check:reconcile-due`, advisory at T = 8 ADRs; the pass table is sorted.                                                                                                        |
-| 98  | The guest share view scrolled sideways at 320 px (WCAG 1.4.10)                         | 2026-08-08 | ADR-0051 F-M4 era; closed by the guest-share responsive fix.                                                                                                                               |
-| 29  | Released images not pulled — "shipped but not live"                                    | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                                                                                                          |
-| 59  | The device-authoritative draw measurement was never made                               | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                                                                                                                   |
-| 77  | The demo Unit 300 file was a lossy rendering of the fixture                            | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                                                                                                                         |
-| 78  | Public activity/dependency API was day-denominated                                     | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                                                                                                               |
-| 79  | A window-only calendar was rejected by the API                                         | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                                                                                                                 |
-| 80  | Intraday shift patterns had no write path                                              | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                                                                                                                     |
-| 82  | Shift-editor epic — the non-blocking half of five gates                                | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                                                                                                                   |
-| 87  | Import rejected a file with two activities of the same name                            | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                                                                                                                   |
-| 90  | `idx_audit_events_actor_occurred` was never measured                                   | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                                                                                                             |
-| 91  | A failed sign-in was recorded and readable by nobody                                   | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                                                                                                             |
-| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                                   | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites.                                                                                           |
-| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo                        | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                                                                                                             |
-| 94  | A verification email that never sends is invisible to everyone                         | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                                                                                                               |
-| 111 | The row menu hid pen-gated actions instead of shading them                             | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                                                                                                              |
-| 103 | ADR-0064's recalculation hold was not wired on the shipped host                        | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                                                                                                           |
-| 107 | ADR-0080 shipped without the specialist-agent review pass                              | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                                                                                                               |
-| 113 | Redo unavailable after undoing a band copy                                             | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                                                                                                                  |
-| 119 | The API e2e suite "fails intermittently"                                               | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                                                                                                                 |
-| 125 | `View ▾` held one toggle that ejects you from it                                       | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                                                                                                           |
-| 83¹ | A typed duration overwritten by the calendar factor landing                            | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                                                                                                                |
-| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns                        | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                                                                                                               |
-| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                                              | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                                                                                                               |
-| 137 | The shortcuts sheet was inert while the Gantt was on screen                            | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                                                                                                                   |
-| 126 | The two segmented pairs had no icons, so they could not go icon-only                   | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.                                                                                                        |
-| 129 | The 56 px app header row was the last recoverable band above the canvas                | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.                                                                                                |
+| #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                              |
+| --- | -------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 183 | `check:claims` could not see a camelCase basename in its colon form                    | 2026-08-31 | The class carries `A-Z`. It hid 15 citations resolving to **seven** unregistered claims into `useBlocker.js`/`Transitioner.js` — the behaviour ADR-0108 rests on. All seven read and registered. |
+| 178 | `check:claims` resolved a package by the first store entry it found                    | 2026-08-31 | Resolved through the LINK, with `resolveVia` naming the dependent for a transitive package. It was live on `axe-core`: the register was pinned to 4.12.1 while the journeys run 4.13.0.          |
+| 217 | Two defects in the printed documents, found by photographing them                      | 2026-08-30 | Both, plus two more the fix's own photographs found. The harness had one print shot; the two documents a planner hands over had never been photographed.                                         |
+| 153 | Three icon sizes in one family of canvas panels                                        | 2026-08-29 | ADR-0118 M3, and not the way this row or its epic's plan said: `icon-lg` was deleted and all three panels unify on `icon`.                                                                       |
+| 145 | A hand-rolled `Combobox` took the platform picker away on touch                        | 2026-08-29 | ADR-0118 M3, closed by measurement rather than argument — including the open list's 32 px options, which nobody had asked about.                                                                 |
+| 210 | The panel-Surface-plus-border pairing was a literal in four places                     | 2026-08-28 | Fix-slice M-D — **seven** pairings, not four; the new structural gate's first run found three the row and the spec both missed.                                                                  |
+| 205 | The fixture plan was unschedulable as seeded, and the horizon guard was an untyped 500 | 2026-08-28 | Both halves — `7aaf155c` and fix-slice M-E's fixture revision.                                                                                                                                   |
+| 203 | Two menu-positioning clamps, one measured and one guessing                             | 2026-08-28 | Fix-slice M-C. Both moved verbatim to `components/ui/overlay-position.ts`, with a structural gate against the next copy.                                                                         |
+| 182 | Three base-journey sign-up specs sat close to a 5 s timeout                            | 2026-08-28 | Correctness programme Phase 2 — the row's own first candidate: an explicit `{ timeout: 15_000 }` with the reason at each site.                                                                   |
+| 175 | The exported diagram had never carried the date marks                                  | 2026-08-28 | Fix-slice M-F. `EXPORT_MARKER_ROW`, drawn from the same `axisMarkers` model the screen's ruler uses.                                                                                             |
+| 173 | The canvas painter drew every glyph in a typeface the product does not use             | 2026-08-28 | Correctness programme Phase 3 — and the row had itself gone stale: the face is IBM Plex Sans, not Space Grotesk.                                                                                 |
+| 172 | No authenticated journey had ever run below `lg`                                       | 2026-08-28 | `apps/web/e2e-narrow-shell/`, its own CI step. Its first run found the sheet had no ground at all.                                                                                               |
+| 170 | Three axe scans ran every rule, because `.options()` replaces `.withTags()`            | 2026-08-28 | Correctness programme Phase 4 — and the siblings were **two**, not three: the third died with the width ladder.                                                                                  |
+| 167 | The exported diagram was the default picture, not the planner's                        | 2026-08-28 | Correctness programme Phase 3. `TsldCanvasHandle.getSceneLenses()` reads all five lens keys off the live scene ref.                                                                              |
+| 166 | A whole-plan export of a long programme lost weekends entirely                         | 2026-08-28 | Correctness programme Phase 3. `paintScene` gains a `minNonWorkingPx` seam; the export passes `0`, so a weekend is one crisp band.                                                               |
+| 162 | The legend's slack chip did not match what the canvas paints                           | 2026-08-28 | Correctness programme Phase 1. The swatch names `--primary` + `--border`, confirmed at `palette.ts` rather than recalled.                                                                        |
+| 152 | `zoomToSelection` framed the time axis and discarded the lane axis                     | 2026-08-28 | Correctness programme Phase 1. `revealOffset` in `render/viewport.ts` — one implementation, shared with `zoomToActivity`.                                                                        |
+| 150 | The drawer overloaded "Close", and the editor's Close left an empty panel open         | 2026-08-28 | Correctness programme Phase 1 — overtaken by ADR-0101, verified rather than assumed.                                                                                                             |
+| 143 | The Project Explorer could not open a client or a project                              | 2026-08-28 | Correctness programme Phase 1. `activate` now navigates for every kind; the container toggle keeps its own surface.                                                                              |
+| 133 | A coarse pointer cost the merged strip two commands, one of them Next conflict         | 2026-08-28 | Overtaken — ADR-0109 D1 deleted the width ladder and the `⋯`, so nothing can leave the row. Re-measured at 1646.                                                                                 |
+| 131 | An icon-only toolbar control named itself only on hover                                | 2026-08-28 | ADR-0117 (fix-slice M-B). `useTooltip` in `components/ui/tooltip.tsx`, WCAG 1.4.13 in full.                                                                                                      |
+| 130 | The zoom trigger's icon said "date range" while owning the viewport                    | 2026-08-28 | Overtaken — ADR-0109/0110 deleted the control this row describes.                                                                                                                                |
+| 176 | Better Auth 1.7 needed a schema migration, and a minor bump is how we found out        | 2026-08-23 | ADR-0107. Both workspaces run `^1.7.1`; `accounts.issuer` migrated in two releases.                                                                                                              |
+| 122 | Two Class A flags were deferred, and the payoff was not where the register said        | 2026-08-17 | `VITE_ACTIVITY_EDITOR_TABS` retired with ADR-0089; `VITE_CANVAS_WORKSPACE` in the flag-cleanup pass. `classACap` is now **0**.                                                                   |
+| 112 | Copy/paste follow-ups from the W5 enablement gate                                      | 2026-08-08 | `ActivitiesTable.row-gate-identity.test.tsx` and `use-clipboard-keybindings.test.ts` pin both, each saying so in its own docblock.                                                               |
+| 106 | `render-model.ts` could not be barrel + core model without a cycle                     | 2026-08-30 | ADR-0078 S8. `render/geometry.ts` exists; the barrel is 128 lines.                                                                                                                               |
+| 109 | `bulkDelete` cascaded one activity at a time under the plan lock                       | 2026-08-30 | `cascadeSoftDeleteActivityLeaves`, shipped in `3cf27de4` (an ADR-0082/0083/0084/0085 commit).                                                                                                    |
+| 104 | The manual Recalculate confirmation stood down against a settle that never came        | 2026-08-30 | The row's own scenario was already guarded in the commit it was raised from; the real defect was the inverse. `settleIsComing`, two tests.                                                       |
+| 114 | Two menus hid rather than shaded, for want of a reason to show                         | 2026-08-30 | Verified in code: `menu.tsx:316-325` shades with `aria-disabled` and keeps roving focus; `plan-actions-menu.tsx:70` passes `disabledReason`; `tree-actions.ts` states the no-trigger rule.       |
+| 127 | Toolbar touch targets were 40 × 36 against a 44 × 44 house rule                        | 2026-08-29 | ADR-0118 — the rule became per-pointer, and the coarse gate enforces it.                                                                                                                         |
+| 134 | A `render` item outranked every command on its row                                     | 2026-08-30 | ADR-0109 D1 deleted the ladder; the diagnosis was right and the remedy expired with it.                                                                                                          |
+| 144 | `e2e-multi-select`'s focus assertion failed under sweep load                           | 2026-08-30 | `focusListboxAfterModal` self-verifies; `e2e-overview`'s `createPlan` waits for the pen. Filed under #184.                                                                                       |
+| 146 | The `chrome` surface scope had no measured current-page state                          | 2026-08-30 | ADR-0109 D2 restored the header, so `e2e-designed-ui` D3 measures two scopes again.                                                                                                              |
+| 147 | The merged command strip stopped fitting below ~900 px                                 | 2026-08-30 | ADR-0109 D1 — the surface wraps; the ladder, the `⋯` and the floor are gone.                                                                                                                     |
+| 148 | Canvas date pills were painted on top of the first two lanes                           | 2026-08-22 | ADR-0106.                                                                                                                                                                                        |
+| 157 | Every colour gate was a floor and none a ceiling                                       | 2026-08-21 | ADR-0102 — ANSWERED, deliberately no gate: the window is two points wide and tuned to two samples.                                                                                               |
+| 158 | The printed and exported diagram was painted on a near-black ground                    | 2026-08-21 | ADR-0102.                                                                                                                                                                                        |
+| 159 | `--color-*` aliases were frozen at `:root`                                             | 2026-08-21 | ADR-0102 — the canvas painter had never once used the canvas surface scope.                                                                                                                      |
+| 163 | The print palette was a surface family truncated to three members                      | 2026-08-22 | ADR-0103 — `[data-surface="print"]` is all 31 members.                                                                                                                                           |
+| 164 | The exported diagram silently dropped seven default-on view layers                     | 2026-08-22 | ADR-0103. One half remains open as **#166**.                                                                                                                                                     |
+| 168 | Below `lg`, Escape closed and announced a drawer the reader could not see              | 2026-08-22 | ADR-0104.                                                                                                                                                                                        |
+| 201 | Two independent mode toggles read as one four-way group                                | 2026-08-30 | ADR-0119; released in `web-v0.115.3`.                                                                                                                                                            |
+| 213 | Two controls painted and not clickable at 390, and a 20 px breadcrumb                  | 2026-08-29 | ADR-0118 M3 — the first was off-screen; the second is a named exception.                                                                                                                         |
+| 115 | The pen sentence named a button the reader could not see                               | 2026-08-09 | ADR-0083 M7 — one refusal sentence chosen from the live role and pen state.                                                                                                                      |
+| 124 | The selection bar's `<Toolbar>` had no fit coverage                                    | 2026-08-27 | ADR-0114 M1 — and the row's own reasoning was wrong: the bar could overflow, by 408 px.                                                                                                          |
+| 219 | The register's rows went stale and nothing measured how much                           | 2026-08-30 | ADR-0120 — `check:debt-status`; every row now carries a machine-readable status.                                                                                                                 |
+| 220 | The reconciliation trigger's input was unsorted prose, and a reader misread it         | 2026-08-30 | ADR-0120 — `check:reconcile-due`, advisory at T = 8 ADRs; the pass table is sorted.                                                                                                              |
+| 98  | The guest share view scrolled sideways at 320 px (WCAG 1.4.10)                         | 2026-08-08 | ADR-0051 F-M4 era; closed by the guest-share responsive fix.                                                                                                                                     |
+| 29  | Released images not pulled — "shipped but not live"                                    | 2026-07-30 | ADR-0047; `docs/DEPLOYMENT.md`. Superseded by #5.                                                                                                                                                |
+| 59  | The device-authoritative draw measurement was never made                               | 2026-08-03 | Folded into **#75**, which waits on the same single run.                                                                                                                                         |
+| 77  | The demo Unit 300 file was a lossy rendering of the fixture                            | 2026-08-01 | ADR-0066; `docs/TEST_PLAYBOOK.md`.                                                                                                                                                               |
+| 78  | Public activity/dependency API was day-denominated                                     | 2026-08-02 | ADR-0070. `durationMinutes` / `lagMinutes` are on both DTOs.                                                                                                                                     |
+| 79  | A window-only calendar was rejected by the API                                         | 2026-08-01 | ADR-0067. Pinned by `calendars.e2e-spec.ts` "window-only".                                                                                                                                       |
+| 80  | Intraday shift patterns had no write path                                              | 2026-08-01 | ADR-0067. `shifts` on the calendar create/update DTOs.                                                                                                                                           |
+| 82  | Shift-editor epic — the non-blocking half of five gates                                | 2026-08-01 | ADR-0067 M4; all seven sub-items landed.                                                                                                                                                         |
+| 87  | Import rejected a file with two activities of the same name                            | 2026-08-03 | Fixed in `validate.ts` (`repairDuplicateCodesAndNames`).                                                                                                                                         |
+| 90  | `idx_audit_events_actor_occurred` was never measured                                   | 2026-08-03 | Measured at 1M rows; ADR-0072 "Storage measured (2026-08-03)".                                                                                                                                   |
+| 91  | A failed sign-in was recorded and readable by nobody                                   | 2026-08-04 | ADR-0073 C2. Attributed at write time; `/me?include=attempts`.                                                                                                                                   |
+| 30  | Canvas-first workspace fast-follows (ADR-0030 M1–M5)                                   | 2026-08-08 | Verified done: `components/ui/segmented-control.tsx` + four `usePlanWorkspaceModel` hook suites.                                                                                                 |
+| 85  | Two `react-hooks/refs` suppressions in the toolbar-context memo                        | 2026-08-07 | ADR-0078 S11 split the commands out; zero suppressions remain.                                                                                                                                   |
+| 94  | A verification email that never sends is invisible to everyone                         | 2026-08-08 | Every remediation paid; ADR-0075 records the decision. Live gap is **#100**.                                                                                                                     |
+| 111 | The row menu hid pen-gated actions instead of shading them                             | 2026-08-08 | ADR-0082, merged `d8d8c34`. `itemsOf` keeps disabled items; `disabledReason`.                                                                                                                    |
+| 103 | ADR-0064's recalculation hold was not wired on the shipped host                        | 2026-08-08 | Debt-paydown M1-T1; pinned in `plan-workspace-toolbar.test.tsx`.                                                                                                                                 |
+| 107 | ADR-0080 shipped without the specialist-agent review pass                              | 2026-08-08 | ADR-0080 §9 — the pass ran and folded five blocking defects.                                                                                                                                     |
+| 113 | Redo unavailable after undoing a band copy                                             | 2026-08-08 | `DELETE …/activities/:id` answers `200 { deleteBatchId }`; `docs/API.md`.                                                                                                                        |
+| 119 | The API e2e suite "fails intermittently"                                               | 2026-08-10 | Order-dependent, not flaky. The live residue is **#119a**.                                                                                                                                       |
+| 125 | `View ▾` held one toggle that ejects you from it                                       | 2026-08-12 | ADR-0090 M5 — a standing note, `aria-describedby`-linked, with a neighbour test.                                                                                                                 |
+| 83¹ | A typed duration overwritten by the calendar factor landing                            | 2026-08-02 | ADR-0070 M6. `useDurationSeed` reads the field, not a flag.                                                                                                                                      |
+| 135 | The Gantt drew a VISUAL plan's bars from the early-date columns                        | 2026-08-17 | ADR-0095. `barGeometry` takes a `source`; `date-source-consistency.test.ts`.                                                                                                                     |
+| 136 | The Gantt's M5 remainder — T1, T4, T5, T6                                              | 2026-08-18 | ADR-0095 M5, released `web-v0.92.0`. `e2e-gantt-editing/view-state.spec.ts`.                                                                                                                     |
+| 137 | The shortcuts sheet was inert while the Gantt was on screen                            | 2026-08-18 | ADR-0095. `PlanShortcutsHelp` mounts at the workspace, above both views.                                                                                                                         |
+| 126 | The two segmented pairs had no icons, so they could not go icon-only                   | 2026-08-20 | ADR-0099 M5 chose all four and moved them to the rail, where they render icon-only.                                                                                                              |
+| 129 | The 56 px app header row was the last recoverable band above the canvas                | 2026-08-20 | ADR-0099 M3 deleted it at `lg`+ (`chrome-band.tsx` — `lg:hidden`). `aboveCanvas` 249 → 135.                                                                                                      |
 
 ¹ **The collision.** This 83 is _not_ the 83 in the table above, which is open (ADR-0068 §6's missing
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
@@ -2525,6 +2527,15 @@ version-pinned and never re-verified — while sitting inside a citation that lo
 carries a real claim: ADR-0075's synthetic-200 anti-enumeration control, which is the reason that
 ADR rejects an abort-on-send-failure design.
 
+**The remedy is now NET-NEGATIVE, established 2026-08-31 by measuring before acting on it.** A
+repo-wide scan finds exactly two compound citations left: `shoot.mjs:555-562,593-608`, which the gate
+already excludes as this repository's own file, and `sign-up.mjs:163,169-207` — **which is this row's
+own text, quoting the defect**. So extending the regex would buy nothing and would demand a register
+entry for a range that exists only as an example, in the row whose job is to describe the notation.
+That is the failure `CITATION_SCAN_EXCLUDES` exists to prevent for `check-claims.mjs`, and taking it
+on would mean excluding the register from its own gate. **Recommend closing as won't-fix unless a
+third compound citation appears in real prose.**
+
 **Worked around rather than fixed, deliberately.** All seven occurrences were split into two
 register-visible citations, so the hidden half is now watched and the immediate hole is closed
 without touching the gate. Extending the regex would be a **shared-gate** change and fires
@@ -2534,75 +2545,6 @@ ADR-0105's trigger, which is not something to smuggle into a dependency bump.
 claim and the eighth in `shoot.mjs`, which the gate excludes anyway as this repository's own file.
 So the convention "one citation, one range" now holds everywhere, and the regex change buys
 enforcement rather than coverage. That is worth doing and worth doing on its own.
-
-## 178. `check:claims` resolves a package by the first store entry it finds
-
-**Status:** unverified
-
-**Raised 2026-08-22** while bumping `react-hook-form`, and it produced a **wrong answer**, not a
-missing one — which is the reason it is worth a row.
-
-`installed()` in `scripts/check-claims.mjs` resolves a package by scanning `node_modules/.pnpm` and
-taking the **first** directory whose name starts with `<name>@`:
-
-```js
-const dir = readdirSync(store).find((entry) => entry.startsWith(stored) && …);
-```
-
-pnpm does not eagerly unlink a superseded version, so immediately after a bump the store holds
-**both** — `react-hook-form@7.84.0_react@19.2.8` and `react-hook-form@7.86.0_react@19.2.8` — and
-`readdirSync` returned the older one. The gate reported _"claims were verified against 7.86.0,
-7.84.0 is installed"_ with the register freshly and correctly updated against 7.86.0, which is the
-message inverted: it names the stale directory as the truth and the verified register as the drift.
-The lockfile referenced only 7.86.0 throughout.
-
-**Both directions are possible and the dangerous one is the quiet one.** Here it failed loudly and
-cost a few minutes. Had the orphan been the _newer_ directory — which happens when a bump is
-reverted, exactly what happened on this branch an hour earlier going from 1.7.1 back to 1.6.28 —
-the gate would have compared the register against a version the application does not load and
-**passed or failed on the wrong evidence**, silently. A gate whose subject is "we verified this
-against what is installed" must not guess which of two things is installed.
-
-**Worked around, not fixed:** the orphan was deleted by hand (`rm -rf` the stale store directory)
-and the gate then read 7.86.0 correctly. The fix is to resolve the version the way the application
-does — read `node_modules/<name>/package.json` through the consuming workspace, or the resolution
-in `pnpm-lock.yaml` — rather than by directory-name prefix. That is a **shared gate**, so it fires
-ADR-0105's trigger and wants its own change rather than riding along inside a dependency bump.
-
-**Not the same bug as #177.** That one is the completeness scan's regex halving a compound
-citation; this is the version resolver picking the wrong directory. They share only a file.
-
-### A second flavour, found the same day: a package legitimately resolved TWICE
-
-`axe-core` is not an orphan case. Two resolutions coexist **by design** in `pnpm-lock.yaml`:
-
-| copy       | pulled by                              | used at                                     |
-| ---------- | -------------------------------------- | ------------------------------------------- |
-| **4.13.0** | `@axe-core/playwright`                 | **journey** time — the Playwright axe scans |
-| 4.12.1     | `eslint-plugin-jsx-a11y`, `vitest-axe` | lint and unit-test time                     |
-
-The register pins **4.12.1**, because `installed()` returns the first directory and `4.12.1` sorts
-before `4.13.0`. But the claim it holds — that `validateContext` **throws** on an empty `include`,
-so a scan whose `.include()` names a deleted row goes red rather than green-for-having-tested-
-nothing (ADR-0099 M5, cited from `CLAUDE.md`) — **is a statement about the journey path**, which
-loads 4.13.0.
-
-**The claim is true in both** and was checked in both rather than assumed: the same
-`No elements found for include` throw is present in 4.13.0's `axe.js`, roughly four hundred lines
-further down than in 4.12.1. So nothing is currently wrong, and the entry is left as it is.
-
-_(No line number for the 4.13.0 copy, deliberately, and the reason is this row's own subject: the
-register can only pin the copy `installed()` resolves, which is 4.12.1 — so a `file:line` citation
-into 4.13.0 is one the gate would demand an entry for and then refuse, because the anchor is not at
-that line in the copy it checks. Writing it that way failed `check:claims` on the first attempt,
-which is a fair demonstration that the hole is real.)_
-
-What is wrong is that **the register cannot say which copy a claim is about**, and the gate silently
-picks one. If the two copies ever diverge on this behaviour, the register would go on asserting a
-verification against the copy that does not run — and, unlike the orphan case above, there is
-nothing to delete that would fix it, because both resolutions are correct. The register format
-needs a way to name the consumer (`axe-core` _via_ `@axe-core/playwright`), not just the package.
-That is the same shared-gate change as the resolver fix and belongs with it.
 
 ## 179. Changesets v3 stops versioning private packages, and says nothing
 
@@ -2721,6 +2663,15 @@ repository had no hyphenated output anywhere to copy from.
 
 _Found 2026-08-23, by the gate accepting a citation it should have refused._
 
+**Still open, and the reason is now sharper than "it is a shared-gate change" (2026-08-31).** Its
+siblings #178 and #183 were fixed in one pass; this one was left because both obvious remedies fail.
+Putting the version in the `ref` requires every citation in prose to carry it, which is not how
+anybody writes one. Parsing a version out of the surrounding prose is a text heuristic over a shape
+nobody has agreed — the class of fix that produced #177, #183 and this row. What it probably wants is
+the version recorded **per claim** rather than per package, so a `ref` resolves to a version rather
+than to a filename: a schema change to `dependency-claims.json` and a migration of all 78 entries,
+which is a slice of its own.
+
 `scripts/check-claims.mjs` scans the tree for citation-shaped strings and requires each one to
 appear as a `ref` in `scripts/dependency-claims.json`. The `ref` is `basename:lines` — it carries no
 version. So a citation into **a different version of the same file, at a line that happens to
@@ -2757,35 +2708,6 @@ which is correct and rewrites every citation in the tree. Or have the scanner re
 `verifiedAgainst` — narrower, and does nothing for the many citations written as a bare basename.
 The second is probably right; neither should be done inside an upgrade epic, because the gate would
 then be changing underneath the citations it is checking.
-
----
-
-## 183. `check:claims` cannot see a camelCase basename in its colon form
-
-**Status:** unverified
-
-_A second, em-dash-styled row briefly shared this number (API-seeding journeys); it is now **#208**._
-
-_Found 2026-08-23 by the `ui-architect` while designing the unsaved-work guard, and confirmed here._
-
-`scripts/check-claims.mjs`'s colon-form citation pattern is case-sensitive lowercase, so a citation
-written as `useBlocker.js:35` is invisible to the completeness scan **in both directions**: it is
-not demanded when unregistered, and a registered entry for it reads as uncited. The prose form
-carries an `i` flag and does match, which is the workaround this epic used.
-
-This is the same family as the dotted-basename hole the file already records about itself — the scan
-is a text pattern over shapes, and every shape it does not anticipate is a silent gap rather than a
-failure. It matters more now than it did: this repository's dependencies are increasingly camelCase
-module files (`useBlocker.js`, `useNavigate.js`), so the blind spot is growing rather than static.
-
-**Not fixed here, deliberately.** Widening the scan is a change to a **shared gate**, which fires
-ADR-0105's trigger and would mean the gate changing underneath the citations it is checking — the
-same reason **#178** and **#181** were left alone during the Better Auth upgrade. Fix it on its own,
-with its own before/after count of what the widened pattern newly demands, because the last two
-widenings each surfaced unregistered citations that had been sitting in the tree (ADR-0077 M0).
-
-Cross-references **#178** (the resolver takes the first store directory) and **#181** (a `ref`
-carries no version) — three holes in one gate, all found by using it rather than by reading it.
 
 ---
 

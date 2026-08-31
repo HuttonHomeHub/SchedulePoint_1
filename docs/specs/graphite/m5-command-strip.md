@@ -132,7 +132,7 @@ e2e-resource-view/…:128           .include('[role="toolbar"][aria-label="View 
 These are **axe scan includes**, and I first wrote this section up as "a scan matching nothing scans
 nothing — green for having tested nothing", which is `docs/TECH_DEBT.md` #124's shape and the
 failure mode this register records most often. **Then I opened the dependency, and it is the
-opposite.** `axe-core`'s `validateContext` (`axe.js:19178-19183`) throws
+opposite.** `axe-core`'s `validateContext` (`axe.js:19564-19569`) throws
 `No elements found for include in page Context` when the include resolves to nothing, so all three
 would have gone **red**, loudly, on their next run — a breakage rather than a hole. (`axe-core`
 **4.12.1**, which is what `@axe-core/playwright@^4.13.0` actually resolves to here — established by
