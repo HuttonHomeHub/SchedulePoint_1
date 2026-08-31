@@ -89,7 +89,7 @@ const warnedSegmentGroups = new Set<string>();
 function warnRefusedPartition(group: string, items: readonly { item: { id: string } }[]): void {
   if (!import.meta.env.DEV || warnedSegmentGroups.has(group)) return;
   warnedSegmentGroups.add(group);
-  // eslint-disable-next-line no-console -- a development-only diagnostic for a silent misconfiguration
+
   console.warn(
     `Toolbar: segmentLabels was passed but group "${group}" was not partitioned. Every item in a ` +
       'group must carry a `segment` the map names, or the whole group falls back to one region. ' +

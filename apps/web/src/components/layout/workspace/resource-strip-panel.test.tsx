@@ -75,25 +75,91 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
     expect(screen.queryByRole('region', { name: 'Activities panel' })).toBeNull();
   });
 
-  it('renders the reused accessible data table for the selected resource (WCAG 2.2 AA equivalent)', async () => {
+  /**
+   * **The stacked default must not delete the text equivalent.**
+   *
+   * The table renders inside `{selectedSeries ? … : null}` and `selectedSeries` resolves BY
+   * resourceId. The moment the picker's default becomes an "all resources" sentinel, that
+   * expression is `null` — so the stacked strip would ship with NO accessible table at all, beside
+   * a disclosure reading "Show data table for Unknown resource" (the `resourceName` fallback).
+   *
+   * A WCAG 2.2 AA regression the feature CAUSES, found by the architecture and accessibility
+   * reviews independently. No unit suite would have caught it, because none mounts this panel in
+   * the state the feature makes the default.
+   */
+  it('keeps the accessible table in the stacked default, over EVERY resource', async () => {
     renderPanel();
     const table = await screen.findByRole('table');
-    // The most-loaded resource (Crew A, total 42) is the default column; every bucket start is a row header.
+    // Both fixture resources are columns — the stacked view's table is the whole record.
     expect(within(table).getByRole('columnheader', { name: 'Crew A' })).toBeInTheDocument();
-    expect(within(table).getByRole('rowheader', { name: '2026-01-05' })).toBeInTheDocument();
-    expect(within(table).getByText('20')).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Crew B' })).toBeInTheDocument();
   });
 
-  it('publishes the strip snapshot for the most-loaded resource, with the bucket axis pre-projected', async () => {
+  it('names the disclosure honestly in the stacked default', async () => {
+    renderPanel();
+    await screen.findByRole('table');
+    // Never "Show data table for Unknown resource" — the sentinel is not a resource, and the
+    // fallback would announce a name that does not exist.
+    expect(screen.getByText(/^Show data table$/)).toBeInTheDocument();
+    expect(screen.queryByText(/Unknown resource/)).toBeNull();
+  });
+
+  it('renders the reused accessible data table for the ISOLATED resource (WCAG 2.2 AA equivalent)', async () => {
+    renderPanel();
+    await screen.findByRole('table');
+    // Isolation is now a choice rather than the starting position — the stacked view is the
+    // default, and picking one resource narrows to it. The table still narrows with the picker.
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    const table = await screen.findByRole('table');
+    expect(within(table).getByRole('columnheader', { name: 'Crew A' })).toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'Crew B' })).toBeNull();
+    expect(within(table).getByRole('rowheader', { name: '2026-01-05' })).toBeInTheDocument();
+    // **Scoped to a row.** This asserted `getByText('20')` over the whole table until the shared
+    // `ResourceLoadingTable` gained a per-bucket Total column, at which point a value and its
+    // bucket total were both `20` and the query became ambiguous. The row is the real subject —
+    // and asserting the whole row also pins that the Total column sits where it is meant to.
+    const secondBucket = within(table).getByRole('row', { name: /2026-01-12/ });
+    expect(
+      within(secondBucket)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['20', '20']);
+  });
+
+  it('publishes a STACKED snapshot by default, scaled to the peak stacked total', async () => {
     const { onSnapshot } = renderPanel();
     await waitFor(() =>
       expect(onSnapshot).toHaveBeenCalledWith(
         expect.objectContaining({
-          series: expect.objectContaining({ resourceId: 'res-1' }),
+          // Both fixture resources, in rank order — one band each.
+          segments: [
+            expect.objectContaining({ values: [10, 20, 12] }),
+            expect.objectContaining({ values: [5, 5, 5] }),
+          ],
           dataDate: '2026-01-01',
-          max: 20, // whole-series peak of [10, 20, 12]
+          // **The peak STACKED total (20 + 5), not the tallest single series (20).** Scaling to the
+          // latter would let the tallest bucket overflow the band — the amendment a stack forces on
+          // ADR-0049 §6's whole-series max.
+          max: 25,
           // buckets projected to signed day offsets about the data date (2026-01-05 = day 4, end day 11).
           dayOffsets: expect.arrayContaining([{ start: 4, end: 11 }]),
+        }),
+      ),
+    );
+  });
+
+  it('isolating a resource publishes a ONE-SEGMENT stack at that resource’s own scale', async () => {
+    // The promise that isolation stays byte-for-byte what it was: one band, its own whole-series
+    // peak, painted with the single-bar fill — not a different code path in the painter.
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('table');
+    onSnapshot.mockClear();
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    await waitFor(() =>
+      expect(onSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          segments: [expect.objectContaining({ values: [10, 20, 12] })],
+          max: 20,
         }),
       ),
     );
@@ -106,8 +172,22 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
     fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-2' } });
     await waitFor(() =>
       expect(onSnapshot).toHaveBeenCalledWith(
-        expect.objectContaining({ series: expect.objectContaining({ resourceId: 'res-2' }) }),
+        expect.objectContaining({ segments: [expect.objectContaining({ values: [5, 5, 5] })] }),
       ),
+    );
+  });
+
+  it('returns to the stack when the picker goes back to All resources', async () => {
+    // The route back matters as much as the route in: a picker that can isolate but not un-isolate
+    // is a one-way door, and this one is the DEFAULT view it would strand the reader away from.
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('table');
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-2' } });
+    await waitFor(() => expect(onSnapshot).toHaveBeenCalled());
+    onSnapshot.mockClear();
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: '__all__' } });
+    await waitFor(() =>
+      expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({ max: 25 })),
     );
   });
 
@@ -156,5 +236,74 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
     renderPanel({ focusOnMount: true });
     const region = await screen.findByRole('region', { name: 'Resource loading' });
     await waitFor(() => expect(region).toHaveFocus());
+  });
+});
+
+describe('the strip names its colours and admits what it is not showing', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetchEnvelope).mockReset().mockResolvedValue(HISTOGRAM);
+  });
+
+  /**
+   * **The legend the spec decided on and nobody built.**
+   *
+   * The strip canvas is `aria-hidden`, so before this there was no text anywhere naming which
+   * colour was which resource, and the aggregate band was unidentifiable entirely. Colour as the
+   * sole channel, on a surface with no alternative — WCAG 1.4.1. Two independent reviews found it.
+   */
+  it('names every stacked band in a legend beside the strip', async () => {
+    renderPanel();
+    const legend = await screen.findByRole('list', { name: 'Legend' });
+    const items = within(legend).getAllByRole('listitem');
+    // Rank order: Crew A totals 42, Crew B totals 15.
+    expect(items.map((li) => li.textContent)).toEqual(['Crew A', 'Crew B']);
+  });
+
+  it('drops the legend when a single resource is isolated, because the picker already names it', async () => {
+    renderPanel();
+    await screen.findByRole('list', { name: 'Legend' });
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    await waitFor(() => {
+      expect(screen.queryByRole('list', { name: 'Legend' })).toBeNull();
+    });
+  });
+
+  it('says so when the histogram is truncated', async () => {
+    vi.mocked(apiFetchEnvelope)
+      .mockReset()
+      .mockResolvedValue({
+        ...HISTOGRAM,
+        meta: { ...HISTOGRAM.meta, hasMore: true, total: 247 },
+      });
+    renderPanel();
+    // The dialog said "Showing N of M" and the strip drew the same incomplete set in silence, so
+    // two views of one plan disagreed about whether the reader was seeing everything.
+    const notice = await screen.findByRole('status');
+    expect(notice.textContent).toContain('Showing 2 of 247 resources');
+  });
+
+  it('says nothing when the histogram is complete', async () => {
+    renderPanel();
+    await screen.findByRole('list', { name: 'Legend' });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  /**
+   * The published snapshot carries the producer's own bucket totals rather than leaving the
+   * painter to re-sum the segments — the second implementation of a computation `stackSeries`
+   * documents as forbidden.
+   */
+  it('publishes the stack with its bucket totals', async () => {
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('table');
+    await waitFor(() => {
+      expect(onSnapshot).toHaveBeenCalled();
+    });
+    const snapshot = vi.mocked(onSnapshot).mock.calls.at(-1)?.[0] as {
+      segments: { values: number[] }[];
+      bucketTotals: readonly number[];
+    } | null;
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.bucketTotals).toEqual([15, 25, 17]);
   });
 });

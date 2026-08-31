@@ -144,3 +144,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0118](0118-a-control-height-is-one-decision-with-an-input-axis.md)         | A control height is one decision, and the input is an axis of it        | Accepted           |
 | [0119](0119-a-group-of-buttons-says-which-of-them-are-alternatives.md)      | A group of buttons says which of them are alternatives                  | Accepted           |
 | [0120](0120-a-documented-obligation-with-no-computed-observer.md)           | A documented obligation with no computed observer                       | Accepted           |
+| [0121](0121-one-derivation-two-renderers-and-a-cap-set-by-height.md)        | One stack derivation, two renderers, and a cap set by height            | Accepted           |

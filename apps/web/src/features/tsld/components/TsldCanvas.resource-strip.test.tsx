@@ -36,7 +36,9 @@ const ACTIVITIES: RenderActivity[] = [
 ];
 
 const SNAPSHOT: ResourceStripSnapshot = {
-  series: { resourceId: 'r1', values: [4, 10, 2], total: 16 },
+  // A one-segment stack — the isolated case, which is the shape this suite has always exercised.
+  segments: [{ values: [4, 10, 2], fill: '#3b6fbf' }],
+  bucketTotals: [4, 10, 2],
   dayOffsets: [
     { start: 0, end: 7 },
     { start: 7, end: 14 },
@@ -156,7 +158,8 @@ describe('TsldCanvas resource strip (Stage E, ADR-0049)', () => {
     // `stripDirtyRef`, never `dirtyRef`, so the strip repaints and the main scene does NOT.
     const next: ResourceStripSnapshot = {
       ...SNAPSHOT,
-      series: { resourceId: 'r2', values: [1, 2, 3], total: 6 },
+      segments: [{ values: [1, 2, 3], fill: '#3b6fbf' }],
+      bucketTotals: [1, 2, 3],
       max: 3,
     };
     rerender(<TsldCanvas {...props} resourceStripActive resourceStrip={next} />);

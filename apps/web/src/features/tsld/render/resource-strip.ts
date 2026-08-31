@@ -29,6 +29,14 @@ export interface StripBar {
   w: number;
   h: number;
   value: number;
+  /**
+   * Which bucket this bar is, in the ORIGINAL series index — not its position among the visible
+   * bars. Culling makes those differ, and a stacked painter has to look each segment's value up by
+   * the real index. Added so the stack DELEGATES x/w/cull here rather than growing a sibling
+   * projector: two implementations of the same affine would drift, and the symptom would be a
+   * segment landing under a different day column from the bar it belongs to.
+   */
+  index: number;
 }
 
 /** A bucket's `[start, end)` pre-projected to signed day offsets about the data date — the snapshot
@@ -49,8 +57,33 @@ export interface StripBandGeom {
  * selected resource's series, its bucket axis **pre-projected to day offsets**, the data date (day 0),
  * and the whole-series max. The strip palette is re-resolved on the canvas side (on the shared theme
  * bump), not carried here, so this stays pure data. `null` ⇒ the strip draws nothing (empty/loading). */
+/** One band of the stacked strip — the painter's view of a `StackSegment`, geometry only. */
+export interface StripSegment {
+  /** Per-bucket values, index-aligned to `dayOffsets`. */
+  values: readonly number[];
+  /** The resolved fill for this band (Canvas 2D cannot take a `var()`). */
+  fill: string;
+}
+
 export interface ResourceStripSnapshot {
-  series: ResourceHistogramSeries;
+  /**
+   * The bands to stack, in draw order from the baseline up. **One entry is the isolated case** —
+   * the strip has always been able to show a single resource, and it still does, by publishing a
+   * one-segment stack rather than a different shape. That is what keeps isolation byte-for-byte:
+   * one band, painted with `palette.bar`, is exactly what the old single-series path drew.
+   */
+  segments: readonly StripSegment[];
+  /**
+   * Sigma of every segment in bucket `i`, **summed by the producer in draw order and carried here**.
+   *
+   * `stackSeries` computes this once and its docblock says plainly that deriving it any other way
+   * can differ in the last bits under IEEE addition — and the painter was then re-summing
+   * `segments` itself, which is a second implementation of exactly the computation that rule
+   * forbids. It happened to agree only because the segment order survives the trip, which is a
+   * property of today's call graph rather than anything asserted. Carrying it makes the shared
+   * derivation shared in fact and not only in intent.
+   */
+  bucketTotals: readonly number[];
   /** `dayOffsets[i]` is `buckets[i]` projected about `dataDate`; index-aligned to `series.values`. */
   dayOffsets: BucketDays[];
   dataDate: string;
@@ -58,6 +91,20 @@ export interface ResourceStripSnapshot {
   /** The selected resource's display name (used for the max-tick label / a11y), when resolvable. */
   resourceName?: string;
 }
+
+/**
+ * A segment thinner than this gets no boundary rule above it. One pixel of separator on a two-pixel
+ * band is not a separator, it is half the band.
+ *
+ * **Here rather than in the painter, because BOTH renderers need it.** The canvas draws the
+ * boundary as a ground-coloured hairline and the dialog's DOM chart draws it as a ground-coloured
+ * bottom border; the whole WCAG 1.4.11 argument for this feature is that adjacent fills never have
+ * to clear 3:1 against each other because a ground-coloured boundary always sits between them. That
+ * argument is only true where the boundary exists, and it was implemented on the canvas and not on
+ * the chart — so the suppression threshold lives in one place now, and the two cannot disagree
+ * about when a band is too thin to separate.
+ */
+export const SEGMENT_RULE_MIN_PX = 2;
 
 /** Vertical inset (px) reserved above the bars for the axis line + max tick, so a full-height bar
  * never paints over the top border. Bars scale against `height - STRIP_BAR_TOP_PAD`. */
@@ -113,7 +160,7 @@ export function bucketBarsFromDays(
     if (x2 <= 0 || x1 >= size.width) continue;
     const value = values[i] ?? 0;
     const h = (value / band.max) * barArea;
-    bars.push({ x: x1, w: Math.max(1, x2 - x1), h, value });
+    bars.push({ x: x1, w: Math.max(1, x2 - x1), h, value, index: i });
   }
   return bars;
 }

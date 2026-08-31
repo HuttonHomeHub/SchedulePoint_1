@@ -62,9 +62,18 @@ describe('ResourceHistogram (ADR-0044 §3 / ADR-0035 §31)', () => {
     const table = await screen.findByRole('table');
     // The resource name is a column header; every bucket start is a row header — a real semantic table.
     expect(within(table).getByRole('columnheader', { name: 'Crew A' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Total' })).toBeInTheDocument();
     expect(within(table).getByRole('rowheader', { name: '2026-01-05' })).toBeInTheDocument();
-    // The bucket values are present as cells.
-    expect(within(table).getByText('20')).toBeInTheDocument();
+    // **Scoped to a row, not to the table.** This asserted `getByText('20')` until the stacked
+    // histogram added a per-bucket Total column, at which point 20 appeared twice — the resource's
+    // cell and that bucket's total, which are equal because this fixture has one resource. A bare
+    // text query over a table is ambiguous the moment a column arrives; the row is the real subject.
+    const firstBucket = within(table).getByRole('row', { name: /2026-01-05/ });
+    expect(
+      within(firstBucket)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['10', '10']);
     // The total foot row carries the conserved sum.
     expect(within(table).getAllByText('42').length).toBeGreaterThan(0);
   });
@@ -91,6 +100,33 @@ describe('ResourceHistogram (ADR-0044 §3 / ADR-0035 §31)', () => {
     });
     renderHistogram();
     expect(await screen.findByText(/didn’t sum to 100%/)).toBeInTheDocument();
+  });
+
+  it('says how much of the plan it is showing when the histogram is truncated', async () => {
+    // `use-resources.ts` raised the page limit 50 -> 200 and started surfacing `hasMore`/`total`
+    // rather than truncating in silence. That branch had no test: a reader would have been told
+    // nothing about the resources missing from the totals in front of them.
+    vi.mocked(apiFetchEnvelope).mockResolvedValue({
+      data: [
+        { resourceId: 'res-1', values: [21, 21], total: 42 },
+        { resourceId: 'res-2', values: [5, 5], total: 10 },
+      ],
+      meta: {
+        granularity: 'WEEK',
+        buckets: [
+          { start: '2026-01-05', end: '2026-01-12' },
+          { start: '2026-01-12', end: '2026-01-19' },
+        ],
+        curveNormalisedCount: 0,
+        hasMore: true,
+        total: 247,
+      },
+    });
+    renderHistogram();
+    const notice = await screen.findByRole('status');
+    expect(notice.textContent).toContain('Showing 2 of 247 resources');
+    // …and it says what that costs the numbers, not merely that something is missing.
+    expect(notice.textContent).toContain('rather than of the whole plan');
   });
 
   it('shows an empty state when no resource is loaded', async () => {

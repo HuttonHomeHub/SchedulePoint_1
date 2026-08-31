@@ -64,7 +64,12 @@ import {
   type Size,
   type Viewport,
 } from './render-model';
-import { bucketBarsFromDays, type ResourceStripSnapshot } from './resource-strip';
+import {
+  SEGMENT_RULE_MIN_PX,
+  STRIP_BAR_TOP_PAD,
+  bucketBarsFromDays,
+  type ResourceStripSnapshot,
+} from './resource-strip';
 import { DEFAULT_VIEW_TOGGLES, type TsldViewToggles } from './view-toggles';
 import type { WbsBandBar } from './wbs-band';
 
@@ -2065,15 +2070,36 @@ export function paintInteractionLayer(
  * painter. `bar` is the demand-bar fill, `axis` the thin baseline/top rule, `tick` the max-tick label ink.
  */
 export interface ResourceStripPalette {
+  /**
+   * The single-band fill, kept deliberately. The isolated path publishes a one-segment stack and
+   * paints it with this, so isolating a resource draws exactly what it drew before the strip
+   * learned to stack — the promise the spec makes about that path, honoured rather than restated.
+   */
   bar: string;
   axis: string;
   tick: string;
+  /**
+   * The band's ground — what a segment boundary is drawn in. Not decoration: every categorical fill
+   * is gated at >= 3:1 against it, which is what makes a ground-coloured hairline legible against
+   * both neighbours whatever they are.
+   */
+  ground: string;
 }
 
 /** Format a demand value (`DECIMAL(18,4)` units) for the max-tick label — ≤ 4 dp, trailing zeros dropped. */
 function formatStripUnits(value: number): string {
   return Number(value.toFixed(4)).toString();
 }
+
+/**
+ * `import.meta.env.DEV`, read defensively.
+ *
+ * Vite replaces it statically in the app, but the measurement harnesses bundle this module with
+ * esbuild in IIFE format, where `import.meta` is an empty object — so reading `.DEV` off it throws
+ * before the painter draws anything. A guard that takes down the instrument measuring the code it
+ * guards is worse than no guard, and this one did, on its first run.
+ */
+const IS_DEV = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
 
 /**
  * Paint the **resource strip** (Stage E, ADR-0049) — the third Canvas 2D layer, on its own
@@ -2102,16 +2128,74 @@ export function paintResourceStrip(
   ctx.fillStyle = palette.axis;
   ctx.fillRect(0, 0, band.width, 1);
 
-  if (!snapshot || snapshot.max <= 0 || snapshot.series.values.length === 0) return;
+  if (!snapshot || snapshot.max <= 0 || snapshot.segments.length === 0) return;
 
-  const bars = bucketBarsFromDays(snapshot.series.values, snapshot.dayOffsets, view, band, {
+  // **Fail loud in development on an unresolved fill.** `fillStyle` discards a `var()` and keeps
+  // the previous colour, so the whole stack paints as one block with nothing thrown, nothing
+  // logged, and a jsdom test asserting the `fill` string passing on the exact value a browser
+  // refuses. That defect reached this painter once; this is what turns the next one into a
+  // failing test rather than a screenshot somebody has to notice.
+  if (IS_DEV) {
+    const unresolved = snapshot.segments.find((seg) => seg.fill.startsWith('var('));
+    if (unresolved) {
+      throw new Error(
+        `paintResourceStrip: segment fill "${unresolved.fill}" is a CSS variable. Canvas 2D ` +
+          'cannot paint one — resolve the ramp with categoricalCycleResolved() before publishing ' +
+          'the snapshot.',
+      );
+    }
+  }
+
+  // **x, w and the cull come from ONE projector, called once on the bucket totals.** Every segment
+  // in a bucket shares them by definition, so delegating rather than projecting per segment makes
+  // co-alignment definitional — a sibling projector would be a second copy of the same affine, and
+  // the symptom of a drift would be a band landing under a different day column from the bar it
+  // belongs to (the ADR-0065 `routeOrthogonal` argument, one module in).
+  // **The totals are the producer's, not re-summed here.** `stackSeries` sums them once in draw
+  // order precisely because summing the same values another way can differ in the last bits under
+  // IEEE addition; re-deriving them in the painter was a second implementation of the computation
+  // that rule exists to forbid, agreeing only by the accident that segment order survives the trip.
+  const bars = bucketBarsFromDays(snapshot.bucketTotals, snapshot.dayOffsets, view, band, {
     height: band.height,
     max: snapshot.max,
   });
-  ctx.fillStyle = palette.bar;
+
+  const barArea = Math.max(0, band.height - STRIP_BAR_TOP_PAD);
   for (const bar of bars) {
-    // Bars grow up from the band's baseline; the top pad keeps a full-height bar clear of the rule/tick.
-    ctx.fillRect(bar.x, band.height - bar.h, bar.w, bar.h);
+    // Bars grow up from the band's baseline; the top pad keeps a full-height bar clear of the
+    // rule/tick. Segments stack from the baseline in draw order.
+    let offset = 0;
+    for (const seg of snapshot.segments) {
+      const value = seg.values[bar.index] ?? 0;
+      if (value <= 0) continue;
+      const h = (value / snapshot.max) * barArea;
+      ctx.fillStyle = seg.fill;
+      ctx.fillRect(bar.x, band.height - offset - h, bar.w, h);
+      offset += h;
+    }
+
+    // **The boundaries, drawn in the GROUND colour — the mechanism, not a workaround.** Every fill
+    // is gated at >= 3:1 against this ground, so a ground-coloured hairline is guaranteed >= 3:1
+    // against both of its neighbours however close two fills are to each other. That is what makes
+    // adjacent-fill contrast a non-question (WCAG 1.4.11 applies to the boundary, not the pair).
+    //
+    // **Skipped where either neighbour is thinner than the rule is tall.** At 66 px of bar area,
+    // nine segments means eight boundaries: 12 % of the column at the peak bucket, 24 % at half
+    // and 48 % at a quarter — and off-peak buckets are the majority of any real profile. A
+    // separator that eats half the column has stopped separating anything.
+    offset = 0;
+    let previousH = 0;
+    for (const seg of snapshot.segments) {
+      const value = seg.values[bar.index] ?? 0;
+      if (value <= 0) continue;
+      const h = (value / snapshot.max) * barArea;
+      if (previousH >= SEGMENT_RULE_MIN_PX && h >= SEGMENT_RULE_MIN_PX && offset > 0) {
+        ctx.fillStyle = palette.ground;
+        ctx.fillRect(bar.x, band.height - offset - 1, bar.w, 1);
+      }
+      offset += h;
+      previousH = h;
+    }
   }
 
   // A single labelled max tick at the top-left (ADR-0026 D1 style), so the vertical scale is legible;

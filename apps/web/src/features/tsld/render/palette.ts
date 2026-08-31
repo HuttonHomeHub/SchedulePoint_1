@@ -34,6 +34,72 @@ const WBS_CYCLE_TOKENS: ReadonlyArray<readonly [fill: string, fallback: string, 
 ];
 
 /**
+ * **The categorical ramp's length, and its `var()` form — the ONE vocabulary, exported.**
+ *
+ * `WBS_CYCLE_TOKENS` above stays module-private, because its triples carry a jsdom fallback that
+ * only a canvas `fillStyle` needs. What a second consumer needs is the *ordering* and a form the DOM
+ * can paint with, and until now there was none: the constant was a private `const` and the stacked
+ * resource histogram's spec described two renderers "indexing the same exported token list", which
+ * did not exist. The default outcome of that sentence is a second hand-maintained array of twelve
+ * token names — exactly what the docblock above says this list was collapsed into one to prevent,
+ * and the drift would be invisible, because each renderer looks right alone and only somebody
+ * comparing a legend against a diagram would ever see segment 3 painted two different colours.
+ *
+ * **`var()` strings, never Tailwind class names.** A caller reaching for `` `fill-chart-${n}` ``
+ * would compile to no CSS at all — Tailwind v4 scans for *literal* class strings — so the chart
+ * would paint unstyled in a real browser while a jsdom test asserting the `className` passed. That
+ * is ADR-0100 M4's minimap-frame defect, in this same token family. A `var()` is also not a colour
+ * literal, so it stays inside the `no-colour-literals` lint rule.
+ *
+ * Theme-reactivity is free and is the reason this is not a resolved-value export: the browser
+ * re-resolves `var(--chart-3)` itself, so a DOM consumer never goes theme-stale and needs no
+ * `useThemeVersion` bump (the same argument {@link lensLegendVarPalette} makes for the legend).
+ */
+export const CATEGORICAL_CYCLE_LENGTH = WBS_CYCLE_TOKENS.length;
+
+/** One categorical member: the fill to paint and the ink that is legible on it, both as `var()`. */
+export interface CategoricalCycleMember {
+  fill: string;
+  ink: string;
+}
+
+/**
+ * The categorical ramp as `var()` pairs, in ramp order — index `n` is the same colour the canvas
+ * painter gives segment `n`, so a DOM chart and the canvas cannot disagree about which member is
+ * which.
+ */
+export function categoricalCycleVars(): readonly CategoricalCycleMember[] {
+  return WBS_CYCLE_TOKENS.map(([fill, , ink]) => ({ fill: `var(${fill})`, ink: `var(${ink})` }));
+}
+
+/**
+ * The same ramp, in the same order, **resolved to paintable colours**.
+ *
+ * Canvas 2D's `fillStyle` cannot take a `var()`: the assignment is silently discarded and the
+ * PREVIOUS fill persists, so a stack whose segments carry `var(--chart-n)` paints as one solid
+ * block with nothing thrown and nothing logged. Verified in Chromium rather than reasoned about
+ * (`fillStyle = 'var(--chart-1)'` after `'#ff0000'` reads back `'#ff0000'`, and the pixel is red).
+ *
+ * That is the ADR-0100 M4 minimap-frame defect in this same token family, and it very nearly
+ * shipped here for the same reason: jsdom has no canvas, so a unit test asserting the segment's
+ * `fill` string passes on exactly the value a browser refuses.
+ *
+ * `resolveLensPalette`'s `wbsCycle` has resolved this ramp correctly since ADR-0049. This is that
+ * pattern applied to its neighbour — which is the failure shape this register has now recorded six
+ * times — so the two share `WBS_CYCLE_TOKENS` and cannot disagree about which member is which.
+ * The jsdom fallbacks travel with it, so a unit test paints the same hex a browser resolves.
+ */
+export function categoricalCycleResolved(root: Element): readonly CategoricalCycleMember[] {
+  const styles = getComputedStyle(root);
+  const token = (name: string, fallback: string): string =>
+    styles.getPropertyValue(name).trim() || fallback;
+  return WBS_CYCLE_TOKENS.map(([fill, fallback, ink]) => ({
+    fill: token(fill, fallback),
+    ink: token(ink, ink === WHITE_INK ? '#ffffff' : '#1a1a1a'),
+  }));
+}
+
+/**
  * Resolve the TSLD painter palette from the app's semantic design tokens (ADR-0006), so the canvas
  * takes its colour from the design system rather than hardcoding it — the tokens stay the single
  * source of truth and the canvas is just another consumer. Reads the computed `--color-*` custom
@@ -275,6 +341,10 @@ export function resolveResourceStripPalette(root: Element): ResourceStripPalette
     bar: token('--primary', '#3b6fbf'),
     axis: token('--border', '#2a2f3a'),
     tick: token('--muted-foreground', '#7a8090'),
+    // The strip canvas is transparent, so what shows through behind the bars is the diagram ground
+    // — which is why segment boundaries are drawn in it, and why the contrast gate asserts every
+    // categorical fill against `--canvas` as well as the dialog's `--card`.
+    ground: token('--canvas', '#f4f6f8'),
   };
 }
 

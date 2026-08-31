@@ -1,6 +1,8 @@
 import { HISTOGRAM_GRANULARITIES, type HistogramGranularity } from '@repo/types';
 import type { ResourceHistogramBucket, ResourceHistogramSeries } from '@repo/types';
 
+import { rankSeries } from '../model/stack-series';
+
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 
@@ -60,9 +62,42 @@ export function BucketSizeSelect({
  * `ResourceHistogram` renders, factored out so the canvas strip reuses it verbatim rather than
  * re-implementing the a11y equivalent (ADR-0049 §5).
  */
+/**
+ * **The per-bucket total, derived from THIS table's own columns — never passed in.**
+ *
+ * The spec left this as "a new required/optional `bucketTotals` prop (or derived internally;
+ * decided at build)", and that is a shared component's public contract, which is exactly the
+ * category the process says must be settled before code rather than during it.
+ *
+ * Deriving it here is the load-bearing half. Passing it in would give one number two sources — the
+ * chart's capped-plus-aggregated derivation, and the raw column set this table renders — and they
+ * would be summed over different sets in different orders. The table is the RECORD; a record whose
+ * footer can disagree with the cells above it is worse than no footer. Derived, the Total column
+ * cannot disagree with the numbers beside it, because it is made of them.
+ */
+function bucketTotal(series: readonly ResourceHistogramSeries[], index: number): number {
+  let sum = 0;
+  for (const s of series) sum += s.values[index] ?? 0;
+  return sum;
+}
+
+/**
+ * **The table sorts, rather than trusting its caller to.**
+ *
+ * The caption has always claimed "ordered by total budgeted units, largest first" and the table
+ * did nothing of the kind — it rendered whatever order it was handed, which from the engine is
+ * `resourceId` (UUID) order and therefore unrelated to load. Both call sites passed the raw list,
+ * and both unit fixtures happened to be in descending order already, so the false caption shipped
+ * green. The spec's US-4 requires the column order to match the chart's bands so a reader moving
+ * between the two is not re-mapping; sorting here rather than at the two call sites is what makes
+ * that true of every caller, including the next one.
+ *
+ * It shares {@link rankSeries} with the chart, so the two orders are the same derivation and not
+ * two agreeing implementations.
+ */
 export function ResourceLoadingTable({
   buckets,
-  series,
+  series: unsortedSeries,
   granularity,
   resourceName,
   captionId,
@@ -75,6 +110,7 @@ export function ResourceLoadingTable({
   /** Optional id to associate an external heading as the table caption (else a plain caption). */
   captionId?: string;
 }): React.ReactElement {
+  const series = rankSeries(unsortedSeries);
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left text-sm">
@@ -83,12 +119,25 @@ export function ResourceLoadingTable({
           className="text-muted-foreground mb-2 text-left text-sm"
         >
           Curve-shaped units per {GRANULARITY_LABELS[granularity].toLowerCase()} bucket, by
-          resource. Each resource’s row sums to its total budgeted units.
+          resource.{' '}
+          {series.length === 1
+            ? 'One resource, one column;'
+            : 'Each resource is a column, ordered by total budgeted units, largest first;'}{' '}
+          each column sums to the resource’s total, and the Total column sums each bucket across
+          every {series.length === 1 ? 'bucket' : 'resource'}.{' '}
+          {series.length > 1
+            ? 'Resources are never grouped here, even where the chart aggregates the smallest into “Other” or stacks them by group.'
+            : ''}
         </caption>
         <thead>
           <tr>
             <th scope="col" className="border-border border-b p-2 font-semibold">
               Bucket start
+            </th>
+            {/* The stack's new fact. Derived below from THIS table's own columns — see the note on
+                `bucketTotal`. */}
+            <th scope="col" className="border-border border-b p-2 text-right font-semibold">
+              Total
             </th>
             {series.map((s) => (
               <th
@@ -107,6 +156,13 @@ export function ResourceLoadingTable({
               <th scope="row" className="border-border border-b p-2 font-normal">
                 {bucket.start}
               </th>
+              {/* Deliberately NOT bold. Its column header names it and `tabular-nums` aligns it,
+                  so a per-row weight buys nothing a reader needs — and `token-architecture`'s
+                  weight ratchet counts every screen that places its own, which is how this was
+                  caught rather than shipped. The footer's grand total keeps the emphasis. */}
+              <td className="border-border border-b p-2 text-right tabular-nums">
+                {formatUnits(bucketTotal(series, i))}
+              </td>
               {series.map((s) => (
                 <td
                   key={s.resourceId}
@@ -123,6 +179,9 @@ export function ResourceLoadingTable({
             <th scope="row" className="p-2 font-semibold">
               Total
             </th>
+            <td className="p-2 text-right font-semibold tabular-nums">
+              {formatUnits(series.reduce((acc, s) => acc + s.total, 0))}
+            </td>
             {series.map((s) => (
               <td key={s.resourceId} className="p-2 text-right font-semibold tabular-nums">
                 {formatUnits(s.total)}

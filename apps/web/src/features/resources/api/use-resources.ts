@@ -518,7 +518,27 @@ export interface ResourceHistogramResult {
   buckets: ResourceHistogramBucket[];
   granularity: HistogramGranularity;
   curveNormalisedCount: number;
+  /** How many series the plan has in total — `series.length` when nothing was truncated. */
+  total: number;
+  /** True when the plan has more resources than this page carries. */
+  hasMore: boolean;
 }
+
+/**
+ * **Ask for every series the endpoint will give, and read whether that was enough.**
+ *
+ * The request used to send no `limit` at all, silently taking the server's default of 50, and threw
+ * away `total`/`hasMore` — so a plan with more than 50 loaded resources quietly lost the rest. That
+ * was survivable while the chart drew each resource on its own axis: a missing chart is a visible
+ * absence. **Stacked it is not survivable, because the missing series are summed into a height** —
+ * the bar is simply too short, the total is wrong, and nothing on screen looks broken.
+ *
+ * 200 is the endpoint's documented maximum (`resource-histogram-query.dto.ts`). It costs the server
+ * nothing extra: `schedule.service.ts` computes every series and *then* slices, so the work is done
+ * either way and only the wire payload grows. Beyond 200 the truncation is real, and the caller is
+ * told rather than left to infer it from a total that does not add up.
+ */
+const HISTOGRAM_SERIES_LIMIT = 200;
 
 export function resourceHistogramQueryOptions(
   orgSlug: string,
@@ -539,15 +559,22 @@ export function resourceHistogramQueryOptions(
           buckets: ResourceHistogramBucket[];
           granularity: HistogramGranularity;
           curveNormalisedCount: number;
+          total?: number;
+          hasMore?: boolean;
         }
       >(
-        `/organizations/${orgSlug}/plans/${planId}/schedule/resource-histogram?granularity=${granularity}`,
+        `/organizations/${orgSlug}/plans/${planId}/schedule/resource-histogram` +
+          `?granularity=${granularity}&limit=${String(HISTOGRAM_SERIES_LIMIT)}`,
       );
       return {
         series: data,
         buckets: meta?.buckets ?? [],
         granularity: meta?.granularity ?? granularity,
         curveNormalisedCount: meta?.curveNormalisedCount ?? 0,
+        // `total` absent means an older/leaner envelope, not "no series" — fall back to what
+        // arrived rather than reporting a truncation that did not happen.
+        total: meta?.total ?? data.length,
+        hasMore: meta?.hasMore ?? false,
       };
     },
     enabled: Boolean(planId),
