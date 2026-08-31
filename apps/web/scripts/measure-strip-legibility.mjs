@@ -28,7 +28,7 @@
  * cap the criterion was originally framed against would be quietly grading an easier fixture.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -104,11 +104,11 @@ await page.addScriptTag({ path: bundle });
 
 const sample = await page.evaluate(
   ({ segments, buckets, pxPerDay, width, height, dpr, even }) => {
-    if (even) window.__stripProbe__ = { even: true };
-    const canvas = document.getElementById('strip');
+    if (even) globalThis.__stripProbe__ = { even: true };
+    const canvas = globalThis.document.getElementById('strip');
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
-    const result = window.renderStripSample({
+    const result = globalThis.renderStripSample({
       canvas,
       segments,
       buckets,
@@ -120,7 +120,7 @@ const sample = await page.evaluate(
     // A harness affordance, not product chrome: the strip itself carries no legend (the dialog
     // does). It is here so the reviewer can match a band to a ramp member by eye, which is exactly
     // what the condition asks them to do.
-    document.getElementById('legend').innerHTML = result.fills
+    globalThis.document.getElementById('legend').innerHTML = result.fills
       .map(
         (f, i) =>
           `<span><span class="sw" style="background:${f}"></span>${

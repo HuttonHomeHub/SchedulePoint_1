@@ -173,7 +173,11 @@ describe('groupSeries', () => {
     // The point of the feature: 40 resources stacked by resource is 8 bands + "Other (32)"; by
     // group it is a handful of named trades and no aggregate.
     const many = Array.from({ length: 40 }, (_, i) => s(`r${String(i)}`, [1]));
-    const twoGroups = (id: string): string => (Number(id.slice(1)) % 2 === 0 ? 'g-a' : 'g-b');
+    // The GROUPS have no parent. This used to be a total function returning a group for every id
+    // — including `g-a` and `g-b` themselves, so `g-a`'s parent was `g-b` — which was invisible
+    // while grouping walked one level and became a self-cycle once it walked to the top.
+    const twoGroups = (id: string): string | null =>
+      id.startsWith('g-') ? null : Number(id.slice(1)) % 2 === 0 ? 'g-a' : 'g-b';
     const byResource = stackSeries(many, 1, { ...opts, cap: 8 });
     expect(byResource.aggregated).toBe(true);
 
@@ -185,5 +189,75 @@ describe('groupSeries', () => {
     });
     expect(byGroup.aggregated).toBe(false);
     expect(byGroup.segments).toHaveLength(2);
+  });
+});
+
+describe('groupSeries attributes to the TOP-LEVEL group', () => {
+  const values = [2, 2];
+  const chain = (parents: Record<string, string | null>) => (id: string) => parents[id] ?? null;
+
+  it('walks past an intermediate group to the trade at the top', () => {
+    // Groundworks > Concrete gang > Vibrator operator. A control labelled "Trade group" that
+    // stacks by sub-gang shows a picture that looks right and answers a different question.
+    const parents = { operator: 'gang', gang: 'groundworks', groundworks: null };
+    const out = groupSeries(
+      [{ resourceId: 'operator', values, total: 4 }],
+      values.length,
+      chain(parents),
+      (id) => `Name ${id}`,
+    );
+    expect(out.series.map((s) => s.resourceId)).toEqual(['groundworks']);
+    expect(out.nameOf('groundworks')).toBe('Name groundworks');
+  });
+
+  it('folds two resources under different sub-gangs of one trade into one band', () => {
+    const parents = {
+      a: 'gang1',
+      b: 'gang2',
+      gang1: 'groundworks',
+      gang2: 'groundworks',
+      groundworks: null,
+    };
+    const out = groupSeries(
+      [
+        { resourceId: 'a', values: [1, 1], total: 2 },
+        { resourceId: 'b', values: [3, 3], total: 6 },
+      ],
+      2,
+      chain(parents),
+      (id) => id,
+    );
+    expect(out.series).toHaveLength(1);
+    expect(out.series[0]?.values).toEqual([4, 4]);
+    expect(out.series[0]?.total).toBe(8);
+  });
+
+  it('terminates on a cycle rather than hanging the tab', () => {
+    // Acyclicity is a SERVICE invariant; this runs over a list the client fetched, which may be
+    // paged, stale or partial. The failure it must not have is an infinite loop.
+    const parents: Record<string, string> = { a: 'b', b: 'a' };
+    const out = groupSeries(
+      [{ resourceId: 'a', values, total: 4 }],
+      values.length,
+      (id) => parents[id] ?? null,
+      (id) => id,
+    );
+    expect(out.series).toHaveLength(1);
+  });
+
+  it('stops at the depth ceiling rather than walking an unbounded chain', () => {
+    // A 12-deep chain exceeds ADR-0053 M3's depth-10 ceiling, so the walk stops early and the
+    // grouping is wrong — which is the correct failure: a wrong band, not a broken page.
+    const parents: Record<string, string | null> = {};
+    for (let i = 0; i < 12; i += 1) parents[`n${String(i)}`] = `n${String(i + 1)}`;
+    parents['n12'] = null;
+    const out = groupSeries(
+      [{ resourceId: 'n0', values, total: 4 }],
+      values.length,
+      (id) => parents[id] ?? null,
+      (id) => id,
+    );
+    expect(out.series).toHaveLength(1);
+    expect(out.series[0]?.resourceId).toBe('n10');
   });
 });

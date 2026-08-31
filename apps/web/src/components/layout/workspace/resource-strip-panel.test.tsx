@@ -238,3 +238,72 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
     await waitFor(() => expect(region).toHaveFocus());
   });
 });
+
+describe('the strip names its colours and admits what it is not showing', () => {
+  beforeEach(() => {
+    vi.mocked(apiFetchEnvelope).mockReset().mockResolvedValue(HISTOGRAM);
+  });
+
+  /**
+   * **The legend the spec decided on and nobody built.**
+   *
+   * The strip canvas is `aria-hidden`, so before this there was no text anywhere naming which
+   * colour was which resource, and the aggregate band was unidentifiable entirely. Colour as the
+   * sole channel, on a surface with no alternative — WCAG 1.4.1. Two independent reviews found it.
+   */
+  it('names every stacked band in a legend beside the strip', async () => {
+    renderPanel();
+    const legend = await screen.findByRole('list', { name: 'Legend' });
+    const items = within(legend).getAllByRole('listitem');
+    // Rank order: Crew A totals 42, Crew B totals 15.
+    expect(items.map((li) => li.textContent)).toEqual(['Crew A', 'Crew B']);
+  });
+
+  it('drops the legend when a single resource is isolated, because the picker already names it', async () => {
+    renderPanel();
+    await screen.findByRole('list', { name: 'Legend' });
+    fireEvent.change(screen.getByLabelText('Resource'), { target: { value: 'res-1' } });
+    await waitFor(() => {
+      expect(screen.queryByRole('list', { name: 'Legend' })).toBeNull();
+    });
+  });
+
+  it('says so when the histogram is truncated', async () => {
+    vi.mocked(apiFetchEnvelope)
+      .mockReset()
+      .mockResolvedValue({
+        ...HISTOGRAM,
+        meta: { ...HISTOGRAM.meta, hasMore: true, total: 247 },
+      });
+    renderPanel();
+    // The dialog said "Showing N of M" and the strip drew the same incomplete set in silence, so
+    // two views of one plan disagreed about whether the reader was seeing everything.
+    const notice = await screen.findByRole('status');
+    expect(notice.textContent).toContain('Showing 2 of 247 resources');
+  });
+
+  it('says nothing when the histogram is complete', async () => {
+    renderPanel();
+    await screen.findByRole('list', { name: 'Legend' });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  /**
+   * The published snapshot carries the producer's own bucket totals rather than leaving the
+   * painter to re-sum the segments — the second implementation of a computation `stackSeries`
+   * documents as forbidden.
+   */
+  it('publishes the stack with its bucket totals', async () => {
+    const { onSnapshot } = renderPanel();
+    await screen.findByRole('table');
+    await waitFor(() => {
+      expect(onSnapshot).toHaveBeenCalled();
+    });
+    const snapshot = vi.mocked(onSnapshot).mock.calls.at(-1)?.[0] as {
+      segments: { values: number[] }[];
+      bucketTotals: readonly number[];
+    } | null;
+    expect(snapshot).not.toBeNull();
+    expect(snapshot?.bucketTotals).toEqual([15, 25, 17]);
+  });
+});

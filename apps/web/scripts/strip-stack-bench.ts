@@ -99,6 +99,9 @@ export function runStripBench(opts: {
 
   const snapshot: ResourceStripSnapshot = {
     segments,
+    bucketTotals: Array.from({ length: opts.buckets }, (_, b) =>
+      segments.reduce((acc, s) => acc + (s.values[b] ?? 0), 0),
+    ),
     dayOffsets,
     dataDate: '2026-01-01',
     max,
@@ -197,7 +200,13 @@ export function renderStripSample(opts: {
   );
   const max = Math.max(...totals);
 
-  const snapshot: ResourceStripSnapshot = { segments, dayOffsets, dataDate: '2026-01-01', max };
+  const snapshot: ResourceStripSnapshot = {
+    segments,
+    bucketTotals: totals,
+    dayOffsets,
+    dataDate: '2026-01-01',
+    max,
+  };
 
   // **Panned so the programme's peak is on screen, and that is a deliberate choice.** At the Week
   // preset only ~14 of 104 buckets fit, and the scale is the WHOLE plan's peak (what the panel

@@ -5387,14 +5387,22 @@ own unattributed ~8 ms: where the time goes "is not yet measured, and must not b
 DevTools Performance recording of one of these runs would attribute it; nothing short of that
 should be written down as the cause.
 
-**What was done meanwhile.** The strip caps at `STRIP_STACK_CAP = 6` named segments plus the
-aggregate — **seven**, two steps clear of the cliff, which passes the committed condition at
-+0.3 ms. Eight would also pass on today's numbers and would sit one segment from a discontinuity
-nobody has explained; that is the kind of margin that vanishes when somebody changes something
-unrelated. The dialog keeps its cap of eight: it is DOM and SVG, not this painter.
+**What was done meanwhile.** The cost remedy set `STRIP_STACK_CAP` to six named segments plus the
+aggregate — seven, two steps clear of the cliff. **The shipped value is three**, and this row said
+six until 2026-08-31: the very next commit cut it further, for a different reason entirely
+(legibility at 72 px, ADR-0121 D3 — six named bands put the aggregate at 0.52 px), and nothing
+propagated that here. Two reviewers found the stale figure independently in the same gate pass. It
+is filed as an understatement of the safety margin rather than an overstatement, which is the
+harmless direction and is exactly why nobody would have noticed.
 
-**Remedy:** attribute the tail (DevTools Performance over one Fit-zoom run), then decide whether the
-cap can rise. Until then the cap is the mitigation and this row is the reason it is 6 and not 8.
+So the cap is no longer this row's to set. Height binds before cost does: at four segments the
+measured delta is +0.2 ms, roughly fifty times clear of the discontinuity, and a legibility argument
+would refuse to raise it long before a cost argument would allow it. The dialog keeps its cap of
+eight: it is DOM and SVG, not this painter.
+
+**Remedy:** attribute the tail (DevTools Performance over one Fit-zoom run). What that buys is now
+narrower than when this row was written — it removes an unexplained discontinuity from a painter the
+product depends on, rather than unlocking a cap that something else is holding down anyway.
 
 ### 224. `plan:scale-500` is described as fully unassigned and its spec assigns 168 activities
 

@@ -140,8 +140,41 @@ export type StackBy = 'resource' | 'group';
  *
  * Resources with no parent stand for themselves. That is deliberate and not a fallback: a
  * standalone crane is not "ungrouped", it is a thing in the plan, and burying it in an "Ungrouped"
- * bucket would hide a real resource behind a word for an absence.
+ * bucket would hide a real resource behind a word for an absence. (The spec's US-8 says
+ * "Ungrouped"; this departs from it knowingly, and the UX gate agreed.)
+ *
+ * **It walks to the TOP-LEVEL ancestor, not to the immediate parent**, which is what US-8 asks for
+ * and what the control's own label promises. ADR-0053 M3 allows a resource tree ten deep, so
+ * `Groundworks → Concrete gang → Vibrator operator` under an immediate-parent rule attributes the
+ * operator to the gang, and a control that says "Trade group" quietly stacks by sub-gang instead —
+ * a picture that looks right and answers a different question. The walk is **bounded** rather than
+ * trusting that depth: ADR-0053 M3 enforces acyclicity and depth <= 10 as SERVICE invariants, and
+ * this is a client deriving from a fetched list that may be paged, stale, or partial, so a cycle
+ * here must degrade to a wrong grouping rather than to a hung tab.
  */
+/** ADR-0053 M3's depth ceiling, used here as a walk bound rather than as an assumption. */
+const MAX_GROUP_DEPTH = 10;
+
+/**
+ * The top-level ancestor of `id`, or `id` itself when it has no parent.
+ *
+ * Bounded at {@link MAX_GROUP_DEPTH} and guarded against revisiting a node: the depth and
+ * acyclicity invariants are enforced in the API service, and this runs over a list the client
+ * fetched, so the failure it must not have is an infinite loop. Hitting either bound returns the
+ * deepest ancestor reached, which is a wrong grouping and not a broken page.
+ */
+function topLevelOf(id: string, parentOf: (resourceId: string) => string | null): string {
+  const seen = new Set<string>([id]);
+  let current = id;
+  for (let depth = 0; depth < MAX_GROUP_DEPTH; depth += 1) {
+    const parent = parentOf(current);
+    if (parent === null || seen.has(parent)) return current;
+    seen.add(parent);
+    current = parent;
+  }
+  return current;
+}
+
 export function groupSeries(
   series: readonly ResourceHistogramSeries[],
   bucketCount: number,
@@ -154,7 +187,7 @@ export function groupSeries(
   for (const s of series) {
     // A resource with no parent IS its own band — see the docblock. Keying on the resource's own id
     // in that case also keeps `nameOf` working without a second lookup table.
-    const key = parentOf(s.resourceId) ?? s.resourceId;
+    const key = topLevelOf(s.resourceId, parentOf);
     labels.set(key, nameOf(key));
     const bucket = byKey.get(key) ?? { values: new Array<number>(bucketCount).fill(0), total: 0 };
     for (let i = 0; i < bucketCount; i += 1) bucket.values[i]! += s.values[i] ?? 0;
@@ -185,6 +218,20 @@ export function groupSeries(
  * the table, which never aggregates, still carries it. Recorded here so nobody "fixes" it into
  * per-bucket ranking, which would make a segment's colour change from bucket to bucket.
  */
+/**
+ * The rank order every surface reads the stack in: descending total, `resourceId` breaking ties so
+ * two resources with identical load never swap between renders.
+ *
+ * **Exported because the TABLE has to sort by it too.** The engine returns series in `resourceId`
+ * (UUID) order, which is unrelated to load, so a table fed the raw list puts its columns in an
+ * order that has nothing to do with the chart's bands — and a reader moving between the two
+ * re-maps every column. The spec's US-4 requires them to match, and the table's own caption had
+ * been *claiming* "largest first" while doing no such thing. One comparator, so they cannot drift.
+ */
+export function rankSeries(series: readonly ResourceHistogramSeries[]): ResourceHistogramSeries[] {
+  return [...series].sort((a, b) => b.total - a.total || a.resourceId.localeCompare(b.resourceId));
+}
+
 export function stackSeries(
   series: readonly ResourceHistogramSeries[],
   bucketCount: number,
@@ -195,9 +242,7 @@ export function stackSeries(
   // failure rank-assignment structurally cannot have. Clamp rather than trust the caller.
   const effectiveCap = Math.max(1, Math.min(cap, CATEGORICAL_CYCLE_LENGTH));
 
-  const ranked = [...series].sort(
-    (a, b) => b.total - a.total || a.resourceId.localeCompare(b.resourceId),
-  );
+  const ranked = rankSeries(series);
 
   const shown = ranked.slice(0, effectiveCap);
   const rest = ranked.slice(effectiveCap);

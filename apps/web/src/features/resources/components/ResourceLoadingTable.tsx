@@ -1,6 +1,8 @@
 import { HISTOGRAM_GRANULARITIES, type HistogramGranularity } from '@repo/types';
 import type { ResourceHistogramBucket, ResourceHistogramSeries } from '@repo/types';
 
+import { rankSeries } from '../model/stack-series';
+
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 
@@ -79,9 +81,23 @@ function bucketTotal(series: readonly ResourceHistogramSeries[], index: number):
   return sum;
 }
 
+/**
+ * **The table sorts, rather than trusting its caller to.**
+ *
+ * The caption has always claimed "ordered by total budgeted units, largest first" and the table
+ * did nothing of the kind — it rendered whatever order it was handed, which from the engine is
+ * `resourceId` (UUID) order and therefore unrelated to load. Both call sites passed the raw list,
+ * and both unit fixtures happened to be in descending order already, so the false caption shipped
+ * green. The spec's US-4 requires the column order to match the chart's bands so a reader moving
+ * between the two is not re-mapping; sorting here rather than at the two call sites is what makes
+ * that true of every caller, including the next one.
+ *
+ * It shares {@link rankSeries} with the chart, so the two orders are the same derivation and not
+ * two agreeing implementations.
+ */
 export function ResourceLoadingTable({
   buckets,
-  series,
+  series: unsortedSeries,
   granularity,
   resourceName,
   captionId,
@@ -94,6 +110,7 @@ export function ResourceLoadingTable({
   /** Optional id to associate an external heading as the table caption (else a plain caption). */
   captionId?: string;
 }): React.ReactElement {
+  const series = rankSeries(unsortedSeries);
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left text-sm">

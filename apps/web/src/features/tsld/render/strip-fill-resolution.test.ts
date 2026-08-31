@@ -61,6 +61,7 @@ const PALETTE: ResourceStripPalette = {
 function snapshotWith(fill: string): ResourceStripSnapshot {
   return {
     segments: [{ values: [10, 20], fill }],
+    bucketTotals: [10, 20],
     dayOffsets: [
       { start: 0, end: 7 },
       { start: 7, end: 14 },

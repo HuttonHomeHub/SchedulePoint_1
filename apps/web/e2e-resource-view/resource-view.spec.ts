@@ -95,7 +95,10 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
   // series) and the reused bucket-size Select, then expand the parallel accessible table.
   const resourcePicker = stripPanel.getByLabel('Resource');
   await expect(resourcePicker).toBeVisible();
-  await expect(resourcePicker.locator('option')).toHaveText(['Crew A']);
+  // The stacked view is the picker's default and its first option (ADR-0121); isolating a single
+  // resource is now a choice rather than the starting position.
+  await expect(resourcePicker.locator('option')).toHaveText(['All resources (stacked)', 'Crew A']);
+  await resourcePicker.selectOption({ label: 'Crew A' });
 
   const bucketSizeSelect = stripPanel.getByLabel('Bucket size');
   await expect(bucketSizeSelect).toHaveValue('WEEK');

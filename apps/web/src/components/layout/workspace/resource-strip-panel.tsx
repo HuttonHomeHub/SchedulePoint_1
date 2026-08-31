@@ -11,6 +11,7 @@ import {
   useResources,
 } from '@/features/resources';
 import { StackByControl } from '@/features/resources/components/StackByControl';
+import { StackLegend } from '@/features/resources/components/StackLegend';
 import {
   STRIP_STACK_CAP,
   type StackBy,
@@ -18,6 +19,7 @@ import {
   stackSeries,
 } from '@/features/resources/model/stack-series';
 import { RESOURCE_STRIP_HEIGHT } from '@/features/tsld/components/TsldCanvas';
+import { useCanvasSurface } from '@/features/tsld/render/canvas-surface';
 import {
   categoricalCycleResolved,
   resolveResourceStripPalette,
@@ -27,6 +29,7 @@ import {
   seriesMax,
   type ResourceStripSnapshot,
 } from '@/features/tsld/render/resource-strip';
+import { useThemeVersion } from '@/features/tsld/render/use-theme-version';
 
 /**
  * The picker's stacked-default value. Deliberately not a resourceId and deliberately not `''` — an
@@ -93,13 +96,31 @@ export function ResourceStripPanel({
   const groupsExist = (resources.data ?? []).some((r) => r.parentId !== null);
 
   const series = histogram.data?.series ?? [];
-  // Canvas 2D `fillStyle` cannot take a `var()`, so the strip's fills are resolved here — off the
-  // canvas surface element, which is what ADR-0102 established the painter must read from.
-  const stripPalette = useMemo(
-    () => resolveResourceStripPalette(document.documentElement),
-    // Re-resolved on the shared theme bump, exactly as `TsldCanvas` does for the scene.
-    [],
-  );
+  /**
+   * **The CANVAS surface element, not `<html>` — and the comment here used to say so while the
+   * code did the opposite.**
+   *
+   * ADR-0102's finding was that `resolveTsldPalette` read `document.documentElement`, so the
+   * painter had never once used the canvas surface scope: `--primary`/`--border`/`--muted-foreground`
+   * are all rebound under `[data-surface="canvas"]`, and `<html>` is outside that subtree, so
+   * `getComputedStyle` returns the PAGE's values for a thing painted on the diagram's ground. That
+   * is why these resolvers take `root` as a required parameter rather than defaulting it — and this
+   * panel passed `document.documentElement` to both of them anyway, under a comment claiming it was
+   * reading the canvas surface. jsdom returns `''` from either root and falls through to identical
+   * fallbacks, so no unit test could tell the difference.
+   */
+  const canvasSurface = useCanvasSurface();
+  // Re-resolved on the shared theme bump, exactly as `TsldCanvas` does for the scene — which the
+  // previous `[]` deps array claimed and did not do.
+  const themeVersion = useThemeVersion();
+  // `themeVersion` is a re-resolve TRIGGER, not an input: the resolver reads live computed styles,
+  // so the dependency the lint rule cannot see is the DOM itself. Reading it inside the factory is
+  // what makes that honest to the compiler as well as to the reader — and dropping it restores the
+  // `[]` this replaced, which claimed in a comment to re-resolve on the theme bump and never did.
+  const stripPalette = useMemo(() => {
+    void themeVersion;
+    return resolveResourceStripPalette(canvasSurface);
+  }, [canvasSurface, themeVersion]);
   const buckets = histogram.data?.buckets ?? [];
 
   // **The most-loaded-resource default is gone, deliberately.** The picker now opens on the stacked
@@ -140,7 +161,9 @@ export function ResourceStripPanel({
     const neutral = { fill: stripPalette.tick, ink: stripPalette.ground };
     // The RESOLVED ramp, because these segments are handed to a canvas: `fillStyle` discards a
     // `var()` silently and keeps the previous fill, so the whole stack would paint one colour.
-    const cycle = categoricalCycleResolved(document.documentElement);
+    // Off the canvas surface for the same reason `stripPalette` is — consistently, rather than
+    // because these particular tokens happen to sit outside the rebind closure today.
+    const cycle = categoricalCycleResolved(canvasSurface);
     if (stackBy !== 'group') {
       return stackSeries(series, buckets.length, {
         resourceName,
@@ -157,7 +180,7 @@ export function ResourceStripPanel({
       cap: STRIP_STACK_CAP,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `resourceName` closes over a per-render map
-  }, [series, buckets.length, stripPalette, stackBy, resources.data]);
+  }, [series, buckets.length, stripPalette, stackBy, resources.data, canvasSurface]);
 
   const snapshot = useMemo<ResourceStripSnapshot | null>(() => {
     if (buckets.length === 0) return null;
@@ -168,6 +191,9 @@ export function ResourceStripPanel({
       const name = nameById.get(selectedSeries.resourceId);
       return {
         segments: [{ values: selectedSeries.values, fill: stripPalette.bar }],
+        // One band, so the totals ARE the band — stated rather than summed, which is the same
+        // producer-owns-the-total rule the stacked branch below follows.
+        bucketTotals: selectedSeries.values,
         dayOffsets,
         dataDate,
         max: seriesMax(selectedSeries),
@@ -178,6 +204,7 @@ export function ResourceStripPanel({
     if (stacked.segments.length === 0 || stacked.peak <= 0) return null;
     return {
       segments: stacked.segments.map((seg) => ({ values: seg.values, fill: seg.fill })),
+      bucketTotals: stacked.bucketTotals,
       dayOffsets,
       dataDate,
       max: stacked.peak,
@@ -239,6 +266,32 @@ export function ResourceStripPanel({
         />
         <BucketSizeSelect id={bucketSizeId} value={granularity} onChange={setGranularity} />
       </div>
+
+      {/**
+       * **The legend and the truncation notice, which this surface shipped without.**
+       *
+       * The strip canvas is `aria-hidden`, so before this there was no text anywhere naming which
+       * colour was which resource — colour as the sole channel, with the aggregate band completely
+       * unidentifiable. The spec's D5 decided the legend belongs in this chrome panel and the plan
+       * listed hosting it as a development step; neither happened. The notice is the same story:
+       * the dialog says "Showing 200 of 247" when the histogram is truncated and the strip drew the
+       * same incomplete 200 silently, so two views of one plan disagreed about whether the reader
+       * was seeing everything.
+       *
+       * Only in the stacked view: isolating a resource names it in the picker and in the
+       * disclosure, so a one-entry legend would restate the selection rather than decode anything.
+       */}
+      {stackedAll && stacked.segments.length > 0 ? (
+        <div className="mt-2">
+          <StackLegend segments={stacked.segments} layout="row" />
+        </div>
+      ) : null}
+      {histogram.data?.hasMore === true ? (
+        <p role="status" className="text-muted-foreground mt-2 text-sm">
+          Showing {String(series.length)} of {String(histogram.data.total)} resources — the stack
+          below is of what is shown rather than of the whole plan.
+        </p>
+      ) : null}
 
       <div className="mt-3">
         {histogram.isPending ? (

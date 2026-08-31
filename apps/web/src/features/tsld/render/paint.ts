@@ -65,6 +65,7 @@ import {
   type Viewport,
 } from './render-model';
 import {
+  SEGMENT_RULE_MIN_PX,
   STRIP_BAR_TOP_PAD,
   bucketBarsFromDays,
   type ResourceStripSnapshot,
@@ -2085,12 +2086,6 @@ export interface ResourceStripPalette {
   ground: string;
 }
 
-/**
- * A segment thinner than this gets no boundary rule above it. One pixel of separator on a two-pixel
- * band is not a separator, it is half the band.
- */
-const SEGMENT_RULE_MIN_PX = 2;
-
 /** Format a demand value (`DECIMAL(18,4)` units) for the max-tick label — ≤ 4 dp, trailing zeros dropped. */
 function formatStripUnits(value: number): string {
   return Number(value.toFixed(4)).toString();
@@ -2156,15 +2151,11 @@ export function paintResourceStrip(
   // co-alignment definitional — a sibling projector would be a second copy of the same affine, and
   // the symptom of a drift would be a band landing under a different day column from the bar it
   // belongs to (the ADR-0065 `routeOrthogonal` argument, one module in).
-  const bucketCount = Math.max(...snapshot.segments.map((seg) => seg.values.length), 0);
-  const totals: number[] = [];
-  for (let i = 0; i < bucketCount; i += 1) {
-    let sum = 0;
-    for (const seg of snapshot.segments) sum += seg.values[i] ?? 0;
-    totals.push(sum);
-  }
-
-  const bars = bucketBarsFromDays(totals, snapshot.dayOffsets, view, band, {
+  // **The totals are the producer's, not re-summed here.** `stackSeries` sums them once in draw
+  // order precisely because summing the same values another way can differ in the last bits under
+  // IEEE addition; re-deriving them in the painter was a second implementation of the computation
+  // that rule exists to forbid, agreeing only by the accident that segment order survives the trip.
+  const bars = bucketBarsFromDays(snapshot.bucketTotals, snapshot.dayOffsets, view, band, {
     height: band.height,
     max: snapshot.max,
   });

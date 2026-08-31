@@ -1,8 +1,10 @@
 import type { ResourceHistogramBucket } from '@repo/types';
 
 import { formatUnits } from './ResourceLoadingTable';
+import { StackLegend } from './StackLegend';
 
 import { type StackedSeries, stackOffsets } from '@/features/resources/model/stack-series';
+import { SEGMENT_RULE_MIN_PX } from '@/features/tsld/render/resource-strip';
 
 /**
  * **The stacked bar chart, and its legend.**
@@ -57,27 +59,7 @@ export function ResourceStackChart({
 
   return (
     <div className="flex items-start gap-4">
-      <ul
-        aria-label="Legend"
-        className="flex shrink-0 flex-col gap-1 text-sm"
-        style={{ width: `${String(LEGEND_WIDTH_PX)}px` }}
-      >
-        {segments.map((seg) => (
-          <li key={seg.resourceId ?? '__other'} className="flex items-baseline gap-2">
-            <span
-              aria-hidden="true"
-              className="mt-1 inline-block size-3 shrink-0 rounded-xs"
-              style={{ background: seg.fill }}
-            />
-            <span className="min-w-0 flex-1 truncate" title={seg.label}>
-              {seg.label}
-            </span>
-            <span className="text-muted-foreground shrink-0 tabular-nums">
-              {formatUnits(seg.total)}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <StackLegend segments={segments} width={LEGEND_WIDTH_PX} formatUnits={formatUnits} />
 
       {/* The plot. `aria-hidden` — the table below carries every number this draws. */}
       <div
@@ -85,29 +67,51 @@ export function ResourceStackChart({
         className="border-border flex min-w-0 flex-1 items-end gap-px border-b"
         style={{ height: `${String(PLOT_HEIGHT)}px` }}
       >
-        {buckets.map((bucket, b) => (
-          <div
-            key={bucket.start}
-            className="relative flex-1"
-            style={{ height: `${String((bucketTotals[b] ?? 0) * scale)}px` }}
-          >
-            {segments.map((seg, s) => {
-              const value = seg.values[b] ?? 0;
-              if (value <= 0) return null;
-              return (
-                <span
-                  key={seg.resourceId ?? '__other'}
-                  className="absolute inset-x-0"
-                  style={{
-                    background: seg.fill,
-                    height: `${String(value * scale)}px`,
-                    bottom: `${String((offsets[b]?.[s] ?? 0) * scale)}px`,
-                  }}
-                />
-              );
-            })}
-          </div>
-        ))}
+        {buckets.map((bucket, b) => {
+          // Reset per column: the boundary rule is about vertical neighbours within one bucket.
+          let previousHeight = 0;
+          return (
+            <div
+              key={bucket.start}
+              className="relative flex-1"
+              style={{ height: `${String((bucketTotals[b] ?? 0) * scale)}px` }}
+            >
+              {segments.map((seg, s) => {
+                const value = seg.values[b] ?? 0;
+                if (value <= 0) return null;
+                const height = value * scale;
+                // **The ground-coloured boundary, which this chart shipped without.**
+                //
+                // The whole WCAG 1.4.11 argument for the stack is that two adjacent fills never have
+                // to clear 3:1 against EACH OTHER, because a boundary in the ground colour always
+                // sits between them and every fill is gated at >= 3:1 against that ground. The canvas
+                // painter implemented it; this chart drew bare backgrounds, so the argument was true
+                // of one renderer and asserted of both — and the ramp's worst adjacent pair measures
+                // 1.46:1, which is two bands reading as one block.
+                //
+                // Suppressed on the same threshold the canvas uses, from the same constant: a 1 px
+                // rule on a 2 px band is not a separator, it is half the band. `previousHeight`
+                // tracks the band below rather than the previous ARRAY entry, because a segment with
+                // no value in this bucket is skipped and is not underneath anything.
+                const boundary =
+                  previousHeight >= SEGMENT_RULE_MIN_PX && height >= SEGMENT_RULE_MIN_PX;
+                previousHeight = height;
+                return (
+                  <span
+                    key={seg.resourceId ?? '__other'}
+                    className="absolute inset-x-0"
+                    style={{
+                      background: seg.fill,
+                      height: `${String(height)}px`,
+                      bottom: `${String((offsets[b]?.[s] ?? 0) * scale)}px`,
+                      ...(boundary ? { borderBottom: '1px solid var(--card)' } : {}),
+                    }}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
