@@ -5326,6 +5326,34 @@ way round (loud, not silent), but the failure message would name the wrong cause
 
 ---
 
+## 223. The canvas resource strip does not export or print, and the gate for that cannot see it
+
+**Status:** open · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram UX review)
+
+The Stage-E resource strip (ADR-0049, `VITE_CANVAS_RESOURCE_VIEW`) is painted from `TsldCanvas`'s
+own `stripRef`, which is a **separate ref from `sceneRef`**. `use-diagram-image.ts` has **zero**
+references to `stripRef` / `resourceStrip` / `ResourceStripSnapshot` — verified by grep across
+`features/tsld/export/` — so the exported PNG/PDF and the printed diagram silently omit the strip a
+planner is looking at.
+
+**The sharp half is that ADR-0103's gate structurally cannot report it.**
+`export/scene-parity.structural.test.ts:30-31` parses exactly two files: `TsldCanvas.tsx` (for the
+`sceneRef` object literal) and `use-diagram-image.ts`. `resourceStrip` was never a **scene key**, so
+it is invisible to the comparison in _both_ directions — it can be neither a composed key nor a
+declared exclusion-with-a-reason. The gate built precisely because nine features silently dropped
+seven layers from the exported diagram has a blind spot of exactly the shape it exists to close, and
+that blind spot is a consequence of where the state lives rather than of anything anyone wrote.
+
+Today's cost is low: one grey bar for one resource. The stacked-histogram epic raises it — a
+coloured, multi-trade composition missing from the deliverable is the ADR-0103 `#164` shape again,
+and the strip is about to become the thing a planner most wants in a handout.
+
+**Remedy:** decide whether the strip belongs in the export at all (it may legitimately not — it is a
+lens, and `#167` already holds five lens keys as an open question), then make that decision
+_visible_ to the parity gate rather than leaving it as an absence. Widening the gate to read
+`stripRef` is the smaller half; the honest half is that a gate keyed on one ref name will go blind
+again the next time a layer gets its own ref.
+
 ## 222. `check:counts` reads any "N ADRs" in a gated file as a claim about the repository
 
 **Status:** open · **Raised:** 2026-08-30 (ADR-0120 M7) · **Size:** S
