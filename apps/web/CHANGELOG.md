@@ -1,5 +1,42 @@
 # @repo/web
 
+## 0.116.0
+
+### Minor Changes
+
+- [#438](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/438) [`af741ec`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/af741ecdc247bb8f3f268a6d3fd2334af881f8d1) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The resource histogram stacks, and it stacks by trade as well as by resource.
+  
+  The histogram showed **one resource at a time**, so answering "who is driving this peak?" meant
+  stepping through a picker one resource at a time and holding the shapes in your head. It now stacks
+  every resource in one chart, with a legend, and the data table beneath it gains a **Total** column
+  so the stacked height has a text equivalent rather than only a picture.
+  
+  **Stack by trade group is where this goes past what P6 offers.** P6 builds a stacked histogram by
+  adding one filter dialog per segment, which its own advocates call tedious for the case every real
+  programme has — dozens of trades. Because resources here already carry a parent group, that is a
+  dropdown: a forty-resource programme that stacks as a handful of bands and "Other (36 resources)"
+  becomes the picture you actually wanted, grouped by trade.
+  
+  The canvas strip under the diagram stacks too, showing fewer bands than the dialog. That is
+  deliberate and measured: at 72 px tall, six bands on a realistically skewed programme put the
+  smallest at half a pixel. Three named trades plus an aggregate is the glance; the dialog carries the
+  detail.
+
+### Patch Changes
+
+- [#431](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/431) [`0821e1d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/0821e1df52713f5f3664ec235af04c18fd1ca44a) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Recalculate confirms again after an auto-recalculation has settled.
+  
+  The button's stand-down rule asked whether a debounce **handle existed** rather than whether a
+  settle was **coming**, and the handle was never cleared when the debounce elapsed on its own. So
+  after any self-firing auto-recalculation, the first press of Recalculate stood down against a settle
+  that had already happened — and the settle announcer had consumed its baseline on that earlier
+  settle, so it said nothing either. The press produced complete silence, on the commonest path there
+  is: edit, let it settle, press Recalculate.
+  
+  The rule now asks the real question (`a debounce is pending OR a run is in flight`), so an edit whose
+  dates are still owed still owns the live region and the two announcers cannot collide, while a press
+  with nothing coming confirms as it always should have.
+
 ## 0.115.3
 
 ### Patch Changes
