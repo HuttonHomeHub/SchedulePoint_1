@@ -60,6 +60,25 @@ export function BucketSizeSelect({
  * `ResourceHistogram` renders, factored out so the canvas strip reuses it verbatim rather than
  * re-implementing the a11y equivalent (ADR-0049 §5).
  */
+/**
+ * **The per-bucket total, derived from THIS table's own columns — never passed in.**
+ *
+ * The spec left this as "a new required/optional `bucketTotals` prop (or derived internally;
+ * decided at build)", and that is a shared component's public contract, which is exactly the
+ * category the process says must be settled before code rather than during it.
+ *
+ * Deriving it here is the load-bearing half. Passing it in would give one number two sources — the
+ * chart's capped-plus-aggregated derivation, and the raw column set this table renders — and they
+ * would be summed over different sets in different orders. The table is the RECORD; a record whose
+ * footer can disagree with the cells above it is worse than no footer. Derived, the Total column
+ * cannot disagree with the numbers beside it, because it is made of them.
+ */
+function bucketTotal(series: readonly ResourceHistogramSeries[], index: number): number {
+  let sum = 0;
+  for (const s of series) sum += s.values[index] ?? 0;
+  return sum;
+}
+
 export function ResourceLoadingTable({
   buckets,
   series,
@@ -83,12 +102,20 @@ export function ResourceLoadingTable({
           className="text-muted-foreground mb-2 text-left text-sm"
         >
           Curve-shaped units per {GRANULARITY_LABELS[granularity].toLowerCase()} bucket, by
-          resource. Each resource’s row sums to its total budgeted units.
+          resource. Each resource is a column, ordered by total budgeted units, largest first; each
+          column sums to the resource’s total, and the Total column sums each bucket across every
+          resource. Resources are never grouped here, even where the chart aggregates the smallest
+          into “Other”.
         </caption>
         <thead>
           <tr>
             <th scope="col" className="border-border border-b p-2 font-semibold">
               Bucket start
+            </th>
+            {/* The stack's new fact. Derived below from THIS table's own columns — see the note on
+                `bucketTotal`. */}
+            <th scope="col" className="border-border border-b p-2 text-right font-semibold">
+              Total
             </th>
             {series.map((s) => (
               <th
@@ -107,6 +134,13 @@ export function ResourceLoadingTable({
               <th scope="row" className="border-border border-b p-2 font-normal">
                 {bucket.start}
               </th>
+              {/* Deliberately NOT bold. Its column header names it and `tabular-nums` aligns it,
+                  so a per-row weight buys nothing a reader needs — and `token-architecture`'s
+                  weight ratchet counts every screen that places its own, which is how this was
+                  caught rather than shipped. The footer's grand total keeps the emphasis. */}
+              <td className="border-border border-b p-2 text-right tabular-nums">
+                {formatUnits(bucketTotal(series, i))}
+              </td>
               {series.map((s) => (
                 <td
                   key={s.resourceId}
@@ -123,6 +157,9 @@ export function ResourceLoadingTable({
             <th scope="row" className="p-2 font-semibold">
               Total
             </th>
+            <td className="p-2 text-right font-semibold tabular-nums">
+              {formatUnits(series.reduce((acc, s) => acc + s.total, 0))}
+            </td>
             {series.map((s) => (
               <td key={s.resourceId} className="p-2 text-right font-semibold tabular-nums">
                 {formatUnits(s.total)}

@@ -62,9 +62,18 @@ describe('ResourceHistogram (ADR-0044 §3 / ADR-0035 §31)', () => {
     const table = await screen.findByRole('table');
     // The resource name is a column header; every bucket start is a row header — a real semantic table.
     expect(within(table).getByRole('columnheader', { name: 'Crew A' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Total' })).toBeInTheDocument();
     expect(within(table).getByRole('rowheader', { name: '2026-01-05' })).toBeInTheDocument();
-    // The bucket values are present as cells.
-    expect(within(table).getByText('20')).toBeInTheDocument();
+    // **Scoped to a row, not to the table.** This asserted `getByText('20')` until the stacked
+    // histogram added a per-bucket Total column, at which point 20 appeared twice — the resource's
+    // cell and that bucket's total, which are equal because this fixture has one resource. A bare
+    // text query over a table is ambiguous the moment a column arrives; the row is the real subject.
+    const firstBucket = within(table).getByRole('row', { name: /2026-01-05/ });
+    expect(
+      within(firstBucket)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['10', '10']);
     // The total foot row carries the conserved sum.
     expect(within(table).getAllByText('42').length).toBeGreaterThan(0);
   });

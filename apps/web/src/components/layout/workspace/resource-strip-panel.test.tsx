@@ -81,7 +81,16 @@ describe('ResourceStripPanel (Stage E, ADR-0049)', () => {
     // The most-loaded resource (Crew A, total 42) is the default column; every bucket start is a row header.
     expect(within(table).getByRole('columnheader', { name: 'Crew A' })).toBeInTheDocument();
     expect(within(table).getByRole('rowheader', { name: '2026-01-05' })).toBeInTheDocument();
-    expect(within(table).getByText('20')).toBeInTheDocument();
+    // **Scoped to a row.** This asserted `getByText('20')` over the whole table until the shared
+    // `ResourceLoadingTable` gained a per-bucket Total column, at which point a value and its
+    // bucket total were both `20` and the query became ambiguous. The row is the real subject —
+    // and asserting the whole row also pins that the Total column sits where it is meant to.
+    const secondBucket = within(table).getByRole('row', { name: /2026-01-12/ });
+    expect(
+      within(secondBucket)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['20', '20']);
   });
 
   it('publishes the strip snapshot for the most-loaded resource, with the bucket axis pre-projected', async () => {
