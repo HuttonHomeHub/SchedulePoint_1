@@ -468,6 +468,68 @@ describe('the axis markers are legible in the ruler band', () => {
   });
 });
 
+/**
+ * **The grounds the stacked histogram actually paints on — and `--card` is the one the draft missed.**
+ *
+ * The spec proposed asserting these fills "under the `page` and `canvas` scopes". Neither is where
+ * the DOM chart paints: `ResourceHistogram` renders inside `Dialog`, whose content area is
+ * `bg-card text-card-foreground` (`components/ui/dialog.tsx:87`), and the strip's chrome panel is
+ * `bg-card/95`. `--card` is `oklch(1 0 0)` — pure white, distinct from `--page-background` and from
+ * `--canvas`/`--canvas-band` — and ADR-0097 makes `Card` a **reset, deliberately outside every
+ * surface scope's rebind closure**, so no `<Surface>` wrapping brings it into line and no existing
+ * page/canvas pair implies anything about it.
+ *
+ * That is not a hypothetical gap. `docs/TECH_DEBT.md` #162 records this repository shipping a
+ * chart-adjacent swatch against exactly this reset once already, found by a specialist gate rather
+ * than by anything here. The ramp's tightest existing margin is 3.10:1, which is narrow enough that
+ * an unmeasured ground is not a formality.
+ *
+ * **What is deliberately NOT asserted: any pair between two adjacent segment fills.** No success
+ * criterion requires two adjacent data fills to differ from each other — the same reasoning this
+ * file already records for the Today / Data-date marker pair. 1.4.11 applies to the segment
+ * BOUNDARY, and the boundary is a 1 px separator drawn in the ground colour, so it is guaranteed
+ * >= 3:1 against both neighbours by the very floor asserted below, however close two fills are to
+ * each other. 1.4.1 is satisfied by **position**: segments are ordered by descending total and the
+ * legend and table share that order, so identity never requires discriminating hue. The ramp's own
+ * worst adjacent pair is 1.46:1 and that is fine.
+ */
+const STACK_GROUNDS: ReadonlyArray<readonly [name: string, token: string]> = [
+  // The dialog chart and the strip's chrome panel. A reset, outside every scope (ADR-0097).
+  ['the dialog card', '--card'],
+  // The strip's own canvas is transparent, so what shows through is the diagram ground.
+  ['the diagram ground', '--canvas'],
+  ['a month band', '--canvas-band'],
+];
+
+describe('the stacked histogram is perceivable on every ground it paints on', () => {
+  // ONE resolve is enough and the reason is worth stating: `--chart-*` sits in
+  // `OUTSIDE_THE_CLOSURE.data` and `--card` is a reset, so neither is rebound by any scope — the
+  // values are identical whichever scope is asked. Resolved under `canvas` because that is the
+  // scope with the most grounds in play.
+  const tokens = resolve(THEME_SELECTORS[0], 'canvas');
+  const members = Array.from({ length: 12 }, (_, i) => `--chart-${String(i + 1)}` as const);
+
+  it.each(
+    members.flatMap((fill) =>
+      STACK_GROUNDS.map(([where, ground]) => [fill, ground, where] as const),
+    ),
+  )('%s is perceivable on %s (%s)', (fill, ground, _where) => {
+    const value = ratio(tokens, fill, ground);
+    expect(
+      value,
+      `${fill} vs ${ground} is ${fmtRatio(value)}, needs 3:1 — a segment a reader cannot ` +
+        'separate from the ground is a band they cannot see the extent of',
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(STACK_GROUNDS)('the "Other" aggregate is perceivable on %s', (_where, ground) => {
+    // The aggregate is neutral rather than a ramp member — it is not a resource, and giving it a
+    // categorical colour would say it is one. It still has to be visible.
+    const value = ratio(tokens, '--muted-foreground', ground);
+    expect(value, `the aggregate vs ${ground} is ${fmtRatio(value)}`).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('the diagram grid is readable on both of its grounds', () => {
   const tokens = resolve(THEME_SELECTORS[0], 'canvas');
 
