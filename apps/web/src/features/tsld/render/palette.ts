@@ -314,6 +314,10 @@ export function resolveResourceStripPalette(root: Element): ResourceStripPalette
     bar: token('--primary', '#3b6fbf'),
     axis: token('--border', '#2a2f3a'),
     tick: token('--muted-foreground', '#7a8090'),
+    // The strip canvas is transparent, so what shows through behind the bars is the diagram ground
+    // — which is why segment boundaries are drawn in it, and why the contrast gate asserts every
+    // categorical fill against `--canvas` as well as the dialog's `--card`.
+    ground: token('--canvas', '#f4f6f8'),
   };
 }
 

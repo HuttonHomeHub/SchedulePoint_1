@@ -29,6 +29,14 @@ export interface StripBar {
   w: number;
   h: number;
   value: number;
+  /**
+   * Which bucket this bar is, in the ORIGINAL series index — not its position among the visible
+   * bars. Culling makes those differ, and a stacked painter has to look each segment's value up by
+   * the real index. Added so the stack DELEGATES x/w/cull here rather than growing a sibling
+   * projector: two implementations of the same affine would drift, and the symptom would be a
+   * segment landing under a different day column from the bar it belongs to.
+   */
+  index: number;
 }
 
 /** A bucket's `[start, end)` pre-projected to signed day offsets about the data date — the snapshot
@@ -49,8 +57,22 @@ export interface StripBandGeom {
  * selected resource's series, its bucket axis **pre-projected to day offsets**, the data date (day 0),
  * and the whole-series max. The strip palette is re-resolved on the canvas side (on the shared theme
  * bump), not carried here, so this stays pure data. `null` ⇒ the strip draws nothing (empty/loading). */
+/** One band of the stacked strip — the painter's view of a `StackSegment`, geometry only. */
+export interface StripSegment {
+  /** Per-bucket values, index-aligned to `dayOffsets`. */
+  values: readonly number[];
+  /** The resolved fill for this band (Canvas 2D cannot take a `var()`). */
+  fill: string;
+}
+
 export interface ResourceStripSnapshot {
-  series: ResourceHistogramSeries;
+  /**
+   * The bands to stack, in draw order from the baseline up. **One entry is the isolated case** —
+   * the strip has always been able to show a single resource, and it still does, by publishing a
+   * one-segment stack rather than a different shape. That is what keeps isolation byte-for-byte:
+   * one band, painted with `palette.bar`, is exactly what the old single-series path drew.
+   */
+  segments: readonly StripSegment[];
   /** `dayOffsets[i]` is `buckets[i]` projected about `dataDate`; index-aligned to `series.values`. */
   dayOffsets: BucketDays[];
   dataDate: string;
@@ -113,7 +135,7 @@ export function bucketBarsFromDays(
     if (x2 <= 0 || x1 >= size.width) continue;
     const value = values[i] ?? 0;
     const h = (value / band.max) * barArea;
-    bars.push({ x: x1, w: Math.max(1, x2 - x1), h, value });
+    bars.push({ x: x1, w: Math.max(1, x2 - x1), h, value, index: i });
   }
   return bars;
 }

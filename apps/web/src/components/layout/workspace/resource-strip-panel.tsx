@@ -10,12 +10,21 @@ import {
   useResourceHistogram,
   useResources,
 } from '@/features/resources';
+import { stackSeries } from '@/features/resources/model/stack-series';
 import { RESOURCE_STRIP_HEIGHT } from '@/features/tsld/components/TsldCanvas';
+import { resolveResourceStripPalette } from '@/features/tsld/render/palette';
 import {
   projectBucketDays,
   seriesMax,
   type ResourceStripSnapshot,
 } from '@/features/tsld/render/resource-strip';
+
+/**
+ * The picker's stacked-default value. Deliberately not a resourceId and deliberately not `''` — an
+ * empty string is what a native `<select>` shows for "no match", so it would be indistinguishable
+ * from a broken binding.
+ */
+const ALL_RESOURCES = '__all__';
 
 /** Gap (px) between the DOM chrome panel's bottom edge and the reserved canvas strip band, so the
  * always-visible controls sit clear ABOVE the demand-bar band rather than covering it (UX review B4). */
@@ -66,36 +75,84 @@ export function ResourceStripPanel({
   const resourceName = (id: string): string => nameById.get(id) ?? 'Unknown resource';
 
   const series = histogram.data?.series ?? [];
+  // Canvas 2D `fillStyle` cannot take a `var()`, so the strip's fills are resolved here — off the
+  // canvas surface element, which is what ADR-0102 established the painter must read from.
+  const stripPalette = useMemo(
+    () => resolveResourceStripPalette(document.documentElement),
+    // Re-resolved on the shared theme bump, exactly as `TsldCanvas` does for the scene.
+    [],
+  );
   const buckets = histogram.data?.buckets ?? [];
 
-  // Default the picker to the **most-loaded** series (highest total), so the strip opens on the resource
-  // that matters most; fall back to the first. Recomputed only when the series set changes.
-  const defaultResourceId = useMemo(() => {
-    if (series.length === 0) return null;
-    return [...series].sort((a, b) => b.total - a.total)[0]!.resourceId;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `series` derives from histogram.data
-  }, [histogram.data]);
+  // **The most-loaded-resource default is gone, deliberately.** The picker now opens on the stacked
+  // view, which shows every resource including the most-loaded one — so a default that silently
+  // isolated the biggest trade was answering a question the stack answers better. Isolation is still
+  // one click, and is now a choice rather than a starting position.
   const [picked, setPicked] = useState<string | null>(null);
-  // The effective selection: the user's pick if it's still in the current series, else the default.
-  const selectedId =
-    picked && series.some((s) => s.resourceId === picked) ? picked : defaultResourceId;
+  /**
+   * **The stacked default is a sentinel, not a resourceId — and everything below must know that.**
+   *
+   * `selectedSeries` resolves BY resourceId, so a sentinel yields `null`. Every consumer that used
+   * to assume "there is always exactly one selected series" has to branch, and the accessible table
+   * is the one that matters: it rendered inside `{selectedSeries ? … : null}`, so the sentinel would
+   * have deleted the strip's text equivalent entirely, beside a disclosure announcing the
+   * `resourceName` fallback — "Show data table for Unknown resource".
+   */
+  const stackedAll = picked === null || picked === ALL_RESOURCES;
+  const selectedId = !stackedAll && series.some((s) => s.resourceId === picked) ? picked : null;
   const selectedSeries = series.find((s) => s.resourceId === selectedId) ?? null;
+  /** Every series when stacked; the one picked resource when isolated. Never empty-by-accident. */
+  const tableSeries = stackedAll ? series : selectedSeries ? [selectedSeries] : series;
 
   // Build + publish the immutable snapshot (ADR-0049 §4): the selected series, its bucket axis
   // pre-projected to day offsets (the same `daysBetween` the scene uses), the data date, and the
   // whole-series (viewport-independent) max. `null` when there's nothing to draw (loading / empty).
+  /**
+   * The stack the canvas paints, and the scale it is measured against.
+   *
+   * **Isolation publishes a ONE-SEGMENT stack rather than a different shape.** One band painted
+   * with `palette.bar` is exactly what the single-series path drew, so isolating a resource is
+   * byte-for-byte what it always was — the promise is kept by construction rather than by a branch
+   * in the painter.
+   *
+   * The scale is the peak STACKED total, not the tallest single series (ADR-0049 §6's whole-series
+   * max, amended for a stack): otherwise the tallest bucket would overflow the band.
+   */
+  const stacked = useMemo(
+    () =>
+      stackSeries(series, buckets.length, {
+        resourceName,
+        neutral: { fill: stripPalette.tick, ink: stripPalette.ground },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `resourceName` closes over a per-render map
+    [series, buckets.length, stripPalette],
+  );
+
   const snapshot = useMemo<ResourceStripSnapshot | null>(() => {
-    if (!selectedSeries || buckets.length === 0) return null;
-    const name = nameById.get(selectedSeries.resourceId);
+    if (buckets.length === 0) return null;
+    const dayOffsets = projectBucketDays(buckets, dataDate);
+
+    if (!stackedAll) {
+      if (!selectedSeries) return null;
+      const name = nameById.get(selectedSeries.resourceId);
+      return {
+        segments: [{ values: selectedSeries.values, fill: stripPalette.bar }],
+        dayOffsets,
+        dataDate,
+        max: seriesMax(selectedSeries),
+        ...(name ? { resourceName: name } : {}),
+      };
+    }
+
+    if (stacked.segments.length === 0 || stacked.peak <= 0) return null;
     return {
-      series: selectedSeries,
-      dayOffsets: projectBucketDays(buckets, dataDate),
+      segments: stacked.segments.map((seg) => ({ values: seg.values, fill: seg.fill })),
+      dayOffsets,
       dataDate,
-      max: seriesMax(selectedSeries),
-      ...(name ? { resourceName: name } : {}),
+      max: stacked.peak,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `buckets` derives from histogram.data
-  }, [selectedSeries, histogram.data, dataDate, nameById]);
+  }, [stackedAll, selectedSeries, stacked, histogram.data, dataDate, nameById, stripPalette]);
 
   useEffect(() => {
     onSnapshot(snapshot);
@@ -130,10 +187,11 @@ export function ResourceStripPanel({
             <Label htmlFor={resourcePickerId}>Resource</Label>
             <Select
               id={resourcePickerId}
-              value={selectedId ?? ''}
+              value={stackedAll ? ALL_RESOURCES : (selectedId ?? ALL_RESOURCES)}
               onChange={(event) => setPicked(event.target.value)}
               className="w-48"
             >
+              <option value={ALL_RESOURCES}>All resources (stacked)</option>
               {series.map((s) => (
                 <option key={s.resourceId} value={s.resourceId}>
                   {resourceName(s.resourceId)}
@@ -166,18 +224,21 @@ export function ResourceStripPanel({
           // The parallel accessible table is one disclosure away (ADR-0049 §5) — the strip band is thin,
           // so the bars are the glance and the table is the exact-numbers equivalent for AT / keyboard.
           <details>
+            {/* The label branches WITH the table. Naming a resource here when the view is stacked
+                would announce a name the reader is not looking at — and `resourceName` of a
+                sentinel is "Unknown resource", which is worse than saying nothing. */}
             <summary className="text-muted-foreground cursor-pointer text-sm select-none">
-              Show data table for {resourceName(selectedId ?? '')}
+              {stackedAll
+                ? 'Show data table'
+                : `Show data table for ${resourceName(selectedId ?? '')}`}
             </summary>
             <div className="mt-2">
-              {selectedSeries ? (
-                <ResourceLoadingTable
-                  buckets={buckets}
-                  series={[selectedSeries]}
-                  granularity={granularity}
-                  resourceName={resourceName}
-                />
-              ) : null}
+              <ResourceLoadingTable
+                buckets={buckets}
+                series={tableSeries}
+                granularity={granularity}
+                resourceName={resourceName}
+              />
             </div>
           </details>
         )}
