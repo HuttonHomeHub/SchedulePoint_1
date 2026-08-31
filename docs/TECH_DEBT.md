@@ -5326,6 +5326,39 @@ way round (loud, not silent), but the failure message would name the wrong cause
 
 ---
 
+## 224. `plan:scale-500` is described as fully unassigned and its spec assigns 168 activities
+
+**Status:** open · **Owner:** repo · **Raised:** 2026-08-31 (stacked-histogram spec fold)
+
+`docs/TEST_PLAYBOOK.md:193` describes `plan:scale-500` for DCMA metric 10 as **"478 of 478
+unassigned"**. Computed from the pure `scaleSpec({ activities: 500 })` — no database, no API:
+
+| fact               | value                                                    |
+| ------------------ | -------------------------------------------------------- |
+| resources declared | **1** (`SCALE_CREW`)                                     |
+| activities         | 540 (478 `TASK`, 40 `WBS_SUMMARY`, 18 milestones, 4 LOE) |
+| assignments        | **168**, each `budgetedUnits: 40`, `curveType: UNIFORM`  |
+
+So **478 is the right denominator** — it is exactly the `TASK` count — and "of 478 unassigned" is not:
+`generator.ts:76` declares `assignedFraction: 0.35` and `:203` applies it, giving 168 assigned and
+310 unassigned tasks.
+
+**Three readings survive and this row does not pick one**, because distinguishing them needs the
+health check run against a seeded database rather than the pure spec: (a) the playbook row is simply
+wrong; (b) the assignments do not reach the database, which would be a seeding defect and a much
+worse one; (c) DCMA metric 10 counts something narrower than "a task with a resource assignment",
+in which case the row is right and its wording is misleading.
+
+**Why it matters beyond tidiness.** The playbook is the document that says which plan proves what
+and _what wrong looks like_, so a reader checking metric 10 against this row would accept a
+100 %-unassigned verdict from a fixture that is 35 % assigned. `pnpm check:playbook` gates that
+every row **resolves to a plan in both directions**; it does not read the claims inside a row, and
+could not have caught this.
+
+**Found while disqualifying the fixture for a performance measurement** — the stacked-histogram
+epic needed a plan with many resources and this one declares exactly one, which would have measured
+a stacked chart's cost as zero.
+
 ## 223. The canvas resource strip does not export or print, and the gate for that cannot see it
 
 **Status:** open · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram UX review)

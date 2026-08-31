@@ -2,7 +2,7 @@
 
 - **Status:** Draft — **awaiting approval before implementation**
 - **Author(s):** feature-analyst (Claude Code), for James Ewbank
-- **Date:** 2026-08-30
+- **Date:** 2026-08-30 · **revised 2026-08-31** to fold four specialist reviews (§0.1)
 - **Tracking issue / epic:** _(none yet)_
 - **Roadmap link:** Resource management (ADR-0039 → ADR-0044 rung 5 → ADR-0049 Stage E)
 - **Related ADR(s):** amends **ADR-0049 §6**; builds on ADR-0044, ADR-0053 §3, ADR-0097 Landing E,
@@ -71,6 +71,48 @@ Confirmed as briefed (re-read, not trusted):
    palette). That is an ADR-0058 Class 1 shape, pre-existing — and this feature is the first to make
    the ramp load-bearing for **touching** segments, where the same comment records the worst
    adjacent pair at **1.46:1** (`globals.css:214`). See §4.5.
+
+### 0.1 What the specialist reviews corrected — kept visible, not silently replaced
+
+Four reviews (ui-architect, ux-reviewer, frontend-performance-reviewer, accessibility-reviewer) ran
+against the approved draft on 2026-08-31. **All four agreed with the epic**; every finding below is a
+condition of that agreement. Nine of them contradict something this document asserted, and the house
+habit is to correct in place and say so rather than edit quietly (ADR-0071's second half, ADR-0102's
+closing section). Each was re-verified against the code before folding, and one reviewer claim was
+itself sharpened by that check.
+
+| #      | What this spec said                                                    | What is true                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Where it is now fixed       |
+| ------ | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **1**  | US-4: the strip's `ResourceLoadingTable` is "unchanged from today"     | **False of the strip.** `resource-strip-panel.tsx:173-180` renders the table only `{selectedSeries ? … : null}` and passes `series={[selectedSeries]}`. With an "all" sentinel `selectedId` is not a `resourceId`, so `selectedSeries` is `null` (`:82`) and **the strip loses its text equivalent entirely** — a WCAG 2.2 AA regression the draft would have shipped, with no unit test failing because none mounts the panel in that state. True of the dialog only. | §2 US-4; new task **M2-T0** |
+| **2**  | US-6 "byte-for-byte today's behaviour" vs US-1 "does not special-case" | **Mutually contradictory.** Today's single bar is `palette.bar` (`--primary`); rank-1 under D2 is `--chart-1`. Both sentences were in the approved spec. Resolved toward the stronger promise: the isolated path keeps `bar`.                                                                                                                                                                                                                                          | §2 US-1/US-6; new **D7**    |
+| **3**  | "the same exported token list" / "shared, never a copy"                | **Currently impossible.** `WBS_CYCLE_TOKENS` is a module-private `const` (`render/palette.ts:21`) — only resolved forms are exported. Verified: no `export` on that declaration anywhere. The seam has to be designed, not assumed.                                                                                                                                                                                                                                    | new **D8**; **M1-T0**       |
+| **4**  | The dialog uses Tailwind `fill-chart-N` classes                        | **A scanner hazard.** Nothing uses `fill-chart-*`/`bg-chart-*` today; Tailwind v4 scans for literal strings, so an interpolated class compiles to no CSS — unstyled in a browser, green in jsdom asserting the `className`. Verbatim ADR-0100 M4's minimap-frame defect, same token family. The shipped precedent is `lensLegendVarPalette()` (`render/palette.ts:341-352`) rendering `var(--chart-N)` as inline style.                                                | §4.6; **M1-T4**             |
+| **5**  | The 1 px separator "makes the WCAG question moot" — a workaround       | **Understated: it is the correct mechanism.** The separator is drawn in the ground colour, and every fill is already required ≥ 3:1 against that ground, so the boundary is guaranteed ≥ 3:1 against **both** neighbours however close the two fills are to each other. Standard adjacent-wedge technique. Say it plainly.                                                                                                                                             | §4.6                        |
+| **6**  | Implied that adjacent fills need to contrast with each other           | **No success criterion requires it.** 1.4.11 applies to the **boundary**; 1.4.1 is satisfied because **position** is a second non-colour channel (descending-total order, shared by legend and table). The register already establishes this for the Today/Data-date pair (`token-contrast.test.ts:427-449`). So **no adjacent-fill pair is added** — which makes the gate smaller and more honest.                                                                    | §4.6                        |
+| **7**  | The contrast gate's grounds are `page` and `canvas`                    | **Both wrong for the dialog.** It paints on `--card` (`dialog.tsx:87` `bg-card`), and the strip's chrome panel on `bg-card/95` (`resource-strip-panel.tsx:125`). `--card`/`--popover` are ADR-0097 **resets, deliberately outside every scope's closure**, so no `<Surface>` wrapper brings them into line. TECH_DEBT #162 records this repository shipping a chart-adjacent swatch against exactly this reset once already.                                           | §4.6; **M1-T2**             |
+| **8**  | `bucketRects` is the co-alignment oracle to leave untouched            | **It has no production caller.** Grep across `apps/web`: the only non-test reference is its own definition; the painter calls `bucketBarsFromDays` (`paint.ts:2107`). M2-T1 as drafted would have protected the wrong function.                                                                                                                                                                                                                                        | **M2-T1**                   |
+| **9**  | M2-T1: "the existing suites green without modification"                | **False as stated.** `TsldCanvas.resource-strip.test.tsx:38` and `:157` construct `ResourceStripSnapshot` **literals**, so a snapshot shape change necessarily edits them. Only `render/resource-strip.test.ts`'s alignment assertions are the untouched oracle.                                                                                                                                                                                                       | **M2-T1**                   |
+| **10** | `ResourceLoadingTable`'s `bucketTotals` prop "decided at build"        | **Not permissible** — a shared component's public contract is an ADR-0105 trigger this spec's own §4.9 lists as firing. Decided here: **derived internally**, so the total cannot disagree with the numbers beside it.                                                                                                                                                                                                                                                 | §4.6; **D9**                |
+| **11** | Cited **CLAUDE.md §19.13** for the `<Select>` sentinel                 | **Overstated.** The strip's picker is a **native `<select>`**; §19.13 targets hand-rolled primitives (`Deck`/`Menu`/`Combobox`/`Tabs`/`Dialog`/`*Field`). Corrected rather than repeated — the ADR-0082 habit. The review is still commissioned, because finding **1**/**X3** shows a native control gaining an option is not risk-free on **naming**.                                                                                                                 | plan **M2-T0**, **M5-T1**   |
+
+**Two more the reviews found that this spec had not considered at all**, and one where the check
+sharpened the reviewer:
+
+- **The strip does not export or print, and ADR-0103's gate structurally cannot see it.** Filed as
+  `docs/TECH_DEBT.md` **#223** (2026-08-31, raised by this epic's UX review). Named in §3 as a known,
+  accepted, **pre-existing** exclusion so this epic does not silently inherit it.
+- **The `--chart-*` ramp is already safe from the ADR-0102 alias trap**, and the plan relied on a
+  docblock to say so. `token-alias-reads.structural.test.ts:82-97` fails any source file naming a
+  `--color-*` alias. State the gate, not the comment.
+- **`plan:scale-500` is worse than "likely trivial" — it holds exactly ONE resource.**
+  frontend-performance said the named fixture probably resolves to something trivial;
+  `scale/generator.ts:319-331` declares a single `SCALE_CREW`, and `:203` assigns it to 35 % of
+  tasks (`assignedFraction: 0.35`, `:76`). So that plan produces a **one-segment stack** and cannot
+  exercise the multi-segment paint path at all — it would measure the feature's cost as zero.
+  _(Unresolved and recorded rather than resolved: `docs/TEST_PLAYBOOK.md:193` says the same plan is
+  "478 of 478 unassigned" for DCMA metric 10. Both cannot describe the same rows; the discrepancy is
+  outside this epic and is not assumed away — M2-T5 must read the fixture's actual series count and
+  print it, not trust either document.)_
 
 ---
 
@@ -191,15 +233,16 @@ unchanged on both surfaces.
 
 ### Success criteria
 
-| #   | Criterion                                                                                                                                     | How measured                                                                                                          |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| S1  | Both surfaces default to stacked-all with **no control touched**                                                                              | Journey: reveal the strip / open the dialog and assert ≥ 2 distinct segment fills without interacting with any picker |
-| S2  | The stacked total is **arithmetically right** — the drawn segment heights sum to the bucket's true total across every shown series plus Other | Unit: property test over the pure derivation, `Σ segments === Σ series.values[i]` for every bucket                    |
-| S3  | No two **shown** segments share a colour, ever, at any resource count                                                                         | Unit: structural test over the derivation for 1…200 series                                                            |
-| S4  | Every number on the chart is reachable as text                                                                                                | Unit + axe: the `<table>` carries per-resource values **and** the per-bucket total; the chart stays `aria-hidden`     |
-| S5  | A truncated or aggregated picture says so                                                                                                     | Unit: `hasMore` ⇒ visible notice; `Other` ⇒ legend entry naming its count and total                                   |
-| S6  | The strip's paint cost stays inside the committed budget                                                                                      | §3 Performance — falsification condition written **before** measurement                                               |
-| S7  | Flag-off / rollback is a clean revert                                                                                                         | No new `VITE_` flag (§4.7 D6); each milestone is one revertible commit                                                |
+| #   | Criterion                                                                                                                                     | How measured                                                                                                                                                                                                                                                                                  |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | Both surfaces default to stacked-all with **no control touched**                                                                              | Journey: reveal the strip / open the dialog and assert ≥ 2 distinct segment fills without interacting with any picker                                                                                                                                                                         |
+| S2  | The stacked total is **arithmetically right** — the drawn segment heights sum to the bucket's true total across every shown series plus Other | Unit: property test over the pure derivation, `Σ segments === Σ series.values[i]` for every bucket                                                                                                                                                                                            |
+| S3  | No two **shown** segments share a colour, ever, at any resource count                                                                         | Unit: structural test over the derivation for 1…200 series                                                                                                                                                                                                                                    |
+| S4  | Every number on the chart is reachable as text **on both surfaces, in both stacked and isolated states**                                      | Unit + axe: the `<table>` carries per-resource values **and** the per-bucket total; the chart stays `aria-hidden`. **The strip's stacked default renders the full series set** — the draft's version of this criterion was satisfied by a strip that renders no table at all (§0.1 finding 1) |
+| S5  | A truncated or aggregated picture says so                                                                                                     | Unit: `hasMore` ⇒ visible notice; `Other` ⇒ legend entry naming its count and total. **Both notices' copy is drafted together**, because `Other (N)` and the `hasMore` notice can co-occur and are two different incompletenesses                                                             |
+| S6  | The strip's paint cost stays inside the committed budget                                                                                      | §3 Condition 1 — written **before** measurement, at **Week and Fit**, on a **named** fixture, at a **pinned DPR**                                                                                                                                                                             |
+| S7  | **A planner can distinguish every segment the strip claims to show, at 72 px**                                                                | §3 Condition 2 — a judgement against a screenshot at 1646, recorded with the screenshot. The feature's premise, which the draft costed and never tested                                                                                                                                       |
+| S8  | Flag-off / rollback is a clean revert                                                                                                         | No new `VITE_` flag (§4.7 D6); each milestone is one revertible commit                                                                                                                                                                                                                        |
 
 ### Open questions
 
@@ -255,7 +298,48 @@ unchanged on both surfaces.
 - **Q6 — stack order and colour assignment.** Default: **descending `total`, colour by rank.** See
   §4.7 D2 for why rank rather than a stable per-resource hash.
 - **Q7 — the S-curve.** The supplied source singles out a cumulative overlay as the one option worth
-  having. Default: **in scope as its own milestone (M3)**, frontend-only, off by default.
+  having. Default: **in scope as its own milestone**, frontend-only, off by default — but it is now
+  **M4, sequenced after grouping**, and its strip half is pre-flagged as likely-withdrawn (§4.7
+  "Milestone order"). See **Q8**, which asks whether it belongs in this epic at all.
+
+**CRITICAL — two more, added by the review round.**
+
+> **Q8 — should the S-curve stay in this epic?**
+>
+> The ui-architect review recommended reordering grouping ahead of it, which is folded (§4.7
+> "Milestone order"), and then asked a second question the reorder does not answer: **should the
+> S-curve be deferred out of the epic entirely?** The case for deferring is that grouping is where
+> the product **leads** P6 — one dropdown against one filter dialog per segment — and it turns
+> "Other (32 resources)" into named trades, which improves the feature's weakest state; whereas the
+> S-curve's strip half is already flagged as probably not fitting a 72 px band with a second labelled
+> axis, so half of it is likely to be withdrawn on measurement.
+>
+> **This is recorded as a decision for the product owner, not taken here.** The reorder is a
+> sequencing call an analyst can make; dropping a milestone the product owner's own supplied source
+> singles out as the one option worth having is not.
+>
+> **My default if unanswered:** keep it, as M4, after grouping. The dialog half is cheap
+> (`Σ` over an array the derivation already produces, plus one table column) and it is the only
+> milestone that reads a **trend** rather than a snapshot.
+
+> **Q9 — colour follows rank, so a re-ranking reshuffles colours. P6 does not do this.**
+>
+> **D2** assigns cycle member _n_ to segment _n_, so if two resources swap totals — after a
+> granularity change with an exact tie, an assignment edit, or a recalculation — **their colours
+> swap**. P6's stacked profile is the opposite: colour is assigned manually per filter and is
+> therefore permanent, which is one of the reasons its setup is tedious.
+>
+> The draft recorded this as an accepted cost inside D2 and put it in a docblock. The UX review's
+> point is that a planner who has learnt "the steel crew is the purple one" and then sees purple move
+> is not reading a docblock. **Raised here rather than left in the design**, because the alternative
+> — a stable per-resource assignment — cannot be had for free: a hash can collide among the shown set
+> (D2's recorded reason), so stability would need a **persisted** per-resource colour, which is a
+> schema change and a different epic.
+>
+> **My default if unanswered:** keep rank-assignment. The reshuffle is **visible rather than
+> silent** — the legend re-orders with it, on screen, in the same frame — and ties are the only case
+> a granularity change can produce (each series' `total` is invariant across granularities,
+> `engine/resource-histogram.ts:330`).
 
 ---
 
@@ -278,8 +362,14 @@ unchanged on both surfaces.
 >   the baseline, and the legend lists them in that same order.
 > - **Given** two vertically adjacent segments **then** a 1 px separator in the surface's ground
 >   colour separates them, so the boundary does not depend on the two fills differing.
+> - **Given** two adjacent segments whose drawn heights are small **then** the separator is
+>   **suppressed where either neighbour is under 2 px**, so ink never dominates the segment it
+>   divides (**D10** — at the strip's 66 px this is the common case, not the edge case).
 > - **Given** a plan whose loaded-resource count is 1 **then** the chart is a single-colour stack
->   and the legend has one entry — the degenerate case renders, it does not special-case.
+>   and the legend has one entry — the degenerate case renders, it does not special-case **the
+>   derivation**. _(Corrected after review: as drafted this contradicted US-6. The **colour** is a
+>   special case and deliberately so — see **D7**. A single stacked segment is painted `--chart-1`;
+>   a single **isolated** series keeps today's `--primary`.)_
 
 > **US-2** — As a **Planner**, I want a legend naming each colour, so that the colours mean
 > something.
@@ -312,6 +402,10 @@ unchanged on both surfaces.
 >   the individually-named resources keep the stable end of the stack.
 > - **Given** 8 or fewer resources **then** no "Other" segment renders at all — an empty aggregate is
 >   not drawn as a zero.
+> - **Given** the ranking **then** it is by **whole-series total**, never per-bucket. A resource that
+>   just misses the cap can therefore dominate one bucket from inside "Other". _(Recorded, on the UX
+>   review's request, so nobody "fixes" it into per-bucket ranking — that would re-rank the stack
+>   every bucket, destroying colour stability and the legend's meaning at once.)_
 
 > **US-4** — As a **screen-reader or keyboard user**, I want every number the chart shows to be
 > available as text, so that the stack is not the only representation.
@@ -319,8 +413,27 @@ unchanged on both surfaces.
 > **Acceptance criteria**
 >
 > - **Given** either surface **then** the chart remains `aria-hidden` and the
->   `ResourceLoadingTable` remains its text equivalent (unchanged from today —
->   `ResourceHistogram.tsx:77-79`, `resource-strip-panel.tsx:166-182`).
+>   `ResourceLoadingTable` remains its text equivalent.
+> - **Given the canvas strip in stacked mode** **then** the table renders **the full series set**,
+>   and in isolation it renders `[selectedSeries]`.
+>
+>   > **This criterion is a correction, and the draft's version was a WCAG regression.** It read
+>   > "unchanged from today — `ResourceHistogram.tsx:77-79`, `resource-strip-panel.tsx:166-182`",
+>   > which is true of the dialog and **false of the strip**. The panel renders the table inside
+>   > `{selectedSeries ? … : null}` and passes `series={[selectedSeries]}`
+>   > (`resource-strip-panel.tsx:173-180`); `selectedSeries` is `series.find(s => s.resourceId ===
+selectedId) ?? null` (`:82`). An "all" sentinel is not a `resourceId`, so under the draft the
+>   > strip's stacked default would have had **no text equivalent at all** — the chart hidden from
+>   > assistive technology by design, and nothing behind it. No unit suite would have caught it,
+>   > because none mounts the panel in that state. It is a task in its own right (**M2-T0**), not a
+>   > line in another one.
+>
+> - **Given the strip's `<summary>` disclosure** **then** its label names what the table contains —
+>   `Show data table (all resources)` when stacked, `Show data table for <name>` when isolated.
+>   Today's label is `Show data table for {resourceName(selectedId ?? '')}` (`:170`), and
+>   `resourceName` falls back to `'Unknown resource'` (`:66`), so the sentinel would announce
+>   **"Show data table for Unknown resource"** in the feature's own default state. Asserted as its
+>   own test in both states.
 > - **Given** the stack introduces a **new** fact — the per-bucket total — **then** the table gains a
 >   **Total** column carrying it, and the table's `<tfoot>` carries the grand total. Without this the
 >   chart shows a number the text equivalent does not.
@@ -351,13 +464,16 @@ unchanged on both surfaces.
 > - **Given** the canvas strip **then** its picker's **first and default** option is **"All
 >   resources (stacked)"**, and each resource remains selectable below it.
 > - **Given** I pick one resource **then** the strip draws that resource alone, scaled to its own
->   whole-series peak — byte-for-byte today's behaviour for that selection.
-> - **Given** I return to "All resources (stacked)" **then** the stack returns.
+>   whole-series peak, **in `palette.bar` (`--primary`) — byte-for-byte today's behaviour for that
+>   selection**, including its fill. _(This is the half of the US-1/US-6 contradiction that survives;
+>   see **D7**. It is the stronger promise, and it is the one a planner can check.)_
+> - **Given** I return to "All resources (stacked)" **then** the stack returns, and the table and the
+>   `<summary>` label switch with it (US-4).
 > - **Given** the dialog **then** it has **no** picker (it never had one) and always stacks — the
 >   dialog's job is the whole plan.
 
-> **US-7** _(M3)_ — As a **Planner**, I want a cumulative S-curve over the stack, so that I can read
-> the programme's overall loading trend.
+> **US-7** _(**M4** — renumbered; see §4.7 "Milestone order")_ — As a **Planner**, I want a
+> cumulative S-curve over the stack, so that I can read the programme's overall loading trend.
 >
 > **Acceptance criteria**
 >
@@ -369,8 +485,9 @@ unchanged on both surfaces.
 > - **Given** the overlay is off **then** nothing about the paint changes (the parity condition for
 >   the milestone).
 
-> **US-8** _(M4)_ — As a **Planner**, I want to stack by resource **grouping** rather than by
-> individual resource, so that a programme with 40 resources reads as five trades.
+> **US-8** _(**M3** — renumbered; see §4.7 "Milestone order")_ — As a **Planner**, I want to stack by
+> resource **grouping** rather than by individual resource, so that a programme with 40 resources
+> reads as five trades.
 >
 > **Acceptance criteria**
 >
@@ -408,7 +525,9 @@ in every case except an exact tie.
 | Case                                      | Behaviour                                                                                                                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | No series at all                          | Today's empty state, verbatim on both surfaces. No chart, no legend.                                                                                                                                         |
-| Exactly one series                        | Stacks; one segment, one legend entry. No special case.                                                                                                                                                      |
+| Exactly one series                        | Stacks; one segment in `--chart-1`, one legend entry. The **derivation** does not special-case; the **colour** does, and deliberately (**D7**) — an isolated single series stays `--primary`.                |
+| Strip in stacked mode, table disclosed    | The table renders **every** series, and the `<summary>` reads `Show data table (all resources)`. Both are new behaviour, not inherited — see §0.1 finding 1 (**M2-T0**).                                     |
+| A segment whose drawn height is < 2 px    | Drawn, with **no separator** on the affected boundary (**D10**). Identity comes from the legend and the table, which is where it comes from at any size.                                                     |
 | Exactly 8 series                          | All named; **no** "Other".                                                                                                                                                                                   |
 | 9 series                                  | Top 8 named + "Other (1 resource)" — singular in the copy.                                                                                                                                                   |
 | 200+ series                               | Top 8 + Other + the US-5 truncation notice. The chart is knowingly incomplete and says so.                                                                                                                   |
@@ -496,19 +615,73 @@ then a nine-file lint-script change, each time citing a finished epic's parity a
 pass removes it" has failed twice as a written instruction and "wants a mechanism rather than a third
 sentence". Arming it here would be supplying the third sentence.
 
-### Performance — the falsification condition, committed before any measurement
+### What the strip already does not do — a pre-existing exclusion this epic inherits
+
+**The canvas resource strip does not appear in the exported PNG/PDF or the printed diagram, and
+ADR-0103's parity gate structurally cannot report that.** `docs/TECH_DEBT.md` **#223**: the strip is
+painted from `TsldCanvas`'s own `stripRef`, a separate ref from `sceneRef`, and
+`export/scene-parity.structural.test.ts:30-31` parses exactly `TsldCanvas.tsx`'s `sceneRef` literal
+plus `use-diagram-image.ts` — so `resourceStrip` is invisible to the comparison in **both**
+directions and can be neither a composed key nor a declared exclusion-with-a-reason.
+
+Named here, in the spec, because this epic makes the strip carry **more** information: a planner who
+can now read total demand and its composition on the strip is more likely to try to export it, and
+"the picture we hand somebody who was not in the room" is exactly what ADR-0103 is about. **It is not
+in scope** — closing it is an export-path change with its own parity argument — but inheriting it
+silently is how it stays inherited. Not a regression, not caused here, and now written down where the
+next reader of this surface will meet it.
+
+### Performance — the falsification conditions, committed before any measurement
 
 Written now, before anything is built or measured, because this repository's habit is that a number
-produced after the fact gets tuned to the answer (ADR-0100 M0, ADR-0119, ADR-0110 D5).
+produced after the fact gets tuned to the answer (ADR-0100 M0, ADR-0119, ADR-0110 D5). There are
+**three**: paint cost, **legibility**, and the payload. The second was missing from the draft, and
+its absence was the sharper of the two performance findings — the feature's whole premise at 72 px is
+that a stack is _readable_ there, and only its _cost_ had a pre-committed test.
 
-> **Condition.** On the seed catalogue's largest resourced plan (`docs/TEST_PLAYBOOK.md`), at the
-> **Week** preset, at **1646 CSS px** (the product owner's Surface Pro width — 2880×1920 at 175%,
-> established in ADR-0091's retrospective and now the repository's reference width), with the
-> resource strip revealed:
+> **On what this is measured against — the correct framing of `docs/TECH_DEBT.md` #75, because half
+> of it is routinely quoted alone and both halves are half-truths.** #75's own correction
+> (2026-08-03) establishes that **there is no §16 in ADR-0026** (its sections run to §9a) and that
+> **4 ms was never a budget** — it is the measured p95 of a throwaway 2026 prototype, recorded as a
+> PASS against a ≤ 16 ms frame. The real gate in §9 is **≥ 45 fps @ 500 and ≥ 30 fps @ 2,000**. On
+> real hardware at 2,016 activities the shipped painter measures **Week 3.9 ms p95 with 0/600 frames
+> dropped**, and **Fit 8.9 ms p95 inside a 16.7 ms frame and yet 10.2 % dropped** (interval p95
+> 33.4 ms). So the gate is met and a planner still sees judder at Fit — which is the finding that
+> matters: **paint duration is the wrong quantity**, and frame pacing is the right one. The
+> 16.7–23.1 ms headless figures quoted elsewhere are software-rasterised and not the target
+> envelope. This spec's conditions therefore report **both** a duration delta and dropped frames, and
+> quote neither the alarming nor the reassuring half alone.
+
+> **Condition 1 — paint cost.** On a named fixture with **≥ 9 genuinely assigned resources across a
+> multi-year span** (see below), at **both** the **Week** preset **and** a **Fit / whole-plan** view,
+> at **1646 CSS px** with **`deviceScaleFactor` pinned and stated**, with the strip revealed:
 >
-> **The stacked strip's per-frame paint cost must be ≤ the single-series baseline + 2.0 ms at p95**,
-> over ≥ 200 frames of a scripted pan, with **paired same-session runs** (baseline and treatment in
-> one browser launch) and **the baseline's own run-to-run spread reported in the verdict**.
+> **`paintResourceStrip`'s own p95 must be ≤ the single-series baseline + 2.0 ms**, over ≥ 200 frames
+> of a scripted pan, with **paired same-session runs** and **the baseline's own run-to-run spread
+> reported in the verdict**. The run additionally reports the **total** frame cost and the **dropped
+> frame count**, not the delta alone.
+>
+> Four amendments to the draft's version, each from the performance review and each because the
+> draft's condition could have passed while the feature was slow:
+>
+> 1. **Fit zoom is added, and it is the real worst case.** Bucket count scales with **plan span**,
+>    not with zoom: a two-year plan at WEEK is ~104 buckets, and at Fit **nothing is culled**, so
+>    every one of them pays up to 9 fills + 8 separators instead of 1. Fit is also where the
+>    pre-existing painter has its thinnest margin (10.2 % dropped, above). The feature's worst case
+>    and the painter's worst case coincide at a zoom the draft's condition never visited.
+> 2. **The fixture is named, and `plan:scale-500` is disqualified.** It declares exactly **one**
+>    resource (`scale/generator.ts:319-331`, `SCALE_CREW`) assigned to 35 % of tasks (`:203`,
+>    `assignedFraction: 0.35` at `:76`) — a **one-segment stack**, which would measure this feature's
+>    cost as approximately zero and report a pass that means nothing. M2-T5 either names a
+>    catalogue plan whose series count it has **read and printed**, or builds a fixture; it may not
+>    name "the largest resourced plan" and let that resolve at run time.
+> 3. **DPR is pinned.** This is a fill-rate-bound measurement and the backing store scales by DPR²;
+>    1646 is the Surface Pro's **CSS** width, and that device is DPR ≈ 1.75. An unstated DPR is an
+>    unstated 3× in the quantity being measured.
+> 4. **The timing isolates `paintResourceStrip`**, not the whole rAF tick — the
+>    `measure-link-routing.mjs` precedent, which times `paintScene` itself. A whole-tick number
+>    cannot attribute a millisecond to this layer, which is `docs/TECH_DEBT.md` #75's own complaint
+>    about the pre-ADR-0078 painter.
 >
 > **If it fails**, the response is recorded, not tuned: first reduce the shown-segment cap for the
 > strip only (the dialog is DOM and unaffected); if that does not clear it, **the strip stack is
@@ -523,12 +696,44 @@ produced after the fact gets tuned to the answer (ADR-0100 M0, ADR-0119, ADR-011
 > browser measurement is the number, the stub is the regression guard, and neither substitutes for
 > the other.
 
-A second, cheaper condition for the payload, same rule:
+> **Condition 2 — legibility at 72 px. NEW, and it tests the feature's premise rather than its cost.**
+>
+> The draft justified the 72 px band with "eight segments over 66 px of bar area averages ~8 px
+> each", and labelled that as reasoned from geometry rather than observed. **The arithmetic assumes
+> an even split, and real trade loading is skewed** — a peak bucket is commonly one dominant trade
+> and several small ones, so named segments land at 1–3 px, and off-peak buckets (the majority of any
+> real profile) are worse: at half the peak the same eight segments average 4 px, at a quarter, 2 px.
+>
+> **On the same named fixture, at 1646 CSS px, at the Week preset, at the strip's default 72 px:
+> every segment the chart claims to show must be distinguishable from its neighbours in a screenshot
+> a person looks at** — which means, concretely, that no shown segment renders at **0 px** and the
+> reviewer can identify each legend colour in the peak column and in a median column.
+>
+> **If it fails**, in order: (a) lower the strip's shown-segment cap below the dialog's, so the two
+> surfaces differ in **how many** segments they name and never in what a segment means — the
+> derivation takes `cap` as a parameter precisely so this is a call-site change; (b) if even a
+> reduced cap is illegible, **the strip ships un-stacked and the dialog carries the feature**, which
+> is the same withdrawal Condition 1 names and for a better-founded reason.
+>
+> This condition is deliberately **not** expressed as a millisecond or a pixel threshold on a
+> computed value. It is a judgement, made once, against a screenshot, recorded in the milestone
+> document with the screenshot attached — because "can a planner read this?" has no arithmetic form,
+> and inventing one would be a number tuned to the answer wearing a gate's clothes.
 
-> **The `limit=50 → 200` change must not add measurable server time.** Expected: **zero**, because
-> `getResourceHistogram` computes every series and _then_ slices (`schedule.service.ts:1048`,
-> `:1067-1068`) — the limit governs only what is serialised. If the measured API p95 moves by more
-> than 10 ms at 200 series, that expectation was wrong and the finding is recorded as such.
+> **Condition 3 — the payload. The `limit=50 → 200` change must not add measurable server time.**
+> Expected: **zero**, because `getResourceHistogram` computes every series and _then_ slices
+> (`schedule.service.ts:1048`, `:1067-1068`) — the limit governs only what is serialised. If the
+> measured API p95 moves by more than 10 ms at 200 series, that expectation was wrong and the finding
+> is recorded as such.
+
+**Two things the strip measurement does not cover, stated rather than implied.** `stackSeries` is
+`useMemo`'d on `[series, cap]`, so it runs on data change and not per frame — the conditions above
+measure the painter, and the derivation's cost is a separate (and much smaller) question. And the
+**table has no virtualisation**: `ResourceLoadingTable` renders `buckets.length` rows × `series.length
+
+- 2` cells, and the DTO's ceiling is 200 series, so a 200-series DAY-granularity table is a large DOM.
+  That ceiling is pre-existing and is not made worse here — but the stack is what makes reaching it
+  plausible, and it is the one number in this feature that is unbounded by the cap.
 
 ### Dependencies
 
@@ -679,36 +884,75 @@ height of every column rather than removing one small chart from a scroll.
 
 ### 4.6 Component changes
 
-| Component                                                           | Change                                                                                                                                                                                                                                                                                                           | Contract impact                                                                                     |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **`features/resources/model/stack-series.ts`** _(new)_              | The pure derivation: rank by `total` desc (ties by `resourceId` asc), cap at `min(WBS_LEGEND_CAP, cycleLength)`, aggregate the remainder into `other`, compute per-bucket cumulative offsets and totals, and the peak stacked total. No React, no DOM, no colour — colour is the caller's, resolved per surface. | New public API                                                                                      |
-| **`features/resources/components/ResourceStackChart.tsx`** _(new)_  | The dialog's stacked plot: an `aria-hidden` SVG of per-bucket columns, 1 px ground-coloured separators, Tailwind `fill-chart-N` classes (the DOM surface, where `@theme inline` aliases are correct).                                                                                                            | New                                                                                                 |
-| **`features/resources/components/ResourceStackLegend.tsx`** _(new)_ | Swatch + name + total, ordered by rank, shared by both surfaces. Left of the plot in the dialog; in the chrome panel for the strip.                                                                                                                                                                              | New                                                                                                 |
-| **`ResourceHistogram.tsx`**                                         | Small multiples → one `ResourceStackChart` + `ResourceStackLegend` + the truncation notice.                                                                                                                                                                                                                      | Internal                                                                                            |
-| **`ResourceLoadingTable.tsx`**                                      | Gains a **Total** column and a stack-ordered column sequence; caption states the chart's aggregation rule.                                                                                                                                                                                                       | **Props change** — a new required/optional `bucketTotals` (or derived internally; decided at build) |
-| **`resource-strip-panel.tsx`**                                      | Picker gains "All resources (stacked)" as first + default; publishes the multi-series snapshot; hosts the legend and notices.                                                                                                                                                                                    | Internal                                                                                            |
-| **`render/resource-strip.ts`**                                      | `ResourceStripSnapshot.series: ResourceHistogramSeries` → a stacked-segment array + offsets; `seriesMax` gains a stacked sibling (peak stacked total). `bucketBarsFromDays` grows a per-segment variant; `bucketRects` and the co-alignment expression are **untouched**.                                        | **Public contract change**                                                                          |
-| **`render/paint.ts`**                                               | `ResourceStripPalette.bar: string` → `bars: readonly string[]` + `separator: string`; `paintResourceStrip` draws segments bottom-up per bucket.                                                                                                                                                                  | **Public contract change**                                                                          |
-| **`render/palette.ts`**                                             | `resolveResourceStripPalette` resolves the cycle from `WBS_CYCLE_TOKENS` (shared, not copied) + `--muted-foreground` for Other + `--canvas` for the separator.                                                                                                                                                   | Internal                                                                                            |
-| **`styles/token-contrast.test.ts`**                                 | **New pairs** asserting the ramp — see below.                                                                                                                                                                                                                                                                    | **Shared gate change**                                                                              |
+| Component                                                           | Change                                                                                                                                                                                                                                                                                                                                                                                       | Contract impact                                                      |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **`features/resources/model/stack-series.ts`** _(new)_              | The pure derivation: rank by `total` desc (ties by `resourceId` asc), cap at `min(WBS_LEGEND_CAP, cycleLength)`, aggregate the remainder into `other`, compute per-bucket cumulative offsets and totals, and the peak stacked total. No React, no DOM, no colour — colour is the caller's, resolved per surface.                                                                             | New public API                                                       |
+| **`features/resources/components/ResourceStackChart.tsx`** _(new)_  | The dialog's stacked plot: an `aria-hidden` SVG of per-bucket columns, 1 px ground-coloured separators, fills as **inline `var(--chart-N)`** — the `lensLegendVarPalette` precedent (**D8**), _not_ Tailwind `fill-chart-N`.                                                                                                                                                                 | New                                                                  |
+| **`features/resources/components/ResourceStackLegend.tsx`** _(new)_ | Swatch + name + total, ordered by rank, shared by both surfaces. Left of the plot in the dialog; in the chrome panel for the strip.                                                                                                                                                                                                                                                          | New                                                                  |
+| **`ResourceHistogram.tsx`**                                         | Small multiples → one `ResourceStackChart` + `ResourceStackLegend` + the truncation notice.                                                                                                                                                                                                                                                                                                  | Internal                                                             |
+| **`ResourceLoadingTable.tsx`**                                      | Gains a **Total** column and a stack-ordered column sequence; caption states the chart's aggregation rule **and the descending-total ordering rule**, and its pre-existing "each resource's **row** sums to its total" error is corrected to **column** (`:85-87`). `bucketTotals` is **derived internally** from the `series`+`buckets` it already holds (**D9**).                          | **Props change** — the Total column only; **no** `bucketTotals` prop |
+| **`resource-strip-panel.tsx`**                                      | Picker gains "All resources (stacked)" as first + default; publishes the multi-series snapshot; hosts the legend and notices; **passes the full series set to the table when stacked and `[selectedSeries]` when isolated**, with the `<summary>` label branching with it (US-4, **M2-T0**); the `:80-81` fallback rule is extended so the sentinel is not discarded as "not in the series". | Internal                                                             |
+| **`render/resource-strip.ts`**                                      | `ResourceStripSnapshot.series: ResourceHistogramSeries` → a stacked-segment array + offsets; `seriesMax` gains a stacked sibling (peak stacked total). The per-segment projector **delegates x / w / culling to `bucketBarsFromDays`** rather than growing a sibling of it, so co-alignment is definitional (**D11**). The `screenXOfDay(daysBetween(…))` expression is **untouched**.       | **Public contract change**                                           |
+| **`render/paint.ts`**                                               | `ResourceStripPalette.bar: string` → `bars: readonly string[]` + `separator: string`; `paintResourceStrip` draws segments bottom-up per bucket.                                                                                                                                                                                                                                              | **Public contract change**                                           |
+| **`render/palette.ts`**                                             | **Exports the ordered ramp** — the list itself and a `var()` form — so the feature package can index it (**D8**). `resolveResourceStripPalette` resolves the cycle from it + `--muted-foreground` for Other + `--canvas` for the separator, keeping its **required `root`**.                                                                                                                 | **New public API** (an export where there was none)                  |
+| **`TsldPanel.tsx`** and **`plan-workspace-toolbar.tsx`**            | **Type-only consumers of `ResourceStripSnapshot`** (`TsldPanel.tsx:69`/`:462`; `plan-workspace-toolbar.tsx:97`/`:194`/`:196`) — they thread it and never read a field, so the widening reaches them as a compile check and nothing more. _(Omitted from the draft's table; named because "which files does this touch" is the plan's file-scope claim.)_                                     | Compile-only                                                         |
+| **`styles/token-contrast.test.ts`**                                 | **New pairs** asserting the ramp — see below.                                                                                                                                                                                                                                                                                                                                                | **Shared gate change**                                               |
 
 **The contrast gate, and why it lands first.** The ramp's three constraints are asserted in a CSS
 comment and computed nowhere (§0, finding 3). This feature makes the ramp load-bearing on a second
-surface and, for the first time, on **touching** segments — where the same comment records the worst
-adjacent pair at **1.46:1**. So M1 adds to `token-contrast.test.ts`, **before** the stack ships (the
-ADR-0083 ordering, and ADR-0110 D5's rule that a gate is finished when it has been made to **fail**
-by the defect it was written for, not when it passes):
+surface. So M1 adds to `token-contrast.test.ts`, **before** the stack ships (the ADR-0083 ordering,
+and ADR-0110 D5's rule that a gate is finished when it has been made to **fail** by the defect it was
+written for, not when it passes):
 
-- each of the twelve fills against the surface it is painted on, under the `page` **and** `canvas`
-  scopes (the matrix already resolves both, `token-contrast.test.ts:25-49`), at ≥ 3:1;
-- each fill against its paired ink from `WBS_CYCLE_TOKENS`, at ≥ 4.5:1;
-- the neutral "Other" fill against both grounds.
+- each of the twelve fills against **each ground it is actually painted on**, at ≥ 3:1;
+- each fill against its paired ink from the ramp, at ≥ 4.5:1;
+- the neutral "Other" fill against those same grounds, **using the token value the painting renderer
+  resolves** (below);
+- and **no adjacent-fill pair at all** (below).
 
-**The 1 px separator is deliberately not argued as a WCAG remedy.** Whether 1.4.11's "Graphical
-Objects" clause reaches the boundary between two adjacent data segments is genuinely arguable, and
-this register has overstated a success-criterion citation once already (ADR-0082, corrected in the
-ADR rather than quietly dropped). The separator makes the question moot for the price of one
-`strokeRect` per segment, which is cheaper than being right about it.
+> **Three corrections from the accessibility review. Two shrink this gate, one widens it, and the
+> draft's version was wrong on the widening.**
+>
+> **(a) The grounds were wrong.** The draft named `page` and `canvas`. **The dialog paints on
+> `--card`** (`dialog.tsx:87`, `bg-card text-card-foreground`) and **the strip's chrome panel on
+> `bg-card/95`** (`resource-strip-panel.tsx:125`). `--card` and `--popover` are
+> `oklch(1 0 0)` — distinct from both named grounds, and ADR-0097 **resets deliberately outside every
+> surface scope's closure**, so no `<Surface>` wrapper brings them into line and no rebind reaches
+> them. The ramp's tightest existing margin is **3.10:1**, so this is not a comfortable
+> approximation. `docs/TECH_DEBT.md` #162 records this repository shipping a chart-adjacent swatch
+> against exactly this reset once already. **`--card` is a third ground, and the gate is verified red
+> by perturbing a ramp value against it specifically** — not against whichever ground fails first.
+>
+> **(b) The "Other" fill's scope resolution was unstated, and the two surfaces resolve it
+> differently.** `resolveResourceStripPalette` reads `--muted-foreground` off the **canvas** element
+> (plot-scoped); the dialog chart and both legends, as ordinary DOM, resolve the **page**-scoped
+> value. `--chart-*` is safe anywhere — it is outside every closure (`globals.css:217-218`) and is
+> already gated against that by `token-alias-reads.structural.test.ts:82-97`, which is a **test**
+> and not the docblock the draft proposed to rely on. **`--muted-foreground` is not safe**: it is a
+> rebound name. So, stated per token and decided rather than discovered: the two `--chart-*` reads
+> are scope-independent; the "Other" read is **not**, and the strip resolves it through the canvas
+> scope (the `TsldLegendPanel.tsx:184` precedent) while the dialog resolves it through the page.
+> The gate asserts the "Other" fill against each ground **at the value that surface's renderer
+> actually resolves**, which is the whole content of TECH_DEBT #162 — closed two days before this
+> spec was written and reproduced in its first draft.
+>
+> **(c) The 1 px separator is the correct mechanism, not a workaround — and the draft undersold it
+> while overstating what else is needed.** The draft said the separator "makes the question moot",
+> hedging on whether 1.4.11 reaches a boundary between two data segments. The honest and stronger
+> statement: **because the separator is drawn in the ground colour, and every fill is already
+> required ≥ 3:1 against that ground, the boundary is guaranteed ≥ 3:1 against both neighbours
+> however close the two fills are to each other.** That is the standard technique for adjacent pie
+> wedges, and it is a derivation rather than a hedge.
+>
+> It also disposes of the draft's implied requirement that **adjacent fills contrast with each
+> other**, and of the alarm about the ramp's worst adjacent pair at 1.46:1. **No success criterion
+> requires two adjacent data fills to contrast**: 1.4.11 applies to the **boundary**, which the
+> separator supplies; 1.4.1 is satisfied because **position is a second, non-colour channel** —
+> segments are ordered by descending total and the legend and table share that order, so identity
+> never requires hue discrimination. The register already establishes exactly this for the
+> Today / Data-date pair (`token-contrast.test.ts:427-449`). **So no adjacent-fill pair is added**,
+> and the 1.46:1 figure is recorded as _not_ a defect for this feature rather than left in the
+> document reading as one.
 
 ### 4.7 Implementation approach & alternatives
 
@@ -768,6 +1012,93 @@ operator rollback. The rollback here is a commit boundary, and the milestones ar
 is independently revertible. This matches every recent epic (ADR-0098, 0109, 0110, 0112, 0114, 0115).
 `VITE_RESOURCE_CURVES` and `VITE_CANVAS_RESOURCE_VIEW` continue to gate the surfaces themselves,
 unchanged.
+
+---
+
+**Six further decisions, all added by the review round. Each settles something the draft left to be
+"decided at build" — which §4.9 itself lists as a fired ADR-0105 trigger, so leaving them open was
+the spec contradicting its own trigger table.**
+
+**D7 — The isolated path keeps `--primary`; only the stack uses the ramp.**
+The draft asserted both "isolation is byte-for-byte today's behaviour" (US-6) and "the degenerate
+single-resource case does not special-case" (US-1), and under D2 rank-1 is `--chart-1` while today's
+single bar is `palette.bar` = `--primary`. **Both sentences were in the approved spec and they cannot
+both hold.** Resolved toward the stronger promise: `ResourceStripPalette` keeps `bar` alongside the
+new `bars` cycle, and the isolated render uses it.
+_The rule, so it is not a coincidence:_ **the ramp is a categorical vocabulary and a stack of one has
+no category to distinguish.** A single stacked segment is `--chart-1` (it is a stack); an isolated
+series is `--primary` (it is not). The two states are reached by different user acts and look
+different, which is correct — a planner who isolates has asked for a different picture.
+_Cost, stated:_ `palette.bar` survives on a type whose other field replaced it, so a later reader may
+read it as dead. The docblock says why it is not.
+
+**D8 — The ramp is exported from `render/palette.ts`; the feature package imports it; the pure render
+layer imports nothing from a feature.**
+The draft said "the same exported token list" and "shared, never a copy" — and `WBS_CYCLE_TOKENS` is
+a module-private `const` (`render/palette.ts:21`) with only resolved forms exported, so **both
+sentences described something that does not exist**, and the likeliest build outcome was the second
+hand-maintained ordered list this repository has spent an ADR eliminating. So the seam is decided
+before M1-T1, not during it:
+
+- `render/palette.ts` **exports the ordered list** and a `var()` form beside the existing
+  `lensLegendVarPalette()`. That is where the ramp lives, it is where its docblock's three call sites
+  already are, and it is one export rather than a move.
+- `features/resources/**` imports **from** it. A feature importing a render-layer constant is the
+  existing direction of travel (`plan-workspace-toolbar.tsx:96` already imports
+  `lensLegendVarPalette`).
+- **`render/resource-strip.ts` owns the segment _geometry_ type**, so the pure render layer never
+  imports from a feature package. The derivation (`features/resources/model/stack-series.ts`) is
+  colourless by D-original design, which is what makes this direction possible at all.
+
+**D9 — `ResourceLoadingTable` derives its per-bucket totals; it is not given them.**
+The draft deferred this ("or derived internally; decided at build"). Decided: **derived**, from the
+`series` and `buckets` the component already receives. A `bucketTotals` prop would give one number
+two sources — the caller's array and the cells beside it — and the failure mode is a total that
+disagrees with the column it sits under, in the one artefact that exists to be the record. It is also
+a smaller public contract, which matters because widening it is an ADR-0105 trigger.
+
+**D10 — A separator is suppressed where either neighbour is under 2 px.**
+Nine segments is eight boundaries. At the strip's 66 px of bar area, a peak bucket's segments average
+~7.2 px, so 8 px of separator ink is **12 %** of the column; at half the peak it is **24 %**, and at a
+quarter — the majority of a real profile's buckets — **48 %**. Without a rule the mechanism that
+guarantees the boundary (D-contrast (c)) becomes the thing obscuring the data. Below 2 px a segment
+is a hairline and the separator would be most of it, so the boundary is dropped and the two fills
+touch — which costs nothing, because at that size neither is individually readable and the legend and
+table carry identity. Strip-specific in effect; the dialog has the room and will rarely trigger it.
+Pinned by a unit test at 1 px, 2 px and 3 px neighbours.
+
+**D11 — The per-segment projector delegates to `bucketBarsFromDays`; it is not a sibling of it.**
+The draft named `bucketRects` as the untouched co-alignment oracle. **`bucketRects` has no production
+caller** — grep across `apps/web` returns its definition and `resource-strip.test.ts`; the painter
+calls `bucketBarsFromDays` (`paint.ts:2107`). So the draft would have frozen a test-only function and
+left the real one free to drift. The per-segment projector takes x, width and culling **from**
+`bucketBarsFromDays` and adds only the vertical stacking, so co-alignment with the scene is
+definitional rather than re-derived — the ADR-0065 `routeOrthogonal` argument (one optional parameter
+of the existing function, never a second function) applied to the layer below.
+
+**D12 — The legend has a width policy, sized against a real resource name.**
+The draft specified a left-hand legend in the dialog and said nothing about its width, in a `size="lg"`
+dialog whose `max-w-2xl` leaves ~624 px of content, for up to nine rows of swatch + name + total.
+This repository has been wrong about width **eight consecutive times** (ADR-0090 → ADR-0115, each
+contradicted by its own measurement), and an unspecified legend is the ninth. So:
+
+- the legend column is **capped at 200 px** and the plot takes the remainder;
+- a name longer than the column **truncates with an ellipsis and carries its full text in the
+  accessible name and a `title`** — never wraps to three lines, which would make the legend's height
+  a function of the longest name;
+- the sizing example is **"Structural Steel Erection Crew"** (~30 characters), not "Crew A". A
+  fixture that fits is a fixture that proves nothing;
+- below the dialog's container breakpoint the legend moves **above** the plot rather than
+  compressing, because a 200 px legend beside a 200 px plot is two unreadable things.
+
+**Milestone order — grouping moves ahead of the S-curve (ui-architect, accepted).**
+The draft ran M3 = S-curve → M4 = grouping. It is now **M3 = grouping, M4 = S-curve**. Grouping is
+where the product **leads** P6 outright (one dropdown against one filter dialog per segment), it is
+cheap and frontend-only, and it improves the feature's **weakest** state by turning
+"Other (32 resources)" into named trades; the S-curve's strip half is pre-flagged as likely-withdrawn
+if a second labelled axis will not fit 72 px. The draft's order therefore put the least certain
+milestone first. _Whether the S-curve belongs in this epic at all is **Q8**, and that is the product
+owner's call, not an analyst's._
 
 **Alternatives considered and rejected**
 
@@ -833,25 +1164,59 @@ the first happens.
 >   viewport-independence and its reason. Any one resource's bar gets shorter; that is the price.
 > - **D5** The legend is DOM on both surfaces, because the strip canvas is `aria-hidden`.
 > - **D6** No new `VITE_` flag (ADR-0088 D1).
-> - **Consequences.** `--chart-*` gains its first computed contrast gate. The 50-series silent
->   truncation is closed. Capacity, cost, a resizable band and legend-click isolation are named as
->   deferred with their triggers. The CPM engine is not imported and no migration runs.
+> - **D7** The isolated path keeps `--primary`. The draft asserted two mutually contradictory
+>   sentences (US-1 "does not special-case" vs US-6 "byte-for-byte"); the rule that resolves them is
+>   that a categorical ramp is a vocabulary and a stack of one has no category to distinguish.
+> - **D8** The ramp is **exported** from `render/palette.ts` and imported by the feature; the pure
+>   render layer imports nothing from a feature. Recorded because the spec twice described a
+>   shared list that **did not exist** as an export, and the default outcome of that sentence is the
+>   second hand-maintained ordered array `WBS_CYCLE_TOKENS` was created to eliminate.
+> - **D9** The table **derives** its per-bucket totals rather than being handed them — one number,
+>   one source, and a smaller public contract.
+> - **D10** Separators are suppressed under 2 px, so the mechanism that guarantees the boundary does
+>   not become the thing obscuring the data at 66 px.
+> - **D11** The per-segment projector **delegates** to `bucketBarsFromDays` (the ADR-0065
+>   one-optional-parameter argument), making co-alignment definitional. `bucketRects`, which the
+>   draft named as the oracle, has **no production caller**.
+> - **D12** The legend has a stated width policy, sized against a real resource name — because eight
+>   consecutive epics on this codebase have had their width expectation contradicted by their own
+>   measurement, every one of them in a document that did not think width was the interesting part.
+> - **Consequences.** `--chart-*` gains its first computed contrast gate — against `--card` as well
+>   as the page and canvas grounds, because both surfaces paint on an ADR-0097 **reset** that no
+>   scope can reach. **No adjacent-fill pair is gated**, and the reason is written down so the 1.46:1
+>   worst pair is not re-raised as a defect: 1.4.11 applies to the ground-coloured boundary and 1.4.1
+>   is met by position. The 50-series silent truncation is closed. The strip's absence from the
+>   exported and printed diagram (`docs/TECH_DEBT.md` #223) is **inherited, named and not fixed**.
+>   Capacity, cost, a resizable band and legend-click isolation are named as deferred with their
+>   triggers. The CPM engine is not imported and no migration runs.
 
 ### 4.9 ADR-0105 triggers — which fire, and what must therefore be settled before code
 
-| Trigger (`docs/PROCESS.md` §"What a tech-debt row does not substitute for") | Fires?            | Evidence                                                                                                                                                                  |
-| --------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A user-facing **entry point** added or changed                              | **Yes (changed)** | Both `Resource view` and `Analysis ▾ → Resource histogram…` change what they open. Neither is new.                                                                        |
-| A **Playwright config or CI step** added or changed                         | **No**            | `playwright.resource-view.config.ts` exists; `ci.yml:342-343` runs it. Both milestones add steps to `e2e-resource-view/resource-view.spec.ts` inside the existing config. |
-| A **component's public contract** (a prop's type or optionality)            | **Yes**           | `ResourceStripSnapshot.series` singular → plural; `ResourceStripPalette.bar: string` → a cycle; `paintResourceStrip`'s signature; `ResourceLoadingTable`'s props.         |
-| A **shared gate**                                                           | **Yes**           | New pairs in `apps/web/src/styles/token-contrast.test.ts`.                                                                                                                |
-| The **schema**                                                              | **No**            | No migration; `database-architect` not engaged for that reason (§4.4).                                                                                                    |
+| Trigger (`docs/PROCESS.md` §"What a tech-debt row does not substitute for") | Fires?            | Evidence                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A user-facing **entry point** added or changed                              | **Yes (changed)** | Both `Resource view` and `Analysis ▾ → Resource histogram…` change what they open. Neither is new.                                                                                                                                           |
+| A **Playwright config or CI step** added or changed                         | **No**            | `playwright.resource-view.config.ts` exists; `ci.yml:342-343` runs it. Both milestones add steps to `e2e-resource-view/resource-view.spec.ts` inside the existing config.                                                                    |
+| A **component's public contract** (a prop's type or optionality)            | **Yes**           | `ResourceStripSnapshot.series` singular → plural; `ResourceStripPalette.bar: string` → `bar` **plus** a `bars` cycle (D7); `paintResourceStrip`'s signature; `ResourceLoadingTable`'s props; **a new export from `render/palette.ts`** (D8). |
+| A **shared gate**                                                           | **Yes**           | New pairs in `apps/web/src/styles/token-contrast.test.ts`.                                                                                                                                                                                   |
+| The **schema**                                                              | **No**            | No migration; `database-architect` not engaged for that reason (§4.4).                                                                                                                                                                       |
 
 Three of five fire, so **the full spec and plan are mandatory** — which is this document and its
-sibling. What must be settled before any code: **Q1 and Q2** (they decide which surfaces exist in
-which milestone, and whether the strip's band height is in play), the ADR's D3 and D4 (they are the
-things a reviewer will otherwise reverse), and the performance falsification condition above, which
-is committed here rather than after the first measurement.
+sibling.
+
+**Every contract decision this trigger table covers is now settled in the spec, not "decided at
+build".** The draft left three of them open in the prose while the table above declared the trigger
+fired, which is the spec contradicting itself in the section whose subject is exactly that. They are
+now **D7** (the palette keeps `bar` and gains `bars`), **D8** (what `render/palette.ts` exports and
+in which direction the import runs), **D9** (the table takes no `bucketTotals` prop) and **D11** (the
+projector's relationship to `bucketBarsFromDays`). A build that reaches any of these and finds a
+choice to make should stop and amend the spec, per ADR-0105's mid-flight rule — that is what the rule
+is for, and this epic has now demonstrated the failure mode in its own first draft.
+
+What must be settled **by the product owner** before any code: **Q1** and **Q2** (which surfaces
+exist in which milestone, and whether the strip's band height is in play), and **Q8** (whether the
+S-curve stays in this epic). **Q9** has a default and proceeds on it. The ADR's D3 and D4 are the
+things a reviewer will otherwise reverse, and the three falsification conditions in §3 are committed
+here rather than after the first measurement.
 
 ---
 
@@ -860,7 +1225,11 @@ is committed here rather than after the first measurement.
 - Implementation plan: [`./implementation-plan.md`](./implementation-plan.md)
 - Amends: [`docs/adr/0049-canvas-axis-aligned-resource-strip.md`](../../adr/0049-canvas-axis-aligned-resource-strip.md) §6
 - Prior spec for this surface: [`docs/specs/canvas-resource-view/`](../canvas-resource-view/)
+- Inherited, not fixed: [`docs/TECH_DEBT.md`](../../TECH_DEBT.md) **#223** — the strip does not
+  export or print, and ADR-0103's parity gate cannot see it (§3)
+- Correctly framed here rather than half-quoted: `docs/TECH_DEBT.md` **#75** — there is no ADR-0026
+  §16, 4 ms was never a budget, and the real gate is fps (§3)
 - Docs this change updates: `CLAUDE.md` §16 (new ADR entry), `docs/adr/README.md`,
   `docs/DESIGN_SYSTEM.md` (the ramp's first gated consumer), `docs/TESTING.md`
   (`e2e-resource-view`'s widened scope), `docs/TECH_DEBT.md` (the ramp's pre-existing ungated
-  constraints; the closed 50-series truncation)
+  constraints; the closed 50-series truncation; #223 cross-referenced from this epic)
