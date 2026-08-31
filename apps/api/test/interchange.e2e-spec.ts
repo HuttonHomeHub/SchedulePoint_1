@@ -314,6 +314,13 @@ describe.skipIf(!hasDatabase)('Interchange API (e2e)', () => {
     // FK-safe order: children before parents. The commit endpoint creates plans/activities/dependencies/
     // calendars (Task 1.5) and, from M2, resources + assignments (ADR-0039) — cleared before projects.
     // Assignments reference activities AND resources, so they go first.
+    // Weighted steps hold `activity_id` (ADR-0044 §33), and they are the THIRD table to fail this
+    // way — after `plan_shares` and `resource_assignments` (`docs/TECH_DEBT.md` #119a). Found the
+    // same way and recorded here rather than in one file: a full API run on 2026-08-31 failed 282
+    // tests across 10 files in `beforeEach` on `activity_steps_activity_id_fkey`, and by the time
+    // anyone looked the database was clean, because a later suite in the same run had swept it.
+    // The log was kept, which is the only reason this was diagnosable at all.
+    await prisma.activityStep.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.activityDependency.deleteMany();
     // Notes hold `activity_id`/`plan_id` FKs, so they must go before what they annotate. The

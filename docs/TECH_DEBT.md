@@ -226,25 +226,6 @@ contain), recorded through a `dependencyEditCommand`. It wants a coalescing key 
 times is one undo step rather than five — which is why it is its own piece of work rather than a
 line in the epic that noticed it.
 
-### 66. A shaded create form still accepts input it cannot submit
-
-**Status:** open
-
-The house rule is shade-with-a-reason, and `ScopeSaveBar` implements it correctly: the Save is
-`aria-disabled` with the reason `aria-describedby`-linked. But on the two create forms the ADR-0062
-epic shipped — **Add a link** (`AddLinkSection`) and **Assign a resource**
-(`ActivityResourcesPanel`) — only the Save is gated. The fields above it stay fully interactive, so
-a member who cannot write can fill in an entire form and meet the refusal at the end of it.
-
-Not a WCAG failure (the reason is announced, and the control is reachable), and deliberately not
-"fixed" by adding native `disabled` — that is #64's defect, reintroduced.
-
-**The pattern is already decided and not yet applied**: ADR-0083 says a gated form field is
-**read-only, not disabled**, with the mechanism differing per control because the platform offers
-different states. So what is left here is not a decision but the application of one — to both forms
-together, with the two claims ADR-0083 marks "reasoned from specification, not observed" checked
-first. It belongs with #64, which is the same question from the other side.
-
 ### 69. Two idioms for editing a row in place
 
 **Status:** unverified
@@ -1012,6 +993,7 @@ One line each. The story lives where the link points, not here.
 | 68  | **Add note** landed on the Notes tab but not in its composer                           | 2026-08-31 | `focusNotes` on the intent, mirroring `focusSteps`, through to a `NoteComposer` `autoFocus`. Both entry points require `canWriteNotes`, so there is no reader-without-a-composer case.                                                                    |
 | 73  | `Column.srHeader` was dead once `headerCell` was set                                   | 2026-08-31 | Dropped at its one double-declaring call site; the `Column` docblock now says which wins and why a `headerCell` control needs no hidden text.                                                                                                             |
 | 169 | The Project Explorer's actions row duplicated its writer gate in two branches          | 2026-08-31 | One `NewClientButton`, rendered by both the `SheetHeader` and drawer branches. The empty-strip half had already been closed incidentally by ADR-0109 D2's fold control.                                                                                   |
+| 66  | A shaded create form still accepted input it cannot submit                             | 2026-08-31 | Both create forms take a `FieldGateProvider`, so the fields shade read-only with the same reason node the Save points at. ADR-0083 had decided the pattern; these two forms had never used it.                                                            |
 | 92  | An undone delete left a deletion with no matching restore                              | 2026-08-31 | The inverse is now the id-stable `restore-batch` rather than a re-create, so `activity.restored` fires with the original id and the pair closes. It also stopped the re-create silently dropping every dependency the activity had. Cascade undo is #230. |
 | 160 | `resolveLensPalette` was resolved twice per cycle                                      | 2026-08-31 | One memo, both maps derived from it — which also makes the `barFill`/`barInk` pairing come from one resolve, as it must.                                                                                                                                  |
 | 171 | `schedulepoint-active-org` was never cleared and carried no user id                    | 2026-08-31 | Keyed `<prefix>:<userId>` matching `recent-plans`, and swept beside `forgetAllForUser` at sign-out. On a shared machine the next person in was silently sent to the previous person's organisation.                                                       |
@@ -1746,6 +1728,29 @@ what `RUN_CAP` exists for.
 
 **Status:** unverified
 
+**A THIRD table, 2026-08-31 — `activity_steps`.** A full `scripts/e2e-local.sh api` run failed
+**282 tests across 10 files**, every one in `beforeEach` on `activity_steps_activity_id_fkey`. By
+the time anyone looked at the database it was clean — a later suite in the same run had swept it,
+which is this row's own recorded signature — so the diagnosis exists only because the **whole log
+was redirected to a file rather than piped through `tail`**, which is the instruction the previous
+occurrence left. `activity_steps` holds `activity_id` (ADR-0044 §33) and was swept by six specs of
+thirty-four; all thirty-four now sweep it, and `clearDomainData` gained it too — along with
+`resourceAssignment`, which that helper swept **after** `plan.deleteMany()`, i.e. after the
+`activity.deleteMany()` it was meant to protect, so it could never have worked there.
+
+**The fix is verified in both directions rather than inferred from a green re-run**, which is what
+this row's own history warns against. A poison `activity_steps` row was planted by hand, and
+`baselines.e2e-spec.ts` then FAILED all 20 tests on `activity_steps_activity_id_fkey` with the sweep
+line removed, and PASSED all 20 with it, clearing the row on its way. A clean re-run alone would
+have proved nothing — the previous run had already swept itself clean before anyone looked.
+
+Three tables have now failed this way — `plan_shares`, `resource_assignments`, `activity_steps` —
+each found the same way, each fixed one table at a time. **The pattern is the finding**: the sweep
+lists are hand-maintained against a schema that keeps growing child tables, so the next one is a
+matter of time. A derived sweep (delete in reverse topological order of the FK graph, which Prisma
+knows) would end the class; it is not done here because the sweep is shared test infrastructure and
+that is a spec-level change (ADR-0105).
+
 **Captured and diagnosed 2026-08-28 (reconciliation pass), and the mechanism explains why every
 prior occurrence destroyed its own evidence.** The full log (kept, per this row's instruction)
 shows `activities.e2e-spec.ts` failing **all 45 tests in `beforeEach`** on
@@ -2468,7 +2473,7 @@ not change — so something other than this guard reverts the pop. Recorded rath
 
 ## #208 — A journey that seeds through the API must tell the client itself
 
-**Status:** unverified
+**Status:** open (audited 2026-08-31 — see below; kept as the standing rule, not as owed work)
 
 _Renumbered from #183 on the 2026-08-28 reconciliation pass (the #207 note explains why)._
 
@@ -2492,11 +2497,23 @@ stale summary, said `Not calculated`. Two halves of one row disagreeing. It read
 activity rows now — the ones the reader is looking at — so no cache can go stale relative to the
 screen. **The lesson generalises past the tests: ask the query that the edit invalidates.**
 
-**What is left is an audit rather than a defect.** The sweep proves today's estate green, so no other
-suite is currently relying on it — but "no suite relies on it today" is a fact about today, and the
-next API-seeding helper will be written by copying one of the existing ones. The candidates are the
-nine support files that POST through `page.evaluate`; each should either reload or say in a comment
-why its caller does not need it to.
+**The audit ran 2026-08-31, and its scope was smaller than this row assumed.** Seventeen support
+files call `page.evaluate`; eleven already reload. Of the six that do not, **three do not seed
+anything at all** — `e2e-public`, `e2e-designed-chrome` and `e2e-designed-ui` use `page.evaluate`
+only to READ (a class name, a scroll height, a colour painted into a 1×1 canvas), so the rule has
+nothing to say about them. The remaining three seed and are each correct for a different reason,
+now written at the helper rather than left to be re-derived:
+
+| helper                           | why no reload                                                                                                                           |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e-float-paths` `seedNetwork`  | the caller reloads on the next line (`float-paths.spec.ts:41`, checked)                                                                 |
+| `e2e-health-check` `seedDefects` | the caller reloads on the next line (`health-check.spec.ts:30`, checked)                                                                |
+| `e2e-overview` `addActivity`     | the caller never reads this page again — it opens the overview in a SECOND tab, because navigating this one away releases the pen lease |
+
+So the estate is green **and now says why**, which is what the row asked for. What it does not buy
+is a gate: the next helper is still written by copying one of these, and nothing checks that the
+copy kept the reason. That is deliberate — the discriminator is "does this page get read again?",
+which a script cannot answer.
 
 Cost: one pass over nine files. There is no gate for this and a structural one looks unpromising —
 "does this helper's caller later observe what it wrote" is not a property of a file.

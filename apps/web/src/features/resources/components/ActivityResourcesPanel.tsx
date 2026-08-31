@@ -29,6 +29,7 @@ import { AssignmentRow, DRIVING_HINT, MATERIAL_DRIVING_HINT } from './Assignment
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { FieldGateProvider } from '@/components/ui/field-gate';
 import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
@@ -166,6 +167,9 @@ export function ActivityResourcesPanel({
   // reason it stays hidden — a shaded form with no explanation is the dead end the house rule
   // forbids, and a Viewer should not see one at all (the `ActivityLogicPanel` precedent).
   const showAssignSection = canWrite || writeReason !== undefined;
+  // ONE gate object for the assign form — the fields and the Save read the same one, so they
+  // cannot disagree about whether this member may assign (`docs/TECH_DEBT.md` #66).
+  const assignGate = { writable: canWrite, reason: writeReason ?? null };
   const search = useResourceSearch(
     orgSlug,
     { q: debouncedResourceQuery },
@@ -347,184 +351,191 @@ export function ActivityResourcesPanel({
               onSubmit={(event) => void onSubmit(event)}
               className="flex flex-col gap-4"
             >
-              <FormErrorSummary errors={errors} />
-              {create.isError ? (
-                <p role="alert" className="text-destructive-text text-sm">
-                  {create.error.message}
-                </p>
-              ) : null}
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={resourceSelectId}>Resource</Label>
-                <Combobox
-                  id={resourceSelectId}
-                  value={selectedResourceId}
-                  onChange={(value) =>
-                    setValue('resourceId', value, {
-                      shouldDirty: true,
-                      shouldValidate: true,
-                    })
-                  }
-                  query={resourceQuery}
-                  onQueryChange={setResourceQuery}
-                  options={searchOptions}
-                  // The chosen resource may sit outside the current server page; label it from
-                  // the full library so the field never blanks after a fresh search.
-                  selectedLabel={resourceById.get(selectedResourceId)?.name}
-                  loading={search.isFetching}
-                  errored={search.isError}
-                  hasMore={search.hasMore}
-                  onLoadMore={search.loadMore}
-                  invalid={errors.resourceId !== undefined}
-                  {...(errors.resourceId ? { describedBy: resourceErrorId } : {})}
-                  placeholder="Choose a resource…"
-                  toggleLabel="Show resources"
-                  emptyMessage="No resources match your search."
-                />
-                {/*
+              {/* **The fields answer to the same gate as the Save** (`docs/TECH_DEBT.md` #66,
+                  ADR-0083). Only the Save was gated, so a member who cannot assign could fill in the
+                  whole form and meet the refusal at the end of it. The reason is rendered once,
+                  above the fields, and every `*Field` beneath it goes read-only — never native
+                  `disabled`, which is #64's defect. */}
+              <FieldGateProvider gate={assignGate}>
+                <FormErrorSummary errors={errors} />
+                {create.isError ? (
+                  <p role="alert" className="text-destructive-text text-sm">
+                    {create.error.message}
+                  </p>
+                ) : null}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor={resourceSelectId}>Resource</Label>
+                  <Combobox
+                    id={resourceSelectId}
+                    value={selectedResourceId}
+                    onChange={(value) =>
+                      setValue('resourceId', value, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      })
+                    }
+                    query={resourceQuery}
+                    onQueryChange={setResourceQuery}
+                    options={searchOptions}
+                    // The chosen resource may sit outside the current server page; label it from
+                    // the full library so the field never blanks after a fresh search.
+                    selectedLabel={resourceById.get(selectedResourceId)?.name}
+                    loading={search.isFetching}
+                    errored={search.isError}
+                    hasMore={search.hasMore}
+                    onLoadMore={search.loadMore}
+                    invalid={errors.resourceId !== undefined}
+                    {...(errors.resourceId ? { describedBy: resourceErrorId } : {})}
+                    placeholder="Choose a resource…"
+                    toggleLabel="Show resources"
+                    emptyMessage="No resources match your search."
+                  />
+                  {/*
                   The error is wired to the control on BOTH branches (`describedBy` /
                   `aria-describedby`): a validation message a screen-reader user never hears
                   while focused on the field fails WCAG 1.3.1 / 4.1.2 — the same idiom every
                   other picker in this epic uses.
                 */}
-                {errors.resourceId ? (
-                  <p id={resourceErrorId} className="text-destructive-text text-sm">
-                    {errors.resourceId.message}
-                  </p>
-                ) : null}
-              </div>
-              <FieldGrid>
-                <TextField
-                  label="Budgeted units"
-                  type="number"
-                  min={0}
-                  step="any"
-                  error={errors.budgetedUnits?.message}
-                  {...register('budgetedUnits', { valueAsNumber: true })}
-                />
-                <CheckboxField
-                  label="Driving resource"
-                  disabled={selectedIsMaterial}
-                  hint={selectedIsMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
-                  {...register('isDriving')}
-                />
-                {/* Loading curve (M7 rung 5, ADR-0044 §3) — the named P6 profile the resource histogram
-                    distributes budgeted units by across the span. Behind the flag and hidden for a
-                    zero-span milestone (#44b); UNIFORM is the flat default. Shapes only the
-                    histogram, never the dates. */}
-                {showCurve ? (
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor={curveSelectId}>Loading curve</Label>
-                    <Select
-                      id={curveSelectId}
-                      aria-describedby={curveHelpId}
-                      {...register('curveType')}
-                    >
-                      {RESOURCE_CURVE_TYPES.map((curve) => (
-                        <option key={curve} value={curve}>
-                          {RESOURCE_CURVE_LABELS[curve]}
-                        </option>
-                      ))}
-                    </Select>
-                    <p id={curveHelpId} className="text-muted-foreground text-sm">
-                      Shapes how this resource’s units spread over the activity — the resource
-                      histogram only. It doesn’t move any dates.
+                  {errors.resourceId ? (
+                    <p id={resourceErrorId} className="text-destructive-text text-sm">
+                      {errors.resourceId.message}
                     </p>
-                  </div>
-                ) : null}
-                {/* The join lag (ADR-0071 §1) — how far into the activity this resource arrives.
-                    Behind its own flag and hidden for a zero-span milestone. The grammar is
-                    ADR-0070's; the factor is the activity's SAVED calendar, so `2d` here means the
-                    same thing the engine will measure. */}
-                {showLag ? (
+                  ) : null}
+                </div>
+                <FieldGrid>
                   <TextField
-                    label={assignmentLagLabel(activityHoursPerDay)}
-                    type="text"
-                    inputMode="text"
-                    // The placeholder has to follow the same rule as the label and the help: with
-                    // no factor, `0d` would be an example in the one unit the field is about to
-                    // refuse — a planner typing what the field suggests would be told off for it.
-                    placeholder={canAuthorLagDays(activityHoursPerDay) ? '0d' : '0h'}
-                    hint={assignmentLagHelp(activityHoursPerDay)}
-                    // The schema's syntax error wins when there is one; the factor error is the
-                    // second rule, and only reachable once the text itself reads (see the derivation
-                    // above). One `error` prop either way, so the field cannot show two messages
-                    // that disagree about whether it is valid.
-                    error={errors.lagText?.message ?? lagFactorError}
-                    {...register('lagText')}
-                  />
-                ) : null}
-                {/* Units/time (rate) is meaningful only for the driver (ADR-0040 §7) — shown once the
-                    driving box is ticked, and only behind the flag. An initial rate is stored inert; the
-                    duration derivation happens on a later units/rate edit in the row above. */}
-                {DURATION_TYPES_ENABLED && wantsDriving && !selectedIsMaterial ? (
-                  <TextField
-                    label="Units / time (rate)"
+                    label="Budgeted units"
                     type="number"
                     min={0}
                     step="any"
-                    hint="Optional. Units of work per working hour, kept with the duration type so units = duration × rate; editing it later can derive the activity’s duration."
-                    error={errors.unitsPerHour?.message}
-                    {...register('unitsPerHour', {
-                      setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                    })}
+                    error={errors.budgetedUnits?.message}
+                    {...register('budgetedUnits', { valueAsNumber: true })}
                   />
-                ) : null}
-                {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag and the
+                  <CheckboxField
+                    label="Driving resource"
+                    disabled={selectedIsMaterial}
+                    hint={selectedIsMaterial ? MATERIAL_DRIVING_HINT : DRIVING_HINT}
+                    {...register('isDriving')}
+                  />
+                  {/* Loading curve (M7 rung 5, ADR-0044 §3) — the named P6 profile the resource histogram
+                    distributes budgeted units by across the span. Behind the flag and hidden for a
+                    zero-span milestone (#44b); UNIFORM is the flat default. Shapes only the
+                    histogram, never the dates. */}
+                  {showCurve ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={curveSelectId}>Loading curve</Label>
+                      <Select
+                        id={curveSelectId}
+                        aria-describedby={curveHelpId}
+                        {...register('curveType')}
+                      >
+                        {RESOURCE_CURVE_TYPES.map((curve) => (
+                          <option key={curve} value={curve}>
+                            {RESOURCE_CURVE_LABELS[curve]}
+                          </option>
+                        ))}
+                      </Select>
+                      <p id={curveHelpId} className="text-muted-foreground text-sm">
+                        Shapes how this resource’s units spread over the activity — the resource
+                        histogram only. It doesn’t move any dates.
+                      </p>
+                    </div>
+                  ) : null}
+                  {/* The join lag (ADR-0071 §1) — how far into the activity this resource arrives.
+                    Behind its own flag and hidden for a zero-span milestone. The grammar is
+                    ADR-0070's; the factor is the activity's SAVED calendar, so `2d` here means the
+                    same thing the engine will measure. */}
+                  {showLag ? (
+                    <TextField
+                      label={assignmentLagLabel(activityHoursPerDay)}
+                      type="text"
+                      inputMode="text"
+                      // The placeholder has to follow the same rule as the label and the help: with
+                      // no factor, `0d` would be an example in the one unit the field is about to
+                      // refuse — a planner typing what the field suggests would be told off for it.
+                      placeholder={canAuthorLagDays(activityHoursPerDay) ? '0d' : '0h'}
+                      hint={assignmentLagHelp(activityHoursPerDay)}
+                      // The schema's syntax error wins when there is one; the factor error is the
+                      // second rule, and only reachable once the text itself reads (see the derivation
+                      // above). One `error` prop either way, so the field cannot show two messages
+                      // that disagree about whether it is valid.
+                      error={errors.lagText?.message ?? lagFactorError}
+                      {...register('lagText')}
+                    />
+                  ) : null}
+                  {/* Units/time (rate) is meaningful only for the driver (ADR-0040 §7) — shown once the
+                    driving box is ticked, and only behind the flag. An initial rate is stored inert; the
+                    duration derivation happens on a later units/rate edit in the row above. */}
+                  {DURATION_TYPES_ENABLED && wantsDriving && !selectedIsMaterial ? (
+                    <TextField
+                      label="Units / time (rate)"
+                      type="number"
+                      min={0}
+                      step="any"
+                      hint="Optional. Units of work per working hour, kept with the duration type so units = duration × rate; editing it later can derive the activity’s duration."
+                      error={errors.unitsPerHour?.message}
+                      {...register('unitsPerHour', {
+                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                      })}
+                    />
+                  ) : null}
+                  {/* Cost & actuals (EV4b, ADR-0042) — the EV read's inputs, behind the flag and the
                     caller's cost-read gate. Money in MAJOR units (×100 → minor on submit); budgeted
                     cost is an optional override of the units × rate derivation. */}
-                {EARNED_VALUE_ENABLED && canReadCost ? (
-                  <>
-                    <TextField
-                      label="Budgeted cost"
-                      type="number"
-                      min={0}
-                      step="any"
-                      inputMode="decimal"
-                      hint="Overrides the cost derived from budgeted units × the resource’s rate. Leave blank to derive it."
-                      error={errors.budgetedCost?.message}
-                      {...register('budgetedCost', {
-                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                      })}
-                    />
-                    <TextField
-                      label="Actual cost"
-                      type="number"
-                      min={0}
-                      step="any"
-                      inputMode="decimal"
-                      hint="The cost booked against this assignment so far, in the plan’s currency."
-                      error={errors.actualCost?.message}
-                      {...register('actualCost', {
-                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                      })}
-                    />
-                    <TextField
-                      label="Actual units"
-                      type="number"
-                      min={0}
-                      step="any"
-                      hint="The quantity of work done so far, feeding the Units earned-value measure."
-                      error={errors.actualUnits?.message}
-                      {...register('actualUnits', {
-                        setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
-                      })}
-                    />
-                  </>
-                ) : null}
-              </FieldGrid>
-              <ScopeSaveBar
-                gate={{ writable: canWrite, reason: writeReason ?? null }}
-                // A create form is always submittable: what is missing is the field errors' job to
-                // say. The feedback for a successful assign is the new row in the list above, so
-                // neither the dirty nor the saved sentence has anything to add (the AddLinkSection
-                // precedent).
-                dirty
-                dirtyMessage={null}
-                savedMessage={null}
-                pending={create.isPending}
-                label="Assign resource"
-                pendingLabel="Assigning…"
-              />
+                  {EARNED_VALUE_ENABLED && canReadCost ? (
+                    <>
+                      <TextField
+                        label="Budgeted cost"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        hint="Overrides the cost derived from budgeted units × the resource’s rate. Leave blank to derive it."
+                        error={errors.budgetedCost?.message}
+                        {...register('budgetedCost', {
+                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                      <TextField
+                        label="Actual cost"
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        hint="The cost booked against this assignment so far, in the plan’s currency."
+                        error={errors.actualCost?.message}
+                        {...register('actualCost', {
+                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                      <TextField
+                        label="Actual units"
+                        type="number"
+                        min={0}
+                        step="any"
+                        hint="The quantity of work done so far, feeding the Units earned-value measure."
+                        error={errors.actualUnits?.message}
+                        {...register('actualUnits', {
+                          setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
+                        })}
+                      />
+                    </>
+                  ) : null}
+                </FieldGrid>
+                <ScopeSaveBar
+                  gate={assignGate}
+                  // A create form is always submittable: what is missing is the field errors' job to
+                  // say. The feedback for a successful assign is the new row in the list above, so
+                  // neither the dirty nor the saved sentence has anything to add (the AddLinkSection
+                  // precedent).
+                  dirty
+                  dirtyMessage={null}
+                  savedMessage={null}
+                  pending={create.isPending}
+                  label="Assign resource"
+                  pendingLabel="Assigning…"
+                />
+              </FieldGateProvider>
             </form>
           )}
         </FormSection>

@@ -70,6 +70,13 @@ describe.skipIf(!hasDatabase)('Projects API (e2e)', () => {
     // (docs/TECH_DEBT.md #119): a leftover row from a sibling suite or a Playwright run against
     // the same `app_test` otherwise fails a spec that never touches resources — which happened
     // on 2026-08-28, in `beforeEach`, to every test in the file at once.
+    // Weighted steps hold `activity_id` (ADR-0044 §33), and they are the THIRD table to fail this
+    // way — after `plan_shares` and `resource_assignments` (`docs/TECH_DEBT.md` #119a). Found the
+    // same way and recorded here rather than in one file: a full API run on 2026-08-31 failed 282
+    // tests across 10 files in `beforeEach` on `activity_steps_activity_id_fkey`, and by the time
+    // anyone looked the database was clean, because a later suite in the same run had swept it.
+    // The log was kept, which is the only reason this was diagnosable at all.
+    await prisma.activityStep.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.deleteMany();
     await prisma.activity.deleteMany();

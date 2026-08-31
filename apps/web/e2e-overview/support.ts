@@ -81,6 +81,16 @@ export function openPlanId(page: Page): string {
  * the assertion under test is that an **activity** edit moves a plan up the list — which is the
  * whole reason the read model's ordering key is a `GREATEST` over three tables rather than
  * `plans.updated_at`. Drawing the bar on the canvas would test the canvas.
+ *
+ * **This seeds through the API and does NOT reload, and does not need to** (`docs/TECH_DEBT.md`
+ * #208).
+ *
+ * A `page.evaluate` POST is invisible to the open page's TanStack Query cache. Several suites used
+ * to rely on a later `Recalculate` press to invalidate it, which was a side effect nobody had
+ * written down and which ADR-0109 D3 removed by making that control conditional. So the rule is
+ * that the reliance is stated where it lives: the caller never reads this page again — it opens the
+ * overview in a SECOND tab (`overview.spec.ts`, and for its own reason: navigating this one away
+ * releases the pen lease). A reload here would prove nothing and cost a page load.
  */
 export async function addActivity(page: Page, orgSlug: string, name: string): Promise<void> {
   const planId = openPlanId(page);

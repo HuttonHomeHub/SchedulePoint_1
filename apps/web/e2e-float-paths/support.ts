@@ -121,6 +121,14 @@ export interface SeededNetwork {
  *
  * Twelve spares are not padding: `hasMorePaths` is the one field a reader cannot verify by
  * counting rows, and a plan with three paths would never exercise it.
+ *
+ * **This seeds through the API and does NOT reload — its callers do** (`docs/TECH_DEBT.md` #208).
+ *
+ * A `page.evaluate` POST is invisible to the open page's TanStack Query cache. Several suites used
+ * to rely on a later `Recalculate` press to invalidate it, which was a side effect nobody had
+ * written down and which ADR-0109 D3 removed by making that control conditional. So the rule is
+ * that the reliance is stated where it lives: every caller calls `page.reload()` on the next line
+ * (`float-paths.spec.ts:41`), verified rather than assumed.
  */
 export async function seedNetwork(
   page: Page,
