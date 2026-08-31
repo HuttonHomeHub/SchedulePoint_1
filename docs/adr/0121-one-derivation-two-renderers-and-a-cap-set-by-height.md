@@ -211,6 +211,7 @@ groups, which the new journey had assumed otherwise.
 - #223 (the strip does not export or print, and the parity gate structurally cannot see that),
   #224 (`plan:scale-500`'s documented resource shape does not match the plan it seeds) and #225
   remain open, each with its reasoning.
+- Non-blocking gate-pass findings are #228, each with the reason it was left.
 - #227 was filed while writing this: 70 of 100 detailed register rows use a heading form the
   register's own convention line forbids, and `check:debt-status` cannot report it because
   ADR-0120's correct fix widened the parser to read both levels.

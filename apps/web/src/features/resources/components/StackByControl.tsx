@@ -34,10 +34,23 @@ export function StackByControl({
         value={value}
         onChange={(event) => onChange(event.target.value as StackBy)}
         disabled={disabled}
+        // **Why, not just that it is shut.** `disabled` here means the organisation's resource
+        // library has no group in it, which is a state the reader can change and cannot guess. A
+        // native `<select>` keeps `disabled` under ADR-0083's named exception, so a `title` is the
+        // channel this codebase already uses for the reason (`tsld-toolbar-items.tsx`,
+        // `selection-actions.tsx`).
+        {...(disabled
+          ? { title: 'No resource groups yet — give a resource a parent group to stack by it.' }
+          : {})}
         className="w-40"
       >
         <option value="resource">Resource</option>
-        <option value="group">Trade group</option>
+        {/* **"Group", not "Trade group".** The resource library calls this kind a Group
+            (`resource-schemas.ts:21`, and the table's own column header), and UX_STANDARDS' rule is
+            that a concept is called the same thing everywhere. "Trade" is also wrong on the facts:
+            a GROUP may hold EQUIPMENT or MATERIAL resources, so it mis-describes every grouping
+            that is not labour. */}
+        <option value="group">Group</option>
       </Select>
     </div>
   );

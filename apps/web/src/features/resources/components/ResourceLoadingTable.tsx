@@ -119,10 +119,15 @@ export function ResourceLoadingTable({
           className="text-muted-foreground mb-2 text-left text-sm"
         >
           Curve-shaped units per {GRANULARITY_LABELS[granularity].toLowerCase()} bucket, by
-          resource. Each resource is a column, ordered by total budgeted units, largest first; each
-          column sums to the resource’s total, and the Total column sums each bucket across every
-          resource. Resources are never grouped here, even where the chart aggregates the smallest
-          into “Other”.
+          resource.{' '}
+          {series.length === 1
+            ? 'One resource, one column;'
+            : 'Each resource is a column, ordered by total budgeted units, largest first;'}{' '}
+          each column sums to the resource’s total, and the Total column sums each bucket across
+          every {series.length === 1 ? 'bucket' : 'resource'}.{' '}
+          {series.length > 1
+            ? 'Resources are never grouped here, even where the chart aggregates the smallest into “Other” or stacks them by group.'
+            : ''}
         </caption>
         <thead>
           <tr>

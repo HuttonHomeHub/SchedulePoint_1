@@ -197,7 +197,7 @@ describe('groupSeries attributes to the TOP-LEVEL group', () => {
   const chain = (parents: Record<string, string | null>) => (id: string) => parents[id] ?? null;
 
   it('walks past an intermediate group to the trade at the top', () => {
-    // Groundworks > Concrete gang > Vibrator operator. A control labelled "Trade group" that
+    // Groundworks > Concrete gang > Vibrator operator. A control offering to stack by Group that
     // stacks by sub-gang shows a picture that looks right and answers a different question.
     const parents = { operator: 'gang', gang: 'groundworks', groundworks: null };
     const out = groupSeries(

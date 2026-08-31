@@ -102,6 +102,33 @@ describe('ResourceHistogram (ADR-0044 §3 / ADR-0035 §31)', () => {
     expect(await screen.findByText(/didn’t sum to 100%/)).toBeInTheDocument();
   });
 
+  it('says how much of the plan it is showing when the histogram is truncated', async () => {
+    // `use-resources.ts` raised the page limit 50 -> 200 and started surfacing `hasMore`/`total`
+    // rather than truncating in silence. That branch had no test: a reader would have been told
+    // nothing about the resources missing from the totals in front of them.
+    vi.mocked(apiFetchEnvelope).mockResolvedValue({
+      data: [
+        { resourceId: 'res-1', values: [21, 21], total: 42 },
+        { resourceId: 'res-2', values: [5, 5], total: 10 },
+      ],
+      meta: {
+        granularity: 'WEEK',
+        buckets: [
+          { start: '2026-01-05', end: '2026-01-12' },
+          { start: '2026-01-12', end: '2026-01-19' },
+        ],
+        curveNormalisedCount: 0,
+        hasMore: true,
+        total: 247,
+      },
+    });
+    renderHistogram();
+    const notice = await screen.findByRole('status');
+    expect(notice.textContent).toContain('Showing 2 of 247 resources');
+    // …and it says what that costs the numbers, not merely that something is missing.
+    expect(notice.textContent).toContain('rather than of the whole plan');
+  });
+
   it('shows an empty state when no resource is loaded', async () => {
     vi.mocked(apiFetchEnvelope).mockResolvedValue({
       data: [],

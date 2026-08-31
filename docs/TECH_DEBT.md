@@ -5437,6 +5437,42 @@ could not have caught this.
 epic needed a plan with many resources and this one declares exactly one, which would have measured
 a stacked chart's cost as zero.
 
+### 228. Stacked-histogram gate-pass suggestions, consciously not folded
+
+**Status:** open · **Raised:** 2026-08-31 (ADR-0121 D8) · **Size:** S
+
+Six specialists reviewed the stacked-resource-histogram diff. Every blocking finding was folded with
+a regression test verified red first (ADR-0121 D8). These are the non-blocking ones, each left with
+its reason rather than quietly dropped.
+
+- **The painter walks its segments twice per bar** — once to fill, once to draw the boundary rules —
+  recomputing each band's height both times. `frontend-performance` measured the cost as immaterial
+  at the shipped cap of four segments and flagged it as an unforced duplicate rather than a defect.
+  Folding the two loops means carrying `previousHeight` through the fill pass, which is exactly the
+  state the DOM chart's equivalent now carries; worth doing when either is next touched, and NOT
+  worth doing while the nine-segment discontinuity (#226) is unattributed, because it changes the
+  shape of the thing somebody will be profiling.
+- **`stackOffsets` is called in `ResourceStackChart`'s render body rather than memoised.** O(buckets
+  x segments), roughly 1,600 operations at the dialog's caps, on a dialog that re-renders rarely and
+  is nowhere near an animation loop. Recorded because it is free to fix, not because it costs
+  anything measurable.
+- **`LEGEND_WIDTH_PX` is applied through an inline `style`, so it is invisible to the sizing
+  ratchet.** `component-reviewer` noted Tailwind v4's dynamic spacing scale would compile `w-42` as a
+  real utility and bring it back into that gate's reach. `PLOT_HEIGHT` genuinely cannot move — it is
+  read in JS to compute the scale — so this is one of a pair and only half of it is movable.
+- **The plan describes a third stacking mode, `Kind`, that was never built.** `StackBy` is
+  `'resource' | 'group'`. If that was a deliberate descope nothing recorded it, which is the reason
+  this row exists: the plan's "invariance across all three modes" testing requirement was quietly
+  met over two. Decide whether stacking by LABOUR/EQUIPMENT/MATERIAL is wanted, or strike the mode
+  from the plan.
+- **The disclosure copy diverged from the approved spec without a recorded reason** — the spec says
+  `Show data table (all resources)` and the shipped label is `Show data table`. The shipped wording
+  is better beside a picker that already says "All resources (stacked)"; the undocumented divergence
+  is the finding, not the words.
+
+**Remedy:** fold the first three whenever `paint.ts`'s strip layer or `ResourceStackChart` is next
+touched; the last two want a decision rather than an edit.
+
 ### 227. Seventy of a hundred detailed rows use the heading form this file forbids
 
 **Status:** open · **Raised:** 2026-08-31 (filing the stacked-histogram rows) · **Size:** M

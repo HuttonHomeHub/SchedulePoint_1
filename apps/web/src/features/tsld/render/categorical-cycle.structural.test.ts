@@ -49,6 +49,40 @@ describe('the categorical ramp is declared once', () => {
     expect(members[11]?.fill).toBe('var(--chart-12)');
   });
 
+  /**
+   * **The scans are pinned against a positive case, so they cannot pass by finding nothing.**
+   *
+   * Both assertions below sweep a directory and require the result to be empty — the exact shape
+   * that goes green when the walk, the extension filter or the comment stripper breaks, and nothing
+   * notices because "no offenders" is what success looks like. This repository has recorded that
+   * failure repeatedly, most recently in `check-debt-status.mjs`, whose own control shared its
+   * blind spot. So the detectors are exercised on strings that MUST be flagged, and the walk is
+   * required to return a plausible number of files.
+   */
+  it('the scan actually scans, and its detectors actually detect', () => {
+    const files = sourceFiles(SRC);
+    // A tree this size has hundreds of sources; a handful means the walk broke.
+    expect(files.length).toBeGreaterThan(500);
+    expect(files.some((f) => f.endsWith('render/palette.ts'))).toBe(true);
+
+    const strip = (code: string): string =>
+      code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+    const enumerates = (code: string): boolean =>
+      new Set([...strip(code).matchAll(/--chart-(\d+)/g)].map((m) => m[1])).size >= 3;
+    expect(enumerates("['--chart-1', '--chart-2', '--chart-3']")).toBe(true);
+    expect(enumerates('var(--chart-1) and var(--chart-1) again')).toBe(false);
+    // …and prose naming three members is NOT an enumeration, which is the whole point of stripping.
+    expect(enumerates('// uses --chart-1, --chart-2 and --chart-3\nconst x = 1;')).toBe(false);
+    expect(enumerates('/* --chart-1 --chart-2 --chart-3 */\nconst x = 1;')).toBe(false);
+
+    const tailwindForm = (code: string): boolean =>
+      /(?:fill|bg|text|stroke)-chart-(?:\d+|\$\{)/.test(strip(code));
+    expect(tailwindForm('className="fill-chart-3"')).toBe(true);
+    expect(tailwindForm('className={`bg-chart-${n}`}')).toBe(true);
+    expect(tailwindForm('// never write fill-chart-3\nconst x = 1;')).toBe(false);
+  });
+
   it('no second file enumerates the ramp', () => {
     // **Comments are stripped before scanning.** This repository has now shipped FIVE gates that
     // matched their own explanatory prose rather than their subject (ADR-0106's reset-fills test,

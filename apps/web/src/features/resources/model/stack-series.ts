@@ -146,7 +146,7 @@ export type StackBy = 'resource' | 'group';
  * **It walks to the TOP-LEVEL ancestor, not to the immediate parent**, which is what US-8 asks for
  * and what the control's own label promises. ADR-0053 M3 allows a resource tree ten deep, so
  * `Groundworks → Concrete gang → Vibrator operator` under an immediate-parent rule attributes the
- * operator to the gang, and a control that says "Trade group" quietly stacks by sub-gang instead —
+ * operator to the gang, so a control offering to stack by Group quietly stacks by sub-gang instead —
  * a picture that looks right and answers a different question. The walk is **bounded** rather than
  * trusting that depth: ADR-0053 M3 enforces acyclicity and depth <= 10 as SERVICE invariants, and
  * this is a client deriving from a fetched list that may be paged, stale, or partial, so a cycle
