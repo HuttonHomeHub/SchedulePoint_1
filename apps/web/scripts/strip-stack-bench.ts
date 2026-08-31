@@ -6,6 +6,10 @@
  * function, which is the thing the committed condition is about.
  */
 import { paintResourceStrip, type ResourceStripPalette } from '@/features/tsld/render/paint';
+import {
+  categoricalCycleResolved,
+  resolveResourceStripPalette,
+} from '@/features/tsld/render/palette';
 import type { ResourceStripSnapshot } from '@/features/tsld/render/resource-strip';
 
 /**
@@ -142,3 +146,109 @@ export function runStripBench(opts: {
 }
 
 (window as unknown as { runStripBench: typeof runStripBench }).runStripBench = runStripBench;
+
+/**
+ * **Condition 2 — legibility at 72 px.** One frame, at true size, with the REAL resolvers reading
+ * the REAL token values (the harness injects `globals.css`), so what the screenshot shows is what
+ * a planner's browser paints and not a fixture of hex literals.
+ *
+ * It also reports the pixel height of every segment in the peak bucket and in the median bucket,
+ * because the condition's concrete half — "no shown segment renders at 0 px" — is arithmetic, and
+ * only its other half ("can a person tell them apart?") is a judgement against the image.
+ */
+export interface LegibilitySample {
+  segmentCount: number;
+  visibleBuckets: number;
+  fills: string[];
+  peakBucket: number;
+  medianBucket: number;
+  peakHeights: number[];
+  medianHeights: number[];
+  barArea: number;
+}
+
+export function renderStripSample(opts: {
+  canvas: HTMLCanvasElement;
+  segments: number;
+  buckets: number;
+  pxPerDay: number;
+  width: number;
+  height: number;
+  dpr: number;
+}): LegibilitySample {
+  const ctx = opts.canvas.getContext('2d');
+  if (!ctx) throw new Error('no 2D context');
+
+  // The REAL ramp resolver, against the REAL tokens — not the bench's hex list.
+  const cycle = categoricalCycleResolved(document.documentElement);
+  const palette = resolveResourceStripPalette(document.documentElement);
+
+  // The shipped shape: `cap` named bands ranked by total, plus one neutral aggregate.
+  const named = opts.segments - 1;
+  const fills = [...cycle.slice(0, named).map((m) => m.fill), palette.tick];
+  const segments = skewedSegments(opts.segments, opts.buckets, fills);
+
+  const dayOffsets = Array.from({ length: opts.buckets }, (_, i) => ({
+    start: i * 7,
+    end: (i + 1) * 7,
+  }));
+  const totals = Array.from({ length: opts.buckets }, (_, b) =>
+    segments.reduce((acc, s) => acc + (s.values[b] ?? 0), 0),
+  );
+  const max = Math.max(...totals);
+
+  const snapshot: ResourceStripSnapshot = { segments, dayOffsets, dataDate: '2026-01-01', max };
+
+  // **Panned so the programme's peak is on screen, and that is a deliberate choice.** At the Week
+  // preset only ~14 of 104 buckets fit, and the scale is the WHOLE plan's peak (what the panel
+  // publishes as `max`), so framing from day zero grades the quietest fortnight of the programme
+  // against a scale set by its busiest — a window in which every band is thin for a reason that has
+  // nothing to do with legibility. A planner reading resource load pans to the busy part; that is
+  // the window the condition's "peak column and a median column" is about.
+  const tallest = totals.indexOf(max);
+  const centreDay = tallest * 7 + 3.5;
+  const view = {
+    originX: opts.width / 2 - centreDay * opts.pxPerDay,
+    originY: 0,
+    pxPerDay: opts.pxPerDay,
+  };
+  paintResourceStrip(
+    ctx,
+    snapshot,
+    view,
+    { width: opts.width, height: opts.height },
+    palette,
+    opts.dpr,
+  );
+
+  // Which buckets are actually on screen — the peak and median are taken from those, not from the
+  // whole programme, because the condition is about what the reviewer can see.
+  const visible: number[] = [];
+  for (let b = 0; b < opts.buckets; b += 1) {
+    const x1 = dayOffsets[b]!.start * opts.pxPerDay + view.originX;
+    const x2 = dayOffsets[b]!.end * opts.pxPerDay + view.originX;
+    if (x2 > 0 && x1 < opts.width) visible.push(b);
+  }
+  const byHeight = [...visible].sort((a, b) => totals[a]! - totals[b]!);
+  const peakBucket = byHeight[byHeight.length - 1] ?? 0;
+  const medianBucket = byHeight[Math.floor(byHeight.length / 2)] ?? 0;
+
+  // `STRIP_BAR_TOP_PAD` is 6 in the painter; the bar area is the band less that pad.
+  const barArea = Math.max(0, opts.height - 6);
+  const heights = (b: number): number[] =>
+    segments.map((s) => ((s.values[b] ?? 0) / max) * barArea);
+
+  return {
+    segmentCount: opts.segments,
+    visibleBuckets: visible.length,
+    fills,
+    peakBucket,
+    medianBucket,
+    peakHeights: heights(peakBucket),
+    medianHeights: heights(medianBucket),
+    barArea,
+  };
+}
+
+(window as unknown as { renderStripSample: typeof renderStripSample }).renderStripSample =
+  renderStripSample;

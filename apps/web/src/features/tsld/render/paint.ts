@@ -2097,6 +2097,16 @@ function formatStripUnits(value: number): string {
 }
 
 /**
+ * `import.meta.env.DEV`, read defensively.
+ *
+ * Vite replaces it statically in the app, but the measurement harnesses bundle this module with
+ * esbuild in IIFE format, where `import.meta` is an empty object — so reading `.DEV` off it throws
+ * before the painter draws anything. A guard that takes down the instrument measuring the code it
+ * guards is worse than no guard, and this one did, on its first run.
+ */
+const IS_DEV = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
+
+/**
  * Paint the **resource strip** (Stage E, ADR-0049) — the third Canvas 2D layer, on its own
  * `aria-hidden` sibling `<canvas>` band at the bottom of the `TsldCanvas` container. It draws the
  * selected resource's per-bucket demand bars from the {@link ResourceStripSnapshot} the DOM host
@@ -2130,7 +2140,7 @@ export function paintResourceStrip(
   // logged, and a jsdom test asserting the `fill` string passing on the exact value a browser
   // refuses. That defect reached this painter once; this is what turns the next one into a
   // failing test rather than a screenshot somebody has to notice.
-  if (import.meta.env.DEV) {
+  if (IS_DEV) {
     const unresolved = snapshot.segments.find((seg) => seg.fill.startsWith('var('));
     if (unresolved) {
       throw new Error(

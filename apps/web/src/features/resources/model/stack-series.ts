@@ -41,15 +41,36 @@ export const DEFAULT_STACK_CAP = 8;
  * the number of distinct fill colours (nine segments with four colours still fails). The
  * arithmetic does not explain it either — nine segments is ~13 % more fills than eight, not 20×.
  *
- * So: six named plus the aggregate is seven, two steps clear of a discontinuity nobody has
- * explained. `docs/TECH_DEBT.md` #226 carries the unknown. Sitting at eight would pass the
- * condition on today's numbers and put the strip one segment from a cliff, which is the kind of
- * margin that disappears when somebody changes something unrelated.
+ * Six named plus the aggregate is seven, two steps clear of that discontinuity.
+ * `docs/TECH_DEBT.md` #226 carries the unknown.
+ *
+ * **Then Condition 2 — legibility at 72 px — cut it further, and that is the binding constraint.**
+ * Cost was never what limited this; height was. On the spec's skewed profile (one dominant trade
+ * halving into a tail — the shape it labels the draft's even-split arithmetic wrong for), six named
+ * bands over 66 px of bar area put the fifth at 1.04 px and the aggregate at **0.52 px**: below a
+ * pixel, and unidentifiable in the screenshot the condition is judged against
+ * (`scripts/measure-strip-legibility.mjs`, `strip-legibility.png`). Measured, not reasoned:
+ *
+ * | strip cap | thinnest band in the peak column | judgement |
+ * | 6 | 0.52 px | FAIL — sub-pixel |
+ * | 5 | 1.05 px | FAIL — a hairline |
+ * | 4 | 2.13 px | FAIL — a hairline |
+ * | 3 | **4.40 px** | PASS — thin, but a band |
+ *
+ * **The cap is set by the worst realistic profile, and that costs something on an even one.** On an
+ * even six-trade split every band is 9.43 px and all six would have been perfectly legible; three
+ * of those trades are now folded into the aggregate for no visual reason. That is deliberate: a cap
+ * that varies with the data would make a segment's presence a property of the plan rather than of
+ * the rank, and the alternative — a constant tuned to the profile that happens to read best — is
+ * the number-tuned-to-the-answer the condition exists to prevent. Recorded here rather than left
+ * for somebody to rediscover as a bug.
  *
  * The DIALOG keeps {@link DEFAULT_STACK_CAP}: it is DOM and SVG, not the canvas painter, it was
- * measured separately, and it has the vertical room the strip does not.
+ * measured separately, and it has the vertical room the strip does not. The two surfaces therefore
+ * differ in HOW MANY segments they name and never in what a segment means — which is exactly the
+ * divergence the spec's remedy ladder sanctions, and why `cap` was a parameter from the start.
  */
-export const STRIP_STACK_CAP = 6;
+export const STRIP_STACK_CAP = 3;
 
 /** One band of the stack: a resource, or the aggregate that stands for the rest. */
 export interface StackSegment {
