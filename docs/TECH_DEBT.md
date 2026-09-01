@@ -916,29 +916,11 @@ Each is one indexed primary-key lookup, sub-millisecond, and each producer is a 
 than a loop — so this is a shape to watch, not a cost to pay down now. It becomes real if any of
 those actions is ever driven from a batch.
 
-(b) **`AuditEventList` has seven inline-typed props and no named `Props` interface**, unlike
-`AuditFilterBarProps` beside it. Predates the epic; worth extracting the next time the file is
-touched.
-
-(c) **Counts render without locale grouping** — `plural()` uses `String(n)`, so a 2,400-row cascade
-reads "2400 activities" while the dates in the same file go through `Intl.DateTimeFormat`. Not an
-established pattern for plain counts elsewhere in the app either, so this is a consistency question
-rather than a defect.
-
-(d) **`DataTable`'s `describedById` contract holds only for the populated table** — the empty state
-returns the message without the `role="region"` wrapper, so the My-activity safety caveat is
-reachable by serial reading but not by landmark navigation when there is nothing to show. Harmless
-today (there is no region to land inside), but the contract is undocumented and a future change to
-the empty-state markup could silently regress the populated case's fix.
-
-(e) **Directional facts use a bare `→` glyph** — "Planner → Contributor", predecessor → successor,
-calendar scope from → to. It is real text, so 1.4.1 is satisfied, but glyph pronunciation varies by
-screen reader and the dependency-direction line is the one ADR-0064 names as the defect this row
-exists to prevent. A textual equivalent (`"X to Y"`, or an `sr-only` sibling) would settle it.
-
-(f) **`AUDIT_CATEGORY_LABELS.settings` reads "Settings & calendars"** but the category now also
-holds baseline and library-governance events, so a reader looking for "why did my baseline
-disappear" may not think to try it. The label predates the widened scope.
+**(b)–(f) were folded on 2026-08-31**, and their original problem statements stood here until
+2026-09-01 — five closed findings restated in full below a header saying they were closed, so a
+reader who scrolled past that header met six open items. What each fix was is at the top of this
+row; what each problem was is in `git log`. Leaving pre-fix text in place is how a fixed row goes on
+reading as owed work, which is the drift class this register exists to catch.
 
 ---
 
@@ -2195,6 +2177,25 @@ action, which is the documented archetype. `resources`, `calendars` and `recentl
 text-only inside a dashed box with no icon and the create action at the header instead. Pre-existing;
 pick one and apply it.
 
+> **Counted from the code 2026-09-01, and it is not three screens — it is the app's dominant
+> idiom.** `grep -rn 'rounded-lg border border-dashed' apps/web/src --include=*.tsx` (test files
+> excluded) returns **34 occurrences across 29 files**, every one the same class string
+> `border-border text-muted-foreground rounded-lg border border-dashed p-N text-center text-sm`.
+> Against that, `EmptyState` — the archetype ADR-0098 built and `docs/UX_STANDARDS.md:61`
+> documents — has **two** consumers, `OrganisationEmptyState` and `RecentlyChangedSection`, both
+> inside the overview feature it was written for. So the primitive did not spread; the hand-rolled
+> box did, and it is what a planner meets on tables, panels, dialogs, the guest share view and four
+> route files.
+>
+> The row's "three screens" was never wrong about what it saw — the shot list had gone 12 → 25 and
+> those were the three empty states a screenshot happened to capture. It is wrong as a **size**,
+> and by an order of magnitude, which is the difference between a tidy-up and a consolidation pass
+> with a gate. ADR-0110 D5's shape: a figure that came from an instrument's reach rather than from
+> the code, and read afterwards as a count.
+>
+> Specified as its own pass rather than fixed here — 34 sites, four of which are dialogs and one
+> the unauthenticated guest view, and a consolidation with no structural gate re-drifts (ADR-0058).
+
 **b. `clients-loading` is a bare spinner** where `docs/UX_STANDARDS.md` expects a skeleton. Also
 pre-existing, and only visible now because the loading state had never been captured.
 
@@ -3292,9 +3293,11 @@ Three suggestions judged real and filed rather than quietly dropped:
 28 × 28 on both pointers, and the five of its consumers that sit in a dense row stay with it
 _(recounted 2026-09-01: this said "six of its eight". `context-drawer` was deleted with the drawer
 mechanism (#156), so the dense-row set is **five**; and "eight consumers" was an undercount when
-filed — there were ten `icon-sm` consumer files besides `button.tsx`, and nine today)_:
-`HierarchyTree`, `GanttRowMenu`, `ActivitiesTable`, `CalendarRowMenu`, `explorer-column`'s collapsed
-spine and `context-drawer`. Under the house rule they should be 44 on touch. They are not, and the
+filed — there were ten `icon-sm` consumer files besides `button.tsx`, and nine today. Re-read
+2026-09-01: that correction **left the deleted name in the list it was correcting**, so the row said
+"five" and then named six — the count fixed, the evidence for it not. Corrected here)_:
+`HierarchyTree`, `GanttRowMenu`, `ActivitiesTable`, `CalendarRowMenu` and `explorer-column`'s
+collapsed spine. Under the house rule they should be 44 on touch. They are not, and the
 reason is that **their containers are sized independently of them**.
 
 **M3 tried the obvious thing and it was wrong.** Giving `icon-sm` a `pointer-coarse` floor made
@@ -3321,8 +3324,8 @@ That is a design pass, not a follow-up ticket.
 **The equivalents that exist today, stated because D1 requires it of an exception.** `HierarchyTree`
 alone honours the advice `icon-sm`'s docblock used to give: a long-press anywhere on the row opens
 the same menu on touch, and Menu/Shift+F10 opens it from the keyboard on the focused treeitem. The
-other five consumers have **no** large-target equivalent, which is the honest reason this is a
-register row and not a closed question.
+other **four** have no large-target equivalent, which is the honest reason this is a register row
+and not a closed question.
 
 **Where it is exempted, so it cannot hide.** `e2e-workspace-fit/command-surface.spec.ts` excludes
 `[role="tree"]` from the coarse projection by ancestor selector — narrow, visible, and named — and
