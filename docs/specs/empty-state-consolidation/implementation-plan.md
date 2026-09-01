@@ -90,7 +90,13 @@ spec's.
 
 ---
 
-### Milestone M1 — The gate, verified red (shippable: the gate alone)
+### Milestone M1 — The gate, verified red (shippable: the gate alone) — **LANDED 2026-09-01**
+
+> **Landed as specified, with one addition.** The plan asked for the gate to be verified red against
+> the tree; it was also verified red against a **new** site and against a **stale allow-list entry**,
+> because an allow-list matching the tree exactly satisfies the main assertion forever while
+> protecting nothing. The allow-list holds **32 entries for 34 occurrences**: two files carry the
+> same class string twice, and a `file::substring` entry covers both. `red-run.md` is committed.
 
 **Outcome:** a structural test that fails against today's tree, naming all 34 sites.
 **Ships dark:** no user-visible change. The gate lands **before** any conversion, which is the
@@ -138,7 +144,25 @@ whole point: a gate written afterwards has never been shown to be able to fail.
 
 ---
 
-### Milestone M2 — The five that are lying (shippable)
+### Milestone M2 — The five that are lying (shippable) — **LANDED 2026-09-01**
+
+> **Landed, and its title overstates two of the five.** The two permission refusals' copy was
+> already correct and both already carried `role="status"` — they were not lying about what they
+> say, they were wearing the treatment this application uses for absence. The three not-found
+> branches are the ones whose whole presentation asserted the wrong thing.
+>
+> **The plan named the truncation defect as the one most likely to ship, and it cannot be caught at
+> the unit tier.** Removing `messageFit="grow"` left the suite green: `truncate` is
+> `text-overflow: ellipsis`, jsdom has no layout, and the text stays in the DOM whatever the box
+> does. The assertion checks the class instead — the realistic regression is the prop going
+> missing — and says so in its own docblock.
+>
+> Four of the five leave the allow-list (34 → 28 entries). `EarnedValuePanel` keeps its entry: its
+> refusal and its genuine empty state share one class string, and the empty case is M6's.
+>
+> `shoot.mjs` shots for the three not-found routes are **NOT** added — recorded as owed rather than
+> silently dropped, and the reason is worth having: they need a route reached with a bad id, which
+> the harness's current shot list has no shape for. M8 picks it up.
 
 **Outcome:** three not-found errors stop looking like empty states; two permission refusals stop
 looking like absences.
