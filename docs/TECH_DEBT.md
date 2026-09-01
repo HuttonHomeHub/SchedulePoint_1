@@ -994,6 +994,44 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 236. The empty-state count was by treatment, so an untreated absence was invisible to it
+
+**Status:** open · **Raised:** 2026-09-01 (empty-state M8) · **Size:** S · **Owner:** web
+
+`docs/specs/empty-state-consolidation/` began from
+`rg 'rounded-lg border border-dashed' apps/web/src -g '*.tsx'` → 34 sites, and everything after that
+— the classification, the six kinds, the milestones, the gate — is derived from that set. **The
+predicate is a treatment.** A region that states an absence in bare prose, with no box around it at
+all, was never a candidate, and the gate that now guards the result cannot see one either: it
+matches the same class string.
+
+Found by looking at a picture rather than by reading, which is the only way it could have been.
+`activity-editor-resources-empty.png` (added in M8) shows the Resources tab carrying **two**
+absences at once in **two** shapes — `No resources assigned yet.` in the dashed `NoticeStrip` M6
+gave it, and `No resources in the library yet — create one on the Resources screen first.`
+(`ActivityResourcesPanel.tsx:342-346`) as a bare `<p className="text-muted-foreground text-sm">`
+directly beneath it.
+
+**The second one is not a defect against this epic's rule, and that is what makes it worth a row
+rather than a fix.** By the §1.5.1 discriminator it is K5 — a precondition resolved on a different
+screen — and K5 stays as prose. But the epic decided that K5 is _not converted_; it never decided
+what a K5 **looks like**, and the two K5 sites it did allow-list (`AddLinkSection`,
+`ImportScheduleDialog`) are both dashed boxes. So three sites of one kind carry two treatments, and
+which one a reader meets depends on which the pass happened to see.
+
+**Scope, probed rather than assumed.** 110 non-test `<p className="text-muted-foreground text-sm">`
+occurrences; a scan of the sentences immediately following one returns four candidates, of which
+two are fallback caveats in `EarnedValuePanel`, one is staff-console prose and one is a sign-up
+link — so this is a handful, not a second 34. The `ActivityResourcesPanel` line does not appear in
+that scan either (its sentence sits inside a ternary a line further in), which is itself the
+finding restated: **there is no cheap predicate for "this sentence reports an absence", which is
+exactly why the original count reached for one that was cheap.**
+
+**What it would take.** A decision on the K5 treatment (one shape for all three, or a written reason
+why a precondition inside a form differs from one inside a dialog), then applying it. Not urgent —
+nothing here misleads a reader about what is true, which is the bar the five K6 sites failed. Do it
+the next time one of the three files is open.
+
 ### 235. A failing typecheck did not block the pre-push gate, because `tsc` exits 2
 
 **Status:** open · **Found and fixed:** 2026-09-01 · **Size:** S (fixed) · **Owner:** repo
@@ -1172,6 +1210,7 @@ One line each. The story lives where the link points, not here.
 | 224 | `plan:scale-500` was described as fully unassigned and its spec assigns 168 activities | 2026-08-31 | The playbook said "478 of 478 unassigned" about a fixture that is 35 % assigned — on the document whose job is to say what wrong looks like. Corrected to 310 of 478, the denominator established from the engine's write set rather than from a seeded run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 65  | A link's lag or type edited from the dialog is not recorded for undo                   | 2026-09-01 | `dependencyEditCommand` + `onSaved`/`onEdited` at both hosts, and a journey reading the lag back from the API.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 92  | An undone delete left a deletion with no matching restore                              | 2026-08-31 | The inverse is now the id-stable `restore-batch` rather than a re-create, so `activity.restored` fires with the original id and the pair closes. It also stopped the re-create silently dropping every dependency the activity had. Cascade undo is #230.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 161 | The empty-state pattern was inconsistent, and `clients-loading` was a bare spinner     | 2026-09-01 | `docs/specs/empty-state-consolidation/` — 34 hand-rolled dashed boxes counted, 5 that were errors or refusals reshaped, 27 converted, 3 left as placeholders with permanent reasons, and `empty-state.structural.test.ts` gating the result. `DataTable` renders a column-matched skeleton; its 15 page/panel siblings are #234. (c) and (d) had resolved in `web-v0.97.0` before anyone acted on them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 160 | `resolveLensPalette` was resolved twice per cycle                                      | 2026-08-31 | One memo, both maps derived from it — which also makes the `barFill`/`barInk` pairing come from one resolve, as it must.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 171 | `schedulepoint-active-org` was never cleared and carried no user id                    | 2026-08-31 | Keyed `<prefix>:<userId>` matching `recent-plans`, and swept beside `forgetAllForUser` at sign-out. On a shared machine the next person in was silently sent to the previous person's organisation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | 108 | The plural drag: model, command and endpoint landed, the gesture did not               | 2026-08-28 | `useBatchPlacements`/`moveMany`/`bulkPlacementCommand` plus `livePeerGhostRects` drawn into the overlay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -2303,111 +2342,6 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
 5. **The one-derivation gate matches the three original idioms only** (architecture S10):
    a fourth extent derivation in a different idiom would pass it. Recorded in ADR-0100
    decision 3 so the gate is not over-read.
-
-### 161. Four screens the harness photographed for the first time, and one question for the product owner
-
-**Status:** unverified
-
-**Raised 2026-08-21** (ADR-0102's UX gate). **Size:** S each, none blocking, none introduced by the
-light theme — they became visible because the shot list went 12 → 25 and started covering states
-nothing had ever looked at.
-
-**a. The empty-state pattern is inconsistent.** `org-home-empty` uses icon + heading + explanation +
-action, which is the documented archetype. `resources`, `calendars` and `recently-deleted` render
-text-only inside a dashed box with no icon and the create action at the header instead. Pre-existing;
-pick one and apply it.
-
-> **Counted from the code 2026-09-01, and it is not three screens — it is the app's dominant
-> idiom.** `grep -rn 'rounded-lg border border-dashed' apps/web/src --include=*.tsx` (test files
-> excluded) returns **34 occurrences across 29 files**, every one the same class string
-> `border-border text-muted-foreground rounded-lg border border-dashed p-N text-center text-sm`.
-> Against that, `EmptyState` — the archetype ADR-0098 built and `docs/UX_STANDARDS.md:61`
-> documents — has **two** consumers, `OrganisationEmptyState` and `RecentlyChangedSection`, both
-> inside the overview feature it was written for. So the primitive did not spread; the hand-rolled
-> box did, and it is what a planner meets on tables, panels, dialogs, the guest share view and four
-> route files.
->
-> The row's "three screens" was never wrong about what it saw — the shot list had gone 12 → 25 and
-> those were the three empty states a screenshot happened to capture. It is wrong as a **size**,
-> and by an order of magnitude, which is the difference between a tidy-up and a consolidation pass
-> with a gate. ADR-0110 D5's shape: a figure that came from an instrument's reach rather than from
-> the code, and read afterwards as a count.
->
-> Specified as its own pass rather than fixed here — 34 sites, four of which are dialogs and one
-> the unauthenticated guest view, and a consolidation with no structural gate re-drifts (ADR-0058).
->
-> **M1 and M2 landed 2026-09-01** (`docs/specs/empty-state-consolidation/`). M1 is the gate,
-> written with an empty allow-list and **verified red in three directions** — against the real tree
-> (34 findings, matching the grep), against a NEW site added to `list-row.tsx`, and against a stale
-> allow-list entry. The middle one is the direction that matters and the easy one to skip: an
-> allow-list matching the tree exactly satisfies the main assertion forever while protecting
-> nothing. `red-run.md` records the state it was written to find, because that state disappears the
-> moment the list is populated.
->
-> **M2 is the substantive half — five of the 34 are not empty states at all.** Three are
-> `query.isError` branches (plan, project, client) and two are permission refusals (the audit log,
-> a plan's cost and earned value). The two refusals' copy was already correct and both already
-> carried `role="status"`; what was wrong is that they wore this application's treatment for
-> absence, so a Viewer met "there is nothing here" about an organisation whose log is full. The
-> allow-list is 34 → 28 entries, which is the epic's progress metric.
->
-> **What M2 established about its own tests is worth carrying**: the truncation defect its plan
-> named as most likely to ship **cannot be caught at the unit tier**, because `truncate` is
-> `text-overflow: ellipsis`, jsdom has no layout, and the text stays in the DOM whatever the box
-> does. Removing `messageFit="grow"` left the suite green. The assertion checks the class instead
-> and says so. **M3–M8 remain.**
-
-**b. `clients-loading` is a bare spinner** where `docs/UX_STANDARDS.md` expects a skeleton. Also
-pre-existing, and only visible now because the loading state had never been captured.
-
-> **Counted 2026-09-01, and it is the same finding as (a) one state over.** `clients-loading` is
-> not a screen that happens to use a spinner — it is `DataTable`, whose own docblock
-> (`components/ui/data-table.tsx:35`) says it owns "loading / error-with-retry / empty / populated
-> states so every resource list", and which renders `<Spinner label={loadingLabel} />` at `:85` for
-> **15 non-test consumers**. So one change covers every resource list, and `clients` was the one a
-> screenshot caught. `Skeleton` and `ListRowSkeleton` both already exist and have **two** consumers
-> between them, both in `features/overview` — the primitive did not spread; the spinner did.
->
-> **Not every spinner is wrong, and saying so is part of the finding.** ~19 files touch
-> `Spinner`/`animate-spin`, and a spinner is right for a pending button, an inline action and a
-> route-level suspense fallback; `docs/UX_STANDARDS.md` asks for a skeleton only where the content
-> has a known shape. Sweeping all 19 would be the mirror of the mistake that filed this row.
->
-> Folded into the (a) pass rather than kept separate: the loading and empty states of one shared
-> table are one reader's experience of one screen, and splitting them means touching `DataTable`
-> twice.
->
-> **The code half landed 2026-09-01** (M7-T1). `DataTable` renders a column-matched skeleton
-> instead of a centred spinner, so every resource list stops spanning a spinner and then reflowing
-> into a table. The obligation was already written down and unbuilt: `skeleton.tsx` says each
-> archetype owns its loading render because a generic rectangle reflows into whatever the content
-> turns out to be, and names `DataTable` as knowing its own. `loadingLabel` survives — it is what
-> `shoot.mjs` asserts on to photograph this state, so deleting it would have broken the instrument
-> that found the defect. **Still owed: the fifteen page/panel spinner candidates the spec
-> deliberately excluded get their own row rather than being absorbed** (M7-T2).
-
-**c. The Project Explorer is a large flat navy block when the tree is short** — **RESOLVED in
-`web-v0.97.0`, before anyone acted on this row.** It was raised as "worth putting to the product
-owner"; they were asked, chose to make the Explorer light, and it shipped in the same release that
-filed this. The Explorer sits in the context drawer at `tone="panel"`, and `--panel` is now
-`oklch(0.968 0.003 250)`. **Left standing for a day, this row would have sent the product owner a
-question they had already answered** — the drift class ADR-0058 exists for, in the register rather
-than in a spec.
-
-Its second half — "consider whether the **rail** should compress when sparse" — is now **moot, and
-the way it went moot is the point**: this row named "the narrow icon rail (`tone="chrome"`)" as the
-navy that remains, and ADR-0109 D2 **deleted that rail entirely** on 2026-08-24. A register row
-describing a component that no longer exists reads as outstanding work; it was still doing so at the
-2026-08-25 pass. Closed by deletion of its subject, not by anyone acting on it.
-
-**d. The sign-in → organisation-home transition is black-to-white** — **RESOLVED in `web-v0.97.0`,
-before anyone acted on this row.** Correctly identified as a product-owner question; they were asked
-and chose to lighten the surround, which shipped in the same release. `--ground` /`--ground-end` are
-now `oklch(0.975 0.005 263)` / `oklch(0.851 0.03 260)` — the old Flask app's own
-`linear-gradient(135deg, #f5f7fa, #c3cfe2)`, solved for in OKLCH to within 0.0013 in sRGB rather
-than matched by eye. The card, its navy panel, the photograph and the amber accents are untouched.
-The accepted cost is recorded at the declaration: a floating card gets much of its drama from a dark
-surround, so the login reads calmer.
 
 ### 165. Five screens photographed for the first time, and what they showed
 

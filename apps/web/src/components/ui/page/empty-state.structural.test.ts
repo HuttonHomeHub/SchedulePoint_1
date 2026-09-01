@@ -33,6 +33,13 @@ import { describe, expect, it } from 'vitest';
  *   errors and two are permission refusals, and a refusal that looks like an absence is the
  *   substantive defect this epic exists to fix. The gate cannot tell them apart; the allow-list's
  *   `kind` field is where that judgement is written down.
+ * - **An absence with no treatment at all** (`docs/TECH_DEBT.md` #236). The predicate is a
+ *   TREATMENT, and so was the count that produced the 34 — so a region stating an absence in bare
+ *   prose was never a candidate for the pass and is not a candidate for this gate either. One was
+ *   found in M8, by looking at a screenshot: the Resources tab carries the dashed strip M6 gave it
+ *   and, directly beneath, an empty-library sentence with no box. There is no cheap predicate for
+ *   "this sentence reports an absence", which is exactly why the original count reached for one
+ *   that was cheap. This is the blind spot to remember before quoting 34 as a total.
  * - Anything outside `apps/web/src`.
  *
  * Two failure modes this gate is built against, both of which this repository has shipped:

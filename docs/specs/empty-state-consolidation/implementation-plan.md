@@ -567,7 +567,7 @@ archetypes were built.
 
 ---
 
-### Milestone M8 — Close the gate and correct the documents (shippable)
+### Milestone M8 — Close the gate and correct the documents (shippable) — **LANDED 2026-09-01**
 
 **Outcome:** the allow-list holds only K5/K6 survivors with permanent reasons; the standards say
 what the product does.
@@ -583,6 +583,41 @@ what the product does.
 > **Testing requirements:** `pnpm prepush`, plus `scripts/e2e-sweep.sh` — **every** journey, not
 > the ones I remember (ADR-0091 M7's recorded failure, and #133's rule: after any label or layout
 > change, run every journey).
+
+> **Landed.** The allow-list finished at **3 of 34**, every entry K5 with a permanent reason —
+> `DataTable`'s own `EMPTY_FRAME` (the treatment itself, which must never be deleted while that
+> constant lives) plus `AddLinkSection` and `ImportScheduleDialog`. `docs/UX_STANDARDS.md` gained
+> the shape table and its row 61 corrected — the icon and the action are both optional, which the
+> primitive has always allowed and the standard had never said; `docs/COMPONENT_LIBRARY.md` gained
+> the `EmptyState`/`NoticeStrip` boundary. `docs/TECH_DEBT.md` #161 is CLOSED and ledgered in full:
+> (a) and (b) by this epic, (c) and (d) having resolved in `web-v0.97.0` before anyone acted on
+> them. No ADR — this applies ADR-0097's archetypes and ADR-0082's omit/shade rule and introduces
+> no architectural decision (step 5's default, taken).
+>
+> **Six shots the epic owed, and one finding they produced.** `plan-not-found`,
+> `project-not-found`, `client-not-found` (M2-T1), `share-guest-empty` (M5) and two editor tabs
+> (M6) are now in `shoot.mjs` and were RUN, not merely written — all six wrote on the first run at
+> 1646, each with an `expectText` so a shot named for a state has to prove it reached it. The three
+> not-found shots navigate to a well-formed id that names nothing rather than intercepting a 500,
+> because that is the path a stale bookmark takes and it additionally proves the route resolves and
+> the guard fires.
+>
+> **Looking at them found what the diff could not** (`docs/TECH_DEBT.md` #236): the Resources tab
+> shows **two** absences at once in **two** shapes — the dashed strip M6 gave it, and an
+> empty-library sentence directly beneath it with no treatment at all. That second site was never
+> among the 34, because **the count was by treatment**: `border-dashed` cannot see an absence
+> nobody drew a box around, and neither can the gate. It is not a defect against this epic's rule
+> (K5 stays as prose), but the epic decided K5 is not _converted_ and never decided what a K5 looks
+> like, so three sites of one kind now carry two treatments. Filed rather than fixed, with the
+> blind spot written into the gate's own docblock so 34 is not quoted as a total.
+>
+> **M6 had never been linted, and the way that surfaced is worth a line.** It landed on the unit
+> suite and four journeys; `pnpm prepush` was not run against it, and its six new `notice-strip`
+> imports were all in the wrong `import/order` position, plus two escaped quotes in the allow-list
+> notes. The first fix repaired **the three files the failure's truncated tail happened to name** —
+> `docs/TECH_DEBT.md` #133's rule (sweep, do not fix what the instrument happened to print) landing
+> on lint rather than on journeys — and the next full run found three more. Fixed by amending M6
+> rather than folding into M8, so no commit in the branch fails a gate on its own.
 
 ##### Task M8-T1 — Finish the gate and the docs
 
