@@ -1,5 +1,30 @@
 # @repo/web
 
+## 0.117.0
+
+### Minor Changes
+
+- [#441](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/441) [`75fcee9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/75fcee93d029fb358bc25efded1d820d60489da6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Stack the resource histogram by **Kind** — `Labour` / `Equipment` / `Material` — on both the
+  dialog and the canvas strip. It needs nothing of the reader: no groups to have been built and no
+  filter per segment, so it is the one mode that says something about a programme nobody has
+  organised yet.
+  
+  The `Stack by` picker no longer shuts entirely when the resource library holds no group. It shades
+  the `Group` option alone and says why in that option's label, so a library with no groups keeps
+  `Kind` — which is exactly the case it is most useful in.
+  
+  The trailing context drawer is removed. Nothing has used it since the activity editor returned to a
+  dialog, and the shell keeps the same layout without it.
+
+### Patch Changes
+
+- [#441](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/441) [`75fcee9`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/75fcee93d029fb358bc25efded1d820d60489da6) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The Gantt grid's six sortable column headers — Code, Activity, Duration, Start, Finish, Float —
+  were 16 px tall, below WCAG 2.2 §2.5.8's 24 px minimum target size. They now clear it, with the
+  label painted exactly where it was.
+  
+  Found by extending the target-size sweep to the Gantt view, which an approved plan had specified
+  and which had never been built for that half.
+
 ## 0.116.1
 
 ### Patch Changes
