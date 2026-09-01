@@ -40,9 +40,9 @@ through a text equivalent or not at all.
 
 **There is no text equivalent. Two places in the repository say there is.**
 
-| Where | The claim |
-| --- | --- |
-| `apps/web/src/features/tsld/components/TsldCanvas.tsx:2198-2202` | "…its a11y equivalent is the band group in the parallel DOM listbox." |
+| Where                                                                 | The claim                                                                              |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `apps/web/src/features/tsld/components/TsldCanvas.tsx:2198-2202`      | "…its a11y equivalent is the band group in the parallel DOM listbox."                  |
 | `docs/adr/0063-pinned-wbs-band-and-the-canvas-band-model.md:123` (§7) | "It carries no activity id, so it **is announced as a group** and cannot be selected". |
 
 **Verified against the code, not taken from the register row** (per `CLAUDE.md` §19.11):
@@ -79,12 +79,12 @@ audience still relying on a claim that was never built.
 
 ### Users
 
-| Role | What they need here |
-| --- | --- |
-| **Planner** (org role `PLANNER`), screen-reader user | To learn, from the diagram, that the plan has unfiled work and how much — the same fact the Gantt already gives them. |
-| **Viewer** / **Contributor** / **Org Admin**, screen-reader user | The same. This is a **read**; nothing here is gated on a role or on the pen. |
-| **External Guest** (ADR-0051 share link) | Out of scope, and structurally so — the guest view's `SCHEDULE_READ` scope does not include the WBS band toggle. See §3 "Permissions". |
-| Sighted planners | **Unaffected by design.** No pixel changes; see §2 "Non-goals". |
+| Role                                                             | What they need here                                                                                                                    |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Planner** (org role `PLANNER`), screen-reader user             | To learn, from the diagram, that the plan has unfiled work and how much — the same fact the Gantt already gives them.                  |
+| **Viewer** / **Contributor** / **Org Admin**, screen-reader user | The same. This is a **read**; nothing here is gated on a role or on the pen.                                                           |
+| **External Guest** (ADR-0051 share link)                         | Out of scope, and structurally so — the guest view's `SCHEDULE_READ` scope does not include the WBS band toggle. See §3 "Permissions". |
+| Sighted planners                                                 | **Unaffected by design.** No pixel changes; see §2 "Non-goals".                                                                        |
 
 ### Primary use cases
 
@@ -123,14 +123,14 @@ today's surface, including no text equivalent.
 
 ### Success criteria
 
-| # | Criterion | How it is judged |
-| --- | --- | --- |
-| SC-1 | With the band on and unfiled work present, the accessibility tree contains a text node naming the bucket **and** its count. | Unit test on `TsldPanel`; flag-on journey assertion in `e2e-wbs`. |
-| SC-2 | The count of AT-reachable **activities** is identical with the band on and off (ADR-0063 §4). | The existing assertions still pass unchanged — `TsldPanel.wbs-band.test.tsx:92-99` and `apps/web/e2e-wbs/wbs.spec.ts:127-130`. Nothing about them is edited. |
-| SC-3 | Nothing announced implies the bucket is selectable. | The equivalent uses plain list semantics — no `role="option"`, no `aria-selected`, no `aria-disabled`, no tab stop. Asserted structurally. |
-| SC-4 | The bucket's name and count are composed by one function shared with the Gantt. | Structural test importing the composer and asserting both call sites use it. |
-| SC-5 | Flag off ⇒ no text equivalent, no other change. | The existing flag-off parity suite, extended by one assertion. |
-| SC-6 | `TsldCanvas.tsx:2200` and ADR-0063 §7 no longer assert something that does not exist. | Review of the diff; the ADR is amended by a new ADR, not edited. |
+| #    | Criterion                                                                                                                   | How it is judged                                                                                                                                             |
+| ---- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| SC-1 | With the band on and unfiled work present, the accessibility tree contains a text node naming the bucket **and** its count. | Unit test on `TsldPanel`; flag-on journey assertion in `e2e-wbs`.                                                                                            |
+| SC-2 | The count of AT-reachable **activities** is identical with the band on and off (ADR-0063 §4).                               | The existing assertions still pass unchanged — `TsldPanel.wbs-band.test.tsx:92-99` and `apps/web/e2e-wbs/wbs.spec.ts:127-130`. Nothing about them is edited. |
+| SC-3 | Nothing announced implies the bucket is selectable.                                                                         | The equivalent uses plain list semantics — no `role="option"`, no `aria-selected`, no `aria-disabled`, no tab stop. Asserted structurally.                   |
+| SC-4 | The bucket's name and count are composed by one function shared with the Gantt.                                             | Structural test importing the composer and asserting both call sites use it.                                                                                 |
+| SC-5 | Flag off ⇒ no text equivalent, no other change.                                                                             | The existing flag-off parity suite, extended by one assertion.                                                                                               |
+| SC-6 | `TsldCanvas.tsx:2200` and ADR-0063 §7 no longer assert something that does not exist.                                       | Review of the diff; the ADR is amended by a new ADR, not edited.                                                                                             |
 
 ### Open questions
 
@@ -209,17 +209,17 @@ blocked. See §6.
 
 ### Edge cases
 
-| Case | Behaviour | Why |
-| --- | --- | --- |
-| Nothing unfiled | No Unassigned entry. | `deriveWbsGroups` returns `unassigned: null` (`wbs-groups.ts:59-60, 127`). |
-| Exactly one unfiled activity | `Unassigned, 1 activity` — singular. | Matches `GanttPanel.tsx:1338`'s existing ternary. |
-| No summaries at all, some unfiled work | The band draws one bar; the list has one entry. | A one-entry list is correct, not noise; the band itself has one bar. |
-| A grouping deeper than the band's cap (`WBS_BAND_MAX_DEPTH = 2`) | **Not listed.** It is not drawn in the band; it is still an ordinary bar in the scene and still a listbox option. | `render/wbs-band.ts:105-110` + `isWithinBandDepth`. Listing it would claim something the picture does not show. |
-| A grouping with no computed span (all members uncalculated) | **Not listed.** | `wbsBandBars` skips it (`render/wbs-band.ts:133`) — no bar is drawn, so there is nothing to describe. |
-| A grouping scrolled off the viewport | **Still listed.** | Viewport culling is a scroll position, not content. Deriving the list from the culled bars would make the announcement change as the planner pans, which is the one thing a text equivalent must not do. This is the single sharpest design decision here — see §4.3. |
-| Band toggle flipped repeatedly | The list appears/disappears with it; the listbox is untouched. | SC-2. |
-| An orphan (a `parentId` naming a row not in the plan) | Counts as unfiled, exactly as the Gantt and the colour lens already treat it. | `wbs-groups.ts:84-94`; `render/lenses.ts:464-467`; `render/a11y.ts:116-118`. One resolution, three readers. |
-| 2,000-activity plan | Unchanged draw cost; the list is at most `WBS_BAND_MAX_DEPTH + 1` rows deep but as many entries as there are groupings. | See §3 Performance. |
+| Case                                                             | Behaviour                                                                                                               | Why                                                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nothing unfiled                                                  | No Unassigned entry.                                                                                                    | `deriveWbsGroups` returns `unassigned: null` (`wbs-groups.ts:59-60, 127`).                                                                                                                                                                                            |
+| Exactly one unfiled activity                                     | `Unassigned, 1 activity` — singular.                                                                                    | Matches `GanttPanel.tsx:1338`'s existing ternary.                                                                                                                                                                                                                     |
+| No summaries at all, some unfiled work                           | The band draws one bar; the list has one entry.                                                                         | A one-entry list is correct, not noise; the band itself has one bar.                                                                                                                                                                                                  |
+| A grouping deeper than the band's cap (`WBS_BAND_MAX_DEPTH = 2`) | **Not listed.** It is not drawn in the band; it is still an ordinary bar in the scene and still a listbox option.       | `render/wbs-band.ts:105-110` + `isWithinBandDepth`. Listing it would claim something the picture does not show.                                                                                                                                                       |
+| A grouping with no computed span (all members uncalculated)      | **Not listed.**                                                                                                         | `wbsBandBars` skips it (`render/wbs-band.ts:133`) — no bar is drawn, so there is nothing to describe.                                                                                                                                                                 |
+| A grouping scrolled off the viewport                             | **Still listed.**                                                                                                       | Viewport culling is a scroll position, not content. Deriving the list from the culled bars would make the announcement change as the planner pans, which is the one thing a text equivalent must not do. This is the single sharpest design decision here — see §4.3. |
+| Band toggle flipped repeatedly                                   | The list appears/disappears with it; the listbox is untouched.                                                          | SC-2.                                                                                                                                                                                                                                                                 |
+| An orphan (a `parentId` naming a row not in the plan)            | Counts as unfiled, exactly as the Gantt and the colour lens already treat it.                                           | `wbs-groups.ts:84-94`; `render/lenses.ts:464-467`; `render/a11y.ts:116-118`. One resolution, three readers.                                                                                                                                                           |
+| 2,000-activity plan                                              | Unchanged draw cost; the list is at most `WBS_BAND_MAX_DEPTH + 1` rows deep but as many entries as there are groupings. | See §3 Performance.                                                                                                                                                                                                                                                   |
 
 ### Permissions
 
@@ -242,10 +242,10 @@ None — there is no input. The one derived value is a count, which is `memberId
 
 ### Error scenarios
 
-| Scenario | Detection | User-facing result | Status |
-| --- | --- | --- | --- |
-| Activities not yet loaded / plan not scheduled | `TsldPanel` already renders "The diagram appears once the schedule has been calculated." (`TsldPanel.tsx:2936-2938`) | No band, no list. | n/a |
-| A cycle in the parent tree (server forbids it, but render code must not hang) | `wbsBandGroups`' `seen` guard (`wbs-groups.ts:190-202`) | The group lands at the depth reached; the list renders. | n/a |
+| Scenario                                                                      | Detection                                                                                                            | User-facing result                                      | Status |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------ |
+| Activities not yet loaded / plan not scheduled                                | `TsldPanel` already renders "The diagram appears once the schedule has been calculated." (`TsldPanel.tsx:2936-2938`) | No band, no list.                                       | n/a    |
+| A cycle in the parent tree (server forbids it, but render code must not hang) | `wbsBandGroups`' `seen` guard (`wbs-groups.ts:190-202`)                                                              | The group lands at the depth reached; the list renders. | n/a    |
 
 There is no network call, no failure mode and no error state to design.
 
@@ -253,17 +253,17 @@ There is no network call, no failure mode and no error state to design.
 
 ## 3. Technical analysis
 
-| Area | Impact | Notes |
-| --- | --- | --- |
-| Frontend | **medium** | `apps/web` only. One new sr-only element in `TsldPanel`; one field added to a shared model type; one composer extracted from `GanttPanel`. |
-| Backend | **none** | No module, service or endpoint touched. |
-| Database | **none** | No model, column, index, constraint or migration. **`database-architect` is therefore not engaged, and that is a stated conclusion rather than an omission** (`CLAUDE.md` §19.3 — the agent is unconditional *for schema changes*; there is no schema change here, confirmed against the planned diff, which is entirely under `apps/web/src` and `docs/`). |
-| API | **none** | No route, DTO, status code or OpenAPI change. |
-| Security | **none** | No new data reaches the client — the counts are derived from activities the caller is already rendering. No authZ decision, no new surface for IDOR, no input. |
-| Performance | **low** | See below. |
-| Infrastructure | **none** | No new Playwright config, no new CI step, no env var, no container change. The existing `apps/web/playwright.wbs.config.ts` and its CI step are reused. |
-| Observability | **none** | No log, metric, trace or health impact. |
-| Testing | **medium** | Unit (2 suites extended, 1 structural test added), flag-off parity (1 assertion), flag-on journey (`e2e-wbs`, extended — no new config). See §5 of the plan. |
+| Area           | Impact     | Notes                                                                                                                                                                                                                                                                                                                                                       |
+| -------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend       | **medium** | `apps/web` only. One new sr-only element in `TsldPanel`; one field added to a shared model type; one composer extracted from `GanttPanel`.                                                                                                                                                                                                                  |
+| Backend        | **none**   | No module, service or endpoint touched.                                                                                                                                                                                                                                                                                                                     |
+| Database       | **none**   | No model, column, index, constraint or migration. **`database-architect` is therefore not engaged, and that is a stated conclusion rather than an omission** (`CLAUDE.md` §19.3 — the agent is unconditional _for schema changes_; there is no schema change here, confirmed against the planned diff, which is entirely under `apps/web/src` and `docs/`). |
+| API            | **none**   | No route, DTO, status code or OpenAPI change.                                                                                                                                                                                                                                                                                                               |
+| Security       | **none**   | No new data reaches the client — the counts are derived from activities the caller is already rendering. No authZ decision, no new surface for IDOR, no input.                                                                                                                                                                                              |
+| Performance    | **low**    | See below.                                                                                                                                                                                                                                                                                                                                                  |
+| Infrastructure | **none**   | No new Playwright config, no new CI step, no env var, no container change. The existing `apps/web/playwright.wbs.config.ts` and its CI step are reused.                                                                                                                                                                                                     |
+| Observability  | **none**   | No log, metric, trace or health impact.                                                                                                                                                                                                                                                                                                                     |
+| Testing        | **medium** | Unit (2 suites extended, 1 structural test added), flag-off parity (1 assertion), flag-on journey (`e2e-wbs`, extended — no new config). See §5 of the plan.                                                                                                                                                                                                |
 
 **Performance.** The list is derived from `wbsBandGroupRows`, which `TsldPanel` already memoises
 (`TsldPanel.tsx:1024-1033`). The added work is one `.filter().map()` over the band's groups —
@@ -375,19 +375,19 @@ one `<li>` per grouping the band draws.
    `aria-hidden` canvas — states its equivalent as "the reused `<table>` in the DOM
    `ResourceStripPanel`" (`TsldCanvas.tsx:2546-2549`). A canvas layer's equivalent living **beside**
    it rather than inside the listbox is the established shape here.
-3. **It does not reopen the design ADR-0063 §4 rejected.** That draft was to *move summaries into a
-   DOM group of the band's own* — its failure mode was losing rows, because the group would have had
+3. **It does not reopen the design ADR-0063 §4 rejected.** That draft was to _move summaries into a
+   DOM group of the band's own_ — its failure mode was losing rows, because the group would have had
    to be "built, ordered and de-duplicated against the first" (ADR-0063:90-96). This adds a
    **read-only description that contains no activities at all**. There is no second list of
    activities to keep in step, and no window in which an activity could exist in neither.
 4. **Nothing it exposes has selection semantics to misread.** A `<li>` in a plain list has no
    selected state, no disabled state and no operability — which is a stronger answer to ADR-0063 §7
    than `role="option"` + `aria-disabled` would be. `aria-disabled` says "this could be operable and
-   currently is not"; the bucket is *never* operable, and saying so by having nothing to say is
+   currently is not"; the bucket is _never_ operable, and saying so by having nothing to say is
    honest.
 5. It describes the whole band, which is what the picture shows, rather than one bar of it.
 
-**Against, stated.** It is a second thing derived from the band's groups, so it *could* drift from
+**Against, stated.** It is a second thing derived from the band's groups, so it _could_ drift from
 the painter. Mitigated by deriving both from the same array in the same component, and by a
 structural test that the list's membership predicate equals the painter's minus the viewport cull
 (§4.5, T-3).
@@ -406,7 +406,7 @@ Wrap the bucket's members in a `role="group"` inside the existing listbox, label
    toggle, deliberately, so "a swap would fail as loudly as a drop". Option 2 requires weakening
    that assertion. That is disqualifying on its own.
 2. **It puts a non-selectable thing inside a selection widget.** A group header in a listbox reads
-   as structure the user is inside, and every sibling of it *is* selectable. ADR-0063 §7's
+   as structure the user is inside, and every sibling of it _is_ selectable. ADR-0063 §7's
    requirement — that nothing announced implies the bucket can be selected — is met better by
    putting it outside the widget entirely.
 3. **It couples the listbox's structure to a view toggle.** The band is a `View ▾` switch; the
@@ -453,13 +453,13 @@ disagree" (`wbs-groups.ts:5-8`). Both consumers already import that feature (§3
 ### 4.5 The membership rule — what the list contains
 
 The list is derived from the band's **groups**, never from its placed **bars**. A group is listed
-when it satisfies both of the painter's *content* filters and neither of its *viewport* filters:
+when it satisfies both of the painter's _content_ filters and neither of its _viewport_ filters:
 
-| Filter | In the list? | Why |
-| --- | --- | --- |
-| `isWithinBandDepth(depth)` (`render/wbs-band.ts:31-33, 124`) | **applied** | Past the cap the band draws nothing; the activity is still an ordinary bar and still a listbox option. |
-| has a span (`start !== null && finish !== null`, `render/wbs-band.ts:133`) | **applied** | No bar is drawn. Describing one would state a schedule the engine has not produced — the same reason the painter skips it. |
-| viewport cull (`render/wbs-band.ts:138`) | **NOT applied** | Culling is a scroll position. A description that changes as the planner pans is worse than none: it would announce work appearing and disappearing from the plan. |
+| Filter                                                                     | In the list?    | Why                                                                                                                                                               |
+| -------------------------------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isWithinBandDepth(depth)` (`render/wbs-band.ts:31-33, 124`)               | **applied**     | Past the cap the band draws nothing; the activity is still an ordinary bar and still a listbox option.                                                            |
+| has a span (`start !== null && finish !== null`, `render/wbs-band.ts:133`) | **applied**     | No bar is drawn. Describing one would state a schedule the engine has not produced — the same reason the painter skips it.                                        |
+| viewport cull (`render/wbs-band.ts:138`)                                   | **NOT applied** | Culling is a scroll position. A description that changes as the planner pans is worse than none: it would announce work appearing and disappearing from the plan. |
 
 This rule is a named export in `features/wbs` and is pinned by a structural test (T-3) that compares
 its output against `wbsBandBars`' output for a viewport wide enough to cull nothing — so the list
@@ -493,8 +493,8 @@ Two of the three reasons are procedural and one is architectural:
    noticing.
 2. **ADR-0063 §4's argument is refined.** That section rejected "a DOM group of the band's own" and
    concluded the listbox's activity-derived construction makes the invariant hold **by
-   construction**. That conclusion is correct and unchanged for *activities*; what this ADR adds is
-   that the band's *groupings* are a different subject, needing their own equivalent, and that such
+   construction**. That conclusion is correct and unchanged for _activities_; what this ADR adds is
+   that the band's _groupings_ are a different subject, needing their own equivalent, and that such
    an equivalent is safe precisely because it contains no activities. Both sections are amended, not
    superseded.
 3. **ADR-0026 D7 gains a qualification.** "The parallel focusable DOM layer is the only route an AT
@@ -540,15 +540,15 @@ conclusion, not an oversight (`CLAUDE.md` §19.3).
 
 ### 4.10 Component changes
 
-| File | Change | Kind |
-| --- | --- | --- |
-| `apps/web/src/features/wbs/model/wbs-group-name.ts` | **new** — `wbsGroupAccessibleName({ label, count })`, the one composer. | new module |
-| `apps/web/src/features/wbs/model/wbs-groups.ts` | `WbsBandGroupInput` gains `count: number` (member count); `wbsBandGroups` populates it from `memberIds.length` for summaries and for the bucket. | shared model type |
-| `apps/web/src/features/wbs/model/wbs-band-rows.ts` (or a named export in `wbs-band-source.ts`) | **new** — the §4.5 membership rule as one predicate. | new module |
-| `apps/web/src/features/wbs/index.ts` | barrel exports for the two above. | barrel |
-| `apps/web/src/features/tsld/components/TsldPanel.tsx` | renders the `sr-only` band description before the listbox, gated on the same expression the band canvas mounts on. | component (internal) |
-| `apps/web/src/features/tsld/components/TsldCanvas.tsx` | comment at `:2198-2202` corrected to name the element that is the equivalent. | comment only |
-| `apps/web/src/features/gantt/components/GanttPanel.tsx` | `:1338` calls the shared composer; the surrounding comment is kept, because it records *why* the count is part of the name. | call-site refactor |
+| File                                                                                           | Change                                                                                                                                           | Kind                 |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- |
+| `apps/web/src/features/wbs/model/wbs-group-name.ts`                                            | **new** — `wbsGroupAccessibleName({ label, count })`, the one composer.                                                                          | new module           |
+| `apps/web/src/features/wbs/model/wbs-groups.ts`                                                | `WbsBandGroupInput` gains `count: number` (member count); `wbsBandGroups` populates it from `memberIds.length` for summaries and for the bucket. | shared model type    |
+| `apps/web/src/features/wbs/model/wbs-band-rows.ts` (or a named export in `wbs-band-source.ts`) | **new** — the §4.5 membership rule as one predicate.                                                                                             | new module           |
+| `apps/web/src/features/wbs/index.ts`                                                           | barrel exports for the two above.                                                                                                                | barrel               |
+| `apps/web/src/features/tsld/components/TsldPanel.tsx`                                          | renders the `sr-only` band description before the listbox, gated on the same expression the band canvas mounts on.                               | component (internal) |
+| `apps/web/src/features/tsld/components/TsldCanvas.tsx`                                         | comment at `:2198-2202` corrected to name the element that is the equivalent.                                                                    | comment only         |
+| `apps/web/src/features/gantt/components/GanttPanel.tsx`                                        | `:1338` calls the shared composer; the surrounding comment is kept, because it records _why_ the count is part of the name.                      | call-site refactor   |
 
 **No design-system component is added or changed.** The element uses the existing `sr-only` utility
 — the same class the listbox and the data-date sentence already use. No new token, no one-off
@@ -570,15 +570,15 @@ already applies to the data-date sentence).
 
 ### 4.11 Testing strategy
 
-| # | Test | Level | Verified red against |
-| --- | --- | --- | --- |
-| T-1 | The description exists, names the bucket and its count, and is singular at `N === 1`. | unit (`TsldPanel.wbs-band.test.tsx`) | the current code, which renders nothing. |
-| T-2 | The listbox's options are unchanged, in count **and order**, across the toggle. | unit — **the existing assertion, unedited** (`:92-99`) | n/a — it must keep passing; an edit to it is a review-blocking signal. |
-| T-3 | The description's membership equals the painter's, minus the viewport cull. | structural (`wbs-band-rows.structural.test.ts`) | a version that reads the culled bars. |
-| T-4 | Both surfaces compose the name through `wbsGroupAccessibleName`. | structural | a version with the Gantt's literal restored. |
-| T-5 | The description exposes no `option`/`selected`/`disabled` semantics and is not a tab stop. | unit | a version using `role="option"`. |
-| T-6 | Flag off ⇒ no description, even with the toggle forced on. | unit (`TsldPanel.wbs-band-off.test.tsx`) | the flag-on path. |
-| T-7 | With the band on and unfiled work present, the description is in the accessibility tree of the real product; the listbox count is unchanged. | **journey** (`e2e-wbs`) | see below. |
+| #   | Test                                                                                                                                         | Level                                                  | Verified red against                                                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------- |
+| T-1 | The description exists, names the bucket and its count, and is singular at `N === 1`.                                                        | unit (`TsldPanel.wbs-band.test.tsx`)                   | the current code, which renders nothing.                               |
+| T-2 | The listbox's options are unchanged, in count **and order**, across the toggle.                                                              | unit — **the existing assertion, unedited** (`:92-99`) | n/a — it must keep passing; an edit to it is a review-blocking signal. |
+| T-3 | The description's membership equals the painter's, minus the viewport cull.                                                                  | structural (`wbs-band-rows.structural.test.ts`)        | a version that reads the culled bars.                                  |
+| T-4 | Both surfaces compose the name through `wbsGroupAccessibleName`.                                                                             | structural                                             | a version with the Gantt's literal restored.                           |
+| T-5 | The description exposes no `option`/`selected`/`disabled` semantics and is not a tab stop.                                                   | unit                                                   | a version using `role="option"`.                                       |
+| T-6 | Flag off ⇒ no description, even with the toggle forced on.                                                                                   | unit (`TsldPanel.wbs-band-off.test.tsx`)               | the flag-on path.                                                      |
+| T-7 | With the band on and unfiled work present, the description is in the accessibility tree of the real product; the listbox count is unchanged. | **journey** (`e2e-wbs`)                                | see below.                                                             |
 
 **Does it need a Playwright journey? Yes — and no new config.**
 
@@ -614,7 +614,7 @@ group (semantically false); an `aria-label` on the band canvas itself (a canvas 
 `aria-hidden` removed becomes an unlabelled image whose contents are still unreachable, and dropping
 `aria-hidden` from a canvas that also takes pointer events would put an unnavigable node in the tree);
 `role="img"` + `aria-label` on the band (one long sentence, unnavigable, and it grows without bound
-with the number of groupings); painting the count on the canvas *instead of* an equivalent (does
+with the number of groupings); painting the count on the canvas _instead of_ an equivalent (does
 nothing for the audience the row is about — the canvas is `aria-hidden`).
 
 ---
@@ -626,6 +626,7 @@ nothing for the audience the row is about — the canvas is `aria-hidden`).
 - Prior epic: `docs/specs/wbs-improvements/` (ADR-0063)
 - Sibling defect, sighted-user half: `docs/specs/wbs-bucket-bracket/` (`#71`, closed 2026-09-01)
 - Docs updated by this change: `docs/adr/0122-*.md` (new), `docs/TECH_DEBT.md` (#232 closed),
-  `CLAUDE.md` §16 (a one-paragraph ADR-0122 entry).
+`CLAUDE.md` §16 (a one-paragraph ADR-0122 entry).
 </content>
+
 </invoke>

@@ -59,7 +59,7 @@ suites are this milestone's oracle, and they are not edited.
   what `GanttPanel.tsx:1338` produces today. Point `GanttBucketRowView` at it.
 - **Complexity:** S
 - **Dependencies:** none
-- **Risks:** the comment at `GanttPanel.tsx:1336-1338` explains *why* the count is part of the name
+- **Risks:** the comment at `GanttPanel.tsx:1336-1338` explains _why_ the count is part of the name
   rather than a decoration; deleting it with the literal loses the reasoning → **move the comment to
   the new module's docblock**, verbatim, and leave a one-line pointer at the call site. Comments in
   this repository record defects that shipped (ADR-0078).
@@ -282,7 +282,7 @@ deferred** (ADR-0081 §2). No new config and no new CI step.
 - **Complexity:** S
 - **Dependencies:** M2-T1
 - **Risks:** closing a row whose second half is unbuilt → **check before closing**: #232 asks for
-  the equivalent *and* the correction of both claims. Both must be done. The depth-cap description
+  the equivalent _and_ the correction of both claims. Both must be done. The depth-cap description
   (`render/wbs-band.ts:105-110`) is **not** part of #232 and is not closed by this.
 - **Testing:** `pnpm check:debt-status` (ADR-0120 Gate A) and the register's own vocabulary rules.
 - **Development steps:**
@@ -312,8 +312,8 @@ folded with a regression test verified red first.
 - **Complexity:** M
 - **Dependencies:** M1, M2
 - **Risks:** treating a review as a formality. Seven consecutive epics in this register found
-  defects here that had passed a human read; the commonest shape is *one correct pattern applied to
-  a control and not its neighbour*, which is exactly what this defect is. Expect findings.
+  defects here that had passed a human read; the commonest shape is _one correct pattern applied to
+  a control and not its neighbour_, which is exactly what this defect is. Expect findings.
 - **Testing:** every fold carries a regression test **verified red against the old code first**.
 - **Development steps:**
   1. Run the three reviewers.
@@ -323,13 +323,13 @@ folded with a regression test verified red first.
 
 **Not run, with reasons stated** (so "the agent was not run" cannot read as an oversight):
 
-| Agent | Why not |
-| --- | --- |
-| `database-architect` | There is no model, column, index, constraint or migration. Confirmed against the planned diff — nothing under `apps/api/prisma/`. |
-| `security-reviewer` | No authN/authZ decision, no new endpoint, no input, no secret, no scope boundary. The change renders data already on the client. |
-| `api-reviewer` / `backend-performance-reviewer` | No `apps/api` change at all. |
-| `devops-reviewer` | No Dockerfile, compose, workflow, CI step or Playwright config change. |
-| `performance-reviewer` (frontend) | Optional. The added work is a bounded `filter().map()` outside the rAF loop (spec §3). If the accessibility or component review disputes that, run it rather than arguing. |
+| Agent                                           | Why not                                                                                                                                                                    |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `database-architect`                            | There is no model, column, index, constraint or migration. Confirmed against the planned diff — nothing under `apps/api/prisma/`.                                          |
+| `security-reviewer`                             | No authN/authZ decision, no new endpoint, no input, no secret, no scope boundary. The change renders data already on the client.                                           |
+| `api-reviewer` / `backend-performance-reviewer` | No `apps/api` change at all.                                                                                                                                               |
+| `devops-reviewer`                               | No Dockerfile, compose, workflow, CI step or Playwright config change.                                                                                                     |
+| `performance-reviewer` (frontend)               | Optional. The added work is a bounded `filter().map()` outside the rAF loop (spec §3). If the accessibility or component review disputes that, run it rather than arguing. |
 
 ---
 
@@ -362,16 +362,16 @@ Three of them are called out because they are the ones most often skipped here:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption | Likelihood | Impact | Mitigation |
-| --- | --- | --- | --- |
-| The new element enters the AT-reachable **activity** count and breaks ADR-0063 §4 | low | high | It is a plain `<li>`, not `role="option"`; both existing assertions (`TsldPanel.wbs-band.test.tsx:97`, `e2e-wbs/wbs.spec.ts:130`) are left **unedited** and act as the tripwire. An edit to either is a review-blocking signal. |
-| The description drifts from what the band paints | medium | medium | Both derive from one array in one component; the membership rule is one predicate, pinned by a structural test verified red against a bars-reading version. |
-| The Gantt's string changes during the extraction | low | medium | Character-identical extraction; the Gantt's existing suites run unedited as the oracle. |
-| "Count" for a real summary is misread as a subtree total | medium | low | Documented on the field and in the composer's docblock; a unit case asserts a nested summary counts as one. **CQ-2 can change this** — it is a decision, not an implementation detail. |
-| The journey finds the product wrong rather than the test | **medium** | medium | Expected, and budgeted for: no test has ever put the band on with unfiled work present. Probe before changing either side; record what it finds. |
-| Verbosity on a plan with many summaries | medium | low | Accepted; CQ-1 is the decision point. A cap would need an "and N more" clause, which reads worse than a skippable list. |
-| The ADR number is taken before filing | low | low | Re-checked at filing; a collision is recorded, not routed around (ADR-0071). |
-| Scope creep into painting the count on the canvas | medium | low | Explicitly a non-goal (spec §2); CQ-3 is where it would be decided, with a default of no. |
+| Risk / assumption                                                                 | Likelihood | Impact | Mitigation                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------- | ---------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The new element enters the AT-reachable **activity** count and breaks ADR-0063 §4 | low        | high   | It is a plain `<li>`, not `role="option"`; both existing assertions (`TsldPanel.wbs-band.test.tsx:97`, `e2e-wbs/wbs.spec.ts:130`) are left **unedited** and act as the tripwire. An edit to either is a review-blocking signal. |
+| The description drifts from what the band paints                                  | medium     | medium | Both derive from one array in one component; the membership rule is one predicate, pinned by a structural test verified red against a bars-reading version.                                                                     |
+| The Gantt's string changes during the extraction                                  | low        | medium | Character-identical extraction; the Gantt's existing suites run unedited as the oracle.                                                                                                                                         |
+| "Count" for a real summary is misread as a subtree total                          | medium     | low    | Documented on the field and in the composer's docblock; a unit case asserts a nested summary counts as one. **CQ-2 can change this** — it is a decision, not an implementation detail.                                          |
+| The journey finds the product wrong rather than the test                          | **medium** | medium | Expected, and budgeted for: no test has ever put the band on with unfiled work present. Probe before changing either side; record what it finds.                                                                                |
+| Verbosity on a plan with many summaries                                           | medium     | low    | Accepted; CQ-1 is the decision point. A cap would need an "and N more" clause, which reads worse than a skippable list.                                                                                                         |
+| The ADR number is taken before filing                                             | low        | low    | Re-checked at filing; a collision is recorded, not routed around (ADR-0071).                                                                                                                                                    |
+| Scope creep into painting the count on the canvas                                 | medium     | low    | Explicitly a non-goal (spec §2); CQ-3 is where it would be decided, with a default of no.                                                                                                                                       |
 
 ---
 
@@ -385,7 +385,7 @@ summaries and bucket alike._
 The register row's subject is the bucket, and only the bucket has no other route. But the band is one
 picture, and describing one bar of it while silently omitting the others is the half-a-pattern shape
 this defect already is. The cost of the whole band is verbosity and a second, softer voice for
-summaries that already have listbox rows — those rows say what the *activity* is, not that it is a
+summaries that already have listbox rows — those rows say what the _activity_ is, not that it is a
 band grouping with N members, so it is not literally duplicative. Choosing "bucket only" makes the
 change smaller and the list often one entry long.
 

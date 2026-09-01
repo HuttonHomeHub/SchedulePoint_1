@@ -19,13 +19,13 @@ ADR amendment says.
 
 ### What the row claims, and what established it
 
-| #230 claims | Verified by | Verdict |
-| --- | --- | --- |
-| A cascade delete clears the undo stack | `apps/web/src/components/layout/workspace/use-plan-workspace-model.ts:936-954` — `if (activity.type === 'WBS_SUMMARY' && hasSubtree) { editHistory.clear(); return; }` | **True, still live** |
-| That is ADR-0048 M2's decision | `docs/adr/0048-undo-redo-command-stack.md:52-54` (Decision, "Delete-undo") and `:77-79` (Consequences) | **True** |
-| A cascade stamps ONE `deleteBatchId` across the subtree | `apps/api/src/modules/activities/activities.service.ts:1191-1221` calling `lifecycle.cascadeSoftDelete`; the subtree walk is `apps/api/src/common/hierarchy/hierarchy-lifecycle.service.ts:278-302` | **True** |
-| `restoreDeleteBatch` restores it in one call, ids and links intact | `activities.service.ts:1385-1445` → `hierarchy-lifecycle.service.ts:489-615` (set-wise `updateMany` per table keyed on `deleteBatchId`) + `:626-654` (endpoint-guarded link restore) | **True** |
-| "The branch that refuses it is the only thing stopping it" | See **F-2** below | **False in one respect — and that is the finding** |
+| #230 claims                                                        | Verified by                                                                                                                                                                                         | Verdict                                            |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| A cascade delete clears the undo stack                             | `apps/web/src/components/layout/workspace/use-plan-workspace-model.ts:936-954` — `if (activity.type === 'WBS_SUMMARY' && hasSubtree) { editHistory.clear(); return; }`                              | **True, still live**                               |
+| That is ADR-0048 M2's decision                                     | `docs/adr/0048-undo-redo-command-stack.md:52-54` (Decision, "Delete-undo") and `:77-79` (Consequences)                                                                                              | **True**                                           |
+| A cascade stamps ONE `deleteBatchId` across the subtree            | `apps/api/src/modules/activities/activities.service.ts:1191-1221` calling `lifecycle.cascadeSoftDelete`; the subtree walk is `apps/api/src/common/hierarchy/hierarchy-lifecycle.service.ts:278-302` | **True**                                           |
+| `restoreDeleteBatch` restores it in one call, ids and links intact | `activities.service.ts:1385-1445` → `hierarchy-lifecycle.service.ts:489-615` (set-wise `updateMany` per table keyed on `deleteBatchId`) + `:626-654` (endpoint-guarded link restore)                | **True**                                           |
+| "The branch that refuses it is the only thing stopping it"         | See **F-2** below                                                                                                                                                                                   | **False in one respect — and that is the finding** |
 
 ### F-1 — ADR-0048 already frames the truncation as a deferral, not a rule
 
@@ -90,7 +90,7 @@ Scope of the hazard, from the same code:
 - **Leaf single delete** (#92's path): the batch contains exactly one activity, so the anchor is
   always the root. Safe.
 - **Bulk delete**: leaf-only by design (`activities.service.ts:1285-1290` refuses a `WBS_SUMMARY`),
-  so each member's `wbsParentId` points at a summary that was *not* deleted and is active. Safe on
+  so each member's `wbsParentId` points at a summary that was _not_ deleted and is active. Safe on
   the common path. (Latently unsafe if that summary was deleted separately first — same fix.)
 - **Cascade batch**: unsafe whenever the anchor is not the root. This is the band-copy redo path
   today, and it is the whole of what #230 proposes to add.
@@ -125,7 +125,7 @@ to establish it by reading rather than reasoning.
 `restoreBatch:496`. The batch is untouched; the transaction rolls back; nothing is partially
 restored.
 
-**Why the case arises at all.** `cascadeSoftDelete` walks only the *active* subtree
+**Why the case arises at all.** `cascadeSoftDelete` walks only the _active_ subtree
 (`hierarchy-lifecycle.service.ts:289`, `where: { parentId: { in: frontier }, deletedAt: null }`), so
 deleting ancestor `P` after descendant-summary `A` does **not** sweep `A` into `P`'s batch. `A`'s row
 keeps `parentId = P`, and `P` is now deleted.
@@ -143,7 +143,7 @@ table deletes and dissolves directly, with no call to any undo seam:
   neither calls `recordActivityDelete` nor `recordDissolveBoundary`, unlike
   `activity-crud-dialogs.tsx:118` and `:166`, which do;
 - that table is rendered **inside the plan workspace** (`activity-bottom-panel.tsx:109`), beside the
-  canvas whose deletes *are* recorded.
+  canvas whose deletes _are_ recorded.
 
 So a planner can delete summary `A` on the canvas (recorded), delete its parent `P` from the
 activities panel one row below (recorded nowhere, and not truncating either), and then press Undo.
@@ -179,7 +179,7 @@ finding the rows in Recently deleted — which for activities is not a surface a
 recycle bin covers clients, projects and plans.
 
 The behaviour was correct when it was written. ADR-0048 M2's inverse for a delete was
-*re-create-with-a-new-id*, which for a summary could only rebuild the summary — an "undo" that
+_re-create-with-a-new-id_, which for a summary could only rebuild the summary — an "undo" that
 returns an empty phase and silently drops forty activities and every link between them. Truncating
 was the honest answer to that. **The inverse changed underneath it** (ADR-0048 M4 /
 `docs/TECH_DEBT.md` #92) and the branch did not.
@@ -191,12 +191,12 @@ feature.
 
 ### Users
 
-| Role | Interest |
-| --- | --- |
-| **Planner** | The subject. Restructures the WBS, deletes and re-groups phases, and is the role that holds the pen (ADR-0028) and therefore the only role that can reach this at all. |
-| **Org Admin** | Same capability as Planner here (both hold `activity:delete` and `activity:restore`, and an Org Admin can take the pen). |
-| **Contributor** | Unaffected — cannot delete an activity, and progress edits are outside the undo model entirely (ADR-0048). |
-| **Viewer / External Guest** | Unaffected — read-only. |
+| Role                        | Interest                                                                                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Planner**                 | The subject. Restructures the WBS, deletes and re-groups phases, and is the role that holds the pen (ADR-0028) and therefore the only role that can reach this at all. |
+| **Org Admin**               | Same capability as Planner here (both hold `activity:delete` and `activity:restore`, and an Org Admin can take the pen).                                               |
+| **Contributor**             | Unaffected — cannot delete an activity, and progress edits are outside the undo model entirely (ADR-0048).                                                             |
+| **Viewer / External Guest** | Unaffected — read-only.                                                                                                                                                |
 
 ### Primary use cases
 
@@ -212,7 +212,7 @@ feature.
 confirms → the bars leave the canvas and the plan recalculates → presses `Ctrl+Z` → one
 `restore-batch` call returns the summary and all 11 descendants with their original ids, so the
 links between them return too → auto-recalculation redraws → "Undid delete “Level 2 fit-out”." is
-announced → the Undo control now offers the step *before* the delete, which is still there.
+announced → the Undo control now offers the step _before_ the delete, which is still there.
 
 **Alternate — redo.** From the state above, `Ctrl+Shift+Z` re-deletes exactly what was restored
 (`deleteActivityCommand.redo`, ids stable across the restore) and rethreads the new batch id.
@@ -250,26 +250,26 @@ as for every other command (`use-plan-undo-redo.ts:90-98`). Unchanged.
 
 **Critical — these change design or scope. See the summary at the end of this document.**
 
-- **CQ-1 — the ancestor-gone case: refuse, or restore what it can?** *Default: refuse*, with a
+- **CQ-1 — the ancestor-gone case: refuse, or restore what it can?** _Default: refuse_, with a
   message naming the phase to restore first. Reasoning in §4.
 - **CQ-2 — does the M0 anchor fix ship as its own release, ahead of the capability?**
-  *Default: yes.* It is a defect fix on a live path (band-copy redo) with its own e2e, and holding
+  _Default: yes._ It is a defect fix on a live path (band-copy redo) with its own e2e, and holding
   it back inside a capability change delays a fix and enlarges the revert.
-- **CQ-3 — the activities panel's unrecorded delete/dissolve (F-3): in scope?** *Default: no —
-  out of scope, filed.* Making that surface record commands changes a second surface's behaviour and
+- **CQ-3 — the activities panel's unrecorded delete/dissolve (F-3): in scope?** _Default: no —
+  out of scope, filed._ Making that surface record commands changes a second surface's behaviour and
   needs its own decision (the dissolve half in particular would truncate a history the planner
   currently keeps). The 409 path makes meeting the case safe in the meantime.
 
 **Non-critical — defaults stated, proceeding.**
 
-- Undo step label. *Default:* leave `deleteActivityCommand`'s existing label builder alone
+- Undo step label. _Default:_ leave `deleteActivityCommand`'s existing label builder alone
   (`Delete “Level 2 fit-out”` — the S1 entity-naming convention) and let the confirmation dialog,
   which already states the subtree consequence, carry the size. The `DELETE` route returns only
   `deleteBatchId` (`delete-activity-result.dto.ts:22-37`), so a count in the label would have to be
   derived client-side from the already-loaded list — possible, but a label whose width changes with
   the plan is a poor fit for a control in a fixed row.
-- Depth cap. *Default:* unchanged at 50 steps; a cascade is one step regardless of subtree size.
-- Confirmation copy. *Default:* unchanged. It already warns that the subtree goes.
+- Depth cap. _Default:_ unchanged at 50 steps; a cascade is one step regardless of subtree size.
+- Confirmation copy. _Default:_ unchanged. It already warns that the subtree goes.
 
 ---
 
@@ -348,29 +348,29 @@ of the batch. That row is the anchor. Everything downstream of `restoreBatch` is
 
 ### Edge cases
 
-| Case | Expected behaviour |
-| --- | --- |
-| Summary with **no** descendants | Already a leaf-shaped batch; already recorded today (`hasSubtree` is false). Unchanged. |
-| Summary whose only descendants are **already deleted** | Same — the cascade sweeps only active rows (`hierarchy-lifecycle.service.ts:289`), so the batch is the summary alone. |
-| **Nested** summaries inside the deleted subtree | One batch, one step, one restore. The anchor is the top summary; every other member's parent is inside the batch. |
-| A dependency crossing the subtree **boundary** | Restored only if both endpoints are live (`restoreLinksInBatch`, `:626-654`). An edge to an activity deleted separately stays deleted — existing, deliberate, unchanged. |
-| A name/code inside the subtree **taken** since the delete | 409 `NAME_TAKEN` from the P2002 catch (`:606-612`); same non-destructive client handling as US-3. |
-| **Very large** subtree (thousands of rows) | One request; the restore is set-wise `updateMany` keyed on the indexed `delete_batch_id`. Not measured — see §3 Performance. |
-| **Redo** after a restore | Versions are bumped by the restore, but `deleteActivityCommand.redo` deletes by **id** and takes no version, so it is unaffected (`commands.ts:408-414`). |
-| Pen lost between delete and undo | 423 → whole history cleared, shared pen contract runs. Unchanged. |
-| Plan switch / reload | History is in-memory and per-pen-session. Unchanged. |
-| `VITE_UNDO_REDO=false` | `recordActivityDelete` returns before any branch (`use-plan-workspace-model.ts:938`). Byte-identical. |
+| Case                                                      | Expected behaviour                                                                                                                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Summary with **no** descendants                           | Already a leaf-shaped batch; already recorded today (`hasSubtree` is false). Unchanged.                                                                                  |
+| Summary whose only descendants are **already deleted**    | Same — the cascade sweeps only active rows (`hierarchy-lifecycle.service.ts:289`), so the batch is the summary alone.                                                    |
+| **Nested** summaries inside the deleted subtree           | One batch, one step, one restore. The anchor is the top summary; every other member's parent is inside the batch.                                                        |
+| A dependency crossing the subtree **boundary**            | Restored only if both endpoints are live (`restoreLinksInBatch`, `:626-654`). An edge to an activity deleted separately stays deleted — existing, deliberate, unchanged. |
+| A name/code inside the subtree **taken** since the delete | 409 `NAME_TAKEN` from the P2002 catch (`:606-612`); same non-destructive client handling as US-3.                                                                        |
+| **Very large** subtree (thousands of rows)                | One request; the restore is set-wise `updateMany` keyed on the indexed `delete_batch_id`. Not measured — see §3 Performance.                                             |
+| **Redo** after a restore                                  | Versions are bumped by the restore, but `deleteActivityCommand.redo` deletes by **id** and takes no version, so it is unaffected (`commands.ts:408-414`).                |
+| Pen lost between delete and undo                          | 423 → whole history cleared, shared pen contract runs. Unchanged.                                                                                                        |
+| Plan switch / reload                                      | History is in-memory and per-pen-session. Unchanged.                                                                                                                     |
+| `VITE_UNDO_REDO=false`                                    | `recordActivityDelete` returns before any branch (`use-plan-workspace-model.ts:938`). Byte-identical.                                                                    |
 
 ### Permissions
 
 Unchanged, and that is the point (ADR-0048: every inverse rides the same gates as a first-class
 edit).
 
-| Operation | Permission | Scope | Pen (ADR-0028) |
-| --- | --- | --- | --- |
-| Delete a summary | `activity:delete` | organisation, plan resolved active in-org (404 otherwise) | required — `assertHoldsPen`, `activities.service.ts:1181` |
-| Undo it (restore batch) | `activity:restore` | same | required — `activities.service.ts:1396` |
-| Redo it (delete again) | `activity:delete` | same | required |
+| Operation               | Permission         | Scope                                                     | Pen (ADR-0028)                                            |
+| ----------------------- | ------------------ | --------------------------------------------------------- | --------------------------------------------------------- |
+| Delete a summary        | `activity:delete`  | organisation, plan resolved active in-org (404 otherwise) | required — `assertHoldsPen`, `activities.service.ts:1181` |
+| Undo it (restore batch) | `activity:restore` | same                                                      | required — `activities.service.ts:1396`                   |
+| Redo it (delete again)  | `activity:delete`  | same                                                      | required                                                  |
 
 Planner and Org Admin hold both; Contributor and Viewer hold neither; External Guest cannot reach
 any of it (`SCHEDULE_READ`, ADR-0051). **The client stack cannot escalate**: an inverse is an
@@ -386,30 +386,30 @@ rather than as a permission failure. Unchanged.
 
 ### Error scenarios
 
-| Scenario | Detection | User-facing result | Status |
-| --- | --- | --- | --- |
-| Undo without the pen | `assertHoldsPen` | lost-control banner; history cleared (single announcement — the banner is its own live region) | 423 |
-| Ancestor summary still deleted | `assertParentActive` | announced message naming the phase to restore first; stacks intact, redo cleared | 409 |
-| Name/code taken since the delete | P2002 → `NAME_TAKEN` | existing conflict copy; stacks intact, redo cleared | 409 |
-| Batch id unknown in this plan | zero members | existing conflict copy (404 shares the 409 branch) | 404 |
-| Caller lacks `activity:restore` | `assertCan` | forbidden | 403 |
-| Foreign / deleted plan | `loadActivePlan` | not found | 404 |
+| Scenario                         | Detection            | User-facing result                                                                             | Status |
+| -------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------- | ------ |
+| Undo without the pen             | `assertHoldsPen`     | lost-control banner; history cleared (single announcement — the banner is its own live region) | 423    |
+| Ancestor summary still deleted   | `assertParentActive` | announced message naming the phase to restore first; stacks intact, redo cleared               | 409    |
+| Name/code taken since the delete | P2002 → `NAME_TAKEN` | existing conflict copy; stacks intact, redo cleared                                            | 409    |
+| Batch id unknown in this plan    | zero members         | existing conflict copy (404 shares the 409 branch)                                             | 404    |
+| Caller lacks `activity:restore`  | `assertCan`          | forbidden                                                                                      | 403    |
+| Foreign / deleted plan           | `loadActivePlan`     | not found                                                                                      | 404    |
 
 ---
 
 ## 3. Technical analysis
 
-| Area | Impact | Notes |
-| --- | --- | --- |
-| Frontend | **low** | One predicate in `recordActivityDelete` (delete ~5 lines); one message constant + its selection in `use-plan-undo-redo.ts`. No new component, route, prop or state. |
-| Backend | **low** | Anchor selection inside `restoreDeleteBatch` (`activities.service.ts:1400-1407`) — pick the batch **root** instead of `ids[0]`. No new endpoint, no signature change, no DTO change. |
-| Database | **none** | No model, column, index, constraint or migration. `delete_batch_id`'s partial index already exists (`schema.prisma:577-580`), confirmed by reading rather than assumed. **`database-architect` is therefore not engaged, and that is a checked conclusion rather than a skipped step** — CLAUDE.md §19.3's rule binds on there being a schema change, and there is none. If review disagrees, the agent runs before anything merges. |
-| API | **none to the contract** | Same route, method, status codes and DTOs. One OpenAPI *description* sentence gains the anchor rule. |
-| Security | **none** | No change to authN/Z, scope, validation or audit. The restore already writes `activity.restored` (`activities.service.ts:1415-1427`), so a cascade undo is audited exactly as a leaf undo is. `security-reviewer` still runs (the diff touches an authorised write path). |
-| Performance | **low, partly unmeasured** | The restore is set-wise `updateMany` per table on the indexed `delete_batch_id`, plus one `findMany`/`updateMany` for links. The anchor change adds two columns to an existing `findMany` and a client-side scan of the member list — no extra round trip. **Not measured at scale**; a 2,000-row cascade restore is a new common path and M0-T3 measures it rather than asserting it. |
-| Infrastructure | **none** | No service, env var, container or CI step. No new Playwright config (see Testing). |
-| Observability | **none** | Existing `activity delete-batch restored` log line already carries the count. |
-| Testing | **medium** | Unit (client seam + command), service unit (anchor), API e2e (cascade round trip — the first anywhere), Playwright (`e2e-undo`, existing config). Detail below. |
+| Area           | Impact                     | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Frontend       | **low**                    | One predicate in `recordActivityDelete` (delete ~5 lines); one message constant + its selection in `use-plan-undo-redo.ts`. No new component, route, prop or state.                                                                                                                                                                                                                                                                  |
+| Backend        | **low**                    | Anchor selection inside `restoreDeleteBatch` (`activities.service.ts:1400-1407`) — pick the batch **root** instead of `ids[0]`. No new endpoint, no signature change, no DTO change.                                                                                                                                                                                                                                                 |
+| Database       | **none**                   | No model, column, index, constraint or migration. `delete_batch_id`'s partial index already exists (`schema.prisma:577-580`), confirmed by reading rather than assumed. **`database-architect` is therefore not engaged, and that is a checked conclusion rather than a skipped step** — CLAUDE.md §19.3's rule binds on there being a schema change, and there is none. If review disagrees, the agent runs before anything merges. |
+| API            | **none to the contract**   | Same route, method, status codes and DTOs. One OpenAPI _description_ sentence gains the anchor rule.                                                                                                                                                                                                                                                                                                                                 |
+| Security       | **none**                   | No change to authN/Z, scope, validation or audit. The restore already writes `activity.restored` (`activities.service.ts:1415-1427`), so a cascade undo is audited exactly as a leaf undo is. `security-reviewer` still runs (the diff touches an authorised write path).                                                                                                                                                            |
+| Performance    | **low, partly unmeasured** | The restore is set-wise `updateMany` per table on the indexed `delete_batch_id`, plus one `findMany`/`updateMany` for links. The anchor change adds two columns to an existing `findMany` and a client-side scan of the member list — no extra round trip. **Not measured at scale**; a 2,000-row cascade restore is a new common path and M0-T3 measures it rather than asserting it.                                               |
+| Infrastructure | **none**                   | No service, env var, container or CI step. No new Playwright config (see Testing).                                                                                                                                                                                                                                                                                                                                                   |
+| Observability  | **none**                   | Existing `activity delete-batch restored` log line already carries the count.                                                                                                                                                                                                                                                                                                                                                        |
+| Testing        | **medium**                 | Unit (client seam + command), service unit (anchor), API e2e (cascade round trip — the first anywhere), Playwright (`e2e-undo`, existing config). Detail below.                                                                                                                                                                                                                                                                      |
 
 ### Dependencies
 
@@ -454,7 +454,7 @@ flowchart LR
 
 The engine sits behind a dashed edge deliberately: the command layer never calls it. Dates are
 recomputed by the existing auto-recalculation after the inverse lands — ADR-0048's
-*recompute, don't restore* rule — so `computeSchedule`'s inputs are unchanged and the ADR-0034
+_recompute, don't restore_ rule — so `computeSchedule`'s inputs are unchanged and the ADR-0034
 parity gate is untouched **by construction**, not by care.
 
 ### Data flow
@@ -562,14 +562,14 @@ answer. (ADR-0065's rule, applied here: one guard, not a second one that drifts.
 
 The whole capability is the deletion of a branch. That is only true because ADR-0048 M4 built the
 right inverse, `deleteActivityCommand` already speaks it, and the DELETE route already returns the
-batch id. What the epic really consists of is the *evidence*: a cascade batch has never been
+batch id. What the epic really consists of is the _evidence_: a cascade batch has never been
 restored against a real database anywhere in this repository, so the work is one predicate and four
 tests, one of which is a defect fix that must land first.
 
 **Why this is the ADR-0080 CQ-4 argument, unchanged.** CQ-4 established that a bulk delete's undo is
 one id-stable `restore-batch` and never N re-creates, because re-creating restores the bars and
-silently loses the links between them. The cascade case is the *same argument with the set defined
-by the tree rather than by the selection* — and it is strictly stronger, for two reasons the bulk
+silently loses the links between them. The cascade case is the _same argument with the set defined
+by the tree rather than by the selection_ — and it is strictly stronger, for two reasons the bulk
 case does not have: a subtree's internal links are dense by construction (a phase is a phase because
 its work is linked), and re-creating would also lose the **nesting**, since a re-created summary has
 a new id and no child could point at it. So the argument does not merely carry over; the case it was
@@ -577,14 +577,14 @@ made for is the weaker one.
 
 **Alternatives considered.**
 
-| Alternative | Why not |
-| --- | --- |
-| **Keep truncating** (status quo) | The stated reason has lapsed. Its cost is a planner losing an entire session's history to one ordinary gesture, and it leaves F-2's live path unexamined. |
-| **Re-create the subtree from a client-side snapshot** | ADR-0080 CQ-4's rejected option. New ids, so every internal link and every parent pointer is lost; an undo that returns a flat pile of activities looks deliberate and is worse than no undo. |
-| **Truncate only when the subtree is "large"** | A threshold with no principle behind it, making reversibility a property of plan shape. A planner cannot predict it, so it is indistinguishable from a defect. |
-| **Widen `assertParentActive` to ignore same-batch parents** | Weakens a shared invariant for five entity types to fix one caller's anchor selection. See "Why here" above. |
-| **Order the members query and take the first** | Would work only by relying on a chosen ordering encoding tree depth, which nothing maintains. Selecting the root *by its parent* says what is meant. |
-| **A confirmation before undoing a large restore** | Undo is the safety net; putting a gate in front of it is the wrong direction, and the forward delete is already confirmed. |
+| Alternative                                                 | Why not                                                                                                                                                                                       |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Keep truncating** (status quo)                            | The stated reason has lapsed. Its cost is a planner losing an entire session's history to one ordinary gesture, and it leaves F-2's live path unexamined.                                     |
+| **Re-create the subtree from a client-side snapshot**       | ADR-0080 CQ-4's rejected option. New ids, so every internal link and every parent pointer is lost; an undo that returns a flat pile of activities looks deliberate and is worse than no undo. |
+| **Truncate only when the subtree is "large"**               | A threshold with no principle behind it, making reversibility a property of plan shape. A planner cannot predict it, so it is indistinguishable from a defect.                                |
+| **Widen `assertParentActive` to ignore same-batch parents** | Weakens a shared invariant for five entity types to fix one caller's anchor selection. See "Why here" above.                                                                                  |
+| **Order the members query and take the first**              | Would work only by relying on a chosen ordering encoding tree depth, which nothing maintains. Selecting the root _by its parent_ says what is meant.                                          |
+| **A confirmation before undoing a large restore**           | Undo is the safety net; putting a gate in front of it is the wrong direction, and the forward delete is already confirmed.                                                                    |
 
 **CQ-1 — refuse rather than partially restore.** The default is to refuse, for four reasons, in
 order of weight:
@@ -621,7 +621,7 @@ and named in the register:
 > **M4 has landed.** `POST …/activities/restore-batch/:batchId` (`ActivitiesService.restoreDeleteBatch`
 > → `HierarchyLifecycleService.restoreBatch`) restores a whole `deleteBatchId` id-stably with its
 > links, and `cascadeSoftDelete` has always stamped one batch id across a summary's entire active
-> subtree. `docs/TECH_DEBT.md` #92 already used M4 to close the *leaf* half of the same sentence and
+> subtree. `docs/TECH_DEBT.md` #92 already used M4 to close the _leaf_ half of the same sentence and
 > left the cascade half standing.
 >
 > So M2's truncation is withdrawn: a `WBS_SUMMARY` delete records an ordinary `deleteActivityCommand`
@@ -648,7 +648,7 @@ and named in the register:
 >    "undo" would build a different grouping and leave the original in Recently deleted. That reason
 >    is untouched by M4, so `recordDissolveBoundary` stands.
 > 4. **The ancestor case is settled: refuse.** A batch whose root's own WBS parent was soft-deleted
->    *after* the batch was created is **not** restorable, because `cascadeSoftDelete` walks only the
+>    _after_ the batch was created is **not** restorable, because `cascadeSoftDelete` walks only the
 >    active subtree, so the later delete does not absorb the earlier batch. `assertParentActive`
 >    answers 409 `PARENT_DELETED`; the batch is untouched and nothing is partially restored. The
 >    client keeps the undo step, refetches server truth, clears the redo branch and announces a
@@ -658,7 +658,7 @@ and named in the register:
 >
 > **One defect was found while establishing the above, and is fixed as a prerequisite rather than
 > inherited.** `restoreDeleteBatch` selected its anchor as `ids[0]` from a members query with no
-> `ORDER BY`, and the parent-active guard is evaluated against *that* row. In a cascade batch every
+> `ORDER BY`, and the parent-active guard is evaluated against _that_ row. In a cascade batch every
 > non-root member's WBS parent is another member of the same batch, still deleted when the guard
 > runs — so the restore was correct only when an unrequested ordering happened to yield the root
 > first. It was already reachable on the shipped band-copy redo path

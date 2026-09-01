@@ -74,7 +74,7 @@ common path for the most destructive gesture in the product.
     ordering. **This is the regression test the spec's success criterion 3 names.**
   - **Verified RED, integration** — a second unit case letting the real guard run over a fake
     transaction: anchor = child ⇒ `ConflictError PARENT_DELETED`; anchor = root ⇒ restores. This
-    proves *why* the anchor matters rather than only that it changed.
+    proves _why_ the anchor matters rather than only that it changed.
   - **API e2e** — `apps/api/test/activity-batch-ops.e2e-spec.ts`: create a summary with ≥ 2
     descendants and a link between two of them, `DELETE` the summary, `POST restore-batch`, expect
     200, and assert every id is active and the internal link is live again. Not red today (it may
@@ -88,7 +88,7 @@ common path for the most destructive gesture in the product.
      member set — and unit-test it directly (empty, single, flat, nested, several roots).
   4. Use it for `anchorId`; keep the existing `NotFoundError` when it yields nothing.
   5. Re-run: green. Add the API e2e.
-  6. Comment the *why* at the call site, briefly — that the guard is a question about the batch and
+  6. Comment the _why_ at the call site, briefly — that the guard is a question about the batch and
      not about whichever row was read first.
   7. `scripts/e2e-local.sh api` (this touches `apps/api`, so it is not optional).
 
@@ -195,7 +195,7 @@ so this does not add an ADR-0105 trigger of its own.
   - a locator by copy rather than by role/name breaks on the next toolbar change → locate the Undo
     control by `[data-toolbar-item]` per ADR-0091's recorded rule.
 - **Testing:** assert through the REST API (counts of activities and dependencies), not the DOM —
-  the point is what was *stored*, and a DOM assertion would pass against a restore that lost the
+  the point is what was _stored_, and a DOM assertion would pass against a restore that lost the
   links.
 - **Development steps:**
   1. Seed via the API: a summary, three members under it, one link between two members, one link
@@ -353,12 +353,12 @@ milestone.
 
 ## Sequencing & slices
 
-| Slice | Ships | Releasable alone? | Why here |
-| --- | --- | --- | --- |
-| **M0** | anchor fix + its tests + band-redo journey | **Yes** — and should be (CQ-2) | A defect on a live path; M1 would make it common. |
-| **M1** | the capability + its journey | Yes | The whole user-visible change; one predicate plus its evidence. |
-| **M2** | the named refusal | Yes | Improves a message; safe without it, since the existing 409 handling is already non-destructive. |
-| **M3** | amendment + gates | Yes | Records the decision; no behaviour. |
+| Slice  | Ships                                      | Releasable alone?              | Why here                                                                                         |
+| ------ | ------------------------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **M0** | anchor fix + its tests + band-redo journey | **Yes** — and should be (CQ-2) | A defect on a live path; M1 would make it common.                                                |
+| **M1** | the capability + its journey               | Yes                            | The whole user-visible change; one predicate plus its evidence.                                  |
+| **M2** | the named refusal                          | Yes                            | Improves a message; safe without it, since the existing 409 handling is already non-destructive. |
+| **M3** | amendment + gates                          | Yes                            | Records the decision; no behaviour.                                                              |
 
 `main` is releasable after each. **No feature flag is added**: `VITE_UNDO_REDO` already exists,
 already gates this seam (`use-plan-workspace-model.ts:938`), and is default-on since 2026-07-19
@@ -381,13 +381,13 @@ Two are called out because they are the ones this epic can most easily skip:
 
 ## Risks & assumptions (rollup)
 
-| Risk / assumption | Likelihood | Impact | Mitigation |
-| --- | --- | --- | --- |
-| The anchor defect is **established by reading, not observed** (spec F-2) | — | high if wrong | M0-T1's unit case makes it deterministic before the fix; if it cannot be made red, the diagnosis is wrong and M0 is re-opened rather than shipped. |
-| A large cascade restore is slow enough to feel broken | low | med | M0-T3 measures it against a falsification condition committed first; queries are set-wise on an indexed column. |
-| `ApiFetchError` does not expose the 409 `reason` | med | low | M2-T1 step 1 reads it before designing; the message degrades rather than printing `undefined`. |
-| The ancestor case is constructible **only** through the unrecorded panel delete | high | med | CQ-3 decides. If it goes in scope, M2-T2 needs a different construction — which is why it is critical rather than a detail. |
-| Undoing a large delete surprises a planner (a lot changes at once) | med | low | It restores exactly what one confirmed gesture removed, and the announcement names it. Accepted. |
-| The unit suites mock the mutation and cannot see the server guard | certain | med | The journey lands **with** M1, not at a gate (ADR-0081 §2). |
-| The register row's `#230` pointers are left behind in code comments | med | low | M1-T1 step 4 removes them; a pointer to a closed row reads as owed work. |
-| **The CPM engine is imported, or `computeSchedule`'s inputs change** | very low | very high | Structural: the diff touches a client predicate, a client message and one server anchor selection. Assert it in review — no engine import in the diff, and the ADR-0034 parity gate untouched by construction. |
+| Risk / assumption                                                               | Likelihood | Impact        | Mitigation                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------- | ---------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The anchor defect is **established by reading, not observed** (spec F-2)        | —          | high if wrong | M0-T1's unit case makes it deterministic before the fix; if it cannot be made red, the diagnosis is wrong and M0 is re-opened rather than shipped.                                                             |
+| A large cascade restore is slow enough to feel broken                           | low        | med           | M0-T3 measures it against a falsification condition committed first; queries are set-wise on an indexed column.                                                                                                |
+| `ApiFetchError` does not expose the 409 `reason`                                | med        | low           | M2-T1 step 1 reads it before designing; the message degrades rather than printing `undefined`.                                                                                                                 |
+| The ancestor case is constructible **only** through the unrecorded panel delete | high       | med           | CQ-3 decides. If it goes in scope, M2-T2 needs a different construction — which is why it is critical rather than a detail.                                                                                    |
+| Undoing a large delete surprises a planner (a lot changes at once)              | med        | low           | It restores exactly what one confirmed gesture removed, and the announcement names it. Accepted.                                                                                                               |
+| The unit suites mock the mutation and cannot see the server guard               | certain    | med           | The journey lands **with** M1, not at a gate (ADR-0081 §2).                                                                                                                                                    |
+| The register row's `#230` pointers are left behind in code comments             | med        | low           | M1-T1 step 4 removes them; a pointer to a closed row reads as owed work.                                                                                                                                       |
+| **The CPM engine is imported, or `computeSchedule`'s inputs change**            | very low   | very high     | Structural: the diff touches a client predicate, a client message and one server anchor selection. Assert it in review — no engine import in the diff, and the ADR-0034 parity gate untouched by construction. |
