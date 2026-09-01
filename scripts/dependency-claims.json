@@ -11,10 +11,12 @@
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
     "@tanstack/react-router": "1.170.27",
-    "@tanstack/history": "1.162.1"
+    "@tanstack/history": "1.162.1",
+    "@tanstack/router-core": "1.171.22"
   },
   "resolveVia": {
-    "axe-core": "@axe-core/playwright"
+    "axe-core": "@axe-core/playwright",
+    "@tanstack/router-core": "@tanstack/react-router"
   },
   "claims": [
     {
@@ -46,30 +48,19 @@
       "citedBy": ["scripts/measure-band-copy.mjs"]
     },
     {
-      "ref": "index.js:19-26",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "19-26",
-      "anchor": "const isPushOrReplace = actionInfo.type === \"PUSH\" || actionInfo.type === \"REPLACE\";",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "index.js:24-34",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "24-34",
-      "anchor": "const blockers = opts.getBlockers?.() ?? [];",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
-    },
-    {
       "ref": "index.js:116-124",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
       "lines": "116-124",
       "anchor": "opts.setBlockers([...blockers, blocker]);",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "index.js:19-26",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "19-26",
+      "anchor": "const isPushOrReplace = actionInfo.type === \"PUSH\" || actionInfo.type === \"REPLACE\";",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
@@ -97,6 +88,17 @@
       "path": "dist/esm/index.js",
       "lines": "230-233",
       "anchor": "ignoreNextPop = true;",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "index.js:24-34",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "24-34",
+      "anchor": "const blockers = opts.getBlockers?.() ?? [];",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
         "docs/specs/unsaved-work-guard/architecture.md"
@@ -193,12 +195,20 @@
       ]
     },
     {
-      "ref": "useBlocker.js:35-36",
+      "ref": "useBlocker.js:101-108",
       "package": "@tanstack/react-router",
       "path": "dist/esm/useBlocker.js",
-      "lines": "35-36",
-      "anchor": "enableBeforeUnload = true",
+      "lines": "101-108",
+      "anchor": "withResolver,",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:131",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "131",
+      "anchor": "export { Block, useBlocker };",
+      "citedBy": ["docs/specs/unsaved-work-guard/feature-spec.md"]
     },
     {
       "ref": "useBlocker.js:35",
@@ -211,6 +221,14 @@
         "docs/specs/unsaved-work-guard/architecture.md",
         "docs/specs/unsaved-work-guard/m0-measurement.md"
       ]
+    },
+    {
+      "ref": "useBlocker.js:35-36",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "35-36",
+      "anchor": "enableBeforeUnload = true",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
       "ref": "useBlocker.js:37",
@@ -229,19 +247,19 @@
       "citedBy": ["docs/specs/unsaved-work-guard/feature-spec.md"]
     },
     {
-      "ref": "useBlocker.js:77-95",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/useBlocker.js",
-      "lines": "77-95",
-      "anchor": "proceed: () => resolve(false),",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
       "ref": "useBlocker.js:77-86",
       "package": "@tanstack/react-router",
       "path": "dist/esm/useBlocker.js",
       "lines": "77-86",
       "anchor": "const canNavigateAsync = await new Promise",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:77-95",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "77-95",
+      "anchor": "proceed: () => resolve(false),",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
@@ -269,20 +287,12 @@
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
-      "ref": "useBlocker.js:101-108",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/useBlocker.js",
-      "lines": "101-108",
-      "anchor": "withResolver,",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "useBlocker.js:131",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/useBlocker.js",
-      "lines": "131",
-      "anchor": "export { Block, useBlocker };",
-      "citedBy": ["docs/specs/unsaved-work-guard/feature-spec.md"]
+      "ref": "router.js:298",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "298",
+      "anchor": "matched route",
+      "citedBy": ["docs/TECH_DEBT.md"]
     },
     {
       "ref": "axe.js:19564-19569",
@@ -320,18 +330,6 @@
       ]
     },
     {
-      "ref": "index.mjs:64-70",
-      "package": "better-auth",
-      "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "64-70",
-      "anchor": "function rateLimitResponse(retryAfter) {",
-      "citedBy": [
-        "docs/adr/0077-public-screens-brand-surface.md",
-        "docs/specs/public-screens-brand/feature-spec.md",
-        "docs/specs/public-screens-brand/implementation-plan.md"
-      ]
-    },
-    {
       "ref": "index.mjs:311-324",
       "package": "better-auth",
       "path": "dist/api/rate-limiter/index.mjs",
@@ -352,15 +350,24 @@
       "citedBy": ["docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"]
     },
     {
-      "ref": "email-verification.mjs:13-19",
+      "ref": "index.mjs:64-70",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "64-70",
+      "anchor": "function rateLimitResponse(retryAfter) {",
+      "citedBy": [
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/feature-spec.md",
+        "docs/specs/public-screens-brand/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "email-verification.mjs:108-121",
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
-      "lines": "13-19",
-      "anchor": "async function createEmailVerificationToken(secret, email, updateTo, expiresIn = 3600, ext",
-      "citedBy": [
-        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
-        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
-      ]
+      "lines": "108-121",
+      "anchor": "if (!user || user.user.emailVerified) await createEmailVerificationToken(ctx.context.secre",
+      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts", "docs/TECH_DEBT.md"]
     },
     {
       "ref": "email-verification.mjs:108-127",
@@ -375,14 +382,6 @@
       ]
     },
     {
-      "ref": "email-verification.mjs:108-121",
-      "package": "better-auth",
-      "path": "dist/api/routes/email-verification.mjs",
-      "lines": "108-121",
-      "anchor": "if (!user || user.user.emailVerified) await createEmailVerificationToken(ctx.context.secre",
-      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts", "docs/TECH_DEBT.md"]
-    },
-    {
       "ref": "email-verification.mjs:119-121",
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
@@ -391,70 +390,23 @@
       "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
     },
     {
+      "ref": "email-verification.mjs:13-19",
+      "package": "better-auth",
+      "path": "dist/api/routes/email-verification.mjs",
+      "lines": "13-19",
+      "anchor": "async function createEmailVerificationToken(secret, email, updateTo, expiresIn = 3600, ext",
+      "citedBy": [
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
       "ref": "email-verification.mjs:285-286",
       "package": "better-auth",
       "path": "dist/api/routes/email-verification.mjs",
       "lines": "285-286",
       "anchor": "if (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
       "citedBy": ["apps/web/src/routes/verify-email.tsx"]
-    },
-    {
-      "ref": "password.mjs:50",
-      "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "50",
-      "anchor": "use: [originCheck((ctx) => ctx.body.redirectTo)]",
-      "citedBy": [
-        "apps/web/src/features/auth/api/use-session.ts",
-        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
-        "docs/specs/account-security/feature-spec.md",
-        "docs/specs/account-security/implementation-plan.md"
-      ]
-    },
-    {
-      "ref": "password.mjs:53-59",
-      "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "53-59",
-      "anchor": "ctx.context.logger.error(\"Reset password isn't enabled.Please pass an emailAndPassword.sen",
-      "citedBy": [
-        "apps/api/src/common/auth/better-auth.ts",
-        "apps/api/test/password-reset.e2e-spec.ts",
-        "apps/web/src/features/auth/api/use-session.ts",
-        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
-        "docs/specs/account-security/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "password.mjs:67-79",
-      "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "67-79",
-      "anchor": "await ctx.context.internalAdapter.findVerificationValue(\"dummy-verification-token\");",
-      "citedBy": [
-        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
-        "docs/specs/account-security/feature-spec.md",
-        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "password.mjs:67-71",
-      "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "67-71",
-      "anchor": "await ctx.context.internalAdapter.findVerificationValue(\"dummy-verification-token\");",
-      "citedBy": [
-        "apps/web/src/features/auth/api/use-session.ts",
-        "apps/web/src/features/auth/components/RequestPasswordResetForm.tsx"
-      ]
-    },
-    {
-      "ref": "password.mjs:83",
-      "package": "better-auth",
-      "path": "dist/api/routes/password.mjs",
-      "lines": "83",
-      "anchor": "await ctx.context.runInBackgroundOrAwait(ctx.context.options.emailAndPassword.sendResetPas",
-      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts"]
     },
     {
       "ref": "password.mjs:127-163",
@@ -496,6 +448,64 @@
       "lines": "174",
       "anchor": "return ctx.json({ status: true });",
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
+    },
+    {
+      "ref": "password.mjs:50",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "50",
+      "anchor": "use: [originCheck((ctx) => ctx.body.redirectTo)]",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/account-security/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:53-59",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "53-59",
+      "anchor": "ctx.context.logger.error(\"Reset password isn't enabled.Please pass an emailAndPassword.sen",
+      "citedBy": [
+        "apps/api/src/common/auth/better-auth.ts",
+        "apps/api/test/password-reset.e2e-spec.ts",
+        "apps/web/src/features/auth/api/use-session.ts",
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:67-71",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "67-71",
+      "anchor": "await ctx.context.internalAdapter.findVerificationValue(\"dummy-verification-token\");",
+      "citedBy": [
+        "apps/web/src/features/auth/api/use-session.ts",
+        "apps/web/src/features/auth/components/RequestPasswordResetForm.tsx"
+      ]
+    },
+    {
+      "ref": "password.mjs:67-79",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "67-79",
+      "anchor": "await ctx.context.internalAdapter.findVerificationValue(\"dummy-verification-token\");",
+      "citedBy": [
+        "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
+        "docs/specs/account-security/feature-spec.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "password.mjs:83",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "83",
+      "anchor": "await ctx.context.runInBackgroundOrAwait(ctx.context.options.emailAndPassword.sendResetPas",
+      "citedBy": ["apps/api/src/common/mail/smtp-mail.service.ts"]
     },
     {
       "ref": "sign-in.mjs:264",
@@ -666,6 +676,14 @@
       "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
     {
+      "ref": "verification-token-storage.mjs:11-13",
+      "package": "better-auth",
+      "path": "dist/db/verification-token-storage.mjs",
+      "lines": "11-13",
+      "anchor": "if (typeof option === \"object\" && \"hash\" in option) return option.hash(identifier);",
+      "citedBy": ["docs/specs/account-security/implementation-plan.md"]
+    },
+    {
       "ref": "verification-token-storage.mjs:11-16",
       "package": "better-auth",
       "path": "dist/db/verification-token-storage.mjs",
@@ -676,14 +694,6 @@
         "docs/adr/0074-account-recovery-verification-enforcement-and-csp.md",
         "docs/specs/account-security/feature-spec.md"
       ]
-    },
-    {
-      "ref": "verification-token-storage.mjs:11-13",
-      "package": "better-auth",
-      "path": "dist/db/verification-token-storage.mjs",
-      "lines": "11-13",
-      "anchor": "if (typeof option === \"object\" && \"hash\" in option) return option.hash(identifier);",
-      "citedBy": ["docs/specs/account-security/implementation-plan.md"]
     },
     {
       "ref": "to-response.mjs:125-129",

@@ -55,7 +55,11 @@ import {
 } from '@/config/env';
 import { calendarScopeErrorMessage } from '@/lib/api/calendar-scope-errors';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
-import { describeUnsavedWork, type UnsavedWorkReport } from '@/lib/unsaved-work/report';
+import {
+  type UnsavedWorkReport,
+  buildReport,
+  describeUnsavedWork,
+} from '@/lib/unsaved-work/report';
 
 /** One field, named against the scope form that owns it. The scope tag is what makes the list below
  * checkable: `{ scope: 'general', name: 'constraintType' }` does not compile, because
@@ -294,19 +298,12 @@ export function ActivityCreateDialog({
   const unsavedReport = useMemo<UnsavedWorkReport | null>(
     () =>
       open && (general.isDirty || scheduling.isDirty || measure.isDirty || cost.isDirty)
-        ? {
-            subject: 'The new activity',
-            scopes: [
-              ...(general.isDirty ? [{ key: 'general', label: 'General', savable: true }] : []),
-              ...(scheduling.isDirty
-                ? [{ key: 'scheduling', label: 'Scheduling', savable: true }]
-                : []),
-              ...(measure.isDirty
-                ? [{ key: 'measure', label: 'Value measure', savable: true }]
-                : []),
-              ...(cost.isDirty ? [{ key: 'cost', label: 'Cost', savable: true }] : []),
-            ],
-          }
+        ? buildReport('The new activity', [
+            { when: general.isDirty, key: 'general', label: 'General', savable: true },
+            { when: scheduling.isDirty, key: 'scheduling', label: 'Scheduling', savable: true },
+            { when: measure.isDirty, key: 'measure', label: 'Value measure', savable: true },
+            { when: cost.isDirty, key: 'cost', label: 'Cost', savable: true },
+          ])
         : null,
     [open, general.isDirty, scheduling.isDirty, measure.isDirty, cost.isDirty],
   );

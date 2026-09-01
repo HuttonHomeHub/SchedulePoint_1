@@ -88,7 +88,7 @@ describe.skipIf(!hasDatabase)('Retention alerting (e2e)', () => {
     await new Promise<void>((resolve) => alertServer.listen(0, '127.0.0.1', resolve));
     const { port } = alertServer.address() as AddressInfo;
 
-    // **Captured and restored in `afterAll`.** `vitest.e2e.config.ts` sets `fileParallelism: false`,
+    // **Captured and restored in `afterAll`.** `vitest.e2e.config.mts` sets `fileParallelism: false`,
     // so every suite shares ONE process and one `process.env`. Leaving `MAIL_ALERT_URL` set would
     // point every later suite's mail alerter at a server this one has already closed — and the
     // suite that breaks is never the suite that is wrong (`mail-alerting.e2e-spec.ts` records the

@@ -1,7 +1,7 @@
 import type { PlanEditLockActor, PlanEditLockStatus } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveLockView } from './lock-view';
+import { resolveLockView, type LockView } from './lock-view';
 
 const ME = 'user-me';
 const JANE: PlanEditLockActor = { id: 'user-jane', name: 'Jane Doe', email: 'jane@x.com' };
@@ -228,5 +228,46 @@ describe('resolveLockView — the sentence stays visible where the badge cannot 
     ] as const) {
       expect(view?.messageVisible, label).toBeUndefined();
     }
+  });
+});
+
+/**
+ * **The two rules the union now holds, asserted at the type level** (`docs/TECH_DEBT.md` #202(d)).
+ *
+ * The runtime cases below prove `resolveLockView` never produces the wrong shape TODAY. They cannot
+ * say it is impossible to write one, and that is the difference this block exists for: before the
+ * union, `{ tone: 'editing', badgeName: 'Alexandra' }` compiled cleanly and would have told a
+ * reader that Alexandra is editing when in fact the reader is and Alexandra is asking.
+ *
+ * `@ts-expect-error` is the assertion — it fails the build if the line it guards ever STOPS being
+ * an error, which is exactly what widening `LockView` back to a flat interface would do. Verified
+ * by flattening `LockView` back to `{ tone: LockTone; badgeName?: string; messageVisible?: boolean }`
+ * first: every one of the five lines then compiled, and `tsc` reported **five** unused
+ * `@ts-expect-error` directives (TS2578) — so each guards a distinct shape rather than several
+ * riding on one.
+ */
+describe('LockView is a discriminated union, not a flat bag', () => {
+  it('rejects a badge name on a tone with no holder to name', () => {
+    const base = { badge: 'Editing', message: 'x', actions: [] } as const;
+    // @ts-expect-error `badgeName` is `locked`-only: on `editing` the actor is the REQUESTER.
+    const editing: LockView = { ...base, tone: 'editing', badgeName: 'Alexandra' };
+    // @ts-expect-error `lost` has no actor at all.
+    const lost: LockView = { ...base, tone: 'lost', messageVisible: true, badgeName: 'Alexandra' };
+    expect([editing.tone, lost.tone]).toEqual(['editing', 'lost']);
+  });
+
+  it('rejects a painted message on the two tones the badge already covers', () => {
+    const base = { badge: 'Locked', message: 'x', actions: [] } as const;
+    // @ts-expect-error `neutral` is a steady state; the badge carries it.
+    const neutral: LockView = { ...base, tone: 'neutral', messageVisible: true };
+    // @ts-expect-error `locked` puts the holder's name on the badge instead (D4).
+    const locked: LockView = { ...base, tone: 'locked', messageVisible: true };
+    expect([neutral.tone, locked.tone]).toEqual(['neutral', 'locked']);
+  });
+
+  it('requires the painted message on `lost`, where nothing else can carry it', () => {
+    // @ts-expect-error omitting it leaves a changed badge, a bare Dismiss and no explanation.
+    const lost: LockView = { badge: 'Read-only', message: 'x', tone: 'lost', actions: ['dismiss'] };
+    expect(lost.tone).toBe('lost');
   });
 });

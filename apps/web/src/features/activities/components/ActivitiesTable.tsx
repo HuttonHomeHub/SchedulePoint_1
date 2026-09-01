@@ -108,14 +108,22 @@ function SelectAllCheckbox({
     if (ref.current) ref.current.indeterminate = indeterminate;
   }, [indeterminate]);
   return (
-    <input
-      ref={ref}
-      type="checkbox"
-      className="accent-primary size-4 align-middle"
-      checked={checked}
-      onChange={(event) => onChange(event.target.checked)}
-      aria-label="Select all activities"
-    />
+    // **The `<label>` is the hit target, not decoration** (`docs/TECH_DEBT.md` #72). A bare
+    // `size-4` input is a **16 px** pointer target, below WCAG 2.2 §2.5.8's 24 px AA floor, and it
+    // sat outside every instrument that could say so: the target-size sweep is scoped to the
+    // command surfaces, and axe's `target-size` rule is `wcag22aa` (not requested) *and* ships
+    // `enabled: false`. The box stays 16 px — this widens what a pointer may hit, not what a reader
+    // sees. `ActivityMembersPanel` has always done it this way; these two never did.
+    <label className="flex size-6 cursor-pointer items-center justify-center">
+      <input
+        ref={ref}
+        type="checkbox"
+        className="accent-primary size-4 align-middle"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-label="Select all activities"
+      />
+    </label>
   );
 }
 
@@ -521,13 +529,16 @@ export function ActivitiesTable({
               // dead controls and the explanation behind them, unreachable. (Contrast the Members
               // checklist, where ticking IS the pending edit, so there the boxes do shade.)
               selectableIds.has(activity.id) ? (
-                <input
-                  type="checkbox"
-                  className="accent-primary size-4 align-middle"
-                  checked={effectiveSelection.has(activity.id)}
-                  onChange={() => toggleRow(activity.id)}
-                  aria-label={`Select ${activity.name}`}
-                />
+                // 24 px of hit area around a 16 px box — see `SelectAllCheckbox` for why.
+                <label className="flex size-6 cursor-pointer items-center justify-center">
+                  <input
+                    type="checkbox"
+                    className="accent-primary size-4 align-middle"
+                    checked={effectiveSelection.has(activity.id)}
+                    onChange={() => toggleRow(activity.id)}
+                    aria-label={`Select ${activity.name}`}
+                  />
+                </label>
               ) : null,
           } satisfies Column<ActivitySummary>,
         ]

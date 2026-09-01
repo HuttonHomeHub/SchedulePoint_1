@@ -338,24 +338,22 @@ export function MenuItem({
   disabledReason,
   srDescription,
   busy = false,
-  itemId,
   children,
 }: {
   /**
-   * A stable identity for the command this row activates, emitted as `data-toolbar-item`.
+   * **`itemId` was here and is gone** (2026-09-01, `docs/TECH_DEBT.md` #149 item 1).
    *
-   * **Why a primitive carries it.** `Toolbar` stamps `data-toolbar-item` on every INLINE control,
-   * and `e2e-library/support.ts` locates by it rather than by label with the reason written down:
-   * "the id is what the registry actually guarantees". That sentence was not true — the overflow
-   * menu stamped nothing — so an id was a handle only while the ladder happened to leave the
-   * command on the row. Graphite M5 merged ADR-0031's two rows onto one budget, `calendar` became
-   * menu-only at every width, and the journey timed out on a locator whose own comment promised it
-   * would not.
+   * It stamped `data-toolbar-item` on a menu row so `e2e-library/support.ts` could locate a command
+   * that the width ladder had demoted into the `⋯` — a real defect, fixed by a real prop. **Its
+   * reason is now structurally gone**: ADR-0109 D1 deleted `ToolbarOverflow` along with the ladder,
+   * and `Deck` wraps rather than hides, so no toolbar command can be in a menu at all. It had zero
+   * call sites when it was removed.
    *
-   * Optional, so every other `Menu` consumer is unchanged: only a command with a registry id has
-   * one to give.
+   * The row that filed it argued against "a wider API for one caller"; by the time anyone looked
+   * there was **no** caller, which is a different and easier decision. Recorded rather than
+   * silently deleted so that if a menu ever renders registry commands again, the next reader knows
+   * this existed, why, and that git has it.
    */
-  itemId?: string;
   onSelect: () => void;
   destructive?: boolean;
   /**
@@ -426,7 +424,6 @@ export function MenuItem({
           : { 'aria-checked': selected })}
       {...(disabled ? { 'aria-disabled': true } : {})}
       {...(busy ? { 'aria-busy': true } : {})}
-      {...(itemId ? { 'data-toolbar-item': itemId } : {})}
       {...(describedBy ? { 'aria-describedby': describedBy } : {})}
       tabIndex={-1}
       onClick={(event) => {

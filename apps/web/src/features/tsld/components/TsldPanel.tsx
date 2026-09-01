@@ -35,6 +35,7 @@ import {
   toggle,
 } from '../model/canvas-selection';
 import { planChain } from '../model/chain-order';
+import { resolveDockStrip } from '../model/dock-strip';
 import {
   announceChainStep,
   baselineGhostClause,
@@ -1400,6 +1401,20 @@ export function TsldPanel({
   // draw-ready** canvas before any recalc so the first activity can be placed on it; uncalculated
   // bars simply don't paint (`paint.ts` skips `earlyStart === null`).
   const showDiagram = dataDate !== null && (isCalculated || CANVAS_AUTHORING_ENABLED);
+
+  /**
+   * Which strip the canvas dock shows. The rule and its reasoning live in
+   * `model/dock-strip.ts`, exported so the DECISION can be asserted rather than the DOM
+   * (`docs/TECH_DEBT.md` #202(b)); this is the one call site.
+   */
+  const dockStrip = resolveDockStrip({
+    hasConflict: conflict !== null,
+    modeStatement,
+    showDiagram,
+    activityCount: activities.length,
+    mode,
+    authoringFlowEnabled: CANVAS_AUTHORING_FLOW_ENABLED,
+  });
   const editingEnabled = showDiagram && canEdit && TSLD_EDITING_ENABLED && onCreate !== undefined;
 
   // The docked selection-actions bar (ADR-0031) is wired iff the host supplies the object actions
@@ -2578,7 +2593,7 @@ export function TsldPanel({
             dismissing the banner re-renders the same confirmation with its Undo; and `Ctrl+Z` is
             bound throughout, so the capability never leaves even while the affordance does. A rule
             with an exception in it is how the three-at-once state arose in the first place. */}
-        {conflict ? (
+        {dockStrip === 'conflict' && conflict ? (
           <EditConflictBanner
             message={conflict.message}
             onDismiss={() => clearConflict()}
@@ -2599,7 +2614,9 @@ export function TsldPanel({
             (nothing overlays the diagram) is intact either way; what changed is that the band now
             costs no canvas height at all, which is why withdrawing three of its six statements is a
             decluttering decision and NOT a height saving. See `docs/specs/foot-row/spec.md` D3. */}
-        {conflict ? null : <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />}
+        {dockStrip === 'mode' ? (
+          <CanvasModeBand statement={modeStatement} onUndo={onUndoLastEdit} />
+        ) : null}
 
         {/*
           The object-actions bar for the SINGLE selected activity (ADR-0031, Fork-2) — in the same
@@ -2679,14 +2696,7 @@ export function TsldPanel({
           instruction at a time, and the armed tool's is the one that describes what the next click
           does.
         */}
-        {CANVAS_AUTHORING_FLOW_ENABLED &&
-        showDiagram &&
-        activities.length === 0 &&
-        mode === 'select' &&
-        // Only `!conflict`. `!modeStatement` was written here too and is DEAD: `modeStatement` is
-        // null for every mode except the four tool modes, so inside `mode === 'select'` it can
-        // never be truthy.
-        !conflict ? (
+        {dockStrip === 'empty' ? (
           <NoticeStrip
             data-testid="canvas-empty-state"
             emphasis="dashed"

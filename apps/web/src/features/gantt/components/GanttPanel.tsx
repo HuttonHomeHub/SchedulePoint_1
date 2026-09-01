@@ -139,10 +139,27 @@ const columnWidth = (column: GanttColumn): number => SCREEN_COLUMN_WIDTHS[column
  * Pure and exported so `grid-width.structural.test.ts` can assert the property this arithmetic
  * exists for, rather than a component test asserting a pixel it read out of the same expression.
  */
-export function ganttFixedWidth(columns: readonly GanttColumn[]): number {
-  return columns.reduce(
-    (sum, c) => sum + (c.key === 'name' ? NAME_COLUMN_MIN_WIDTH : columnWidth(c)),
-    0,
+export function ganttFixedWidth(
+  columns: readonly GanttColumn[],
+  /**
+   * Width of pinned content that is NOT one of {@link columns} — today only the `vs baseline`
+   * column, which renders inside the pinned block when a baseline is active and is deliberately
+   * not a `GanttColumn` (it is not sortable, hideable or part of the column vocabulary).
+   *
+   * **Required, never defaulted** (the ADR-0070 `hoursPerDay` rule). A default of 0 is silently
+   * wrong on exactly the plans that have a baseline, and the consequence is the ADR-0095 incident:
+   * `name` absorbs against a floor that does not know about the column, so the pinned block sums to
+   * `pane + 72` and the variance column paints on top of the chart. That shipped, and was found by
+   * a browser (`docs/TECH_DEBT.md` #151) rather than by this file's own gate, which summed
+   * `columns` alone and therefore agreed with the bug.
+   */
+  extraPinnedWidth: number,
+): number {
+  return (
+    columns.reduce(
+      (sum, c) => sum + (c.key === 'name' ? NAME_COLUMN_MIN_WIDTH : columnWidth(c)),
+      0,
+    ) + extraPinnedWidth
   );
 }
 
@@ -398,8 +415,6 @@ export function GanttPanel({
     [hiddenColumns],
   );
   const GRID_WIDTH = useMemo(() => COLUMNS.reduce((sum, c) => sum + columnWidth(c), 0), [COLUMNS]);
-  /** What the fixed columns need — the floor a resizable pane may not go below. */
-  const FIXED_WIDTH = useMemo(() => ganttFixedWidth(COLUMNS), [COLUMNS]);
   const [focusedId, setFocusedId] = useState<string | undefined>(undefined);
 
   // The bar region's own width, measured so the zoom preset can frame its target range in the
@@ -420,6 +435,19 @@ export function GanttPanel({
   }, [GRID_WIDTH]);
 
   const showVariance = varianceByActivityId !== undefined && varianceByActivityId.size > 0;
+  /**
+   * What the pinned block needs — the floor a resizable pane may not go below.
+   *
+   * **`vs baseline` is part of it**, and leaving it out was a live defect until 2026-09-01: that
+   * column renders inside the pinned block with its own width but is not a `GanttColumn`, so
+   * `name` absorbed against a floor 72 px short and the block summed to `pane + 72` at EVERY
+   * width, not merely at the floor. Measured in a browser: `vs baseline` spanned 817–889 with the
+   * chart starting at 817 — ADR-0095's Float incident, reproduced by a column added afterwards.
+   */
+  const FIXED_WIDTH = useMemo(
+    () => ganttFixedWidth(COLUMNS, showVariance ? VARIANCE_COLUMN_WIDTH : 0),
+    [COLUMNS, showVariance],
+  );
   const derivedGridWidth = GRID_WIDTH + (showVariance ? VARIANCE_COLUMN_WIDTH : 0);
   /**
    * **The grid pane's width, draggable** (ADR-0099 D6, Graphite M8).

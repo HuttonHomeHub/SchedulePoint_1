@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildReport,
   describeUnsavedWork,
   hasUnsavedWork,
   unsavableScopes,
@@ -116,5 +117,43 @@ describe('unsaved-work report', () => {
         { subject: 'The calendar', scopes: [scope('week', 'Working week')] },
       ]),
     ).toBe('Working week has unsaved changes.');
+  });
+});
+
+describe('buildReport', () => {
+  it('keeps only the candidates whose condition holds, in order', () => {
+    expect(
+      buildReport('This activity', [
+        { when: true, key: 'general', label: 'General', savable: true },
+        { when: false, key: 'scheduling', label: 'Scheduling', savable: true },
+        { when: true, key: 'cost', label: 'Cost', savable: false },
+      ]),
+    ).toEqual({
+      subject: 'This activity',
+      scopes: [
+        { key: 'general', label: 'General', savable: true },
+        { key: 'cost', label: 'Cost', savable: false },
+      ],
+    });
+  });
+
+  /**
+   * `when` must not survive into the report. It is assembly input, and an `UnsavedScope` carrying
+   * an extra truthy field is one more thing every future consumer has to know not to trust — the
+   * kind of leak `toEqual` catches and `toMatchObject` would not.
+   */
+  it('does not leak the condition into the scopes it returns', () => {
+    const [scope] = buildReport('x', [{ when: true, key: 'a', label: 'A', savable: true }]).scopes;
+    expect(Object.keys(scope ?? {}).sort()).toEqual(['key', 'label', 'savable']);
+  });
+
+  it('returns an empty report rather than null when nothing holds', () => {
+    const report = buildReport('This calendar', [
+      { when: false, key: 'details', label: 'Calendar details', savable: true },
+    ]);
+    // The caller decides whether an empty report is registered at all — `hasUnsavedWork` is what
+    // reads it, and every call site already guards on its own open/dirty state.
+    expect(report.scopes).toEqual([]);
+    expect(hasUnsavedWork([report])).toBe(false);
   });
 });
