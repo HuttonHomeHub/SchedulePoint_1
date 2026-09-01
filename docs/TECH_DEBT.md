@@ -740,6 +740,29 @@ the driving assignment's resource calendar when the type is `RESOURCE_DEPENDENT`
 exists, else today's answer — so every caller is corrected at once rather than per-surface. The
 engine is not involved and the recalc parity gate is untouched.
 
+> **Scoped 2026-09-01, and "every caller is corrected at once" does not survive contact.** The
+> helper has **twelve** call sites and can only use what it is handed, so a branch alone corrects
+> nobody — it would be dead code until a caller supplies the driver.
+>
+> **Where the driver is resolvable, and where it is not**, established by reading rather than
+> estimating:
+>
+> - `ActivityResourcesPanel` **can** — it holds `assignments.data` (each with `isDriving` and
+>   `resourceId`) and a `resourceById` map, and `ResourceSummary.calendarId` exists
+>   (`packages/types/src/index.ts:1739`). But it does not compute the factor: it receives
+>   `activityHoursPerDay` as a **prop** from its host and forwards it to `AssignmentRow`
+>   (`:318-320`). Correcting it means the panel deriving its own — which needs the activity's
+>   `type` and the `calendars` list plumbed in, two new props on a component that currently needs
+>   neither.
+> - `ActivitiesTable`'s **Duration column** cannot. It resolves per row (`:639`) and the table
+>   never loads assignments, so the driving resource is not in scope at all; getting it would mean
+>   a bulk fetch this surface does not do today.
+> - The two activity editors are in between and need checking when the work is taken.
+>
+> **So it needs a spec, not a register row** (ADR-0105): the panel's props are a component contract.
+> That is a bigger trigger than the row's own "three-line formatter fix" framing implies, and the
+> framing is what has kept it looking cheaper than it is.
+
 ### 88. An email link scanner reaches the verification URL before the recipient
 
 **Status:** unverified
