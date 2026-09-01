@@ -74,14 +74,14 @@ function sourceFiles(): string[] {
  */
 const ALLOWED: { file: string; match: string; note: string }[] = [
   {
+    file: 'components/ui/data-table.tsx',
+    match: 'border-border text-muted-foreground rounded-lg border border-dashed',
+    note: 'PERMANENT — this IS the frame. `EMPTY_FRAME` is where the treatment lives after M3; the entry exists so the gate does not report the primitive as an offender, and it must never be deleted while that constant does.',
+  },
+  {
     file: 'components/layout/workspace/resource-strip-panel.tsx',
     match: 'border-border text-muted-foreground rounded-lg border border',
     note: 'K3 \u2014 a panel with nothing to show \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/activities/components/ActivitiesTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
     file: 'features/activities/components/ActivityProgressPanels.tsx',
@@ -89,59 +89,14 @@ const ALLOWED: { file: string; match: string; note: string }[] = [
     note: 'K3 \u2014 a panel, in a dialog \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
-    file: 'features/audit/components/AuditEventList.tsx',
-    match: 'border-border rounded-lg border border-dashed p-8 text-cente',
-    note: 'K1 unfiltered / K2 filtered \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/audit/components/AuditEventList.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 unfiltered / K2 filtered \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/baselines/components/BaselinesPanel.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
     file: 'features/calendars/components/CalendarExceptionsEditor.tsx',
     match: 'border-border text-muted-foreground rounded-lg border border',
     note: 'K3 \u2014 a panel, in a dialog \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
-    file: 'features/calendars/components/CalendarsTable.tsx',
-    match: 'border-border rounded-lg border border-dashed p-8 text-cente',
-    note: 'K1 unfiltered / K2 filtered \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/calendars/components/CalendarsTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 unfiltered / K2 filtered \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/calendars/components/ProjectCalendarsSection.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1/K2 \u2014 unfiltered and filtered; the filtered one has no way back (spec \u00a71.6) \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/clients/components/ClientsTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/cross-plan-dependencies/components/CrossPlanLinksSection.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
     file: 'features/dependencies/components/AddLinkSection.tsx',
     match: 'border-border text-muted-foreground rounded-lg border border',
     note: 'K5 \u2014 a placeholder, not an absence; stays prose \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/dependencies/components/DependencyTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
     file: 'features/earned-value/components/EarnedValuePanel.tsx',
@@ -154,29 +109,9 @@ const ALLOWED: { file: string; match: string; note: string }[] = [
     note: 'K5 \u2014 a placeholder, not an absence; stays prose \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
-    file: 'features/members/components/MembersTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
     file: 'features/notes/components/NoteThread.tsx',
     match: 'border-border text-muted-foreground rounded-lg border border',
     note: 'K3 \u2014 a panel with nothing to show \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/plans/components/PlansTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/projects/components/ProjectsTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/recently-deleted/components/RecentlyDeletedTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
     file: 'features/resources/components/ActivityResourcesPanel.tsx',
@@ -189,24 +124,9 @@ const ALLOWED: { file: string; match: string; note: string }[] = [
     note: 'K3 \u2014 a panel, same sentence as resource-strip-panel \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
-    file: 'features/resources/components/ResourcesTable.tsx',
-    match: 'border-border rounded-lg border border-dashed p-8 text-cente',
-    note: 'K1 unfiltered / K2 filtered \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/resources/components/ResourcesTable.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 unfiltered / K2 filtered \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
     file: 'features/share/components/GuestPlanView.tsx',
     match: 'border-border text-muted-foreground rounded-lg border border',
     note: 'K4 \u2014 the unauthenticated guest view; its own milestone \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/share/components/ShareLinksDialog.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K1 \u2014 a table with no rows, in a dialog \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
     file: 'features/tsld/components/TsldPanel.tsx',

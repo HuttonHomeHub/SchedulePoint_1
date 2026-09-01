@@ -422,16 +422,14 @@ export function ResourcesTable({
         errorLabel="Couldn’t load resources. Please try again."
         empty={
           filtersActive ? (
-            <div className="border-border rounded-lg border border-dashed p-8 text-center">
+            <>
               <p className="text-muted-foreground text-sm">No resources match these filters.</p>
               <Button variant="outline" size="sm" className="mt-3" onClick={clearFilters}>
                 Clear filters
               </Button>
-            </div>
+            </>
           ) : (
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-              No resources yet.{canWrite ? ' Add your first resource to the library.' : ''}
-            </div>
+            <>No resources yet.{canWrite ? ' Add your first resource to the library.' : ''}</>
           )
         }
       />

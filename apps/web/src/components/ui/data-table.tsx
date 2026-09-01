@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { Fragment } from 'react';
+import { Children, Fragment, isValidElement } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -29,6 +29,33 @@ export interface Column<T> {
   headClassName?: string;
   cellClassName?: string;
 }
+
+/**
+ * Is this `empty` node one the caller deliberately left blank?
+ *
+ * Narrow on purpose: a `<></>` with nothing in it, which is what a call site writes when the state
+ * has nothing to say. Anything else — text, an element, a conditional that happens to render
+ * nothing at runtime — is framed, because React cannot tell us what a node renders without
+ * rendering it, and guessing would make the frame's presence depend on data.
+ */
+function isEmptyNode(empty: React.ReactNode): boolean {
+  return (
+    isValidElement(empty) &&
+    empty.type === Fragment &&
+    Children.count((empty.props as { children?: React.ReactNode }).children) === 0
+  );
+}
+
+/**
+ * The dashed frame every resource list's empty state sits in.
+ *
+ * One constant rather than fourteen copies of the same class string
+ * (`docs/specs/empty-state-consolidation/`). Exported so a surface that legitimately renders an
+ * empty state OUTSIDE a `DataTable` — a panel, a dialog — reaches for the same thing rather than
+ * writing it again, which is how the fourteen happened.
+ */
+export const EMPTY_FRAME =
+  'border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm';
 
 /**
  * The single table primitive (DESIGN_SYSTEM.md → Tables). Renders the shared
@@ -107,9 +134,25 @@ export function DataTable<T>({
     // reached a reader with rows and not a reader with none, which is the state where an
     // unexplained absence is most likely to be misread. No `role="region"` here: there is nothing
     // to scroll and nothing to label, so this associates the description with the copy itself.
+    //
+    // **The frame lives here, not at the call site** (`docs/specs/empty-state-consolidation/` M3).
+    // Fourteen of the fifteen consumers hand-wrote the same dashed box around their own copy, which
+    // is fourteen chances for one of them to drift and no way to change the treatment once. It goes
+    // INSIDE the `aria-describedby` div rather than replacing it: `docs/TECH_DEBT.md` #93(d) records
+    // the empty branch having once returned before that association existed, and a frame that
+    // wrapped the outside would silently undo it.
+    //
+    // **It renders only when there is something to frame.** `staff.tsx:598` passes `empty={<></>}`,
+    // and an unconditional frame turns that into a dashed rectangle containing nothing — the
+    // primitive asserting an absence where the call site deliberately said nothing.
+    //
+    // The test is an EMPTY FRAGMENT specifically, not a general "does this render anything", which
+    // React cannot answer without rendering. A truthiness check is wrong (`<></>` is a truthy
+    // element) and so is `Children.count(empty)`, which returns 1 for a fragment because the
+    // fragment IS the child — that was the first version, and the case below caught it.
     return (
       <div {...(describedById === undefined ? {} : { 'aria-describedby': describedById })}>
-        {empty}
+        {isEmptyNode(empty) ? empty : <div className={EMPTY_FRAME}>{empty}</div>}
       </div>
     );
   }

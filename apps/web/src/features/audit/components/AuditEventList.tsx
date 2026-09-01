@@ -124,18 +124,16 @@ export function AuditEventList({
         errorLabel="Couldn’t load the audit log. Please try again."
         empty={
           emptyFilteredMessage === undefined ? (
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-              {emptyMessage}
-            </div>
+            <>{emptyMessage}</>
           ) : (
-            <div className="border-border rounded-lg border border-dashed p-8 text-center">
+            <>
               <p className="text-muted-foreground text-sm">{emptyFilteredMessage}</p>
               {onClearFilter === undefined ? null : (
                 <Button variant="outline" size="sm" className="mt-3" onClick={onClearFilter}>
                   Clear filters
                 </Button>
               )}
-            </div>
+            </>
           )
         }
       />

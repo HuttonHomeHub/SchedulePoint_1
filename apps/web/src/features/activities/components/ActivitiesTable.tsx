@@ -889,9 +889,7 @@ export function ActivitiesTable({
         loadingLabel="Loading activities…"
         errorLabel="Couldn’t load activities. Please try again."
         empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            No activities yet.{canEditSchedule ? ' Add the first activity to this plan.' : ''}
-          </div>
+          <>No activities yet.{canEditSchedule ? ' Add the first activity to this plan.' : ''}</>
         }
       />
 

@@ -262,9 +262,7 @@ export function ShareLinksDialog({
             loadingLabel="Loading share links…"
             errorLabel="Couldn’t load share links. Please try again."
             empty={
-              <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-                No share links yet. Create one to give someone read-only access to this plan.
-              </div>
+              <>No share links yet. Create one to give someone read-only access to this plan.</>
             }
           />
         </FormSection>

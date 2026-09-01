@@ -119,11 +119,7 @@ export function PlansTable({
         getRowKey={(plan) => plan.id}
         loadingLabel="Loading plans…"
         errorLabel="Couldn’t load plans. Please try again."
-        empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            No plans yet.{canWrite ? ' Create the first plan for this project.' : ''}
-          </div>
-        }
+        empty={<>No plans yet.{canWrite ? ' Create the first plan for this project.' : ''}</>}
       />
 
       {canWrite ? (

@@ -367,16 +367,14 @@ export function CalendarsTable({
           filtersActive ? (
             // A filtered-to-nothing list is a different situation from an empty library, and must
             // never read as one — it says so, and offers the way back (docs/UX_STANDARDS.md).
-            <div className="border-border rounded-lg border border-dashed p-8 text-center">
+            <>
               <p className="text-muted-foreground text-sm">No calendars match these filters.</p>
               <Button variant="outline" size="sm" className="mt-3" onClick={clearFilters}>
                 Clear filters
               </Button>
-            </div>
+            </>
           ) : (
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-              No calendars yet.{canWrite ? ' Create your first working-day calendar.' : ''}
-            </div>
+            <>No calendars yet.{canWrite ? ' Create your first working-day calendar.' : ''}</>
           )
         }
       />

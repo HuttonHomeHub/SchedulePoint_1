@@ -116,5 +116,53 @@ describe('DataTable', () => {
       expect(container.querySelectorAll('tbody tr')).toHaveLength(3);
       expect(screen.getByText('only Alpha')).toBeInTheDocument();
     });
+
+    describe('the empty state’s frame (docs/specs/empty-state-consolidation/ M3)', () => {
+      /**
+       * **The frame must not displace `describedById`.** `docs/TECH_DEBT.md` #93(d) records this
+       * branch once returning BEFORE the described region existed, so prose qualifying what the rows
+       * mean reached a reader WITH rows and not a reader with none — the state where an unexplained
+       * absence is most likely to be misread. M3 puts a frame in the same place, and a frame wrapped
+       * on the outside would silently undo that fix while looking identical on screen.
+       *
+       * Verified red by moving the frame outside the `aria-describedby` div.
+       */
+      it('keeps aria-describedby on the outermost element, with the frame inside it', () => {
+        const { container } = render(
+          <DataTable
+            {...common}
+            query={query({ data: [] })}
+            empty={<>Nothing yet.</>}
+            describedById="caveat"
+          />,
+        );
+        const described = container.querySelector('[aria-describedby="caveat"]');
+        expect(described).not.toBeNull();
+        expect(described?.querySelector('.border-dashed')).not.toBeNull();
+      });
+
+      it('frames the empty copy so a call site does not have to', () => {
+        const { container } = render(
+          <DataTable {...common} query={query({ data: [] })} empty={<>Nothing yet.</>} />,
+        );
+        const frame = container.querySelector('.border-dashed');
+        expect(frame).not.toBeNull();
+        expect(frame).toHaveTextContent('Nothing yet.');
+      });
+
+      /**
+       * **An empty fragment gets no frame, and that is the M3-T1 finding rather than tidiness.**
+       * `staff.tsx:598` passes `empty={<></>}`. Framed unconditionally that becomes a dashed
+       * rectangle containing nothing — the primitive asserting an absence where the call site
+       * deliberately said nothing at all. `Children.count` rather than a truthiness test, because
+       * `<></>` is a truthy React element and `empty && …` would frame it.
+       */
+      it('renders no frame when there is nothing to frame', () => {
+        const { container } = render(
+          <DataTable {...common} query={query({ data: [] })} empty={<></>} />,
+        );
+        expect(container.querySelector('.border-dashed')).toBeNull();
+      });
+    });
   });
 });

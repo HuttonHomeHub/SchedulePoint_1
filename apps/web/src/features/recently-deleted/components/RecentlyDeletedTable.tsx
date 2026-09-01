@@ -323,10 +323,10 @@ export function RecentlyDeletedTable({
         loadingLabel="Loading recently deleted…"
         errorLabel="Couldn’t load recently deleted items. Please try again."
         empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+          <>
             Nothing has been deleted. Deleted clients, projects and plans appear here so you can
             restore them.
-          </div>
+          </>
         }
       />
       {(() => {
