@@ -470,7 +470,15 @@ emphasis="dashed"`, converging on the answer three sites already use.
 
 ---
 
-### Milestone M7 — The loading skeleton (#161(b)) (shippable)
+### Milestone M7 — The loading skeleton (#161(b)) (shippable) — **T1 LANDED 2026-09-01**
+
+> Landed as specified. Two of its numbers are corrected by M3-T1's count: **fifteen** consumers,
+> not seventeen. `loadingLabel` is kept and announced through an `sr-only` `role="status"`, so
+> `shoot.mjs:331`'s `expectText: /Loading clients/i` still matches — the instrument that found the
+> defect survives the fix, which was the milestone's first named risk. The column-count assertion
+> was **verified red with a hardcoded count**, which is the drift it exists to catch. **T2 filed the fifteen page/panel
+> skeleton candidates as `docs/TECH_DEBT.md` #234**, with the ten spinners that are correct named
+> alongside them so the next reader is not tempted to sweep those too.
 
 **Outcome:** all 17 `DataTable` consumers show a column-matched skeleton instead of a centred
 spinner, discharging the obligation `skeleton.tsx:11-12` has carried unobserved since the

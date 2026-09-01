@@ -994,6 +994,39 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 234. Fifteen page and panel loading states are spinners where the shape is known
+
+**Status:** open · **Found:** 2026-09-01 (empty-state consolidation §1.8) · **Size:** M · **Owner:** a loading-state pass
+
+`docs/UX_STANDARDS.md:60` asks for a _"Skeleton matching final layout (first load) / inline busy
+(actions)"_ — two answers, with the discriminator being whether the content has a **known shape**,
+not whether something is pending. M7 fixed the one site where the shape was known to a shared
+primitive (`DataTable`, fifteen consumers). These fifteen are the remainder, and they are a
+different piece of work rather than the same one left undone.
+
+`client-detail.tsx:20`, `project-detail.tsx:43`, `plan-detail.tsx:42`, `EarnedValuePanel.tsx:121`,
+four in `staff.tsx`, and the panel spinners in `NoteThread`, `CalendarExceptionsEditor`,
+`GuestPlanView`, `FloatPathsPanel`, `ScheduleSummaryStrip`, `ActivityMembersPanel` and
+`ScheduleHealthPanel`.
+
+**Why it is one row and not fifteen tickets.** Each is a page or panel whose shape is bespoke, so
+each needs its own skeleton **designed** — and `plan-detail.tsx:39,45` already renders partial
+`animate-pulse` bars beside its spinner, so a page-level pattern is half-invented already and wants
+deciding rather than extending. That decision is the work; the fifteen conversions follow from it.
+
+**What is NOT here, deliberately.** Of the 52 `Spinner`/`animate-spin` occurrences across 22 files,
+ten are correct and stay: an **action** with an indeterminate duration and no final layout to match
+(`ImportScheduleDialog`'s parse and import, the recalculating cue, a pending submit), and a **gate**
+whose answer decides which layout renders at all (the Suspense chunk fallbacks, the staff identity
+check, "Checking your access…"). A skeleton in either place promises a shape that is not coming, or
+guesses one and is wrong half the time — including on a refusal branch, where the settled layout is
+a sentence.
+
+**Unverified:** the four `staff.tsx` spinners and the six panel spinners were classified from
+surrounding context in a grep pass, not by opening each file whole. If any turns out to be a
+`DataTable`-shaped list it belongs with M7's fix rather than here — checking that is the first task
+of whatever picks this up.
+
 ### 233. A canvas lag drag reads and writes rounded days, so a sub-day lag cannot survive one
 
 **Status:** open · **Found:** 2026-09-01, while specifying #65 · **Size:** S · **Owner:** web
@@ -2310,6 +2343,15 @@ pre-existing, and only visible now because the loading state had never been capt
 > Folded into the (a) pass rather than kept separate: the loading and empty states of one shared
 > table are one reader's experience of one screen, and splitting them means touching `DataTable`
 > twice.
+>
+> **The code half landed 2026-09-01** (M7-T1). `DataTable` renders a column-matched skeleton
+> instead of a centred spinner, so every resource list stops spanning a spinner and then reflowing
+> into a table. The obligation was already written down and unbuilt: `skeleton.tsx` says each
+> archetype owns its loading render because a generic rectangle reflows into whatever the content
+> turns out to be, and names `DataTable` as knowing its own. `loadingLabel` survives — it is what
+> `shoot.mjs` asserts on to photograph this state, so deleting it would have broken the instrument
+> that found the defect. **Still owed: the fifteen page/panel spinner candidates the spec
+> deliberately excluded get their own row rather than being absorbed** (M7-T2).
 
 **c. The Project Explorer is a large flat navy block when the tree is short** — **RESOLVED in
 `web-v0.97.0`, before anyone acted on this row.** It was raised as "worth putting to the product
