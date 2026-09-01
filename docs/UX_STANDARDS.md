@@ -58,10 +58,42 @@ a bug:
 | State       | Standard                                                            |
 | ----------- | ------------------------------------------------------------------- |
 | **Loading** | Skeleton matching final layout (first load) / inline busy (actions) |
-| **Empty**   | Icon + one-line explanation + primary action to proceed             |
+| **Empty**   | One-line explanation; an icon and an action where each is truthful  |
 | **Error**   | Friendly message + retry; never a raw error or blank screen         |
 | **Partial** | Show what's available; indicate what's still loading                |
 | **Success** | Clear confirmation (toast/inline); update the view optimistically   |
+
+### Not everything that renders nothing is an empty state
+
+The Empty row above said "Icon + one-line explanation + primary action" until
+2026-09-01, and the primitive it describes has never required either the icon or
+the action. That was not pedantry: a required action forces a lie on the case a
+Viewer meets most, where the honest answer is that they cannot act and should
+ask a Planner, and a button that refuses them is worse than no button
+(`components/ui/page/empty-state.tsx`). Both are optional; an icon is usually
+wrong at section size.
+
+The sharper failure is the opposite one — dressing something that is **not** an
+absence as one. Thirty-four hand-rolled dashed boxes were counted across the app
+and **seven were the wrong shape entirely**, including three failed requests
+rendered as "nothing found" (a request that errored and a request that succeeded
+and found nothing are different facts — ADR-0073 C1) and two permission refusals
+wearing an absence's costume. So decide the shape from what the region is
+saying, not from the fact that it is blank:
+
+| What the region is saying                                 | Shape                                                                                                                                           |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Nothing exists here yet, and you might create it          | `EmptyState` — `size="page"` for a whole screen, `size="section"` inside a card. `DataTable` frames its own.                                    |
+| Nothing matches the filter                                | `EmptyState size="section"` **plus a way back** — the two must never read alike                                                                 |
+| Nothing here yet, in a panel or dock where room is scarce | `NoticeStrip emphasis="dashed"`                                                                                                                 |
+| You may not see this                                      | `NoticeStrip tone="info" emphasis="solid"` — a refusal names why it is shut (ADR-0082), and solid says the state is settled rather than pending |
+| The request failed                                        | The error shape — `role="alert"` and a retry, never a dashed box                                                                                |
+| A step has not been taken yet ("choose a file above")     | Prose. Nothing is missing; giving it a frame announces a problem the screen does not have                                                       |
+| A settled good outcome ("nothing needs you")              | A sentence. Not a state at all                                                                                                                  |
+
+Enforced by `components/ui/page/empty-state.structural.test.ts`, which fails on a
+hand-rolled dashed box outside a three-entry allow-list, and fails again when an
+entry stops being needed.
 
 ## Interaction standards
 

@@ -576,3 +576,35 @@ the hover path only. At most one tooltip is open application-wide. Positioned by
 | a truncated text's full value                            | keep native `title` (free, correct, not a control's name)                                    |
 | a supplementary clause on a control with a visible label | keep native `title` (a copy decision, not a naming gap)                                      |
 | a fact the accessible name does not carry                | `useTooltip({ purpose: 'description' })`, with its own review — it changes what AT announces |
+
+## Primitives: `EmptyState` and `NoticeStrip` — and where the boundary is
+
+`EmptyState` (`components/ui/page/empty-state.tsx`) says a screen or a section holds nothing.
+`NoticeStrip` (`components/ui/notice-strip.tsx`) says one short thing in a horizontal band. They
+overlap on the case they most often meet — a region with no content — and the discriminator is
+**vertical room**, not sentiment: an empty state is centred with generous padding and wants a
+screen or a card to sit in; a notice strip is one line and fits a dock, a side panel or a
+`FormSection`. `size="section"` covers the middle; below that, use the strip.
+
+Three rules the pass that converted 34 hand-rolled boxes settled
+(`docs/specs/empty-state-consolidation/`):
+
+- **Neither the icon nor the action is required, and the actionless case is a real one.** A Viewer
+  who cannot create the missing thing is told so; a button that would refuse them is worse than no
+  button. An icon is usually wrong at `size="section"`.
+- **`DataTable` frames its own empty state.** Pass the sentence or an `EmptyState`; do not wrap it
+  in a dashed box, because the table already draws one (`EMPTY_FRAME`), and a second nests
+  padding inside padding. The empty node goes inside the `aria-describedby` container, so the
+  absence is announced with the table rather than beside it.
+- **A refusal and an error are not empty states.** `NoticeStrip tone="info" emphasis="solid"` for
+  "you may not see this" — solid, because dashed means "nothing here yet" and a permission is
+  settled, not pending; the error shape (`role="alert"` + retry) for a failed request. The shape
+  table in [`docs/UX_STANDARDS.md`](UX_STANDARDS.md) is the full discriminator, and
+  `empty-state.structural.test.ts` fails on a hand-rolled dashed box outside its three-entry
+  allow-list.
+
+`NoticeStrip` takes `role` from its caller rather than choosing one. That is deliberate: the same
+strip carries a live-updating count (`role="status"`) and a static "nothing here yet" (no role at
+all), and a primitive that announced both would make the second one speak every time it mounted.
+Its `messageFit` defaults to `'truncate'`; pass `'grow'` where the sentence must wrap rather than
+lose its second half.

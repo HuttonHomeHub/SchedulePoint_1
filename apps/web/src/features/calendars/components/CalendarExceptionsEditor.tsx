@@ -32,6 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { FormErrorSummary, TextField } from '@/components/ui/form';
 import { Label } from '@/components/ui/label';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Select } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { WindowListEditor } from '@/components/ui/window-list-editor';
@@ -438,9 +439,7 @@ export function CalendarExceptionsEditor({
             </Button>
           </div>
         ) : calendar.data.exceptions.length === 0 ? (
-          <p className="border-border text-muted-foreground rounded-lg border border-dashed p-4 text-center text-sm">
-            No exceptions yet.
-          </p>
+          <NoticeStrip emphasis="dashed" message="No exceptions yet." />
         ) : (
           <ul className="flex max-h-64 flex-col gap-2 overflow-y-auto">
             {calendar.data.exceptions.map((exception) => (

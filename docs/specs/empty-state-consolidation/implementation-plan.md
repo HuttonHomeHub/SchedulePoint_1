@@ -390,7 +390,26 @@ the K2 path.
 
 ---
 
-### Milestone M5 — The guest share view (shippable, own milestone by design)
+### Milestone M5 — The guest share view (shippable, own milestone by design) — **LANDED 2026-09-01**
+
+> Converted to `EmptyState size="page"` with an icon. Page-sized because there is nothing else on
+> that screen: a small centred box in a large empty column reads as a component that failed to load
+> rather than as a plan with no work in it yet. **No action, and that is the archetype's third
+> shape rather than an omission** — a guest holds a read-only link, so a button offering one would
+> be a lie. The copy says whose move it is instead, without assuming product knowledge, because the
+> reader has no account and did not choose to be here.
+>
+> **The token claim was re-verified in a browser rather than inherited**, which the milestone's
+> first named risk insisted on. `e2e-share` now reads `--muted-foreground` and `--muted` off the
+> guest page's `<main>` and asserts nothing on its ancestor chain carries a `[data-surface]`. The
+> probe itself was **verified red** — inverting one expectation printed `oklch(0.5 0 0)`, so it is
+> reading a real resolved value rather than passing on an absence, which is exactly how ADR-0102's
+> defect stayed green.
+>
+> **Not done: the `shoot.mjs` shot of the guest empty state.** The journey's plan has an activity,
+> so photographing this state needs a second share link on an empty plan; that is a fixture change
+> rather than a shot, and it goes to M8 with the three not-found shots M2-T1 also owes. Recorded
+> rather than quietly dropped.
 
 **Outcome:** the one screen an outsider sees gets a page-level empty state written for someone
 with no account and no context.
@@ -430,7 +449,30 @@ minted from the **Share links** dialog on the plan toolbar.
 
 ---
 
-### Milestone M6 — Panels and the canvas (shippable)
+### Milestone M6 — Panels and the canvas (shippable) — **LANDED 2026-09-01**
+
+> Eight sites through `NoticeStrip emphasis="dashed"`, converging on the answer three sites already
+> used. **The allow-list is now THREE entries, and all three are permanent decisions rather than
+> deferrals** — the frame itself in `DataTable`, and the two K5 placeholders CQ-3 settled. Their
+> notes say `PERMANENT` and give the reason, so a later reader does not mistake a decision for a
+> queue.
+>
+> The duplicated resource sentence is one exported `NO_RESOURCE_LOADING_MESSAGE`: it lived verbatim
+> in `ResourceHistogram` and `resource-strip-panel`, which is two chances for one to be reworded on
+> two views of the same data.
+>
+> `EarnedValuePanel`'s `role="status"` is passed THROUGH to `NoticeStrip` rather than dropped —
+> that primitive's role is deliberately the caller's, because a tone→role mapping gets it wrong for
+> a mode band that wants neither.
+>
+> **The canvas site converged on its own file's answer**: `TsldPanel:2700` already rendered its
+> empty canvas through `NoticeStrip`, and the hand-rolled box sat two hundred lines above it saying
+> the same kind of thing a different way. `render/` is untouched, so the ADR-0034 parity gate and
+> #75's draw budget are unaffected by construction.
+>
+> **Not done: the panel shots** the milestone asks for (`shoot.mjs` has none). They go to M8 with
+> the guest empty state and the three not-found routes — four fixtures, one milestone, rather than
+> four half-fixtures spread across three.
 
 **Outcome:** the 7 K3 panel sites and the canvas site render through `NoticeStrip
 emphasis="dashed"`, converging on the answer three sites already use.
@@ -525,7 +567,7 @@ archetypes were built.
 
 ---
 
-### Milestone M8 — Close the gate and correct the documents (shippable)
+### Milestone M8 — Close the gate and correct the documents (shippable) — **LANDED 2026-09-01**
 
 **Outcome:** the allow-list holds only K5/K6 survivors with permanent reasons; the standards say
 what the product does.
@@ -541,6 +583,59 @@ what the product does.
 > **Testing requirements:** `pnpm prepush`, plus `scripts/e2e-sweep.sh` — **every** journey, not
 > the ones I remember (ADR-0091 M7's recorded failure, and #133's rule: after any label or layout
 > change, run every journey).
+
+> **Landed.** The allow-list finished at **3 of 34**, every entry K5 with a permanent reason —
+> `DataTable`'s own `EMPTY_FRAME` (the treatment itself, which must never be deleted while that
+> constant lives) plus `AddLinkSection` and `ImportScheduleDialog`. `docs/UX_STANDARDS.md` gained
+> the shape table and its row 61 corrected — the icon and the action are both optional, which the
+> primitive has always allowed and the standard had never said; `docs/COMPONENT_LIBRARY.md` gained
+> the `EmptyState`/`NoticeStrip` boundary. `docs/TECH_DEBT.md` #161 is CLOSED and ledgered in full:
+> (a) and (b) by this epic, (c) and (d) having resolved in `web-v0.97.0` before anyone acted on
+> them. No ADR — this applies ADR-0097's archetypes and ADR-0082's omit/shade rule and introduces
+> no architectural decision (step 5's default, taken).
+>
+> **Six shots the epic owed, and one finding they produced.** `plan-not-found`,
+> `project-not-found`, `client-not-found` (M2-T1), `share-guest-empty` (M5) and two editor tabs
+> (M6) are now in `shoot.mjs` and were RUN, not merely written — all six wrote on the first run at
+> 1646, each with an `expectText` so a shot named for a state has to prove it reached it. The three
+> not-found shots navigate to a well-formed id that names nothing rather than intercepting a 500,
+> because that is the path a stale bookmark takes and it additionally proves the route resolves and
+> the guard fires.
+>
+> **Looking at them found what the diff could not** (`docs/TECH_DEBT.md` #236): the Resources tab
+> shows **two** absences at once in **two** shapes — the dashed strip M6 gave it, and an
+> empty-library sentence directly beneath it with no treatment at all. That second site was never
+> among the 34, because **the count was by treatment**: `border-dashed` cannot see an absence
+> nobody drew a box around, and neither can the gate. It is not a defect against this epic's rule
+> (K5 stays as prose), but the epic decided K5 is not _converted_ and never decided what a K5 looks
+> like, so three sites of one kind now carry two treatments. Filed rather than fixed, with the
+> blind spot written into the gate's own docblock so 34 is not quoted as a total.
+>
+> **M6 had never been linted, and the way that surfaced is worth a line.** It landed on the unit
+> suite and four journeys; `pnpm prepush` was not run against it, and its six new `notice-strip`
+> imports were all in the wrong `import/order` position, plus two escaped quotes in the allow-list
+> notes. The first fix repaired **the three files the failure's truncated tail happened to name** —
+> `docs/TECH_DEBT.md` #133's rule (sweep, do not fix what the instrument happened to print) landing
+> on lint rather than on journeys — and the next full run found three more. Fixed by amending M6
+> rather than folding into M8, so no commit in the branch fails a gate on its own.
+>
+> **And running the sweep found that the sweep has never run the base journey** (`docs/TECH_DEBT.md`
+> #237). M8's testing requirement is `scripts/e2e-sweep.sh` — _every_ journey, not the ones I
+> remember — and its first line was `web EXIT=1`. The list names `web` explicitly under a
+> four-sentence comment about why the base journey cannot be derived from the `test:e2e:*` names;
+> the loop ten lines below then prefixed `web:` unconditionally, so it asked for a `test:e2e:web`
+> script that does not exist. Fixed and verified in both directions. The transferable half is that
+> nothing aggregates the sweep's output — one `EXIT=1` among forty lines scrolls past — so it was
+> found by reading rather than by anything failing.
+>
+> **And fixing it mid-run corrupted the run's own instrument.** `e2e-sweep.sh` was edited while it
+> was executing, and bash reads a script by byte offset — so when the loop's last iteration
+> returned, the shifted file gave `dds: command not found` and a syntax error on the trailing
+> `done`. The sweep had by then reached the end of its list, and the result was confirmed
+> trustworthy by deriving the expected 43 targets from `apps/web/package.json` and comparing them
+> against the reported ones (43 distinct, none missing, none unexpected, `web=1` the only non-zero)
+> rather than by trusting the log's shape. The habit worth keeping: **do not edit a script that is
+> running**; note the fix and apply it after.
 
 ##### Task M8-T1 — Finish the gate and the docs
 

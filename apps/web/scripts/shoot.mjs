@@ -40,6 +40,15 @@ const stamp = Date.now();
 const password = 'correct-horse-battery';
 
 /**
+ * A well-formed id that names nothing, for the three not-found shots.
+ *
+ * A UUID rather than `missing`: the route params are validated, so a non-UUID is refused before the
+ * query runs and would photograph a different screen from the one a person with a stale bookmark
+ * actually reaches. All-zeroes is deliberately unmistakable in a URL bar that ends up in a picture.
+ */
+const MISSING_ID = '00000000-0000-4000-8000-000000000000';
+
+/**
  * Sign up and create an organisation; returns the slug. Each run gets its own tenant.
  *
  * **The tenant is per WIDTH, not per run**, and that is a repair rather than a nicety: the
@@ -263,6 +272,32 @@ async function seedProgramme(page, slug) {
  * never reaches a referrer or a server log. That is why this exists at all: there is no way to
  * recover the link afterwards, so the harness has to be the thing that creates it.
  */
+/**
+ * One plan in an existing project, with no activities — the fixture for the guest view's empty
+ * state (`docs/specs/empty-state-consolidation/` M5).
+ *
+ * It takes no edit lock, because it creates nothing that needs one: a plan is created against the
+ * project, and every write the pen gates is a write to a plan's contents.
+ */
+async function seedEmptyPlan(page, slug, projectId) {
+  return page.evaluate(
+    async ({ org, project }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/projects/${project}/plans`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Riverside — Phase 3 (not started)',
+          plannedStart: '2026-06-01',
+        }),
+      });
+      if (!response.ok) throw new Error(`plans: ${response.status} ${await response.text()}`);
+      return (await response.json()).data.id;
+    },
+    { org: slug, project: projectId },
+  );
+}
+
 async function mintShareLink(page, slug, planId) {
   return page.evaluate(
     async ({ org, plan }) => {
@@ -533,6 +568,56 @@ const SHOTS = [
   // variable set — see `playwright.staff.config.ts`, which already does exactly that. Silent
   // skipping is how a shot list grows a hole that reads as coverage.
   { name: 'staff', staff: true, go: (p) => p.goto(`${BASE}/staff`) },
+  // **The states the empty-state pass changed, which nothing had ever photographed**
+  // (`docs/specs/empty-state-consolidation/` M8). The epic reshaped 27 sites and three of its
+  // milestones owed a shot each; those are the six below. The reason they were owed rather than
+  // taken at the time is the point: every one of them is a state you reach by getting something
+  // wrong (a stale link), by sharing something unfinished, or by opening a tab — and a shot list
+  // ordered by ROUTE cannot see any of that, which is the same blind spot ADR-0101 records one
+  // level up.
+  //
+  // The three not-found screens are reached with a well-formed id that names nothing, which is the
+  // real path: a bookmark to a deleted plan, or a link forwarded to somebody without access. An
+  // intercepted 500 would photograph the same branch and prove less, because it could not tell you
+  // the route resolves and the guard fires. `expectText` is what makes each a shot of the state it
+  // is named for rather than of whatever rendered — the `clients-error` lesson, where the first
+  // version photographed a spinner and reported success.
+  {
+    name: 'plan-not-found',
+    go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/plans/${MISSING_ID}`),
+    expectText: /doesn.t exist, was deleted, or you don.t have access/i,
+  },
+  {
+    name: 'project-not-found',
+    go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/projects/${MISSING_ID}`),
+    expectText: /doesn.t exist, was deleted, or you don.t have access/i,
+  },
+  {
+    name: 'client-not-found',
+    go: (p, slug) => p.goto(`${BASE}/orgs/${slug}/clients/${MISSING_ID}`),
+    expectText: /doesn.t exist, was deleted, or you don.t have access/i,
+  },
+  // **A shared plan with no work in it yet** (M5). `share-guest` above photographs the populated
+  // view; this is the one an outsider meets when somebody shares a plan before building it, and it
+  // is the only empty state in the product with no signed-in reader and no action — the archetype's
+  // third shape. It needs its own plan, because the programme's cannot be un-populated.
+  { name: 'share-guest-empty', shareGuest: true, emptyPlan: true },
+  // **Two panel empty states behind a tab** (M6). The dock and the side panel are where
+  // `NoticeStrip emphasis="dashed"` earns its place over `EmptyState`, and neither had been seen.
+  {
+    name: 'activity-editor-notes-empty',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+    after: (p) => openEditorTab(p, 'Notes'),
+  },
+  {
+    name: 'activity-editor-resources-empty',
+    programme: true,
+    takePen: true,
+    go: (p, slug, ids) => p.goto(`${BASE}/orgs/${slug}/plans/${ids.planId}`),
+    after: (p) => openEditorTab(p, 'Resources'),
+  },
 ];
 
 /**
@@ -621,6 +706,22 @@ async function toggleViewSwitch(page, pattern) {
  * Select the first activity from the canvas's parallel listbox and open its editor — the keyboard
  * route, because it needs no bar coordinates and it is a real path a planner has.
  */
+/**
+ * Open the activity editor and switch to one of its tabs, so the panel empty states can be
+ * photographed (`docs/specs/empty-state-consolidation/` M6, M8).
+ *
+ * Two of the eight sites M6 converted live behind a tab that nothing had ever opened — the Notes
+ * thread and the Resources assignment list — so the treatment they were given was reviewed as a
+ * diff and never as a picture. The tab is found by role and accessible name rather than by a test
+ * id: these are `Tabs` from `components/ui`, and a name change should break this loudly rather
+ * than quietly photograph whichever tab happened to be first.
+ */
+async function openEditorTab(page, name) {
+  await openActivityEditor(page);
+  await page.getByRole('tab', { name }).click();
+  await page.waitForTimeout(500);
+}
+
 async function openActivityEditor(page) {
   const listbox = page.getByRole('listbox', { name: 'Activities in the diagram' });
   await listbox.focus();
@@ -714,7 +815,13 @@ for (const width of widths) {
         // Needs BOTH contexts: the signed-in one to mint the link, and an anonymous one to view it
         // as a recipient would. Minting first also means `programme` seeding has already run.
         if (!ids) ids = await seedProgramme(page, slug);
-        const url = await mintShareLink(page, slug, ids.planId).catch(() => null);
+        // **A second plan, not the programme with its activities removed.** Deleting six
+        // activities would leave the plan carrying their deletion batch and a computed schedule
+        // that no longer describes it, which is a state the guest view can reach but is not the one
+        // this shot is named for. A plan nobody has put work in yet is the honest fixture, and it
+        // is cheap: one POST.
+        const planId = shot.emptyPlan ? await seedEmptyPlan(page, slug, ids.projectId) : ids.planId;
+        const url = await mintShareLink(page, slug, planId).catch(() => null);
         if (!url) {
           console.log(`${width}  ${shot.name}  SKIPPED — no share URL returned`);
           continue;

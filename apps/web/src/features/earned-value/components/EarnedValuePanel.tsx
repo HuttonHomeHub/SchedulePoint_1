@@ -332,13 +332,16 @@ export function EarnedValuePanel({
       </dl>
 
       {ev.activities.length === 0 ? (
-        // `role="status"` so the resolved empty state is announced when the query settles (WCAG 4.1.3).
-        <div
+        // `role="status"` so the resolved empty state is announced when the query settles
+        // (WCAG 4.1.3). It is passed to `NoticeStrip`, whose role is deliberately the caller's —
+        // a tone→role mapping would get this wrong for a mode band that wants neither.
+        <NoticeStrip
           role="status"
-          className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm"
-        >
-          No activities to measure yet. Add activities with cost or resources, then Recalculate.
-        </div>
+          emphasis="dashed"
+          density="comfortable"
+          messageFit="grow"
+          message="No activities to measure yet. Add activities with cost or resources, then Recalculate."
+        />
       ) : (
         <div
           className="overflow-x-auto"

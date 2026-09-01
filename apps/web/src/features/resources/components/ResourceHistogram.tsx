@@ -9,6 +9,7 @@ import { ResourceStackChart } from './ResourceStackChart';
 import { StackByControl } from './StackByControl';
 
 import { Button } from '@/components/ui/button';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 
 /**
  * The plan's **resource loading histogram** read view (M7 rung 5, ADR-0044 §3 / ADR-0035 §31) — a
@@ -21,6 +22,17 @@ import { Button } from '@/components/ui/button';
  * user reads the table — a real `<table>` with `scope`-ed headers, natively keyboard-navigable — rather
  * than an opaque graphic.
  */
+/**
+ * The one sentence both resource-loading surfaces show when there is nothing to plot.
+ *
+ * It lived in two files verbatim — this histogram and `resource-strip-panel` — which is two
+ * chances for one to be reworded and the other not, on two views of the same data
+ * (`docs/specs/empty-state-consolidation/` M6). Exported here because this is the component the
+ * strip hosts.
+ */
+export const NO_RESOURCE_LOADING_MESSAGE =
+  'No resource loading to show yet — assign resources with budgeted units and recalculate the schedule.';
+
 export function ResourceHistogram({
   orgSlug,
   planId,
@@ -105,10 +117,12 @@ export function ResourceHistogram({
           </Button>
         </div>
       ) : series.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-          No resource loading to show yet — assign resources with budgeted units and recalculate the
-          schedule.
-        </div>
+        <NoticeStrip
+          emphasis="dashed"
+          density="comfortable"
+          messageFit="grow"
+          message={NO_RESOURCE_LOADING_MESSAGE}
+        />
       ) : (
         <div className="flex flex-col gap-6">
           {histogram.data && histogram.data.curveNormalisedCount > 0 ? (
