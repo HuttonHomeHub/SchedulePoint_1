@@ -2071,16 +2071,21 @@ painter untouched, so TECH_DEBT #75's known overage is not attributable here). C
 accessibility and UX each blocked, and every blocking finding was folded with a regression test
 verified red first. What follows is what was deliberately **not** folded, with the reason.
 
-- **`MenuItem.itemId` bakes toolbar vocabulary into a general primitive.** It emits the literal
-  `data-toolbar-item`, and nine of `Menu`'s ten consumers are not toolbars. Kept as-is: the
-  alternative is a name-agnostic passthrough, which is a wider API for one caller, and renaming it
-  `toolbarItemId` would make the attribute and the prop disagree. Revisit when a second, non-toolbar
-  consumer wants a stable per-row locator — that is the point at which the generic shape earns its
-  keep rather than being speculative.
-- **Nested landmarks share a name.** With the Explorer subject showing, `<aside aria-label="Project
-Explorer">` wraps `<nav aria-label="Project Explorer">`, so a rotor lists the same words twice. Not
-  a WCAG failure. The fix is a prop telling `NavigatorRail` it is hosted rather than freestanding,
-  which is a change to a component eight screens render for a duplication on one.
+- ~~**`MenuItem.itemId` bakes toolbar vocabulary into a general primitive.**~~ **CLOSED 2026-09-01,
+  and the resolution was not the one this item weighed.** The item chose between keeping the prop,
+  a name-agnostic passthrough and a rename. It never asked whether anything used it: **zero call
+  sites**. So the prop was deleted rather than debated, and `menu.tsx:344` now records why, and the
+  condition for bringing it back — a caller that actually wants a stable per-row locator. An item
+  that argues three ways to shape an API for "one caller" is worth a `grep` before it is worth an
+  argument; this one had none.
+- ~~**Nested landmarks share a name.**~~ **STALE — the duplication no longer exists** (verified
+  2026-09-01). There is **no `<aside>` anywhere in `apps/web/src`**, so nothing wraps
+  `<nav aria-label="Project Explorer">`. It went with the Graphite drawer: ADR-0101 returned the
+  editor to a modal and the drawer mechanism was deleted (#156), and ADR-0109 D2 docked the
+  Explorer instead. `explorer-column.tsx:108-114` now carries the rule as a comment — the column
+  owns the width, the fold and the splitter and deliberately renders neither a landmark nor a
+  heading of its own, "which is how one panel comes to announce itself twice". Closed as fixed by
+  a decision made elsewhere, not as never-having-been-true.
 - **`localStorage` is written at drag frame rate.** `useResizablePanelPrefs` persists on every
   `setSize`, i.e. ~60×/s while a splitter is moving. Pre-existing (the Explorer rail and the activity
   panel have done this since ADR-0030); Graphite adds two more consumers of the same hook. Each write
@@ -3167,6 +3172,29 @@ without also clearing the selection (which would take the whole bar with it and 
 moot), and **that could not be settled from the code** — it needs a browser. Raised by the
 accessibility review and explicitly marked unverified there. If reachable it is WCAG 2.4.3, a class
 this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0096).
+
+> **Re-read 2026-09-01. The mechanism described above no longer exists; the hazard may, by a
+> different route, and the row is narrowed rather than closed.**
+>
+> **What is stale.** The item is written about a _toolbar item_ going `isVisible: false`, with
+> `Toolbar`'s roving-tabindex repair as the thing that fails to move `document.activeElement`.
+> ADR-0115 moved `clear-visual-placement` **off the command surface onto the selection bar**
+> (`plan-workspace-toolbar.tsx:826-828` says so in as many words), where it is **omitted** outside
+> Visual mode on ADR-0082's discriminator rather than hidden by a toolbar visibility flag. So the
+> named mechanism cannot be what happens.
+>
+> **What is not settled**, and the reachability question is now sharper rather than answered.
+> Flipping the mode from the mode control **moves focus to that control**, so focus cannot be on
+> `Clear visual start` at the moment of the flip — and there is **no keyboard shortcut for
+> scheduling mode** (searched; none). That closes the route the item imagined.
+>
+> The route it did not consider is the one this product is built for: `schedulingMode` is a
+> **plan-level** setting, so **another user can change it** and a refetch can unmount the control
+> under a reader whose focus is on it. That is ADR-0028's world, not a contrived case — and it
+> still needs a browser plus a two-session fixture to settle, which is why it stays open.
+>
+> Worth stating because it changes who would find it: the remaining path is not something a single
+> planner can do to themselves, so no solo journey will ever reproduce it.
 
 **(d) Two of three lens toggles offered to the product owner for promotion did not exist.** The
 `AskUserQuestion` options named `Critical path`, `Float paths` and `Baseline overlay`. Only the
