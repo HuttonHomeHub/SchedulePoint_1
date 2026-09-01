@@ -20,10 +20,19 @@ You review; you do not edit code.
 
 ## SchedulePoint context — where frontend performance actually bites
 
-- **The TSLD canvas is the hot surface**: Canvas 2D, layered and culled, budgeted at
-  ≤ 4 ms p95 draw at 2,000 activities (ADR-0026 §16). Per-frame work in the render
-  loop is the thing to look for — a per-frame recompute has slipped in before and
-  only review caught it.
+- **The TSLD canvas is the hot surface**: Canvas 2D, layered and culled. Its gate is
+  **ADR-0026 §9**, and it is expressed in **frames per second, not milliseconds** —
+  ≥ 45 fps @ 500 activities and ≥ 30 fps @ 2,000 under sustained pan/zoom/drag.
+  Per-frame work in the render loop is the thing to look for; a per-frame recompute
+  has slipped in before and only review caught it.
+  **Do not quote "≤ 4 ms p95 at 2,000 (ADR-0026 §16)" — this brief did, and it was
+  wrong on both halves** (`docs/TECH_DEBT.md` #75). 4 ms was the _measured_ p95 of a
+  throwaway prototype, recorded as a PASS against a ≤ 16 ms frame, never a budget;
+  and ADR-0026 has no §16 — that reference is §9's own unqualified pointer at
+  `docs/PROJECT_BRIEF.md` §16 Deployment, for the _hardware envelope_.
+  Real-hardware readings (2026-08-03, 2,016 activities): **3.9 ms p95 at Week zoom
+  with 0/600 frames dropped**, 8.9 ms at Fit with 10.2% dropped. Both PASS §9; the
+  Fit judder is the open question, and it is a frame-pacing one.
 - **Budgets are gated by call-count tests, not timings** — CI timings are noise.
   If you propose a budget assertion, propose it in that shape.
 - **The render layer is pure**: `features/tsld/render/` imports neither React nor

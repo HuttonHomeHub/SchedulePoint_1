@@ -2160,7 +2160,7 @@ export function TsldPanel({
         //
         // Only the dragged bar gets a ghost. The other N-1 still jump on release; that is the
         // preview gap `docs/TECH_DEBT.md` #108 is narrowed to, and it has a painting cost to
-        // measure against ADR-0026 §16 before it moves.
+        // measure against ADR-0026 §9 before it moves.
         const span =
           activity.earlyStart && activity.earlyFinish
             ? daysBetween(activity.earlyStart, activity.earlyFinish)

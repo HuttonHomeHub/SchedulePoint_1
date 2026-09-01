@@ -15,7 +15,9 @@ import type { RenderActivity, Viewport } from './render-model';
  * `PaintFrame.laneRows()` which lanes have content, and that getter buckets and sorts the visible
  * activity set. It is lazy on purpose (`paint-frame.ts`), and a paint with the labels and dates
  * layers off never builds it — so reaching for it here would make every frame pay for a build this
- * layer has no use for. The painter is already 4–6× over ADR-0026 §16's budget
+ * layer has no use for. The painter's cost is measured rather than assumed (`docs/TECH_DEBT.md` #75; the
+ * "4–6× over ADR-0026 §16" this line used to claim was a headless software-rasterised
+ * figure against a budget that never existed)
  * (`docs/TECH_DEBT.md` #75); a new layer that scales with plan size is exactly what must not ship.
  *
  * The discriminating case is therefore the **1,000-activity** one: the same viewport, two hundred

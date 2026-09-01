@@ -1768,7 +1768,7 @@ export interface InteractionOverlay {
    * Outline-plus-faint-fill deliberately, never the full-fidelity treatment: the grabbed bar
    * carries the labelled ghost, and N labelled ghosts would multiply the frame's text cost for
    * detail the planner already has — the peers' source bars stay lit until release. Absent ⇒
-   * not one call ⇒ parity, which is the whole draw-budget argument (ADR-0026 §16): the field is
+   * not one call ⇒ parity, which is the whole draw-budget argument (ADR-0026 §9): the field is
    * only ever populated while a plural drag is in flight.
    */
   peers?: readonly Rect[] | null;
