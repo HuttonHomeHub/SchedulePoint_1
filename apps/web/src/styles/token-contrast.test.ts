@@ -71,7 +71,11 @@ function ratio(tokens: Map<string, string>, fillToken: string, inkToken: string)
 /** Text pairs — WCAG 1.4.3 Contrast (Minimum), 4.5:1. */
 const TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: string]> = [
   ['--background', '--foreground', 'body text on the surface'],
-  ['--background', '--muted-foreground', 'secondary text on the surface'],
+  // **Two consumers, one pair.** The second arrived when the WBS band's derived bucket stopped
+  // being a filled bar: its name now sits on the diagram's ground rather than on a fill of its
+  // own, which is what this row already validates for every scope including `canvas`. A third
+  // row saying the same thing would be the duplication this file merged away above.
+  ['--background', '--muted-foreground', 'secondary text, and the Unassigned bucket’s name'],
   ['--background', '--destructive-text', 'an error message on the surface'],
   ['--background', '--success-text', 'a success message on the surface'],
   ['--background', '--warning-text', 'a warning message on the surface'],
@@ -160,7 +164,10 @@ const NON_TEXT_PAIRS: ReadonlyArray<readonly [fill: string, ink: string, why: st
   // reader has selected, the accent fill — and `--accent` is a different value from `--background`
   // in every theme, so a line validated only against the page would be the thing that vanishes on
   // exactly the row somebody is looking at.
-  ['--background', '--muted-foreground', 'a dependency arrow against the chart ground'],
+  // Second consumer, same pair: the WBS band's derived bucket is an unfilled BRACKET stroked in
+  // `--muted-foreground` on the diagram ground, so it is a graphical object carrying meaning under
+  // 1.4.11 exactly as an arrow is.
+  ['--background', '--muted-foreground', 'a dependency arrow, and the Unassigned bucket’s bracket'],
   ['--accent', '--muted-foreground', 'a dependency arrow crossing the selected row'],
   // **The Gantt's constraint badge (M5).** A small mark beside a bar saying "this activity is
   // pinned", which sustains awareness after the one-per-session note that explained the moment is
@@ -206,15 +213,30 @@ const CRITICALITY_PAIRS: ReadonlyArray<readonly [a: string, b: string, why: stri
  * **The WBS band (ADR-0063), which this matrix had no entry for at all.**
  *
  * Added by ADR-0102's accessibility gate, which found two live failures the 216 assertions above
- * could not see. The reason they could not is worth keeping: the band paints its name on whichever
- * of TWO fills applies, and reuses `--muted-foreground` — a token this matrix only ever validates
- * as INK — as the derived bucket's FILL. There is no concept here of "a token normally used as ink,
- * repurposed as a fill, then painted with a different ink than the one it was validated with", so
- * the pairing was invisible by construction rather than by oversight.
+ * could not see. **The reason they could not is the part worth keeping**, because it is a shape
+ * this file can be blind to again: the band painted its name on whichever of TWO fills applied, and
+ * reused `--muted-foreground` — a token this matrix only ever validates as INK — as the derived
+ * bucket's FILL. There is no concept here of "a token normally used as ink, repurposed as a fill,
+ * then painted with a different ink than the one it was validated with", so the pairing was
+ * invisible by construction rather than by oversight.
  *
  * Both were measured before being fixed: the derived bucket's name at **3.01:1** against 4.5, and
  * the selected summary's inset ring at **1.68:1** against 3. Both reached the exported and printed
  * diagram too, since `resolvePrintWbsBandPalette` delegates to the same resolver.
+ *
+ * **`--muted-foreground` is no longer a fill anywhere in this band** (`docs/TECH_DEBT.md` #71,
+ * `docs/specs/wbs-bucket-bracket/`). The derived bucket became an unfilled bracket, so the
+ * ink-as-fill inversion above is gone rather than merely validated — which is the stronger fix,
+ * since the blind spot it exploited still exists for the next painter that tries it.
+ *
+ * **The derived bucket therefore has no row of its own here, and that is a decision.** Its two
+ * pairings are both against the diagram ground, and both are already swept across every scope
+ * — `canvas` included — by the generic rows above: the name by `--background`/`--foreground`
+ * in `TEXT_PAIRS`, the bracket by `--background`/`--muted-foreground` in `NON_TEXT_PAIRS`. Each of
+ * those rows carries the band's reason in its own comment, which is this file's established
+ * two-consumers-one-pair convention. A third row restating them would be the duplication that
+ * convention exists to prevent — but an ABSENT row reads as an oversight unless somebody says it
+ * is not, which is what this paragraph is for.
  *
  * The ring is asserted against the BAR rather than the ground on purpose: `paintWbsBand` strokes it
  * inset (`bar.x + 0.5`, `bar.w - 1`), unlike the scene's ring, which is offset 2px outward and
@@ -225,7 +247,6 @@ describe('the WBS band pairs the ink it paints with the fill it paints on', () =
 
   it.each([
     ['--primary', '--primary-foreground', "a real summary's name on its bar", 4.5],
-    ['--muted-foreground', '--background', "the Unassigned bucket's name on its fill", 4.5],
     ['--primary', '--foreground', "the selected summary's INSET ring on its bar", 3],
   ] as const)('%s / %s — %s', (fill, ink, _why, floor) => {
     const value = ratio(tokens, fill, ink);

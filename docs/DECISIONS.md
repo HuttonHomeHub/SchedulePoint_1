@@ -3113,3 +3113,39 @@ the strength of a plan written without sight of the shape.
 entry, on the ADR-0093 precedent. That is the product owner's call, not the author's — an ADR is permanent and
 this establishes a rule without adding a gate. Recorded as a disagreement rather than resolved
 quietly.
+
+## 2026-09-01 — The WBS band's derived bucket, and a claim settled by looking
+
+`docs/TECH_DEBT.md` #71 asked for a non-colour cue on the band's derived **Unassigned** bucket,
+which was the same rounded rectangle as a real phase in a different fill — so at any width where
+`truncateToWidth` drops the label, colour was the only channel left (WCAG 1.4.1).
+
+**Two specialist reviews reached opposite remedies**, and the disagreement was real rather than a
+misunderstanding. Accessibility wanted the fill kept and a dashed outline added, on the reasoning
+that a dash "stays visually distinct at any bar height/width above a couple of px", and objected to
+the bracket because `derivedLabel` was `--background` — the canvas ground itself — so removing the
+fill would paint the name invisible. UX wanted the bracket, matching the Gantt's stated vocabulary,
+and answered that objection by moving the ink.
+
+**What settled it was a mockup, not an argument.** Both treatments were drawn on a real canvas at
+five bar widths using the product's own `oklch()` tokens read through `getComputedStyle`, its
+geometry constants, `truncateToWidth` copied verbatim, and its 11px IBM Plex Sans — with one
+control, **Remove colour**, which is the actual 1.4.1 test. At 12px with colour withdrawn the
+dashed outline reads as a slightly textured block rather than a different kind of object, because
+`--muted-foreground` and `--foreground` are both mid-greys once hue is gone. The product owner's
+words were that they could not see the dashed line and it "looks similar to what we have today".
+
+So a reasoned claim from a specialist review was falsified by rendering it. Worth recording for
+the same reason ADR-0090's and ADR-0091's width estimates are: **the review was careful, cited its
+sources, and was wrong about what a thing looks like** — which is not a class of question reading
+can answer.
+
+The accessibility objection was not wrong, only scoped to a careless version of the bracket: the
+ink and the fill are one change, and the spec says so.
+
+**Process notes.** The change moves what `token-contrast.test.ts` asserts, so ADR-0105 made it
+spec-first (`docs/specs/wbs-bucket-bracket/`) rather than a register row. The spec corrected three
+claims in its own brief — most usefully that the band has a golden paint log to re-baseline (it has
+none; `paint.wbs-band.test.ts` is its first paint-level test) and that it appears in the screenshot
+harness (it does not: `wbsBand` is absent from `DEFAULT_VIEW_TOGGLES`, so the band has never been
+photographed by anything).

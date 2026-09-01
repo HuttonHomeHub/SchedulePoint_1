@@ -2219,14 +2219,21 @@ export function paintResourceStrip(
  */
 export interface WbsBandPalette {
   bar: string;
+  /** The derived bucket's **bracket stroke** — not a fill; see `paintWbsBand` and #71. */
   derived: string;
   rule: string;
   /** Ink for a real summary's name, painted on `bar`. */
   label: string;
   /**
-   * Ink for the derived "Unassigned" bucket's name, painted on `derived`.
+   * Ink for the derived "Unassigned" bucket's name, painted on the canvas **ground**.
    *
-   * **A separate field because `derived` is a separate fill, and one ink cannot serve both.** The
+   * **It was painted on `derived` until that stopped being a fill** (`docs/TECH_DEBT.md` #71). The
+   * history below is kept because the measurement is the useful part, and because the token it
+   * used to hold — `--background`, i.e. the ground itself inside the canvas scope — would have
+   * rendered the name invisible the moment the fill went. The bracket and this ink are one change.
+   *
+   * **A separate field because the two names sit on different things, and one ink cannot serve
+   * both.** The
    * band paints its name on whichever fill applies, and reused `label` for both until an
    * accessibility gate measured it: `label` pairs with `bar` at 4.86:1 and landed on `derived` at
    * **3.01:1**, a live 1.4.3 failure on any plan with an ungrouped activity — which is most of
@@ -2293,11 +2300,55 @@ export function paintWbsBand(
   }
 
   for (const bar of bars) {
-    // The derived bucket reads differently from a real summary on purpose: one is a grouping the
-    // planner made, the other is the app observing that some work has no grouping at all.
-    ctx.fillStyle = bar.id === null ? palette.derived : palette.bar;
-    if (beginRoundedRect(ctx, { x: bar.x, y: bar.y, w: bar.w, h: bar.h }, 3)) ctx.fill();
-    else ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
+    if (bar.id === null) {
+      /**
+       * **The derived bucket is an open bracket, not a bar** (`docs/TECH_DEBT.md` #71,
+       * `docs/specs/wbs-bucket-bracket/`).
+       *
+       * One of these two objects is a grouping the planner made; the other is the app observing
+       * that some work has no grouping at all. They used to be the same rounded rectangle in two
+       * fills — so at any width where the label is dropped below, colour was the only thing left
+       * telling them apart (WCAG 1.4.1). The Gantt had already decided this and says why in its
+       * own words: "the bucket is not a scheduled thing, it is the extent of things that are."
+       *
+       * **The rejected remedy was a dashed outline over the fill, and it was rejected by looking.**
+       * The accessibility review reasoned that a dash "stays visually distinct at any bar width
+       * above a couple of px". Mocked up on a real canvas with colour withdrawn — which is the
+       * actual 1.4.1 test — a 1px dash sitting ON a fill of similar tone reads as a slightly
+       * textured block rather than a different kind of object, because `--muted-foreground` and
+       * `--foreground` are both mid-greys once hue is gone. The product owner could not see it.
+       * Dash was also already carrying four meanings on this canvas (near-critical, Today, the
+       * cursor guideline, lag runs, float tails), and this would have been a fifth.
+       *
+       * Three sides with the foot left OPEN is the whole distinction from a rectangle: the first
+       * and last points sit at `y + h` and nothing runs between them at that y. Half-pixel offsets
+       * put the 1px stroke on a pixel rather than across two. Square corners, deliberately — a
+       * bracket is not a bar with its middle removed.
+       *
+       * **`setLineDash([])` is explicit and is not defensive tidiness.** The image export runs
+       * `paintScene` and then this painter through ONE shared context, so a dash left set by an
+       * earlier layer would be inherited here. Every dash site over there happens to reset today,
+       * which is a property nothing asserts, across a function boundary, on the one path where
+       * nobody is watching a screen.
+       *
+       * **Accepted and reported rather than special-cased:** below about 4px the two verticals are
+       * close enough to read as one mark. The `CRITICAL_FRINGE_MIN_H` precedent — state the limit,
+       * do not add a second glyph for it.
+       */
+      ctx.strokeStyle = palette.derived;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(bar.x + 0.5, bar.y + bar.h);
+      ctx.lineTo(bar.x + 0.5, bar.y + 0.5);
+      ctx.lineTo(bar.x + bar.w - 0.5, bar.y + 0.5);
+      ctx.lineTo(bar.x + bar.w - 0.5, bar.y + bar.h);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = palette.bar;
+      if (beginRoundedRect(ctx, { x: bar.x, y: bar.y, w: bar.w, h: bar.h }, 3)) ctx.fill();
+      else ctx.fillRect(bar.x, bar.y, bar.w, bar.h);
+    }
 
     if (bar.id !== null && bar.id === selectedId) {
       ctx.strokeStyle = palette.selection;
@@ -2314,8 +2365,9 @@ export function paintWbsBand(
     if (maxPx <= 0) continue;
     const text = truncateToWidth(bar.label, maxPx, measure);
     if (text.length === 0) continue;
-    // The ink follows the FILL, the way every inside label in this painter does. Using one ink for
-    // both fills is what put the derived bucket's name at 3.01:1.
+    // A real summary's ink follows its FILL, the way every inside label in this painter does; the
+    // bucket's now follows the GROUND, because it no longer has a fill to sit on. Using one ink for
+    // both is what put the derived bucket's name at 3.01:1.
     ctx.fillStyle = bar.id === null ? palette.derivedLabel : palette.label;
     ctx.fillText(text, bar.x + LABEL_PAD_PX, bar.y + bar.h / 2);
   }

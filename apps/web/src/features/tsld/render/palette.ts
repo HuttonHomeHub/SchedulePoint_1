@@ -456,6 +456,12 @@ export function lensLegendVarPalette(): LensPalette {
  * observing that some work has no grouping, not a grouping the planner made, and the two should
  * not read as the same kind of object. It is the muted token rather than a tint of the primary,
  * so the difference survives a theme switch instead of depending on one theme's contrast.
+ *
+ * **`derived` is a STROKE, not a fill** (`docs/TECH_DEBT.md` #71). The bucket is drawn as an open
+ * bracket, so this token is back to the ink role every other consumer uses it in. That closes the
+ * inversion — a token this codebase validates as ink, used as a fill, then painted with a
+ * different ink than the one it was validated with — which `token-contrast.test.ts` records as
+ * having been invisible to it by construction rather than by oversight.
  */
 export function resolveWbsBandPalette(root: Element): WbsBandPalette {
   const styles = getComputedStyle(root);
@@ -468,9 +474,13 @@ export function resolveWbsBandPalette(root: Element): WbsBandPalette {
     derived: token('--muted-foreground', '#7a8090'),
     rule: token('--border', '#2a2f3a'),
     label: token('--primary-foreground', '#ffffff'),
-    // Paired with `derived`, not with `bar` — see `WbsBandPalette.derivedLabel`. The canvas ground
-    // as ink on a muted fill is the same inversion `resolveLensPalette`'s `neutralInk` already uses.
-    derivedLabel: token('--background', '#ffffff'),
+    // The diagram's ink on the diagram's GROUND, because the derived bucket no longer has a fill of
+    // its own to sit on (`docs/TECH_DEBT.md` #71). It was `--background` — which inside the canvas
+    // scope resolves to `--canvas`, the ground itself — chosen as an inversion against the muted
+    // fill. Leaving it there while removing the fill would have painted the name in the ground
+    // colour: invisible, on screen, in the export and on paper. That is why the bracket and this
+    // line are one change and not two.
+    derivedLabel: token('--foreground', '#1a1a1a'),
     // The diagram's ink, not `--ring`: this stroke is painted INSET on the bar's own fill.
     selection: token('--foreground', '#1a1a1a'),
   };
