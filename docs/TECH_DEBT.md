@@ -2269,6 +2269,27 @@ pick one and apply it.
 >
 > Specified as its own pass rather than fixed here — 34 sites, four of which are dialogs and one
 > the unauthenticated guest view, and a consolidation with no structural gate re-drifts (ADR-0058).
+>
+> **M1 and M2 landed 2026-09-01** (`docs/specs/empty-state-consolidation/`). M1 is the gate,
+> written with an empty allow-list and **verified red in three directions** — against the real tree
+> (34 findings, matching the grep), against a NEW site added to `list-row.tsx`, and against a stale
+> allow-list entry. The middle one is the direction that matters and the easy one to skip: an
+> allow-list matching the tree exactly satisfies the main assertion forever while protecting
+> nothing. `red-run.md` records the state it was written to find, because that state disappears the
+> moment the list is populated.
+>
+> **M2 is the substantive half — five of the 34 are not empty states at all.** Three are
+> `query.isError` branches (plan, project, client) and two are permission refusals (the audit log,
+> a plan's cost and earned value). The two refusals' copy was already correct and both already
+> carried `role="status"`; what was wrong is that they wore this application's treatment for
+> absence, so a Viewer met "there is nothing here" about an organisation whose log is full. The
+> allow-list is 34 → 28 entries, which is the epic's progress metric.
+>
+> **What M2 established about its own tests is worth carrying**: the truncation defect its plan
+> named as most likely to ship **cannot be caught at the unit tier**, because `truncate` is
+> `text-overflow: ellipsis`, jsdom has no layout, and the text stays in the DOM whatever the box
+> does. Removing `messageFit="grow"` left the suite green. The assertion checks the class instead
+> and says so. **M3–M8 remain.**
 
 **b. `clients-loading` is a bare spinner** where `docs/UX_STANDARDS.md` expects a skeleton. Also
 pre-existing, and only visible now because the loading state had never been captured.
