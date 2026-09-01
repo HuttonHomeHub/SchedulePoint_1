@@ -1976,6 +1976,28 @@ reads, never link params. So the next step is a browser: run a journey with cons
 print the stack at the warning. **Do not change the route tree on the strength of the paragraph this
 one replaced** — it was written from the call sites rather than from the message.
 
+**The browser step ran on 2026-09-01, and it did not reproduce.** A throwaway probe in
+`e2e-overview` captured the message on **two independent channels** — `console.warn`/`error`/`log`
+patched via `addInitScript` (so before any app code), and Playwright's own channel-agnostic
+`page.on('console')` — across six routes: the overview, the clients list reached directly, the
+clients list reached by clicking, a client detail, a project detail and a plan detail. **Zero hits
+on every one.**
+
+**The zero means something because the probe carried a control**, which is the part worth copying:
+it emitted a `console.warn` carrying the message text and required BOTH channels to catch it. They
+did (1 hit each), so a zero above is the absence of the warning and not the absence of capture —
+the distinction this register keeps recording gates getting wrong. The guard was also confirmed
+satisfiable rather than assumed: the call site is a plain `console.warn` inside `try {}` at
+`@tanstack/router-core@1.171.22`'s `router.js:298`, conditioned on
+`process.env.NODE_ENV !== 'production'`, and the sweep ran against the Vite dev server.
+
+**What the probe does NOT cover, stated rather than implied:** the control exercises the capture,
+not the router's own code path; and the row also reports the warning in the **base** journey, whose
+specs carry no such listener, so those routes are untested. The row therefore stays open and
+narrows to one question — **does it still happen anywhere?** The next step is the listener in the
+base journey, not another read of the call sites. If that is also silent, this closes as
+unreproduced rather than as fixed, because nothing here was changed to fix it.
+
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
 **Status:** unverified
