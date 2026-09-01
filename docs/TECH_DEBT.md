@@ -1788,6 +1788,28 @@ diagnosis.
 counter assertion on `apiFetch` calls rather than on the last call's body, which would tell a
 double-submit apart from a slow one. Left open rather than guessed at.
 
+> **Both were done 2026-09-01. It still does not reproduce, and the second half shipped anyway.**
+>
+> **The reproduction attempt.** Vitest's CLI has no `--repeat` (it is a config option, and the row
+> assumed a flag), so the file was looped **20 times while a full `apps/web` run held the
+> machine** — the concurrency the row names as the condition. **Zero failures**, and the full run
+> underneath was itself green (589 files, 5,373 tests, 515 s), which matters because a full
+> `pnpm test` is the exact condition the one failure occurred in. With the five isolated runs
+> recorded when this was filed, that is **26 attempts and no reproduction**.
+>
+> The row stays **open** rather than closing as stale: one failure is still one failure, and a
+> cause nobody has found is not the same as a cause that is not there.
+>
+> **The counter landed regardless**, and that is the useful half — it costs one line and makes the
+> NEXT occurrence diagnosable instead of another shrug. The two candidates now fail differently: a
+> **slow** submit expires the `waitFor`, a **double** submit passes it and trips
+> `toHaveBeenCalledTimes(1)`. Without it they are the same red line — and because the case reads
+> `calls[0]`, a second call would otherwise go entirely unnoticed. Added to both submitting cases
+> in the file, with the reasoning at the first.
+>
+> Worth stating plainly: this does not fix anything. It converts an unreproducible failure into one
+> that would arrive with evidence attached.
+
 ### 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
 **Status:** unverified
