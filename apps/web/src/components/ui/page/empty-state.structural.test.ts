@@ -213,26 +213,6 @@ const ALLOWED: { file: string; match: string; note: string }[] = [
     match: 'border-border text-muted-foreground flex items-center justif',
     note: 'K4 \u2014 page-filling; this same file uses NoticeStrip correctly at :2700 \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
-  {
-    file: 'routes/audit-log.tsx',
-    match: 'border-border text-muted-foreground mt-6 rounded-lg border b',
-    note: 'K6 \u2014 NOT an empty state: a permission refusal with role="status". Must not become an EmptyState \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'routes/client-detail.tsx',
-    match: 'border-border text-muted-foreground mt-4 rounded-lg border b',
-    note: 'K6 \u2014 NOT an empty state: a not-found/no-access error. Must not become an EmptyState \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'routes/plan-detail.tsx',
-    match: 'border-border text-muted-foreground mt-4 rounded-lg border b',
-    note: 'K6 \u2014 NOT an empty state: a not-found/no-access error. Must not become an EmptyState \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'routes/project-detail.tsx',
-    match: 'border-border text-muted-foreground mt-4 rounded-lg border b',
-    note: 'K6 \u2014 NOT an empty state: a not-found/no-access error. Must not become an EmptyState \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
 ];
 
 describe('the hand-rolled empty-state treatment', () => {

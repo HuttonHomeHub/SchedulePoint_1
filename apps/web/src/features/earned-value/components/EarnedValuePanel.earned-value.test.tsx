@@ -131,6 +131,32 @@ describe('EarnedValuePanel', () => {
     expect(
       screen.queryByText('Couldn’t load earned value. Please try again.'),
     ).not.toBeInTheDocument();
+
+    /**
+     * **The second sentence, the role, and one thing this tier cannot see**
+     * (`docs/specs/empty-state-consolidation/` M2-T2).
+     *
+     * The role is asserted for the reason its own comment at the call site gives: a reader not
+     * focused on the panel hears the permission boundary when the query resolves out of the
+     * spinner (WCAG 4.1.3). **Verified red** by deleting the attribute.
+     *
+     * The second sentence is asserted because it names who CAN see the figures — the only
+     * actionable thing on this screen — and a heading-only assertion passes without it.
+     *
+     * **`messageFit` is asserted by its CLASS, and that is a weaker check stated as one.**
+     * `NoticeStrip` defaults to `truncate`, which the plan names as the defect most likely to
+     * ship here. Removing `messageFit="grow"` was tried and **this suite stayed green**: `truncate`
+     * is `text-overflow: ellipsis`, jsdom has no layout, and the text stays in the DOM whatever the
+     * box does — so `toHaveTextContent` structurally cannot see the clipping. Asserting the class
+     * catches the prop going missing, which is the realistic regression; it does not prove the
+     * sentence is legible. Only a picture does that, which is why the milestone also takes a shot.
+     */
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent(
+      'Only Planners and Org Admins can view cost and earned-value figures for this plan.',
+    );
+    expect(notice.querySelector('p')?.className).toContain('flex-1');
+    expect(notice.querySelector('p')?.className).not.toContain('truncate');
   });
 
   it('shows a retryable error for any other failure', async () => {
