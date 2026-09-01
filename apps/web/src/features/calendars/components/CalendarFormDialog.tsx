@@ -32,6 +32,7 @@ import { FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { calendarErrorMessage } from '@/lib/api/calendar-scope-errors';
+import { buildReport } from '@/lib/unsaved-work/report';
 
 /**
  * Why the shared organisation library is out of reach, and what to do instead. One constant so the
@@ -180,13 +181,10 @@ export function CalendarFormDialog({
   const weekChanged = JSON.stringify(week) !== JSON.stringify(seededWeek);
   useRegisterUnsavedWork(
     open && (isDirty || weekChanged)
-      ? {
-          subject: 'This calendar',
-          scopes: [
-            ...(isDirty ? [{ key: 'details', label: 'Calendar details', savable: true }] : []),
-            ...(weekChanged ? [{ key: 'week', label: 'Working week', savable: true }] : []),
-          ],
-        }
+      ? buildReport('This calendar', [
+          { when: isDirty, key: 'details', label: 'Calendar details', savable: true },
+          { when: weekChanged, key: 'week', label: 'Working week', savable: true },
+        ])
       : null,
   );
   const seedKey = `${String(open)}:${calendar?.id ?? 'new'}`;

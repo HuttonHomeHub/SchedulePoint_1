@@ -37,6 +37,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { WindowListEditor } from '@/components/ui/window-list-editor';
 import { ApiFetchError } from '@/lib/api/client';
 import { formatCalendarDate } from '@/lib/format-date';
+import { buildReport } from '@/lib/unsaved-work/report';
 
 /** True when the error is the API's 409 "an exception already exists for that date". */
 function isDuplicateException(error: unknown): boolean {
@@ -357,13 +358,10 @@ export function CalendarExceptionsEditor({
    */
   useRegisterUnsavedWork(
     open && (isDirty || editDirty)
-      ? {
-          subject: 'This calendar exception',
-          scopes: [
-            ...(isDirty ? [{ key: 'add', label: 'New exception', savable: true }] : []),
-            ...(editDirty ? [{ key: 'edit', label: 'Exception being edited', savable: true }] : []),
-          ],
-        }
+      ? buildReport('This calendar exception', [
+          { when: isDirty, key: 'add', label: 'New exception', savable: true },
+          { when: editDirty, key: 'edit', label: 'Exception being edited', savable: true },
+        ])
       : null,
   );
 

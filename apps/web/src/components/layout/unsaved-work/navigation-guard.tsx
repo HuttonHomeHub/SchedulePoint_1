@@ -1,8 +1,9 @@
 import { useBlocker } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef } from 'react';
 
-import { useUnsavedWorkRegistry } from './unsaved-work-provider';
+import { useUnsavedWorkRegistry, useUnsavedWorkReports } from './unsaved-work-provider';
 
+import { useAnnounce } from '@/components/ui/announcer';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { describeUnsavedWork, hasUnsavedWork } from '@/lib/unsaved-work/report';
 
@@ -43,6 +44,8 @@ export function NavigationGuard(): React.ReactElement | null {
   /** Where focus was when the navigation was attempted, so **Keep editing** can put it back. */
   const returnFocusTo = useRef<HTMLElement | null>(null);
 
+  const announce = useAnnounce();
+
   const shouldBlockFn = useCallback(
     ({ next, current }: { next?: { fullPath?: string }; current?: { fullPath?: string } }) => {
       const reports = registry?.read() ?? [];
@@ -64,15 +67,50 @@ export function NavigationGuard(): React.ReactElement | null {
   const resolver = useBlocker({ shouldBlockFn, enableBeforeUnload, withResolver: true });
 
   const blocked = resolver.status === 'blocked';
-  const reports = blocked ? (registry?.read() ?? []) : [];
+
+  /**
+   * **Subscribed, not read imperatively — and this is a fix, not a tidy-up.**
+   *
+   * `useUnsavedWorkRegistry` returns a `useMemo(…, [])` object, so its identity never changes.
+   * Nothing else here changes either while a confirmation is open. So the auto-proceed effect
+   * below — whose whole subject is work disappearing WHILE the dialog stands — had a dependency
+   * array that could not move, and the guard had nothing re-rendering it: the effect could only run
+   * at the moment `blocked` flipped, which is precisely the moment `shouldBlockFn` has just
+   * established there IS unsaved work. It fired in production only when something unrelated
+   * happened to re-render this component.
+   *
+   * `useUnsavedWorkReports` is the subscribing reader, and until now it had **no production
+   * caller** (`docs/TECH_DEBT.md` #184 recorded that, and kept it for a future consumer). This is
+   * that consumer. The provider's `bump()` is already change-gated — a re-render that produces a
+   * scope-for-scope identical report does not notify — so subscribing costs nothing per keystroke.
+   *
+   * The two blocker callbacks deliberately keep reading `registry` imperatively: they are
+   * `useCallback([registry])`, and making them depend on a changing value would re-register the
+   * blocker on every registry change, which `navigation-guard.test.tsx` counts.
+   */
+  const liveReports = useUnsavedWorkReports();
+  const reports = blocked ? liveReports : [];
 
   /**
    * The work went away while the dialog was open — a save landed, or the surface unmounted. Let the
    * navigation through rather than asking about something that no longer exists.
+   *
+   * **And say so** (`docs/TECH_DEBT.md` #184). This completes a navigation with no gesture from the
+   * reader: the dialog they were reading disappears and the page changes underneath them, which for
+   * anyone not watching the screen is an unexplained context change and for anyone mid-sentence in
+   * a screen reader is the sentence being cut off. The announcement is the only channel that
+   * carries the reason, because visually the answer is obvious — the page moved — and audibly it is
+   * not.
+   *
+   * It fires INSIDE the effect rather than beside `proceed()` at a call site, because there is no
+   * call site: this is the one path that proceeds without anybody pressing anything.
    */
   useEffect(() => {
-    if (blocked && !hasUnsavedWork(registry?.read() ?? [])) resolver.proceed?.();
-  }, [blocked, registry, resolver]);
+    if (blocked && !hasUnsavedWork(liveReports)) {
+      announce('Your changes were saved, so leaving the page no longer discards anything.');
+      resolver.proceed?.();
+    }
+  }, [announce, blocked, liveReports, resolver]);
 
   /**
    * Put focus back where the reader left it — **after** the dialog has gone, never inside the click

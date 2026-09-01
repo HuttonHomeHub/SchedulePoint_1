@@ -40,6 +40,42 @@ export interface UnsavedWorkReport {
   readonly scopes: readonly UnsavedScope[];
 }
 
+/** A scope that may or may not be in the report, depending on {@link when}. */
+export interface UnsavedScopeCandidate extends UnsavedScope {
+  /** Include this scope? Typically a form's `isDirty`, or a value comparison. */
+  readonly when: boolean;
+}
+
+/**
+ * Assemble a report from candidates, keeping the ones whose {@link UnsavedScopeCandidate.when} is
+ * true.
+ *
+ * **Why a helper rather than four conditional spreads** (`docs/TECH_DEBT.md` #184). The four call
+ * sites had **fourteen** occurrences of `...(cond ? [{ key, label, savable }] : [])` between them
+ * — six in the activity editor alone. Every one was correct; the idiom is the risk, because it
+ * buries the condition inside array-spread punctuation where a misplaced bracket reads as
+ * formatting rather than as a scope that can never be reported. ADR-0074 records that exact shape
+ * going wrong elsewhere (`...(FLAG ? [route] : [])` widens to include the route in BOTH branches,
+ * so typecheck cannot catch it).
+ *
+ * Written as a declarative list, a reader compares conditions down one column instead of parsing
+ * a spread per line, and the assembly is independently testable rather than re-derived per dialog.
+ */
+export function buildReport(
+  subject: string,
+  candidates: readonly UnsavedScopeCandidate[],
+): UnsavedWorkReport {
+  return {
+    subject,
+    // Rebuilt rather than spread, so a `when` cannot leak into the report a consumer reads. The
+    // extra field is harmless today and would be one more thing a future `UnsavedScope` consumer
+    // has to know not to trust.
+    scopes: candidates
+      .filter((c) => c.when)
+      .map((c) => ({ key: c.key, label: c.label, savable: c.savable })),
+  };
+}
+
 export function hasUnsavedWork(reports: readonly UnsavedWorkReport[]): boolean {
   return reports.some((r) => r.scopes.length > 0);
 }

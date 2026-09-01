@@ -67,7 +67,11 @@ import { ActivityLogicPanel } from '@/features/dependencies';
 import { ActivityResourcesPanel } from '@/features/resources';
 import { ActivityMembersPanel } from '@/features/wbs';
 import { effectiveHoursPerDay } from '@/lib/effective-hours-per-day';
-import { describeUnsavedWork, type UnsavedWorkReport } from '@/lib/unsaved-work/report';
+import {
+  buildReport,
+  describeUnsavedWork,
+  type UnsavedWorkReport,
+} from '@/lib/unsaved-work/report';
 import { cn } from '@/lib/utils';
 
 type TabKey = ActivityEditorTab;
@@ -385,34 +389,50 @@ export function ActivityEditor({
    * unsaved AND unsavable, and the reader is told so rather than let go in silence.
    */
   const unsavedReport = useMemo<UnsavedWorkReport>(
-    () => ({
-      subject: 'This activity',
-      scopes: [
-        ...(general.isDirty
-          ? [{ key: 'general', label: 'General', savable: gating.general.writable }]
-          : []),
-        ...(scheduling.isDirty
-          ? [{ key: 'scheduling', label: 'Scheduling', savable: gating.general.writable }]
-          : []),
-        ...(cost.isDirty && gating.cost.readable
-          ? [{ key: 'cost', label: 'Cost', savable: gating.cost.writable }]
-          : []),
+    () =>
+      buildReport('This activity', [
+        {
+          when: general.isDirty,
+          key: 'general',
+          label: 'General',
+          savable: gating.general.writable,
+        },
+        {
+          when: scheduling.isDirty,
+          key: 'scheduling',
+          label: 'Scheduling',
+          savable: gating.general.writable,
+        },
+        {
+          when: cost.isDirty && gating.cost.readable,
+          key: 'cost',
+          label: 'Cost',
+          savable: gating.cost.writable,
+        },
         // The labels are the SECTION HEADINGS a planner actually sees, not shorthand. The first
         // version said 'Progress', 'Value measure' and 'Steps' — and 'Progress' is also the name of
         // the TAB that hosts all three, so the dialog could say "Progress, Value measure have
         // unsaved changes", naming a tab and a string that appears nowhere on screen. Found by the
         // ux review; the spec had named the right labels and the code had not used them.
-        ...(progressDirty.progress
-          ? [{ key: 'progress', label: 'Reported progress', savable: gating.progress.writable }]
-          : []),
-        ...(progressDirty.measure
-          ? [{ key: 'measure', label: MEASURE_SECTION_TITLE, savable: gating.progress.writable }]
-          : []),
-        ...(progressDirty.steps
-          ? [{ key: 'steps', label: 'Weighted steps', savable: gating.steps.writable }]
-          : []),
-      ],
-    }),
+        {
+          when: progressDirty.progress,
+          key: 'progress',
+          label: 'Reported progress',
+          savable: gating.progress.writable,
+        },
+        {
+          when: progressDirty.measure,
+          key: 'measure',
+          label: MEASURE_SECTION_TITLE,
+          savable: gating.progress.writable,
+        },
+        {
+          when: progressDirty.steps,
+          key: 'steps',
+          label: 'Weighted steps',
+          savable: gating.steps.writable,
+        },
+      ]),
     [
       general.isDirty,
       scheduling.isDirty,

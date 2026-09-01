@@ -2445,9 +2445,19 @@ rest, recorded rather than carried in someone's head._
   move for the same reason. The six-scope sentence — which no test had ever read, which is how it
   shipped unpunctuated — is now asserted, with three pinned beside it so the threshold has both
   sides.
-- **Silent auto-proceed.** If the registry goes clean while the confirmation is open, the guard
-  calls `proceed()` and the navigation completes with no announcement — an unexpected context change
-  while the reader may be mid-sentence. Low likelihood; nothing currently guards it.
+- ~~**Silent auto-proceed.**~~ **CLOSED 2026-09-01, and the item understated it: the auto-proceed
+  was not silent, it was _unreliable_.** `NavigationGuard` read the registry imperatively through
+  `useUnsavedWorkRegistry`, whose value is a `useMemo(…, [])` — so nothing subscribed the guard to
+  registry changes, and the effect's dependency array could not move while a confirmation stood. It
+  could fire only if something unrelated happened to re-render the component. Verified: with the
+  pre-fix effect restored, `proceed` is not called at all in the new case.
+  The fix gives `useUnsavedWorkReports` its **first production caller** — the subscribing reader
+  this register recorded on 2026-08-31 as having none, kept "for a future consumer"; this is that
+  consumer. The two blocker callbacks deliberately keep reading imperatively, because making them
+  depend on a changing value would re-register the blocker on every registry change, which the
+  suite counts. The announcement rides on the working subscription and says why the page moved:
+  the visual channel needs nothing (the page moved, which is its own explanation) and the audible
+  one had nothing at all.
 
 **From the component review**
 
@@ -2462,13 +2472,14 @@ rest, recorded rather than carried in someone's head._
   is now written where the next reader will reach for that option: `WeightedStepsPanel` does not use
   `useScopeForm`, so an option there would cover two panels of three — the one-and-not-its-neighbour
   shape.
-- **Fourteen conditional array spreads** across the four report builders _(recounted 2026-09-01;
-  the row said thirteen: six in `ActivityEditorDialog.tsx:390-410`, four in
-  `ActivityCreateDialog.tsx:299-308`, two each in the two calendar dialogs)_
-  (`...(cond ? [{ key, label, savable }] : [])`). A pure `buildReport(subject, scopes)` helper in the
-  already-React-free `lib/unsaved-work/report.ts` would read declaratively and be independently
-  testable. Every current call site is correct; the idiom is the risk, and ADR-0074 records this
-  exact shape going wrong elsewhere.
+- ~~**Fourteen conditional array spreads** across the four report builders~~ **CLOSED 2026-09-01.**
+  `buildReport(subject, candidates)` lives in the already-React-free `lib/unsaved-work/report.ts`
+  and all four builders call it; each scope is now one object with a `when` field, so a reader
+  compares conditions down a column instead of parsing a spread per line. The helper **rebuilds**
+  each scope rather than spreading the candidate, so `when` cannot leak into what a consumer reads
+  — pinned by a key-set assertion, which `toMatchObject` would have missed. Every call site was
+  correct before and after; the idiom was the risk, and ADR-0074 records this exact shape going
+  wrong elsewhere.
 
 **From the security review, and it is about my own conduct**
 
@@ -2480,6 +2491,23 @@ rest, recorded rather than carried in someone's head._
   red), but **no journey opens the in-app `ConfirmDialog` at all**, so the "Keep editing" focus
   return is asserted nowhere a real `<dialog>` exists. That matters because the focus defect the
   accessibility review found was invisible to jsdom by construction.
+
+  > **Assessed 2026-09-01, and the answer is that the journey cannot be written honestly today —
+  > which is a bigger finding than the gap it was filed as.** Enumerated: there are **four**
+  > registrants (`ActivityEditorDialog`, `ActivityCreateDialog`, `CalendarFormDialog`,
+  > `CalendarExceptionsEditor`, the last rendered inside the third), and **every one of them lives
+  > inside a modal `<dialog>`** — `dialog.tsx:70` calls `showModal()`. A modal dialog puts
+  > everything behind it in the browser's top layer and makes it `inert`, so while any of them holds
+  > unsaved work there is **no in-app link a planner or a test can reach**. ADR-0108 recorded
+  > exactly this about the editor ("never reachable while it was open — for a test or a planner")
+  > and the register did not carry the consequence forward: the guard's in-app half has no reachable
+  > trigger at all. Its `beforeunload` half is reachable and IS covered.
+  >
+  > So this is ADR-0081's shape rather than a coverage gap — a capability with no entry point — and
+  > writing a journey now would mean driving something the product cannot do. **What would close
+  > it** is the first non-modal registrant (an inline form, or a drawer-hosted editor — see #156),
+  > at which point the journey becomes both possible and owed. Filed here rather than as a new row
+  > because it is the same finding one level down.
 
 **Why Back is unresolved**, since it belongs beside the above: instrumented in a real browser,
 `shouldBlockFn` is **never called** on `page.goBack()` while the guard is mounted and the URL does
