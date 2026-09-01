@@ -93,6 +93,8 @@ import {
   pasteActivitiesCommand,
   deleteActivityCommand,
   dependencyAddCommand,
+  dependencyEditChanged,
+  dependencyEditCommand,
   dependencyRemoveCommand,
   durationResizeCommand,
   lagDragCommand,
@@ -1312,6 +1314,31 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     announce,
   });
 
+  // Record an **Edit link** dialog save on the undo stack (`docs/TECH_DEBT.md` #65) — the third
+  // way a link changes, and the last one that recorded nothing. Called by the Logic panel with the
+  // pre-edit row and the PATCH response; the inverse restores type + lag + lag calendar in ONE
+  // PATCH, because the forward write is atomic and a partial inverse is a new edit wearing an
+  // undo's label. A no-op unless `VITE_UNDO_REDO` is on.
+  //
+  // A save that changed nothing records nothing: the dialog resends the whole form, so reading a
+  // link and pressing Save is a real PATCH with no field different, and a step whose inverse moves
+  // nothing pushes the planner's genuine last edit one press further away. `dependencyEditChanged`
+  // compares MINUTES — two lags an hour apart are equal in days, so a days comparison would drop
+  // the step for exactly the edits this seam exists to make undoable.
+  const recordDependencyEdit = useCallback(
+    (before: DependencySummary, after: DependencySummary): void => {
+      if (!UNDO_REDO_ENABLED) return;
+      if (!dependencyEditChanged(before, after)) return;
+      editHistory.record(
+        dependencyEditCommand({
+          updateDependency: updateDependency.mutateAsync,
+          before,
+          after,
+        }),
+      );
+    },
+    [editHistory, updateDependency.mutateAsync],
+  );
   // TSLD dependency-draw (M2): a drag from one bar's edge to another becomes a link. The route
   // composes the create + recalc (ADR-0026 D8). A cycle or duplicate (ADR-0021) is a 422/409 the
   // engine rejects — surfaced non-destructively (nothing was created), never retried.
@@ -2100,6 +2127,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     recordDissolveBoundary,
     recordDependencyRemove,
     recordDependencyAdd,
+    recordDependencyEdit,
     // Undo/redo user-visible surface (ADR-0048 M3): the toolbar Undo/Redo items + the workspace
     // keybindings drive this, sharing the ONE history instance the recording seams above push onto.
     // Inert (never invoked) unless `VITE_UNDO_REDO` is on.

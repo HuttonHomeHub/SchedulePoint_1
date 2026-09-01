@@ -39,6 +39,7 @@ export function ActivityLogicPanel({
   enabled = true,
   onAdded,
   onRemoved,
+  onEdited,
   onNudgeLag,
   crossPlanSlot,
   notesSlot,
@@ -84,6 +85,17 @@ export function ActivityLogicPanel({
    * Absent (the default) leaves the panel byte-identical.
    */
   onRemoved?: (dependency: DependencySummary) => void;
+  /**
+   * Called with the pre-edit row and the saved row after a successful **Edit link** save
+   * (`docs/TECH_DEBT.md` #65) — the third way a link changes, and until now the only one that
+   * recorded nothing. Same shape and same reason as {@link onAdded} / {@link onRemoved}; absent
+   * (the default) leaves the panel byte-identical.
+   *
+   * That gap was visible in this very component: `Shift+←/→` on a row is undoable via
+   * {@link onNudgeLag} and the tip below advertises it, twenty lines from the dialog that ignored
+   * it.
+   */
+  onEdited?: (before: DependencySummary, after: DependencySummary) => void;
   /**
    * Keyboard lag nudge (ADR-0052 M3): with a row's Edit/Remove button focused, `Shift+←/→` nudges
    * that link's lag ±1 day — the keyboard equivalent of the canvas lag-anchor drag, landed here
@@ -286,6 +298,7 @@ export function ActivityLogicPanel({
             {...(planCalendarId === undefined ? {} : { planCalendarId })}
             planActivities={planActivities ?? []}
             {...(editing ? { dependency: editing } : {})}
+            {...(onEdited ? { onSaved: onEdited } : {})}
           />
           <ConfirmDialog
             open={removing !== undefined}

@@ -72,6 +72,7 @@ type Model = Parameters<typeof PlanDialogs>[0]['model'];
 const ACTIVITY = { id: 'a1', name: 'Excavate', type: 'TASK', durationType: 'FIXED_DURATION' };
 
 const recordDependencyRemove = vi.fn();
+const recordDependencyEdit = vi.fn();
 const nudgeDependencyLag = vi.fn();
 
 function makeModel(over: Record<string, unknown> = {}): Model {
@@ -92,6 +93,7 @@ function makeModel(over: Record<string, unknown> = {}): Model {
     logicRevealNotes: false,
     setLogicActivity: vi.fn(),
     recordDependencyRemove,
+    recordDependencyEdit,
     nudgeDependencyLag,
     resourcesActivity: undefined,
     setResourcesActivity: vi.fn(),
@@ -129,6 +131,20 @@ describe('the workspace hosts, with the convergence flag on', () => {
     render(<ActivityCrudDialogs model={makeModel()} />);
     const props = editorProps.mock.calls[0]![0] as { logic?: { onRemoved?: unknown } };
     expect(props.logic?.onRemoved).toBe(recordDependencyRemove);
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #65. Pinned by **identity** rather than by rendering the dialog and
+   * saving: what can go wrong here is not the callback's behaviour — its own suite covers that —
+   * but a host that never passes it. `ActivityLogicPanel` has two hosts under two flags, and
+   * ADR-0080 records `bulk` being wired into one and not the layout its flag selects, unit tests
+   * green throughout. So both hosts are asserted, and they were wired in one commit for the same
+   * reason.
+   */
+  it('hands the editor the undo seam for an edited link', () => {
+    render(<ActivityCrudDialogs model={makeModel()} />);
+    const props = editorProps.mock.calls[0]![0] as { logic?: { onEdited?: unknown } };
+    expect(props.logic?.onEdited).toBe(recordDependencyEdit);
   });
 
   it('hands the editor the coalesced keyboard lag nudge', () => {

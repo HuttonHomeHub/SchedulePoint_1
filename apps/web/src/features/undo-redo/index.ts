@@ -12,6 +12,8 @@ export {
   createLoeSpanCommand,
   deleteActivityCommand,
   dependencyAddCommand,
+  dependencyEditChanged,
+  dependencyEditCommand,
   dependencyRemoveCommand,
   visualStartCommand,
   autoArrangeCommand,
