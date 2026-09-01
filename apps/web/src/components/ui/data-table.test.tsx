@@ -117,6 +117,56 @@ describe('DataTable', () => {
       expect(screen.getByText('only Alpha')).toBeInTheDocument();
     });
 
+    describe('the loading skeleton (docs/TECH_DEBT.md #161(b))', () => {
+      /**
+       * **The skeleton's column count must equal the settled table's**, because a skeleton whose
+       * shape differs reflows the page under the reader's cursor when the rows arrive — which is the
+       * defect a skeleton exists to prevent, not a cosmetic mismatch. `docs/UX_STANDARDS.md` states
+       * it and `skeleton.tsx` explains why the shape has to live with the component that knows it.
+       *
+       * Asserted against `columns.length` rather than a literal, and **verified red with a hardcoded
+       * count** — a literal here would pass forever while the two drifted apart, which is the whole
+       * failure mode.
+       */
+      it('renders a skeleton row matching the table’s own column count', () => {
+        const { container } = render(
+          <DataTable
+            {...common}
+            columns={two}
+            query={query({ isPending: true, data: undefined })}
+          />,
+        );
+        const bodyRows = container.querySelectorAll('tbody tr');
+        expect(bodyRows.length).toBeGreaterThan(0);
+        for (const row of bodyRows) {
+          expect(row.querySelectorAll('td')).toHaveLength(two.length);
+        }
+        // The header is the real one, so the columns line up before and after the rows land.
+        expect(container.querySelectorAll('thead th')).toHaveLength(two.length);
+      });
+
+      /**
+       * `loadingLabel` is required on every caller and `shoot.mjs` asserts on it to photograph this
+       * state. Deleting it would break the instrument that found the defect this milestone fixes,
+       * so it is announced rather than replaced by the visual material — which is `aria-hidden`, so
+       * an assistive reader gets one sentence rather than a few dozen grey rectangles.
+       */
+      it('still announces the loading label, and hides the material from assistive readers', () => {
+        const { container } = render(
+          <DataTable
+            {...common}
+            columns={two}
+            query={query({ isPending: true, data: undefined })}
+          />,
+        );
+        expect(screen.getByRole('status')).toHaveTextContent('Loading rows…');
+        expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+        for (const cell of container.querySelectorAll('tbody td > *')) {
+          expect(cell).toHaveAttribute('aria-hidden', 'true');
+        }
+      });
+    });
+
     describe('the empty state’s frame (docs/specs/empty-state-consolidation/ M3)', () => {
       /**
        * **The frame must not displace `describedById`.** `docs/TECH_DEBT.md` #93(d) records this

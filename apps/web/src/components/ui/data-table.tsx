@@ -2,7 +2,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import { Children, Fragment, isValidElement } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+import { Skeleton } from '@/components/ui/page/skeleton';
 
 /** A column definition for {@link DataTable}. */
 export interface Column<T> {
@@ -29,6 +29,16 @@ export interface Column<T> {
   headClassName?: string;
   cellClassName?: string;
 }
+
+/**
+ * How many skeleton rows a loading table shows.
+ *
+ * Three, matching `ListRowSkeleton`'s default — enough to read as a list rather than a single
+ * misplaced row, few enough that a short list does not shrink when the real rows arrive. Not a
+ * prop: a caller cannot know how many rows the server will return, so a number chosen per call
+ * site would be guessing with extra steps (CQ-4).
+ */
+const SKELETON_ROWS = 3;
 
 /**
  * Is this `empty` node one the caller deliberately left blank?
@@ -107,9 +117,57 @@ export function DataTable<T>({
   describedById?: string | undefined;
 }): React.ReactElement {
   if (query.isPending) {
+    // **A skeleton, not a spinner** (`docs/TECH_DEBT.md` #161(b),
+    // `docs/specs/empty-state-consolidation/` M7). `docs/UX_STANDARDS.md` asks for a skeleton
+    // wherever the content has a known shape, and a table's shape is known: it is this component's
+    // own `columns`. That obligation has been written down since the archetypes were built —
+    // `skeleton.tsx` says in as many words that each archetype owns its loading render because
+    // "`DataTable` knows its own" — and was never built here, so seventeen resource lists span a
+    // centred spinner and then reflow into a table.
+    //
+    // The header row is the real one, and the body is `columns.length` cells wide, because a
+    // skeleton whose column count differs from the settled table reflows the page under the
+    // reader's cursor — which is the defect a skeleton exists to prevent, not merely a cosmetic
+    // mismatch. Each cell reuses its column's own `cellClassName` for the same reason.
+    //
+    // `loadingLabel` is KEPT and announced. It is required on every caller and `shoot.mjs` asserts
+    // on it to photograph this state; deleting it would break the instrument that found the defect.
+    // The material is `aria-hidden` (see `Skeleton`) so an assistive reader gets that one sentence
+    // rather than a few dozen announced grey rectangles.
     return (
-      <div className="p-6">
-        <Spinner label={loadingLabel} />
+      <div aria-busy="true">
+        <span className="sr-only" role="status">
+          {loadingLabel}
+        </span>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <caption className="sr-only">{caption}</caption>
+            <thead>
+              <tr className="border-border text-muted-foreground border-b text-left">
+                {columns.map((column) => (
+                  <th
+                    key={column.header}
+                    scope="col"
+                    className={column.headClassName ?? 'py-2 pr-4 font-medium'}
+                  >
+                    {column.srHeader ? <span className="sr-only">{column.header}</span> : null}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: SKELETON_ROWS }, (_, rowIndex) => (
+                <tr key={rowIndex} className="border-border border-b">
+                  {columns.map((column) => (
+                    <td key={column.header} className={column.cellClassName ?? 'py-2 pr-4'}>
+                      <Skeleton className="h-3.5 w-full max-w-40" />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
