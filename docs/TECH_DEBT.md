@@ -988,6 +988,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                    |
 | --- | -------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 214 | An approved plan clause was never built, and its own risk table said it shipped        | 2026-09-01 | Both halves now built. The coarse half landed at ADR-0118 M2; the row said the Gantt half was "carried into M3" and **it did not land there either** — verified by grep, then built. Its first run found six sortable column headers at **16 px** against WCAG 2.2 §2.5.8's 24 px floor, live on a shipped surface nothing had ever swept.                                                                             |
 | 177 | A compound citation was invisible to `check:claims`                                    | 2026-09-01 | **Won't-fix**, on the row's own measurement: a repo-wide sweep found exactly two compound citations left, one excluded as this repository's own file and one that IS this row quoting the defect. Extending the regex is a shared-gate change (ADR-0105) that would then demand a register entry for an example. The seven real occurrences were already split into two citations each, so the hole is closed.         |
 | 156 | The drawer-subject mechanism had no registrant                                         | 2026-09-01 | Deleted, on the product owner's call: ADR-0097 D2 is closed as not wanted. The row's own premise had gone stale — it said the drawer "is very much alive: it holds the Project Explorer", which ADR-0109 D2 had already moved to its own column, so the dead set was the whole mechanism plus `ContextDrawer`, `useContextDrawerPrefs`, the `drawer` chrome slot and the shell's Escape rung. See `docs/DECISIONS.md`. |
 | 63  | The Progress tab carried no unsaved marker for its three panels                        | 2026-08-31 | The confirmation half closed with ADR-0108 D2; this is the tab's own dot, which the lifted six-scope report already had the state for. Never a padlock — the pen does not gate Progress.                                                                                                                                                                                                                               |
@@ -3014,27 +3015,6 @@ rather than quietly dropped:
   gracefully to 'Unknown activity'). Measured immaterial (~0.7 ms beside an ~800 ms compute); fold
   the label columns into the engine loader, or a narrow `{id, code, name, calendarId}` loader, on
   next touch (the M6 backend-performance review).
-
-## 214. An approved plan clause was never built, and its own risk table says it shipped
-
-**Status:** unverified · **Raised:** 2026-08-29 (ADR-0118 M0) · **Size:** S · **Owner:** web
-
-`docs/specs/workspace-chrome-fit/implementation-plan.md:306` (approved) requires the target-size
-sweep to run "…at every width, **in both plan views, once with a coarse pointer**", and its US-5
-carries an approved acceptance criterion for the coarse minor axis. Its risk table at `:622` then
-lists that sweep as the **mitigation** for the named risk _"a touch target shrinks (TECH_DEBT
-#127/#133 are open)"_.
-
-The shipped `apps/web/e2e-workspace-fit/command-surface.spec.ts` contains **zero** occurrences of
-`hasTouch`, `pointerType` or `view=gantt`. Two clauses of an approved task were not built, one
-acceptance criterion was never asserted, and **the document asserts the mitigation as delivered**.
-
-This is the ADR-0090 M5 shape — _a document describing work correctly and the work not happening_ —
-with a risk table claiming otherwise on top, which is worse than the plain version: ADR-0058's rule
-is _verify the claim_, and here the claim is that something is already verified.
-
-Discharged by **ADR-0118 M2**, which builds the coarse projection the clause asked for; the Gantt
-half (`view=gantt`) is carried into M3 with the surfaces it belongs to.
 
 ## 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
