@@ -25,6 +25,7 @@ import {
 } from '../schemas/dependency-schemas';
 
 import { useAnnounce } from '@/components/ui/announcer';
+import { FieldGateProvider } from '@/components/ui/field-gate';
 import { FormErrorSummary, SelectField, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridFull, FormSection } from '@/components/ui/form-layout';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
@@ -167,85 +168,92 @@ export function AddLinkSection({
         </div>
       ) : (
         <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
-          <FormErrorSummary errors={errors} />
-          {create.isError ? (
-            <p role="alert" className="text-destructive-text text-sm">
-              {create.error.message}
-            </p>
-          ) : null}
-          <FieldGrid>
-            {/* Activity names are long, so the picker takes the full width; the two fields that
+          {/* **The fields answer to the same gate as the Save** (`docs/TECH_DEBT.md` #66, ADR-0083).
+              Only the Save was gated, so a member who cannot add a link could fill in the whole form
+              and meet the refusal at the end of it. `FieldGateProvider` renders the reason once,
+              above the fields, and every `*Field` beneath it goes read-only — never native
+              `disabled`, which is #64's defect and would take the values out of a reader's reach. */}
+          <FieldGateProvider gate={gate}>
+            <FormErrorSummary errors={errors} />
+            {create.isError ? (
+              <p role="alert" className="text-destructive-text text-sm">
+                {create.error.message}
+              </p>
+            ) : null}
+            <FieldGrid>
+              {/* Activity names are long, so the picker takes the full width; the two fields that
                 describe the SHAPE of the link pair up underneath it. */}
-            <FieldGridFull>
-              <SelectField
-                label={otherLabel}
-                id="dependency-other"
-                error={errors.otherActivityId?.message}
-                {...register('otherActivityId')}
-              >
-                <option value="" disabled>
-                  Choose an activity…
-                </option>
-                {options.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.code ? `${option.code} — ${option.name}` : option.name}
+              <FieldGridFull>
+                <SelectField
+                  label={otherLabel}
+                  id="dependency-other"
+                  error={errors.otherActivityId?.message}
+                  {...register('otherActivityId')}
+                >
+                  <option value="" disabled>
+                    Choose an activity…
+                  </option>
+                  {options.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.code ? `${option.code} — ${option.name}` : option.name}
+                    </option>
+                  ))}
+                </SelectField>
+              </FieldGridFull>
+              <SelectField label="Link it as" id="dependency-direction" {...register('direction')}>
+                {LINK_DIRECTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {LINK_DIRECTION_LABELS[value]}
                   </option>
                 ))}
               </SelectField>
-            </FieldGridFull>
-            <SelectField label="Link it as" id="dependency-direction" {...register('direction')}>
-              {LINK_DIRECTIONS.map((value) => (
-                <option key={value} value={value}>
-                  {LINK_DIRECTION_LABELS[value]}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField label="Type" id="dependency-type" {...register('type')}>
-              {DEPENDENCY_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {DEPENDENCY_TYPE_LABELS[value]}
-                </option>
-              ))}
-            </SelectField>
-          </FieldGrid>
-          {/* The lag and the calendar it is counted in are one decision — a "5" means a different
+              <SelectField label="Type" id="dependency-type" {...register('type')}>
+                {DEPENDENCY_TYPES.map((value) => (
+                  <option key={value} value={value}>
+                    {DEPENDENCY_TYPE_LABELS[value]}
+                  </option>
+                ))}
+              </SelectField>
+            </FieldGrid>
+            {/* The lag and the calendar it is counted in are one decision — a "5" means a different
               date depending on the field beside it, which stacking them concealed. */}
-          <FieldGrid columns="lead">
-            <SelectField
-              label="Lag calendar"
-              id="dependency-lag-calendar"
-              hint={LAG_CALENDAR_HINT}
-              {...register('lagCalendar')}
-            >
-              {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
-                <option key={value} value={value}>
-                  {LAG_CALENDAR_LABELS[value]}
-                </option>
-              ))}
-            </SelectField>
-            <TextField
-              label={lagFieldLabel(lagCalendar, hoursPerDay)}
-              {...lagInputProps(hoursPerDay)}
-              {...(lagFieldHelp(lagCalendar, hoursPerDay) === undefined
-                ? {}
-                : { hint: lagFieldHelp(lagCalendar, hoursPerDay) })}
-              error={errors.lag?.message}
-              {...register('lag')}
+            <FieldGrid columns="lead">
+              <SelectField
+                label="Lag calendar"
+                id="dependency-lag-calendar"
+                hint={LAG_CALENDAR_HINT}
+                {...register('lagCalendar')}
+              >
+                {LAG_CALENDAR_DISPLAY_ORDER.map((value) => (
+                  <option key={value} value={value}>
+                    {LAG_CALENDAR_LABELS[value]}
+                  </option>
+                ))}
+              </SelectField>
+              <TextField
+                label={lagFieldLabel(lagCalendar, hoursPerDay)}
+                {...lagInputProps(hoursPerDay)}
+                {...(lagFieldHelp(lagCalendar, hoursPerDay) === undefined
+                  ? {}
+                  : { hint: lagFieldHelp(lagCalendar, hoursPerDay) })}
+                error={errors.lag?.message}
+                {...register('lag')}
+              />
+            </FieldGrid>
+            <ScopeSaveBar
+              gate={gate}
+              // A create form is always submittable: what is missing is the validation messages' job
+              // to say, field by field, rather than a shaded button's. The feedback for a successful
+              // add is the new row appearing in the table above — so neither message has anything to
+              // add here, and both are silenced.
+              dirty
+              dirtyMessage={null}
+              savedMessage={null}
+              pending={create.isPending}
+              label="Add link"
+              pendingLabel="Adding…"
             />
-          </FieldGrid>
-          <ScopeSaveBar
-            gate={gate}
-            // A create form is always submittable: what is missing is the validation messages' job
-            // to say, field by field, rather than a shaded button's. The feedback for a successful
-            // add is the new row appearing in the table above — so neither message has anything to
-            // add here, and both are silenced.
-            dirty
-            dirtyMessage={null}
-            savedMessage={null}
-            pending={create.isPending}
-            label="Add link"
-            pendingLabel="Adding…"
-          />
+          </FieldGateProvider>
         </form>
       )}
     </FormSection>

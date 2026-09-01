@@ -531,66 +531,64 @@ describe('createActivityCommand', () => {
 });
 
 describe('deleteActivityCommand', () => {
-  it('undo re-creates the whole definition (new id) + restores the lane; redo deletes it again', async () => {
-    const snapshot = activity({
-      id: 'gone',
-      name: 'Excavate',
-      constraintType: 'SNET',
-      constraintDate: '2026-02-01',
-      laneIndex: 4,
-      version: 9,
-    });
-    const createActivity = vi.fn(() =>
-      Promise.resolve(activity({ id: 'reborn', laneIndex: 0, version: 1 })),
-    );
-    const repositionLane = vi.fn((i: { activityId: string; laneIndex: number; version: number }) =>
-      Promise.resolve(activity({ id: i.activityId, laneIndex: i.laneIndex, version: 2 })),
-    );
-    const deleteActivity = vi.fn(() => Promise.resolve());
+  it('undo restores the batch (id-stable, links intact); redo deletes the same id again', async () => {
+    // The re-create this replaced minted a NEW id, which is not the endpoint any dependency
+    // referenced — so an undone delete gave the bar back with its logic gone (`docs/TECH_DEBT.md`
+    // #92). Verified red against the previous implementation — all three cases threw
+    // `params.createActivity is not a function`, which is the honest shape of the failure: the old
+    // inverse reached for a create seam that no longer exists, and never for `restoreBatch`.
+    const snapshot = activity({ id: 'gone', name: 'Excavate', laneIndex: 4, version: 9 });
+    const restoreBatch = vi.fn(() => Promise.resolve([activity({ id: 'gone', version: 10 })]));
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-2' }));
     const command = deleteActivityCommand({
       activity: snapshot,
-      createActivity,
-      repositionLane,
+      deleteBatchId: 'batch-1',
+      restoreBatch,
       deleteActivity,
     });
 
     await command.undo();
-    // Re-creates the full definition…
-    expect(createActivity).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        name: 'Excavate',
-        constraintType: 'SNET',
-        constraintDate: '2026-02-01',
-      }),
-    );
-    // …then restores the original lane (the create landed lane 0, snapshot was lane 4).
-    expect(repositionLane).toHaveBeenCalledExactlyOnceWith({
-      activityId: 'reborn',
-      laneIndex: 4,
-      version: 1,
-    });
+    expect(restoreBatch).toHaveBeenCalledExactlyOnceWith({ deleteBatchId: 'batch-1' });
 
     await command.redo();
-    expect(deleteActivity).toHaveBeenCalledExactlyOnceWith('reborn'); // deletes the re-created id
+    // The ORIGINAL id — the restore is id-stable, so there is no new id to chase.
+    expect(deleteActivity).toHaveBeenCalledExactlyOnceWith('gone');
     expect(command.label).toBe('Delete “Excavate”');
   });
 
-  it('skips the lane restore when the re-created activity already lands on the original lane', async () => {
-    const snapshot = activity({ id: 'g', laneIndex: 3 });
-    const createActivity = vi.fn(() =>
-      Promise.resolve(activity({ id: 'r', laneIndex: 3, version: 1 })),
-    );
-    const repositionLane: RepositionLaneFn = vi.fn((i) =>
-      Promise.resolve(activity({ id: i.activityId, laneIndex: i.laneIndex, version: 2 })),
-    );
+  it('rethreads the batch id on every redo, so a second undo restores what the second delete swept', async () => {
+    // A redo is a NEW delete and therefore a NEW batch. Reusing the first id would restore nothing
+    // and report success — the `bulkDeleteCommand` rule, one gesture along.
+    const restoreBatch = vi.fn(() => Promise.resolve([activity({ id: 'gone' })]));
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-2' }));
     const command = deleteActivityCommand({
-      activity: snapshot,
-      createActivity,
-      repositionLane,
-      deleteActivity: vi.fn(() => Promise.resolve()),
+      activity: activity({ id: 'gone' }),
+      deleteBatchId: 'batch-1',
+      restoreBatch,
+      deleteActivity,
     });
+
     await command.undo();
-    expect(repositionLane).not.toHaveBeenCalled();
+    await command.redo();
+    await command.undo();
+    expect(restoreBatch).toHaveBeenLastCalledWith({ deleteBatchId: 'batch-2' });
+  });
+
+  it('is idempotent in both directions', async () => {
+    const restoreBatch = vi.fn(() => Promise.resolve([activity({ id: 'gone' })]));
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'batch-2' }));
+    const command = deleteActivityCommand({
+      activity: activity({ id: 'gone' }),
+      deleteBatchId: 'batch-1',
+      restoreBatch,
+      deleteActivity,
+    });
+
+    await command.redo(); // already absent — no-op
+    expect(deleteActivity).not.toHaveBeenCalled();
+    await command.undo();
+    await command.undo(); // already present — no-op
+    expect(restoreBatch).toHaveBeenCalledTimes(1);
   });
 });
 

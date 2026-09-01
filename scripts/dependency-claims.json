@@ -8,100 +8,15 @@
     "@nestjs/throttler": "6.5.0",
     "react-hook-form": "7.86.0",
     "lucide-react": "1.33.0",
-    "axe-core": "4.12.1",
+    "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
     "@tanstack/react-router": "1.170.27",
     "@tanstack/history": "1.162.1"
   },
+  "resolveVia": {
+    "axe-core": "@axe-core/playwright"
+  },
   "claims": [
-    {
-      "ref": "useBlocker.js:35-36",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/useBlocker.js",
-      "lines": "35-36",
-      "anchor": "enableBeforeUnload = true",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "useBlocker.js:37",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/useBlocker.js",
-      "lines": "37",
-      "anchor": "const router = useRouter();",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "useBlocker.js:77-95",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/useBlocker.js",
-      "lines": "77-95",
-      "anchor": "proceed: () => resolve(false),",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "useBlocker.js:97-100",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/useBlocker.js",
-      "lines": "97-100",
-      "anchor": "return disabled ? void 0 : history.block({",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "useBlocker.js:101-108",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/useBlocker.js",
-      "lines": "101-108",
-      "anchor": "withResolver,",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "index.js:19-26",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "19-26",
-      "anchor": "const isPushOrReplace = actionInfo.type === \"PUSH\" || actionInfo.type === \"REPLACE\";",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "index.js:116-124",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "116-124",
-      "anchor": "opts.setBlockers([...blockers, blocker]);",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "index.js:223-235",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "223-235",
-      "anchor": "win.history.go(1);",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "index.js:240-262",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "240-262",
-      "anchor": "const shouldHaveBeforeUnload = blocker.enableBeforeUnload ?? true;",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "index.js:297",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "297",
-      "anchor": "win.addEventListener(beforeUnloadEvent, onBeforeUnload, { capture: true });",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
-    {
-      "ref": "index.js:335-342",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "335-342",
-      "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
-      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
-    },
     {
       "ref": "index.js:170-172",
       "package": "@axe-core/playwright",
@@ -131,10 +46,249 @@
       "citedBy": ["scripts/measure-band-copy.mjs"]
     },
     {
-      "ref": "axe.js:19178-19183",
+      "ref": "index.js:19-26",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "19-26",
+      "anchor": "const isPushOrReplace = actionInfo.type === \"PUSH\" || actionInfo.type === \"REPLACE\";",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "index.js:24-34",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "24-34",
+      "anchor": "const blockers = opts.getBlockers?.() ?? [];",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "index.js:116-124",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "116-124",
+      "anchor": "opts.setBlockers([...blockers, blocker]);",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "index.js:221-238",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "221-238",
+      "anchor": "if (skipBlockerNextPop) skipBlockerNextPop = false;",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "index.js:223-235",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "223-235",
+      "anchor": "win.history.go(1);",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "index.js:230-233",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "230-233",
+      "anchor": "ignoreNextPop = true;",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "index.js:240-262",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "240-262",
+      "anchor": "const shouldHaveBeforeUnload = blocker.enableBeforeUnload ?? true;",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "index.js:247-257",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "247-257",
+      "anchor": "if (typeof document !== \"undefined\" && blockers.length) for (const blocker of blockers) {",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "index.js:258-261",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "258-261",
+      "anchor": "if (shouldBlock) {",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "index.js:290-292",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "290-292",
+      "anchor": "onBlocked: () => {",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "index.js:297",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "297",
+      "anchor": "win.addEventListener(beforeUnloadEvent, onBeforeUnload, { capture: true });",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "index.js:335-342",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "335-342",
+      "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "index.js:335-343",
+      "package": "@tanstack/history",
+      "path": "dist/esm/index.js",
+      "lines": "335-343",
+      "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "Transitioner.js:44-48",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/Transitioner.js",
+      "lines": "44-48",
+      "anchor": "ignoreBlocker: true",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "link.js:302",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/link.js",
+      "lines": "302",
+      "anchor": "ignoreBlocker",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "useBlocker.js:35-36",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "35-36",
+      "anchor": "enableBeforeUnload = true",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:35",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "35",
+      "anchor": "function useBlocker(opts, condition) {",
+      "citedBy": [
+        "docs/TECH_DEBT.md",
+        "docs/specs/unsaved-work-guard/architecture.md",
+        "docs/specs/unsaved-work-guard/m0-measurement.md"
+      ]
+    },
+    {
+      "ref": "useBlocker.js:37",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "37",
+      "anchor": "const router = useRouter();",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:59-65",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "59-65",
+      "anchor": "search: router.options.parseSearch(location.search)",
+      "citedBy": ["docs/specs/unsaved-work-guard/feature-spec.md"]
+    },
+    {
+      "ref": "useBlocker.js:77-95",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "77-95",
+      "anchor": "proceed: () => resolve(false),",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:77-86",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "77-86",
+      "anchor": "const canNavigateAsync = await new Promise",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:78-86",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "78-86",
+      "anchor": "setResolver({",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:83",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "83",
+      "anchor": "proceed: () => resolve(false),",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:97-100",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "97-100",
+      "anchor": "return disabled ? void 0 : history.block({",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:101-108",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "101-108",
+      "anchor": "withResolver,",
+      "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
+    },
+    {
+      "ref": "useBlocker.js:131",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.js",
+      "lines": "131",
+      "anchor": "export { Block, useBlocker };",
+      "citedBy": ["docs/specs/unsaved-work-guard/feature-spec.md"]
+    },
+    {
+      "ref": "axe.js:19564-19569",
       "package": "axe-core",
       "path": "axe.js",
-      "lines": "19178-19183",
+      "lines": "19564-19569",
       "anchor": "throw new Error('No elements found for include in ' + env + ' Context');",
       "citedBy": ["docs/specs/graphite/m5-command-strip.md", "CLAUDE.md"]
     },
@@ -640,94 +794,6 @@
       "lines": "145-163",
       "anchor": "export const allowsEval = /* @__PURE__*/ cached(() => {",
       "citedBy": ["apps/web/src/config/zod-jitless.ts"]
-    },
-    {
-      "ref": "index.js:24-34",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "24-34",
-      "anchor": "const blockers = opts.getBlockers?.() ?? [];",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
-    },
-    {
-      "ref": "index.js:221-238",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "221-238",
-      "anchor": "if (skipBlockerNextPop) skipBlockerNextPop = false;",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
-    },
-    {
-      "ref": "index.js:230-233",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "230-233",
-      "anchor": "ignoreNextPop = true;",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
-    },
-    {
-      "ref": "index.js:247-257",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "247-257",
-      "anchor": "if (typeof document !== \"undefined\" && blockers.length) for (const blocker of blockers) {",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
-    },
-    {
-      "ref": "index.js:258-261",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "258-261",
-      "anchor": "if (shouldBlock) {",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
-    },
-    {
-      "ref": "index.js:290-292",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "290-292",
-      "anchor": "onBlocked: () => {",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
-    },
-    {
-      "ref": "index.js:335-343",
-      "package": "@tanstack/history",
-      "path": "dist/esm/index.js",
-      "lines": "335-343",
-      "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
-    },
-    {
-      "ref": "link.js:302",
-      "package": "@tanstack/react-router",
-      "path": "dist/esm/link.js",
-      "lines": "302",
-      "anchor": "ignoreBlocker",
-      "citedBy": [
-        "docs/specs/unsaved-work-guard/feature-spec.md",
-        "docs/specs/unsaved-work-guard/architecture.md"
-      ]
     }
   ]
 }

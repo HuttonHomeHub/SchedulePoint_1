@@ -150,15 +150,22 @@ const EXPORT_LEGEND: readonly LegendEntry[] = [
   { label: 'Critical', kind: 'outlineSolid', colour: (p) => p.critical },
   { label: 'Near-critical', kind: 'outlineDashed', colour: (p) => p.nearCritical },
   { label: 'On schedule', kind: 'fill', colour: (p) => p.bar },
-  { label: 'Driving link', kind: 'lineSolid', colour: (p) => p.edge },
-  { label: 'Non-driving link', kind: 'lineDashed', colour: (p) => p.edge },
-  // The data-date status line (canvas status & feedback M1) — drawn SOLID, before Today, matching
-  // the DOM legend's order and the marker-channel table. Flag-off it is absent, so the export
-  // legend is byte-for-byte the prior row (the parity gate).
+  // **The two date markers, then the two link cues** — the DOM legend's grouping
+  // (`TsldLegend.tsx`'s `SHARED_CUES`), which this list did not follow (`docs/TECH_DEBT.md`
+  // #211c). The docblock below the markers used to claim it matched "the DOM legend's order",
+  // and that was true only of Data-date-before-Today, never of markers-before-links. A key whose
+  // groups run in a different order from the one on screen is a small tax on every reader who
+  // holds both.
+  //
+  // The data-date status line (canvas status & feedback M1) is drawn SOLID, before Today, per the
+  // marker-channel table. Flag-off it is absent, so the export legend is byte-for-byte the prior
+  // row (the parity gate).
   ...(CANVAS_DATA_DATE_ENABLED
     ? [{ label: 'Data date', kind: 'dataDate', colour: (p: PrintPalette) => p.dataDate } as const]
     : []),
   { label: 'Today', kind: 'today', colour: (p) => p.today },
+  { label: 'Driving link', kind: 'lineSolid', colour: (p) => p.edge },
+  { label: 'Non-driving link', kind: 'lineDashed', colour: (p) => p.edge },
 ];
 
 /**

@@ -8,6 +8,49 @@ import { HierarchyTree, useNavigatorCrud, type UseExpansionState } from '@/featu
 import { AppVersionLine } from '@/features/system';
 
 /**
+ * The Project Explorer's root create (CQ-2): an empty organisation has no node to right-click, so
+ * writers get a **New client** entry point in the rail's own header.
+ *
+ * **One component, rendered by both branches** (`docs/TECH_DEBT.md` #169). It was two verbatim
+ * copies — same gate, same button, same four-paragraph comment — in the `SheetHeader` branch and the
+ * drawer branch. The reason to remove that is not tidiness: #165a is exactly the defect of a rule
+ * applied to one copy and not its neighbour, and this row was raised while fixing it.
+ *
+ * Withheld entirely for a reader who cannot create a client, on ADR-0082's omit clause: there is no
+ * action here to shade, only a container whose contents are absent.
+ *
+ * A labelled primary button rather than a bare `+` icon: creating the first client is the one action
+ * an empty Project Explorer exists to offer, and an unlabelled glyph makes the entry point something
+ * you have to already know about. The visible label is shortened to "Client" to fit the rail header,
+ * so the button needs an explicit accessible name — "Client" on its own names a NOUN, not what
+ * pressing it does. WCAG 2.5.3 (Label in Name) is satisfied because the visible text is contained in
+ * the accessible name, so voice control still reaches it by the word on screen.
+ */
+function NewClientButton({
+  canWrite,
+  onCreateClient,
+}: {
+  canWrite: boolean;
+  onCreateClient: () => void;
+}): React.ReactElement | null {
+  if (!canWrite) return null;
+  return (
+    <Button
+      size="sm"
+      aria-label="New client"
+      onClick={onCreateClient}
+      // `h-7` overrides `size="sm"` for the rail's density; the coarse override restores the
+      // house rule on touch (ADR-0118 M3 — measured 74 x 28, the last control in the Project
+      // Explorer under it).
+      className="h-7 gap-1 px-2 pointer-coarse:h-(--control-h)"
+    >
+      <Plus aria-hidden="true" className="size-4" />
+      Client
+    </Button>
+  );
+}
+
+/**
  * The **Project Explorer** — the persistent home of the Client → Project → Plan tree (ADR-0029).
  * Rendered once in {@link AppShell}, so it survives route changes, and **only where there is an
  * organisation to show**: the shell withholds it entirely on the three `_authed` routes that carry
@@ -89,33 +132,7 @@ export function NavigatorRail({
           className="border-border h-12 shrink-0 gap-1 px-4 py-0"
           actionsClassName="gap-1"
           actions={
-            <>
-              {/* Root create (CQ-2): an empty org has no node to right-click, so writers get
-                a "New client" entry point here; hidden for non-writers and flag-off. */}
-              {crud.canWrite ? (
-                // A labelled primary button rather than a bare `+` icon: creating the first client
-                // is the one action an empty Project Explorer exists to offer, and an unlabelled
-                // glyph makes the entry point something you have to already know about.
-                //
-                // The visible label is shortened to "Client" to fit the rail header, so the button
-                // needs an explicit accessible name: "Client" on its own names a NOUN, not what
-                // pressing it does. WCAG 2.5.3 (Label in Name) is satisfied because the visible
-                // text is contained in the accessible name, so voice control still reaches it by
-                // the word on screen.
-                <Button
-                  size="sm"
-                  aria-label="New client"
-                  onClick={crud.onCreateClient}
-                  // `h-7` overrides `size="sm"` for the rail's density; the coarse override restores the
-                  // house rule on touch (ADR-0118 M3 — measured 74 x 28, the last control in
-                  // the Project Explorer under it).
-                  className="h-7 gap-1 px-2 pointer-coarse:h-(--control-h)"
-                >
-                  <Plus aria-hidden="true" className="size-4" />
-                  Client
-                </Button>
-              ) : null}
-            </>
+            <NewClientButton canWrite={crud.canWrite} onCreateClient={crud.onCreateClient} />
           }
           onClose={onClose}
           closeLabel="Close Project Explorer"
@@ -134,31 +151,7 @@ export function NavigatorRail({
         // of scroll height on touch and nothing at all on a mouse. That is why this one is fixed
         // by growing the row and `icon-sm` is fixed by not growing the control.
         <div className="border-border flex h-10 shrink-0 items-center gap-1 border-b px-3 pointer-coarse:h-(--control-h)">
-          {/* Root create (CQ-2): an empty org has no node to right-click, so writers get
-              a "New client" entry point here; hidden for non-writers and flag-off. */}
-          {crud.canWrite ? (
-            // A labelled primary button rather than a bare `+` icon: creating the first client
-            // is the one action an empty Project Explorer exists to offer, and an unlabelled
-            // glyph makes the entry point something you have to already know about.
-            //
-            // The visible label is shortened to "Client" to fit the rail header, so the button
-            // needs an explicit accessible name: "Client" on its own names a NOUN, not what
-            // pressing it does. WCAG 2.5.3 (Label in Name) is satisfied because the visible
-            // text is contained in the accessible name, so voice control still reaches it by
-            // the word on screen.
-            <Button
-              size="sm"
-              aria-label="New client"
-              onClick={crud.onCreateClient}
-              // `h-7` overrides `size="sm"` for the rail's density; the coarse override restores the
-              // house rule on touch (ADR-0118 M3 — measured 74 x 28, the last control in
-              // the Project Explorer under it).
-              className="h-7 gap-1 px-2 pointer-coarse:h-(--control-h)"
-            >
-              <Plus aria-hidden="true" className="size-4" />
-              Client
-            </Button>
-          ) : null}
+          <NewClientButton canWrite={crud.canWrite} onCreateClient={crud.onCreateClient} />
           {onCollapse ? (
             <Button
               ref={collapseRef}

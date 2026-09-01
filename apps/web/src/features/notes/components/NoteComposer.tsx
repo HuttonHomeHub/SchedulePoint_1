@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { useCreateNote } from '../api/use-notes';
@@ -25,10 +25,20 @@ export function NoteComposer({
   orgSlug,
   target,
   placeholder = 'Add a note…',
+  takeFocus = false,
 }: {
   orgSlug: string;
   target: NoteTarget;
   placeholder?: string;
+  /**
+   * Take focus on mount — set by a host opened *in order to* write a note (`docs/TECH_DEBT.md` #68).
+   * Off by default, because the composer also renders inside a panel somebody opened to READ.
+   *
+   * **Not called `autoFocus`**, and not merely to satisfy `jsx-a11y/no-autofocus`: that rule guards
+   * the DOM attribute, which takes focus before a reader has any say and is what the rule is about.
+   * This is an effect a host opts into for one entry point, and the different name says so.
+   */
+  takeFocus?: boolean;
 }): React.ReactElement {
   const create = useCreateNote(orgSlug, target);
   const announce = useAnnounce();
@@ -41,11 +51,18 @@ export function NoteComposer({
     handleSubmit,
     reset,
     control,
+    setFocus,
     formState: { errors },
   } = useForm<NoteFormValues>({
     resolver: zodResolver(noteFormSchema),
     defaultValues: { body: '' },
   });
+
+  // RHF's own `setFocus` rather than an `autoFocus` attribute or a merged ref: the field's ref is
+  // already owned by `register`, and a second one would have to be composed by hand.
+  useEffect(() => {
+    if (takeFocus) setFocus('body');
+  }, [takeFocus, setFocus]);
 
   const value = useWatch({ control, name: 'body' }) ?? '';
   const overLimit = value.length > NOTE_BODY_MAX;

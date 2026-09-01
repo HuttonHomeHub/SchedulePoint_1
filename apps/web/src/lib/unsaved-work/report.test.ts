@@ -34,8 +34,47 @@ describe('unsaved-work report', () => {
     expect(describeUnsavedWork([editor(scope('general', 'General'))])).toBe(
       'General has unsaved changes.',
     );
+    // "General **and** Cost", not "General, Cost" (`docs/TECH_DEBT.md` #184). The multi-surface
+    // branch below always said "and", so the same confirmation read two ways depending on how many
+    // surfaces were dirty; both branches now share one `joinWithAnd`.
     expect(describeUnsavedWork([editor(scope('general', 'General'), scope('cost', 'Cost'))])).toBe(
-      'General, Cost have unsaved changes.',
+      'General and Cost have unsaved changes.',
+    );
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #184. **No test had ever read the six-scope sentence**, which is how it
+   * shipped as one unpunctuated comma list — every scope the activity editor holds, in one breath,
+   * with the number a reader most wants left for them to count. Past four names the count leads.
+   *
+   * Three is the last length that reads as a phrase, so it is pinned beside four: a threshold with
+   * only one side asserted is a threshold nobody can move safely.
+   */
+  it('leads with the count once the list is too long to be a phrase', () => {
+    expect(
+      describeUnsavedWork([
+        editor(
+          scope('general', 'General'),
+          scope('scheduling', 'Scheduling'),
+          scope('cost', 'Cost'),
+        ),
+      ]),
+    ).toBe('General, Scheduling and Cost have unsaved changes.');
+
+    expect(
+      describeUnsavedWork([
+        editor(
+          scope('general', 'General'),
+          scope('scheduling', 'Scheduling'),
+          scope('cost', 'Cost'),
+          scope('progress', 'Reported progress'),
+          scope('measure', 'How value is measured'),
+          scope('steps', 'Weighted steps'),
+        ),
+      ]),
+    ).toBe(
+      '6 sections have unsaved changes: General, Scheduling, Cost, Reported progress, ' +
+        'How value is measured and Weighted steps.',
     );
   });
 
@@ -55,7 +94,7 @@ describe('unsaved-work report', () => {
     ];
     expect(unsavableScopes(report)).toHaveLength(2);
     expect(describeUnsavedWork(report)).toBe(
-      'General, Scheduling have unsaved changes. They can no longer be saved, because you no longer hold the edit lock.',
+      'General and Scheduling have unsaved changes. They can no longer be saved, because you no longer hold the edit lock.',
     );
   });
 
@@ -66,7 +105,7 @@ describe('unsaved-work report', () => {
       editor(scope('general', 'General', false), scope('progress', 'Progress', true)),
     ];
     expect(describeUnsavedWork(report)).toBe(
-      'General, Progress have unsaved changes. General can no longer be saved, because you no longer hold the edit lock.',
+      'General and Progress have unsaved changes. General can no longer be saved, because you no longer hold the edit lock.',
     );
   });
 

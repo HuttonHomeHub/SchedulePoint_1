@@ -17,7 +17,14 @@ export interface Column<T> {
    * column's key and its identity in code.
    */
   headerCell?: () => React.ReactNode;
-  /** Visually hide the header (e.g. an actions column). */
+  /**
+   * Visually hide the header (e.g. an actions column).
+   *
+   * **Ignored when {@link headerCell} is set** — the render takes `headerCell` first, so a column
+   * declaring both gets the control and never the hidden text. Declaring both looks load-bearing
+   * and is not (`docs/TECH_DEBT.md` #73), so don't: a `headerCell` control carries its own
+   * accessible name, which is what the hidden text would have been for.
+   */
   srHeader?: boolean;
   headClassName?: string;
   cellClassName?: string;
@@ -94,7 +101,18 @@ export function DataTable<T>({
   }
 
   const rows = query.data ?? [];
-  if (rows.length === 0) return <>{empty}</>;
+  if (rows.length === 0) {
+    // **The empty state carries `describedById` too.** It used to return before the region below,
+    // so the prose qualifying what these rows mean — the safety caveat on `/me/activity`, say —
+    // reached a reader with rows and not a reader with none, which is the state where an
+    // unexplained absence is most likely to be misread. No `role="region"` here: there is nothing
+    // to scroll and nothing to label, so this associates the description with the copy itself.
+    return (
+      <div {...(describedById === undefined ? {} : { 'aria-describedby': describedById })}>
+        {empty}
+      </div>
+    );
+  }
 
   return (
     // Focusable + labelled so a keyboard-only user can scroll a wide table

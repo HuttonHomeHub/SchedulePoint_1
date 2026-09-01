@@ -13,8 +13,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
  *    reader can find afterwards. A producer wired outside the transaction, or onto a code path the
  *    UI does not take, is green in every unit test in the repository.
  * 2. **The `before` on a role change is the row's real prior value.** The detail line reads
- *    "Planner → Contributor" only if the service read the membership under its lock; a version
- *    that echoed the request DTO would render "Contributor → Contributor" and look plausible.
+ *    "Planner to Contributor" only if the service read the membership under its lock; a version
+ *    that echoed the request DTO would render "Contributor to Contributor" and look plausible.
  * 3. **`audit:read` is enforced at the API, not by the hidden nav link.** The teammate's request is
  *    made from their own browser session and must come back **403** — not an empty list, which is
  *    the log's own worst failure mode: absence a reader cannot tell from nothing having happened.
@@ -199,8 +199,14 @@ test('the audit log records real actions and only an Org Admin can read them', a
   await expect(admin.getByText('Member joined', { exact: true })).toHaveCount(2);
 
   // 2. The `before` came from the row, not the request. A service that echoed the DTO would render
-  // "Contributor → Contributor" here and look entirely reasonable.
-  await expect(auditRow(admin, 'Role changed')).toContainText('Planner → Contributor');
+  // "Contributor to Contributor" here and look entirely reasonable.
+  //
+  // **The word, not an arrow** (`docs/TECH_DEBT.md` #93e): a screen reader announces nothing at all
+  // for "→", so the before/after pair read as one undifferentiated phrase. This assertion is the
+  // reason that change failed CI — the two unit assertions pinning the glyph were updated and this
+  // one was not, because the journeys were chosen by reasoning about which screens changed rather
+  // than by sweeping. That is the failure `docs/TECH_DEBT.md` #133's neighbours already name.
+  await expect(auditRow(admin, 'Role changed')).toContainText('Planner to Contributor');
   await expect(auditRow(admin, 'Role changed')).toContainText(adminEmail);
   await expect(auditRow(admin, 'Role changed')).toContainText(mateEmail);
 

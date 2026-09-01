@@ -87,10 +87,29 @@ describe('renderExportImage — the data-date legend entry (flag on)', () => {
       'Critical',
       'Near-critical',
       'On schedule',
-      'Driving link',
-      'Non-driving link',
+      // The two DATE MARKERS precede the two LINK cues, which is the DOM legend's grouping
+      // (`docs/TECH_DEBT.md` #211c). The exported key ran links-first until 2026-08-31 while its
+      // own docblock claimed to match the screen — true of Data-date-before-Today, and of nothing
+      // else.
       'Data date',
       'Today',
+      'Driving link',
+      'Non-driving link',
     ]);
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #211c, stated as the RULE rather than as one expected array — the sequence
+   * above would also pass if somebody re-ordered both halves together and lost the grouping.
+   *
+   * Verified red: with the links first, `Data date` sat at index 5 and `Driving link` at index 3.
+   */
+  it('groups the date markers before the link cues, as the on-screen legend does', async () => {
+    const { canvas, calls } = fakeCanvas();
+    await renderExportImage(input(), { createCanvas: () => canvas, paint: vi.fn() });
+    const labels = calls.filter(([name]) => name === 'fillText').map(([, args]) => String(args[0]));
+    expect(labels.indexOf('Data date')).toBeLessThan(labels.indexOf('Driving link'));
+    expect(labels.indexOf('Today')).toBeLessThan(labels.indexOf('Driving link'));
+    expect(labels.indexOf('Driving link')).toBeLessThan(labels.indexOf('Non-driving link'));
   });
 });

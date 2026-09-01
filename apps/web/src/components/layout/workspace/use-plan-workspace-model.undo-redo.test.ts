@@ -315,13 +315,14 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
     // A leaf (TASK, no children) is reversible — one command, no truncation.
-    act(() => result.current.recordActivityDelete(ACTIVITY));
+    act(() => result.current.recordActivityDelete(ACTIVITY, 'batch-1'));
     expect(h.record).toHaveBeenCalledTimes(1);
     expect(h.clear).not.toHaveBeenCalled();
 
     h.record.mockClear();
-    // A WBS summary WITH a subtree is not cleanly reversible in M2 — clear the stack, record nothing.
-    act(() => result.current.recordActivityDelete(SUMMARY));
+    // A WBS summary WITH a subtree still truncates: the restore would take the subtree too, but
+    // lifting ADR-0048 M2's boundary is a capability change filed as `docs/TECH_DEBT.md` #230.
+    act(() => result.current.recordActivityDelete(SUMMARY, 'batch-2'));
     expect(h.clear).toHaveBeenCalledTimes(1);
     expect(h.record).not.toHaveBeenCalled();
   });
@@ -329,8 +330,8 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
   it('flag OFF: neither a leaf delete nor a cascade delete touches the history', () => {
     h.undoRedo = false;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
-    act(() => result.current.recordActivityDelete(ACTIVITY));
-    act(() => result.current.recordActivityDelete(SUMMARY));
+    act(() => result.current.recordActivityDelete(ACTIVITY, 'batch-1'));
+    act(() => result.current.recordActivityDelete(SUMMARY, 'batch-2'));
     expect(h.record).not.toHaveBeenCalled();
     expect(h.clear).not.toHaveBeenCalled();
   });

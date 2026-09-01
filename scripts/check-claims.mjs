@@ -44,7 +44,7 @@
  * version we said we read.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -53,20 +53,116 @@ const register = JSON.parse(readFileSync(join(root, 'scripts/dependency-claims.j
 /**
  * Resolve an installed package's real directory through pnpm's content-addressed store.
  *
- * **pnpm flattens the scope separator**: `@better-fetch/fetch` is stored as
- * `@better-fetch+fetch@1.3.1`, so a naive `startsWith(name + '@')` never matches and the script
- * reports a perfectly-installed package as missing. Found by ADR-0077's design pass, which was the
- * first to need a scoped citation.
+ * **Resolved through the LINK, not by scanning the store** (`docs/TECH_DEBT.md` #178). The previous
+ * implementation scanned `node_modules/.pnpm` and took the FIRST directory whose name started with
+ * `<name>@` — and pnpm does not eagerly unlink a superseded version, so immediately after a bump the
+ * store holds both and `readdirSync` returned the older one. That produced a WRONG answer rather
+ * than a missing one: the gate reported "claims were verified against 7.86.0, 7.84.0 is installed"
+ * against a register that was freshly and correctly updated. A gate that lies about which version
+ * it checked is worse than one that says nothing, because the fix looks like reverting the register.
+ *
+ * A symlink cannot be stale in that way: it points at what this workspace actually loads. It also
+ * removes the store's own naming as a parsing problem — pnpm flattens the scope separator
+ * (`@better-fetch/fetch` is stored as `@better-fetch+fetch@1.3.1`) and appends peer hashes, and the
+ * version now comes from the resolved `package.json` rather than from a directory name.
+ *
+ * **Two workspaces on different versions is refused, not resolved.** The register holds one
+ * `verifiedAgainst` per package, so a split estate leaves it unable to describe the code that ships
+ * — whichever way it is set. ADR-0107 met exactly this while bumping `better-auth` in one workspace
+ * and not the other, and worked around it by only ever installing one version; this makes that
+ * assumption checkable instead of remembered.
  */
 function installed(name) {
-  const store = join(root, 'node_modules/.pnpm');
-  const stored = `${name.replace('/', '+')}@`;
-  const dir = readdirSync(store).find(
-    (entry) => entry.startsWith(stored) && statSync(join(store, entry)).isDirectory(),
-  );
-  if (!dir) return null;
-  const version = /@(\d+\.\d+\.\d+)/.exec(dir.slice(stored.length - 1))?.[1];
-  return { version, dir: join(store, dir, 'node_modules', name) };
+  // **A transitive package is resolved through the dependent the claim is about.** `axe-core` is
+  // installed TWICE, legitimately: `@axe-core/playwright` loads 4.13.0 and `eslint-plugin-jsx-a11y`
+  // / `vitest-axe` load 4.12.1. "The installed version" is not a fact about the tree, it is a fact
+  // about which consumer the claim concerns — so the register names it (`resolveVia`) rather than
+  // leaving the script to pick. It picked, it picked the wrong one, and the gate reported a claim
+  // as verified against a version the journeys do not run.
+  const via = register.resolveVia?.[name];
+  if (via !== undefined) {
+    const host = installed(via);
+    if (!host?.dir) return null;
+    // pnpm links a dependency as a SIBLING of its dependent inside the store — `…/node_modules/
+    // @axe-core/playwright` sits beside `…/node_modules/axe-core`, not above it — so the host's
+    // `node_modules` root is its own directory with its package name trimmed off. The nested npm
+    // layout is tried second, because both are real and neither is universal.
+    const hostRoot = host.dir.endsWith(via) ? host.dir.slice(0, -via.length) : null;
+    for (const candidate of [
+      ...(hostRoot === null ? [] : [join(hostRoot, name)]),
+      join(host.dir, 'node_modules', name),
+    ]) {
+      try {
+        const real = realpathSync(candidate);
+        const version = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8')).version;
+        return { version, dir: real };
+      } catch {
+        /* try the next layout */
+      }
+    }
+    return null;
+  }
+
+  // Every place the package could be LINKED: the root and each workspace. pnpm links a dependency
+  // into the workspace that declares it, so this is where "what is actually installed" lives.
+  const roots = [
+    root,
+    ...['apps', 'packages'].flatMap((group) => {
+      const dir = join(root, group);
+      try {
+        return readdirSync(dir).map((entry) => join(dir, entry));
+      } catch {
+        return [];
+      }
+    }),
+  ];
+
+  const found = new Map();
+  for (const base of roots) {
+    const link = join(base, 'node_modules', name);
+    let real;
+    try {
+      real = realpathSync(link);
+    } catch {
+      continue;
+    }
+    try {
+      const version = JSON.parse(readFileSync(join(real, 'package.json'), 'utf8')).version;
+      if (typeof version === 'string') found.set(version, real);
+    } catch {
+      /* a link with no readable manifest is not an install */
+    }
+  }
+
+  // A transitive dependency is linked into no workspace at all. Fall back to the store — but
+  // requiring a SINGLE match, so the ambiguity that produced #178's wrong answer is reported rather
+  // than resolved by whichever name `readdirSync` returns first.
+  if (found.size === 0) {
+    const store = join(root, 'node_modules/.pnpm');
+    const stored = `${name.replace('/', '+')}@`;
+    const dirs = readdirSync(store).filter(
+      (entry) => entry.startsWith(stored) && /^\d/.test(entry.slice(stored.length)),
+    );
+    if (dirs.length === 0) return null;
+    if (dirs.length > 1) {
+      const versions = dirs
+        .map((d) => /@(\d+\.\d+\.\d+)/.exec(d.slice(stored.length - 1))?.[1])
+        .filter(Boolean)
+        .sort();
+      return { version: null, dir: null, conflict: [...new Set(versions)], ambiguous: true };
+    }
+    const dir = dirs[0];
+    const version = /@(\d+\.\d+\.\d+)/.exec(dir.slice(stored.length - 1))?.[1];
+    return { version, dir: join(store, dir, 'node_modules', name) };
+  }
+  if (found.size > 1) {
+    // Two workspaces on different versions makes "the installed version" meaningless, and the
+    // register holds ONE `verifiedAgainst` per package — so a citation could be re-read against
+    // either and the gate could not say which. Refused loudly rather than resolved by picking.
+    return { version: null, dir: null, conflict: [...found.keys()].sort() };
+  }
+  const [version, dir] = [...found][0];
+  return { version, dir };
 }
 
 /**
@@ -107,6 +203,19 @@ for (const [name, expected] of Object.entries(register.verifiedAgainst)) {
   if (!pkg) {
     problems.push(`${name}: not installed — cannot verify any claim about it.`);
     stale.add(name);
+    continue;
+  }
+  if (pkg.conflict) {
+    stale.add(name);
+    problems.push(
+      pkg.ambiguous
+        ? `${name}: installed at ${pkg.conflict.join(' and ')} — more than one copy in the store,\n` +
+            `    and it is linked into no workspace, so which one a claim is about is not a fact\n` +
+            `    about the tree. Name the dependent whose copy it concerns in "resolveVia".`
+        : `${name}: installed at ${pkg.conflict.join(' and ')} in different workspaces.\n` +
+            `    The register holds ONE verified version per package, so it cannot describe both.\n` +
+            `    Align the workspaces before re-verifying (docs/TECH_DEBT.md #178).`,
+    );
     continue;
   }
   if (pkg.version !== expected) {
@@ -158,7 +267,15 @@ for (const claim of register.claims) {
 // leading path still falls away.
 const CITATIONS = [
   // `sign-in.mjs:264` / `dist/api/routes/sign-in.mjs:234-240` / `dist/throttler.guard.js:148-150`
-  /\b([a-z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b/g,
+  // …and `useBlocker.js:35`. **The class carries `A-Z` because dependencies are increasingly
+  // camelCase module files**, and a case-sensitive class made those citations invisible in BOTH
+  // directions: not demanded when unregistered, and a registered entry for one reading as uncited
+  // (`docs/TECH_DEBT.md` #183). The prose form below always carried an `i` flag, so the two halves
+  // of one gate disagreed about which citations existed. Measured before widening: 15 occurrences
+  // across the unsaved-work-guard artefacts, resolving to FIVE load-bearing claims that had never
+  // been version-pinned — into `useBlocker.js` and `Transitioner.js`, which is the exact behaviour
+  // ADR-0108's design rests on.
+  /\b([a-zA-Z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b/g,
   // `` `dist/api/routes/sign-in.mjs`, lines **234** `` — also "line", "on lines", ``234``, 234–240
   /`[^`\n]*?([a-z0-9.-]+\.m?js)`[,;]?\s*(?:on\s+)?lines?\s*\**`?(\d+(?:\s*[-–]\s*\d+)?)/gi,
 ];

@@ -5,8 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignInScreen } from '@/routes/sign-in';
 
 /**
- * The rollback contract for `VITE_PASSWORD_RESET` (ADR-0074 M4) — and, more importantly, **the only
- * gate that can catch the stranding failure.**
+ * The rollback contract for `VITE_PASSWORD_RESET` (ADR-0074 M4), and one of three gates that cross
+ * the stranding failure.
+ *
+ * It called itself "the only gate" until `docs/TECH_DEBT.md` #97c — true when written, and not
+ * since `router-search.test.ts` and the flag-on journey both reached it. What stays true, and is
+ * the reason to keep this file, is the mechanism below.
  *
  * `pnpm typecheck` cannot: `...(FLAG ? [route] : [])` widens the registered-route union to include
  * the route in **both** branches, so `<Link to="/forgot-password">` compiles whether or not the

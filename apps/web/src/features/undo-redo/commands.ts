@@ -298,8 +298,6 @@ export function updateCommand(params: {
 
 /** `useCreatePlacedActivity().mutateAsync` — a canvas-placed create; resolves to the created row. */
 export type CreatePlacedActivityFn = (input: PlacedActivityInput) => Promise<ActivitySummary>;
-/** `useCreateActivity().mutateAsync` — a full-definition create; resolves to the created row. */
-export type CreateActivityFn = (input: ActivityDefinitionInput) => Promise<ActivitySummary>;
 /** `useDeleteActivity().mutateAsync` — soft-deletes an activity by id. */
 export type DeleteActivityFn = (activityId: string) => Promise<{ deleteBatchId: string } | void>;
 
@@ -359,45 +357,61 @@ export function createActivityCommand(params: {
 }
 
 /**
- * Reverse a **leaf** activity delete — undo re-creates the whole pre-delete definition (a NEW id, the
- * conservative M2 rule; id-stable/cascade-clean restore is the deferred M4) and restores its lane;
- * redo deletes it again. Only leaves belong here — a summary-with-subtree (cascade) delete instead
- * truncates history (see the recording seam), because a partial re-create would be a broken undo.
+ * Reverse an activity delete — **one id-stable restore, not a re-create**
+ * (`docs/TECH_DEBT.md` #92).
+ *
+ * This used to re-create the whole definition through `createActivity` and then relane it, which was
+ * ADR-0048's conservative M1–M3 rule for one reason only: the id-stable restore endpoint did not
+ * exist yet. It does now — `DELETE …/activities/:id` answers `{ deleteBatchId }` and
+ * `POST …/activities/restore-batch/:batchId` puts that batch back with its ids and its links intact
+ * (`docs/TECH_DEBT.md` #113, ADR-0048 M4). So the re-create is no longer the best available inverse,
+ * it is a strictly worse one, and it was wrong in two ways a planner could see:
+ *
+ * - **Every dependency the activity had was silently lost.** A new id is not the endpoint any edge
+ *   referenced, so undoing a delete gave the bar back with its logic gone — the CQ-4 argument that
+ *   made {@link bulkDeleteCommand} a restore rather than N re-creates, one gesture along.
+ * - **The audit log recorded a deletion with no matching restore.** `activity.deleted` and
+ *   `activity.restored` are a pair a reader uses to answer "what happened to this activity?", and a
+ *   re-create fires neither half of it (`activity.created` is deliberately outside the catalogue,
+ *   ADR-0073 §2.4). The restore path fires the existing producer with the original id, so the pair
+ *   closes with no new audit action and no rows on the common path.
+ *
+ * The batch id is **rethreaded on every redo**, exactly as `bulkDeleteCommand` does and for the same
+ * reason: a redo is a new delete and therefore a new batch, so an undo reusing the first id would
+ * restore nothing and report success.
+ *
+ * Still leaf-only at the recording seam — a summary-with-subtree delete truncates the history there.
+ * That deferral's reason has lapsed (this restore takes the subtree too) but reversing an ADR-0048
+ * decision is a capability change rather than a defect fix, so it is filed rather than smuggled in
+ * here (`docs/TECH_DEBT.md` #230).
  */
 export function deleteActivityCommand(params: {
   activity: ActivitySummary;
-  createActivity: CreateActivityFn;
-  repositionLane: RepositionLaneFn;
+  /** The batch the forward delete returned — what the restore is keyed on. */
+  deleteBatchId: string;
+  restoreBatch: RestoreDeleteBatchFn;
   deleteActivity: DeleteActivityFn;
   label?: string;
 }): Command {
-  const { activity } = params;
-  const toggle = existenceToggle({
-    // The delete already happened at the call site, so the command starts in the ABSENT state.
-    startId: null,
-    create: async () => {
-      const recreated = await params.createActivity(activityDefinitionInput(activity));
-      // The create endpoint doesn't take a lane, so restore the original lane afterwards (only when
-      // it differs, to avoid a gratuitous second write).
-      if (recreated.laneIndex !== activity.laneIndex) {
-        const relaned = await params.repositionLane({
-          activityId: recreated.id,
-          laneIndex: activity.laneIndex,
-          version: recreated.version,
-        });
-        return relaned.id;
-      }
-      return recreated.id;
-    },
-    remove: async (id: string) => {
-      await params.deleteActivity(id);
-    },
-  });
+  const { activity, restoreBatch, deleteActivity } = params;
+  let batchId = params.deleteBatchId;
+  // The delete already happened at the call site, so the command starts in the ABSENT state.
+  let present = false;
   return {
     // Name the deleted entity ("Delete “Excavate”"), mirroring the toast convention (S1).
     label: params.label ?? `Delete “${activity.name}”`,
-    undo: toggle.ensurePresent,
-    redo: toggle.ensureAbsent,
+    undo: async () => {
+      if (present) return;
+      await restoreBatch({ deleteBatchId: batchId });
+      present = true;
+    },
+    redo: async () => {
+      if (!present) return;
+      // The id is stable across the restore, so the redo deletes exactly what was restored.
+      const result = await deleteActivity(activity.id);
+      if (result) batchId = result.deleteBatchId;
+      present = false;
+    },
   };
 }
 

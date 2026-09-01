@@ -110,11 +110,39 @@ describe.skipIf(!hasDatabase)('Mail failure alerting (e2e)', () => {
     await prisma.mailEvent.deleteMany({});
   });
 
-  /** The record and the POST are both deliberately un-awaited, so give them a moment to land. */
-  const settle = async (): Promise<void> => {
+  /**
+   * The record and the POST are both deliberately un-awaited, so wait for them.
+   *
+   * **On the row count, never on a fixed delay** (`docs/TECH_DEBT.md` #132). The previous version
+   * waited for the first alert POST and then slept 50 ms, which is not a wait for five writes at
+   * all: in CI it returned with one row on disk, test 1 failed asserting five, the other four
+   * landed during test 2, and test 2 then failed asserting one and seeing five. Both cases red,
+   * neither of them the defect — and the pattern that fixes it was already in this file, applied to
+   * one case and not its neighbour.
+   *
+   * It throws rather than falling through to the assertion, because "expected 5, got 1" sends the
+   * next reader looking at the service.
+   */
+  const settleRows = async (expected: number): Promise<void> => {
+    for (let i = 0; i < 100 && (await prisma.mailEvent.count()) < expected; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    const landed = await prisma.mailEvent.count();
+    if (landed < expected) {
+      throw new Error(
+        `mail_events did not reach ${expected} rows within 2s (saw ${landed}) — the writes are ` +
+          'fire-and-forget, so this is a wait that gave up, not necessarily a missing write.',
+      );
+    }
+  };
+
+  /** The alert POST leaves the process, so it is waited for separately from the durable rows. */
+  const settleAlert = async (): Promise<void> => {
     for (let i = 0; i < 50 && received.length === 0; i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
+    // A short tail so a SECOND alert — the thing "alerts exactly once" is about — has a chance to
+    // arrive and be caught, rather than being counted as absent because nothing waited for it.
     await new Promise((resolve) => setTimeout(resolve, 50));
   };
 
@@ -140,7 +168,8 @@ describe.skipIf(!hasDatabase)('Mail failure alerting (e2e)', () => {
     for (let i = 0; i < 5; i += 1) {
       await mail.sendPasswordReset({ to: RECIPIENT, resetUrl: 'https://example.test/reset/abc' });
     }
-    await settle();
+    await settleRows(5);
+    await settleAlert();
 
     // Five rows: every failure is recorded, because the history is what the staff panel reads.
     const rows = await prisma.mailEvent.findMany({});
@@ -176,9 +205,13 @@ describe.skipIf(!hasDatabase)('Mail failure alerting (e2e)', () => {
     ).resolves.toBeUndefined();
 
     // And the durable record still lands — the row does not depend on the channel.
-    for (let i = 0; i < 50 && (await prisma.mailEvent.count()) === 0; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
+    //
+    // Through the SHARED waiter, which is the second half of #132: this case used to poll for
+    // `count() === 0` to become false, and a row leaked from test 1 satisfies that immediately — so
+    // its wait could not tell its own write from its predecessor's, and it reported a confident 5
+    // rather than timing out. With test 1 now waiting on all five before it asserts, nothing leaks
+    // past `beforeEach`; sharing the waiter keeps the two cases from drifting apart again.
+    await settleRows(1);
     expect(await prisma.mailEvent.count()).toBe(1);
   });
 });

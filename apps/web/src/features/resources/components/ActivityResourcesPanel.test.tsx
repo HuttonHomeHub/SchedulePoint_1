@@ -120,6 +120,31 @@ describe('ActivityResourcesPanel', () => {
     );
   });
 
+  /**
+   * `docs/TECH_DEBT.md` #66. The case above proves the SAVE is shaded with its reason; nothing
+   * proved the fields above it were, and they were not — so a member who could not assign could
+   * fill in the whole form and meet the refusal at the end of it. Verified red: the units field had
+   * no `readonly` before the form took a `FieldGateProvider`.
+   *
+   * **Read-only, never native `disabled`** (ADR-0083 D1). The reason node is the SAME one the Save
+   * points at: the provider renders it once and both reference it, which is what stops the sentence
+   * appearing twice on one screen.
+   */
+  it('shades the assign form’s fields read-only too, pointing at the same reason (#66)', () => {
+    renderPanel({ canWrite: false, writeReason: 'Start editing to change this activity.' });
+    const assign = screen.getByRole('group', { name: 'Assign a resource' });
+
+    const units = within(assign).getByLabelText(/Budgeted units/i);
+    expect(units).toHaveAttribute('readonly');
+    expect(units).not.toBeDisabled();
+
+    // One node, N references — the field and the Save name the same element.
+    const save = within(assign).getByRole('button', { name: 'Assign resource' });
+    const fieldReason = units.getAttribute('aria-describedby')?.split(' ') ?? [];
+    expect(fieldReason).toContain(save.getAttribute('aria-describedby'));
+    expect(screen.getAllByText('Start editing to change this activity.')).toHaveLength(1);
+  });
+
   it('shows the assignments empty state', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },

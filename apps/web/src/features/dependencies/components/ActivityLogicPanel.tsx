@@ -125,7 +125,16 @@ export function ActivityLogicPanel({
   const successors = useSuccessors(orgSlug, activityId, queriesEnabled);
   const deleteDependency = useDeleteDependency(orgSlug);
   const announce = useAnnounce();
-  const regionRef = useRef<HTMLDivElement>(null);
+  // A removed row unmounts, taking focus with it. This lands on the two dependency tables — NOT on
+  // a wrapper around the whole panel, which is what it used to be (`docs/TECH_DEBT.md` #67): that
+  // wrapper also held the add form, the cross-plan slot and the notes slot, so "you removed a link"
+  // put the reader at the top of four unrelated sections.
+  //
+  // Deliberately **no host-override seam** of the kind `ActivityResourcesPanel` has. That prop
+  // exists because `ActivityResourcesDialog` owns a Close button worth landing on; the Logic
+  // dialog is a bare `Dialog` around this panel with no such control, so the seam would ship with
+  // no registrant — the shape `docs/TECH_DEBT.md` #156 records. Add it with its first caller.
+  const linksRef = useRef<HTMLDivElement>(null);
 
   // Toolbar **Add note** reveal (toolbar quick-wins U4/A4): when this panel opens via that entry point,
   // scroll its Notes section into view + move focus onto its heading, so the user lands ready to write a
@@ -198,7 +207,7 @@ export function ActivityLogicPanel({
           setRemoveError(null);
         });
         announce('Dependency removed.');
-        regionRef.current?.focus();
+        linksRef.current?.focus();
       },
       onError: (err) => setRemoveError(err.message),
     });
@@ -206,7 +215,10 @@ export function ActivityLogicPanel({
 
   return (
     <>
-      <div ref={regionRef} tabIndex={-1} className="outline-none">
+      {/* Kept as a plain box after the focus target moved inward (`docs/TECH_DEBT.md` #67). It no
+          longer takes focus, but removing it would make `FieldGridContainer` — and its `min-w-0` —
+          the host's direct child, which is a layout change this fix has no business making. */}
+      <div>
         <FieldGridContainer className="flex flex-col gap-6">
           {/* Advertise the lag-nudge chord (ADR-0052 M3) — a non-hover, in-context hint, since the
               canvas-scoped shortcuts sheet doesn't cover this panel. Rendered only when the nudge
@@ -217,28 +229,30 @@ export function ActivityLogicPanel({
               by one day.
             </p>
           ) : null}
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-medium">Predecessors</h3>
-            <DependencyTable
-              query={predecessors}
-              endpoint="predecessor"
-              caption="Predecessors"
-              emptyLabel="No predecessors — nothing has to finish before this activity."
-              {...lagReadout}
-              {...editHandlers}
-            />
-          </section>
-          <section className="flex flex-col gap-2">
-            <h3 className="text-sm font-medium">Successors</h3>
-            <DependencyTable
-              query={successors}
-              endpoint="successor"
-              caption="Successors"
-              emptyLabel="No successors — this activity doesn’t drive anything yet."
-              {...lagReadout}
-              {...editHandlers}
-            />
-          </section>
+          <div ref={linksRef} tabIndex={-1} className="flex flex-col gap-6 outline-none">
+            <section className="flex flex-col gap-2">
+              <h3 className="text-sm font-medium">Predecessors</h3>
+              <DependencyTable
+                query={predecessors}
+                endpoint="predecessor"
+                caption="Predecessors"
+                emptyLabel="No predecessors — nothing has to finish before this activity."
+                {...lagReadout}
+                {...editHandlers}
+              />
+            </section>
+            <section className="flex flex-col gap-2">
+              <h3 className="text-sm font-medium">Successors</h3>
+              <DependencyTable
+                query={successors}
+                endpoint="successor"
+                caption="Successors"
+                emptyLabel="No successors — this activity doesn’t drive anything yet."
+                {...lagReadout}
+                {...editHandlers}
+              />
+            </section>
+          </div>
           {/* What exists, then the form that adds to it (ADR-0061 §2). The two "Add …" buttons
               that used to sit beside these headings opened a second dialog on top of this one. */}
           {showAddSection ? (

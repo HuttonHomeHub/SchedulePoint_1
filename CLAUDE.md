@@ -20,7 +20,7 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1124 web
+> (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1126 web
 > source files with 41 Playwright suites beside the base journey, and
 > 121 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
@@ -2559,7 +2559,7 @@ progress` off the command surface because **an object action belongs on the obje
   located the toolbar by **selector string** rather than by role+name, so their axe `.include()`
   calls were left naming deleted rows; that was first written up as "a scan matching nothing, green
   for having tested nothing" — the shape #124 records — and then the dependency was opened:
-  `axe-core`'s `validateContext` (`axe.js:19178-19183`) **throws** on an empty include, so all three
+  `axe-core`'s `validateContext` (`axe.js:19564-19569`) **throws** on an empty include, so all three
   would have gone red loudly. A breakage, not a hole. Corrected in place rather than rewritten, because reaching for the
   register's own favourite failure mode instead of reading the code is ADR-0076 Class 2 committed in
   the same document that was praising an instrument for catching one; the citation is now in

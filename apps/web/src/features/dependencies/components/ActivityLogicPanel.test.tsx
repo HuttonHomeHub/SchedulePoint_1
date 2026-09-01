@@ -254,3 +254,36 @@ describe('ActivityLogicPanel', () => {
     expect(screen.queryByRole('group', { name: 'Add a link' })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * `docs/TECH_DEBT.md` #67. A removed row unmounts with focus inside it, so the panel moves focus —
+ * and it used to move it to a wrapper around **everything**: both tables, the add form, the
+ * cross-plan slot and the notes slot. "You removed a link" therefore put the reader at the top of
+ * four unrelated sections.
+ *
+ * The assertion is containment rather than a focus event, deliberately: the removal path runs
+ * through a modal `<dialog>`, and jsdom has no top layer, so what a browser does with focus there
+ * is not something this tier can ask (ADR-0111). What it CAN pin is the shape of the target, which
+ * is the whole of the defect — verified red against the wrapper, which contained the add form.
+ */
+describe('ActivityLogicPanel post-remove focus target (#67)', () => {
+  beforeEach(() => {
+    fetchAllPages.mockReset().mockResolvedValue([link()]);
+    fetchOne.mockReset().mockResolvedValue({});
+  });
+
+  it('is the two dependency tables, not the whole panel', async () => {
+    const { container } = renderPanel({ canManageLogic: true, planActivities: OTHERS });
+    await screen.findByText('Excavate');
+
+    const targets = container.querySelectorAll('[tabindex="-1"]');
+    expect(targets).toHaveLength(1);
+    const target = targets[0]!;
+
+    // Both tables are inside it — removing a predecessor and removing a successor land in one place.
+    expect(target).toContainElement(screen.getByRole('heading', { name: 'Predecessors' }));
+    expect(target).toContainElement(screen.getByRole('heading', { name: 'Successors' }));
+    // The add form is NOT — that is the part that made the old target the wrong answer.
+    expect(target).not.toContainElement(screen.getByRole('heading', { name: /Add a link/i }));
+  });
+});

@@ -57,6 +57,10 @@ export async function clearDomainData(prisma: PrismaClient): Promise<void> {
   // behind, so without this the failure lands in a spec that has never heard of notes — the
   // same way `plan_shares` did, one table along.
   await prisma.note.deleteMany();
+  // Weighted steps hold `activity_id` (ADR-0044 §33) — the THIRD table to fail this way, after
+  // `plan_shares` and `resource_assignments` (`docs/TECH_DEBT.md` #119a).
+  await prisma.activityStep.deleteMany();
+  await prisma.resourceAssignment.deleteMany();
   await prisma.activity.deleteMany();
   // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go before
   // `plan`, deepest first.
@@ -67,7 +71,9 @@ export async function clearDomainData(prisma: PrismaClient): Promise<void> {
   // Share links hold a RESTRICT FK to their plan.
   await prisma.planShare.deleteMany();
   await prisma.plan.deleteMany();
-  await prisma.resourceAssignment.deleteMany();
+  // The assignments went above, before `activity` — they hold `activity_id` as well as
+  // `resource_id`, so sweeping them only here could never have worked. `resource` still belongs
+  // after them.
   await prisma.resource.deleteMany();
   await prisma.calendarException.deleteMany();
   await prisma.calendar.deleteMany();

@@ -24,7 +24,6 @@ export {
   type UpdateActivityFn,
   type UpdateActivityInput,
   type CreatePlacedActivityFn,
-  type CreateActivityFn,
   type DeleteActivityFn,
   type CreateDependencyFn,
   type DeleteDependencyFn,

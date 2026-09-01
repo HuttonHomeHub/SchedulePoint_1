@@ -66,6 +66,14 @@ export interface SeededDefects {
  *   Phase 2 (WBS) ▸ Loose end (3 d)                                    ← dangles (metric 1 offender),
  *                                                                        under a collapsible parent
  * ```
+ *
+ * **This seeds through the API and does NOT reload — its callers do** (`docs/TECH_DEBT.md` #208).
+ *
+ * A `page.evaluate` POST is invisible to the open page's TanStack Query cache. Several suites used
+ * to rely on a later `Recalculate` press to invalidate it, which was a side effect nobody had
+ * written down and which ADR-0109 D3 removed by making that control conditional. So the rule is
+ * that the reliance is stated where it lives: the caller calls `page.reload()` on the next line
+ * (`health-check.spec.ts:30`), verified rather than assumed.
  */
 export async function seedDefects(
   page: Page,

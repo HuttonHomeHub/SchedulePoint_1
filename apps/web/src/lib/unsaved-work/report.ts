@@ -54,12 +54,42 @@ function labelsOf(reports: readonly UnsavedWorkReport[]): string[] {
 }
 
 /**
+ * Past this many names, print the count first (`docs/TECH_DEBT.md` #184). The activity editor holds
+ * **six** independently-dirty scopes, and all six produced one unpunctuated comma list —
+ * "General, Scheduling, Cost, Reported progress, How value is measured, Weighted steps have unsaved
+ * changes." — read aloud as one breath, with the number a reader most wants left for them to count.
+ * Four is where a list stops being a phrase; it is the same move ADR-0094 made for its offenders.
+ */
+const COUNT_BEFORE_LIST_AT = 4;
+
+/**
+ * "A", "A and B", "A, B and C" — the English list, used by BOTH branches of the sentence below.
+ *
+ * The multi-surface branch already said "and" and the per-scope branch did not, so the same
+ * confirmation read two different ways depending on how many surfaces were dirty. One helper is
+ * what stops that recurring.
+ */
+function joinWithAnd(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+/** The subject phrase: a list, or a count and then the list once the list is too long to be one. */
+function nameScopes(labels: readonly string[]): string {
+  if (labels.length < COUNT_BEFORE_LIST_AT) {
+    return `${joinWithAnd(labels)} ${labels.length === 1 ? 'has' : 'have'} unsaved changes.`;
+  }
+  return `${labels.length} sections have unsaved changes: ${joinWithAnd(labels)}.`;
+}
+
+/**
  * The sentence both the navigation guard and the in-editor confirmation print.
  *
- * Reproduces the editor's existing FIRST SENTENCE exactly for the single-surface case — including
- * the `has`/`have` agreement it already gets right (`ActivityEditorDialog.tsx:856-863`) — so
- * replacing that copy with a call to this is provably a no-op for the three scopes that already
- * worked, and the change is visible only in the three that were silently omitted.
+ * It reproduced the editor's existing FIRST SENTENCE exactly when it was written — including the
+ * `has`/`have` agreement that copy already got right — which is what made replacing that copy with
+ * a call to this provably a no-op at the time. **That is history, not a contract**: the list now
+ * carries an "and" and, past {@link COUNT_BEFORE_LIST_AT} names, its own count
+ * (`docs/TECH_DEBT.md` #184).
  *
  * The caller appends its own action clause (`Closing will discard them.`, `Switching to X will
  * discard them.`, and the guard's own). That is not an omission: only the caller knows which action
@@ -74,8 +104,8 @@ export function describeUnsavedWork(reports: readonly UnsavedWorkReport[]): stri
   // so name the subjects instead. Single surface keeps the established per-scope wording.
   const subject =
     surfaces.length > 1
-      ? `${surfaces.map((r) => r.subject).join(' and ')} have unsaved changes.`
-      : `${labels.join(', ')} ${labels.length === 1 ? 'has' : 'have'} unsaved changes.`;
+      ? `${joinWithAnd(surfaces.map((r) => r.subject))} have unsaved changes.`
+      : nameScopes(labels);
 
   const unsavable = unsavableScopes(reports);
   if (unsavable.length === 0) return subject;
@@ -83,6 +113,6 @@ export function describeUnsavedWork(reports: readonly UnsavedWorkReport[]): stri
   if (unsavable.length === labels.length) {
     return `${subject} They can no longer be saved, because you no longer hold the edit lock.`;
   }
-  const names = unsavable.map((s) => s.label).join(', ');
+  const names = joinWithAnd(unsavable.map((s) => s.label));
   return `${subject} ${names} can no longer be saved, because you no longer hold the edit lock.`;
 }

@@ -16,6 +16,7 @@ describe('openActivityEditor', () => {
     ['steps', { activityId: 'act-1', tab: 'progress', focusSteps: true }],
     ['logic', { activityId: 'act-1', tab: 'logic' }],
     ['resources', { activityId: 'act-1', tab: 'resources' }],
+    ['notes', { activityId: 'act-1', tab: 'notes', focusNotes: true }],
   ];
 
   it.each(CASES)('maps %s to its intent', (purpose, expected) => {
@@ -29,6 +30,17 @@ describe('openActivityEditor', () => {
     expect(steps.tab).toBe(progress.tab);
     expect(progress.focusSteps).toBeUndefined();
     expect(steps.focusSteps).toBe(true);
+  });
+
+  /**
+   * `docs/TECH_DEBT.md` #68. The tab was the reveal *visually* and nothing more: a native
+   * `<dialog>` puts initial focus on its ✕ whichever tab is active, so **Add note** left a keyboard
+   * user three stops from the composer. Verified red — this mapping returned `{ activityId, tab }`.
+   */
+  it('sends Notes to its tab AND asks for focus, like Steps', () => {
+    const notes = openActivityEditor(ROW, 'notes');
+    expect(notes.tab).toBe('notes');
+    expect(notes.focusNotes).toBe(true);
   });
 
   it('gives Logic and Resources their own tabs — they are collections, not a scope of the form', () => {

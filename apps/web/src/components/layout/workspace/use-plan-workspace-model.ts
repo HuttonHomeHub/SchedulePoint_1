@@ -12,7 +12,6 @@ import {
 } from '@/config/env';
 import {
   useActivities,
-  useCreateActivity,
   useCreatePlacedActivity,
   useUpdateActivity,
   useRepositionLane,
@@ -618,10 +617,9 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   // no other feature (ADR-0026 D8). A drag becomes a 1-day-min TASK pinned at the dropped day
   // with an SNET constraint, then the authoritative recalc places it.
   const createPlacedActivity = useCreatePlacedActivity(orgSlug, planId);
-  // Full-definition create + delete, used only by the undo/redo inverses (ADR-0048 M2): undoing a
-  // create deletes it; undoing a leaf delete re-creates its whole definition (a new id). Instantiated
-  // here (not in the dialog) so the command's inverse re-issues through the same authorised endpoints.
-  const createActivity = useCreateActivity(orgSlug, planId);
+  // Delete, used by the undo/redo inverses (ADR-0048 M2): undoing a create deletes it. The
+  // full-definition CREATE that undoing a delete used to need is gone with `docs/TECH_DEBT.md` #92 —
+  // the inverse is now the id-stable batch restore, so there is nothing left here to re-create.
   const createClone = useCreateClonedActivity(orgSlug, planId);
   const cloneCarriage = useCloneCarriage(orgSlug);
   const deleteActivity = useDeleteActivity(orgSlug, planId);
@@ -919,13 +917,15 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     [editHistory, updateActivity.mutateAsync],
   );
   // Record an activity DELETE on the undo stack (ADR-0048 M2). Called by `ActivityCrudDialogs` after a
-  // successful delete, with the pre-delete row. A **leaf** delete is reversible: undo re-creates the
-  // whole definition (a NEW id — the conservative rule; id-stable/cascade-clean restore is M4). A
-  // **cascade** (a WBS summary with a subtree, ADR-0038) is NOT cleanly reversible in M2, so rather
-  // than offer a broken partial undo we record an explicit non-undoable boundary that **truncates**
-  // the history (clear the stack). A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
+  // successful delete, with the pre-delete row **and the batch the delete returned**. A **leaf**
+  // delete is reversible: undo restores that batch, ids and links intact (`docs/TECH_DEBT.md` #92 —
+  // it used to re-create, which minted a new id and silently dropped every dependency the activity
+  // had). A **cascade** (a WBS summary with a subtree, ADR-0038) still records an explicit
+  // non-undoable boundary that **truncates** the history; the restore would take the subtree too, so
+  // that deferral's reason has lapsed, and lifting it is a capability change filed as #230 rather
+  // than made here. A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
   const recordActivityDelete = useCallback(
-    (activity: ActivitySummary): void => {
+    (activity: ActivitySummary, deleteBatchId: string): void => {
       if (!UNDO_REDO_ENABLED) return;
       const hasSubtree = (activities.data ?? []).some((a) => a.parentId === activity.id);
       if (activity.type === 'WBS_SUMMARY' && hasSubtree) {
@@ -935,19 +935,13 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
       editHistory.record(
         deleteActivityCommand({
           activity,
-          createActivity: createActivity.mutateAsync,
-          repositionLane: repositionLane.mutateAsync,
+          deleteBatchId,
+          restoreBatch,
           deleteActivity: deleteActivity.mutateAsync,
         }),
       );
     },
-    [
-      editHistory,
-      activities.data,
-      createActivity.mutateAsync,
-      repositionLane.mutateAsync,
-      deleteActivity.mutateAsync,
-    ],
+    [editHistory, activities.data, restoreBatch, deleteActivity.mutateAsync],
   );
   /**
    * Record a summary **dissolve** as a non-undoable boundary (WBS improvements M2). Dissolve is one
@@ -2093,8 +2087,8 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // the TSLD callbacks. A no-op when `VITE_UNDO_REDO` is off; undo/redo controls arrive in M3.
     recordActivityUpdate,
     // Undo/redo recording seams for delete (ADR-0048 M2). `ActivityCrudDialogs` calls
-    // `recordActivityDelete` after a successful delete (leaf → reversible re-create; cascade → history
-    // truncation); the `DependencyEditor` calls `recordDependencyRemove` after a successful link
+    // `recordActivityDelete` after a successful delete, with the batch it returned (leaf → id-stable
+    // restore; cascade → history truncation); the `DependencyEditor` calls `recordDependencyRemove` after a successful link
     // removal. No-ops when `VITE_UNDO_REDO` is off.
     recordActivityDelete,
     // Dissolve's undo boundary (WBS improvements M2) — see `recordDissolveBoundary`.
