@@ -73,6 +73,31 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   // A summary offers no checkbox — nesting one is the Breakdown picker's job (spec C-1b).
   await expect(rowCheckbox(page, 'Substructure')).toHaveCount(0);
 
+  // **Every selection checkbox clears 24 x 24** (`docs/TECH_DEBT.md` #72). A bare `size-4` input is
+  // a **16 px** pointer target, below WCAG 2.2 §2.5.8's AA floor, and it sat outside every
+  // instrument that could report it: `e2e-workspace-fit`'s sweep is scoped to the command surfaces,
+  // and axe's `target-size` rule is tagged `wcag22aa` (never requested here) *and* ships
+  // `enabled: false`. The fix wraps the 16 px box in a 24 px `<label>`, so this measures the LABEL.
+  //
+  // It lives in this journey and not in the target-size suite because the selection column renders
+  // only when the plan holds a `WBS_SUMMARY` — written there first, its pinned positive caught the
+  // fixture having none and failed rather than sweeping an empty set and reporting green.
+  const targets = await page.getByRole('checkbox', { name: /^Select / }).evaluateAll((els) =>
+    els.map((el) => {
+      const box = (el.closest('label') ?? el).getBoundingClientRect();
+      return {
+        name: el.getAttribute('aria-label') ?? '?',
+        w: Math.round(box.width),
+        h: Math.round(box.height),
+      };
+    }),
+  );
+  expect(targets.length, 'no selection checkboxes found').toBeGreaterThan(0);
+  expect(
+    targets.filter((t) => t.w < 24 || t.h < 24),
+    `selection checkboxes below 24x24: ${JSON.stringify(targets)}`,
+  ).toEqual([]);
+
   await rowCheckbox(page, 'Excavate').check();
   await rowCheckbox(page, 'Blind').check();
   await rowCheckbox(page, 'Reinforce').check();

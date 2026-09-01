@@ -254,7 +254,18 @@ describe.skipIf(!hasDatabase)('Cross-plan dependencies API (e2e)', () => {
     expect(cyclic.body.error?.details?.reason).toBe('CROSS_PLAN_CYCLE_DETECTED');
   });
 
-  it('serialises concurrent mirror cross-plan creates so exactly one wins (no plan-level cycle)', async () => {
+  // **Scope note (`docs/TECH_DEBT.md` #70), so nobody reads more into this name than it proves.**
+  //
+  // This exercises the cycle REJECTION through the real stack (HTTP -> service -> Postgres). It is
+  // **not** the regression gate for the advisory lock, and the name "serialises" overclaims: two
+  // mirror requests fired with `Promise.all`, even on separate keep-alive sockets, were **measured
+  // not to overlap in the danger window** — the second request's read began after the first's
+  // transaction had already committed — so this passes identically with the lock removed.
+  //
+  // The lock's real gate is the unit suite, which asserts the acquisition itself and its ordering
+  // and fails when either is taken away. `activities.e2e-spec.ts`'s WBS block has carried this note
+  // since the measurement; its three siblings did not,.
+  it('rejects the mirror cross-plan create that would close a plan-level cycle, whichever wins', async () => {
     const { actor, u, d } = await setup();
     // upPlan → downPlan and downPlan → upPlan raced together: the org lock orders them; the loser's
     // plan-level walk sees the winner's edge and is rejected as a cycle (ADR-0045 §3).

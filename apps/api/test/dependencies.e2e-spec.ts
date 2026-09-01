@@ -298,7 +298,18 @@ describe.skipIf(!hasDatabase)('Dependencies API (e2e)', () => {
     await actor.agent.post(base).send({ predecessorId: a, successorId: c }).expect(201);
   });
 
-  it('serialises concurrent mirror inserts so exactly one wins (no persisted cycle)', async () => {
+  // **Scope note (`docs/TECH_DEBT.md` #70), so nobody reads more into this name than it proves.**
+  //
+  // This exercises the cycle REJECTION through the real stack (HTTP -> service -> Postgres). It is
+  // **not** the regression gate for the advisory lock, and the name "serialises" overclaims: two
+  // mirror requests fired with `Promise.all`, even on separate keep-alive sockets, were **measured
+  // not to overlap in the danger window** — the second request's read began after the first's
+  // transaction had already committed — so this passes identically with the lock removed.
+  //
+  // The lock's real gate is the unit suite, which asserts the acquisition itself and its ordering
+  // and fails when either is taken away. `activities.e2e-spec.ts`'s WBS block has carried this note
+  // since the measurement; its three siblings did not,.
+  it('rejects the mirror insert that would close a cycle, leaving the graph acyclic', async () => {
     const { actor, planId, a, b } = await setup();
     const base = `/api/v1/organizations/acme/plans/${planId}/dependencies`;
 

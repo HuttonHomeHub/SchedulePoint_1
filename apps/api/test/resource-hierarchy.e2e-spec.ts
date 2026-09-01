@@ -435,10 +435,25 @@ describe.skipIf(!hasDatabase)('Resource hierarchy (e2e)', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Concurrency — the reason the tree lock is ORG-scoped
+  // Mirror reparents — the shape the ORG-scoped tree lock exists for
+  //
+  // Headed "Concurrency" until 2026-09-01, which promised more than the case below delivers: see
+  // its scope note. The lock's reason is recorded in ADR-0053 M3 and gated in the unit suite.
   // -------------------------------------------------------------------------
 
-  it('serialises concurrent MIRROR reparents so the pair cannot form a cycle', async () => {
+  // **Scope note (`docs/TECH_DEBT.md` #70), so nobody reads more into this name than it proves.**
+  //
+  // This exercises the cycle REJECTION through the real stack (HTTP -> service -> Postgres). It is
+  // **not** the regression gate for the advisory lock, and the name "serialises" overclaims: two
+  // mirror requests fired with `Promise.all`, even on separate keep-alive sockets, were **measured
+  // not to overlap in the danger window** — the second request's read began after the first's
+  // transaction had already committed — so this passes identically with the lock removed.
+  //
+  // The lock's real gate is the unit suite, which asserts the acquisition itself and its ordering
+  // and fails when either is taken away. `activities.e2e-spec.ts`'s WBS block has carried this note
+  // since the measurement; its three siblings did not, and this one had the strongest implied
+  // guarantee of the four — a `describe` headed "the reason the tree lock is ORG-scoped".
+  it('rejects the mirror reparent that would close a cycle, leaving the tree acyclic', async () => {
     const { actor } = await adminWithOrg();
     const a = await create(actor, { name: 'A', kind: 'GROUP' });
     const b = await create(actor, { name: 'B', kind: 'GROUP' });

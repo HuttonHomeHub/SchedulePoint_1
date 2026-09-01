@@ -277,10 +277,19 @@ The consequence is that the three existing "serialises concurrent mirror X" e2e 
 than they read: they prove the rejection path, not the serialisation. The lock is gated instead by
 unit tests that assert the acquisition and its ordering directly, and fail when it is removed.
 
-**What would close it:** either drive the race below HTTP (two concurrent service calls, or two
-hand-rolled transactions racing the read-then-write with a barrier between the read and the write),
-or accept the HTTP tests as invariant tests and rename them so they stop implying a concurrency
-guarantee. Until then, do not add another "serialises concurrent …" e2e test and treat it as a gate.
+**The second of the two remedies landed 2026-09-01, and it was the honest one.** The row offered
+either driving the race below HTTP _or_ accepting the HTTP tests as invariant tests and renaming
+them so they stop implying a guarantee they do not make. All three are now named for what they
+prove — `rejects the mirror re-parent …` rather than `serialises concurrent …` — and each carries
+the same scope note, in the file, saying that the harness serialises the two requests and that the
+lock's own acquisition and ordering are gated by unit tests. A test whose name overstates it is
+worse than a missing one, because it stops anybody writing the real one.
+
+**What remains open is the first remedy**: driving the race below HTTP (two concurrent service
+calls, or two hand-rolled transactions racing the read-then-write with a barrier between the read
+and the write). Until then, **do not add another "serialises concurrent …" e2e test** — treat that
+as a gate. Renaming does not make the harness able to race; it makes the estate stop claiming it
+can.
 
 ### 71. The WBS band's derived bucket is distinguished by colour and label, not shape
 
@@ -303,20 +312,35 @@ matching the Gantt's stated rule. Raised by the ADR-0063 M6 accessibility gate a
 also flagged by the UX gate, which noted the `muted-foreground`-as-fill / `primary-foreground`-as-ink
 pairing is not one of the design system's validated pairs and has no contrast test pinning it.
 
-### 72. Bulk-selection checkboxes are a 16px target, and hand-rolled
+### 72. The bulk-selection checkboxes are hand-rolled
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-01
 
-The activities table's new selection column renders a bare `size-4` `<input type="checkbox">` per
-row. `ActivityMembersPanel` does better for the same job — the whole row is a clickable `<label>` —
-and `CheckboxField` (`components/ui/form.tsx`) exists to stop the chrome being hand-assembled at
-all. It is not a regression (`TsldViewControls` and the toolbar registry already hand-roll the same
-className for compact inline toggles), but the selection column is the fifth occurrence of a shape
-the design system has a primitive for.
+**The target-size half closed 2026-09-01 and the primitive half did not**, so the row is narrowed
+rather than deleted.
+
+~~Bulk-selection checkboxes are a 16px target~~ — **fixed.** Both boxes in `ActivitiesTable` (the
+select-all and the per-row) now sit inside a `size-6` `<label>`, so the pointer target is 24 × 24
+while the painted box stays 16 px: this widens what a pointer may hit, not what a reader sees. It
+was a **WCAG 2.2 §2.5.8 (AA)** failure with no exception available, and it sat outside every
+instrument that could have said so — the target-size sweep is scoped to the command surfaces, and
+axe's `target-size` rule is tagged `wcag22aa` (which no scan here requests) _and_ ships
+`enabled: false`. It is now pinned in `e2e-wbs/wbs.spec.ts`, which is the suite whose fixture has a
+`WBS_SUMMARY` and therefore renders the selection column at all — **verified red first**, naming
+every checkbox at 16 × 16. It was first written into `e2e-workspace-fit`, where its own pinned
+positive fired ("no selection checkboxes found"): a sweep of a table that never renders the column
+reads as coverage while testing nothing.
+
+**What survives is the original component finding.** The boxes are still hand-assembled where
+`CheckboxField` (`components/ui/form.tsx`) exists, and the selection column is the fifth occurrence
+of that shape. It is not a regression — `TsldViewControls` and the toolbar registry already
+hand-roll the same className for compact inline toggles.
 
 **What would close it:** widen `CheckboxField` to support a visually-hidden label and trailing row
 content — the two reasons a straight swap is not free today — then move all five call sites, and
-make the table row itself the hit target. Raised by the ADR-0063 M6 component and UX gates.
+make the table row itself the hit target. That is a **primitive's public contract** and therefore
+needs a spec (ADR-0105), which is why the accessibility half was taken on its own. Raised by the
+ADR-0063 M6 component and UX gates.
 
 ### 74. The plan advisory lock's contention headroom is unmeasured
 
@@ -1639,12 +1663,36 @@ unsolicited announcement on load, and now that each panel announces its own sett
 its role from `tone` alone, and the distinction it is missing is "reporting a change" vs "stating a
 standing fact". Not blocking — nothing is unreachable, and the copy is correct.
 
-**4. `--card` / `--muted-foreground` is not in the contrast matrix.** The staff console puts
-`text-muted-foreground` directly on `Card` rather than through `CardDescription`, and
-`token-contrast.test.ts` pins `--muted-foreground` only against `--background`. Recomputed
-independently at the OKLCH→sRGB level: the worst case is dark theme at **6.91:1**, comfortably above
-4.5, so **there is no failure today** — but it is ungated, and it is _less_ contrasty than the pair
-that is gated (7.63:1), so the gate is currently reassuring about the wrong pair. Add the case.
+**4. `--card` / `--muted-foreground` is not in the contrast matrix — and adding it is not one line.**
+The staff console puts `text-muted-foreground` directly on `Card` rather than through
+`CardDescription`, and `token-contrast.test.ts` pins `--muted-foreground` only against
+`--background`. `--card` appears in that suite once, inside `STACK_GROUNDS`, asserted at the 3:1
+**graphical** floor — so the 4.5:1 **text** question has never been asked about it.
+
+~~the worst case is dark theme at **6.91:1** … it is _less_ contrasty than the pair that is gated
+(7.63:1), so the gate is currently reassuring about the wrong pair~~ — **both numbers and the
+conclusion are wrong** (2026-09-01). There is no dark theme (ADR-0097). Recomputed from today's
+tokens: the card pair is **6.00:1** and the gated pair (`--background`/`--muted-foreground`) is
+**4.65:1**, so the ungated pair is the _safer_ of the two and the gate is not reassuring about the
+wrong one. What survives is only "the pair is ungated".
+
+**Adding it naively was tried, and it goes RED at 2.00:1 in the `chrome` and `brand` scopes.** The
+suite applies every `TEXT_PAIRS` entry to all seven scopes, and `--card` is deliberately outside the
+rebind closure (`token-architecture.test.ts:116`, `resets:`) while `--muted-foreground` is rebound —
+so in a navy scope the pair is a light grey on an unbound white. **That is ADR-0097's own "latent
+split pair", and making `--card` a "reset" does not close it at runtime**: `Card` renders
+`bg-card text-card-foreground` and nothing restores `--muted-foreground` for its subtree. The reset
+is a taxonomy exemption from the completeness check, not a runtime re-binding.
+
+**It is latent, not live** — verified: no `<Card>`, `CardDescription` or `text-muted-foreground`
+occurs inside any `chrome`- or `brand`-scoped subtree today. So the naive addition would be a gate
+that fails on day one over a combination the product never produces, which ADR-0058 says gets
+deleted rather than fixed.
+
+**What it actually needs** is a way to say "assert this pair in the scopes where it can occur" — a
+per-pair scope filter in `TEXT_PAIRS`. That is a change to a shared gate (ADR-0105), and it is the
+same shape as **#231** and **#227**: three deferred edits to the same family of checks, all wanting
+one question answered once.
 
 **Not a finding, recorded because it was measured and the measurement inverted the recommendation:**
 a partial index `(created_at, id) WHERE NOT email_verified` on `users`, serving the accounts panel.
@@ -3073,6 +3121,14 @@ rather than quietly dropped:
 - **`VerdictBadge` hand-rolls a coloured span where `Badge` exists** — the spec named the
   `EarnedValuePanel` precedent; the hand-rolled path is also where the `text-destructive` token
   slip happened, which is the argument for the primitive.
+  > **Assessed 2026-09-01, and the item's own framing is what needs correcting.** "Where `Badge`
+  > exists" reads as a swap, and it is not one: `Badge`'s variants are `default`/`secondary`/
+  > `outline`/`destructive`, which has **no member for a PASS and no member for a caution** — so
+  > closing this means adding at least two variants to a primitive every badge in the product is
+  > downstream of, and then deciding what a passing verdict looks like everywhere. That is a design
+  > decision plus a **primitive public-contract** change (ADR-0105), not the small fold the wording
+  > implies. The triage line above already called it "a ux call, not a correctness fix"; this says
+  > _why_ it cannot be done as a swap, so the next reader does not open it expecting one.
 - **(M6 addendum) `getCriticalPathTest` scans the plan's activities twice** — `buildEngineGraph`'s
   `loadActivities` plus `loadHealthActivities` for labels/factors, concurrent but on separate
   connections (so not one snapshot; a concurrent rename can label the offender stale, degraded
