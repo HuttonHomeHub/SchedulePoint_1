@@ -92,7 +92,7 @@ saying, not from the fact that it is blank:
 | A settled good outcome ("nothing needs you")              | A sentence. Not a state at all                                                                                                                  |
 
 Enforced by `components/ui/page/empty-state.structural.test.ts`, which fails on a
-hand-rolled dashed box outside a three-entry allow-list, and fails again when an
+hand-rolled dashed box outside a one-entry allow-list, and fails again when an
 entry stops being needed.
 
 ## Interaction standards

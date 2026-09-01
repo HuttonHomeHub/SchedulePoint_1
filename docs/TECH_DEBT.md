@@ -1023,44 +1023,6 @@ sweep that ends with a count of failures, named, would have surfaced this the fi
 Not built here, because the sweep is a local convenience rather than a CI gate and this is the
 milestone that found it, not a milestone about it.
 
-### 236. The empty-state count was by treatment, so an untreated absence was invisible to it
-
-**Status:** open · **Raised:** 2026-09-01 (empty-state M8) · **Size:** S · **Owner:** web
-
-`docs/specs/empty-state-consolidation/` began from
-`rg 'rounded-lg border border-dashed' apps/web/src -g '*.tsx'` → 34 sites, and everything after that
-— the classification, the six kinds, the milestones, the gate — is derived from that set. **The
-predicate is a treatment.** A region that states an absence in bare prose, with no box around it at
-all, was never a candidate, and the gate that now guards the result cannot see one either: it
-matches the same class string.
-
-Found by looking at a picture rather than by reading, which is the only way it could have been.
-`activity-editor-resources-empty.png` (added in M8) shows the Resources tab carrying **two**
-absences at once in **two** shapes — `No resources assigned yet.` in the dashed `NoticeStrip` M6
-gave it, and `No resources in the library yet — create one on the Resources screen first.`
-(`ActivityResourcesPanel.tsx:342-346`) as a bare `<p className="text-muted-foreground text-sm">`
-directly beneath it.
-
-**The second one is not a defect against this epic's rule, and that is what makes it worth a row
-rather than a fix.** By the §1.5.1 discriminator it is K5 — a precondition resolved on a different
-screen — and K5 stays as prose. But the epic decided that K5 is _not converted_; it never decided
-what a K5 **looks like**, and the two K5 sites it did allow-list (`AddLinkSection`,
-`ImportScheduleDialog`) are both dashed boxes. So three sites of one kind carry two treatments, and
-which one a reader meets depends on which the pass happened to see.
-
-**Scope, probed rather than assumed.** 110 non-test `<p className="text-muted-foreground text-sm">`
-occurrences; a scan of the sentences immediately following one returns four candidates, of which
-two are fallback caveats in `EarnedValuePanel`, one is staff-console prose and one is a sign-up
-link — so this is a handful, not a second 34. The `ActivityResourcesPanel` line does not appear in
-that scan either (its sentence sits inside a ternary a line further in), which is itself the
-finding restated: **there is no cheap predicate for "this sentence reports an absence", which is
-exactly why the original count reached for one that was cheap.**
-
-**What it would take.** A decision on the K5 treatment (one shape for all three, or a written reason
-why a precondition inside a form differs from one inside a dialog), then applying it. Not urgent —
-nothing here misleads a reader about what is true, which is the bar the five K6 sites failed. Do it
-the next time one of the three files is open.
-
 ### 235. A failing typecheck did not block the pre-push gate, because `tsc` exits 2
 
 **Status:** open · **Found and fixed:** 2026-09-01 · **Size:** S (fixed) · **Owner:** repo
@@ -1170,6 +1132,17 @@ must send whichever unit the gesture actually means, stated rather than inherite
 driven in a browser. Establishing them wants a plan whose edge carries a sub-day lag — the seed
 catalogue can build one — and that proof belongs with the fix.
 
+**DECIDED 2026-09-01 (product owner): minutes, snapped to the pixel.** The drag converts x-pixels to
+working minutes on the relationship's lag calendar and PATCHes `lagMinutes`; dropping between day
+boundaries stores what the pointer landed on, so a 90-minute lag nudged one day becomes `1d 90m`
+rather than `1d`. That is ADR-0070 M4's answer for `durationDays` applied to the field beside it,
+and it disposes of both halves at once — the no-op guard stops comparing two different quantities,
+so the silent refusal goes with the data loss rather than needing its own fix.
+
+The `Shift+←/→` nudge shares the handler and keeps whole-day steps: a keyboard step has no pixel to
+snap to, and inventing a minute figure for it would be a second answer to a question the drag has
+already answered.
+
 ### 232. The WBS band's derived bucket has no accessible name or count
 
 **Status:** open · **Verified:** 2026-09-01 · **Size:** M · **Owner:** web
@@ -1239,6 +1212,7 @@ One line each. The story lives where the link points, not here.
 | 224 | `plan:scale-500` was described as fully unassigned and its spec assigns 168 activities | 2026-08-31 | The playbook said "478 of 478 unassigned" about a fixture that is 35 % assigned — on the document whose job is to say what wrong looks like. Corrected to 310 of 478, the denominator established from the engine's write set rather than from a seeded run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 65  | A link's lag or type edited from the dialog is not recorded for undo                   | 2026-09-01 | `dependencyEditCommand` + `onSaved`/`onEdited` at both hosts, and a journey reading the lag back from the API.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 92  | An undone delete left a deletion with no matching restore                              | 2026-08-31 | The inverse is now the id-stable `restore-batch` rather than a re-create, so `activity.restored` fires with the original id and the pair closes. It also stopped the re-create silently dropping every dependency the activity had. Cascade undo is #230.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 236 | Three placeholder sites of one kind carried two treatments                             | 2026-09-01 | Bare prose everywhere (product-owner decision): the dashed frame came off `AddLinkSection` and `ImportScheduleDialog`, matching `ActivityResourcesPanel`. A precondition is not an absence, which is the reason these sites were excluded from the empty-state pass rather than converted by it. Both allow-list entries then went stale and the gate's third assertion caught them; the list fell 3 → 1. **The blind spot the row also named stays open in the gate's docblock**: the count was by TREATMENT, so an absence nobody drew a box around is invisible to it, and there is no cheap predicate for one.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | 161 | The empty-state pattern was inconsistent, and `clients-loading` was a bare spinner     | 2026-09-01 | `docs/specs/empty-state-consolidation/` — 34 hand-rolled dashed boxes counted, 5 that were errors or refusals reshaped, 27 converted, 3 left as placeholders with permanent reasons, and `empty-state.structural.test.ts` gating the result. `DataTable` renders a column-matched skeleton; its 15 page/panel siblings are #234. (c) and (d) had resolved in `web-v0.97.0` before anyone acted on them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 160 | `resolveLensPalette` was resolved twice per cycle                                      | 2026-08-31 | One memo, both maps derived from it — which also makes the `barFill`/`barInk` pairing come from one resolve, as it must.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 171 | `schedulepoint-active-org` was never cleared and carried no user id                    | 2026-08-31 | Keyed `<prefix>:<userId>` matching `recent-plans`, and swept beside `forgetAllForUser` at sign-out. On a shared machine the next person in was silently sent to the previous person's organisation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |

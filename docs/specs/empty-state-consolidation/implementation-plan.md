@@ -611,6 +611,15 @@ what the product does.
 > like, so three sites of one kind now carry two treatments. Filed rather than fixed, with the
 > blind spot written into the gate's own docblock so 34 is not quoted as a total.
 >
+> **The allow-list then fell 3 → 1 the same day, and #236 closed with it.** Put to the product
+> owner, the answer was **bare prose everywhere**: the dashed frame comes off `AddLinkSection` and
+> `ImportScheduleDialog`, matching `ActivityResourcesPanel`, on the epic's own argument for
+> excluding these sites in the first place — a precondition is not an absence, and framing one
+> announces a problem the screen does not have. Both entries then stopped offending and the gate's
+> **third assertion caught them**, which is the assertion existing for exactly this: an allow-list
+> entry that outlives its need silently exempts a file, and the next hand-rolled box in it walks
+> through. The survivor is `DataTable`'s `EMPTY_FRAME`, which is the treatment itself.
+>
 > **M6 had never been linted, and the way that surfaced is worth a line.** It landed on the unit
 > suite and four journeys; `pnpm prepush` was not run against it, and its six new `notice-strip`
 > imports were all in the wrong `import/order` position, plus two escaped quotes in the allow-list

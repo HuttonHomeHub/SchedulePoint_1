@@ -162,10 +162,15 @@ export function AddLinkSection({
   return (
     <FormSection title="Add a link" description="Connect this activity to another one in the plan.">
       {options.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+        // **Prose, not a framed empty state** (`docs/TECH_DEBT.md` #236, decided 2026-09-01).
+        // Nothing is missing from this section: its subject is links, and there are no links
+        // because the plan has no other activities — an absence resolved on a different surface.
+        // A dashed frame announces a problem the screen does not have, which is the reason this
+        // site was excluded from the empty-state pass rather than converted by it.
+        <p className="text-muted-foreground text-sm">
           This plan has no other activities to link to yet. Add another activity to the plan first,
           then come back to connect them.
-        </div>
+        </p>
       ) : (
         <form noValidate onSubmit={(event) => void onSubmit(event)} className="flex flex-col gap-4">
           {/* **The fields answer to the same gate as the Save** (`docs/TECH_DEBT.md` #66, ADR-0083).

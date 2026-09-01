@@ -261,7 +261,11 @@ function ImportFlow({
             </div>
           </div>
         ) : (
-          <p className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
+          // **Prose, not a framed empty state** (`docs/TECH_DEBT.md` #236, decided 2026-09-01).
+          // The reader has not chosen a file yet; nothing is absent. This is an instruction
+          // pointing at a control above it, and framing it would report a fault where the dialog
+          // is working exactly as designed — the same reasoning the step-3 comment below applies.
+          <p className="text-muted-foreground text-sm">
             Choose a file above and its report appears here.
           </p>
         )}

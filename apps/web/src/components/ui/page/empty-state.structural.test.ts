@@ -33,13 +33,16 @@ import { describe, expect, it } from 'vitest';
  *   errors and two are permission refusals, and a refusal that looks like an absence is the
  *   substantive defect this epic exists to fix. The gate cannot tell them apart; the allow-list's
  *   `kind` field is where that judgement is written down.
- * - **An absence with no treatment at all** (`docs/TECH_DEBT.md` #236). The predicate is a
+ * - **An absence with no treatment at all** (`docs/TECH_DEBT.md` #236, closed — but closed on the
+ *   TREATMENT question, not this one; the blind spot below stands). The predicate is a
  *   TREATMENT, and so was the count that produced the 34 — so a region stating an absence in bare
  *   prose was never a candidate for the pass and is not a candidate for this gate either. One was
  *   found in M8, by looking at a screenshot: the Resources tab carries the dashed strip M6 gave it
  *   and, directly beneath, an empty-library sentence with no box. There is no cheap predicate for
  *   "this sentence reports an absence", which is exactly why the original count reached for one
- *   that was cheap. This is the blind spot to remember before quoting 34 as a total.
+ *   that was cheap. This is the blind spot to remember before quoting 34 as a total, and it is
+ *   why no assertion here was added for it: a gate that cannot be written is better named than
+ *   faked.
  * - Anything outside `apps/web/src`.
  *
  * Two failure modes this gate is built against, both of which this repository has shipped:
@@ -84,16 +87,6 @@ const ALLOWED: { file: string; match: string; note: string }[] = [
     file: 'components/ui/data-table.tsx',
     match: 'border-border text-muted-foreground rounded-lg border border-dashed',
     note: 'PERMANENT — this IS the frame. `EMPTY_FRAME` is where the treatment lives after M3; the entry exists so the gate does not report the primitive as an offender, and it must never be deleted while that constant does.',
-  },
-  {
-    file: 'features/dependencies/components/AddLinkSection.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'PERMANENT — K5, a placeholder rather than an absence (CQ-3). “This plan has no other activities to link to yet” is a precondition for the form beside it, and the action that resolves it is on another surface; framing it as an empty state would promise something to do here.',
-  },
-  {
-    file: 'features/interchange/components/ImportScheduleDialog.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'PERMANENT — K5, a placeholder rather than an absence (CQ-3). “Choose a file above and its report appears here” describes what the panel is waiting for, not something missing from the plan.',
   },
 ];
 
