@@ -30,9 +30,12 @@ import { apiFetch } from '@/lib/api/client';
  * control on a screen that is about to be replaced is worse than none.
  */
 const search = vi.hoisted<{ value: Record<string, unknown> }>(() => ({ value: {} }));
+/** The screen strips its token from the URL on mount (`docs/TECH_DEBT.md` #102 item 2). */
+const navigate = vi.hoisted<{ fn: ReturnType<typeof vi.fn> }>(() => ({ fn: vi.fn() }));
 
 vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({ navigate: vi.fn() }),
+  useNavigate: () => navigate.fn,
   useSearch: () => search.value,
   Link: ({ children, ...rest }: { children: React.ReactNode; to?: string }) => (
     <a href={typeof rest.to === 'string' ? rest.to : '/'}>{children}</a>
@@ -120,6 +123,56 @@ function operableControls(): HTMLElement[] {
 afterEach(() => {
   search.value = {};
   vi.clearAllMocks();
+});
+
+describe('accept-invite — the token does not stay in the URL (`docs/TECH_DEBT.md` #102 item 2)', () => {
+  /**
+   * **An invitation token is a live capability grant**, so it belongs in the URL for exactly as
+   * long as it takes to read it. Left there it sits in browser history for the life of the tab and
+   * rides along in any later navigation's referrer.
+   *
+   * `reset-password.tsx` has always stripped its token this way and this route never did — one of
+   * two token-bearing public screens applying the rule, which is what made it a row rather than a
+   * judgement. The mechanism is the sibling's verbatim; these two cases pin it here so the
+   * inconsistency cannot come back on only one side.
+   *
+   * **Verified red against the pre-fix screen, and only the first case fails there** — no
+   * `navigate` call at all. The other two pass against the original code as well, because they
+   * guard a wrong FIX rather than the original defect: one catches a strip that reads the token
+   * live and then meets its own "Invitation not found", the other a strip that fires on a screen
+   * with no token. Said plainly, because three cases that all go red together prove less than one
+   * that discriminates plus two that state the traps.
+   */
+  it('replaces the URL without the token, once, on mount', () => {
+    navigate.fn.mockClear();
+    renderScreen({ token: 'tok' });
+
+    expect(navigate.fn).toHaveBeenCalledTimes(1);
+    expect(navigate.fn).toHaveBeenCalledWith({
+      to: '/accept-invite',
+      search: {},
+      // `replace`, not a push: without it Back restores the URL the token was in, which is most of
+      // what putting it in history costs.
+      replace: true,
+    });
+  });
+
+  it('still renders the invitation after the token has left the URL', () => {
+    // The half a bare "it navigates" assertion cannot see. The token is captured in a `useState`
+    // initialiser BEFORE the effect strips it; read live from `search` instead, this screen would
+    // navigate and then immediately render its own "Invitation not found" dead end.
+    renderScreen({ token: 'tok' });
+
+    expect(screen.queryByText('Invitation not found')).not.toBeInTheDocument();
+  });
+
+  it('navigates nowhere when there was no token to strip', () => {
+    navigate.fn.mockClear();
+    renderScreen({ token: null });
+
+    expect(navigate.fn).not.toHaveBeenCalled();
+    expect(screen.getByText('Invitation not found')).toBeInTheDocument();
+  });
 });
 
 describe('accept-invite — the states that explain themselves', () => {

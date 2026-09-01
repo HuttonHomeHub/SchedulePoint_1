@@ -48,6 +48,29 @@ describe('BrandPanel', () => {
     expect(screen.getByText('SchedulePoint').closest('a')).toBeNull();
   });
 
+  it('contains nothing focusable at all, not just no link (`docs/TECH_DEBT.md` #102 item 5)', () => {
+    // **The case above pins `a` and `button`; this pins the RULE.** A focusable element inside an
+    // `aria-hidden` container is a focus stop assistive technology cannot see — WCAG 4.1.2, and
+    // 2.4.3 for anyone tabbing through it — and the two elements already asserted are only the two
+    // that were tempting on the day. `input`, `summary`, a `tabindex` on a decorative `<div>` and a
+    // `contenteditable` are all reachable and all silent here.
+    //
+    // **Verified red against `<div tabIndex={0}>`, deliberately not against `<button>`.** A button
+    // trips the case above as well, so it proves nothing about this one; a `tabindex` on a plain
+    // `<div>` is caught here and by nothing else in the estate — exactly one test fails, this one.
+    const { container } = render(<BrandPanel />);
+    const panel = container.querySelector('aside');
+
+    const focusable = panel?.querySelectorAll(
+      'a[href],button,input,select,textarea,summary,iframe,object,embed,area[href],' +
+        '[tabindex],[contenteditable="true"]',
+    );
+    expect(
+      [...(focusable ?? [])].map((el) => el.outerHTML.slice(0, 80)),
+      'the brand panel is aria-hidden, so anything focusable inside it is a focus stop nobody can see',
+    ).toEqual([]);
+  });
+
   it('is hidden from assistive technology, and loses nothing by it', () => {
     const { container } = render(<BrandPanel />);
     const panel = container.querySelector('aside');
