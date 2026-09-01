@@ -244,7 +244,11 @@
       "path": "dist/esm/useBlocker.js",
       "lines": "59-65",
       "anchor": "search: router.options.parseSearch(location.search)",
-      "citedBy": ["docs/specs/unsaved-work-guard/feature-spec.md"]
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
     },
     {
       "ref": "useBlocker.js:77-86",
@@ -287,12 +291,146 @@
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
+      "ref": "useSearch.js:21-23",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useSearch.js",
+      "lines": "21-23",
+      "anchor": "return opts.select ? opts.select(match.search) : match.search;",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "load-client.js:152-156",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/load-client.js",
+      "lines": "152-156",
+      "anchor": "const validationError = match.paramsError ?? match.searchError;",
+      "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
+    },
+    {
+      "ref": "qss.js:25-32",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/qss.js",
+      "lines": "25-32",
+      "anchor": "if (val !== void 0) result.set(key, stringify(val));",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "qss.js:41-46",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/qss.js",
+      "lines": "41-46",
+      "anchor": "if (str === \"false\") return false;",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "qss.js:55-65",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/qss.js",
+      "lines": "55-65",
+      "anchor": "else result[key] = [previousValue, toValue(value)];",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "router.js:183-194",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "183-194",
+      "anchor": "const searchStr = this.options.stringifySearch(parsedSearch);",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
       "ref": "router.js:298",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
       "lines": "298",
       "anchor": "matched route",
       "citedBy": ["docs/TECH_DEBT.md"]
+    },
+    {
+      "ref": "router.js:634-635",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "634-635",
+      "anchor": "parseSearch: options.parseSearch ?? defaultParseSearch",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "router.js:685-696",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "685-696",
+      "anchor": "const strictSearch = validateSearch(route.options.validateSearch, { ...parentSearch }) ?? void 0;",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "router.js:697-704",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "697-704",
+      "anchor": "if (!(err instanceof SearchParamError)) searchParamError = new SearchParamError(err.message, { cause: err });",
+      "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
+    },
+    {
+      "ref": "router.js:795-798",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/router.js",
+      "lines": "795-798",
+      "anchor": "Object.assign(accumulatedSearch, validateSearch(route.options.validateSearch, accumulatedSearch));",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "searchParams.js:7",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/searchParams.js",
+      "lines": "7",
+      "anchor": "const defaultStringifySearch = stringifySearchWith(JSON.stringify, JSON.parse);",
+      "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
+    },
+    {
+      "ref": "searchParams.js:18-30",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/searchParams.js",
+      "lines": "18-30",
+      "anchor": "if (typeof value === \"string\") try {",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "searchParams.js:43-62",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/searchParams.js",
+      "lines": "43-62",
+      "anchor": "if (isJsonParser && !jsonStart.test(val)) return val;",
+      "citedBy": [
+        "docs/specs/router-search-params/feature-spec.md",
+        "docs/specs/router-search-params/implementation-plan.md"
+      ]
     },
     {
       "ref": "axe.js:19564-19569",
@@ -498,6 +636,14 @@
         "docs/specs/account-security/feature-spec.md",
         "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
       ]
+    },
+    {
+      "ref": "password.mjs:75",
+      "package": "better-auth",
+      "path": "dist/api/routes/password.mjs",
+      "lines": "75",
+      "anchor": "const verificationToken = generateId(24);",
+      "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
     },
     {
       "ref": "password.mjs:83",
