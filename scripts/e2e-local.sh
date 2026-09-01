@@ -20,6 +20,10 @@
 # A `web:<name>` target maps to `pnpm --filter @repo/web test:e2e:<name>`.
 set -euo pipefail
 
+# Where the full log lands. Defaulted rather than opt-in: an instrument nobody has to remember to
+# switch on is the only kind that is there when it is needed (#119a). Set `SP_E2E_LOG=` to disable.
+SP_E2E_LOG="${SP_E2E_LOG-.e2e-logs/e2e-$(date +%Y%m%d-%H%M%S).log}"
+
 PG_PORT="${PGPORT:-5432}"
 export DATABASE_URL="${DATABASE_URL:-postgresql://app:app@localhost:${PG_PORT}/app_test?schema=public}"
 # Better Auth refuses a secret under 32 chars; e2e only ever signs throwaway
@@ -28,6 +32,35 @@ export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-local-e2e-secret-at-least-32-ch
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
+
+# --- 0. Keep the whole log, whatever the caller did with the pipe -----------
+#
+# **The capture must not depend on how this was invoked** (`docs/TECH_DEBT.md` #119a).
+#
+# That row records the API e2e suite failing intermittently four times. Three were diagnosed; the
+# fourth, on 2026-09-01, was lost — 45 tests failed in one file and the command had been piped
+# through `tail -12`, so the file name and the error were discarded before anyone read them. The
+# re-run passed 572/572, which is the row's own recorded signature: a run that sweeps itself clean
+# before anybody looks, proving nothing.
+#
+# The instruction to redirect the whole log to a file was already written down, by the occurrence
+# before. It was correct and it did not survive contact with someone typing the command from muscle
+# memory — which is ADR-0058's rule exactly: replace the vigilance with something the machine
+# carries.
+#
+# `tee` rather than a redirect, because the caller still wants to watch it; `SP_E2E_LOG=` opts out
+# for anyone who genuinely wants the old behaviour. The `PIPESTATUS` guard below is load-bearing:
+# without it a piped run always exits 0 and this script would silently stop being able to fail.
+if [ -z "${SP_E2E_LOG_ACTIVE:-}" ] && [ "${SP_E2E_LOG:-}" != "" ]; then
+  mkdir -p "$(dirname "$SP_E2E_LOG")"
+  export SP_E2E_LOG_ACTIVE=1
+  set +e
+  "${BASH_SOURCE[0]}" "$@" 2>&1 | tee "$SP_E2E_LOG"
+  status="${PIPESTATUS[0]}"
+  set -e
+  printf '\n\033[1m==> Full log: %s\033[0m\n' "$SP_E2E_LOG"
+  exit "$status"
+fi
 
 log() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 
@@ -147,6 +180,17 @@ for target in "${targets[@]}"; do
     web:*)
       suite="${target#web:}"
       log "Web end-to-end (${suite})"
+      # **A mistyped suite must fail, not pass quietly.** `pnpm run` exits **0** when no package
+      # has the script — measured: `pnpm --filter @repo/web test:e2e:does-not-exist; echo $?` prints
+      # `0` — so `scripts/e2e-local.sh web:wsb` printed "Done", exited clean, and ran nothing. That
+      # is this script's own header failing on itself: a run that cannot be trusted is worse than no
+      # run. Found while proving the log capture below catches failures (`docs/TECH_DEBT.md` #119a).
+      if ! node -e "process.exit(require('./apps/web/package.json').scripts['test:e2e:${suite}'] ? 0 : 1)"; then
+        echo "No such web suite: ${suite} (no \`test:e2e:${suite}\` script in apps/web/package.json)." >&2
+        echo "Available:" >&2
+        node -e "console.error(Object.keys(require('./apps/web/package.json').scripts).filter((k) => k.startsWith('test:e2e')).map((k) => '  ' + k.replace(/^test:e2e:?/, 'web:') || '  web').join('\n'))" >&2
+        exit 1
+      fi
       pnpm --filter @repo/web "test:e2e:${suite}"
       ;;
     # **Measurement harnesses, which need the same bootstrap and were not getting it.**

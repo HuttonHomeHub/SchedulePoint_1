@@ -1792,7 +1792,39 @@ what `RUN_CAP` exists for.
 
 ### 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-01
+
+> **A FOURTH occurrence, 2026-09-01 — and I lost it by doing exactly what this row tells the next
+> reader not to do.** A full `scripts/e2e-local.sh api` run failed **45 tests in one file** (44 files,
+> 572 tests, 527 passing). The command was piped through `tail -12`, so the file name and the error
+> were discarded before anyone read them; the log held only the summary. An immediate re-run passed
+> **572/572**, which is this row's recorded signature — a run that sweeps itself clean before anyone
+> looks — and proves nothing.
+>
+> The instruction to redirect the whole log to a file rather than pipe it through `tail` is in the
+> paragraph directly below, left by the third occurrence for exactly this reason. It was written
+> down, it was correct, and it did not survive contact with someone running the command from muscle
+> memory. **That is the finding**: this row's remedy was a habit, and a habit is the instrument
+> ADR-0058 says to replace with a mechanism.
+>
+> **Built the same day.** `scripts/e2e-local.sh` now `tee`s every run to a timestamped
+> `.e2e-logs/` file and prints the path, so the capture no longer depends on how the caller used the
+> pipe. `SP_E2E_LOG=` opts out. The `PIPESTATUS` guard is load-bearing and was **verified in both
+> directions** rather than assumed: a forced failure (`DATABASE_URL` pointed at a dead port) exits
+> **1** with the error in the log, and a real suite still runs, passes and is logged. Without that
+> guard a piped run always exits 0 and the script would silently stop being able to fail — which is
+> the same class as the defect it is being added for.
+>
+> **And proving it caught a second, unrelated one.** `pnpm run` exits **0** when no package has the
+> script (measured: `pnpm --filter @repo/web test:e2e:does-not-exist; echo $?` prints `0`), so
+> `scripts/e2e-local.sh web:wsb` printed "Done", exited clean and ran **nothing**. A `web:*` target
+> now checks the script exists and fails with the list of real suites. That is this script's own
+> header — _"a run that cannot be trusted is worse than no run"_ — failing on itself, and it was
+> found only because the log capture was being tested against a failure rather than a pass.
+>
+> What can be said about the fourth occurrence: it was **one file, 45 tests**, consistent with a
+> `beforeEach` failing for a whole spec — the same shape as all three recorded causes — and it is
+> **not** attributable to that session's changes, which touched only a unit spec under `src/`.
 
 **A THIRD table, 2026-08-31 — `activity_steps`.** A full `scripts/e2e-local.sh api` run failed
 **282 tests across 10 files**, every one in `beforeEach` on `activity_steps_activity_id_fkey`. By
