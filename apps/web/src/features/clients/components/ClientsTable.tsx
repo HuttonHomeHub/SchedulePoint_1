@@ -115,11 +115,7 @@ export function ClientsTable({
         getRowKey={(client) => client.id}
         loadingLabel="Loading clients…"
         errorLabel="Couldn’t load clients. Please try again."
-        empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            No clients yet.{canWrite ? ' Create your first client to get started.' : ''}
-          </div>
-        }
+        empty={<>No clients yet.{canWrite ? ' Create your first client to get started.' : ''}</>}
       />
 
       {canWrite ? (

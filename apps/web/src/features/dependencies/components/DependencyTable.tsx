@@ -167,11 +167,7 @@ export function DependencyTable({
       getRowKey={(dep) => dep.id}
       loadingLabel={`Loading ${caption.toLowerCase()}…`}
       errorLabel={`Couldn’t load ${caption.toLowerCase()}. Please try again.`}
-      empty={
-        <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-          {emptyLabel}
-        </div>
-      }
+      empty={<>{emptyLabel}</>}
     />
   );
 }

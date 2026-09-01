@@ -118,11 +118,7 @@ export function ProjectsTable({
         getRowKey={(project) => project.id}
         loadingLabel="Loading projects…"
         errorLabel="Couldn’t load projects. Please try again."
-        empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            No projects yet.{canWrite ? ' Create the first project for this client.' : ''}
-          </div>
-        }
+        empty={<>No projects yet.{canWrite ? ' Create the first project for this client.' : ''}</>}
       />
 
       {canWrite ? (

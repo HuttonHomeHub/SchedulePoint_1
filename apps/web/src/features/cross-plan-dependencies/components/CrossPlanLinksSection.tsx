@@ -154,11 +154,7 @@ export function CrossPlanLinksSection({
         getRowKey={(link) => link.id}
         loadingLabel="Loading cross-plan links…"
         errorLabel="Couldn’t load cross-plan links. Please try again."
-        empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-            No cross-plan links — this activity isn’t tied to any activity in another plan.
-          </div>
-        }
+        empty={<>No cross-plan links — this activity isn’t tied to any activity in another plan.</>}
       />
 
       {canManageLogic ? (

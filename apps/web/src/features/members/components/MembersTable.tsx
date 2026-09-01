@@ -94,11 +94,7 @@ export function MembersTable({ orgSlug }: { orgSlug: string }): React.ReactEleme
         getRowKey={(member) => member.id}
         loadingLabel="Loading members…"
         errorLabel="Couldn’t load members. Please try again."
-        empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-            No members yet.
-          </div>
-        }
+        empty={<>No members yet.</>}
       />
 
       <ConfirmDialog

@@ -241,13 +241,9 @@ export function ProjectCalendarsSection({
         errorLabel="Couldn’t load this project’s calendars. Please try again."
         empty={
           archivedFilter === 'only' ? (
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-              No archived calendars.
-            </div>
+            <>No archived calendars.</>
           ) : (
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-              No calendars available.{canWrite ? ' Create one for this project.' : ''}
-            </div>
+            <>No calendars available.{canWrite ? ' Create one for this project.' : ''}</>
           )
         }
       />

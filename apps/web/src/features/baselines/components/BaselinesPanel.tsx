@@ -135,10 +135,10 @@ export function BaselinesPanel({
         loadingLabel="Loading baselines…"
         errorLabel="Couldn’t load baselines. Please try again."
         empty={
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
+          <>
             No baselines yet.
             {canManage ? ' Capture one to freeze the current schedule as a plan of record.' : ''}
-          </div>
+          </>
         }
       />
 
