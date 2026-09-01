@@ -390,7 +390,26 @@ the K2 path.
 
 ---
 
-### Milestone M5 — The guest share view (shippable, own milestone by design)
+### Milestone M5 — The guest share view (shippable, own milestone by design) — **LANDED 2026-09-01**
+
+> Converted to `EmptyState size="page"` with an icon. Page-sized because there is nothing else on
+> that screen: a small centred box in a large empty column reads as a component that failed to load
+> rather than as a plan with no work in it yet. **No action, and that is the archetype's third
+> shape rather than an omission** — a guest holds a read-only link, so a button offering one would
+> be a lie. The copy says whose move it is instead, without assuming product knowledge, because the
+> reader has no account and did not choose to be here.
+>
+> **The token claim was re-verified in a browser rather than inherited**, which the milestone's
+> first named risk insisted on. `e2e-share` now reads `--muted-foreground` and `--muted` off the
+> guest page's `<main>` and asserts nothing on its ancestor chain carries a `[data-surface]`. The
+> probe itself was **verified red** — inverting one expectation printed `oklch(0.5 0 0)`, so it is
+> reading a real resolved value rather than passing on an absence, which is exactly how ADR-0102's
+> defect stayed green.
+>
+> **Not done: the `shoot.mjs` shot of the guest empty state.** The journey's plan has an activity,
+> so photographing this state needs a second share link on an empty plan; that is a fixture change
+> rather than a shot, and it goes to M8 with the three not-found shots M2-T1 also owes. Recorded
+> rather than quietly dropped.
 
 **Outcome:** the one screen an outsider sees gets a page-level empty state written for someone
 with no account and no context.

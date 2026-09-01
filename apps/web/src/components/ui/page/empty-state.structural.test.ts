@@ -124,11 +124,6 @@ const ALLOWED: { file: string; match: string; note: string }[] = [
     note: 'K3 \u2014 a panel, same sentence as resource-strip-panel \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
   },
   {
-    file: 'features/share/components/GuestPlanView.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K4 \u2014 the unauthenticated guest view; its own milestone \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
     file: 'features/tsld/components/TsldPanel.tsx',
     match: 'border-border text-muted-foreground flex items-center justif',
     note: 'K4 \u2014 page-filling; this same file uses NoticeStrip correctly at :2700 \u2014 deferred, see docs/TECH_DEBT.md #161(a)',

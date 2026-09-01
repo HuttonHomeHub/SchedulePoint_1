@@ -106,6 +106,32 @@ test('an outsider with a share link views a plan read-only, and revoking it is i
   );
   expect(canvasHeight).toBeGreaterThan(400);
 
+  // **The tokens `EmptyState` reaches for resolve HERE**
+  // (`docs/specs/empty-state-consolidation/` M5). That milestone converts this view's empty state
+  // to the shared archetype, which uses `text-muted-foreground` and `bg-muted` — page-family names
+  // declared at `:root`. `reset-fills.structural.test.ts` already records this file as "a page in
+  // its own right, outside every scope", so those should apply.
+  //
+  // **Asserted rather than inherited, because ADR-0102's finding was exactly an inherited claim**:
+  // the canvas painter resolved its palette from a root it was not mounted under, painted the wrong
+  // family, and every gate stayed green — jsdom returns `''` from either root, so no unit test can
+  // see this. The check is that the values are real colours, and that nothing on the ancestor chain
+  // has quietly acquired a `[data-surface]` that would rebind them.
+  const tokens = await guestPage.evaluate(() => {
+    const main = document.querySelector('main');
+    if (!main) return null;
+    const style = getComputedStyle(main);
+    return {
+      muted: style.getPropertyValue('--muted-foreground').trim(),
+      mutedBg: style.getPropertyValue('--muted').trim(),
+      scoped: main.closest('[data-surface]') !== null,
+    };
+  });
+  expect(tokens).not.toBeNull();
+  expect(tokens?.muted).not.toBe('');
+  expect(tokens?.mutedBg).not.toBe('');
+  expect(tokens?.scoped, 'the guest page is outside every surface scope').toBe(false);
+
   // …and the canvas still has height at 320 px. `h-dvh` is what makes it fill, and a DEFINITE
   // viewport height is exactly what can start clipping once the header wraps on a narrow screen —
   // so the fix's own mechanism is the thing to re-check at the small end, not assume.

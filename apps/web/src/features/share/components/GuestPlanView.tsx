@@ -1,5 +1,6 @@
 import type { PlanStatus } from '@repo/types';
 import { useQuery } from '@tanstack/react-query';
+import { CalendarRange } from 'lucide-react';
 import { useMemo } from 'react';
 
 import {
@@ -16,6 +17,7 @@ import {
 import { AnnouncerProvider } from '@/components/ui/announcer';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { TsldPanel } from '@/features/tsld';
 import { CanvasSurfaceProvider } from '@/features/tsld/render/canvas-surface';
@@ -234,9 +236,21 @@ export function GuestPlanView({ token }: { token: string }): React.ReactElement 
 
           <main className="min-h-0 flex-1 p-4">
             {activities.length === 0 ? (
-              <div className="border-border text-muted-foreground rounded-lg border border-dashed p-10 text-center text-sm">
-                This plan has no activities yet.
-              </div>
+              // **The one screen an outsider sees** (`docs/specs/empty-state-consolidation/` M5).
+              // Page-sized rather than section-sized: there is nothing else on this screen, so a
+              // small centred box in a large empty column reads as a component that failed to load
+              // rather than as a plan with no work in it yet.
+              //
+              // **No action, and that is the archetype's third shape rather than an omission**
+              // (`empty-state.tsx`): a guest holds a read-only share link, so there is nothing they
+              // could do about this and a button offering one would be a lie. The copy says whose
+              // move it is instead — and says it without assuming any product knowledge, because
+              // the reader has no account and did not choose to be here.
+              <EmptyState
+                icon={<CalendarRange className="size-6" />}
+                title="This plan has no activities yet"
+                description="Whoever shared this link will add work to it. The link keeps working — open it again later to see the schedule."
+              />
             ) : (
               <TsldPanel
                 activities={activities}
