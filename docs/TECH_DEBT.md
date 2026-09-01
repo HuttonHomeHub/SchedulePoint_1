@@ -1920,6 +1920,37 @@ what `RUN_CAP` exists for.
 
 **Status:** open · **Verified:** 2026-09-01
 
+> **A FIFTH occurrence, 2026-09-01 — DIAGNOSED, FIXED AND PROVEN, and the table is `baselines`.**
+> The fourth occurrence (below) recorded "one file, 45 tests" and could say no more, because the
+> observer piped the run through `tail`. **It happened again the same day, to the same observer,
+> piped the same way — and this time the diagnosis survived**, because the `tee` capture built for
+> occurrence four held the whole log. That is ADR-0058's thesis demonstrated rather than asserted:
+> the habit failed twice in one session, the mechanism worked the first time it was needed.
+>
+> Given the identical signature — `activities.e2e-spec.ts`, all 45 tests, `beforeAll` — occurrence
+> four was almost certainly this same cause. Stated as a likelihood, not a fact: its log holds only
+> the summary, which is the whole reason that entry exists.
+>
+> **The cause.** `baselines` holds `plan_id` and the snapshot tables hold `baseline_id` (ADR-0025),
+> and **25 of 33 plan-sweeping specs deleted plans without deleting baselines first**. A single
+> baseline surviving in the shared `app_test` — from an aborted earlier run or a Playwright journey,
+> the 2026-08-28 mechanism — fails the next spec to sweep. The producer is **not named**: the log
+> gives the constraint and not the writer, and every in-suite creator sweeps (directly, or via
+> `clearDomainData`), so it came from outside the run.
+>
+> **Fixed in all 25, and verified in both directions rather than inferred from a green re-run** —
+> which is the trap this row's own history is made of. A poison baseline was planted by hand
+> against `app_test`; `activities.e2e-spec.ts` then FAILED all 45 tests on `baselines_plan_id_fkey`
+> with the three sweep lines removed, and PASSED all 45 with them, on a freshly re-planted row.
+> That reproduces the production failure exactly, which is what makes the diagnosis a fact.
+>
+> **The fourth table in a class this row has now watched happen five times.** `plan_shares`,
+> `resource_assignments`, `activity_steps`, `baselines`. The permanent answer is still the derived
+> sweep the paragraphs below describe — delete in reverse topological order of the FK graph, which
+> Prisma knows — and it is still a spec-level change (ADR-0105) rather than a fourth hand-edit
+> across 25 files. What is different now is that the cost is measurable: four tables, five
+> occurrences, and on each the whole estate is edited by hand.
+
 > **A FOURTH occurrence, 2026-09-01 — and I lost it by doing exactly what this row tells the next
 > reader not to do.** A full `scripts/e2e-local.sh api` run failed **45 tests in one file** (44 files,
 > 572 tests, 527 passing). The command was piped through `tail -12`, so the file name and the error

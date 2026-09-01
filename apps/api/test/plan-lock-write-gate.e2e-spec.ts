@@ -61,6 +61,21 @@ describe.skipIf(!hasDatabase)('Plan edit-lock write-gate (e2e, enforced)', () =>
     // Steps hang off an activity with a RESTRICT FK, so they must go first. This spec created no
     // steps until the ADR-0060 §5 gate case below, which is why the omission surfaced only now —
     // the same order `calendar-scope.e2e-spec.ts` already uses.
+    // Baselines and their snapshot rows hold `plan_id` / `baseline_id` (ADR-0025), and they are the
+    // FOURTH table to fail this way — after `plan_shares`, `resource_assignments` and
+    // `activity_steps` (`docs/TECH_DEBT.md` #119a). Found on 2026-09-01, when a full API run failed
+    // all 45 tests in `activities.e2e-spec.ts` on `baselines_plan_id_fkey`: 25 of 33 plan-sweeping
+    // specs deleted plans without deleting baselines first, so a baseline surviving in the shared
+    // `app_test` poisons whichever spec sweeps next. **Which writer left it is not claimed** — the
+    // log names the constraint and not the producer, and every in-suite creator sweeps (directly, or
+    // via `clearDomainData`), so the residue came from outside this run: an earlier aborted run or a
+    // Playwright journey against the same database, exactly as #119a's 2026-08-28 entry describes.
+    // Diagnosed the same day only because `scripts/e2e-local.sh` tees the whole log to a file — the
+    // observer piped the command through `tail` exactly as that row warns them not to, and the
+    // mechanism caught what the habit lost. That is ADR-0058 working as advertised.
+    await prisma.baselineAssignment.deleteMany();
+    await prisma.baselineActivity.deleteMany();
+    await prisma.baseline.deleteMany();
     await prisma.activityStep.deleteMany();
     // Notes hold `activity_id`/`plan_id` FKs, so they must go before what they annotate. The
     // e2e database is shared with the Playwright run and `apps/web/e2e-notes` leaves notes
