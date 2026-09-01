@@ -627,6 +627,15 @@ what the product does.
 > script that does not exist. Fixed and verified in both directions. The transferable half is that
 > nothing aggregates the sweep's output — one `EXIT=1` among forty lines scrolls past — so it was
 > found by reading rather than by anything failing.
+>
+> **And fixing it mid-run corrupted the run's own instrument.** `e2e-sweep.sh` was edited while it
+> was executing, and bash reads a script by byte offset — so when the loop's last iteration
+> returned, the shifted file gave `dds: command not found` and a syntax error on the trailing
+> `done`. The sweep had by then reached the end of its list, and the result was confirmed
+> trustworthy by deriving the expected 43 targets from `apps/web/package.json` and comparing them
+> against the reported ones (43 distinct, none missing, none unexpected, `web=1` the only non-zero)
+> rather than by trusting the log's shape. The habit worth keeping: **do not edit a script that is
+> running**; note the fix and apply it after.
 
 ##### Task M8-T1 — Finish the gate and the docs
 
