@@ -61,7 +61,14 @@ for s in $SUITES; do
   for pid in $(ps aux | grep -E "vite/bin/vite.js|apps/api/dist/main" | grep -v grep | awk '{print $2}'); do kill "$pid" 2>/dev/null; done
   sleep 2
   echo "=== $s ==="
-  timeout 900 scripts/e2e-local.sh "web:$s" > "/tmp/sweep-$s.log" 2>&1
+  # **`web` is passed BARE, and this is the second half of the line 45 comment.** That comment adds
+  # the base journey to the list explicitly and says so at length — and this loop then prefixed
+  # `web:` unconditionally, so it went to `e2e-local.sh` as `web:web`, resolved to a
+  # `test:e2e:web` script that does not exist, and exited 1. The base journey has therefore never
+  # once been run by this sweep: verbatim the failure the comment above claims to prevent, in the
+  # same file, ten lines down. Found 2026-09-01 by the first sweep to read its own output.
+  if [ "$s" = "web" ]; then target="web"; else target="web:$s"; fi
+  timeout 900 scripts/e2e-local.sh "$target" > "/tmp/sweep-$s.log" 2>&1
   echo "$s EXIT=$?"
 done
 echo "SWEEP-DONE"

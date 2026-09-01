@@ -994,6 +994,35 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 237. The journey sweep has never run the base journey
+
+**Status:** open · **Found and fixed:** 2026-09-01 (empty-state M8) · **Size:** S (fixed) · **Owner:** repo
+
+**Closed as a defect; open as the question of what else the sweep has never done.**
+
+`scripts/e2e-sweep.sh` builds its list as `web $DERIVED`, and the comment above that line is four
+sentences long about why the base journey has to be named explicitly — it is `test:e2e` with **no
+suffix**, so it cannot be derived from the `test:e2e:*` names, and _"ADR-0096 added `web` as a
+target to `e2e-local.sh` for exactly this reason and stopped one line short of here."_
+
+The loop ten lines below then called `scripts/e2e-local.sh "web:$s"` for **every** entry including
+that one. `web:web` resolves to a `test:e2e:web` script that does not exist, `e2e-local.sh`
+correctly refuses it (that refusal is itself #119a's fix), and the sweep printed `web EXIT=1` and
+carried on. **So the base journey — the suite covering the shipped default configuration, the
+screens every other suite signs in through — has never once been run by the sweep**, which is
+verbatim the failure the comment claims to prevent, in the same file, ten lines apart.
+
+Fixed by passing `web` bare. Verified in both directions: before, `web EXIT=1` with
+`No such web suite: web`; after, it runs.
+
+**What is open is the class, not this instance.** Two of this repository's sweeps and gates have now
+been found to be silently running against nothing (`#124`'s empty axe include, this), and both were
+found by somebody reading the instrument's output rather than its exit code — the sweep prints one
+line per suite and nothing aggregates them, so a single `EXIT=1` among forty scrolls past. A
+sweep that ends with a count of failures, named, would have surfaced this the first time it ran.
+Not built here, because the sweep is a local convenience rather than a CI gate and this is the
+milestone that found it, not a milestone about it.
+
 ### 236. The empty-state count was by treatment, so an untreated absence was invisible to it
 
 **Status:** open · **Raised:** 2026-09-01 (empty-state M8) · **Size:** S · **Owner:** web

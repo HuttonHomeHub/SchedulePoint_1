@@ -618,6 +618,15 @@ what the product does.
 > `docs/TECH_DEBT.md` #133's rule (sweep, do not fix what the instrument happened to print) landing
 > on lint rather than on journeys — and the next full run found three more. Fixed by amending M6
 > rather than folding into M8, so no commit in the branch fails a gate on its own.
+>
+> **And running the sweep found that the sweep has never run the base journey** (`docs/TECH_DEBT.md`
+> #237). M8's testing requirement is `scripts/e2e-sweep.sh` — _every_ journey, not the ones I
+> remember — and its first line was `web EXIT=1`. The list names `web` explicitly under a
+> four-sentence comment about why the base journey cannot be derived from the `test:e2e:*` names;
+> the loop ten lines below then prefixed `web:` unconditionally, so it asked for a `test:e2e:web`
+> script that does not exist. Fixed and verified in both directions. The transferable half is that
+> nothing aggregates the sweep's output — one `EXIT=1` among forty lines scrolls past — so it was
+> found by reading rather than by anything failing.
 
 ##### Task M8-T1 — Finish the gate and the docs
 
