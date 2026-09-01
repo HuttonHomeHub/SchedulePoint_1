@@ -317,7 +317,16 @@ test('the audit log records real actions and only an Org Admin can read them', a
 
   // ---------------------------------------------- 3. The teammate is refused, by the API not the UI
   await mate.goto(`/orgs/${orgSlug}/audit-log`);
-  await expect(mate.getByText(/Only an Org Admin can read/)).toBeVisible();
+  // The whole refusal, not its first sentence. It is now a `NoticeStrip` rather than the dashed
+  // box every empty state in this app uses (`docs/specs/empty-state-consolidation/` M2 — an
+  // absence and a refusal are different facts and were drawn the same). Two things are asserted
+  // that a first-sentence check does not reach: `role="status"`, so a reader who is not focused on
+  // the region still hears the boundary when the route settles (WCAG 4.1.3), and the SECOND
+  // sentence, which is the only actionable thing on the screen — it names where this reader can go
+  // instead. `NoticeStrip` truncates by default, and that half is what the default would clip.
+  const refusal = mate.getByRole('status');
+  await expect(refusal).toContainText('Only an Org Admin can read');
+  await expect(refusal).toContainText('My activity');
   // No table at all — an empty one would read as "nothing has happened here", which is exactly the
   // wrong answer to give someone who is not allowed to know.
   await expect(mate.getByRole('table')).toHaveCount(0);

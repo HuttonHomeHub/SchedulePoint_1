@@ -1,5 +1,6 @@
 import { useParams } from '@tanstack/react-router';
 
+import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Spinner } from '@/components/ui/spinner';
 import { AUDIT_FILTERS_ENABLED } from '@/config/env';
 import { useOrganizationAuditEvents } from '@/features/audit/api/use-audit-events';
@@ -81,13 +82,26 @@ export function AuditLogScreen(): React.ReactElement {
           <AuditLogTable orgSlug={orgSlug} />
         </div>
       ) : (
-        <p
+        /* **A refusal, not an absence** (`docs/specs/empty-state-consolidation/` §1.5.2, M2).
+           The dashed centred box said "there is nothing here" about an organisation whose log is
+           full; what is true is that this reader may not see it. `role="status"` is preserved —
+           dropping it is a silent WCAG 4.1.3 regression no unit test would catch — and
+           `messageFit="grow"` is load-bearing: the default truncates, and the clipped half is the
+           sentence naming where the reader CAN go. */
+        <NoticeStrip
+          className="mt-6"
+          tone="info"
+          emphasis="solid"
+          density="comfortable"
+          messageFit="grow"
           role="status"
-          className="border-border text-muted-foreground mt-6 rounded-lg border border-dashed p-8 text-center text-sm"
-        >
-          Only an Org Admin can read this organisation&rsquo;s audit log. Your own activity is on{' '}
-          <strong className="text-foreground font-medium">My activity</strong>.
-        </p>
+          message={
+            <>
+              Only an Org Admin can read this organisation&rsquo;s audit log. Your own activity is
+              on <strong className="text-foreground font-medium">My activity</strong>.
+            </>
+          }
+        />
       )}
     </div>
   );

@@ -32,12 +32,21 @@ export function ClientDetailScreen(): React.ReactElement {
           ]}
         />
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Client not found</h1>
-        <div className="border-border text-muted-foreground mt-4 rounded-lg border border-dashed p-8 text-center text-sm">
-          <p>This client doesn’t exist, was deleted, or you don’t have access to it.</p>
+        {/* **An error, not an empty state** (`docs/specs/empty-state-consolidation/` §1.5.2, M2).
+            This branch is `query.isError` — the client does not exist, was deleted, or the reader
+            has no access. Drawn as a dashed centred box it read as "there is nothing here", which
+            is a statement about the client when the truth may be a statement about the reader.
+            `role="alert"` + destructive ink is the shape `DataTable` already uses for the same
+            condition. The exit link stays: `isError` also covers a transient network failure, so a
+            reader who is not lost must not be stranded. */}
+        <div className="flex flex-col items-start gap-3">
+          <p role="alert" className="text-destructive-text text-sm">
+            This client doesn’t exist, was deleted, or you don’t have access to it.
+          </p>
           <Link
             to="/orgs/$orgSlug/clients"
             params={{ orgSlug }}
-            className="text-foreground mt-2 inline-block underline underline-offset-4"
+            className="text-foreground underline underline-offset-4"
           >
             Back to clients
           </Link>

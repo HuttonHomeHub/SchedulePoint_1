@@ -5,6 +5,7 @@ import { isCostReadForbidden, useEarnedValue } from '../api/use-earned-value';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Spinner } from '@/components/ui/spinner';
 import { formatMoney } from '@/lib/format-money';
 
@@ -125,16 +126,34 @@ export function EarnedValuePanel({
       // `role="status"` so a screen-reader user not focused on the panel still hears the permission
       // boundary when the query resolves from the loading spinner (WCAG 4.1.3) — matching the sibling
       // async-resolved notices (EditLockBanner, ActivityResourcesDialog).
+      // **A refusal, not an absence** (`docs/specs/empty-state-consolidation/` §1.5.2, M2). The
+      // dashed centred box is this application's empty-state treatment, and drawn in it a
+      // permission boundary reads as "this plan has no cost data" — a claim about the plan, when
+      // the truth is about the reader. `messageFit="grow"` is load-bearing rather than tidy:
+      // `NoticeStrip` truncates by default, and the half that would be clipped is the sentence
+      // naming who CAN see the figures, which is the only actionable thing here.
       return shell(
-        <div
+        <NoticeStrip
+          tone="info"
+          emphasis="solid"
+          density="comfortable"
+          messageFit="grow"
           role="status"
-          className="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm"
-        >
-          <p className="text-foreground font-medium">Cost &amp; earned value is restricted</p>
-          <p className="mt-1">
-            Only Planners and Org Admins can view cost and earned-value figures for this plan.
-          </p>
-        </div>,
+          /* Two block spans rather than two `<p>`s: `NoticeStrip` already renders `message`
+             inside a `<p>`, and a nested one is invalid HTML. The copy is verbatim — the first
+             version merged the two sentences and added a full stop, which the existing assertion
+             correctly refused. */
+          message={
+            <>
+              <span className="text-foreground block font-medium">
+                Cost &amp; earned value is restricted
+              </span>
+              <span className="block">
+                Only Planners and Org Admins can view cost and earned-value figures for this plan.
+              </span>
+            </>
+          }
+        />,
       );
     }
     return shell(
