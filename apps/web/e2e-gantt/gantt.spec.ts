@@ -9,8 +9,10 @@ import {
   ensurePen,
   ganttGrid,
   onboard,
+  openPlanId,
   seedActivities,
   showGantt,
+  syncClient,
 } from './support';
 
 /**
@@ -99,7 +101,108 @@ test('the Gantt is a peer view of the same schedule, deep-linkable and readable 
     .analyze();
   expect(results.violations).toEqual([]);
 
-  // ------------------------------------------------------------------ 5. Back to the diagram
+  // -------------------------------------------------- 5. The splitter, and where the chart begins
+  // `grid-width.structural.test.ts` pins the arithmetic — the columns fill the pane exactly and
+  // `name` absorbs the difference — and until now nothing drove the divider in a BROWSER
+  // (`docs/TECH_DEBT.md` #151). That gap mattered more than a missing structural test usually does,
+  // because the defect this arithmetic exists to prevent is a *picture* one: ADR-0095 shipped a
+  // `GRID_WIDTH` literal that disagreed with its own columns and painted Float on top of the chart,
+  // and the first version of this splitter reproduced it at a guessed 180 px floor. Both were found
+  // by looking at a browser; neither would have failed a test of the sums.
+  //
+  // The `role="separator"` carries `aria-valuemin`/`max`, so the bounds are read off the control
+  // rather than restated here — a copied constant is how a gate comes to agree with the wrong
+  // number.
+  const chartMeetsGrid = async (where: string): Promise<void> => {
+    // Only meaningful at `scrollLeft: 0`. The pinned block is `position: sticky; left: 0`, so once
+    // the scroller moves the chart header slides UNDER it and the two edges legitimately overlap —
+    // an assertion taken mid-scroll would report the defect it is looking for.
+    await grid.evaluate((el) => {
+      let node = el.parentElement;
+      while (node && node.scrollWidth <= node.clientWidth) node = node.parentElement;
+      if (node) node.scrollLeft = 0;
+    });
+    const heads = await grid.getByRole('columnheader').evaluateAll((els) =>
+      els.map((el) => {
+        const box = el.getBoundingClientRect();
+        return { name: (el.textContent ?? '').trim(), left: box.left, right: box.right };
+      }),
+    );
+    const timeline = heads.find((h) => h.name === 'Timeline');
+    // `Actions` is `sr-only`, so it takes no layout and its rect says nothing about the pane.
+    const pinned = heads.filter((h) => h.name !== 'Timeline' && h.name !== 'Actions');
+    expect(timeline, `${where}: no Timeline column header`).toBeDefined();
+    expect(pinned.length, `${where}: no pinned column headers`).toBeGreaterThan(0);
+    // ONE equality catches both ways the arithmetic can be wrong: a column overflowing onto the
+    // chart reads as `>`, a gap between the two as `<`.
+    expect(
+      Math.round(Math.max(...pinned.map((h) => h.right))),
+      `${where}: the pinned columns do not end where the chart begins — ${JSON.stringify(heads)}`,
+    ).toBe(Math.round(timeline?.left ?? -1));
+  };
+
+  const splitter = page.getByRole('separator', { name: 'Grid width' });
+  await chartMeetsGrid('at the seeded width');
+
+  // Home is the floor: the width at which `name` stops absorbing and every column is at its
+  // tightest, which is where a sum that is wrong by a column shows first.
+  const floor = await splitter.getAttribute('aria-valuemin');
+  await splitter.focus();
+  await page.keyboard.press('Home');
+  await expect(splitter).toHaveAttribute('aria-valuenow', floor ?? '');
+  await chartMeetsGrid('at the floor');
+
+  // And a step off the floor, so the pass is not a property of one width. ArrowRight grows a
+  // vertical divider (`PanelResizer`'s start-anchored default).
+  await page.keyboard.press('ArrowRight');
+  await expect(splitter).not.toHaveAttribute('aria-valuenow', floor ?? '');
+  await chartMeetsGrid('one step above the floor');
+
+  /**
+   * And with a **baseline active**, which adds a `vs baseline` column to the pinned block.
+   *
+   * This is the state the arithmetic is least likely to hold in, and it was not in #151's brief:
+   * the variance column is rendered inside the pinned block with its own width, and it is NOT one
+   * of `COLUMNS` — so `ganttFixedWidth` cannot see it and `resolveColumnWidth` never accounts for
+   * it. Whether that overflows the pane is a question about a real layout, which is exactly the
+   * kind of question a structural test cannot ask and the reason this row was filed at all.
+   *
+   * Captured through the API: the plan's FIRST baseline auto-activates (`baselines.service.ts`),
+   * so no separate activate call is needed, and `syncClient` is what makes the open page aware of
+   * a write that bypassed it (`docs/TECH_DEBT.md` #183).
+   */
+  const planId = openPlanId(page);
+  const captured = await page.evaluate(
+    async ({ org, id }: { org: string; id: string }) => {
+      const response = await fetch(`/api/v1/organizations/${org}/plans/${id}/baselines`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Splitter check' }),
+      });
+      return { ok: response.ok, status: response.status, body: await response.text() };
+    },
+    { org: orgSlug, id: planId },
+  );
+  expect(captured.ok, `capturing a baseline failed: ${captured.status} ${captured.body}`).toBe(
+    true,
+  );
+  await syncClient(page);
+  await showGantt(page);
+
+  // The pinned positive: without it the two assertions below would pass equally on a Gantt that
+  // never rendered the column, which is the state they exist to test.
+  await expect(
+    ganttGrid(page).getByRole('columnheader', { name: 'vs baseline' }),
+    'no variance column — the baseline did not reach the grid, so nothing below is being tested',
+  ).toBeVisible();
+  await chartMeetsGrid('with a baseline, at the seeded width');
+
+  await page.getByRole('separator', { name: 'Grid width' }).focus();
+  await page.keyboard.press('Home');
+  await chartMeetsGrid('with a baseline, at the floor');
+
+  // ------------------------------------------------------------------ 6. Back to the diagram
   await page.getByRole('button', { name: 'Diagram', exact: true }).click();
   await expect(page.locator('section[aria-label="Time-scaled logic diagram"]')).toBeVisible();
   await expect(ganttGrid(page)).toBeHidden();

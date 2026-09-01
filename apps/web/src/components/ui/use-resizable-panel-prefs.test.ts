@@ -55,4 +55,31 @@ describe('useResizablePanelPrefs', () => {
     const { result } = renderHook(() => useResizablePanelPrefs(OPTS));
     expect(result.current.size).toBe(400);
   });
+
+  /**
+   * **A bound can change while the panel is mounted, and the size in state has to follow it.**
+   *
+   * The case above clamps in the `useState` initialiser, which runs once — so before this, a
+   * `min` that rose later never reached a size already held. That is not hypothetical: the Gantt's
+   * grid floor is derived from what its pinned block needs, and capturing a baseline adds a
+   * `vs baseline` column to it. A planner who had dragged the divider narrow was left below a floor
+   * the component believed it was enforcing, and the column painted over the chart
+   * (`docs/TECH_DEBT.md` #151, found in a browser, not by any unit gate).
+   */
+  it('follows a bound that changes after mount', () => {
+    localStorage.setItem('test-panel', JSON.stringify({ collapsed: false, size: 150 }));
+    const { result, rerender } = renderHook(({ min }) => useResizablePanelPrefs({ ...OPTS, min }), {
+      initialProps: { min: 100 },
+    });
+    expect(result.current.size).toBe(150);
+
+    rerender({ min: 220 });
+    expect(result.current.size, 'a raised floor must lift the size').toBe(220);
+
+    // And the planner's own width comes BACK when the floor drops again — the stored preference is
+    // deliberately untouched, so a panel does not shrink permanently because of a transient bound.
+    rerender({ min: 100 });
+    expect(result.current.size, 'the stored preference survives the clamp').toBe(150);
+    expect(JSON.parse(localStorage.getItem('test-panel')!).size).toBe(150);
+  });
 });

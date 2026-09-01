@@ -25,10 +25,24 @@ import { GANTT_COLUMNS } from './layout/grid-columns';
  * **What it deliberately does not claim.** It pins the arithmetic and the single source, not the
  * rendering: a site that ignored `resolveColumnWidth` and wrote its own `style={{ width }}` would
  * still be caught only by the second assertion below, which is a text scan and therefore weaker
- * than the compiler. **And there is no browser-level proof at all**: nothing in `e2e-gantt` or
- * `e2e-gantt-editing` drives the splitter, the pane width or a column resize — checked, not
- * assumed, after this sentence first read that such proof "belongs to `e2e-gantt`", which is how a
- * gap comes to read as coverage held somewhere else. The arithmetic is pinned; the picture is not.
+ * than the compiler.
+ *
+ * **The browser-level proof now exists** (`docs/TECH_DEBT.md` #151, closed 2026-09-01):
+ * `e2e-gantt/gantt.spec.ts` drives the separator to its floor and one step above it and asserts
+ * that the pinned columns end exactly where the chart begins. This sentence used to say there was
+ * none — and before that it said such proof "belongs to `e2e-gantt`", which is how a gap comes to
+ * read as coverage held somewhere else.
+ *
+ * That journey immediately earned its place by finding a **live defect this file was green
+ * against**: with a baseline active the pinned block summed to `pane + 72` at every width, because
+ * `vs baseline` is not a `GanttColumn` and nothing here summed it. See {@link VARIANCE} below.
+ *
+ * **And the division of labour between the two is worth stating, because it was checked rather
+ * than assumed.** This file pins the HELPER: dropping `extraPinnedWidth` from `ganttFixedWidth`
+ * turns five cases red here. It cannot see the COMPONENT passing the wrong extra — reverting
+ * `GanttPanel` to `ganttFixedWidth(COLUMNS, 0)`, which is the defect that shipped, leaves all 22
+ * cases green. Only the browser assertion catches that, which is the whole argument of #151 in one
+ * measurement.
  */
 describe('the Gantt grid width', () => {
   /**
@@ -47,40 +61,72 @@ describe('the Gantt grid width', () => {
   const visible = (hidden: readonly string[]) =>
     GANTT_COLUMNS.filter((c) => !hidden.includes(c.key));
 
-  it.each(SETS.map((hidden) => [hidden.join(',') || '(nothing hidden)', hidden] as const))(
-    'fills the pane exactly at every width from the floor up — %s',
-    (_label, hidden) => {
-      const columns = visible(hidden);
-      const fixed = ganttFixedWidth(columns);
+  /**
+   * The `vs baseline` column's width, and the reason this file now sweeps two values rather than
+   * one.
+   *
+   * That column renders inside the pinned block when a baseline is active and is **not** a
+   * `GanttColumn` — not sortable, not hideable, not in the vocabulary. So every assertion below
+   * used to sum `columns` alone, which is precisely the arithmetic the product was getting wrong:
+   * the pinned block summed to `pane + 72` at every width, and the column painted on top of the
+   * chart. **This suite was green throughout.** A gate that sums only what it already knows about
+   * agrees with the defect by construction, which is why the extra is now a parameter the compiler
+   * makes every caller answer.
+   *
+   * 72 rather than an import: `VARIANCE_COLUMN_WIDTH` is module-private to `GanttPanel`, and the
+   * number here is a fixture, not the source of truth — if the two ever disagree the browser-level
+   * assertion in `e2e-gantt` is what says so.
+   */
+  const VARIANCE = 72;
+  const EXTRAS: readonly (readonly [string, number])[] = [
+    ['no baseline', 0],
+    ['a baseline active', VARIANCE],
+  ];
 
-      for (const pane of [fixed, fixed + 1, fixed + 96, 720]) {
-        const total = columns.reduce((sum, c) => sum + ganttColumnWidth(c, pane, fixed), 0);
-        expect(
-          total,
-          `columns sum to ${total} in a ${pane}px pane — ` +
-            (total > pane ? 'they overflow onto the chart' : 'they leave dead space'),
-        ).toBe(pane);
-      }
-    },
-  );
+  it.each(
+    SETS.flatMap((hidden) =>
+      EXTRAS.map(
+        ([state, extra]) =>
+          [`${hidden.join(',') || '(nothing hidden)'}, ${state}`, hidden, extra] as const,
+      ),
+    ),
+  )('fills the pane exactly at every width from the floor up — %s', (_label, hidden, extra) => {
+    const columns = visible(hidden);
+    const fixed = ganttFixedWidth(columns, extra);
 
-  it.each(SETS.map((hidden) => [hidden.join(',') || '(nothing hidden)', hidden] as const))(
-    'never lets the columns overflow below the floor either — %s',
-    (_label, hidden) => {
-      const columns = visible(hidden);
-      const fixed = ganttFixedWidth(columns);
+    for (const pane of [fixed, fixed + 1, fixed + 96, 720]) {
+      // `extra` is pinned content the column loop cannot see, so it is added here exactly as the
+      // component renders it — beside the columns, inside the same block.
+      const total = columns.reduce((sum, c) => sum + ganttColumnWidth(c, pane, fixed), extra);
+      expect(
+        total,
+        `the pinned block sums to ${total} in a ${pane}px pane — ` +
+          (total > pane ? 'it overflows onto the chart' : 'it leaves dead space'),
+      ).toBe(pane);
+    }
+  });
 
-      // The floor is enforced by `useResizablePanelPrefs`' `min`, so a pane narrower than it should
-      // be unreachable. Asserted anyway: if the floor is ever bypassed the columns must CLIP, which
-      // is recoverable, rather than paint over the chart, which is the defect.
-      const total = columns.reduce((sum, c) => sum + ganttColumnWidth(c, fixed - 200, fixed), 0);
-      expect(total).toBe(fixed);
-    },
-  );
+  it.each(
+    SETS.flatMap((hidden) =>
+      EXTRAS.map(
+        ([state, extra]) =>
+          [`${hidden.join(',') || '(nothing hidden)'}, ${state}`, hidden, extra] as const,
+      ),
+    ),
+  )('never lets the columns overflow below the floor either — %s', (_label, hidden, extra) => {
+    const columns = visible(hidden);
+    const fixed = ganttFixedWidth(columns, extra);
+
+    // The floor is enforced by `useResizablePanelPrefs`' `min`, so a pane narrower than it should
+    // be unreachable. Asserted anyway: if the floor is ever bypassed the columns must CLIP, which
+    // is recoverable, rather than paint over the chart, which is the defect.
+    const total = columns.reduce((sum, c) => sum + ganttColumnWidth(c, fixed - 200, fixed), extra);
+    expect(total).toBe(fixed);
+  });
 
   it('gives every extra pixel to the name column and none to the fixed ones', () => {
     const columns = visible(['predecessors']);
-    const fixed = ganttFixedWidth(columns);
+    const fixed = ganttFixedWidth(columns, 0);
     const name = columns.find((c) => c.key === 'name')!;
 
     expect(ganttColumnWidth(name, fixed + 200, fixed) - ganttColumnWidth(name, fixed, fixed)).toBe(
