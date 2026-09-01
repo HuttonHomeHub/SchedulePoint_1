@@ -56,6 +56,32 @@ warned=()
 # Note that a passing gate's output goes to a log and is never printed, so before this a warn-only
 # `check:*` script was COMPLETELY SILENT. There is no design in which an advisory gate is visible
 # without this branch.
+#
+# **`run_strict` exists because `tsc` uses exit 2 for type errors, and that collided with the
+# advisory convention above — silently.** Measured 2026-09-01: `tsc --noEmit` exits **2** when it
+# reports errors, turbo propagates it, and `pnpm typecheck` therefore fails a real type error with
+# the exit code this script reads as "advisory, does not block". So from the day the three states
+# landed until that measurement, **a failing typecheck printed a yellow WARN and let the push
+# through**. `pnpm lint` and `pnpm test` were checked in the same pass and exit 1 correctly, so the
+# hole was typecheck alone.
+#
+# The lesson is not "typecheck is important" — it is that a convention numbered 0/2/other collides
+# with any tool that already uses those numbers for its own meanings, and the collision is invisible
+# because the gate still prints something. So the three core gates declare that they are NEVER
+# advisory rather than relying on the tools underneath them to avoid a number.
+run_strict() {
+  local label="$1"; shift
+  "$@" >/tmp/prepush-last.log 2>&1
+  local code=$?
+  if [ $code -eq 0 ]; then
+    printf '  \033[32mok\033[0m    %s\n' "$label"
+  else
+    printf '  \033[31mFAIL\033[0m  %s\n' "$label"
+    tail -12 /tmp/prepush-last.log | sed 's/^/        /'
+    failed+=("$label")
+  fi
+}
+
 run() {
   local label="$1"; shift
   "$@" >/tmp/prepush-last.log 2>&1
@@ -75,9 +101,11 @@ run() {
 
 echo "Pre-push gate (docs/TESTING.md) — $(pwd)"
 if [ "$CHECKS_ONLY" -eq 0 ]; then
-  run "lint" pnpm lint
-  run "typecheck" pnpm typecheck
-  run "test" pnpm test
+  # Never advisory: each of these fails because of an edit to a file, which is exit 1's category —
+  # and `typecheck` in particular reaches this line with tsc's exit 2. See `run_strict`.
+  run_strict "lint" pnpm lint
+  run_strict "typecheck" pnpm typecheck
+  run_strict "test" pnpm test
 fi
 # **Derived from package.json, never listed here.** A hard-coded roster beside a set that grows is
 # the ADR-0073 C4 defect: an eleventh `check:*` script lands and this gate silently stops covering
