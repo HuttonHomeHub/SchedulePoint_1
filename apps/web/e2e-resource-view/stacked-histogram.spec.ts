@@ -109,13 +109,31 @@ test('a planner stacks two trades, tells them apart by colour, and reads the tot
   await expect(table.getByRole('columnheader', { name: 'Crew B' })).toBeVisible();
   await expect(table.getByRole('columnheader', { name: 'Total' })).toBeVisible();
 
-  // **Stack by is shaded, and finding that out is what this assertion is for.** Neither resource
-  // has a parent, so the org has no groups and the control would do nothing — it offers a mode that
-  // cannot change the picture. The first version of this journey assumed it was operable and timed
-  // out against a `disabled` select, which is the honest way to learn a precondition.
+  // **`Stack by` is operable, and only its `Group` option is shaded.** Neither resource has a
+  // parent, so grouping would do nothing — but `Kind` needs no groups at all, and until 2026-09-01
+  // the whole select was disabled here, which withheld it from exactly the unorganised programme it
+  // is most useful on (`docs/TECH_DEBT.md` #228 item 4). This assertion is what caught that: it
+  // read `toBeDisabled()` and went red on the change, which is the only place that rule was pinned.
   const stackBy = stripPanel.getByLabel('Stack by');
   await expect(stackBy).toHaveValue('resource');
-  await expect(stackBy).toBeDisabled();
+  await expect(stackBy).toBeEnabled();
+  await expect(
+    stripPanel.getByRole('option', { name: /^Group — none in the library yet$/ }),
+  ).toBeDisabled();
+
+  // **Stacking by kind re-bands the picture end to end.** Both crews are LABOUR (the library
+  // form's default), so the two named bands collapse into one called `Labour` — a real
+  // re-partition a planner can see, against a real API, which no unit suite can say.
+  await expect(stripPanel.getByRole('list', { name: 'Legend' })).toContainText('Crew A');
+  await stackBy.selectOption('kind');
+  const legend = stripPanel.getByRole('list', { name: 'Legend' });
+  await expect(legend).toContainText('Labour');
+  await expect(legend).not.toContainText('Crew A');
+  // The table is the chart's accessible equivalent and deliberately stays per-resource in every
+  // mode — it carries more than the chart, never less. Asserted so the asymmetry is a decision on
+  // the record rather than something a later reader "fixes".
+  await expect(table.getByRole('columnheader', { name: 'Crew A' })).toBeVisible();
+  await stackBy.selectOption('resource');
 
   // Isolating one resource returns the single-series picture, and says whose it is.
   await resourcePicker.selectOption({ label: 'Crew A' });

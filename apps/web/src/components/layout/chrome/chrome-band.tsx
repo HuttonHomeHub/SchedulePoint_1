@@ -98,7 +98,6 @@ export function ChromeSlotHost({
     rowsSlotRef: (node: HTMLDivElement | null) => void;
     identitySlotRef: (node: HTMLDivElement | null) => void;
     modeSlotRef: (node: HTMLDivElement | null) => void;
-    drawerSlotRef: (node: HTMLDivElement | null) => void;
     statusSlotRef: (node: HTMLDivElement | null) => void;
   }) => React.ReactNode;
 }): React.ReactElement {
@@ -108,10 +107,6 @@ export function ChromeSlotHost({
   const identity = useChromeSlot();
   // The plan's mode cluster and pen controls — the header row's middle section.
   const mode = useChromeSlot();
-  // The trailing drawer's body (Graphite M6-T2). Mounted only while the drawer shows the registered
-  // `'context'` subject, so a route's portal renders `null` the rest of the time rather than
-  // painting into a hidden node — `ChromePortal`'s existing "no slot, no children" contract.
-  const drawer = useChromeSlot();
   const status = useChromeSlot();
   return (
     <HelpActionProvider>
@@ -120,7 +115,6 @@ export function ChromeSlotHost({
           rows: rows.node,
           identity: identity.node,
           mode: mode.node,
-          drawer: drawer.node,
           status: status.node,
         }}
       >
@@ -128,7 +122,6 @@ export function ChromeSlotHost({
           rowsSlotRef: rows.slotRef,
           identitySlotRef: identity.slotRef,
           modeSlotRef: mode.slotRef,
-          drawerSlotRef: drawer.slotRef,
           statusSlotRef: status.slotRef,
         })}
       </ChromeSlotProvider>

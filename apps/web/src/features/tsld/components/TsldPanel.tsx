@@ -2523,7 +2523,7 @@ export function TsldPanel({
           page's navy beside bars painted the diagram's blue, i.e. a legend misdescribing the thing
           it exists to explain, on the one screen a person outside the organisation sees.
 
-          `contents` is the `context-drawer.tsx` precedent: the element provides the scope and
+          `contents` is the `explorer-column.tsx` precedent: the element provides the scope and
           generates no box, so this is a colour correction with no layout consequence. Wrapping it
           in a real box would also hand the legend the diagram's GROUND, which is a visual decision
           nobody asked for. */}

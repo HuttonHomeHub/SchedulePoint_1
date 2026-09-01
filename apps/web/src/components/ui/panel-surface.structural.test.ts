@@ -50,11 +50,14 @@ describe('PanelSurface owns the panel ground+border pairing', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('pinned positive: the three panel hosts import PanelSurface', () => {
+  it('pinned positive: the panel hosts import PanelSurface', () => {
     for (const host of [
       'components/layout/navigator/app-shell.tsx',
       'components/layout/navigator/explorer-column.tsx',
-      'components/layout/drawer/context-drawer.tsx',
+      // `components/layout/drawer/context-drawer.tsx` was here until 2026-09-01, when the whole
+      // context-drawer mechanism was deleted (`docs/TECH_DEBT.md` #156). A pinned positive naming a
+      // file that no longer exists throws rather than going quietly green, which is why this list
+      // was the first thing the deletion had to answer to.
       // Found by this gate's own first run, not by the register: #210 said four sites and the
       // sweep named three more — the workspace's three right docks (ADR-0110's rule, again).
       'components/layout/workspace/plan-workspace-toolbar.tsx',

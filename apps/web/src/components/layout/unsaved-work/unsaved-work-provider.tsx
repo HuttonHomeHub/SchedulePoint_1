@@ -17,8 +17,9 @@ import type { UnsavedWorkReport } from '@/lib/unsaved-work/report';
  * first to unmount deletes the survivor's registration — a guard that silently stops guarding,
  * which is the worst failure this feature has.
  *
- * **Release belongs to unmount alone**, following the `drawer-subject.tsx:257-272` precedent and for
- * the reason recorded there: a cleanup returned from the reporting effect runs on every dependency
+ * **Release belongs to unmount alone**, following the precedent `drawer-subject.tsx` set before it
+ * was deleted with the context drawer (`docs/TECH_DEBT.md` #156), and for the reason recorded here
+ * rather than by pointer: a cleanup returned from the reporting effect runs on every dependency
  * change, which would unregister and re-register on every edit. That is harmless today only because
  * React batches the pair into one commit — i.e. it relies on a batching detail to make a wrong
  * statement look right.

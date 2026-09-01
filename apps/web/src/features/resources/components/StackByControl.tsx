@@ -19,12 +19,23 @@ export function StackByControl({
   id,
   value,
   onChange,
-  disabled = false,
+  groupsAvailable = true,
 }: {
   id: string;
   value: StackBy;
   onChange: (next: StackBy) => void;
-  disabled?: boolean;
+  /**
+   * False when the organisation's resource library holds no `GROUP` node, which makes **one**
+   * option a no-op rather than the control.
+   *
+   * **It shades that option, never the select** (2026-09-01). It disabled the whole control until
+   * `Kind` existed, which was right while `Group` was the only alternative to `Resource` and became
+   * wrong the moment it was not: a library with no groups is exactly the unorganised programme
+   * `Kind` is most useful on, and the old rule withheld it from precisely those readers. That is
+   * ADR-0082's clause about a surface every item of which would be shaded, arriving one option at a
+   * time — the register's most-repeated shape, avoided here because it was looked for.
+   */
+  groupsAvailable?: boolean;
 }): React.ReactElement {
   return (
     <div className="flex flex-col gap-1.5">
@@ -33,15 +44,6 @@ export function StackByControl({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value as StackBy)}
-        disabled={disabled}
-        // **Why, not just that it is shut.** `disabled` here means the organisation's resource
-        // library has no group in it, which is a state the reader can change and cannot guess. A
-        // native `<select>` keeps `disabled` under ADR-0083's named exception, so a `title` is the
-        // channel this codebase already uses for the reason (`tsld-toolbar-items.tsx`,
-        // `selection-actions.tsx`).
-        {...(disabled
-          ? { title: 'No resource groups yet — give a resource a parent group to stack by it.' }
-          : {})}
         className="w-40"
       >
         <option value="resource">Resource</option>
@@ -49,8 +51,21 @@ export function StackByControl({
             (`resource-schemas.ts:21`, and the table's own column header), and UX_STANDARDS' rule is
             that a concept is called the same thing everywhere. "Trade" is also wrong on the facts:
             a GROUP may hold EQUIPMENT or MATERIAL resources, so it mis-describes every grouping
-            that is not labour. */}
-        <option value="group">Group</option>
+            that is not labour.
+
+            **Why, not just that it is shut.** The reason rides in the option's own label rather
+            than in a `title` on the select: an option's text IS its accessible name, so it reaches
+            a screen-reader user and a pointer user by the same channel, and a `title` on the select
+            would now be describing one of three choices. A native `<option disabled>` is skipped by
+            the platform's own keyboard model, which is ADR-0083's named exception for
+            `<select>`. */}
+        <option value="group" disabled={!groupsAvailable}>
+          {groupsAvailable ? 'Group' : 'Group — none in the library yet'}
+        </option>
+        {/* Needs nothing of the reader: every resource has a kind, so this mode says something
+            about a programme nobody has organised. Approved in the spec's US-8 and the plan's M3
+            and not built until 2026-09-01 (`docs/TECH_DEBT.md` #228 item 4). */}
+        <option value="kind">Kind</option>
       </Select>
     </div>
   );

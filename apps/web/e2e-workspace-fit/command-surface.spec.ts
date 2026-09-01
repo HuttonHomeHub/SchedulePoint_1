@@ -494,6 +494,73 @@ test.describe('The plan command surface', () => {
     await sweepObjectBar('TSLD, panel expanded');
     await page.getByRole('button', { name: 'Collapse activities panel' }).click();
   });
+  /**
+   * **The other plan view** (`docs/TECH_DEBT.md` #214).
+   *
+   * `docs/specs/workspace-chrome-fit/implementation-plan.md:306` (approved) requires this sweep to
+   * run "…at every width, **in both plan views**, once with a coarse pointer". The coarse half
+   * landed at ADR-0118 M2; the Gantt half was carried into M3 and **did not land there either** —
+   * verified 2026-09-01 by grepping the shipped estate, which holds zero occurrences of
+   * `view=gantt` or of a coarse sweep under `e2e-gantt/`. So the approved clause was outstanding
+   * twice, under a risk table that lists this sweep as the mitigation for "a touch target shrinks".
+   *
+   * **The Gantt is not a second copy of the diagram's chrome and that is why it needs its own
+   * pass.** The deck is one registry with items shaded per view, so sweeping it here is cheap
+   * insurance; the grid is a `treegrid` of its own — sortable column headers, a per-row actions
+   * menu and in-cell editors (ADR-0095) — and **nothing has ever swept it.** It went last in this
+   * describe so the view switch cannot leak into a sibling that assumes the diagram.
+   *
+   * The grid's floor is deliberately low. It is virtualized, so the swept count is a function of
+   * the viewport rather than of the plan, and a floor tuned to a tall window would fail at 1280
+   * for a reason that is not a defect. What the pinned positive has to exclude is a grid that
+   * rendered nothing at all — which is the state a broken view switch produces, and the state
+   * every other assertion here would pass against.
+   */
+  test('every command and every grid control clears 24 × 24 in the Gantt view too', async () => {
+    test.setTimeout(240_000);
+    await page.getByRole('button', { name: 'Gantt', exact: true }).click();
+    const grid = page.getByRole('treegrid', { name: 'Schedule as a bar chart' });
+    await expect(grid).toBeVisible();
+
+    const SURFACES = [
+      { name: 'command deck', root: '[role="toolbar"][aria-label="Plan commands"]', atLeast: 15 },
+      { name: 'Gantt grid', root: '[role="treegrid"]', atLeast: 1 },
+    ] as const;
+
+    for (const viewport of WIDTHS) {
+      await page.setViewportSize(viewport);
+      await page.waitForTimeout(500);
+
+      for (const surface of SURFACES) {
+        const targets = await sweep(page, surface.root);
+
+        expect(
+          targets.length,
+          `no controls swept on ${surface.name} in the Gantt at ${viewport.width}`,
+        ).toBeGreaterThan(surface.atLeast);
+
+        const undersized = targets.filter(
+          (t) => t.visible && (t.w < MIN_TARGET || t.h < MIN_TARGET),
+        );
+        expect(
+          undersized,
+          `${surface.name}: below ${MIN_TARGET}×${MIN_TARGET} in the Gantt at ${viewport.width}: ${JSON.stringify(undersized)}`,
+        ).toEqual([]);
+
+        const invisible = targets.filter((t) => !t.visible);
+        expect(
+          invisible,
+          `${surface.name}: painted at zero size in the Gantt at ${viewport.width}: ${JSON.stringify(invisible)}`,
+        ).toEqual([]);
+
+        const unreachable = targets.filter((t) => t.visible && !t.reachable);
+        expect(
+          unreachable,
+          `${surface.name}: a pointer cannot reach these in the Gantt at ${viewport.width}: ${JSON.stringify(unreachable)}`,
+        ).toEqual([]);
+      }
+    }
+  });
 });
 
 /**

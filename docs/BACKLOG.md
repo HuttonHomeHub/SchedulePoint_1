@@ -43,9 +43,17 @@ a product idea that has not yet earned a roadmap line:
      what is at risk.
 
   **So nothing here is owed.** The docked editor is a withdrawn decision, not deferred work; the
-  guard exists. What survives is one recorded gap and it is already filed: the drawer-subject
-  mechanism has no registrant (#156), and a browser Back does not reach the blocker in this app,
-  established by instrumenting rather than by reading (ADR-0108).
+  guard exists. What survives is one channel recorded as open rather than claimed: a browser Back
+  does not reach the blocker in this app, established by instrumenting rather than by reading
+  (ADR-0108).
+
+  4. **The mechanism is deleted, 2026-09-01.** #156 named two exits — build ADR-0097 D2, or close
+     D2 as not wanted and delete all of it — and the product owner took the second. `drawer/` is
+     gone (`drawer-subject.tsx`, `context-drawer.tsx`, `use-context-drawer-prefs.ts` and their
+     suites), with the `drawer` chrome slot, the shell's trailing grid column and its Escape rung.
+     **The row's own premise had gone stale too**: it said "the drawer itself is very much alive: it
+     holds the Project Explorer", which ADR-0109 D2 had already moved into its own column — so the
+     dead set was larger than the row described, which is this entry's shape for the fourth time.
 
   **Kept in full rather than deleted, because the shape is the point.** Every correction to this
   entry was made by someone who had just done the work, and each was overtaken within days by the

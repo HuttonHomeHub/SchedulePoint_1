@@ -16,6 +16,7 @@ import {
   STRIP_STACK_CAP,
   type StackBy,
   groupSeries,
+  kindSeries,
   stackSeries,
 } from '@/features/resources/model/stack-series';
 import { RESOURCE_STRIP_HEIGHT } from '@/features/tsld/components/TsldCanvas';
@@ -92,7 +93,12 @@ export function ResourceStripPanel({
     [resources.data],
   );
   const parentOf = (id: string): string | null => parentById.get(id) ?? null;
-  /** Grouping is offered only when a group exists — otherwise the control would do nothing. */
+  const kindById = useMemo(
+    () => new Map((resources.data ?? []).map((r) => [r.id, r.kind])),
+    [resources.data],
+  );
+  const kindOf = (id: string): string | null => kindById.get(id) ?? null;
+  /** Grouping is offered only when a group exists — otherwise that OPTION would do nothing. */
   const groupsExist = (resources.data ?? []).some((r) => r.parentId !== null);
 
   const series = histogram.data?.series ?? [];
@@ -164,7 +170,13 @@ export function ResourceStripPanel({
     // Off the canvas surface for the same reason `stripPalette` is — consistently, rather than
     // because these particular tokens happen to sit outside the rebind closure today.
     const cycle = categoricalCycleResolved(canvasSurface);
-    if (stackBy !== 'group') {
+    const partitioned =
+      stackBy === 'group'
+        ? groupSeries(series, buckets.length, parentOf, resourceName)
+        : stackBy === 'kind'
+          ? kindSeries(series, buckets.length, kindOf)
+          : null;
+    if (partitioned === null) {
       return stackSeries(series, buckets.length, {
         resourceName,
         neutral,
@@ -172,7 +184,6 @@ export function ResourceStripPanel({
         cap: STRIP_STACK_CAP,
       });
     }
-    const partitioned = groupSeries(series, buckets.length, parentOf, resourceName);
     return stackSeries(partitioned.series, buckets.length, {
       resourceName: partitioned.nameOf,
       neutral,
@@ -262,7 +273,7 @@ export function ResourceStripPanel({
           id={stackById}
           value={stackBy}
           onChange={setStackBy}
-          disabled={!groupsExist}
+          groupsAvailable={groupsExist}
         />
         <BucketSizeSelect id={bucketSizeId} value={granularity} onChange={setGranularity} />
       </div>

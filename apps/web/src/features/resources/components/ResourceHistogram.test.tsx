@@ -172,3 +172,87 @@ describe('ResourceHistogram (ADR-0044 §3 / ADR-0035 §31)', () => {
     });
   });
 });
+
+/**
+ * **The `Stack by` modes reach the chart from the dialog** — the entry-point half (ADR-0081).
+ *
+ * `StackByControl.test.tsx` proves the picker offers three modes and `stack-series.test.ts` proves
+ * each partition is correct; neither can say the dialog wires the choice to the derivation. `Kind`
+ * shipped in the approved spec and plan and was never built (`docs/TECH_DEBT.md` #228 item 4), so
+ * this is exactly the seam that had nothing watching it.
+ */
+describe('ResourceHistogram — stacking modes', () => {
+  const CHIPPY: ResourceSummary = { ...CREW, id: 'res-1', name: 'Chippies', kind: 'LABOUR' };
+  const CRANE: ResourceSummary = { ...CREW, id: 'res-2', name: 'Tower crane', kind: 'EQUIPMENT' };
+
+  function renderTwoKinds() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    });
+    queryClient.setQueryData(resourceKeys.list('acme'), [CHIPPY, CRANE]);
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <ResourceHistogram orgSlug="acme" planId="plan-1" />
+      </QueryClientProvider>,
+    );
+  }
+
+  beforeEach(() => {
+    vi.mocked(apiFetchEnvelope)
+      .mockReset()
+      .mockResolvedValue({
+        data: [
+          { resourceId: 'res-1', values: [10, 20], total: 30 },
+          { resourceId: 'res-2', values: [4, 6], total: 10 },
+        ],
+        meta: {
+          granularity: 'WEEK',
+          buckets: [
+            { start: '2026-01-05', end: '2026-01-12' },
+            { start: '2026-01-12', end: '2026-01-19' },
+          ],
+          curveNormalisedCount: 0,
+        },
+      });
+  });
+
+  it('re-bands the chart legend by kind when Kind is chosen', async () => {
+    renderTwoKinds();
+    const legend = await screen.findByRole('list', { name: 'Legend' });
+    expect(within(legend).getByText('Chippies')).toBeInTheDocument();
+    expect(within(legend).getByText('Tower crane')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Stack by' }), {
+      target: { value: 'kind' },
+    });
+
+    await waitFor(() => {
+      expect(within(legend).getByText('Labour')).toBeInTheDocument();
+    });
+    expect(within(legend).getByText('Equipment')).toBeInTheDocument();
+    expect(within(legend).queryByText('Chippies')).not.toBeInTheDocument();
+  });
+
+  it('leaves the data table per-resource in every mode, which is deliberate', async () => {
+    // **Written after the first version of the test above asserted the opposite and failed.**
+    // The table is the chart's accessible equivalent and it never aggregates
+    // (`stack-series.ts`: "the table, which never aggregates, still carries it"), so it carries
+    // MORE than the chart and never less. Stacking is a display lens over the same numbers; a
+    // table that followed it would take the per-resource figures away from the one representation
+    // a screen-reader user has. Asserted so nobody "fixes" the asymmetry into a regression.
+    renderTwoKinds();
+    const table = await screen.findByRole('table');
+    const before = within(table).getByRole('row', { name: /2026-01-05/ }).textContent;
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Stack by' }), {
+      target: { value: 'kind' },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Stack by' })).toHaveValue('kind');
+    });
+    expect(within(table).getByRole('columnheader', { name: 'Chippies' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Tower crane' })).toBeInTheDocument();
+    expect(within(table).getByRole('row', { name: /2026-01-05/ }).textContent).toBe(before);
+  });
+});

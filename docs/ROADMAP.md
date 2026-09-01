@@ -564,7 +564,7 @@ discriminators. Each becomes a spec/plan before build:
   third. So the rule narrows to `pointer: coarse` with named exceptions — a mouse user loses 0 px of
   diagram, a touch user 16 of 808 — and the coarse axis stops being deferred to a register row that
   closed the day before. The epic also found two defects that are **not** touch defects (#213) and
-  an approved plan clause whose own risk table claims it shipped (#214).
+  an approved plan clause whose own risk table claimed it shipped (#214 — both halves built and closed 2026-09-01, the Gantt half having gone unbuilt a second time).
 
 - **Icon-only commands name themselves everywhere** — **shipped** (ADR-0117, 2026-08-28, the
   fix-slice epic). The product's first Tooltip primitive: a hand-rolled APG hook meeting

@@ -44,7 +44,7 @@ import { ActivityNotesSection } from '@/features/notes';
  * (`max-w-4xl`, 896 px) dialog with a vertical section rail beside the content pane.
  *
  * **Why this stopped being a drawer subject.** Graphite M6 docked it in the trailing context
- * drawer, which is 300 px by default and caps at 420 px (`use-context-drawer-prefs.ts`). ADR-0061
+ * drawer, which was 300 px by default and capped at 420 px. ADR-0061
  * had widened this exact form to 896 px *because 448 px was already unusable* — Save fell below the
  * fold — so docking it put a form into a third of a width that had been judged too narrow at half.
  * The M10 gate pass then found the vertical rail left "about 92 px of content beside it" and

@@ -142,9 +142,10 @@ export function Surface({
  * drawer, which sits at the trailing edge — building to #210's original "trailing-edge border"
  * wording would have put a wrong edge on it, which is why the prop is required reading).
  *
- * Deliberately NOT a route for the two `className="contents"` resizer scopes
- * (`explorer-column.tsx`, `context-drawer.tsx`): those exist to give a `PanelResizer` the panel
- * family with **no box of their own**, and a border needs a box.
+ * Deliberately NOT a route for the `className="contents"` resizer scope in
+ * `explorer-column.tsx`: it exists to give a `PanelResizer` the panel family with **no box of its
+ * own**, and a border needs a box. (`context-drawer.tsx` was the second such scope until the
+ * context drawer was deleted, `docs/TECH_DEBT.md` #156.)
  *
  * `data-panel-border` is stamped so tests assert the pairing through the primitive rather than
  * against a raw class string — the half that broke once is the half the attribute pins.

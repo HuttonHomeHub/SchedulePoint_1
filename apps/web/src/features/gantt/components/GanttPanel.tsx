@@ -1072,8 +1072,20 @@ export function GanttPanel({
                         type="button"
                         onClick={() => onSort(column.key as GanttSortKey)}
                         className={cn(
-                          'focus-visible:ring-ring w-full rounded-sm text-xs font-medium focus-visible:ring-2 focus-visible:outline-none',
-                          column.align === 'right' ? 'text-right' : 'text-left',
+                          'focus-visible:ring-ring flex w-full items-end rounded-sm text-xs font-medium focus-visible:ring-2 focus-visible:outline-none',
+                          // **`min-h-6` is WCAG 2.2 §2.5.8's 24 px floor, not a rhythm choice**
+                          // (`docs/TECH_DEBT.md` #214). These six sort controls were **16 px**
+                          // tall — the label's own line box, because the button wrapped nothing
+                          // else and the row bottom-aligns them. The row is `RULER_HEIGHT` (34)
+                          // with `pb-1`, so 24 fits with headroom and `items-end` keeps the label
+                          // painted exactly where it was: this raises the TARGET, not the text.
+                          //
+                          // Found by the Gantt half of an approved clause that was never built —
+                          // the target-size sweep was specified to run "in both plan views" and
+                          // ran in one, so the only surface with sortable headers had never been
+                          // swept at all.
+                          'min-h-6',
+                          column.align === 'right' ? 'justify-end text-right' : 'text-left',
                           active
                             ? 'text-foreground'
                             : 'text-muted-foreground hover:text-foreground',

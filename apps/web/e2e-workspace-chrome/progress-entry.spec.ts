@@ -80,7 +80,6 @@ test.describe('Progress entry', () => {
     await expect(editor.getByRole('heading', { name: dig.name })).toBeVisible();
     await expect(editor.getByRole('tab', { name: /Progress/, selected: true })).toBeVisible();
 
-    // **Escape closes the drawer and hands focus to the rail button** — measured, after two
     // **Escape closes the dialog and focus goes back to the control that opened it** (ADR-0101).
     //
     // The focus half is the assertion that matters and it cannot be made anywhere else: the Close
