@@ -569,6 +569,13 @@ trades instead of "top 8 + Other".
 **Journey:** one step in the existing suite: create a `GROUP`, parent two resources to it, choose
 `Stack by → Group`, assert one segment named for the group and an unchanged per-bucket total.
 
+> **`Kind` landed late — 2026-09-01, after the epic shipped** (`docs/TECH_DEBT.md` #228 item 4).
+> M3 built `Resource` and `Group` only; nothing recorded the descope, so this milestone's own
+> "invariance across all three modes" requirement was quietly met over two and read as satisfied.
+> The mode is now built and that gate really does compare three. Recorded here rather than in the
+> commit alone, because a plan that describes work nobody did is the drift class this repository
+> keeps finding in the other direction.
+
 #### Feature: grouped aggregation
 
 > **Description:** Re-partition the same series by the resource's group ancestor (ADR-0053 §3

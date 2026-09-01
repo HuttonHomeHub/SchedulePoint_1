@@ -2,7 +2,7 @@ import type { HistogramGranularity } from '@repo/types';
 import { useId, useMemo, useState } from 'react';
 
 import { useResourceHistogram, useResources } from '../api/use-resources';
-import { type StackBy, groupSeries, stackSeries } from '../model/stack-series';
+import { type StackBy, groupSeries, kindSeries, stackSeries } from '../model/stack-series';
 
 import { BucketSizeSelect, ResourceLoadingTable } from './ResourceLoadingTable';
 import { ResourceStackChart } from './ResourceStackChart';
@@ -40,7 +40,9 @@ export function ResourceHistogram({
   const resourceName = (id: string): string => nameById.get(id) ?? 'Unknown resource';
   const parentById = new Map((resources.data ?? []).map((r) => [r.id, r.parentId]));
   const parentOf = (id: string): string | null => parentById.get(id) ?? null;
-  /** True once at least one resource has a parent — otherwise grouping would be a no-op control. */
+  const kindById = new Map((resources.data ?? []).map((r) => [r.id, r.kind]));
+  const kindOf = (id: string): string | null => kindById.get(id) ?? null;
+  /** True once at least one resource has a parent — otherwise grouping is a no-op OPTION. */
   const groupsExist = (resources.data ?? []).some((r) => r.parentId !== null);
 
   const buckets = histogram.data?.buckets ?? [];
@@ -50,7 +52,11 @@ export function ResourceHistogram({
   // re-render of this dialog (focus, hover, a granularity control's own state) does not re-rank.
   const stacked = useMemo(() => {
     const partitioned =
-      stackBy === 'group' ? groupSeries(series, buckets.length, parentOf, resourceName) : null;
+      stackBy === 'group'
+        ? groupSeries(series, buckets.length, parentOf, resourceName)
+        : stackBy === 'kind'
+          ? kindSeries(series, buckets.length, kindOf)
+          : null;
     return partitioned
       ? stackSeries(partitioned.series, buckets.length, {
           resourceName: partitioned.nameOf,
@@ -81,7 +87,7 @@ export function ResourceHistogram({
             id={stackById}
             value={stackBy}
             onChange={setStackBy}
-            disabled={!groupsExist}
+            groupsAvailable={groupsExist}
           />
           <BucketSizeSelect id={granularityId} value={granularity} onChange={setGranularity} />
         </div>

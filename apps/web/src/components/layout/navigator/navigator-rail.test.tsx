@@ -80,7 +80,8 @@ describe('NavigatorRail', () => {
    *
    * It is the **third** suite in this area found pinning a state the product can no longer
    * produce, after `app-shell.test.tsx` and `drawer-entry-point.test.tsx` — which is most of the
-   * answer to why three live routes sat in that state without anyone noticing.
+   * answer to why three live routes sat in that state without anyone noticing. (That third suite
+   * no longer exists — it went with the context drawer, `docs/TECH_DEBT.md` #156.)
    */
   it('renders the Project Explorer landmark around the organisation tree', () => {
     renderRail(<NavigatorRail orgSlug="acme" />);

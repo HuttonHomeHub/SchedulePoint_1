@@ -173,16 +173,16 @@ describe('AppShell', () => {
    * absence cost a planner the Link tool mid-search); and a closed drawer must not swallow the key
    * from anything above it.
    */
-  it('leaves Escape alone when there is no drawer on screen', () => {
-    // **The shape of this case changed with the drawer's contents** (M3-T2). It used to open on the
-    // Project Explorer, so Escape always had something to close; the Explorer is a docked column
-    // now and the drawer holds only what a route registers — nothing, in this fixture and in the
-    // shipped product (`docs/TECH_DEBT.md` #156).
+  it('leaves Escape alone — the shell claims no key at all', () => {
+    // **The shell has no keydown handler any more** (`docs/TECH_DEBT.md` #156, 2026-09-01). The
+    // rung this case was written for closed the context drawer, and the whole drawer mechanism is
+    // deleted: ADR-0101 returned the activity editor to a modal and left it with no registrant.
     //
-    // What that leaves is the half that was always the sharp one: a shell with no drawer must not
-    // swallow Escape from anything above it, and must not write a collapse a reader never asked
-    // for. The three-rung deferral is asserted in `drawer-entry-point.test.tsx`, where a subject IS
-    // registered and there is a panel for the rung to act on.
+    // The case is kept rather than deleted with it, because the half it pins outlived its subject:
+    // the shell root must not swallow Escape from anything above it, and must not fold the
+    // Explorer — whose fold state is a persisted preference of its own, so a rung aimed here later
+    // would write one nobody asked for. That is a live risk with no mechanism, which is exactly
+    // when an assertion is worth more than a paragraph.
     renderShell();
     const grid = screen.getByRole('main').parentElement!;
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
@@ -316,90 +316,6 @@ describe('AppShell', () => {
         Object.keys(sessionStorage).filter((k) => k.startsWith('schedulepoint-nav-expanded:')),
       ).toEqual([]);
     });
-
-    it('does not write a collapse to storage when Escape is pressed with nothing to close', () => {
-      const writes = spyOnStorageWrites();
-      const { container } = renderShell();
-      const grid = screen.getByRole('main').parentElement!;
-      fireEvent.keyDown(grid, { key: 'Escape' });
-
-      // Asserted tightly rather than with a `stored === null` alternative: `useResizablePanelPrefs`
-      // writes its preference in an effect on mount, which `render()`'s `act()` flushes, so storage
-      // is never null by the time this runs and the permissive arm was vestigial.
-      const stored = localStorage.getItem('schedulepoint-context-drawer');
-      expect(stored).not.toBeNull();
-      expect(JSON.parse(stored!).collapsed).toBe(false);
-      // The independent spec check asked for the WRITE and not only the resting value: a rule that
-      // collapsed and then restored would leave `collapsed: false` on disk and still have written
-      // `true`, which the assertion above cannot see. No write may name a collapse at all.
-      expect(
-        writes.filter(
-          ([key, value]) =>
-            key === 'schedulepoint-context-drawer' && value.includes('"collapsed":true'),
-        ),
-      ).toEqual([]);
-      expect(within(container).queryByText(/Project Explorer closed/)).not.toBeInTheDocument();
-    });
-  });
-
-  /**
-   * **Below `lg`, Escape must not close a drawer the reader cannot see** (`docs/TECH_DEBT.md` #168).
-   *
-   * The drawer's column is `hidden lg:flex`, so under 1024 px it is in the DOM and invisible — the
-   * Explorer's real surface there is the `Sheet`, which is separate state and which the browser
-   * closes on Escape by itself. The rung guarded on content alone, so on every narrow viewport
-   * Escape wrote a silent collapse to `localStorage` and announced "Project Explorer closed." for a
-   * panel that was never on screen: **a guard disagreeing with a CSS class.**
-   *
-   * Both directions are asserted. A test that only pins the narrow case passes equally against a
-   * rung that never fires at all, which would break the behaviour ADR-0104 shipped.
-   */
-  describe('below the lg breakpoint', () => {
-    beforeEach(() => {
-      isDesktop = false;
-    });
-
-    it('does not close, persist or announce anything when Escape is pressed', () => {
-      const writes = spyOnStorageWrites();
-      const { container } = renderShell();
-      const grid = screen.getByRole('main').parentElement!;
-
-      fireEvent.keyDown(grid, { key: 'Escape' });
-
-      expect(
-        writes.filter(
-          ([key, value]) =>
-            key === 'schedulepoint-context-drawer' && value.includes('"collapsed":true'),
-        ),
-      ).toEqual([]);
-      expect(within(container).queryByText(/Project Explorer closed/)).not.toBeInTheDocument();
-    });
-  });
-
-  it('never persists a collapse from an Escape with no drawer, at any width', () => {
-    // **The positive half of #168 moved rather than went** (M3-T2). It used to assert that Escape
-    // at `lg`+ closed the Project Explorer — true while the Explorer WAS the drawer's subject, and
-    // meaningless now that it is a docked column with its own fold state and its own control.
-    // The rung's positive case is asserted in `drawer-entry-point.test.tsx`, against a registered
-    // subject, which is the only shape that has a drawer to close.
-    //
-    // What is pinned here is the half this suite can still see, and it is the one #168 was about:
-    // the guard must not write a preference for a panel that is not on screen. Asserted at `lg`+ as
-    // well as below it, because the `describe` above pins only the narrow half — and a rung that
-    // fires wrongly at the wide one would be invisible to it.
-    const writes = spyOnStorageWrites();
-    const { container } = renderShell();
-    const grid = screen.getByRole('main').parentElement!;
-
-    fireEvent.keyDown(grid, { key: 'Escape' });
-
-    expect(
-      writes.filter(
-        ([key, value]) =>
-          key === 'schedulepoint-context-drawer' && value.includes('"collapsed":true'),
-      ),
-    ).toEqual([]);
-    expect(within(container).queryByText(/closed/)).not.toBeInTheDocument();
   });
 
   it('puts a skip link first in the document, pointing at a focusable main', () => {

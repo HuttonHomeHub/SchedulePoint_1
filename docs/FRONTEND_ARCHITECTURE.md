@@ -329,19 +329,25 @@ sequenceDiagram
   changed three times after that ADR. It is now: a **docked Project Explorer** on the
   leading edge — resizable 200–420, folding to a 34 px spine, with its own persisted
   preference — or an off-canvas `Sheet` below `lg`; a **chrome band** across the top
-  carrying identity, the organisation switcher and the account; and a **trailing
-  context drawer** a route may register a subject into (resizable 224–420, and with
-  no production registrant today — `docs/TECH_DEBT.md` #156). It mounts in the layout
+  carrying identity, the organisation switcher and the account. It mounts in the layout
   route so it survives child-route swaps, and derives its active node and ancestor
   expansion from the URL — never a competing selection store.
 
-  <!-- Corrected 2026-08-22 and again 2026-08-24. The first correction removed a
+  There is **no trailing context drawer**. One existed from Graphite M6 until 2026-09-01,
+  for a route to register a subject into; ADR-0101 returned its only registrant — the
+  activity editor — to a modal, and the whole mechanism was deleted rather than kept as a
+  seam nothing exercised (`docs/TECH_DEBT.md` #156, closing ADR-0097 D2 as not wanted).
+  The shell grid is two columns.
+
+  <!-- Corrected 2026-08-22, 2026-08-24 and 2026-09-01. The first correction removed a
   retired flag and a superseded rail description. The second removes the 48 px tool
   rail Graphite M4 introduced and this paragraph had described for two days: the
   workspace redesign deletes it, docks the Explorer back on the leading edge and
   restores the header row at every width. Two rewrites of one paragraph in three days
   is the cost of a shell whose shape is being worked on — which is a reason to keep
-  it current, not a reason to describe it loosely. -->
+  it current, not a reason to describe it loosely. The third removes the context drawer,
+  and states its absence rather than dropping the sentence: a reader who remembers the
+  drawer needs to be told it is gone, not left to infer it from silence. -->
 
 - **A `useMediaQuery`/`useBreakpoint` hook** exposes breakpoints to logic when
   layout alone can't express a change.

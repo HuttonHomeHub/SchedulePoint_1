@@ -122,8 +122,15 @@ export interface StackSeriesOptions {
   cycle?: readonly CategoricalCycleMember[];
 }
 
-/** How the segments are formed: one band per resource, or one band per parent group. */
-export type StackBy = 'resource' | 'group';
+/**
+ * How the segments are formed: one band per resource, per top-level group, or per resource kind.
+ *
+ * `'kind'` was in the approved spec (US-8) and the approved plan's M3 from the start and was not
+ * built — a descope nobody recorded, which is why the plan's "invariance across all three modes"
+ * requirement was quietly met over two (`docs/TECH_DEBT.md` #228 item 4). Built 2026-09-01 on the
+ * product owner's call.
+ */
+export type StackBy = 'resource' | 'group' | 'kind';
 
 /**
  * **Grouping — where this beats P6 outright, and it is a re-partition rather than a new pipeline.**
@@ -175,20 +182,34 @@ function topLevelOf(id: string, parentOf: (resourceId: string) => string | null)
   return current;
 }
 
-export function groupSeries(
+/** What a partition returns: a re-keyed series, and the labeller for its new keys. */
+export interface PartitionedSeries {
+  series: ResourceHistogramSeries[];
+  nameOf: (id: string) => string;
+}
+
+/**
+ * **The one re-partition, shared by every mode.** A partition maps each series to a key and a
+ * label and sums the members of each key bucket-wise; nothing else about it varies between
+ * grouping by ancestor and grouping by kind.
+ *
+ * Written as one function rather than two the day a second mode arrived, because a second copy is
+ * where the milestone's own acceptance gate would go wrong: per-bucket totals must be **identical**
+ * across every mode, and a partition that re-sums rather than re-partitions is invisible from the
+ * chart — it looks like a plausible picture of a different plan.
+ */
+function partitionSeries(
   series: readonly ResourceHistogramSeries[],
   bucketCount: number,
-  parentOf: (resourceId: string) => string | null,
-  nameOf: (id: string) => string,
-): { series: ResourceHistogramSeries[]; nameOf: (id: string) => string } {
+  keyOf: (s: ResourceHistogramSeries) => string,
+  labelOf: (key: string) => string,
+): PartitionedSeries {
   const byKey = new Map<string, { values: number[]; total: number }>();
   const labels = new Map<string, string>();
 
   for (const s of series) {
-    // A resource with no parent IS its own band — see the docblock. Keying on the resource's own id
-    // in that case also keeps `nameOf` working without a second lookup table.
-    const key = topLevelOf(s.resourceId, parentOf);
-    labels.set(key, nameOf(key));
+    const key = keyOf(s);
+    labels.set(key, labelOf(key));
     const bucket = byKey.get(key) ?? { values: new Array<number>(bucketCount).fill(0), total: 0 };
     for (let i = 0; i < bucketCount; i += 1) bucket.values[i]! += s.values[i] ?? 0;
     bucket.total += s.total;
@@ -201,8 +222,68 @@ export function groupSeries(
       values: v.values,
       total: v.total,
     })),
-    nameOf: (id) => labels.get(id) ?? nameOf(id),
+    nameOf: (id) => labels.get(id) ?? labelOf(id),
   };
+}
+
+export function groupSeries(
+  series: readonly ResourceHistogramSeries[],
+  bucketCount: number,
+  parentOf: (resourceId: string) => string | null,
+  nameOf: (id: string) => string,
+): PartitionedSeries {
+  // A resource with no parent IS its own band — see the docblock. Keying on the resource's own id
+  // in that case also keeps `nameOf` working without a second lookup table.
+  return partitionSeries(
+    series,
+    bucketCount,
+    (s) => topLevelOf(s.resourceId, parentOf),
+    (key) => nameOf(key),
+  );
+}
+
+/**
+ * **Stacking by kind — three bands at most, and no configuration at all.**
+ *
+ * The coarsest partition the model can offer: `LABOUR` / `EQUIPMENT` / `MATERIAL`. It needs nothing
+ * of the reader — no groups to have been built, no filter per segment — so it is the one mode that
+ * always says something about a programme that has never been organised, which is the state the
+ * feature is weakest in.
+ *
+ * **`GROUP` cannot appear and that is structural, not an assumption.** A `GROUP` node is
+ * non-assignable by a database CHECK (`ck_resources_group_no_scheduling_fields`, ADR-0053 §3) and
+ * refused at assignment with 422 `GROUP_NOT_ASSIGNABLE`; the histogram is derived from
+ * *assignments*, so no `GROUP` id can reach a series. Asserted as a test rather than left as this
+ * paragraph, which is what the plan's M3-T1 asked for.
+ *
+ * A series whose resource is not in the fetched library lands in one **`Unknown kind`** band rather
+ * than being dropped. Dropping it would break the invariant every mode is judged on — per-bucket
+ * totals identical across modes — and would do it silently, by making a plan look lighter than it
+ * is. It mirrors `resourceName`'s existing `Unknown resource` fallback, for the same reason: the
+ * resource list is paged and may be stale.
+ */
+const UNKNOWN_KIND = 'UNKNOWN';
+
+/** Sentence case, because these are band labels a planner reads and not enum values. */
+const KIND_LABELS: Record<string, string> = {
+  LABOUR: 'Labour',
+  EQUIPMENT: 'Equipment',
+  MATERIAL: 'Material',
+  GROUP: 'Group',
+  [UNKNOWN_KIND]: 'Unknown kind',
+};
+
+export function kindSeries(
+  series: readonly ResourceHistogramSeries[],
+  bucketCount: number,
+  kindOf: (resourceId: string) => string | null,
+): PartitionedSeries {
+  return partitionSeries(
+    series,
+    bucketCount,
+    (s) => kindOf(s.resourceId) ?? UNKNOWN_KIND,
+    (key) => KIND_LABELS[key] ?? key,
+  );
 }
 
 /**

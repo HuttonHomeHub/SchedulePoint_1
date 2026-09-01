@@ -1,7 +1,13 @@
 import type { ResourceHistogramSeries } from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_STACK_CAP, groupSeries, stackOffsets, stackSeries } from './stack-series';
+import {
+  DEFAULT_STACK_CAP,
+  groupSeries,
+  kindSeries,
+  stackOffsets,
+  stackSeries,
+} from './stack-series';
 
 import { CATEGORICAL_CYCLE_LENGTH } from '@/features/tsld/render/palette';
 
@@ -259,5 +265,117 @@ describe('groupSeries attributes to the TOP-LEVEL group', () => {
     );
     expect(out.series).toHaveLength(1);
     expect(out.series[0]?.resourceId).toBe('n10');
+  });
+});
+
+describe('kindSeries', () => {
+  const kinds: Record<string, string> = {
+    chippy: 'LABOUR',
+    sparks: 'LABOUR',
+    crane: 'EQUIPMENT',
+    concrete: 'MATERIAL',
+  };
+  const kindOf = (id: string): string | null => kinds[id] ?? null;
+
+  it('collapses to one band per kind, labelled in sentence case', () => {
+    const out = kindSeries(
+      [s('chippy', [1, 2]), s('sparks', [3, 4]), s('crane', [5, 6]), s('concrete', [7, 8])],
+      2,
+      kindOf,
+    );
+    expect(out.series.map((x) => x.resourceId).sort()).toEqual(['EQUIPMENT', 'LABOUR', 'MATERIAL']);
+    // Two LABOUR resources summed bucket-wise, not concatenated or re-ranked.
+    expect(out.series.find((x) => x.resourceId === 'LABOUR')?.values).toEqual([4, 6]);
+    expect(out.nameOf('LABOUR')).toBe('Labour');
+    expect(out.nameOf('EQUIPMENT')).toBe('Equipment');
+    expect(out.nameOf('MATERIAL')).toBe('Material');
+  });
+
+  it('puts a resource missing from the library in one Unknown kind band rather than dropping it', () => {
+    // Dropping it would break the invariant every mode is judged on, and would do it silently —
+    // by making the plan look lighter than it is. The resource list is paged and may be stale.
+    const out = kindSeries([s('chippy', [1, 1]), s('ghost', [4, 4])], 2, kindOf);
+    expect(out.series.map((x) => x.resourceId).sort()).toEqual(['LABOUR', 'UNKNOWN']);
+    expect(out.nameOf('UNKNOWN')).toBe('Unknown kind');
+    expect(out.series.find((x) => x.resourceId === 'UNKNOWN')?.total).toBe(8);
+  });
+
+  it('never sees a GROUP, because a GROUP is not assignable', () => {
+    // The plan's M3-T1 asked for this as a test rather than as a paragraph. `GROUP` is
+    // non-assignable by a database CHECK (`ck_resources_group_no_scheduling_fields`, ADR-0053 §3)
+    // and refused at assignment with 422 `GROUP_NOT_ASSIGNABLE`; the histogram derives from
+    // assignments, so no GROUP id can reach a series. Asserted through the library rather than by
+    // filtering here: nothing in the partition excludes a GROUP, and nothing needs to.
+    const library = [
+      { id: 'g-steel', kind: 'GROUP' },
+      { id: 'chippy', kind: 'LABOUR' },
+    ];
+    const assignable = library.filter((r) => r.kind !== 'GROUP').map((r) => r.id);
+    const out = kindSeries(
+      assignable.map((id) => s(id, [1])),
+      1,
+      (id) => library.find((r) => r.id === id)?.kind ?? null,
+    );
+    expect(out.series.map((x) => x.resourceId)).toEqual(['LABOUR']);
+  });
+});
+
+/**
+ * **The milestone's own acceptance gate, over all THREE modes.**
+ *
+ * The plan (M3-T1) required total invariance across `Resource` / `Group` / `Kind` and the third
+ * mode was never built, so the requirement was quietly met over two (`docs/TECH_DEBT.md` #228
+ * item 4). Grouping re-partitions; it never re-sums — and a partition that re-sums is invisible on
+ * the chart, because it looks like a plausible picture of a different plan.
+ *
+ * Verified red against a re-summing implementation: doubling one bucket inside `partitionSeries`
+ * fails the `kind` and `group` rows and leaves `resource` green, which is what makes the three-way
+ * comparison worth more than three separate assertions.
+ */
+describe('per-bucket totals are identical across every stacking mode', () => {
+  const input = [
+    s('chippy', [1, 2, 3]),
+    s('sparks', [4, 5, 6]),
+    s('crane', [7, 8, 9]),
+    s('concrete', [2, 0, 4]),
+  ];
+  const parents: Record<string, string | null> = {
+    chippy: 'g-fitout',
+    sparks: 'g-fitout',
+    crane: null,
+    concrete: null,
+  };
+  const kinds: Record<string, string> = {
+    chippy: 'LABOUR',
+    sparks: 'LABOUR',
+    crane: 'EQUIPMENT',
+    concrete: 'MATERIAL',
+  };
+
+  it('resource, group and kind all stack to the same column heights', () => {
+    const byResource = stackSeries(input, 3, opts);
+
+    const grouped = groupSeries(input, 3, (id) => parents[id] ?? null, name);
+    const byGroup = stackSeries(grouped.series, 3, { ...opts, resourceName: grouped.nameOf });
+
+    const kinded = kindSeries(input, 3, (id) => kinds[id] ?? null);
+    const byKind = stackSeries(kinded.series, 3, { ...opts, resourceName: kinded.nameOf });
+
+    // Asserted as an equality against the raw input as well as against each other: three modes
+    // agreeing with one another and all being wrong is a state three pairwise assertions permit.
+    const raw = [0, 1, 2].map((b) => input.reduce((acc, x) => acc + (x.values[b] ?? 0), 0));
+    expect(byResource.bucketTotals).toEqual(raw);
+    expect(byGroup.bucketTotals).toEqual(raw);
+    expect(byKind.bucketTotals).toEqual(raw);
+
+    // And the modes really do partition differently, or the equality above would be vacuous.
+    expect(byResource.segments).toHaveLength(4);
+    expect(byGroup.segments).toHaveLength(3);
+    expect(byKind.segments).toHaveLength(3);
+    expect(byKind.segments.map((seg) => seg.label).sort()).toEqual([
+      'Equipment',
+      'Labour',
+      'Material',
+    ]);
   });
 });

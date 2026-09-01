@@ -20,8 +20,10 @@ import {
  * drawer, the milestone's headline capability, was dark in the product's default path.
  *
  * **Why this file exists rather than another unit test.** The unit suites mount the editor, and the
- * defect was in the seam between the editor and the shell: `drawer-entry-point.test.tsx` now drives
- * that seam with a probe route, which is a real test and still not this one. Only the shipped
+ * defect was in the seam between the editor and the shell: `drawer-entry-point.test.tsx` drove that
+ * seam with a probe route, which was a real test and still not this one — and which is why it went
+ * with the drawer on 2026-09-01 (`docs/TECH_DEBT.md` #156): a probe route proves nothing about a
+ * mechanism the product no longer has. Only the shipped
  * product can say that the *plan workspace* — the actual route, its actual selection bar, its actual
  * gating — reaches it. ADR-0081 exists because a milestone once shipped with unit tests validating
  * code no planner could reach, and this is the fifth recorded instance of that shape.

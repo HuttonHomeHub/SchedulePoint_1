@@ -10,6 +10,46 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-01 — The context drawer is deleted, and ADR-0097 D2 is closed as not wanted
+
+`docs/TECH_DEBT.md` #156. No ADR: nothing is designed here. ADR-0101 already decided that an editor
+is a dialog and not a drawer; this is that decision followed to the end of the mechanism it left
+behind, on the product owner's call between the two exits #156 itself named.
+
+**What went.** `components/layout/drawer/` entirely — `drawer-subject.tsx` (the registration
+context, its `show`/`focusRailButton` controls and `ContextDrawerEmpty`), `context-drawer.tsx`,
+`use-context-drawer-prefs.ts` and their suites — plus `drawer-entry-point.test.tsx`, the `drawer`
+member of `CHROME_SLOT_NAMES` with its slot in `ChromeSlotHost` and `test-chrome-host.tsx`, the
+shell's trailing grid column, its `onShellKeyDown` Escape rung and the `shellWidth` ResizeObserver
+that existed only to clamp the drawer's width. The shell grid is two columns; the band's §4a
+zero-width argument is unchanged, because an `auto` column with no child was already zero wide —
+which is precisely how it sat unused without anyone noticing.
+
+**The row's own premise had gone stale, and the correction made the work larger.** #156 said "the
+drawer itself is very much alive: it holds the Project Explorer". ADR-0109 D2 docked the Explorer
+into its own leading-edge column on 2026-08-25, so by the time the row was acted on the drawer held
+nothing at all — making `ContextDrawer`, its persisted preference and the chrome slot dead too,
+none of which the row or the question put to the product owner described. Cause 3 from the
+2026-08-30 entry above, four days later, in the row that entry's own sweep left standing: a
+milestone that moves something does not go back and edit the rows that describe where it used to
+be. Taking the smaller scope would have left new dead code in the commit that deleted dead code.
+
+**Three tests were deleted rather than kept green.** They asserted that Escape wrote no collapse to
+`schedulepoint-context-drawer` — a key nothing writes now, so they would have passed against
+anything. One case is **kept and retargeted**: the shell root must still not swallow Escape or fold
+the Explorer, whose fold state is a persisted preference of its own. That is a live risk with no
+mechanism behind it, which is exactly when an assertion beats a paragraph.
+
+**Every citation of a deleted file was repaired, not left dangling** — `panel-surface.structural.test.ts`'s
+pinned positive list (which would have thrown, and was the first thing the deletion had to answer
+to), four docblocks that cited `context-drawer.tsx` or `drawer-subject.tsx` as a precedent, and two
+that pointed a reader at `drawer-entry-point.test.tsx`. Historical specs and ADRs are left alone:
+they record what was true when they were written. `docs/FRONTEND_ARCHITECTURE.md` **states the
+absence** rather than dropping the sentence — a reader who remembers the drawer needs to be told it
+is gone, not left to infer it from silence.
+
+---
+
 ## 2026-08-30 — A register row is a claim frozen at the moment it was written
 
 `docs/TECH_DEBT.md` #219. No ADR: this records a finding and a method, and the one thing it points
