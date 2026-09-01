@@ -1013,6 +1013,49 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 233. A canvas lag drag reads and writes rounded days, so a sub-day lag cannot survive one
+
+**Status:** open · **Found:** 2026-09-01, while specifying #65 · **Size:** S · **Owner:** web
+
+`onTsldLag` (`use-plan-workspace-model.ts:1253-1265`) — the one handler the TSLD lag-anchor **drag**
+and the Logic panel's `Shift+←/→` **nudge** share — takes `lagDays`, compares it against
+`dependency.lagDays`, and sends `lagDays`. Both halves are in **rounded days**, and
+`DependencySummary.lagDays` is documented at `packages/types/src/index.ts:665-670` as _"rounded from
+the stored minutes. A sub-day lag reads back as 0 here"_.
+
+So on an edge whose stored lag is not a whole number of days — a two-hour cure, a 90-minute lift —
+two things go wrong and they are different:
+
+- **The drag is silently refused.** Drag a 90-minute lag to zero: the gesture emits `0`,
+  `dependency.lagDays` is already `0`, the defensive no-op at `:1257` returns `{ applied: false }`,
+  and the anchor snaps back with nothing written and nothing said. That guard is correct in its own
+  terms — it exists so a stale caller cannot burn a version bump and a recalculation on an identical
+  write — and it is comparing two numbers that are not the same quantity. The ADR-0064 shape: a
+  gesture that produces no change and no explanation.
+- **The remainder is discarded on any drag that does write.** Nudge that lag by one day and the
+  PATCH carries `lagDays: 1`, so the server stores a whole day and the 90 minutes is gone.
+
+**This is ADR-0070 M4's defect one field along.** That milestone found "a canvas move resent the
+**rounded** duration, flattening a sub-day activity to zero on every drag" and fixed it for
+`durationDays`. `lagDays` is the same conversion on the same surface and was not swept — one correct
+pattern applied to a control and not its neighbour, the shape this register has recorded six times.
+
+**Why it is filed rather than fixed inside #65.** #65 is an **undo** seam: it adds an inverse and
+changes no forward write. This is a **forward write**, and changing what a drag stores is a change to
+a shipped gesture that wants its own before/after — including a decision the fix cannot dodge: when a
+planner drags a 90-minute lag to "1 day", do they mean one day exactly, or one day plus the 90
+minutes they never saw? The former is almost certainly right (they dragged to a day boundary), but it
+is a product answer, not a refactor.
+
+**What the remedy looks like.** `LagInput` is already `{ lagDays } | { lagMinutes }`
+(`use-dependencies.ts:85`) and the API stores minutes verbatim, so nothing new is needed on the wire.
+The comparison must move to `lagMinutes` — the only quantity both sides can express — and the write
+must send whichever unit the gesture actually means, stated rather than inherited.
+
+**Unverified:** the two failure modes above are read from the code and the type's own docblock, not
+driven in a browser. Establishing them wants a plan whose edge carries a sub-day lag — the seed
+catalogue can build one — and that proof belongs with the fix.
+
 ### 232. The WBS band's derived bucket has no accessible name or count
 
 **Status:** open · **Verified:** 2026-09-01 · **Size:** M · **Owner:** web
@@ -2216,6 +2259,23 @@ pick one and apply it.
 
 **b. `clients-loading` is a bare spinner** where `docs/UX_STANDARDS.md` expects a skeleton. Also
 pre-existing, and only visible now because the loading state had never been captured.
+
+> **Counted 2026-09-01, and it is the same finding as (a) one state over.** `clients-loading` is
+> not a screen that happens to use a spinner — it is `DataTable`, whose own docblock
+> (`components/ui/data-table.tsx:35`) says it owns "loading / error-with-retry / empty / populated
+> states so every resource list", and which renders `<Spinner label={loadingLabel} />` at `:85` for
+> **15 non-test consumers**. So one change covers every resource list, and `clients` was the one a
+> screenshot caught. `Skeleton` and `ListRowSkeleton` both already exist and have **two** consumers
+> between them, both in `features/overview` — the primitive did not spread; the spinner did.
+>
+> **Not every spinner is wrong, and saying so is part of the finding.** ~19 files touch
+> `Spinner`/`animate-spin`, and a spinner is right for a pending button, an inline action and a
+> route-level suspense fallback; `docs/UX_STANDARDS.md` asks for a skeleton only where the content
+> has a known shape. Sweeping all 19 would be the mirror of the mistake that filed this row.
+>
+> Folded into the (a) pass rather than kept separate: the loading and empty states of one shared
+> table are one reader's experience of one screen, and splitting them means touching `DataTable`
+> twice.
 
 **c. The Project Explorer is a large flat navy block when the tree is short** — **RESOLVED in
 `web-v0.97.0`, before anyone acted on this row.** It was raised as "worth putting to the product

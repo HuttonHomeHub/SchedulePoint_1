@@ -683,14 +683,36 @@ export function visualResizeCommand(params: {
   });
 }
 
-/** `useUpdateDependency().mutateAsync` — the dependency PATCH (type + lag + lag calendar). */
-export type UpdateDependencyFn = (input: {
-  dependencyId: string;
-  type: DependencyType;
-  lagDays: number;
-  lagCalendar: LagCalendarSource;
-  version: number;
-}) => Promise<DependencySummary>;
+/**
+ * The signed lag in exactly one of the two units the API accepts — structurally
+ * `UpdateDependencyInput`'s own `LagInput`, restated here so this module stays free of the query
+ * layer. Sending both is a 422 by design, which is why it is a union and not two optional fields.
+ */
+export type CommandLagInput = { lagDays: number } | { lagMinutes: number };
+
+/**
+ * `useUpdateDependency().mutateAsync` — the dependency PATCH (type + lag + lag calendar).
+ *
+ * **The lag is a union, and that is the fix rather than a generalisation** (`docs/TECH_DEBT.md`
+ * #65). This type declared `lagDays: number` — a narrowed copy of an API input that has taken
+ * `{ lagDays } | { lagMinutes }` since ADR-0070 — so every inverse built against it could only
+ * speak in whole working days. `DependencySummary.lagDays` is documented as _"rounded from the
+ * stored minutes. A sub-day lag reads back as 0 here"_, so an inverse restoring a 90-minute cure
+ * lag would have restored **zero**: an undo that loses data, which is worse than no undo at all.
+ *
+ * That is verbatim the defect {@link dependencyLinkOf} records having already shipped and been
+ * fixed one command along — the narrow type that caused it was still sitting next door. Widening
+ * is strictly more permissive, so {@link lagDragCommand}'s existing day-denominated calls are
+ * unchanged; #233 is the separate question of whether that gesture should be sending days at all.
+ */
+export type UpdateDependencyFn = (
+  input: {
+    dependencyId: string;
+    type: DependencyType;
+    lagCalendar: LagCalendarSource;
+    version: number;
+  } & CommandLagInput,
+) => Promise<DependencySummary>;
 
 /**
  * Reverse a **lag-anchor drag / lag nudge** (ADR-0052 M3) — the dependency PATCH whose only
@@ -743,6 +765,88 @@ export function lagDragCommand(params: {
         ...(params.label !== undefined ? { label: params.label } : {}),
       }),
   });
+}
+
+/**
+ * Did an **Edit link** save actually change anything? (`docs/TECH_DEBT.md` #65, CQ-2.)
+ *
+ * The dialog resends the whole form, so a planner who opens it, reads it and presses Save issues a
+ * real PATCH that changes no field. Recording an undo step for that puts an entry on the stack whose
+ * inverse moves nothing — the ADR-0064 "a confirmation that names nothing" shape, one surface along,
+ * and worse here because it pushes a genuine edit one press further out of reach.
+ *
+ * Compared on `lagMinutes` and never `lagDays`: two lags an hour apart are equal in days, so a days
+ * comparison would suppress the step for exactly the edits this row exists to make undoable.
+ *
+ * **Deliberately NOT used to suppress the PATCH itself.** Whether the write is worth sending is the
+ * dialog's question and involves the optimistic version; this answers only whether the *history*
+ * gained a step. Conflating them would make an undo concern silently change what the server sees.
+ */
+export function dependencyEditChanged(
+  before: Pick<DependencySummary, 'type' | 'lagMinutes' | 'lagCalendar'>,
+  after: Pick<DependencySummary, 'type' | 'lagMinutes' | 'lagCalendar'>,
+): boolean {
+  return (
+    before.type !== after.type ||
+    before.lagMinutes !== after.lagMinutes ||
+    before.lagCalendar !== after.lagCalendar
+  );
+}
+
+/**
+ * Reverse an **Edit link** dialog save — the third way a link changes, and until now the only one
+ * that recorded nothing (`docs/TECH_DEBT.md` #65). Adding and removing a link were already
+ * symmetric, and the lag-anchor drag records {@link lagDragCommand}; so `Shift+←/→` on a link was
+ * undoable and typing into the same link's lag field was not, from one panel, one row apart —
+ * `ActivityLogicPanel` renders the tip advertising the chord and the dialog that ignored it in the
+ * same component.
+ *
+ * **All three fields move together, in one PATCH** (CQ-1). The forward write is atomic — a save
+ * that changes the type and the lag is one request — so an inverse that restored only the lag would
+ * leave the row in a state the planner never authored and the history unable to describe. That is
+ * not a partial undo; it is a new edit wearing an undo's label.
+ *
+ * **The lag rides as `lagMinutes`.** `DependencySummary.lagDays` is rounded from the stored minutes
+ * and a sub-day lag reads back as `0`, so a days-denominated inverse would restore a 90-minute cure
+ * lag as no lag at all — see {@link UpdateDependencyFn} for why that type was narrow, and
+ * {@link dependencyLinkOf} for the same defect having already shipped once.
+ *
+ * **No coalescing, and that is a decision rather than an omission.** #65 asked for a coalescing key
+ * "so a lag nudged five times is one undo step" — a requirement that belongs to the *nudge*, which
+ * already has it ({@link lagDragCommand}'s `lag:{id}` plus the caller's debounce). A dialog closes
+ * on save, so five saves inside the 500 ms window is unreachable; and sharing the nudge's key would
+ * be actively wrong, merging a drag with a following dialog save into one step the planner never
+ * performed. {@link Command.coalescing}'s own docblock already says discrete edits leave it unset.
+ */
+export function dependencyEditCommand(params: {
+  updateDependency: UpdateDependencyFn;
+  /** The row as it stood when the dialog opened — the undo target. */
+  before: DependencySummary;
+  /** The row the PATCH returned: the redo target, and the version the inverse starts from. */
+  after: DependencySummary;
+  label?: string;
+}): Command {
+  const { updateDependency, before, after } = params;
+  let version = after.version;
+  const applyState = async (
+    state: Pick<DependencySummary, 'type' | 'lagMinutes' | 'lagCalendar'>,
+  ): Promise<void> => {
+    const saved = await updateDependency({
+      dependencyId: before.id,
+      type: state.type,
+      lagMinutes: state.lagMinutes,
+      lagCalendar: state.lagCalendar,
+      version,
+    });
+    version = saved.version;
+  };
+  return {
+    // Both endpoints named, the link labels' entity-naming convention (S1) — and deliberately the
+    // same wording as a lag drag, because to the planner they are the same edit by another route.
+    label: params.label ?? `Edit link “${before.predecessor.name}” → “${before.successor.name}”`,
+    undo: () => applyState(before),
+    redo: () => applyState(after),
+  };
 }
 
 /** `useBatchPositions().mutateAsync` — an all-or-nothing lane batch; resolves to the updated rows. */

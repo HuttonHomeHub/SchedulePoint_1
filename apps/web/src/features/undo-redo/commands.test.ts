@@ -11,6 +11,8 @@ import {
   dependencyLinkOf,
   dependencyRemoveCommand,
   durationResizeCommand,
+  dependencyEditChanged,
+  dependencyEditCommand,
   lagDragCommand,
   relaneCommand,
   repositionCommand,
@@ -336,10 +338,25 @@ describe('visualResizeCommand (ADR-0052 M3 — VISUAL start-edge resize)', () =>
 });
 
 describe('lagDragCommand (ADR-0052 M3)', () => {
+  /**
+   * Narrows on the lag union rather than reading `lagDays` off the input, which no longer
+   * type-checks — `UpdateDependencyFn` takes `{ lagDays } | { lagMinutes }` since #65, because a
+   * days-only inverse restores a sub-day lag as zero. The fake echoes back BOTH units so a caller
+   * sending minutes gets a row whose `lagMinutes` is what it sent, which is what the sub-day
+   * assertions below read.
+   */
   const fakeUpdateDependency = () => {
     let next = 300;
     return vi.fn((i: Parameters<UpdateDependencyFn>[0]) =>
-      Promise.resolve(dependency({ id: i.dependencyId, lagDays: i.lagDays, version: (next += 1) })),
+      Promise.resolve(
+        dependency({
+          id: i.dependencyId,
+          ...('lagMinutes' in i
+            ? { lagMinutes: i.lagMinutes, lagDays: Math.round(i.lagMinutes / 1440) }
+            : { lagDays: i.lagDays, lagMinutes: i.lagDays * 1440 }),
+          version: (next += 1),
+        }),
+      ),
     );
   };
 
@@ -394,6 +411,122 @@ describe('lagDragCommand (ADR-0052 M3)', () => {
     expect(updateDependency).toHaveBeenLastCalledWith(expect.objectContaining({ lagDays: 0 }));
     await merged.redo();
     expect(updateDependency).toHaveBeenLastCalledWith(expect.objectContaining({ lagDays: -2 }));
+  });
+});
+
+/**
+ * **The Edit-link dialog's inverse** (`docs/TECH_DEBT.md` #65).
+ *
+ * The sub-day case below was **verified red first** against an inverse built the way the row
+ * described it — restoring `before.lagDays`. That inverse restores `0`, because
+ * `DependencySummary.lagDays` is rounded from the stored minutes and a 90-minute lag reads back as
+ * zero: an undo that silently deletes the lag it was asked to bring back. The no-coalescing case
+ * was verified red against a `lag:{id}`-keyed version, which merges a preceding anchor drag with a
+ * following dialog save into one step the planner never performed.
+ */
+describe('dependencyEditCommand (#65)', () => {
+  const fakeUpdateDependency = () => {
+    let next = 500;
+    return vi.fn((i: Parameters<UpdateDependencyFn>[0]) =>
+      Promise.resolve(
+        dependency({
+          id: i.dependencyId,
+          type: i.type,
+          lagCalendar: i.lagCalendar,
+          ...('lagMinutes' in i ? { lagMinutes: i.lagMinutes } : { lagDays: i.lagDays }),
+          version: (next += 1),
+        }),
+      ),
+    );
+  };
+
+  it('restores a sub-day lag exactly, in minutes', async () => {
+    const updateDependency = fakeUpdateDependency();
+    const command = dependencyEditCommand({
+      updateDependency,
+      before: dependency({ id: 'd9', type: 'FS', lagMinutes: 90, lagDays: 0 }),
+      after: dependency({ id: 'd9', type: 'FS', lagMinutes: 1440, lagDays: 1, version: 12 }),
+    });
+
+    await command.undo();
+    // 90, not 0 — the whole point. A `lagDays` inverse restores 0 here and looks correct.
+    expect(updateDependency).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dependencyId: 'd9', lagMinutes: 90, version: 12 }),
+    );
+    expect(updateDependency.mock.lastCall?.[0]).not.toHaveProperty('lagDays');
+  });
+
+  it('moves type, lag and lag calendar together in one PATCH, and threads the version', async () => {
+    const updateDependency = fakeUpdateDependency();
+    const command = dependencyEditCommand({
+      updateDependency,
+      before: dependency({ id: 'd9', type: 'FS', lagMinutes: 0, lagCalendar: 'PROJECT_DEFAULT' }),
+      after: dependency({
+        id: 'd9',
+        type: 'SS',
+        lagMinutes: 2880,
+        lagCalendar: 'TWENTY_FOUR_HOUR',
+        version: 12,
+      }),
+    });
+
+    await command.undo();
+    expect(updateDependency).toHaveBeenCalledExactlyOnceWith({
+      dependencyId: 'd9',
+      type: 'FS',
+      lagMinutes: 0,
+      lagCalendar: 'PROJECT_DEFAULT',
+      version: 12,
+    });
+
+    await command.redo();
+    expect(updateDependency).toHaveBeenLastCalledWith({
+      dependencyId: 'd9',
+      type: 'SS',
+      lagMinutes: 2880,
+      lagCalendar: 'TWENTY_FOUR_HOUR',
+      version: 501, // threaded from the undo response, not re-read from `after`
+    });
+  });
+
+  it('does not coalesce — a dialog save is a discrete step', () => {
+    const command = dependencyEditCommand({
+      updateDependency: fakeUpdateDependency(),
+      before: dependency({ lagMinutes: 0 }),
+      after: dependency({ lagMinutes: 60, version: 2 }),
+    });
+    expect(command.coalescing).toBeUndefined();
+  });
+
+  it('names both endpoints, like the lag drag it is the dialog twin of', () => {
+    const command = dependencyEditCommand({
+      updateDependency: fakeUpdateDependency(),
+      before: dependency({ lagMinutes: 0 }),
+      after: dependency({ lagMinutes: 60, version: 2 }),
+    });
+    expect(command.label).toBe('Edit link “Excavate” → “Pour”');
+  });
+});
+
+describe('dependencyEditChanged (#65, CQ-2)', () => {
+  it('is false for a save that resends the same values', () => {
+    const row = dependency({ type: 'FS', lagMinutes: 90, lagCalendar: 'PROJECT_DEFAULT' });
+    expect(dependencyEditChanged(row, { ...row })).toBe(false);
+  });
+
+  it('sees a sub-day lag change that a days comparison cannot', () => {
+    // Both rows are `lagDays: 0`. Comparing days would call this unchanged and record no step —
+    // for exactly the edit #65 exists to make undoable.
+    const before = dependency({ lagMinutes: 30, lagDays: 0 });
+    const after = dependency({ lagMinutes: 90, lagDays: 0 });
+    expect(before.lagDays).toBe(after.lagDays);
+    expect(dependencyEditChanged(before, after)).toBe(true);
+  });
+
+  it('sees a type change and a lag-calendar change', () => {
+    const before = dependency({ type: 'FS', lagCalendar: 'PROJECT_DEFAULT' });
+    expect(dependencyEditChanged(before, { ...before, type: 'SF' })).toBe(true);
+    expect(dependencyEditChanged(before, { ...before, lagCalendar: 'PREDECESSOR' })).toBe(true);
   });
 });
 
