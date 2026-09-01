@@ -252,7 +252,36 @@ first** (`docs/PROCESS.md` — CI is the second opinion).
 > **Testing requirements:** a regression test for #93(d) **verified red by reverting that fix**;
 > the four journeys; a `shoot.mjs` look at two tables before and after.
 
-##### Task M3-T1 — Read the three non-dashed consumers
+##### Task M3-T1 — Read the three non-dashed consumers — **DONE 2026-09-01, and it corrects this milestone**
+
+> **Counted and read. Four of this task's own premises were wrong, and one of the corrections
+> changes M3's design.**
+>
+> **There are 15 consumer files and 19 renders, not "17 consumers".** `grep -rln '<DataTable'`
+> over `apps/web/src` excluding tests: 14 files render one each, and `staff.tsx` renders **five**.
+> (A raw `<DataTable` count returns 26 — the difference is test files.)
+>
+> **Two of the three files this task names do not render `DataTable` at all.**
+> `activity-bottom-panel.tsx:69` and `EarnedValuePanel.tsx:348` each mention it **in a comment**,
+> which is what a filename-level search finds. A reader following this task as written would have
+> opened two files, found nothing to assess, and concluded the risk was clear — when the real
+> blast radius is one file they would not have looked at twice.
+>
+> **`staff.tsx` is the only non-dashed consumer, and it holds five renders.** Three pass a bare
+> `<p>` (`No failures recorded.`, `Nothing is swept on a schedule.`, `Nothing recorded yet.`), one
+> passes a composed node, and **one passes `empty={<></>}`** (`:598`).
+>
+> **That last one is the finding.** An unconditional frame turns an empty fragment into a dashed
+> box containing nothing — a visible rectangle asserting an absence that the author deliberately
+> chose not to announce. It is not a styling regression; it is the frame saying something where
+> the call site said nothing on purpose. So the design gains a rule this milestone did not have:
+> **the frame renders only when there is something to frame.**
+>
+> The other four `staff.tsx` renders **do** gain a frame they never had. That is accepted rather
+> than worked around — one treatment for one state across the product is the point of the
+> milestone, and the staff console is the one surface where an inconsistency costs least — but it
+> is a deliberate change to three screens outside the 34, and it belongs in the PR body rather
+> than in a reviewer's surprise.
 
 - **Description:** establish what `activity-bottom-panel.tsx`, `staff.tsx` and
   `EarnedValuePanel.tsx` pass for `empty`, before changing the primitive underneath them.
