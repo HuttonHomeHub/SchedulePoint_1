@@ -994,6 +994,39 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 235. A failing typecheck did not block the pre-push gate, because `tsc` exits 2
+
+**Status:** open · **Found and fixed:** 2026-09-01 · **Size:** S (fixed) · **Owner:** repo
+
+**Closed as a defect; open as a question about the convention that caused it.**
+
+`scripts/prepush.sh` has three result states since the drift-gates epic (2026-08-30): **0 ok,
+2 WARN — advisory and does not block, anything else FAIL**. The discriminator is written into the
+script and is a good one — _exit 1 is for an obligation whose remedy is an edit to the file that
+failed; exit 2 is for one whose remedy is somebody's judgement._
+
+**`tsc` uses exit 2 for "I reported type errors".** Measured: `tsc --noEmit` exits **2**, turbo
+propagates it, and `pnpm typecheck` therefore fails a real type error with the exact code this
+script reads as advisory. So from the day the three states landed until 2026-09-01, a broken
+typecheck printed a yellow `WARN`, said "All green, with advisory findings", and **let the push
+through**. Found by running into it: a type error introduced while writing M7's tests was reported
+that way, and the gate exited 0.
+
+`pnpm lint` and `pnpm test` were measured in the same pass and exit **1** correctly, so the hole was
+typecheck alone — which is why nobody noticed. A gate that goes quiet is conspicuous; one that goes
+yellow looks like it is working.
+
+**Fixed** by `run_strict`: the three core gates declare that they are never advisory, rather than
+relying on the tools underneath them to avoid a number. Verified red — a planted type error now
+fails the gate with exit 1.
+
+**What stays open is the convention.** A three-state contract numbered 0/2/other collides with any
+tool that already assigns meanings to those numbers, and the collision is invisible because the gate
+still prints something. Two questions worth an answer before the next advisory gate is added:
+whether any future `check:*` script could exit 2 for its own reasons, and whether the advisory
+channel should use a sentinel in the output rather than an exit code at all. Not decided here —
+`run_strict` closes the live hole without pretending to settle the design.
+
 ### 234. Fifteen page and panel loading states are spinners where the shape is known
 
 **Status:** open · **Found:** 2026-09-01 (empty-state consolidation §1.8) · **Size:** M · **Owner:** a loading-state pass

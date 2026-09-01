@@ -130,11 +130,7 @@ describe('DataTable', () => {
        */
       it('renders a skeleton row matching the table’s own column count', () => {
         const { container } = render(
-          <DataTable
-            {...common}
-            columns={two}
-            query={query({ isPending: true, data: undefined })}
-          />,
+          <DataTable {...common} columns={two} query={query({ isPending: true })} />,
         );
         const bodyRows = container.querySelectorAll('tbody tr');
         expect(bodyRows.length).toBeGreaterThan(0);
@@ -153,11 +149,7 @@ describe('DataTable', () => {
        */
       it('still announces the loading label, and hides the material from assistive readers', () => {
         const { container } = render(
-          <DataTable
-            {...common}
-            columns={two}
-            query={query({ isPending: true, data: undefined })}
-          />,
+          <DataTable {...common} columns={two} query={query({ isPending: true })} />,
         );
         expect(screen.getByRole('status')).toHaveTextContent('Loading rows…');
         expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
