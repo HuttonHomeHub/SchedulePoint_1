@@ -473,7 +473,12 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         canWrite,
         canProgress,
         // Client-derived from the role, because the DTO returns `null` for both "unset" and "not
-        // permitted" (TECH_DEBT #62). Sound while `cost:read` and `activity:update` share a role set.
+        // permitted" (TECH_DEBT #62). Sound while `cost:read` and `activity:update` share a role
+        // set — which is no longer left to whoever remembers to read the register: since 2026-09-01
+        // `apps/api/src/common/auth/org-permissions.spec.ts` asserts the two are granted to the
+        // same roles or to neither, so the diff that separates them fails there rather than
+        // showing money to the wrong reader here. That is a gate, not a fix; the fix is for the API
+        // to say so (a `meta.permissions` block, or a "redacted" marker instead of `null`).
         canReadCost: canWrite,
         // Who holds the pen, when it is not this reader (`docs/TECH_DEBT.md` #115). Without it the
         // refusal says "Start editing to …" to somebody whose screen shows **Request control** and

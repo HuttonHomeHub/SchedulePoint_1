@@ -189,6 +189,24 @@ changing its nature — one derivation, two surfaces.
 fields (not `null`). Until then, treat the permission sets as coupled: changing one without the
 other is a client bug in a different file.
 
+> **The interim rule is now enforced, 2026-09-01** — `org-permissions.spec.ts` asserts that every
+> role holds `cost:read` and `activity:update` together or holds neither. **The row is not closed
+> by it**: the architectural gap is unchanged, and the DTO still cannot say. What changes is the
+> failure mode. A divergence used to be silent — correct API, correct guards, a client in another
+> workspace showing or hiding money for the wrong people, with every test green — and is now a red
+> build in the diff that causes it.
+>
+> Its detection power was **established by running it, not argued**. Both permissions were already
+> pinned above it to the same literal role set, so against a bare divergence it adds nothing: three
+> assertions go red together. The case that separates them is the one that would really happen —
+> narrow `cost:read` to Org Admin **and update the literal expectation to match**, which is what
+> anybody does when a test fails on a change they meant to make. Tried: the whole pre-existing
+> suite stayed green and **one** test failed, this one. It survives because it asserts a
+> relationship rather than a role set, so bringing a literal into line cannot silence it — the
+> assertion has to be deleted deliberately, which is the moment a reader meets #62.
+>
+> This is ADR-0058's move applied to a rule the row had already written down and left to memory.
+
 ### 64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
 
 **Status:** open · **Verified:** 2026-09-01 · **Size:** M · **Owner:** web
