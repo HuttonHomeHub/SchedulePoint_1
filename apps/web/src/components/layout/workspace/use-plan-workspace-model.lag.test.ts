@@ -82,13 +82,20 @@ vi.mock('@/features/calendars', () => ({
 vi.mock('@/features/baselines', () => ({ useBaselineVariance: () => query(undefined) }));
 vi.mock('@/features/notes', () => ({ useActivityNoteCounts: () => query(undefined) }));
 
-/** The one dependency on the plan — an SS+2 on the 24-hour calendar, so the echo is provable. */
+/**
+ * The one dependency on the plan — an SS+2 on the 24-hour calendar, so the echo is provable.
+ *
+ * **`lagMinutes` was 960 and is now 2880** (`docs/TECH_DEBT.md` #233). On the elapsed calendar a day
+ * is 1440 minutes, so 960 is sixteen hours — a row whose two fields describe different lags, which
+ * the API could never return. It was harmless while nothing read the minutes and became a fixture
+ * of its own answer the moment the handler did.
+ */
 const DEPENDENCY: DependencySummary = {
   id: 'd1',
   planId: 'p1',
   type: 'SS',
   lagDays: 2,
-  lagMinutes: 960,
+  lagMinutes: 2880,
   lagCalendar: 'TWENTY_FOUR_HOUR',
   predecessor: { id: 'a1', code: 'A10', name: 'Excavate' },
   successor: { id: 'a2', code: 'A20', name: 'Pour' },
@@ -98,7 +105,13 @@ const DEPENDENCY: DependencySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-vi.mock('@/features/dependencies', () => ({
+// **The hooks are stubbed; the pure helpers are the real ones** (`docs/TECH_DEBT.md` #233).
+// `resolveLagDragWrite` and `lagHoursPerDay` decide what this handler writes, so stubbing them
+// would leave the suite asserting against a fixture of its own answer — the shape this repository
+// keeps recording as a green result about nothing. `importOriginal` keeps them live, which is also
+// why the assertions below now read in minutes.
+vi.mock('@/features/dependencies', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   usePlanDependencies: () => query([DEPENDENCY]),
   useCreateDependency: () => ({ mutateAsync: vi.fn() }),
   useDeleteDependency: () => ({ mutateAsync: vi.fn() }),
@@ -165,10 +178,13 @@ describe('onTsldLag (ADR-0052 M3)', () => {
     });
 
     expect(outcome).toEqual({ applied: true, conflict: null });
+    // **Minutes, not the gesture's day** (`docs/TECH_DEBT.md` #233): the drag moved +3 days from a
+    // stored 2880, so 7200 — which is five days on the elapsed calendar, i.e. the whole-day case is
+    // preserved exactly while a sub-day remainder would have ridden through untouched.
     expect(h.updateDependencyMutateAsync).toHaveBeenCalledExactlyOnceWith({
       dependencyId: 'd1',
       type: 'SS',
-      lagDays: 5,
+      lagMinutes: 7200,
       lagCalendar: 'TWENTY_FOUR_HOUR',
       version: 6,
     });
@@ -197,13 +213,16 @@ describe('onTsldLag (ADR-0052 M3)', () => {
     const command = h.record.mock.calls[0]![0];
     expect(command.label).toBe('Change lag “Excavate” → “Pour”');
     expect(command.coalescing?.key).toBe('lag:d1');
-    // The inverse restores the prior lag (2) at the post-edit version (7).
+    // The inverse restores the prior lag at the post-edit version (7) — in the row's **stored
+    // minutes** (2880), not the rounded day the gesture named. Undoing to `lagDays` is the same
+    // defect the forward write was just fixed for, one layer along, and it would be visible only to
+    // somebody pressing Ctrl+Z on an edge carrying a sub-day lag (`docs/TECH_DEBT.md` #233).
     h.updateDependencyMutateAsync.mockClear();
     await command.undo();
     expect(h.updateDependencyMutateAsync).toHaveBeenCalledExactlyOnceWith({
       dependencyId: 'd1',
       type: 'SS',
-      lagDays: 2,
+      lagMinutes: 2880,
       lagCalendar: 'TWENTY_FOUR_HOUR',
       version: 7,
     });

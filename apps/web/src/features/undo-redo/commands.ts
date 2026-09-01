@@ -723,21 +723,35 @@ export type UpdateDependencyFn = (
  */
 export function lagDragCommand(params: {
   updateDependency: UpdateDependencyFn;
-  /** The pre-edit row: its `lagDays` is the undo target; endpoints/type/calendar are echoed. */
+  /** The pre-edit row: the undo target is read from it; endpoints/type/calendar are echoed. */
   dependency: DependencySummary;
-  afterLagDays: number;
+  /**
+   * What the forward write sent — `{ lagMinutes }` normally, `{ lagDays }` on the degraded path
+   * where the lag calendar's hours-per-day is not resolvable (`docs/TECH_DEBT.md` #233).
+   *
+   * **It is the resolved write and not the gesture's day**, because undo has to restore the exact
+   * stored value. Taking `afterLagDays` here — which is what this took until 2026-09-01 — meant the
+   * first Ctrl+Z after a drag re-sent a ROUNDED day and destroyed the sub-day remainder the forward
+   * write had just been fixed to preserve: the same defect one layer along, and invisible unless
+   * somebody undid a drag on an edge carrying a ninety-minute lift.
+   */
+  after: CommandLagInput;
   /** The post-edit optimistic-lock version (from the forward write's response). */
   version: number;
   label?: string;
 }): Command {
-  const { updateDependency, dependency, afterLagDays } = params;
-  const beforeLagDays = dependency.lagDays;
+  const { updateDependency, dependency, after } = params;
+  // The undo target mirrors the forward write's unit: minutes are what is stored, so restoring
+  // them is exact; days are used only where the factor was unknown going in, and re-sending days
+  // is then the same lossy-but-honest degradation the forward path took.
+  const before: CommandLagInput =
+    'lagMinutes' in after ? { lagMinutes: dependency.lagMinutes } : { lagDays: dependency.lagDays };
   let version = params.version;
-  const setLag = async (lagDays: number): Promise<void> => {
+  const setLag = async (lag: CommandLagInput): Promise<void> => {
     const saved = await updateDependency({
       dependencyId: dependency.id,
       type: dependency.type,
-      lagDays,
+      ...lag,
       lagCalendar: dependency.lagCalendar,
       version,
     });
@@ -748,19 +762,24 @@ export function lagDragCommand(params: {
     label:
       params.label ??
       `Change lag “${dependency.predecessor.name}” → “${dependency.successor.name}”`,
-    undo: () => setLag(beforeLagDays),
-    redo: () => setLag(afterLagDays),
+    undo: () => setLag(before),
+    redo: () => setLag(after),
   };
   return coalescable(command, {
     key: `lag:${dependency.id}`,
-    before: beforeLagDays,
-    after: afterLagDays,
-    // A burst rebuilds oldest-before → newest-after, threading the newest version (M2.3).
+    before,
+    after,
+    // A burst rebuilds oldest-before → newest-after, threading the newest version (M2.3). The
+    // rebuilt row carries the oldest `before` in whichever unit that step used, so a burst that
+    // began before the calendar list resolved still undoes to where it started.
     rebuild: (b, a) =>
       lagDragCommand({
         updateDependency,
-        dependency: { ...dependency, lagDays: b },
-        afterLagDays: a,
+        dependency:
+          'lagMinutes' in b
+            ? { ...dependency, lagMinutes: b.lagMinutes }
+            : { ...dependency, lagDays: b.lagDays },
+        after: a,
         version,
         ...(params.label !== undefined ? { label: params.label } : {}),
       }),

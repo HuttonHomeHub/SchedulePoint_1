@@ -1089,60 +1089,6 @@ surrounding context in a grep pass, not by opening each file whole. If any turns
 `DataTable`-shaped list it belongs with M7's fix rather than here — checking that is the first task
 of whatever picks this up.
 
-### 233. A canvas lag drag reads and writes rounded days, so a sub-day lag cannot survive one
-
-**Status:** open · **Found:** 2026-09-01, while specifying #65 · **Size:** S · **Owner:** web
-
-`onTsldLag` (`use-plan-workspace-model.ts:1253-1265`) — the one handler the TSLD lag-anchor **drag**
-and the Logic panel's `Shift+←/→` **nudge** share — takes `lagDays`, compares it against
-`dependency.lagDays`, and sends `lagDays`. Both halves are in **rounded days**, and
-`DependencySummary.lagDays` is documented at `packages/types/src/index.ts:665-670` as _"rounded from
-the stored minutes. A sub-day lag reads back as 0 here"_.
-
-So on an edge whose stored lag is not a whole number of days — a two-hour cure, a 90-minute lift —
-two things go wrong and they are different:
-
-- **The drag is silently refused.** Drag a 90-minute lag to zero: the gesture emits `0`,
-  `dependency.lagDays` is already `0`, the defensive no-op at `:1257` returns `{ applied: false }`,
-  and the anchor snaps back with nothing written and nothing said. That guard is correct in its own
-  terms — it exists so a stale caller cannot burn a version bump and a recalculation on an identical
-  write — and it is comparing two numbers that are not the same quantity. The ADR-0064 shape: a
-  gesture that produces no change and no explanation.
-- **The remainder is discarded on any drag that does write.** Nudge that lag by one day and the
-  PATCH carries `lagDays: 1`, so the server stores a whole day and the 90 minutes is gone.
-
-**This is ADR-0070 M4's defect one field along.** That milestone found "a canvas move resent the
-**rounded** duration, flattening a sub-day activity to zero on every drag" and fixed it for
-`durationDays`. `lagDays` is the same conversion on the same surface and was not swept — one correct
-pattern applied to a control and not its neighbour, the shape this register has recorded six times.
-
-**Why it is filed rather than fixed inside #65.** #65 is an **undo** seam: it adds an inverse and
-changes no forward write. This is a **forward write**, and changing what a drag stores is a change to
-a shipped gesture that wants its own before/after — including a decision the fix cannot dodge: when a
-planner drags a 90-minute lag to "1 day", do they mean one day exactly, or one day plus the 90
-minutes they never saw? The former is almost certainly right (they dragged to a day boundary), but it
-is a product answer, not a refactor.
-
-**What the remedy looks like.** `LagInput` is already `{ lagDays } | { lagMinutes }`
-(`use-dependencies.ts:85`) and the API stores minutes verbatim, so nothing new is needed on the wire.
-The comparison must move to `lagMinutes` — the only quantity both sides can express — and the write
-must send whichever unit the gesture actually means, stated rather than inherited.
-
-**Unverified:** the two failure modes above are read from the code and the type's own docblock, not
-driven in a browser. Establishing them wants a plan whose edge carries a sub-day lag — the seed
-catalogue can build one — and that proof belongs with the fix.
-
-**DECIDED 2026-09-01 (product owner): minutes, snapped to the pixel.** The drag converts x-pixels to
-working minutes on the relationship's lag calendar and PATCHes `lagMinutes`; dropping between day
-boundaries stores what the pointer landed on, so a 90-minute lag nudged one day becomes `1d 90m`
-rather than `1d`. That is ADR-0070 M4's answer for `durationDays` applied to the field beside it,
-and it disposes of both halves at once — the no-op guard stops comparing two different quantities,
-so the silent refusal goes with the data loss rather than needing its own fix.
-
-The `Shift+←/→` nudge shares the handler and keeps whole-day steps: a keyboard step has no pixel to
-snap to, and inventing a minute figure for it would be a second answer to a question the drag has
-already answered.
-
 ### 232. The WBS band's derived bucket has no accessible name or count
 
 **Status:** open · **Verified:** 2026-09-01 · **Size:** M · **Owner:** web
@@ -1212,6 +1158,7 @@ One line each. The story lives where the link points, not here.
 | 224 | `plan:scale-500` was described as fully unassigned and its spec assigns 168 activities | 2026-08-31 | The playbook said "478 of 478 unassigned" about a fixture that is 35 % assigned — on the document whose job is to say what wrong looks like. Corrected to 310 of 478, the denominator established from the engine's write set rather than from a seeded run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 65  | A link's lag or type edited from the dialog is not recorded for undo                   | 2026-09-01 | `dependencyEditCommand` + `onSaved`/`onEdited` at both hosts, and a journey reading the lag back from the API.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 92  | An undone delete left a deletion with no matching restore                              | 2026-08-31 | The inverse is now the id-stable `restore-batch` rather than a re-create, so `activity.restored` fires with the original id and the pair closes. It also stopped the re-create silently dropping every dependency the activity had. Cascade undo is #230.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 233 | A canvas lag drag read and wrote rounded days, so a sub-day lag could not survive one  | 2026-09-01 | The gesture now says how many DAYS it moved and the write carries minutes (`resolveLagDragWrite`), so the remainder rides through and the rounding cancels. Pixel-precise dragging was measured and rejected: one pixel is 5 min at the Day preset and 6.3 h at Year. Undo restores the stored minutes too — the same defect one layer along. Proven end to end against a real API on an eight-hour calendar, and **verified red**: pre-fix, nudging a four-hour lag stored 960 minutes, i.e. the lag DOUBLED rather than merely losing its remainder, because 240 min rounds up to 1 day.                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | 236 | Three placeholder sites of one kind carried two treatments                             | 2026-09-01 | Bare prose everywhere (product-owner decision): the dashed frame came off `AddLinkSection` and `ImportScheduleDialog`, matching `ActivityResourcesPanel`. A precondition is not an absence, which is the reason these sites were excluded from the empty-state pass rather than converted by it. Both allow-list entries then went stale and the gate's third assertion caught them; the list fell 3 → 1. **The blind spot the row also named stays open in the gate's docblock**: the count was by TREATMENT, so an absence nobody drew a box around is invisible to it, and there is no cheap predicate for one.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | 161 | The empty-state pattern was inconsistent, and `clients-loading` was a bare spinner     | 2026-09-01 | `docs/specs/empty-state-consolidation/` — 34 hand-rolled dashed boxes counted, 5 that were errors or refusals reshaped, 27 converted, 3 left as placeholders with permanent reasons, and `empty-state.structural.test.ts` gating the result. `DataTable` renders a column-matched skeleton; its 15 page/panel siblings are #234. (c) and (d) had resolved in `web-v0.97.0` before anyone acted on them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 160 | `resolveLensPalette` was resolved twice per cycle                                      | 2026-08-31 | One memo, both maps derived from it — which also makes the `barFill`/`barInk` pairing come from one resolve, as it must.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

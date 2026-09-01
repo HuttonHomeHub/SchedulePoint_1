@@ -155,6 +155,65 @@ test('a sub-day lag round-trips, and the 24-hour calendar measures elapsed time'
 });
 
 /**
+ * **A whole-day nudge must not flatten a sub-day lag** (`docs/TECH_DEBT.md` #233).
+ *
+ * The lag-anchor drag and the Logic panel's `Shift+←/→` nudge share ONE handler, so this drives the
+ * nudge — which a browser can express exactly — and the canvas drag is covered by the same code
+ * path. It read `dependency.lagDays`, which is ROUNDED from the stored minutes, compared it against
+ * the gesture's day and sent days; so on this four-hour cure a single nudge wrote a whole day and
+ * the four hours were gone.
+ *
+ * **Only a real API can see it.** `lagDays` and `lagMinutes` agree on every whole-day lag, so a
+ * mocked fetch handed either one is consistent with both the defect and the fix. The assertion is
+ * on the minutes the server actually stored, read back through the same endpoint the app uses.
+ *
+ * **Verified against the pre-fix build: it stored 960.** Worth reading, because the obvious guess
+ * is 480 and that is not what happens: 240 minutes on an eight-hour calendar is half a day, which
+ * `lagDays` rounds UP to 1 — so the nudge asked for 2, the handler sent `lagDays: 2`, and the
+ * server stored two whole days. The defect is therefore not only that the four hours vanish but
+ * that the lag DOUBLES, which is the sharper reason a planner would notice it.
+ */
+test('a whole-day lag nudge keeps the sub-day remainder', async ({ page }) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  const calendarId = await createEightHourCalendar(page, orgSlug);
+  await openProject(page);
+  await createAndOpenPlan(page, 'Cure and strike', orgSlug, calendarId);
+  await ensurePen(page);
+  await addActivity(page, 'Pour slab', '2');
+  await addActivity(page, 'Strike formwork', '1');
+
+  await openLogic(page, 'Strike formwork');
+  const logic = activityEditor(page);
+  await logic.getByLabel('Predecessor activity').selectOption({ label: 'Pour slab' });
+  await logic.getByLabel(/^Lag \(/).fill('4h');
+  await logic.getByRole('button', { name: 'Add link' }).click();
+
+  const lagOf = async (): Promise<number[]> =>
+    page.evaluate(
+      async ({ slug, planId }) => {
+        const res = await fetch(`/api/v1/organizations/${slug}/plans/${planId}/dependencies`);
+        const body = (await res.json()) as { data: { lagMinutes: number }[] };
+        return body.data.map((d) => d.lagMinutes);
+      },
+      { slug: orgSlug, planId: planIdOf(page.url()) },
+    );
+  // Four hours on the plan's eight-hour calendar — half a working day, so `lagDays` reads 0.
+  await expect.poll(lagOf).toEqual([240]);
+
+  // The nudge rides a link row's Edit/Remove button (ADR-0052 M3). One day right on an eight-hour
+  // calendar is +480 minutes.
+  await logic
+    .getByRole('button', { name: /^Edit link/ })
+    .first()
+    .focus();
+  await page.keyboard.press('Shift+ArrowRight');
+
+  // 720 = 1d 4h. The pre-fix handler sent `lagDays: 1` and the server stored 480.
+  await expect.poll(lagOf).toEqual([720]);
+});
+
+/**
  * A named activity's row **in the activities table**.
  *
  * Scoped by the table's own caption, because the earned-value table below repeats every activity

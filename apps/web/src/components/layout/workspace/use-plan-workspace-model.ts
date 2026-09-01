@@ -54,6 +54,8 @@ import { useBaselineVariance } from '@/features/baselines';
 import { useCalendar, usePlanScopedCalendars } from '@/features/calendars';
 import { useClient } from '@/features/clients';
 import {
+  lagHoursPerDay,
+  resolveLagDragWrite,
   useCreateDependency,
   useDeleteDependency,
   usePlanDependencies,
@@ -1252,17 +1254,43 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
   const updateDependency = useUpdateDependency(orgSlug);
   const lagConflict =
     'This plan changed since you opened it — the lag wasn’t changed. Refresh to see the latest.';
+  // An endpoint's own calendar, for the lag factor. `undefined` when the row is not loaded is a
+  // real answer and NOT the same as `null` (bound to nothing, inherits the plan's) — `lagHoursPerDay`
+  // reads the difference and only the second falls back (ADR-0070 §3).
+  const activityCalendarId = (activityId: string): string | null | undefined =>
+    (activities.data ?? []).find((a) => a.id === activityId)?.calendarId;
+
   const onTsldLag = async ({ dependencyId, lagDays }: TsldLagInput): Promise<TsldEditOutcome> => {
     const dependency = (dependencies.data ?? []).find((d) => d.id === dependencyId);
     if (!dependency) return { applied: false, conflict: null };
-    // Defensive no-op: the gesture/nudge only emit a *changed* lag, but a stale caller must never
-    // burn a version bump (and a recalc) on an identical write.
-    if (lagDays === dependency.lagDays) return { applied: false, conflict: null };
+    // **The gesture says how many DAYS you moved; the write carries minutes** (`docs/TECH_DEBT.md`
+    // #233). This handler used to compare the gesture's whole-day target against the row's
+    // `lagDays` — which is ROUNDED from the stored minutes — and send days, so one drag flattened a
+    // two-hour cure or a ninety-minute lift to a whole day. The pixel-precise alternative was
+    // measured and rejected: one pixel is 5 minutes at the Day preset and 6.3 HOURS at Year, so a
+    // gesture at coarse zoom cannot author a minute figure anybody meant. See `lag-drag.ts` for
+    // why a delta cancels the rounding, and why an unknown calendar factor degrades rather than
+    // guesses.
+    const write = resolveLagDragWrite(
+      dependency,
+      lagDays,
+      lagHoursPerDay(dependency.lagCalendar, {
+        calendars: calendars.data ?? [],
+        ...(plan.data?.calendarId ? { planCalendarId: plan.data.calendarId } : {}),
+        predecessorCalendarId: activityCalendarId(dependency.predecessor.id),
+        successorCalendarId: activityCalendarId(dependency.successor.id),
+      }),
+    );
+    // Zero days moved is nothing to write — and a stale caller must never burn a version bump
+    // (and a recalc) on an identical write.
+    if (write.kind === 'noop') return { applied: false, conflict: null };
+    const lagFields =
+      write.kind === 'minutes' ? { lagMinutes: write.lagMinutes } : { lagDays: write.lagDays };
     try {
       const saved = await updateDependency.mutateAsync({
         dependencyId,
         type: dependency.type,
-        lagDays,
+        ...lagFields,
         lagCalendar: dependency.lagCalendar,
         version: dependency.version,
       });
@@ -1274,7 +1302,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
           lagDragCommand({
             updateDependency: updateDependency.mutateAsync,
             dependency,
-            afterLagDays: lagDays,
+            // The SAME resolved write, so undo restores the exact stored minutes rather than the
+            // rounded day the gesture named — otherwise the remainder this fix preserves would be
+            // destroyed by the first Ctrl+Z, which is the same defect one layer along.
+            after: lagFields,
             version: saved.version,
           }),
         );
