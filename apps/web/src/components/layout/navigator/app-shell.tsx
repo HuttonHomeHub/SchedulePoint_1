@@ -15,16 +15,20 @@ import { PanelSurface } from '@/components/ui/surface';
 import { useExpansionState } from '@/features/navigator';
 import { canManageHierarchy, useOrgRole } from '@/hooks/use-org-role';
 
-/** `lg` breakpoint (64rem) as a media query — the pinned rail takes over at/above it. */
+/** `lg` breakpoint (64rem) as a media query — the pinned Explorer column takes over at/above it. */
 const LG_QUERY = '(min-width: 64rem)';
 
 /**
- * The persistent app-shell (ADR-0029): a top bar + Project Explorer rail + a single
+ * The persistent app-shell (ADR-0029): a header row + a docked Project Explorer + a single
  * workspace region that stay **mounted once**, so navigating between plans swaps only
- * the `<Outlet/>` and the rail keeps its state and warm cache. On `lg`+ the rail is
- * pinned (collapsible + resizable); below `lg` it is an off-canvas drawer opened from
- * the header. **Unconditional** since `VITE_NAV_TREE` retired (2026-08-18): {@link AuthedLayout}
- * is now this component and nothing else.
+ * the `<Outlet/>` and the Explorer keeps its state and warm cache. On `lg`+ the Explorer is a
+ * pinned column on the leading edge (foldable + resizable, ADR-0109 D2); below `lg` it is an
+ * off-canvas `Sheet` opened from the header. **Unconditional** since `VITE_NAV_TREE` retired
+ * (2026-08-18): {@link AuthedLayout} is now this component and nothing else.
+ *
+ * The word "rail" survives here in {@link NavigatorRail} and in `LG_QUERY`'s comment: that
+ * component is the Explorer's tree, and it is called a rail because it used to be one. Renaming it
+ * is a separate change to a separate file.
  */
 export function AppShell(): React.ReactElement {
   return (
