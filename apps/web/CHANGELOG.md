@@ -1,5 +1,16 @@
 # @repo/web
 
+## 0.117.2
+
+### Patch Changes
+
+- [#446](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/446) [`4991209`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/49912097262d5120a03aee3d0086048a2fa5f06f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The WBS band's **Unassigned** bucket is now an open bracket rather than a filled bar.
+  
+  It used to be the same rounded rectangle as a real phase, in a different colour — so on a busy plan,
+  where the bars are too narrow to carry their names, there was nothing but colour to say which was a
+  grouping somebody made and which was the app pointing out that some work has none. Now it differs in
+  shape, which is the language the Gantt already uses for the same thing.
+
 ## 0.117.1
 
 ### Patch Changes
