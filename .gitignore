@@ -83,3 +83,7 @@ measure-output/
 
 # Screenshot harness output (apps/web/scripts/shoot.mjs) — never committed.
 .screenshots/
+
+# Local e2e run logs — `scripts/e2e-local.sh` tees every run so an intermittent
+# failure is captured whatever the caller did with the pipe (`docs/TECH_DEBT.md` #119a).
+.e2e-logs/

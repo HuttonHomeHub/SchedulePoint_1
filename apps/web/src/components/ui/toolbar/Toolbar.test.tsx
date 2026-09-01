@@ -443,7 +443,7 @@ describe('Toolbar (APG primitive)', () => {
 /**
  * **The measure pass's cost, asserted in call-count shape** (ADR-0090 M5, performance gate).
  *
- * ADR-0026 §16 and `docs/TECH_DEBT.md` #75 set the doctrine for this surface: it shares a frame with
+ * ADR-0026 §9 and `docs/TECH_DEBT.md` #75 set the doctrine for this surface: it shares a frame with
  * a canvas painter already measured at 4–6× its budget, so a claim about cost here should be a gate
  * rather than a paragraph. M3 added `setLayout(...)` inside `measure()`, which changes `resolved` →
  * `bar` → `measure`'s identity → the layout effect, i.e. an **extra synchronous pass**. The

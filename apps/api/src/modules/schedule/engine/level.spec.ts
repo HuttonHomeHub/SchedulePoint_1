@@ -439,6 +439,62 @@ describe('levelSchedule — single-resource many-way contention performance (ADR
     expect(leveled.summary.leveledActivityCount).toBe(N - 1); // all but the first were delayed
     expect(elapsedMs).toBeLessThan(3000);
   });
+
+  /**
+   * **The absolute bound above cannot see this pass getting slower, and that is the gap.**
+   *
+   * It allows 3,000 ms where the run measures ~840; a pass that got **three times** slower would
+   * still be green. `docs/TECH_DEBT.md` #84 records the shape as quadratic in the number of
+   * activities contending on ONE resource and deliberately leaves it that way — measure a real plan
+   * before optimising — so what is worth gating is not the cost but the **shape**.
+   *
+   * **A ratio, not a second absolute, because a ratio cancels the hardware.** Two runs in one
+   * process on one machine: whatever the runner's speed, doubling N should cost about the same
+   * multiple. This is the one place a wall-clock assertion earns its keep against this repository's
+   * "budgets are gated by call-count tests, CI timings are noise" doctrine — the noise is in the
+   * numerator and the denominator, and divides out.
+   *
+   * **Measured before the bound was chosen** (this container, three consecutive runs):
+   * 370→731 = 1.98×, 244→586 = 2.41×, 233→575 = 2.47×. A verification sweep separately measured
+   * the ratio climbing towards 4× at larger doublings (2.0× at 1k→2k, 2.8× at 2k→4k, 3.4× at
+   * 4k→8k, 4.6× at 8k→16k), which is the quadratic asserting itself once the constant factors
+   * stop dominating.
+   *
+   * So the bound is **4.0×** — the quadratic prediction. It sits ~60 % above the worst reading at
+   * this size and far below the ~8× a cubic slide would produce. It says something true rather than
+   * something safe: *at this size the pass is no worse than quadratic.*
+   */
+  it('stays no worse than quadratic when the contending set doubles', () => {
+    const timeOne = (n: number): number => {
+      const activities: EngineActivity[] = [];
+      const assignments: EngineAssignment[] = [];
+      for (let i = 0; i < n; i += 1) {
+        activities.push(task(`N${i}`, 1, { levelingPriority: i }));
+        assignments.push(assign(`N${i}`, 'R', 1));
+      }
+      const started = performance.now();
+      const { leveled } = run(activities, [], assignments, [{ id: 'R', capacity: 1 }]);
+      const elapsed = performance.now() - started;
+      // The pinned positive. Without it a pass that returned early would produce a beautiful
+      // ratio — which is the shape #84 exists to watch, satisfied by doing nothing.
+      expect(leveled.results, `levelling produced no results at ${String(n)}`).toHaveLength(n);
+      return elapsed;
+    };
+
+    // A discarded warm-up: the first run in a fresh process pays JIT and allocation costs the
+    // second does not, and charging those to the numerator alone flatters the ratio.
+    timeOne(500);
+
+    const small = timeOne(1000);
+    const large = timeOne(2000);
+    const ratio = large / small;
+
+    expect(
+      ratio,
+      `doubling the contending set cost ${ratio.toFixed(2)}x (${small.toFixed(0)}ms -> ${large.toFixed(0)}ms); ` +
+        'above 4x means the pass has grown worse than quadratic — see `docs/TECH_DEBT.md` #84',
+    ).toBeLessThan(4);
+  });
 });
 
 describe('levelSchedule — performance (2,000 activities, ADR-0041 §2)', () => {

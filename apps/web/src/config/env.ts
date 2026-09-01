@@ -996,7 +996,8 @@ export const CANVAS_AUTHORING_FLOW_ENABLED =
  * **Default-on with the cost known, not assumed.** `scripts/measure-link-routing.mjs` paints the
  * real painter against a real 2D context in Chromium at 2,000 activities: routing adds
  * **+3.4–5.9 ms p95**, on a baseline that is itself 13–23 ms — i.e. already 4–6× over ADR-0026
- * §16's stated ≤ 4 ms, which had never been measured before that script existed (`TECH_DEBT` #59).
+ * the prototype's 4 ms, which was never a budget and had never been re-measured before
+ * that script existed (`TECH_DEBT` #75, which absorbed #59).
  * The product owner took the trade explicitly, and the open question is now whether **4 ms was ever
  * the right number** rather than whether this feature fits under it (`TECH_DEBT` #75). Recording it
  * here because "we enabled it and the budget was already blown" is exactly the kind of fact that

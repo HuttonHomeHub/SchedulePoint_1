@@ -420,12 +420,24 @@ invisible to the script, and zero long tasks > 50 ms rules out a blocking stall.
 investigated further here because the gate passes; a DevTools Performance capture would attribute it
 if the Fit case is ever worth improving. Dirty-region repainting stays a reserved escalation.
 
-**Numbering correction.** This ADR has no `§16`. Its decision sections end at §9a; the reference to
-"the §16 target hardware envelope" in §9 is to a section that does not exist here. That phantom
-number then propagated: **33 citations of "ADR-0026 §16" across 20 files**, including five ADRs,
-and with it the claim that this ADR "sets a ≤ 4 ms p95 draw budget". **It does not.** 4 ms is §9a's
-_measured prototype result_, recorded as a PASS against a stated **≤ 16 ms** frame budget, and the
-binding gate in §9 is and always was **fps**: ≥ 45 @ 500, ≥ 30 @ 2,000.
+**Numbering correction — and a correction to the correction (2026-09-01).** This ADR has no `§16` of
+its own, and the claim that it "sets a ≤ 4 ms p95 draw budget" is false: 4 ms is §9a's _measured
+prototype result_, recorded as a PASS against a stated **≤ 16 ms** frame budget, and the binding
+gate in §9 is and always was **fps** — ≥ 45 @ 500, ≥ 30 @ 2,000. That much stands, and it is the
+half that matters.
+
+**What this paragraph got wrong is calling §16 a phantom.** §9's reference resolves: it reads "on the
+**§16 target hardware envelope**", and §9's neighbouring sentences use the same unqualified style for
+cross-document references — "the mitigation **PROJECT_BRIEF §17** mandates" two lines above, "(per
+§15/§17 and CLAUDE.md §19.2)" below. `docs/PROJECT_BRIEF.md` **§16 Deployment** carries the
+_Supported browsers_ bullet — "latest 2 versions of Chrome, Edge, Firefox, Safari on desktop; latest
+1 version of Safari / Chrome on iPad-class tablets" — which is precisely the envelope §9 names.
+
+So the drift was not an invented number. It was an unqualified reference to **another document's**
+section being re-attached to **this** one, and then to a budget neither document states. That is a
+subtler failure and a more common one: a citation that resolves correctly at its origin and stops
+resolving the moment it is copied. Recorded rather than quietly amended, because the first
+correction was written with the same confidence as this one.
 
 Months of work — this ADR's own follow-up rows, and a long argument in `TECH_DEBT.md` #75 that the
 budget ought to be re-expressed as frame pacing — rested on that misreading. It already was frame

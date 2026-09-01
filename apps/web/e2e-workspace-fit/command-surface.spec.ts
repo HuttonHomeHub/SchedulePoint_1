@@ -561,6 +561,47 @@ test.describe('The plan command surface', () => {
       }
     }
   });
+
+  /**
+   * **The object bar in the Gantt, which is a THIRD state and not a second view of the same one**
+   * (`docs/TECH_DEBT.md` #202c).
+   *
+   * The two `sweepObjectBar` cases above both run on the TSLD, and the Gantt case above them
+   * sweeps the deck and the grid — so the bar was swept in one view and the view was swept without
+   * the bar. It is the same `SelectionActionsBar` (`plan-workspace-toolbar.tsx:1151`), which is
+   * exactly why nobody noticed: the component is shared, the CONTEXT is not. `ganttSelectionCtx`
+   * makes `Zoom to selection` and `Isolate logic path` absent rather than shaded (ADR-0095), so
+   * the bar renders a different item set here and a different set can wrap differently.
+   *
+   * Selection is a real row click, not a listbox focus: the Gantt has no parallel listbox — that
+   * is ADR-0026 D7's canvas machinery, and the grid is DOM rows with their own roving tab stop.
+   */
+  test('every object action in the Gantt view a pointer can see, it can also reach', async () => {
+    test.setTimeout(240_000);
+    await page.setViewportSize({ width: 1646, height: 1097 });
+    // Switched explicitly rather than inherited from the case above. `mode: 'serial'` shares the
+    // page, so this would pass today on its predecessor's leftover state — and silently stop
+    // testing the Gantt the day that case is reordered, renamed or skipped.
+    await page.getByRole('button', { name: 'Gantt', exact: true }).click();
+    const grid = page.getByRole('treegrid', { name: 'Schedule as a bar chart' });
+    await expect(grid).toBeVisible();
+
+    // The row helper's shape, read from `e2e-gantt/support.ts:234-239` rather than re-invented:
+    // a `row` filtered by a `gridcell` whose name starts with the activity's.
+    await page
+      .getByRole('row')
+      .filter({ has: page.getByRole('gridcell', { name: /^Site setup\b/ }) })
+      .first()
+      .click();
+
+    // The pinned positive for the STATE. Without it a click that selected nothing leaves
+    // `sweepObjectBar` to fail on an absent surface, which reads as a defect in the bar rather
+    // than in this setup — and the sweep's own `no controls swept` message would name the wrong
+    // subject.
+    await expect(page.getByRole('toolbar', { name: /^Actions for / })).toBeVisible();
+
+    await sweepObjectBar('Gantt, panel collapsed');
+  });
 });
 
 /**

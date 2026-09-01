@@ -11,7 +11,7 @@ import type { RenderActivity, Viewport } from './render-model';
  *
  * The assertion is deliberately about the SHAPE of the cost, never a wall-clock millisecond
  * count, because a CI runner's absolute timings are noise (the `paint.dates-budget.test.ts`
- * convention this file copies). TECH_DEBT #75 — the painter already runs over ADR-0026 §16's
+ * convention this file copies). TECH_DEBT #75 — the painter's real-hardware cost against ADR-0026 §9's
  * stated budget — is the standing context: this epic must not make that worse, and a constant
  * delta at 2,000 activities is the proof that it does not.
  */
