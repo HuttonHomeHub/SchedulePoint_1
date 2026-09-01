@@ -42,6 +42,7 @@ export function EditDependencyDialog({
   calendars = [],
   planCalendarId,
   planActivities = [],
+  onSaved,
 }: {
   orgSlug: string;
   dependency?: DependencySummary;
@@ -60,6 +61,18 @@ export function EditDependencyDialog({
    * from the host rather than from the row.
    */
   planActivities?: ActivitySummary[];
+  /**
+   * Called with the pre-edit row and the PATCH response after a successful save
+   * (`docs/TECH_DEBT.md` #65) — the composition root passes the undo/redo recording seam, keeping
+   * this feature free of a sideways feature import (the `onRemoved` precedent). Absent (the
+   * default) leaves the dialog byte-identical.
+   *
+   * **The `before` is the `dependency` prop, not something threaded down.** The response carries
+   * only the updated row, so an inverse needs the prior type/lag/lag-calendar from somewhere — and
+   * the host already resolves the row fresh each render to render the form. It needs handing up,
+   * not passing down.
+   */
+  onSaved?: (before: DependencySummary, after: DependencySummary) => void;
 }): React.ReactElement {
   const update = useUpdateDependency(orgSlug);
   const announce = useAnnounce();
@@ -126,7 +139,8 @@ export function EditDependencyDialog({
         version: dependency.version,
       },
       {
-        onSuccess: () => {
+        onSuccess: (saved) => {
+          onSaved?.(dependency, saved);
           announce('Dependency updated.');
           onClose();
         },

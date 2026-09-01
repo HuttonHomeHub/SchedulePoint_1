@@ -222,6 +222,7 @@ export function ActivityEditor({
     onAdded?: (dependency: DependencySummary) => void;
     /** Undo recording for a removed link (ADR-0048 M2). */
     onRemoved?: (dependency: DependencySummary) => void;
+    onEdited?: (before: DependencySummary, after: DependencySummary) => void;
     /** The coalesced keyboard lag nudge (ADR-0052 M3) — `Shift+←/→` on a link's row buttons. */
     onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
   };
@@ -804,6 +805,7 @@ export function ActivityEditor({
                     {...(logic?.crossPlanSlot ? { crossPlanSlot: logic.crossPlanSlot } : {})}
                     {...(logic?.onAdded ? { onAdded: logic.onAdded } : {})}
                     {...(logic?.onRemoved ? { onRemoved: logic.onRemoved } : {})}
+                    {...(logic?.onEdited ? { onEdited: logic.onEdited } : {})}
                     {...(logic?.onNudgeLag ? { onNudgeLag: logic.onNudgeLag } : {})}
                   />
                 ) : null}

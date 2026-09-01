@@ -219,6 +219,7 @@ export function ActivityCrudDialogs({ model }: { model: PlanWorkspaceModel }): R
               logic: {
                 onAdded: model.recordDependencyAdd,
                 onRemoved: model.recordDependencyRemove,
+                onEdited: model.recordDependencyEdit,
                 ...(CANVAS_DIRECT_MANIPULATION_ENABLED && model.canManageLogic
                   ? { onNudgeLag: model.nudgeDependencyLag }
                   : {}),

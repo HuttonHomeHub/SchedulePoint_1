@@ -291,3 +291,68 @@ describe('permissionsForRole — baselines (read/variance vs write)', () => {
     }
   });
 });
+
+/**
+ * **The `cost:read` / `activity:update` coupling the web client silently depends on**
+ * (`docs/TECH_DEBT.md` #62).
+ *
+ * The activity DTO returns `null` for a cost field that is **unset** and `null` for one the caller
+ * **may not read** — indistinguishable on the wire. So `deriveActivityEditorGating` in `apps/web`
+ * decides whether to show the Cost tab, and whether `ActivityResourcesPanel` shows an assignment's
+ * money, from the caller's **role** rather than from the payload. That derivation is correct only
+ * because these two permissions happen to be granted to exactly the same roles.
+ *
+ * #62 wrote the rule down — _"treat the permission sets as coupled: changing one without the other
+ * is a client bug in a different file"_ — and left nothing enforcing it. That is precisely the
+ * arrangement ADR-0058 exists to replace: a rule held by whoever remembers to read the register
+ * before editing a permission bundle.
+ *
+ * **What fails, and why no other test would catch it.** Split `COST_READ` off from a role that
+ * keeps `HIERARCHY_WRITE` (or the reverse) and the client shows or hides the Cost tab for the
+ * wrong people — money to somebody who may not see it, or a tab withheld from somebody entitled
+ * to it — with **every existing assertion still green**, because they all assert the current
+ * coincidence one permission at a time. The API stays correct throughout: its own guards read the
+ * real permission. Only the client is wrong, in another workspace, and only for readers of one
+ * role.
+ *
+ * **This is a gate, not a fix.** The architectural answer is for the API to say so rather than
+ * making the client guess — a `meta.permissions` block on the activity read, or a distinguishable
+ * "redacted" marker instead of `null`. Until that lands, this turns a silent client defect into a
+ * failing build in the diff that causes it, which is the whole difference worth having.
+ *
+ * If you are here because this went red: the divergence may well be right. Land it together with
+ * the client change (`deriveActivityEditorGating`'s `canReadCost` input must stop being derived
+ * from the role), then delete this test and #62 with it.
+ *
+ * **No pinned positive is added beside it**, and that is checked rather than assumed: an equality
+ * assertion passes vacuously if no role holds either permission, so it needs one — and
+ * `'grants cost:read (Earned Value / cost) to Planner + Org Admin only'` above already IS one, on
+ * both halves. Writing a second would have been a duplicate whose docblock claimed to close a hole
+ * that was shut, which is the shape this register keeps catching one file over.
+ *
+ * **What it detects that the suite around it does not, established by running it rather than by
+ * reasoning.** Both permissions are already pinned above to the same literal role set, so the
+ * obvious objection is that this adds nothing — and against a bare divergence that is true: strip
+ * `COST_READ` from Planner and three assertions go red together. The case that separates them is
+ * the one that would actually happen. Narrow `cost:read` to Org Admin **and update the literal
+ * expectation to match**, which is the natural thing to do when a test fails on a change you meant
+ * to make, and the entire pre-existing suite goes green while the client is wrong. Tried: **one
+ * test failed, this one.** It survives because it asserts a *relationship* rather than a role set,
+ * so bringing a literal into line with an intended change cannot silence it — the assertion has to
+ * be deleted deliberately, which is the moment a reader meets this docblock and #62.
+ */
+describe('permissionsForRole — cost:read is coupled to activity:update (#62)', () => {
+  it('grants both to the same roles, or neither', () => {
+    for (const role of Object.values(OrganizationRole)) {
+      const perms = permissionsForRole(role);
+      const canReadCost = perms.includes('cost:read');
+      const canUpdateActivity = perms.includes('activity:update');
+      expect(
+        canReadCost,
+        `${role} holds activity:update=${canUpdateActivity} and cost:read=${canReadCost}. ` +
+          `The web client derives the Cost tab from the role because the DTO cannot say ` +
+          `(docs/TECH_DEBT.md #62); splitting these makes it wrong with nothing else failing.`,
+      ).toBe(canUpdateActivity);
+    }
+  });
+});

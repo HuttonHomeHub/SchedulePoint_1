@@ -37,6 +37,8 @@ export function DependencyEditor({
   /** See {@link ActivityLogicPanel} — forwarded unchanged. */
   onRemoved?: (dependency: DependencySummary) => void;
   /** See {@link ActivityLogicPanel} — forwarded unchanged. */
+  onEdited?: (before: DependencySummary, after: DependencySummary) => void;
+  /** See {@link ActivityLogicPanel} — forwarded unchanged. */
   onNudgeLag?: (dependency: DependencySummary, delta: number) => void;
   /** See {@link ActivityLogicPanel} — forwarded unchanged. */
   crossPlanSlot?: React.ReactNode;

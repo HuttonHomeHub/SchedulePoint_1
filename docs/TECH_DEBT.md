@@ -189,6 +189,24 @@ changing its nature — one derivation, two surfaces.
 fields (not `null`). Until then, treat the permission sets as coupled: changing one without the
 other is a client bug in a different file.
 
+> **The interim rule is now enforced, 2026-09-01** — `org-permissions.spec.ts` asserts that every
+> role holds `cost:read` and `activity:update` together or holds neither. **The row is not closed
+> by it**: the architectural gap is unchanged, and the DTO still cannot say. What changes is the
+> failure mode. A divergence used to be silent — correct API, correct guards, a client in another
+> workspace showing or hiding money for the wrong people, with every test green — and is now a red
+> build in the diff that causes it.
+>
+> Its detection power was **established by running it, not argued**. Both permissions were already
+> pinned above it to the same literal role set, so against a bare divergence it adds nothing: three
+> assertions go red together. The case that separates them is the one that would really happen —
+> narrow `cost:read` to Org Admin **and update the literal expectation to match**, which is what
+> anybody does when a test fails on a change they meant to make. Tried: the whole pre-existing
+> suite stayed green and **one** test failed, this one. It survives because it asserts a
+> relationship rather than a role set, so bringing a literal into line cannot silence it — the
+> assertion has to be deleted deliberately, which is the moment a reader meets #62.
+>
+> This is ADR-0058's move applied to a rule the row had already written down and left to memory.
+
 ### 64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
 
 **Status:** open · **Verified:** 2026-09-01 · **Size:** M · **Owner:** web
@@ -227,25 +245,6 @@ summary branch and move six hand-rolled controls onto the gated primitives, plus
 
 **Sequence it with #69**, whose remedy may move `AssignmentRow` to a different editing idiom
 altogether; doing this first and that second would rewrite the same file twice.
-
-### 65. A link's lag or type edited from the dialog is not recorded for undo
-
-**Status:** unverified
-
-The undo stack now covers a dependency **add** and **remove** symmetrically (the convergence epic's
-M5, `recordDependencyAdd` / `recordDependencyRemove`), and the canvas lag-anchor drag records its
-own change. What is still missing is the third way a link changes: the **Edit link** dialog, where a
-planner sets the type, the lag and the lag calendar.
-
-So `Shift+←/→` on a link is undoable and typing `5` into the same link's lag field is not — from one
-panel, one row apart. That is a worse inconsistency than the gap the add seam just closed, because
-both routes are visible at once.
-
-**What would close it:** an `onEdited` seam on `EditDependencyDialog` carrying the **pre-edit**
-snapshot (the inverse needs the old type/lag/lagCalendar, which the mutation's response does not
-contain), recorded through a `dependencyEditCommand`. It wants a coalescing key so a lag nudged five
-times is one undo step rather than five — which is why it is its own piece of work rather than a
-line in the epic that noticed it.
 
 ### 69. Two idioms for editing a row in place
 
@@ -916,29 +915,11 @@ Each is one indexed primary-key lookup, sub-millisecond, and each producer is a 
 than a loop — so this is a shape to watch, not a cost to pay down now. It becomes real if any of
 those actions is ever driven from a batch.
 
-(b) **`AuditEventList` has seven inline-typed props and no named `Props` interface**, unlike
-`AuditFilterBarProps` beside it. Predates the epic; worth extracting the next time the file is
-touched.
-
-(c) **Counts render without locale grouping** — `plural()` uses `String(n)`, so a 2,400-row cascade
-reads "2400 activities" while the dates in the same file go through `Intl.DateTimeFormat`. Not an
-established pattern for plain counts elsewhere in the app either, so this is a consistency question
-rather than a defect.
-
-(d) **`DataTable`'s `describedById` contract holds only for the populated table** — the empty state
-returns the message without the `role="region"` wrapper, so the My-activity safety caveat is
-reachable by serial reading but not by landmark navigation when there is nothing to show. Harmless
-today (there is no region to land inside), but the contract is undocumented and a future change to
-the empty-state markup could silently regress the populated case's fix.
-
-(e) **Directional facts use a bare `→` glyph** — "Planner → Contributor", predecessor → successor,
-calendar scope from → to. It is real text, so 1.4.1 is satisfied, but glyph pronunciation varies by
-screen reader and the dependency-direction line is the one ADR-0064 names as the defect this row
-exists to prevent. A textual equivalent (`"X to Y"`, or an `sr-only` sibling) would settle it.
-
-(f) **`AUDIT_CATEGORY_LABELS.settings` reads "Settings & calendars"** but the category now also
-holds baseline and library-governance events, so a reader looking for "why did my baseline
-disappear" may not think to try it. The label predates the widened scope.
+**(b)–(f) were folded on 2026-08-31**, and their original problem statements stood here until
+2026-09-01 — five closed findings restated in full below a header saying they were closed, so a
+reader who scrolled past that header met six open items. What each fix was is at the top of this
+row; what each problem was is in `git log`. Leaving pre-fix text in place is how a fixed row goes on
+reading as owed work, which is the drift class this register exists to catch.
 
 ---
 
@@ -1013,6 +994,49 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 233. A canvas lag drag reads and writes rounded days, so a sub-day lag cannot survive one
+
+**Status:** open · **Found:** 2026-09-01, while specifying #65 · **Size:** S · **Owner:** web
+
+`onTsldLag` (`use-plan-workspace-model.ts:1253-1265`) — the one handler the TSLD lag-anchor **drag**
+and the Logic panel's `Shift+←/→` **nudge** share — takes `lagDays`, compares it against
+`dependency.lagDays`, and sends `lagDays`. Both halves are in **rounded days**, and
+`DependencySummary.lagDays` is documented at `packages/types/src/index.ts:665-670` as _"rounded from
+the stored minutes. A sub-day lag reads back as 0 here"_.
+
+So on an edge whose stored lag is not a whole number of days — a two-hour cure, a 90-minute lift —
+two things go wrong and they are different:
+
+- **The drag is silently refused.** Drag a 90-minute lag to zero: the gesture emits `0`,
+  `dependency.lagDays` is already `0`, the defensive no-op at `:1257` returns `{ applied: false }`,
+  and the anchor snaps back with nothing written and nothing said. That guard is correct in its own
+  terms — it exists so a stale caller cannot burn a version bump and a recalculation on an identical
+  write — and it is comparing two numbers that are not the same quantity. The ADR-0064 shape: a
+  gesture that produces no change and no explanation.
+- **The remainder is discarded on any drag that does write.** Nudge that lag by one day and the
+  PATCH carries `lagDays: 1`, so the server stores a whole day and the 90 minutes is gone.
+
+**This is ADR-0070 M4's defect one field along.** That milestone found "a canvas move resent the
+**rounded** duration, flattening a sub-day activity to zero on every drag" and fixed it for
+`durationDays`. `lagDays` is the same conversion on the same surface and was not swept — one correct
+pattern applied to a control and not its neighbour, the shape this register has recorded six times.
+
+**Why it is filed rather than fixed inside #65.** #65 is an **undo** seam: it adds an inverse and
+changes no forward write. This is a **forward write**, and changing what a drag stores is a change to
+a shipped gesture that wants its own before/after — including a decision the fix cannot dodge: when a
+planner drags a 90-minute lag to "1 day", do they mean one day exactly, or one day plus the 90
+minutes they never saw? The former is almost certainly right (they dragged to a day boundary), but it
+is a product answer, not a refactor.
+
+**What the remedy looks like.** `LagInput` is already `{ lagDays } | { lagMinutes }`
+(`use-dependencies.ts:85`) and the API stores minutes verbatim, so nothing new is needed on the wire.
+The comparison must move to `lagMinutes` — the only quantity both sides can express — and the write
+must send whichever unit the gesture actually means, stated rather than inherited.
+
+**Unverified:** the two failure modes above are read from the code and the type's own docblock, not
+driven in a browser. Establishing them wants a plan whose edge carries a sub-day lag — the seed
+catalogue can build one — and that proof belongs with the fix.
+
 ### 232. The WBS band's derived bucket has no accessible name or count
 
 **Status:** open · **Verified:** 2026-09-01 · **Size:** M · **Owner:** web
@@ -1080,6 +1104,7 @@ One line each. The story lives where the link points, not here.
 | 169 | The Project Explorer's actions row duplicated its writer gate in two branches          | 2026-08-31 | One `NewClientButton`, rendered by both the `SheetHeader` and drawer branches. The empty-strip half had already been closed incidentally by ADR-0109 D2's fold control.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 66  | A shaded create form still accepted input it cannot submit                             | 2026-08-31 | Both create forms take a `FieldGateProvider`, so the fields shade read-only with the same reason node the Save points at. ADR-0083 had decided the pattern; these two forms had never used it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 224 | `plan:scale-500` was described as fully unassigned and its spec assigns 168 activities | 2026-08-31 | The playbook said "478 of 478 unassigned" about a fixture that is 35 % assigned — on the document whose job is to say what wrong looks like. Corrected to 310 of 478, the denominator established from the engine's write set rather than from a seeded run.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 65  | A link's lag or type edited from the dialog is not recorded for undo                   | 2026-09-01 | `dependencyEditCommand` + `onSaved`/`onEdited` at both hosts, and a journey reading the lag back from the API.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 92  | An undone delete left a deletion with no matching restore                              | 2026-08-31 | The inverse is now the id-stable `restore-batch` rather than a re-create, so `activity.restored` fires with the original id and the pair closes. It also stopped the re-create silently dropping every dependency the activity had. Cascade undo is #230.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 160 | `resolveLensPalette` was resolved twice per cycle                                      | 2026-08-31 | One memo, both maps derived from it — which also makes the `barFill`/`barInk` pairing come from one resolve, as it must.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 171 | `schedulepoint-active-org` was never cleared and carried no user id                    | 2026-08-31 | Keyed `<prefix>:<userId>` matching `recent-plans`, and swept beside `forgetAllForUser` at sign-out. On a shared machine the next person in was silently sent to the previous person's organisation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -1877,6 +1902,37 @@ what `RUN_CAP` exists for.
 
 **Status:** open · **Verified:** 2026-09-01
 
+> **A FIFTH occurrence, 2026-09-01 — DIAGNOSED, FIXED AND PROVEN, and the table is `baselines`.**
+> The fourth occurrence (below) recorded "one file, 45 tests" and could say no more, because the
+> observer piped the run through `tail`. **It happened again the same day, to the same observer,
+> piped the same way — and this time the diagnosis survived**, because the `tee` capture built for
+> occurrence four held the whole log. That is ADR-0058's thesis demonstrated rather than asserted:
+> the habit failed twice in one session, the mechanism worked the first time it was needed.
+>
+> Given the identical signature — `activities.e2e-spec.ts`, all 45 tests, `beforeAll` — occurrence
+> four was almost certainly this same cause. Stated as a likelihood, not a fact: its log holds only
+> the summary, which is the whole reason that entry exists.
+>
+> **The cause.** `baselines` holds `plan_id` and the snapshot tables hold `baseline_id` (ADR-0025),
+> and **25 of 33 plan-sweeping specs deleted plans without deleting baselines first**. A single
+> baseline surviving in the shared `app_test` — from an aborted earlier run or a Playwright journey,
+> the 2026-08-28 mechanism — fails the next spec to sweep. The producer is **not named**: the log
+> gives the constraint and not the writer, and every in-suite creator sweeps (directly, or via
+> `clearDomainData`), so it came from outside the run.
+>
+> **Fixed in all 25, and verified in both directions rather than inferred from a green re-run** —
+> which is the trap this row's own history is made of. A poison baseline was planted by hand
+> against `app_test`; `activities.e2e-spec.ts` then FAILED all 45 tests on `baselines_plan_id_fkey`
+> with the three sweep lines removed, and PASSED all 45 with them, on a freshly re-planted row.
+> That reproduces the production failure exactly, which is what makes the diagnosis a fact.
+>
+> **The fourth table in a class this row has now watched happen five times.** `plan_shares`,
+> `resource_assignments`, `activity_steps`, `baselines`. The permanent answer is still the derived
+> sweep the paragraphs below describe — delete in reverse topological order of the FK graph, which
+> Prisma knows — and it is still a spec-level change (ADR-0105) rather than a fourth hand-edit
+> across 25 files. What is different now is that the cost is measurable: four tables, five
+> occurrences, and on each the whole estate is edited by hand.
+
 > **A FOURTH occurrence, 2026-09-01 — and I lost it by doing exactly what this row tells the next
 > reader not to do.** A full `scripts/e2e-local.sh api` run failed **45 tests in one file** (44 files,
 > 572 tests, 527 passing). The command was piped through `tail -12`, so the file name and the error
@@ -2071,16 +2127,21 @@ painter untouched, so TECH_DEBT #75's known overage is not attributable here). C
 accessibility and UX each blocked, and every blocking finding was folded with a regression test
 verified red first. What follows is what was deliberately **not** folded, with the reason.
 
-- **`MenuItem.itemId` bakes toolbar vocabulary into a general primitive.** It emits the literal
-  `data-toolbar-item`, and nine of `Menu`'s ten consumers are not toolbars. Kept as-is: the
-  alternative is a name-agnostic passthrough, which is a wider API for one caller, and renaming it
-  `toolbarItemId` would make the attribute and the prop disagree. Revisit when a second, non-toolbar
-  consumer wants a stable per-row locator — that is the point at which the generic shape earns its
-  keep rather than being speculative.
-- **Nested landmarks share a name.** With the Explorer subject showing, `<aside aria-label="Project
-Explorer">` wraps `<nav aria-label="Project Explorer">`, so a rotor lists the same words twice. Not
-  a WCAG failure. The fix is a prop telling `NavigatorRail` it is hosted rather than freestanding,
-  which is a change to a component eight screens render for a duplication on one.
+- ~~**`MenuItem.itemId` bakes toolbar vocabulary into a general primitive.**~~ **CLOSED 2026-09-01,
+  and the resolution was not the one this item weighed.** The item chose between keeping the prop,
+  a name-agnostic passthrough and a rename. It never asked whether anything used it: **zero call
+  sites**. So the prop was deleted rather than debated, and `menu.tsx:344` now records why, and the
+  condition for bringing it back — a caller that actually wants a stable per-row locator. An item
+  that argues three ways to shape an API for "one caller" is worth a `grep` before it is worth an
+  argument; this one had none.
+- ~~**Nested landmarks share a name.**~~ **STALE — the duplication no longer exists** (verified
+  2026-09-01). There is **no `<aside>` anywhere in `apps/web/src`**, so nothing wraps
+  `<nav aria-label="Project Explorer">`. It went with the Graphite drawer: ADR-0101 returned the
+  editor to a modal and the drawer mechanism was deleted (#156), and ADR-0109 D2 docked the
+  Explorer instead. `explorer-column.tsx:108-114` now carries the rule as a comment — the column
+  owns the width, the fold and the splitter and deliberately renders neither a landmark nor a
+  heading of its own, "which is how one panel comes to announce itself twice". Closed as fixed by
+  a decision made elsewhere, not as never-having-been-true.
 - **`localStorage` is written at drag frame rate.** `useResizablePanelPrefs` persists on every
   `setSize`, i.e. ~60×/s while a splitter is moving. Pre-existing (the Explorer rail and the activity
   panel have done this since ADR-0030); Graphite adds two more consumers of the same hook. Each write
@@ -2190,8 +2251,44 @@ action, which is the documented archetype. `resources`, `calendars` and `recentl
 text-only inside a dashed box with no icon and the create action at the header instead. Pre-existing;
 pick one and apply it.
 
+> **Counted from the code 2026-09-01, and it is not three screens — it is the app's dominant
+> idiom.** `grep -rn 'rounded-lg border border-dashed' apps/web/src --include=*.tsx` (test files
+> excluded) returns **34 occurrences across 29 files**, every one the same class string
+> `border-border text-muted-foreground rounded-lg border border-dashed p-N text-center text-sm`.
+> Against that, `EmptyState` — the archetype ADR-0098 built and `docs/UX_STANDARDS.md:61`
+> documents — has **two** consumers, `OrganisationEmptyState` and `RecentlyChangedSection`, both
+> inside the overview feature it was written for. So the primitive did not spread; the hand-rolled
+> box did, and it is what a planner meets on tables, panels, dialogs, the guest share view and four
+> route files.
+>
+> The row's "three screens" was never wrong about what it saw — the shot list had gone 12 → 25 and
+> those were the three empty states a screenshot happened to capture. It is wrong as a **size**,
+> and by an order of magnitude, which is the difference between a tidy-up and a consolidation pass
+> with a gate. ADR-0110 D5's shape: a figure that came from an instrument's reach rather than from
+> the code, and read afterwards as a count.
+>
+> Specified as its own pass rather than fixed here — 34 sites, four of which are dialogs and one
+> the unauthenticated guest view, and a consolidation with no structural gate re-drifts (ADR-0058).
+
 **b. `clients-loading` is a bare spinner** where `docs/UX_STANDARDS.md` expects a skeleton. Also
 pre-existing, and only visible now because the loading state had never been captured.
+
+> **Counted 2026-09-01, and it is the same finding as (a) one state over.** `clients-loading` is
+> not a screen that happens to use a spinner — it is `DataTable`, whose own docblock
+> (`components/ui/data-table.tsx:35`) says it owns "loading / error-with-retry / empty / populated
+> states so every resource list", and which renders `<Spinner label={loadingLabel} />` at `:85` for
+> **15 non-test consumers**. So one change covers every resource list, and `clients` was the one a
+> screenshot caught. `Skeleton` and `ListRowSkeleton` both already exist and have **two** consumers
+> between them, both in `features/overview` — the primitive did not spread; the spinner did.
+>
+> **Not every spinner is wrong, and saying so is part of the finding.** ~19 files touch
+> `Spinner`/`animate-spin`, and a spinner is right for a pending button, an inline action and a
+> route-level suspense fallback; `docs/UX_STANDARDS.md` asks for a skeleton only where the content
+> has a known shape. Sweeping all 19 would be the mirror of the mistake that filed this row.
+>
+> Folded into the (a) pass rather than kept separate: the loading and empty states of one shared
+> table are one reader's experience of one screen, and splitting them means touching `DataTable`
+> twice.
 
 **c. The Project Explorer is a large flat navy block when the tree is short** — **RESOLVED in
 `web-v0.97.0`, before anyone acted on this row.** It was raised as "worth putting to the product
@@ -3168,6 +3265,29 @@ moot), and **that could not be settled from the code** — it needs a browser. R
 accessibility review and explicitly marked unverified there. If reachable it is WCAG 2.4.3, a class
 this repository has fixed four times (ADR-0060 M6, ADR-0080, ADR-0099 M10, ADR-0096).
 
+> **Re-read 2026-09-01. The mechanism described above no longer exists; the hazard may, by a
+> different route, and the row is narrowed rather than closed.**
+>
+> **What is stale.** The item is written about a _toolbar item_ going `isVisible: false`, with
+> `Toolbar`'s roving-tabindex repair as the thing that fails to move `document.activeElement`.
+> ADR-0115 moved `clear-visual-placement` **off the command surface onto the selection bar**
+> (`plan-workspace-toolbar.tsx:826-828` says so in as many words), where it is **omitted** outside
+> Visual mode on ADR-0082's discriminator rather than hidden by a toolbar visibility flag. So the
+> named mechanism cannot be what happens.
+>
+> **What is not settled**, and the reachability question is now sharper rather than answered.
+> Flipping the mode from the mode control **moves focus to that control**, so focus cannot be on
+> `Clear visual start` at the moment of the flip — and there is **no keyboard shortcut for
+> scheduling mode** (searched; none). That closes the route the item imagined.
+>
+> The route it did not consider is the one this product is built for: `schedulingMode` is a
+> **plan-level** setting, so **another user can change it** and a refetch can unmount the control
+> under a reader whose focus is on it. That is ADR-0028's world, not a contrived case — and it
+> still needs a browser plus a two-session fixture to settle, which is why it stays open.
+>
+> Worth stating because it changes who would find it: the remaining path is not something a single
+> planner can do to themselves, so no solo journey will ever reproduce it.
+
 **(d) Two of three lens toggles offered to the product owner for promotion did not exist.** The
 `AskUserQuestion` options named `Critical path`, `Float paths` and `Baseline overlay`. Only the
 third is a promotable `LensToggle`: `float-paths` is **already** a deck item
@@ -3264,9 +3384,11 @@ Three suggestions judged real and filed rather than quietly dropped:
 28 × 28 on both pointers, and the five of its consumers that sit in a dense row stay with it
 _(recounted 2026-09-01: this said "six of its eight". `context-drawer` was deleted with the drawer
 mechanism (#156), so the dense-row set is **five**; and "eight consumers" was an undercount when
-filed — there were ten `icon-sm` consumer files besides `button.tsx`, and nine today)_:
-`HierarchyTree`, `GanttRowMenu`, `ActivitiesTable`, `CalendarRowMenu`, `explorer-column`'s collapsed
-spine and `context-drawer`. Under the house rule they should be 44 on touch. They are not, and the
+filed — there were ten `icon-sm` consumer files besides `button.tsx`, and nine today. Re-read
+2026-09-01: that correction **left the deleted name in the list it was correcting**, so the row said
+"five" and then named six — the count fixed, the evidence for it not. Corrected here)_:
+`HierarchyTree`, `GanttRowMenu`, `ActivitiesTable`, `CalendarRowMenu` and `explorer-column`'s
+collapsed spine. Under the house rule they should be 44 on touch. They are not, and the
 reason is that **their containers are sized independently of them**.
 
 **M3 tried the obvious thing and it was wrong.** Giving `icon-sm` a `pointer-coarse` floor made
@@ -3293,8 +3415,8 @@ That is a design pass, not a follow-up ticket.
 **The equivalents that exist today, stated because D1 requires it of an exception.** `HierarchyTree`
 alone honours the advice `icon-sm`'s docblock used to give: a long-press anywhere on the row opens
 the same menu on touch, and Menu/Shift+F10 opens it from the keyboard on the focused treeitem. The
-other five consumers have **no** large-target equivalent, which is the honest reason this is a
-register row and not a closed question.
+other **four** have no large-target equivalent, which is the honest reason this is a register row
+and not a closed question.
 
 **Where it is exempted, so it cannot hide.** `e2e-workspace-fit/command-surface.spec.ts` excludes
 `[role="tree"]` from the coarse projection by ancestor selector — narrow, visible, and named — and

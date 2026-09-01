@@ -73,3 +73,91 @@ export async function drawTask(
   await form.getByRole('button', { name: 'Add to plan' }).click();
   await expect(form).toBeHidden();
 }
+
+/**
+ * Expand the activities panel, which is **collapsed by default** (ADR-0030 — the canvas gets the
+ * room).
+ *
+ * Written the naive way first (go straight for the row menu) and it timed out on the first run,
+ * which is the whole reason this suite runs locally before it ships. The shape below is
+ * `e2e-activity-editor/support.ts`'s, deliberately copied rather than re-derived, including its
+ * race guard: asserting one of the two buttons is visible **before** asking which, so a check that
+ * runs before the app has painted cannot answer "not collapsed" and skip the expand.
+ */
+export async function showActivities(page: Page): Promise<void> {
+  const expand = page.getByRole('button', { name: 'Expand activities panel' });
+  const collapse = page.getByRole('button', { name: 'Collapse activities panel' });
+  await expect(expand.or(collapse).first()).toBeVisible();
+  if (await expand.isVisible()) await expand.click();
+  await expect(collapse).toBeVisible();
+}
+
+/**
+ * Open an activity's **Logic** surface. Convergence-flag-on (the default this config inherits) that
+ * is the tabbed editor's Logic tab; the helper goes through the activities table's row menu, which
+ * is the route a planner takes and therefore the one worth proving.
+ */
+export async function openLogic(page: Page, activityName: string): Promise<void> {
+  await showActivities(page);
+  await page.getByRole('button', { name: `Actions for ${activityName}` }).click();
+  await page.getByRole('menuitem', { name: 'Logic' }).click();
+  await expect(page.getByRole('heading', { name: 'Add a link' })).toBeVisible();
+}
+
+/**
+ * Link the open activity to `otherName` as its successor, with a whole-day lag.
+ *
+ * Deliberately the inline **Add a link** section rather than the canvas two-click Link tool: the
+ * subject here is the Edit-link dialog's undo seam, and a canvas pick would make a failure
+ * ambiguous between "the link was not drawn" and "the edit was not recorded" — the ambiguity
+ * ADR-0064's own harness was built to remove.
+ */
+export async function addLink(page: Page, otherName: string, lag: string): Promise<void> {
+  await page.getByLabel('Link it as').selectOption('successor');
+  // `selectOption`'s `label` is an exact string, never a pattern — the first version passed a
+  // RegExp behind an `as never` and the compiler said nothing while the browser refused it
+  // ("expected string, got object"). The option's visible text is `CODE — Name` when the activity
+  // has a code and `Name` when it does not, so the id is resolved from the option whose text
+  // CONTAINS the name and the select is driven by value, which is stable either way.
+  const picker = page.getByLabel('Successor activity');
+  const value = await picker
+    .locator('option', { hasText: otherName })
+    .first()
+    .getAttribute('value');
+  if (!value) throw new Error(`no option for ${otherName} in the successor picker`);
+  await picker.selectOption(value);
+  await page.getByLabel(/^Lag \(/).fill(lag);
+  await page.getByRole('button', { name: 'Add link' }).click();
+}
+
+/**
+ * Read the open plan's dependencies straight from the REST API, in the page's own session.
+ *
+ * The assertion this exists for is about **stored minutes**, and the field cannot display them on
+ * the degraded path (`lagDays` is rounded, and the sub-day control needs a resolvable
+ * working-hours factor). Reading the DOM back would therefore prove the form re-rendered, not that
+ * the undo restored what was there — which is the whole defect the seam guards against.
+ *
+ * The org slug and plan id come from `location.pathname` (`/orgs/:slug/plans/:id`) rather than
+ * being threaded through the spec: the page is already on that URL, so a mismatch between what the
+ * test thinks it opened and what it opened cannot hide. Note the API path says `organizations`
+ * where the client route says `orgs` — they are genuinely different, and writing `orgs` here
+ * returns a 404 whose body still parses, so the helper asserts the status.
+ */
+export async function apiDependencies(
+  page: Page,
+): Promise<{ id: string; lagMinutes: number; lagDays: number; type: string }[]> {
+  return page.evaluate(async () => {
+    const match = /\/orgs\/([^/]+)\/plans\/([^/?#]+)/.exec(window.location.pathname);
+    if (!match) throw new Error(`not on a plan route: ${window.location.pathname}`);
+    const res = await fetch(
+      `/api/v1/organizations/${match[1]}/plans/${match[2]}/dependencies?limit=100`,
+      { credentials: 'include' },
+    );
+    if (!res.ok) throw new Error(`dependencies read failed: ${res.status}`);
+    const body = (await res.json()) as {
+      data: { id: string; lagMinutes: number; lagDays: number; type: string }[];
+    };
+    return body.data;
+  });
+}

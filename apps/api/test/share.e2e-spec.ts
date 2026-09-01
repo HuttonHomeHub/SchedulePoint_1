@@ -76,6 +76,21 @@ describe.skipIf(!hasDatabase)('Share links API (e2e)', () => {
     // tests across 10 files in `beforeEach` on `activity_steps_activity_id_fkey`, and by the time
     // anyone looked the database was clean, because a later suite in the same run had swept it.
     // The log was kept, which is the only reason this was diagnosable at all.
+    // Baselines and their snapshot rows hold `plan_id` / `baseline_id` (ADR-0025), and they are the
+    // FOURTH table to fail this way — after `plan_shares`, `resource_assignments` and
+    // `activity_steps` (`docs/TECH_DEBT.md` #119a). Found on 2026-09-01, when a full API run failed
+    // all 45 tests in `activities.e2e-spec.ts` on `baselines_plan_id_fkey`: 25 of 33 plan-sweeping
+    // specs deleted plans without deleting baselines first, so a baseline surviving in the shared
+    // `app_test` poisons whichever spec sweeps next. **Which writer left it is not claimed** — the
+    // log names the constraint and not the producer, and every in-suite creator sweeps (directly, or
+    // via `clearDomainData`), so the residue came from outside this run: an earlier aborted run or a
+    // Playwright journey against the same database, exactly as #119a's 2026-08-28 entry describes.
+    // Diagnosed the same day only because `scripts/e2e-local.sh` tees the whole log to a file — the
+    // observer piped the command through `tail` exactly as that row warns them not to, and the
+    // mechanism caught what the habit lost. That is ADR-0058 working as advertised.
+    await prisma.baselineAssignment.deleteMany();
+    await prisma.baselineActivity.deleteMany();
+    await prisma.baseline.deleteMany();
     await prisma.activityStep.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.deleteMany();
