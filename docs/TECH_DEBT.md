@@ -740,6 +740,29 @@ the driving assignment's resource calendar when the type is `RESOURCE_DEPENDENT`
 exists, else today's answer — so every caller is corrected at once rather than per-surface. The
 engine is not involved and the recalc parity gate is untouched.
 
+> **Scoped 2026-09-01, and "every caller is corrected at once" does not survive contact.** The
+> helper has **twelve** call sites and can only use what it is handed, so a branch alone corrects
+> nobody — it would be dead code until a caller supplies the driver.
+>
+> **Where the driver is resolvable, and where it is not**, established by reading rather than
+> estimating:
+>
+> - `ActivityResourcesPanel` **can** — it holds `assignments.data` (each with `isDriving` and
+>   `resourceId`) and a `resourceById` map, and `ResourceSummary.calendarId` exists
+>   (`packages/types/src/index.ts:1739`). But it does not compute the factor: it receives
+>   `activityHoursPerDay` as a **prop** from its host and forwards it to `AssignmentRow`
+>   (`:318-320`). Correcting it means the panel deriving its own — which needs the activity's
+>   `type` and the `calendars` list plumbed in, two new props on a component that currently needs
+>   neither.
+> - `ActivitiesTable`'s **Duration column** cannot. It resolves per row (`:639`) and the table
+>   never loads assignments, so the driving resource is not in scope at all; getting it would mean
+>   a bulk fetch this surface does not do today.
+> - The two activity editors are in between and need checking when the work is taken.
+>
+> **So it needs a spec, not a register row** (ADR-0105): the panel's props are a component contract.
+> That is a bigger trigger than the row's own "three-line formatter fix" framing implies, and the
+> framing is what has kept it looking cheaper than it is.
+
 ### 88. An email link scanner reaches the verification URL before the recipient
 
 **Status:** unverified
@@ -1764,6 +1787,28 @@ diagnosis.
 **What would settle it**: run the file under `--repeat` with the suite's own concurrency, or add a
 counter assertion on `apiFetch` calls rather than on the last call's body, which would tell a
 double-submit apart from a slow one. Left open rather than guessed at.
+
+> **Both were done 2026-09-01. It still does not reproduce, and the second half shipped anyway.**
+>
+> **The reproduction attempt.** Vitest's CLI has no `--repeat` (it is a config option, and the row
+> assumed a flag), so the file was looped **20 times while a full `apps/web` run held the
+> machine** — the concurrency the row names as the condition. **Zero failures**, and the full run
+> underneath was itself green (589 files, 5,373 tests, 515 s), which matters because a full
+> `pnpm test` is the exact condition the one failure occurred in. With the five isolated runs
+> recorded when this was filed, that is **26 attempts and no reproduction**.
+>
+> The row stays **open** rather than closing as stale: one failure is still one failure, and a
+> cause nobody has found is not the same as a cause that is not there.
+>
+> **The counter landed regardless**, and that is the useful half — it costs one line and makes the
+> NEXT occurrence diagnosable instead of another shrug. The two candidates now fail differently: a
+> **slow** submit expires the `waitFor`, a **double** submit passes it and trips
+> `toHaveBeenCalledTimes(1)`. Without it they are the same red line — and because the case reads
+> `calls[0]`, a second call would otherwise go entirely unnoticed. Added to both submitting cases
+> in the file, with the reasoning at the first.
+>
+> Worth stating plainly: this does not fix anything. It converts an unreproducible failure into one
+> that would arrive with evidence attached.
 
 ### 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 

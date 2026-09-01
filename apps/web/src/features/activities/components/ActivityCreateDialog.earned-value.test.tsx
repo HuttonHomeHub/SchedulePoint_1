@@ -123,6 +123,24 @@ describe('ActivityCreateDialog — Cost & Earned Value (flag on)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    /**
+     * **The count, not just the body** (`docs/TECH_DEBT.md` #123).
+     *
+     * This case failed exactly once, in a full run on 2026-08-11, and has not reproduced —
+     * 25 attempts now: five in isolation when it was filed, and twenty here under a concurrent
+     * full-suite run, which is the load the row named as the thing to try.
+     *
+     * So the cause is still unknown, and this assertion is what makes the NEXT occurrence
+     * diagnosable rather than another shrug. The two candidates fail differently: a **slow**
+     * submit expires the `waitFor` above, a **double** submit passes it and trips this. Without
+     * the count they are the same red line — and reading `calls[0]` means a second call would
+     * otherwise go unnoticed entirely.
+     *
+     * The double-submit hypothesis has a motive: ADR-0060 M6 swapped this button's native
+     * `disabled` for `aria-disabled` plus a `preventDefault` guard, and a natively disabled button
+     * is the one thing that made a second click during an in-flight save structurally impossible.
+     */
+    expect(apiFetch, 'a second submit reached the API').toHaveBeenCalledTimes(1);
     const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
     expect(JSON.parse(init?.body as string)).toMatchObject({
       name: 'Pour slab',
@@ -138,6 +156,8 @@ describe('ActivityCreateDialog — Cost & Earned Value (flag on)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create activity' }));
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    // Same discriminator as the case above — see its comment for why the count is asserted.
+    expect(apiFetch, 'a second submit reached the API').toHaveBeenCalledTimes(1);
     const [, init] = vi.mocked(apiFetch).mock.calls[0]!;
     const body = JSON.parse(init?.body as string);
     expect(body).toMatchObject({ percentCompleteType: 'DURATION' });
