@@ -71,7 +71,7 @@ describe.skipIf(!hasDatabase)('Mail failure alerting (e2e)', () => {
     // waiting ten seconds to produce one would make the suite slow for no extra proof.
     //
     // **Every variable this suite sets is captured and restored in `afterAll`**, and that is not
-    // housekeeping — `vitest.e2e.config.ts` sets `fileParallelism: false`, so all 36 suites share
+    // housekeeping — `vitest.e2e.config.mts` sets `fileParallelism: false`, so all 36 suites share
     // ONE process and one `process.env`. Leaving `MAIL_SMTP_URL` set makes every later suite boot
     // the real SMTP adapter against a refusing port instead of the logging stub, which is exactly
     // what happened on the first full run: 235 failures across 8 files, none of them in this one,

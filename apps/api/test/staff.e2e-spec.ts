@@ -24,7 +24,7 @@ import { clearDomainData } from './audit-reset';
  * not just the response, because a 200 with no row would be the same defect wearing a smile.
  *
  * `STAFF_EMAILS` is set before `AppModule` is imported and restored in `afterAll`:
- * `vitest.e2e.config.ts` sets `fileParallelism: false`, so all suites share one process and one
+ * `vitest.e2e.config.mts` sets `fileParallelism: false`, so all suites share one process and one
  * `process.env`, and a leaked value here would silently make an address staff in every later suite.
  */
 const hasDatabase = Boolean(process.env.DATABASE_URL);
@@ -70,7 +70,7 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     //
     // This block used to delete org members, audit events, organisations, verifications and users,
     // in that order, having grown that list one failure at a time. It was correct only for the file
-    // order the runner happened to pick: `vitest.e2e.config.ts` sets `fileParallelism: false`, so
+    // order the runner happened to pick: `vitest.e2e.config.mts` sets `fileParallelism: false`, so
     // all 40 suites share one database, and adding `retention-alerting.e2e-spec.ts` reshuffled them
     // until a suite leaving `clients` behind ran first. The organisation delete then tripped
     // `clients_organization_id_fkey` — a message naming a foreign key and saying nothing about the
