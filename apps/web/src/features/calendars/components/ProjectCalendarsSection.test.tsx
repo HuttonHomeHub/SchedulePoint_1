@@ -215,6 +215,46 @@ describe('ProjectCalendarsSection', () => {
       expect(screen.getByRole('button', { name: 'Unarchive Winter shutdown' })).toBeInTheDocument();
     });
 
+    /**
+     * **A filtered-empty offers the way back** (`docs/specs/empty-state-consolidation/` §1.6,
+     * M4-T2). Filtering to archived-only and finding none used to render the bare sentence "No
+     * archived calendars." — while this section's three siblings (`CalendarsTable`,
+     * `ResourcesTable`, `AuditEventList`) all render a control. A reader who filtered, found
+     * nothing and had no way out has to work out that the select above is the cause.
+     *
+     * The button is asserted to WORK, not merely to exist: a control that does not clear the
+     * filter is a worse dead end than the sentence it replaced, because it looks like an exit.
+     * Verified red against the bare sentence.
+     */
+    it('offers a way back when the archived-only filter finds nothing', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, staleTime: Infinity },
+          mutations: { retry: false },
+        },
+      });
+      queryClient.setQueryData(calendarKeys.forProject('acme', 'proj-1', { archived: 'only' }), []);
+      queryClient.setQueryData(calendarKeys.forProject('acme', 'proj-1'), [OWN_CALENDAR]);
+      render(
+        <QueryClientProvider client={queryClient}>
+          <ProjectCalendarsSection
+            orgSlug="acme"
+            projectId="proj-1"
+            projectName="Harbour Tower"
+            canWrite
+            canManageOrg
+          />
+        </QueryClientProvider>,
+      );
+
+      fireEvent.change(screen.getByLabelText('Show archived'), { target: { value: 'only' } });
+      expect(await screen.findByText('No archived calendars.')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show all calendars' }));
+      expect(screen.getByLabelText('Show archived')).toHaveValue('exclude');
+      expect(await screen.findByText(OWN_CALENDAR.name)).toBeInTheDocument();
+    });
+
     it('hides the archive action from a reader', () => {
       renderSection({ canWrite: false });
       expect(screen.queryByRole('button', { name: /^Archive /i })).not.toBeInTheDocument();

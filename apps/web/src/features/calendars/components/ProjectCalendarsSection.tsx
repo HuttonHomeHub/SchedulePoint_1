@@ -241,7 +241,24 @@ export function ProjectCalendarsSection({
         errorLabel="Couldn’t load this project’s calendars. Please try again."
         empty={
           archivedFilter === 'only' ? (
-            <>No archived calendars.</>
+            // **A filtered-empty says so, and offers the way back**
+            // (`docs/specs/empty-state-consolidation/` §1.6, M4-T2). This rendered the bare
+            // sentence while its three siblings — `CalendarsTable`, `ResourcesTable` and
+            // `AuditEventList` — all offered a control, so a reader who filtered to archived and
+            // found none had to work out that the select above was the cause. One correct pattern
+            // applied to a control and not its neighbour. The only filter here IS the archived
+            // select, so "clear" is a return to its default rather than a reset of a filter object.
+            <>
+              <p className="text-muted-foreground text-sm">No archived calendars.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setArchivedFilter('exclude')}
+              >
+                Show all calendars
+              </Button>
+            </>
           ) : (
             <>No calendars available.{canWrite ? ' Create one for this project.' : ''}</>
           )

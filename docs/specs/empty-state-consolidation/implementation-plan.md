@@ -306,6 +306,28 @@ first** (`docs/PROCESS.md` — CI is the second opinion).
 
 ---
 
+### Milestone M4 — Table empties become the archetype (shippable) — **RE-DERIVED 2026-09-01; T2 LANDED, T1 WITHDRAWN pending a decision**
+
+> **M3 changed this milestone's premise, and re-reading it rather than working through it is the
+> point.** M4 was written while every call site owned its own box: converting the 18 table sites to
+> `EmptyState size="section"` would have replaced eighteen hand-rolled boxes with one archetype.
+> M3 shipped first and moved the box into `DataTable`, so the sites now pass a bare fragment into a
+> frame the primitive owns — and the gate no longer reports any of them, because the hand-rolled
+> treatment is gone.
+>
+> **So T1's remaining value is not what it was.** It would put an `EmptyState` inside `DataTable`'s
+> frame, and `EmptyState size="section"` brings its own `px-4 py-10` and centring on top of the
+> frame's `p-8 text-center` — two layouts nesting, neither aware of the other. That is a real
+> design question (does the primitive's frame simply BECOME the section-sized empty state, or does
+> `DataTable` render an `EmptyState` from structured props?) and it is **not answered here**.
+> Building T1 as written would have produced doubled padding and called it consolidation.
+>
+> **T2 landed, because its value is unchanged.** The missing way back is a defect about behaviour,
+> not treatment, and M3 did nothing to it.
+>
+> This is `CLAUDE.md` §19's rule — re-verify a plan's PROBLEM statement, not only its design —
+> applied to a plan invalidated by its own predecessor two hours earlier.
+
 ### Milestone M4 — Table empties become the archetype (shippable)
 
 **Outcome:** the 18 table sites render through `EmptyState`, and the filtered-empty defect in
@@ -338,7 +360,20 @@ the K2 path.
 - **Development steps:** convert in ~4 PR-sized batches by feature area; remove allow-list entries
   as each batch lands.
 
-##### Task M4-T2 — The 4 K2 filtered sites, and the missing way back
+##### Task M4-T2 — The 4 K2 filtered sites, and the missing way back — **DONE 2026-09-01**
+
+> The three correct siblings need no conversion after M3 — they already render their copy and their
+> `Clear filters` button, and the frame around them is now the primitive's.
+> **`ProjectCalendarsSection` gained its way back**, which is what this task was really for: it
+> rendered the bare sentence "No archived calendars." while `CalendarsTable`, `ResourcesTable` and
+> `AuditEventList` all offered a control, so a reader who filtered to archived-only and found none
+> had to work out that the select above was the cause. The only filter on that section IS the
+> archived select, so the control returns it to its default and is labelled for what it does —
+> **Show all calendars** — rather than borrowing the siblings' "Clear filters" for a single select.
+>
+> The test asserts the button **works**, not that it exists: a control that does not clear the
+> filter is a worse dead end than the sentence it replaced, because it looks like an exit. Verified
+> red against the bare sentence, with the deletion confirmed to have landed.
 
 - **Description:** the three correct ones convert with their `Clear filters` action;
   **`ProjectCalendarsSection.tsx:244` gains one** (`feature-spec.md` §1.6).
