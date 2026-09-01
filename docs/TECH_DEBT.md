@@ -988,6 +988,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                    |
 | --- | -------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 177 | A compound citation was invisible to `check:claims`                                    | 2026-09-01 | **Won't-fix**, on the row's own measurement: a repo-wide sweep found exactly two compound citations left, one excluded as this repository's own file and one that IS this row quoting the defect. Extending the regex is a shared-gate change (ADR-0105) that would then demand a register entry for an example. The seven real occurrences were already split into two citations each, so the hole is closed.         |
 | 156 | The drawer-subject mechanism had no registrant                                         | 2026-09-01 | Deleted, on the product owner's call: ADR-0097 D2 is closed as not wanted. The row's own premise had gone stale — it said the drawer "is very much alive: it holds the Project Explorer", which ADR-0109 D2 had already moved to its own column, so the dead set was the whole mechanism plus `ContextDrawer`, `useContextDrawerPrefs`, the `drawer` chrome slot and the shell's Escape rung. See `docs/DECISIONS.md`. |
 | 63  | The Progress tab carried no unsaved marker for its three panels                        | 2026-08-31 | The confirmation half closed with ADR-0108 D2; this is the tab's own dot, which the lifted six-scope report already had the state for. Never a padlock — the pen does not gate Progress.                                                                                                                                                                                                                               |
 | 67  | The Logic panel's post-remove focus target was the whole panel                         | 2026-08-31 | Narrowed to the two dependency tables. No host-override seam: the Logic dialog owns no Close button to land on, so it would have shipped with no registrant (#156's shape).                                                                                                                                                                                                                                            |
@@ -2240,39 +2241,16 @@ commit. It is removed, but the lesson is the general one: `git add -A` is not sa
 else is writing to the tree, and a review pass is exactly when something else is. Stage by path
 during a gate pass.
 
-## 177. A compound citation is invisible to `check:claims`
-
-**Status:** unverified
-
-**Raised 2026-08-22.** The completeness scan's regex is
-`\b([a-z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b`, which matches `sign-up.mjs:163` inside
-`sign-up.mjs:163,169-207` and stops. The second range was therefore **never registered**, never
-version-pinned and never re-verified — while sitting inside a citation that looks complete and
-carries a real claim: ADR-0075's synthetic-200 anti-enumeration control, which is the reason that
-ADR rejects an abort-on-send-failure design.
-
-**The remedy is now NET-NEGATIVE, established 2026-08-31 by measuring before acting on it.** A
-repo-wide scan finds exactly two compound citations left: `shoot.mjs:555-562,593-608`, which the gate
-already excludes as this repository's own file, and `sign-up.mjs:163,169-207` — **which is this row's
-own text, quoting the defect**. So extending the regex would buy nothing and would demand a register
-entry for a range that exists only as an example, in the row whose job is to describe the notation.
-That is the failure `CITATION_SCAN_EXCLUDES` exists to prevent for `check-claims.mjs`, and taking it
-on would mean excluding the register from its own gate. **Recommend closing as won't-fix unless a
-third compound citation appears in real prose.**
-
-**Worked around rather than fixed, deliberately.** All seven occurrences were split into two
-register-visible citations, so the hidden half is now watched and the immediate hole is closed
-without touching the gate. Extending the regex would be a **shared-gate** change and fires
-ADR-0105's trigger, which is not something to smuggle into a dependency bump.
-
-**Sized before deciding:** a repo-wide sweep found **8** compound citations, 7 of them this one
-claim and the eighth in `shoot.mjs`, which the gate excludes anyway as this repository's own file.
-So the convention "one citation, one range" now holds everywhere, and the regex change buys
-enforcement rather than coverage. That is worth doing and worth doing on its own.
-
 ## 180. A workflow's renamed INPUTS have no equivalent of the output guard
 
-**Status:** unverified
+**Status:** standing · **Verified:** 2026-09-01
+
+**`standing`, not `open`** (2026-09-01). This is a permanent property of GitHub Actions — an
+unrecognised `with:` key is indistinguishable from an omitted one from inside a workflow — so there
+is no state in which it becomes fixed. It was filed `unverified` in ADR-0120's wholesale
+classification, which is the right default for a row nobody has read and the wrong answer for one
+whose own last paragraph names the practice it wants. The practice is CLAUDE.md §19.11 applied to a
+workflow: re-read the action's `action.yml` on every major bump.
 
 **Raised 2026-08-23** while migrating `changesets/action` v1 → v2 (Dependabot #323), and it is a
 finding about **what can be guarded**, not about that upgrade, which is done.
@@ -3130,8 +3108,13 @@ reason. Neither hides anything else.
 
 ## 216. The favicon's brand glyph is set in `system-ui`, and no gate can reach it
 
-**Status:** unverified · **Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, CQ-1) · **Size:** S ·
+**Status:** standing · **Verified:** 2026-09-01 · **Raised:** 2026-08-29
+(`docs/specs/typeface-outward-artefacts/`, CQ-1) · **Size:** S ·
 **Disposition: a NAMED EXCEPTION the product owner took, not an oversight**
+
+**`standing`, not `unverified`** (2026-09-01). A row recording a decision somebody made is not a
+row awaiting one, and `unverified` invites the next reader to re-open a question the product owner
+already answered — which happened to #225 the same week, in the same wholesale classification.
 
 `apps/web/public/favicon.svg:16` draws the brand `S` with
 `font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"`. It is therefore the one
