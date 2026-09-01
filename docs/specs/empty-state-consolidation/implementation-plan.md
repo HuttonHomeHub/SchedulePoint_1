@@ -449,7 +449,30 @@ minted from the **Share links** dialog on the plan toolbar.
 
 ---
 
-### Milestone M6 — Panels and the canvas (shippable)
+### Milestone M6 — Panels and the canvas (shippable) — **LANDED 2026-09-01**
+
+> Eight sites through `NoticeStrip emphasis="dashed"`, converging on the answer three sites already
+> used. **The allow-list is now THREE entries, and all three are permanent decisions rather than
+> deferrals** — the frame itself in `DataTable`, and the two K5 placeholders CQ-3 settled. Their
+> notes say `PERMANENT` and give the reason, so a later reader does not mistake a decision for a
+> queue.
+>
+> The duplicated resource sentence is one exported `NO_RESOURCE_LOADING_MESSAGE`: it lived verbatim
+> in `ResourceHistogram` and `resource-strip-panel`, which is two chances for one to be reworded on
+> two views of the same data.
+>
+> `EarnedValuePanel`'s `role="status"` is passed THROUGH to `NoticeStrip` rather than dropped —
+> that primitive's role is deliberately the caller's, because a tone→role mapping gets it wrong for
+> a mode band that wants neither.
+>
+> **The canvas site converged on its own file's answer**: `TsldPanel:2700` already rendered its
+> empty canvas through `NoticeStrip`, and the hand-rolled box sat two hundred lines above it saying
+> the same kind of thing a different way. `render/` is untouched, so the ADR-0034 parity gate and
+> #75's draw budget are unaffected by construction.
+>
+> **Not done: the panel shots** the milestone asks for (`shoot.mjs` has none). They go to M8 with
+> the guest empty state and the three not-found routes — four fixtures, one milestone, rather than
+> four half-fixtures spread across three.
 
 **Outcome:** the 7 K3 panel sites and the canvas site render through `NoticeStrip
 emphasis="dashed"`, converging on the answer three sites already use.

@@ -79,54 +79,14 @@ const ALLOWED: { file: string; match: string; note: string }[] = [
     note: 'PERMANENT — this IS the frame. `EMPTY_FRAME` is where the treatment lives after M3; the entry exists so the gate does not report the primitive as an offender, and it must never be deleted while that constant does.',
   },
   {
-    file: 'components/layout/workspace/resource-strip-panel.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K3 \u2014 a panel with nothing to show \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/activities/components/ActivityProgressPanels.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K3 \u2014 a panel, in a dialog \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/calendars/components/CalendarExceptionsEditor.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K3 \u2014 a panel, in a dialog \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
     file: 'features/dependencies/components/AddLinkSection.tsx',
     match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K5 \u2014 a placeholder, not an absence; stays prose \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/earned-value/components/EarnedValuePanel.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K3 empty / K6 permission refusal \u2014 see the note; the refusal must NOT become an EmptyState \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
+    note: 'PERMANENT — K5, a placeholder rather than an absence (CQ-3). “This plan has no other activities to link to yet” is a precondition for the form beside it, and the action that resolves it is on another surface; framing it as an empty state would promise something to do here.',
   },
   {
     file: 'features/interchange/components/ImportScheduleDialog.tsx',
     match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K5 \u2014 a placeholder, not an absence; stays prose \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/notes/components/NoteThread.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K3 \u2014 a panel with nothing to show \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/resources/components/ActivityResourcesPanel.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K3 \u2014 a panel with nothing to show \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/resources/components/ResourceHistogram.tsx',
-    match: 'border-border text-muted-foreground rounded-lg border border',
-    note: 'K3 \u2014 a panel, same sentence as resource-strip-panel \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
-  },
-  {
-    file: 'features/tsld/components/TsldPanel.tsx',
-    match: 'border-border text-muted-foreground flex items-center justif',
-    note: 'K4 \u2014 page-filling; this same file uses NoticeStrip correctly at :2700 \u2014 deferred, see docs/TECH_DEBT.md #161(a)',
+    note: 'PERMANENT — K5, a placeholder rather than an absence (CQ-3). “Choose a file above and its report appears here” describes what the panel is waiting for, not something missing from the plan.',
   },
 ];
 

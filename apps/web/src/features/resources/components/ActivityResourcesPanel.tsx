@@ -33,6 +33,7 @@ import { FieldGateProvider } from '@/components/ui/field-gate';
 import { CheckboxField, FormErrorSummary, TextField } from '@/components/ui/form';
 import { FieldGrid, FieldGridContainer, FormSection } from '@/components/ui/form-layout';
 import { Label } from '@/components/ui/label';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { Select } from '@/components/ui/select';
 import {
@@ -299,9 +300,7 @@ export function ActivityResourcesPanel({
               Couldn’t load assignments. Please try again.
             </p>
           ) : (assignments.data ?? []).length === 0 ? (
-            <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-              No resources assigned yet.
-            </div>
+            <NoticeStrip emphasis="dashed" message="No resources assigned yet." />
           ) : (
             <ul className="flex flex-col gap-2">
               {(assignments.data ?? []).map((assignment) => (

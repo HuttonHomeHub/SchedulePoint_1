@@ -2468,16 +2468,21 @@ export function TsldPanel({
   // the interactive canvas below. Flag-off — or with no anchor — keep today's empty-state note.
   if (activities.length === 0 && !(CANVAS_AUTHORING_ENABLED && showDiagram)) {
     return (
-      <div
-        className={cn(
-          'border-border text-muted-foreground flex items-center justify-center rounded-lg border border-dashed p-8 text-center text-sm',
-          // In the canvas-first workspace the region is tall; fill it and centre the message
-          // rather than leaving a small box pinned to the top (ADR-0030). Boxed otherwise.
-          fill ? 'h-full min-h-[240px]' : '',
-        )}
-      >
-        No activities to diagram yet. Add activities to this plan to see the logic diagram.
-      </div>
+      // **Converged on the same file's own answer** (`docs/specs/empty-state-consolidation/` M6):
+      // `:2700` below already renders its empty canvas through `NoticeStrip emphasis="dashed"`,
+      // and this hand-rolled box sat two hundred lines above it saying the same kind of thing a
+      // different way. `render/` is untouched, so the ADR-0034 parity gate and `docs/TECH_DEBT.md`
+      // #75's draw budget are unaffected by construction — stated so a reviewer need not work it out.
+      <NoticeStrip
+        emphasis="dashed"
+        density="comfortable"
+        messageFit="grow"
+        // In the canvas-first workspace the region is tall; fill it and centre the message rather
+        // than leaving a small box pinned to the top (ADR-0030). Boxed otherwise — the `fill`
+        // behaviour is the reason this passes a className rather than taking the default box.
+        className={cn('items-center', fill ? 'h-full min-h-[240px] justify-center' : '')}
+        message="No activities to diagram yet. Add activities to this plan to see the logic diagram."
+      />
     );
   }
 

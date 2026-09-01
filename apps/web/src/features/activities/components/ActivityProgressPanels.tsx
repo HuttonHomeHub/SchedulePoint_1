@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/button';
 import { FieldGateProvider } from '@/components/ui/field-gate';
 import { FormProblemCount, TextField } from '@/components/ui/form';
 import { FieldGrid } from '@/components/ui/form-layout';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 import { ScopeSaveBar } from '@/components/ui/scope-save-bar';
 import { EARNED_VALUE_ENABLED, PROGRESS_INGESTION_ENABLED } from '@/config/env';
 
@@ -587,10 +588,12 @@ export function WeightedStepsPanel({
             ) : null}
 
             {fields.length === 0 ? (
-              <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-                No steps yet. Add a step to build a weighted checklist; until then the physical %
-                complete is whatever is typed above.
-              </div>
+              <NoticeStrip
+                emphasis="dashed"
+                density="comfortable"
+                messageFit="grow"
+                message="No steps yet. Add a step to build a weighted checklist; until then the physical % complete is whatever is typed above."
+              />
             ) : (
               <ul ref={listRef} className="flex flex-col gap-3">
                 {fields.map((field, index) => {

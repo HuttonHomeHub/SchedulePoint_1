@@ -7,6 +7,7 @@ import { NoteItem } from './NoteItem';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
@@ -92,9 +93,7 @@ export function NoteThread({
           Couldn’t load notes. Please try again.
         </div>
       ) : notes.length === 0 ? (
-        <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-          No notes yet.
-        </div>
+        <NoticeStrip emphasis="dashed" message="No notes yet." />
       ) : (
         <ul className="flex flex-col gap-2">
           {notes.map((note, index) => (

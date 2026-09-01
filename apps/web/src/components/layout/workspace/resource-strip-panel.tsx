@@ -3,6 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { NoticeStrip } from '@/components/ui/notice-strip';
 import { Select } from '@/components/ui/select';
 import {
   BucketSizeSelect,
@@ -10,6 +11,7 @@ import {
   useResourceHistogram,
   useResources,
 } from '@/features/resources';
+import { NO_RESOURCE_LOADING_MESSAGE } from '@/features/resources/components/ResourceHistogram';
 import { StackByControl } from '@/features/resources/components/StackByControl';
 import { StackLegend } from '@/features/resources/components/StackLegend';
 import {
@@ -317,10 +319,12 @@ export function ResourceStripPanel({
             </Button>
           </div>
         ) : series.length === 0 ? (
-          <div className="border-border text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm">
-            No resource loading to show yet — assign resources with budgeted units and recalculate
-            the schedule.
-          </div>
+          <NoticeStrip
+            emphasis="dashed"
+            density="comfortable"
+            messageFit="grow"
+            message={NO_RESOURCE_LOADING_MESSAGE}
+          />
         ) : (
           // The parallel accessible table is one disclosure away (ADR-0049 §5) — the strip band is thin,
           // so the bars are the glance and the table is the exact-numbers equivalent for AT / keyboard.
