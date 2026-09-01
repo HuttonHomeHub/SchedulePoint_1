@@ -98,9 +98,18 @@ The table above carries the older, one-line rows. Items that need more than a ta
 section here. Both are the same register — the split is how much explaining a row needs, not how
 important it is.
 
-Headings are `### <number>. <title>`, always. Three rows had drifted to `##`, which made every
-detailed item a child of "Principles for managing debt" in the document tree rather than a sibling
-of its peers.
+Headings are `### <number>. <title>`, always — so a row is a **child** of this section. A row
+written `## ` is a **sibling** of `## Detailed items`, which puts it outside the section that
+contains it.
+
+**Normalised 2026-09-01** (`docs/TECH_DEBT.md` #227): 31 rows had drifted to `##` and are now `###`.
+Two things that paragraph got wrong are corrected with it. It said **three** rows had drifted, which
+was already wrong by a factor of ten when ADR-0120 — whose entire subject was this file — was
+written; the count had reached 70 of 100 by the time #227 measured it, and 31 of 60 by the time it
+was fixed. And its explanation was **inverted**: it said `##` "made every detailed item a child of
+Principles for managing debt … rather than a sibling of its peers", and the nesting works the other
+way round. A reader checking the rule against the document was told two things, one false and one
+backwards.
 
 ### 58. The tiered ruler and TODAY chip (ADR-0055 S4, deferred)
 
@@ -180,32 +189,44 @@ changing its nature — one derivation, two surfaces.
 fields (not `null`). Until then, treat the permission sets as coupled: changing one without the
 other is a client bug in a different file.
 
-### 64. Fields still use native `disabled`, so a mid-session pen loss can drop focus
+### 64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-01 · **Size:** M · **Owner:** web
 
-ADR-0060's Save buttons were moved to `aria-disabled` + a pointer-events guard (`ScopeSaveBar`),
-because a natively-disabled button is blurred to `<body>` the instant it flips — and they flip on
-every save. The **fields** they sit beside were not: they are still natively `disabled` when the
-scope is un-writable.
+> **Most of this row was discharged by ADR-0083 and nobody closed it** — found by the 2026-09-01
+> verification sweep, and it is a **half-executed** close: that ADR's own step 8 says _"Delete #64
+> and #66 from `docs/TECH_DEBT.md`, add both numbers to Closed numbers"_, and **#66 was closed on
+> 2026-08-31 while #64 was not.**
+>
+> What the row used to claim, and what is true today:
+>
+> - _"The fields … are still natively `disabled` when the scope is un-writable."_ **False.**
+>   `components/ui/form.tsx` implements ADR-0083 throughout: `TextField` takes `readOnly` (`:113`),
+>   `TextareaField` likewise (`:395`), `CheckboxField` takes `aria-disabled` plus a `preventDefault`
+>   click guard (`:324-331`). `SelectField` keeps native `disabled` (`:225`) as ADR-0083 D1's
+>   **named exception with its cost stated** — a recorded decision, not debt.
+> - _"What would close it: extend the `aria-disabled` treatment … to the form primitives."_
+>   **Discharged, and by a more careful mechanism than this row proposed** — ADR-0083 D1 rejected
+>   blanket `aria-disabled` and split the treatment by what the control can do besides hold a value.
+> - _"`ActivityResourcesPanel`'s assign fields … sit inside exactly the window this entry
+>   describes."_ **Fixed**: that form sits under `<FieldGateProvider gate={assignGate}>`
+>   (`ActivityResourcesPanel.tsx:359`), whose own comment names this row.
 
-That is fine while writability is fixed for a session, and it is not — the pen can be taken over
-by another user mid-edit (ADR-0028), which flips every definition field from enabled to disabled
-under whatever focus the user had. Rarer than the Save case (which fired on the happy path, every
-time), same root cause, same WCAG 2.4.3 exposure. Raised by the M6 accessibility gate as the
-lower-priority half of that finding.
+**What survives is one thing, and it is the worst case the row ever named.**
+`AssignmentRow.tsx:511` is still `{canWrite ? ( …eight editors… ) : ( <p>…summary…</p> )}`. On
+`canWrite` going false it does not shade its editors, it **unmounts** them for a read-only summary
+line — a **guaranteed** focus-to-`<body>` rather than a possible one (WCAG 2.4.3), in a tab of a
+long-lived editor session where the pen can be taken by another user at any moment (ADR-0028).
 
-**What would close it:** extend the `aria-disabled` treatment from `ScopeSaveBar` to the form
-primitives (`TextField`/`SelectField`/`CheckboxField`), which would fix every gated surface in the
-app at once rather than this editor alone — which is also why it is a separate piece of work.
+Its neighbouring controls are already correct (`:450`, `:602`, `:662` all shade rather than
+disable), which is moot while the whole subtree unmounts around them.
 
-**Widened by the convergence epic (ADR-0062).** The Resources surface is now a tab of the same
-long-lived session rather than a dialog opened and closed in seconds, so its natively-`disabled`
-controls (`ActivityResourcesPanel`'s assign fields, and `AssignmentRow`'s cost / units / rate saves,
-driving checkbox, curve select and Unassign) sit inside exactly the window this entry describes.
-`AssignmentRow` is the **worse** case and the one to fix first: on `canWrite` going false it does not
-disable its editors, it **unmounts** them for a read-only summary line — a guaranteed focus-to-`<body>`
-rather than a possible one. Raised by the ADR-0062 accessibility gate.
+**Already specified**: ADR-0083 D5 cites this exact line and schedules it as **M3** (_"`AssignmentRow`
+(#64's worst case)"_), which has not landed. So no new spec is owed — the work is to delete the
+summary branch and move six hand-rolled controls onto the gated primitives, plus tests.
+
+**Sequence it with #69**, whose remedy may move `AssignmentRow` to a different editing idiom
+altogether; doing this first and that second would rewrite the same file twice.
 
 ### 65. A link's lag or type edited from the dialog is not recorded for undo
 
@@ -267,7 +288,12 @@ guarantee. Until then, do not add another "serialises concurrent …" e2e test a
 
 `paintWbsBand` draws the derived **Unassigned** bucket as the same rounded rect as a real summary,
 in a different fill (`--color-muted-foreground` vs `--color-primary`) with its label on top. Every
-pairing clears 4.5:1 in all three themes today, so this is not a contrast failure — but at a zoom
+pairing clears 4.5:1 in all three themes today, so this is not a contrast failure**
+[STRUCK 2026-09-01 — wrong on both halves. There is **one** theme, not three (`THEME_SELECTORS =
+[':root']`, ADR-0097), and the pairing did **not** clear 4.5:1: `token-contrast.test.ts:215-216`
+records it measured **3.01:1**, "a live 1.4.3 failure on any plan with an ungrouped activity",
+fixed by ADR-0102. The ink is now `--background`, not `--primary-foreground`, and it **is** pinned
+at `token-contrast.test.ts:228`. What this row is still for is the **shape** cue alone.]** — but at a zoom
 where `truncateToWidth` drops the label entirely, the only remaining difference is colour (WCAG
 1.4.1). Its Gantt sibling deliberately does better: `GanttBucketRowView` draws a **bracket**, not a
 bar, precisely so the bucket is not a fourth kind of bar on the chart.
@@ -490,8 +516,12 @@ would not exercise the code being budgeted.
    any work is scheduled against it.
 
    Two caveats on this row. It is at **Fit** (whole-plan) zoom — the dearest case, and per the
-   container harness the working zoom can be less than half the cost, so a **Week-zoom run is still
-   owed** and may well show the surface a planner actually uses is smooth. And **DPR 1**: at 150%
+   container harness the working zoom can be less than half the cost. **A Week-zoom run was called
+   "still owed" here and this row's own table already carried it** (corrected 2026-09-01):
+   `2,016, Week | 3.9 ms p95 | 0 / 600 frames dropped`, and it showed exactly what the sentence
+   guessed — the surface a planner actually uses is smooth. What is genuinely unmeasured is the
+   **500-activity** limb of §9's two-limb gate, which has no real-hardware reading at all. And
+   **DPR 1**: at 150%
    scaling the backing store is 2.25× larger, so this is the cheap end of this machine.
 
    **The first row is why the script now refuses to run.** It was a real run on a real machine and
@@ -646,6 +676,10 @@ a levelling pass takes ~11.6 s.
 
 **It is pre-existing and this diff did not change it.** It is recorded because ADR-0041 §F's
 boundedness wording ("`O(k log k)`, never a per-minute scan") is easy to read as ruling this out,
+_(citation corrected 2026-09-01: that phrasing is **not** in invariant (f), which reads only "the
+feasibility search terminates within the ADR-0036 horizon/iteration cap; a never-freed resource
+flags, never loops". It lives in `level.ts:437-438` and in ADR-0041's ADR-0071 amendment paragraph
+at `:154`. The point below survives the correction.)_
 and it does not: §F rules out cost that scales with the **span** being levelled — the defect where
 a two-year plan costs a thousand times a two-day one regardless of how much work it holds. It says
 nothing about cost that scales with the number of **contenders**, which is what this is. A reader
@@ -675,13 +709,20 @@ inherited it rather than introducing it.
 
 `effectiveHoursPerDay()` (`apps/web/src/lib/effective-hours-per-day.ts`) resolves the factor as the
 **activity's own** `calendarId`, falling back to the plan's. That is correct for every activity type
-but one. For a **`RESOURCE_DEPENDENT`** activity, ADR-0039 §23 makes the **driving resource's**
-calendar authoritative — the service resolves and overrides the activity's own, which
+but one. For a **`RESOURCE_DEPENDENT`** activity, ADR-0035 §23 / ADR-0039 §4 make the **driving
+resource's** calendar authoritative — the service resolves and overrides the activity's own, which
 `ActivityCalendarField.tsx` already documents on screen. The web factor never accounts for it.
 
 **What it costs.** Any day-denominated figure the client _renders_ for such an activity is measured
 against the wrong day length: the assignment join-lag field (shipped under ADR-0071) and now the
-derived-duration preview. Both are display and neither writes a wrong value — the API stores
+derived-duration preview.
+
+_(Citation corrected 2026-09-01: this row said "ADR-0039 §23", and ADR-0039 has no §23 — §23 is
+ADR-0035's, which ADR-0039's own heading cites as "reuses the ADR-0037 port seam (rung 2, §23)".
+The code cites it correctly; only this row did not. The sweep also found the row overstating the
+plumbing cost: `AssignmentRow` already receives `resource: ResourceSummary | undefined`, and
+`ResourceSummary` carries `calendarId`, so only the calendars list is missing — and the panel above
+it already holds both.)_ Both are display and neither writes a wrong value — the API stores
 minutes, and the engine reschedules on the correct calendar regardless — so this is a misleading
 read-out, not corrupt data. It bites only where a `RESOURCE_DEPENDENT` activity has a driving
 resource on a calendar whose `hoursPerDay` differs from the activity's own.
@@ -948,7 +989,10 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 - **(a) `AUDIT_ACTION_CATEGORY` files the three new password actions under `sign-ins`**
   (api-reviewer). `auth.password_reset_requested`, `auth.password_reset_completed` and
   `auth.password_changed` are credential-lifecycle events, not sign-ins, so the audit log's
-  **Access** chip returns them together with successful and failed authentications. Not wrong
+  **Sign-ins** chip returns them together with successful and failed authentications _(chip name
+  corrected 2026-09-01: these map to the `sign-ins` category, not `access`, which holds
+  `member.joined`/`member.removed`/`member.role_changed`. The finding is unaffected — the eight
+  auth actions still arrive as one undifferentiated group)_. Not wrong
   enough to block — they are genuinely access-adjacent and a reader filtering for "Access" would
   expect to see them — but a reader asking "who changed a password this month?" cannot ask it. The
   fix is a fourth category, which touches ADR-0073 C1's chip vocabulary and its derived cap, so it
@@ -988,6 +1032,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                    |
 | --- | -------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 132 | `mail-alerting.e2e-spec.ts` saw its own writes late and the two cases swapped answers  | 2026-09-01 | Fixed in `e560ac2c`, whose own message names #132, and the row was left open — the already-fixed-and-unclosed shape, found by the verification sweep. `settleRows(expected)` polls the row count and throws with a diagnostic rather than sleeping 50 ms; both cases share it.                                                                                                                                         |
 | 214 | An approved plan clause was never built, and its own risk table said it shipped        | 2026-09-01 | Both halves now built. The coarse half landed at ADR-0118 M2; the row said the Gantt half was "carried into M3" and **it did not land there either** — verified by grep, then built. Its first run found six sortable column headers at **16 px** against WCAG 2.2 §2.5.8's 24 px floor, live on a shipped surface nothing had ever swept.                                                                             |
 | 177 | A compound citation was invisible to `check:claims`                                    | 2026-09-01 | **Won't-fix**, on the row's own measurement: a repo-wide sweep found exactly two compound citations left, one excluded as this repository's own file and one that IS this row quoting the defect. Extending the regex is a shared-gate change (ADR-0105) that would then demand a register entry for an example. The seven real occurrences were already split into two citations each, so the hole is closed.         |
 | 156 | The drawer-subject mechanism had no registrant                                         | 2026-09-01 | Deleted, on the product owner's call: ADR-0097 D2 is closed as not wanted. The row's own premise had gone stale — it said the drawer "is very much alive: it holds the Project Explorer", which ADR-0109 D2 had already moved to its own column, so the dead set was the whole mechanism plus `ContextDrawer`, `useContextDrawerPrefs`, the `drawer` chrome slot and the shell's Escape rung. See `docs/DECISIONS.md`. |
@@ -1101,7 +1146,7 @@ here by title so neither reference is ambiguous.
 The endpoint is uniform in **everything the caller can read** — same status, same body, whether the
 address exists or not (ADR-0074, and the property `sendPasswordReset` holds rather than borrows).
 It is not uniform in **how long it takes**. Better Auth awaits the send
-(`runInBackgroundOrAwait` → `else await promise`, `better-auth@1.6.25`,
+(`runInBackgroundOrAwait` → `else await promise`, `better-auth@1.7.1`,
 `create-context.mjs:220`), so:
 
 | address | work done               | response time          |
@@ -1264,7 +1309,7 @@ open-ended rather than bounded by a poll interval, because there is no poll.
 
 ---
 
-## 101. `check:claims` completeness has structural blind spots
+### 101. `check:claims` completeness has structural blind spots
 
 **Status:** open (narrowed) · **Owner:** repo · **Raised:** 2026-08-06 (ADR-0077 M0-T2) ·
 **Narrowed:** 2026-08-08 (W5 M2-T4)
@@ -1320,7 +1365,7 @@ version, and a version bump fails CI) is unaffected.
 
 ---
 
-## 102. The public screens' deferred review findings (ADR-0077 M6-T2)
+### 102. The public screens' deferred review findings (ADR-0077 M6-T2)
 
 > **(1) is CLOSED (2026-08-08, programme M1-T2).** `/sign-in`'s `?redirect=` is now same-origin by
 > shape — one leading slash and not two, so `//evil.test` (protocol-relative, resolved by the browser
@@ -1378,7 +1423,7 @@ swapped, which is why it is written down rather than remembered.
 
 **Next free number: 103.**
 
-## 105. Two follow-ups from the canvas status & feedback gate pass
+### 105. Two follow-ups from the canvas status & feedback gate pass
 
 **Status:** open · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
 
@@ -1401,7 +1446,7 @@ blocked the epic.
    listbox row text one producer (`composeListboxRowText`, consumed by both the row and the
    announcement). The export legend is the third instance of the same shape, left alone.
 
-## 110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
+### 110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
 
 **Status:** deferred (on a measured trigger) · **Owner:** api · **Raised:** 2026-08-08 (W5 M2-T4)
 
@@ -1451,7 +1496,7 @@ on the canvas, and undoable by the ADR-0048 command the composite already regist
 
 ---
 
-## 116. Consolidation-pass findings that were not folded
+### 116. Consolidation-pass findings that were not folded
 
 **Status:** open · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
 
@@ -1500,6 +1545,18 @@ taken as one slice. (3)–(5) are consistency and tidiness.
 
 ### 117. CSP report delivery is unverified end to end
 
+**Status:** unverified · **Verified:** 2026-09-01 (the row's own subject still needs a deployed host)
+
+> **This row had NO `**Status:**` line at all until 2026-09-01, and `check:debt-status` reported
+> "71 rows (71 with a status, 0 without)" over a document where that was false.** The cause is in
+> the shared parser, not here: `scripts/lib/doc-register.mjs`'s `sections(md, level)` ends a
+> section at the next heading **of the same level only**, so this `###` row's body ran 1,115 lines
+> to the next `###` and picked up **#118's** status on the way. A9 — the control assertion written
+> to answer "did we read less than we think?" — compares heading COUNTS (71 = 71) and is
+> structurally unable to see a body-boundary defect. That is ADR-0120 D5's class, inside the gate
+> written to close it. The parser fix is filed separately as **#231**; this line closes the hole
+> the gate could not report.
+
 **Found:** 2026-08-09, while writing the gate that was supposed to verify it (staff console M4).
 
 `apps/web/e2e-csp` serves the **real** deployed policy over the **production build** and now proves
@@ -1538,7 +1595,7 @@ origin serving both the app and the API, which is the deployed stack and not a p
 the same shape as `docs/TECH_DEBT.md` #100's operator half, and closable the same way: by
 observation on the host, not by a test.
 
-## 118. Staff-console M6 review findings that were not folded
+### 118. Staff-console M6 review findings that were not folded
 
 **Status:** unverified
 
@@ -1598,7 +1655,7 @@ rather than a date — build it when unverified accounts on the deployed install
 figures — and recorded in `20260809180000_audit_events_staff_index/migration.sql` so the question is
 not reopened from scratch.
 
-## 118a. `audit_events`' 12-month `auth.*` period is still unenforced, and the sweep may never enforce it
+### 118a. `audit_events`' 12-month `auth.*` period is still unenforced, and the sweep may never enforce it
 
 **Status:** unverified
 
@@ -1626,7 +1683,7 @@ which guarantee gives way. The candidate that keeps both is a **column-level scr
 `subject_label` on rows past the period — but `audit_events` refuses `UPDATE` too, so it lands in the
 same place. Recorded here so the next reader meets the conflict rather than the ticket.
 
-## 118b. The CSP period bounds staleness, not data age — and the sweep does not change that
+### 118b. The CSP period bounds staleness, not data age — and the sweep does not change that
 
 **Status:** unverified
 
@@ -1648,7 +1705,7 @@ The real remedy, if one is wanted, is to stop recording the path at all — whic
 investigative value the column exists for. Open, unowned, and cheap to leave open: the throttle
 bounds a sustained flood and the sweep bounds the residue after one stops.
 
-## 123. One create-dialog earned-value case failed once in a full run and has not repeated
+### 123. One create-dialog earned-value case failed once in a full run and has not repeated
 
 **Status:** unverified
 
@@ -1670,7 +1727,7 @@ diagnosis.
 counter assertion on `apiFetch` calls rather than on the last call's body, which would tell a
 double-submit apart from a slow one. Left open rather than guessed at.
 
-## 121. The base Playwright journey proves editing in a world no shipped bundle can produce
+### 121. The base Playwright journey proves editing in a world no shipped bundle can produce
 
 **Status:** unverified
 
@@ -1702,7 +1759,7 @@ dated flag work precisely because the date was the wrong instrument.
 
 **Do not** substitute unit-level flag-off suites for it (ADR-0088 D5, D7).
 
-## 120. The first retention drain leaves 10–20% dead tuples for several ticks, and nothing says so
+### 120. The first retention drain leaves 10–20% dead tuples for several ticks, and nothing says so
 
 **Status:** unverified
 
@@ -1724,7 +1781,7 @@ exactly the runner's loop — and watched `pg_stat_user_tables`:
 **This is ordinary Postgres behaviour and not a defect in the design.** It is recorded because the
 ADR and the docblocks assert the sweep is bounded and say nothing about the table staying clean, and
 those are different claims. The place it will actually be met is the **first enablement against a
-real backlog**, which on the deployed host is a month away for `csp_reports` and a year for
+real backlog**, which on the deployed host is **about a week away** for `csp_reports` and a year for
 `mail_events` — so there is time, and nothing to do today.
 
 If it ever matters, the remedies in order of cost are: watch `n_dead_tup` rather than assume it
@@ -1733,7 +1790,7 @@ self-heals; set a per-table `autovacuum_vacuum_scale_factor` on the two swept ta
 first — the last one trades a bounded connection hold for a faster vacuum, which is the opposite of
 what `RUN_CAP` exists for.
 
-## 119a. The API e2e suite fails intermittently, and the failure has never been captured
+### 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
 **Status:** unverified
 
@@ -1816,41 +1873,7 @@ independently. But a gate that fails one run in three and is green on the retry 
 learn to re-run rather than read, which is the failure mode `docs/RECONCILE.md` describes for
 documentation and applies just as well here.
 
-## 132. `mail-alerting.e2e-spec.ts` sees its own writes late, and the two cases then swap answers
-
-**Status:** unverified
-
-**Observed in CI, 2026-08-12**, on a branch that changes **zero files under `apps/api`** (verified:
-`git diff --name-only origin/main...HEAD | grep -c '^apps/api'` → 0). So it is a pre-existing flake
-surfacing, not a regression from the change under review — worth recording precisely because the
-next reader will meet it on an unrelated PR and start looking in the wrong place.
-
-Both cases in the file failed together, and the pair is the diagnosis:
-
-```
-expected [ { …(7) } ] to have a length of 5 but got 1   (test 1, :147)
-expected 5 to be 1                                       (test 2, :182)
-```
-
-Test 1 sends five messages and asserts five `mail_events` rows; it saw **one**. Test 2 asserts
-exactly one row; it saw **five**. The other four arrived between the two assertions — so `settle()`
-is not waiting for all five **fire-and-forget** writes, and the rows land during the next test.
-
-Two things follow. The obvious fix is to make `settle()` wait on the row count rather than on a
-fixed delay — test 2 already does exactly that (`for (let i = 0; i < 50 && count === 0; i++)`), so
-the pattern is in the file, applied to one case and not its neighbour. The less obvious one is that
-test 2's own poll waits for `count === 0` to become false, which the leaked rows satisfy
-**immediately** — its wait cannot distinguish its own write from test 1's, which is why it reports a
-confident 5 rather than timing out.
-
-The file's docblock records that a `reset()` for tests was considered and rejected, for a good
-reason (a production-caller-less method existing only to make an assertion true). That argument is
-about isolation, not about waiting, and does not cover this.
-
-**Impact:** a red CI run on an unrelated PR, roughly one run in several. **Fix:** wait on the
-expected count in test 1, and give test 2 a wait that is specific to its own row.
-
-## 142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
+### 142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
 
 **Status:** unverified · **Raised:** 2026-08-19 (ADR-0098 M2, seen in the base and overview journeys) · **Size:** S ·
 **Risk if left:** low
@@ -1862,7 +1885,12 @@ Generated path "/orgs/<slug>/clients/" for route "/_authed/orgs/$orgSlug/clients
 matched route "/_authed/orgs/$orgSlug/clients" instead.
 ```
 
-Five call sites use the identical `to` (`app-header.tsx:86`, `client-detail.tsx:38`,
+_(Citations corrected 2026-09-01, on top of a paragraph already labelled the wrong diagnosis:
+`app-header.tsx` has **no clients link at all** — the organisation destination moved to
+`components/layout/navigator/org-destinations.tsx:82` — and `plan-detail.tsx`'s link is at `:64`,
+not `:58`. A reader following the old citation lands on a file without the symbol.)_
+
+Five call sites use the identical `to` (`org-destinations.tsx:82`, `client-detail.tsx:38`,
 `project-detail.tsx:61`, `plan-detail.tsx:58`, and now
 `features/overview/components/OrganisationEmptyState.tsx`), so it is **pre-existing and general**,
 not something this epic introduced — it surfaced here only because the overview journey is the first
@@ -1895,7 +1923,7 @@ reads, never link params. So the next step is a browser: run a journey with cons
 print the stack at the warning. **Do not change the route tree on the strength of the paragraph this
 one replaced** — it was written from the call sites rather than from the message.
 
-## 149. The Graphite M10 gate pass's non-blocking findings
+### 149. The Graphite M10 gate pass's non-blocking findings
 
 **Status:** unverified
 
@@ -1955,7 +1983,7 @@ is a rule with no gate behind it, one layer up from the rule it enforces.
 did not match, and reported nothing. Found by re-reading rather than by anything failing, which is
 the ADR-0058 rule doing its job on a document written about instruments not being reached for.
 
-## 151. The Gantt grid splitter has no browser-level coverage
+### 151. The Gantt grid splitter has no browser-level coverage
 
 **Status:** unverified
 
@@ -1980,7 +2008,7 @@ checks the chart's left edge equals the grid's right edge. `PanelResizer` is `ro
 browser-level proof "belongs to `e2e-gantt`", which reads as coverage held elsewhere. It was not
 checked when written.
 
-## 154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
+### 154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
 
 **Status:** unverified
 
@@ -2005,7 +2033,7 @@ remain owed to a human pass on real hardware — NVDA or VoiceOver for the liste
 the magnification half. Recorded rather than quietly re-deferred; flagged to the product owner
 with the Phase 2 report so the row has an owner outside this environment.
 
-## 155. The minimap M4 gate pass's non-blocking findings
+### 155. The minimap M4 gate pass's non-blocking findings
 
 **Status:** unverified
 
@@ -2037,7 +2065,7 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
    a fourth extent derivation in a different idiom would pass it. Recorded in ADR-0100
    decision 3 so the gate is not over-read.
 
-## 161. Four screens the harness photographed for the first time, and one question for the product owner
+### 161. Four screens the harness photographed for the first time, and one question for the product owner
 
 **Status:** unverified
 
@@ -2076,11 +2104,13 @@ than matched by eye. The card, its navy panel, the photograph and the amber acce
 The accepted cost is recorded at the declaration: a floating card gets much of its drama from a dark
 surround, so the login reads calmer.
 
-## 165. Five screens photographed for the first time, and what they showed
+### 165. Five screens photographed for the first time, and what they showed
 
 **Status:** unverified
 
-**Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **(a) is CLOSED
+**Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **(c) is CLOSED 2026-09-01 too** — fixed in `e560ac2c`, whose message names `#165c`, and this
+header was not updated: the already-fixed-and-unclosed shape at ITEM granularity, which is harder
+to see than at row granularity because the row is legitimately still open. **(a) is CLOSED
 2026-08-22; (b)–(e) remain open.** The product owner's decision was to shoot, report and choose;
 they chose (a).
 
@@ -2184,7 +2214,7 @@ indistinguishable from coverage, which is the failure W1 exists to correct. What
 generated per-run one. That is a second onboarding path, not a shot entry, which is why it is filed
 rather than done inside a catalogue-only slice.
 
-## 174. The axis-markers gate pass's non-blocking findings
+### 174. The axis-markers gate pass's non-blocking findings
 
 **Status:** unverified
 
@@ -2242,7 +2272,7 @@ commit. It is removed, but the lesson is the general one: `git add -A` is not sa
 else is writing to the tree, and a review pass is exactly when something else is. Stage by path
 during a gate pass.
 
-## 180. A workflow's renamed INPUTS have no equivalent of the output guard
+### 180. A workflow's renamed INPUTS have no equivalent of the output guard
 
 **Status:** standing · **Verified:** 2026-09-01
 
@@ -2306,7 +2336,7 @@ repository had no hyphenated output anywhere to copy from.
 
 ---
 
-## 181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
+### 181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
 
 **Status:** unverified
 
@@ -2360,7 +2390,7 @@ then be changing underneath the citations it is checking.
 
 ---
 
-## 184. Unsaved-work guard: the findings its gate pass did not block on
+### 184. Unsaved-work guard: the findings its gate pass did not block on
 
 **Status:** unverified
 
@@ -2404,7 +2434,9 @@ rest, recorded rather than carried in someone's head._
   is now written where the next reader will reach for that option: `WeightedStepsPanel` does not use
   `useScopeForm`, so an option there would cover two panels of three — the one-and-not-its-neighbour
   shape.
-- **Thirteen conditional array spreads** across the four report builders
+- **Fourteen conditional array spreads** across the four report builders _(recounted 2026-09-01;
+  the row said thirteen: six in `ActivityEditorDialog.tsx:390-410`, four in
+  `ActivityCreateDialog.tsx:299-308`, two each in the two calendar dialogs)_
   (`...(cond ? [{ key, label, savable }] : [])`). A pure `buildReport(subject, scopes)` helper in the
   already-React-free `lib/unsaved-work/report.ts` would read declaratively and be independently
   testable. Every current call site is correct; the idiom is the risk, and ADR-0074 records this
@@ -2428,7 +2460,7 @@ not change — so something other than this guard reverts the pop. Recorded rath
 
 ---
 
-## #208 — A journey that seeds through the API must tell the client itself
+### #208 — A journey that seeds through the API must tell the client itself
 
 **Status:** open (audited 2026-08-31 — see below; kept as the standing rule, not as owed work)
 
@@ -2477,7 +2509,7 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 
 ---
 
-## #187 — The deck's labels sit 3 px apart and three hypotheses are falsified
+### #187 — The deck's labels sit 3 px apart and three hypotheses are falsified
 
 **Status:** unverified
 
@@ -2516,7 +2548,7 @@ read from `distinctControlHeights` rather than from the label tops.
 
 ---
 
-## #191 — The local pre-push gate costs 8 minutes and 96% of it is two steps
+### #191 — The local pre-push gate costs 8 minutes and 96% of it is two steps
 
 **Status:** unverified
 
@@ -2588,7 +2620,7 @@ of the gate that catches what a reviewer cannot see.
 
 ---
 
-## #193 — Four more toolbar docblocks and five exports describe deleted machinery
+### #193 — Four more toolbar docblocks and five exports describe deleted machinery
 
 **Status:** unverified
 
@@ -2665,7 +2697,7 @@ and should be corrected whether or not the code goes. Decide the two questions s
 
 ---
 
-## #194 — "The epic's own gate pass removes it" has now failed twice as an instruction
+### #194 — "The epic's own gate pass removes it" has now failed twice as an instruction
 
 **Status:** unverified
 
@@ -2708,7 +2740,7 @@ instance is not also fixed by writing a fourth sentence.
 
 ---
 
-## #195 — `pnpm prepush` cannot see uncommitted work in its diff-based checks
+### #195 — `pnpm prepush` cannot see uncommitted work in its diff-based checks
 
 **Status:** unverified
 
@@ -2735,7 +2767,7 @@ with `#194` because both are about this gate, and both should be settled in one 
 
 ---
 
-## #197 — Three rules with two or three implementations each, agreeing by discipline
+### #197 — Three rules with two or three implementations each, agreeing by discipline
 
 **Status:** unverified
 
@@ -2776,7 +2808,7 @@ Take them in the order above.
 
 ---
 
-## #200 — Two named-slot registries, one of them the better pattern, neither shared
+### #200 — Two named-slot registries, one of them the better pattern, neither shared
 
 **Status:** unverified
 
@@ -2814,7 +2846,7 @@ eleven call sites.
 **Trigger:** the next named chrome slot. Adding a fifth this way pays the threading tax again, with
 the better pattern sitting one directory over.
 
-## 202. Six non-blocking findings from the foot-row gate pass
+### 202. Six non-blocking findings from the foot-row gate pass
 
 **Status:** unverified
 
@@ -2915,7 +2947,7 @@ to the card; a contrast assertion asserts a **floor**, and a floor on a 5 % deco
 fail by design. The pair that matters — control ink over the composited card — is already covered by
 the chrome scope's existing text pairs.
 
-## 204. Four things the foot-row-and-deck epic found and did not fix
+### 204. Four things the foot-row-and-deck epic found and did not fix
 
 **Status:** unverified
 
@@ -2974,7 +3006,7 @@ one step upstream of a document: a decision-bearing claim asserted without check
 question put to somebody else. No code defect; recorded because the rule §19.11 states is about
 claims in documents and this was a claim in a **choice**, and nothing currently covers that.
 
-## 206. Health-check review suggestions consciously not folded at the M5 gate pass
+### 206. Health-check review suggestions consciously not folded at the M5 gate pass
 
 **Status:** unverified
 
@@ -3016,7 +3048,7 @@ rather than quietly dropped:
   the label columns into the engine loader, or a narrow `{id, code, name, calendarId}` loader, on
   next touch (the M6 backend-performance review).
 
-## 211. Fix-slice M-G suggestions consciously not folded at the gate pass
+### 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
 **Status:** unverified · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
@@ -3044,12 +3076,15 @@ Three suggestions judged real and filed rather than quietly dropped:
   **rule** (markers precede links) rather than one expected array, because re-ordering both halves
   together would satisfy an array and lose the grouping; verified red first.
 
-## 215. Dense rows are 28 px on touch, and their height is a JavaScript constant
+### 215. Dense rows are 28 px on touch, and their height is a JavaScript constant
 
 **Status:** unverified · **Raised:** 2026-08-29 (ADR-0118 M4 gate pass) · **Size:** M · **Owner:** a row-rhythm pass
 
 **ADR-0118 D1's second named exception, filed rather than solved.** `Button`'s `icon-sm` stays
-28 × 28 on both pointers, and the six of its eight consumers that sit in a dense row stay with it:
+28 × 28 on both pointers, and the five of its consumers that sit in a dense row stay with it
+_(recounted 2026-09-01: this said "six of its eight". `context-drawer` was deleted with the drawer
+mechanism (#156), so the dense-row set is **five**; and "eight consumers" was an undercount when
+filed — there were ten `icon-sm` consumer files besides `button.tsx`, and nine today)_:
 `HierarchyTree`, `GanttRowMenu`, `ActivitiesTable`, `CalendarRowMenu`, `explorer-column`'s collapsed
 spine and `context-drawer`. Under the house rule they should be 44 on touch. They are not, and the
 reason is that **their containers are sized independently of them**.
@@ -3086,7 +3121,7 @@ register row and not a closed question.
 `apps/web/src/styles/control-height.structural.test.ts` exempts `button.tsx::size-7` with the same
 reason. Neither hides anything else.
 
-## 216. The favicon's brand glyph is set in `system-ui`, and no gate can reach it
+### 216. The favicon's brand glyph is set in `system-ui`, and no gate can reach it
 
 **Status:** standing · **Verified:** 2026-09-01 · **Raised:** 2026-08-29
 (`docs/specs/typeface-outward-artefacts/`, CQ-1) · **Size:** S ·
@@ -3118,7 +3153,7 @@ touching brand assets, and there is **no automatable assertion for a favicon's t
 gate's blind-spot table says so, and this row does not pretend otherwise. A person looks at a
 browser tab.
 
-## 218. Two review suggestions from the typeface gate pass, not folded
+### 218. Two review suggestions from the typeface gate pass, not folded
 
 **Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, gate pass) · **Size:** S ·
 **Status:** open
@@ -3273,47 +3308,32 @@ its reason rather than quietly dropped.
 **Remedy:** fold the first three whenever `paint.ts`'s strip layer or `ResourceStackChart` is next
 touched; the last two want a decision rather than an edit.
 
-### 227. Seventy of a hundred detailed rows use the heading form this file forbids
+### 227. Nothing asserts the register's heading form, so it drifts silently
 
-**Status:** open · **Raised:** 2026-08-31 (filing the stacked-histogram rows) · **Size:** M
+**Status:** open · **Raised:** 2026-08-31 · **Verified:** 2026-09-01 · **Size:** S ·
+**Owner:** repo
 
-`docs/TECH_DEBT.md:101` states the convention: _"Headings are `### <number>. <title>`, always.
-Three rows had drifted to `##`."_ Measured on the day this row was filed:
+> **The headings are normalised (2026-09-01). What remains is that nothing stops it happening
+> again.** 41 rows were converted from `##` to `###` — 30 in the plain `N.` form and **11 more in
+> two forms the first pass missed** (`## 118a.` lettered rows and `## #208 —` em-dash rows), which
+> is itself worth recording: a sweep written from the commonest shape found 30 of 41.
+>
+> Two claims in this row's own body were corrected with it. The **count** was never stable — the
+> convention paragraph said "three rows had drifted", this row measured 70 of 100, and the fix
+> converted 41 of 71; a number in prose that changes every epic is not a fact, which is the argument
+> for the gate below rather than against it. And the convention paragraph's **explanation was
+> inverted**: `##` makes a row a _sibling_ of `## Detailed items`, not a _child_ of "Principles for
+> managing debt".
 
-```
-## rows:  70
-### rows: 30
-```
+**The gate is the part that is still owed**, and it is deliberately not built here.
+`check-debt-status.mjs` reads BOTH heading levels — correctly, per ADR-0120 Finding 0: the gate's
+job is to find every row, and a row in the wrong form is still a row. But nothing then asserts the
+**form**, so the widening that stopped the gate missing rows also stopped anyone noticing the drift.
 
-**The "three" is wrong by a factor of 23, and it was already wrong when ADR-0120 was written** —
-that ADR's entire subject was this file. A `##` row is a sibling of `## Detailed items` rather than
-a child of it, so two-thirds of the register sits outside the section that contains it, and the
-document tree says the opposite of what the file says about itself.
-
-**The gate structurally cannot report it, and that is a consequence of a correct fix.** ADR-0120's
-Finding 0 was that `check-debt-status.mjs` read `## ` only, so 31 numbered rows were invisible and
-29 of them had no status — while the gate printed a clean verdict over a document where that was
-false. The repair widened the parser to read BOTH levels, which is right: the gate's job is to find
-every row, and a row in the wrong form is still a row. But nothing then asserts the form, so the
-widening that stopped the gate missing rows also stopped anyone noticing the drift, and it has been
-accumulating in every epic since.
-
-Its own explanatory sentence is also backwards — it says `##` "made every detailed item a child of
-Principles for managing debt … rather than a sibling of its peers", and the nesting works the other
-way round. So a reader who checks the rule against the document is told two things, one false and
-one inverted.
-
-**Not fixed here, deliberately, and not half-fixed either.** Normalising seventy headings is a large
-mechanical diff in the middle of a feature epic (the campsite rule's own exception for drive-by
-churn), and adding a form assertion to `check-debt-status.mjs` is a change to a **shared gate**,
-which ADR-0105 makes a spec-and-plan trigger rather than something to slip into a release. Rows
-223–226 were written in the documented form rather than the majority one, because deepening a drift
-knowingly is worse than leaving it.
-
-**What closing it needs:** one decision (is `###` still the rule?), then either normalise and assert
-the form, or change the convention line to describe what the file does. Whichever, the count in that
-line has to be derived rather than restated — it is an ADR-0076 Class 1 claim sitting in the
-register that ADR-0120 built a computed observer for.
+Adding a form assertion is a change to a **shared gate**, which ADR-0105 makes a spec-and-plan
+trigger — the same reason #222 and **#231** are deferred. Worth doing as one slice with those two,
+since all three are `scripts/` changes to the same family of checks and all three want the same
+question asked once: what should a register parser refuse, and what should it merely find?
 
 ### 223. The canvas resource strip does not export or print, and the gate for that cannot see it
 
@@ -3343,7 +3363,7 @@ _visible_ to the parity gate rather than leaving it as an absence. Widening the 
 `stripRef` is the smaller half; the honest half is that a gate keyed on one ref name will go blind
 again the next time a layer gets its own ref.
 
-## 229. Two latent primitive keyboard residuals, carried out of #196
+### 229. Two latent primitive keyboard residuals, carried out of #196
 
 **Status:** open · **Raised:** 2026-08-31 (register verification sweep) · **Size:** XS each
 
@@ -3358,12 +3378,30 @@ than lost with the row:
 - **`menu.tsx:188`'s outside-pointerdown handler does not exclude its own trigger**, so a press on
   the trigger closes and reopens rather than toggling.
 
+**Verified 2026-09-01, and BOTH are bigger than "XS each".**
+
+- The combobox half is real (`combobox.tsx:223` assigns `-1`; `:235` filters on `>= 0`), but
+  `activeIndex` is doing **double duty**: the same counter yields `selectableCount`, which is the
+  number announced as "N results available" (`:271`), the `Load more` row's position (`:245`) and
+  the empty-state test (`:545`) — and `:261`'s own comment says counting non-selectable rows "would
+  be a lie". So the fix is **splitting navigable from selectable**, a refactor of the primitive's
+  internals rather than a one-line change.
+- The menu half is real (`menu.tsx:189` closes on any pointerdown outside the panel, and the trigger
+  is outside it) — but **the obvious fix is wrong**. Excluding `restoreFocusRef.current` fails,
+  because that ref is not always the opener: `selection-actions.tsx:320` and
+  `tsld-toolbar-items.tsx:707,875` pass `mainButtonRef`, and `tsld-toolbar-authoring.test.tsx:263`
+  records why — for a split button the **caret** opens the menu and is `tabIndex={-1}`, so the
+  focus-restore target is the main button instead. Excluding it would stop a press on the main
+  button (a separate command) from closing the menu, and still not fix the caret. The correct fix
+  needs the opener's element, i.e. a **new optional prop** — a component's public contract, and an
+  ADR-0105 trigger.
+
 **Both are primitive keyboard-model changes**, so CLAUDE.md §19.13 requires accessibility-reviewer
 (and component-reviewer) BEFORE either ships — that rule exists because this exact class shipped
 wrong twice in two days (#189, then #192 inside its fix). They belong with #197's shared-contract
 slice rather than alone.
 
-## 222. `check:counts` reads any "N ADRs" in a gated file as a claim about the repository
+### 222. `check:counts` reads any "N ADRs" in a gated file as a claim about the repository
 
 **Status:** open · **Raised:** 2026-08-30 (ADR-0120 M7) · **Size:** S
 
@@ -3397,7 +3435,44 @@ a commit.
 real stale count, only invent one. The cost is that an author writing about counts must phrase around
 it, without being told why until the gate fires.
 
-## 230. A cascade delete's undo still truncates the history, and its reason has lapsed
+### 231. `sections()` ends a row at the next SAME-level heading, so a `###` row borrows its neighbour's fields
+
+**Status:** open · **Raised:** 2026-09-01 (the register verification sweep) · **Size:** S ·
+**Owner:** repo
+
+`scripts/lib/doc-register.mjs`'s `sections(md, level)` collects headings at exactly `level` and
+gives each a body running to **the next heading of that same level** (`:100-110`). It never ends a
+section at a _shallower_ heading. So for a `###` row followed by `##` rows, the body runs past every
+one of them to the next `###`.
+
+**Measured, and it was hiding a real hole.** `#117` carried **no `**Status:**` line at all**, and
+`pnpm check:debt-status` reported `71 detailed rows (71 with a status, 0 without)`. Its body ran
+**1,115 lines** to the next `###` and picked up **#118's** status on the way:
+
+```
+117 at line 1501, next ### heading at 2617 — body 1115 lines
+first Status line found in that body: "**Status:** unverified" at document line 1543  ← #118's
+```
+
+**A9 cannot see it, and A9 is the assertion written for exactly this question.** ADR-0120 D5's
+control asks _"did we read less than we think?"_ by comparing **heading counts** — 71 against 71,
+which agree. The defect is in **body boundaries**, a different axis, so the control and the parser
+share no blind spot and the control still cannot report it. That is the seventh recorded instance of
+a check whose subject was not what it believed, and the second inside the gate ADR-0120 built to
+close that class.
+
+**Not fixed here.** `doc-register.mjs` is a **shared gate** — `check:debt-status`, `check:doc-links`
+and `check:doc-register` all read it — and changing where a section ends moves every body boundary
+in every document those gates parse, so the blast radius is the ratchets and counts derived from
+bodies rather than the one-line predicate. ADR-0105 makes that a spec-and-plan trigger, and #222 and
+#227 both defer shared-gate edits for the same reason. The immediate hole is closed by giving #117
+the status line the gate could not demand.
+
+**The fix, when someone specs it:** end a section at the next heading of the same level **or
+shallower**, and give A9 a second limb that counts **fields** rather than headings — a control that
+compares the same quantity on both sides can only ever agree with itself.
+
+### 230. A cascade delete's undo still truncates the history, and its reason has lapsed
 
 **Status:** open · **Raised:** 2026-08-31 (closing #92) · **Size:** S
 

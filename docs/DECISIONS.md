@@ -10,6 +10,71 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-01 — Verifying the register, and what a register is wrong about
+
+Forty-two rows sat `unverified` — ADR-0120's honest default for rows nobody had read — and two rows
+had already been found wrong about themselves in the preceding day's work. So the whole set was
+checked against the code by six parallel agents, each told the repository's own rule: _verify the
+claim; do not trust the document._ No ADR: this records a measurement and its corrections, and the
+one thing it points at that needs building is a shared gate, which needs its own spec (ADR-0105).
+
+**The headline is that a register is wrong in more ways than "the defect was fixed".** Four distinct
+failure modes turned up, and only the first is the one anybody expects:
+
+1. **Already fixed and never closed.** `#132` was fixed on 2026-09-01 in a commit whose own message
+   names `#132`, and the row survived the diff untouched while its neighbours were ledgered. `#165c`
+   the same, one level down — the row is legitimately still open, so the closed ITEM inside it is
+   harder to see than a closed row would be. `#64` is the sharpest: ADR-0083's own step 8 says
+   _"delete #64 and #66"_, and **#66 was closed while #64 was not** — a half-executed instruction,
+   which leaves the register asserting a defect the ADR beside it records fixing.
+2. **Premise lapsed.** `#149`'s nested-landmark item describes an `<aside>` that no longer exists
+   anywhere in the app; its `ResizeObserver` item describes one `Toolbar` no longer has; its
+   `MenuItem.itemId` item argues against "a wider API for one caller" when there is now **no**
+   caller. `#155`'s remedy names a deleted suite and a deleted constant.
+3. **Citations that rot in place.** `#142` points at `app-header.tsx:86` for a link that file no
+   longer contains; `#76` cites `render-model.ts:784` in a file that is now 128 lines; `#86` cites
+   an ADR section that does not exist; `#99` labels a dependency version two bumps stale.
+4. **Numbers that were never right.** `#215`'s "eight consumers" was an undercount when filed;
+   `#184`'s thirteen spreads are fourteen; `#71`'s "clears 4.5:1 in all three themes" was wrong on
+   both halves — there is one theme, and the pairing measured 3.01:1 and was a live 1.4.3 failure.
+
+**Two findings outrank the corrections.**
+
+`#117` **carried no `**Status:**` line at all, and the gate reported "71 rows, 71 with a status, 0
+without".** The cause is in the shared parser: `sections(md, level)` ends a section at the next
+heading of the **same level only**, so that `###` row's body ran 1,115 lines to the next `###` and
+picked up its neighbour's status on the way. **A9 — the control assertion written to answer "did we
+read less than we think?" — cannot see it**, because it compares heading _counts_ (71 = 71) and the
+defect is in _body boundaries_. That is ADR-0120 D5's own class, inside the gate ADR-0120 built to
+close it, and it is the second time that gate has been wrong about its own reach. Filed as **#231**;
+the immediate hole is closed by writing the status line the gate could not demand.
+
+And **the correction in ADR-0026 §9b was itself wrong.** It declared "ADR-0026 §16" a phantom. It is
+not: §9 reads "on the **§16** target hardware envelope", and its neighbouring sentences use the same
+unqualified style for cross-document references ("the mitigation **PROJECT_BRIEF §17** mandates").
+`PROJECT_BRIEF.md` §16 Deployment carries the Supported-browsers bullet — desktop plus iPad-class
+tablets — which is exactly the envelope §9 names. So the drift was never an invented number: it was
+a reference to **another document's** section re-attached to this one, and then to a ≤ 4 ms budget
+neither document states. **A citation that resolves at its origin and stops resolving the moment it
+is copied** is a subtler failure than a phantom and a commoner one. The worst consequence was live
+and outward-facing: `.claude/agents/performance-reviewer.md` taught the false budget to a reviewer
+agent as fact.
+
+**What the sweep cost and what it bought.** Six agents, ~1.6 M tokens, about twenty minutes of wall
+clock. It closed two rows, rewrote two down to what actually remains, corrected wrong claims in
+fourteen, filed one new defect, and normalised 41 drifted headings. It also **changed what got
+built**: three fixes that looked cheap were disproved before being started — `#229`'s two "XS each"
+halves are both refactors and one has a proposed mechanism that is simply wrong, and `#227`'s gate
+half is a shared-gate change. Not verifying would have shipped all three.
+
+**The transferable rule is narrow and worth stating.** `docs/RECONCILE.md` already says _verify the
+claim_. What this pass adds is **who to trust least**: a row's own account of its own discharge. Five
+of the six failure instances above are a row describing where its remedy went — into a milestone, an
+ADR step, a later epic — and being wrong about it. Nobody re-reads a row after fixing what it
+describes, so that sentence is the one nothing in the process ever checks.
+
+---
+
 ## 2026-09-01 — The context drawer is deleted, and ADR-0097 D2 is closed as not wanted
 
 `docs/TECH_DEBT.md` #156. No ADR: nothing is designed here. ADR-0101 already decided that an editor
