@@ -13,7 +13,8 @@
     "@tanstack/react-router": "1.170.27",
     "@tanstack/history": "1.162.1",
     "@tanstack/router-core": "1.171.22",
-    "playwright-core": "1.62.1"
+    "playwright-core": "1.62.1",
+    "tailwindcss": "4.3.3"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -193,6 +194,17 @@
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
         "docs/specs/unsaved-work-guard/architecture.md"
+      ]
+    },
+    {
+      "ref": "useBlocker.d.ts:35",
+      "package": "@tanstack/react-router",
+      "path": "dist/esm/useBlocker.d.ts",
+      "lines": "35",
+      "anchor": "enableBeforeUnload?: boolean | (() => boolean);",
+      "citedBy": [
+        "docs/specs/unsaved-work-guard/feature-spec.md",
+        "docs/specs/unsaved-work-guard/implementation-plan.md"
       ]
     },
     {
@@ -884,6 +896,14 @@
       ]
     },
     {
+      "ref": "lucide-react.d.ts:342",
+      "package": "lucide-react",
+      "path": "dist/lucide-react.d.ts",
+      "lines": "342",
+      "anchor": "declare const AlignHorizontalJustifyStart:",
+      "citedBy": ["docs/specs/workspace-modes/feature-spec.md"]
+    },
+    {
       "ref": "waypoints.mjs:19",
       "package": "lucide-react",
       "path": "dist/esm/icons/waypoints.mjs",
@@ -950,6 +970,18 @@
       "citedBy": [
         "apps/web/src/features/activities/components/ActivityFormDialog.tsx",
         "apps/web/src/features/activities/components/ActivityFormDialog.test.tsx"
+      ]
+    },
+    {
+      "ref": "preflight.css:202-206",
+      "package": "tailwindcss",
+      "path": "preflight.css",
+      "lines": "202-206",
+      "anchor": "list-style: none;",
+      "citedBy": [
+        "apps/web/src/features/tsld/components/TsldPanel.tsx",
+        "docs/adr/0122-a-picture-a-screen-reader-cannot-reach-is-not-described-by-saying-it-is.md",
+        "docs/specs/claims-citation-scan/feature-spec.md"
       ]
     },
     {

@@ -27,7 +27,7 @@
     "check:surface-contract": "node scripts/check-surface-contract.mjs",
     "check:flags": "node scripts/check-flags.mjs",
     "check:counts": "node scripts/check-counts.mjs",
-    "check:claims": "node scripts/check-claims.mjs",
+    "check:claims": "node scripts/lib/citation-patterns.test.mjs && node scripts/check-claims.mjs",
     "check:adr-coverage": "node scripts/check-adr-coverage.mjs",
     "check:nginx": "node scripts/check-nginx-template.mjs",
     "test": "turbo run test",

@@ -146,6 +146,50 @@ correctly. A human wrote "this function awaits" beside a line, and only a human 
 that reading is right. The guarantee is narrower and still worth having: the line is where we said
 it was, in the version we said we read it in.
 
+#### Amendment, 2026-09-02 — the extension class is ONE list, and there is a third ownership category
+
+_(`docs/TECH_DEBT.md` #240; the record is `docs/specs/claims-citation-scan/`.)_
+
+Completeness above is written as "every `<file>.mjs:<line>` reference", and that is what shipped: both
+recognisers ended `\.m?js`, spelled separately from the own-file exclusion's
+`git ls-files '*.js' '*.mjs' '*.cjs'`. So **the matcher and the exclusion disagreed about what
+JavaScript is** — it was never only a CSS hole — and a citation the matcher could not see was
+invisible in **both** directions: never demanded when unregistered, and, if registered anyway,
+reported as uncited and suggested for deletion. Both halves failed towards green, which is why the
+gate never went red on it in four weeks.
+
+Three things are decided here rather than left as an implementation detail.
+
+**What counts as a citable file is one constant.** `CITED_EXTENSIONS` in
+`scripts/lib/citation-patterns.mjs` feeds both recognisers _and_ the `git ls-files` arguments, and
+`scripts/lib/citation-patterns.test.mjs` — chained into `check:claims`, so it runs first — asserts
+the **derivation** rather than the values, which is the only form of the assertion that survives the
+next admission. Admitting an extension takes three things: a dependency in this tree ships files with
+it, a citation exists or is imminent, and the first-run cost has been measured. `.ts`/`.tsx` and
+`.json` are refused with reasons recorded beside the constant.
+
+**Widening one half alone is worse than leaving the hole**, and that is a measurement rather than a
+judgement: patterns alone produces **87 findings on the first run**, nearly all this repository's own
+stylesheets, because the exclusion cannot list a file class it does not know about. That is
+ADR-0058's fails-on-day-one gate, which gets deleted rather than fixed. Widened together it produces
+four, and all four were real — including `useBlocker.d.ts:35`, which ADR-0108's design calls its
+single most consequential claim and which had been unregistered the whole time while its seven
+`useBlocker.js` siblings were registered, purely because those end `.js`.
+
+**A cited file has three possible owners, not two.** A dependency's (register it), ours (excluded —
+no version to pin and nothing to rot), or **neither**: `FOREIGN_UNVERIFIABLE`, which today holds one
+name, the previous Flask application's `auth.css`. No installed package resolves it and `git ls-files`
+will never list it, so no register entry for it can exist — yet three of its line ranges are
+load-bearing evidence in ADR-0077 §9.3 and `docs/DESIGN_SYSTEM.md`. Its admission rule is stated so it
+cannot become a bin for citations nobody wanted to register: **no installed package can resolve it,
+AND it is not in `git ls-files`.** Anything failing either half is a claim, and claims go in the
+register.
+
+What the amendment does **not** buy is the `ref`-string weakness recorded as `docs/TECH_DEBT.md` #181,
+and this widening supplied a fresh illustration of it: `lucide-react.d.ts:342` still holds, at the
+same line, across five minor versions — by coincidence, not by anything checking. The anchor is what
+would catch that drift; the ref cannot.
+
 ### 3. Class 3 gets a process step, and is labelled as the weak one
 
 There is no gate for "the author asserted something and never checked". The claim is prose, it is
