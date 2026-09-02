@@ -146,9 +146,32 @@ const documents = [
   { path: 'docs/DATABASE.md', label: 'docs/DATABASE.md', required: false },
 ];
 
+/**
+ * **A claim is prose; a mention is code** (`docs/TECH_DEBT.md` #222).
+ *
+ * `phrase('(\\d+) ADRs')` is unanchored, so any sentence that merely *mentions* a number of ADRs is
+ * read as a stated count and fails the gate. That is not hypothetical: ADR-0120's `CLAUDE.md` entry
+ * described a threshold as "T = 8 ADRs from p75 = 7.50" and this script reported
+ * `CLAUDE.md — ADRs: says 8, the repository has 120` — the seventh time a scan here matched
+ * explanatory prose rather than its subject, inside the entry documenting the gates built to stop
+ * exactly that.
+ *
+ * **The fix is an escape, not a narrowing.** Narrowing the match to "the shape a banner claim takes"
+ * was the row's own proposal and was rejected on measurement: four of the six live claim sites are
+ * not in a banner at all — `CLAUDE.md`'s two are inside a fenced repository-layout tree and
+ * `docs/ARCHITECTURE.md`'s two are plain prose. A banner-shaped pattern would silently stop checking
+ * them, which is this gate's own failure mode introduced by the fix for a different one.
+ *
+ * So: an **inline code span** marks a mention. Fenced blocks stay in scope, because two real claims
+ * live inside one. Measured before arming: 19 matches across the four documents today, **0** of them
+ * inside an inline code span — so the escape removes no live claim, and an author who needs to write
+ * about a number has a way to say so.
+ */
+const escapeMentions = (text) => text.replace(/`[^`\n]*`/g, (m) => ' '.repeat(m.length));
+
 const problems = [];
 for (const { path, label: where, required } of documents) {
-  const text = read(path);
+  const text = escapeMentions(read(path));
   for (const [label, patterns] of Object.entries(claimed)) {
     // **Every occurrence, not the first.** A document states a figure more than once — CLAUDE.md
     // carries the module count in its stage banner AND in its repository-layout tree — and checking
@@ -160,7 +183,11 @@ for (const { path, label: where, required } of documents) {
         found = true;
         const stated = Number(match[1]);
         if (stated !== actual[label]) {
-          problems.push(`${where} — ${label}: says ${stated}, the repository has ${actual[label]}`);
+          problems.push(
+            `${where} — ${label}: says ${stated}, the repository has ${actual[label]}` +
+              '\n    If that sentence MENTIONS a number rather than claiming one, wrap it in ' +
+              'backticks — an inline code span is read as a mention, not a claim.',
+          );
         }
       }
     }

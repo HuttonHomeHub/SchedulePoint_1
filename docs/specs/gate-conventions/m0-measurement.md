@@ -163,3 +163,52 @@ unchanged. `check:doc-links` is green over 1,272 relative links.
 a gate's job is to find every row — a row in the wrong form is still a row, and a reader that skips
 it reports green over the gap. Finding stays generous; refusing is this separate strict pass over
 what was found.
+
+## F0.4 — the claim/mention escape (M3)
+
+**Condition:** _the escape removes zero live claims — every one of the six claim sites is matched
+before and after._
+
+**Verdict: holds.** 19 matches across the four gated documents today; **0** of them sit inside an
+inline code span, so the escape costs nothing. Verified in both directions by appending a sentence
+to `CLAUDE.md`: bare, `The reconciliation threshold sits at 8 ADRs since the last pass` fails with
+`says 8, the repository has 123`; wrapped as `` `8 ADRs` `` it passes. The failure message now names
+the escape, so an author meets the remedy at the moment the gate fires.
+
+**The row's own proposed fix was rejected on measurement.** It said to narrow the match "to the shape
+a claim takes rather than the shape a mention takes", on the premise that the banner states counts in
+one known form. Four of the six live sites are not in a banner: `CLAUDE.md`'s two are inside a fenced
+repository-layout tree and `docs/ARCHITECTURE.md`'s two are plain prose. A banner-shaped pattern would
+have silently stopped checking them — this gate's own failure mode, introduced by the fix for a
+different one. Fences therefore stay in scope and only inline code spans are escaped.
+
+## F0.5 — the advisory posture (M4)
+
+**Condition:** _all `check:*` gates are `node scripts/*.mjs`, and exactly one can exit 2._
+
+**Verdict: holds.** Thirteen `check:*` scripts, all node; `report()` in `scripts/lib/doc-register.mjs`
+is the only producer of a 2, and `check-reconcile-due.mjs` its only caller.
+
+The default is **inverted** rather than patched: a non-zero exit blocks unless the gate is named in
+`ADVISORY_GATES`. The previous fix marked three gates "never advisory", which covers the three
+somebody thought of and leaves the default on the dangerous side for everything else. Inverting makes
+the residual risk **harmless instead of closed** — an unanticipated exit 2 now blocks, which is the
+safe direction — and `run_strict` retires as a special case rather than being the safe path nobody
+remembered to take. Proven by dispatch: `typecheck` exiting 2 FAILs, `check:reconcile-due` exiting 2
+WARNs, `check:counts` exiting 2 FAILs.
+
+`check:advisory-agreement` asserts the list against the code both ways, reading `ADVISORY_GATES` out
+of `prepush.sh` rather than restating it. Verified red in both directions: a declared gate that
+cannot warn, and a capable gate that is not declared.
+
+### The check's first run was a false positive, and it is left recorded
+
+It reported `check:doc-register` as capable of exiting 2, because `doc-register.test.mjs` names
+`advisory` eleven times — while **testing** `report()`, capturing its return through a `quiet()`
+helper rather than exiting on it. Forcing a failure in that file and reading the code gives **1**.
+
+So a `*.test.mjs` exercises the mechanism as a subject and does not use it as its own exit path, and
+the scan excludes those files with the measurement written beside the exclusion. The false positive
+is the same class as `#222` itself — a scan matching something that _discusses_ its subject rather
+than something that _is_ it — arriving inside the check written about that class, and caught only by
+verifying the red rather than believing it.
