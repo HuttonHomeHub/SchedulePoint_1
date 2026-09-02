@@ -1,5 +1,11 @@
 # @repo/api
 
+## 0.55.3
+
+### Patch Changes
+
+- [#458](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/458) [`193e740`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/193e7408b2dc3a5fe369208804492de86da0ecf9) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Restoring a deleted WBS phase no longer depends on the order Postgres happens to return its rows in. A cascade delete stamps one batch id across the whole subtree, and the restore now anchors on the batch's root — the only member whose parent is active at that moment — rather than on whichever row came back first.
+
 ## 0.55.2
 
 ### Patch Changes
