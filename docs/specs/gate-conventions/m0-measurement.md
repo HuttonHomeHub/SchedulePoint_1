@@ -76,3 +76,58 @@ Three of the spec's corrections to `#231` and `#222` were re-checked here rather
   and the comment three lines below records that guard being removed as actively wrong because it
   ate two real declarations. Corrected as prose only — restoring the stripping would re-introduce
   the defect that comment exists to record.
+
+## F0.2 — A9's field limb
+
+**Condition, committed before the run:** _today the limb reports N = N and produces zero findings;
+at the prior revision it reports N−1 against N and fails._ Predicted: 71 = 71 today, 70 against 71
+before.
+
+**Verdict: holds, in both halves.** Today: `71 detailed rows (71 with a status, 0 without)`, no
+finding. Against `6b3f740b` — the parent of `d250104d`, the commit that gave `#117` its status line
+— the real gate reports:
+
+```
+✗ A9: the parser sees 71 numbered rows but the raw document declares 70 column-0 **Status:** lines.
+      Some row has no declaration of its own — A1 names it.
+✗ A1: docs/TECH_DEBT.md:1501 "117. CSP report delivery is unverified end to end" has no **Status:** line.
+```
+
+**A1 fires there too, and that is not redundancy — it is the point.** At that revision, with the
+**old** parser, A1 was silent: `#117`'s body ran 1,115 lines and picked up `#118`'s declaration, so
+the row satisfied A1 by borrowing. With the boundary fixed, A1 sees the row honestly. The field
+limb is the independent control for the case where the parser is wrong again in some _new_ way, and
+the two firing together is what a correct instrument and a correct control look like on a document
+that really is missing a field.
+
+The unanchored count at that revision is 70 as well; the 74-vs-71 divergence the spec predicted is
+a property of today's register, not that one. Both are recorded because the anchoring decision has
+to be right for both.
+
+### The probe was wrong first, and the gate corrected it
+
+The first measurement of this condition reported **63 parsed rows against 70 declarations** — the
+wrong number and the wrong direction. It came from a throwaway probe that **reimplemented the
+gate's `rowNumber` matcher** rather than running the gate, and the reimplementation required a
+trailing `.`, so every row titled in the `### #208 —` em-dash form fell out of the count.
+
+Running the real `check:debt-status` against the same file, by swapping the document into place,
+gives 71 against 70 — precisely what the condition predicted.
+
+This is the epic's own subject, committed inside the milestone that is about it: **a measurement
+taken with a copy of an instrument measures the copy.** The copy looked right, produced a plausible
+number, and would have been written into this document as evidence. It is recorded rather than
+quietly replaced, because the corrected number is less instructive than the reason the first one
+was wrong.
+
+## F0.1 addendum — the ledger move (M1-T3)
+
+`## Closed numbers` sat at `:1161` with **40 numbered detailed rows after it**, and
+`check-debt-status.mjs` classifies any `| N |` line after that heading as a ledger entry. Measured
+before the move: **113 matched rows after the heading, the last at `:1290`** — all of them the
+ledger's own table, so the misclassification was **latent, not live**, exactly as the spec said.
+
+Moved to the foot. Verified a **pure relocation** by comparing the sorted multiset of every
+non-blank line before and after: identical, so no line was added, dropped or edited. The gate's
+summary is unchanged (`71 / 43 / 113 / 3`), and the count of numbered rows after the ledger heading
+is now **0**.

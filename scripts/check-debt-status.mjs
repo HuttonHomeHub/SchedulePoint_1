@@ -110,6 +110,31 @@ function main(argv) {
     );
   }
 
+  // **A9's second limb counts FIELDS, because the first counts headings and so does A1.**
+  // `#231`: `sections()` used to end a body only at the next SAME-level heading, so a `###` row
+  // followed by `##` headings ran past them and read whatever fields it met. `#117` carried no
+  // `**Status:**` line at all, its body ran 1,115 lines, it borrowed `#118`'s, and A1 below was
+  // satisfied — while the limb above compared 71 headings against 71 headings and agreed with
+  // itself. A control that measures the same quantity as the thing it controls cannot report a
+  // disagreement; this one measures a different quantity, which is the whole point.
+  //
+  // **Anchored at column 0**, for the reason `fieldValue` is: an unanchored count reads 74 here,
+  // three of them prose discussing the field rather than declaring it.
+  const declaredStatuses = md.split('\n').filter((l) => l.startsWith('**Status:**')).length;
+  if (items.length !== declaredStatuses) {
+    // **The two directions mean different things, so the message says which one happened.** More
+    // rows than declarations means a row has no field of its own and A1 will name it. Fewer means
+    // a declaration sits somewhere the parser found no row — a heading form it cannot see, which
+    // is the shape A10 exists for.
+    problems.push(
+      `A9: the parser sees ${items.length} numbered rows but the raw document declares ` +
+        `${declaredStatuses} column-0 **Status:** lines. ` +
+        (items.length > declaredStatuses
+          ? 'Some row has no declaration of its own — A1 names it.'
+          : 'Some declaration belongs to a heading the parser did not read as a row.'),
+    );
+  }
+
   // ── A1 — every item row has exactly one column-0 status line ────────────────────────────────
   const noStatus = items.filter((s) => fieldValue(s.body, 'Status') === null);
   for (const s of noStatus) {
