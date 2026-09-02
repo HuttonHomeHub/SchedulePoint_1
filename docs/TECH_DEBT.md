@@ -998,8 +998,20 @@ that is the other half of the row: `/accept-invite?token=` has the same latent s
   Verified red five ways between them; Gate B's `git ls-files` blind spot is measured and written
   into its own docblock rather than left implicit.
 
-**What is left:** M3 (the serialiser pair, pure and unwired), M4 (the flip — the router-level
-codec), M5 (reconciliation and the ADR).
+- **M3 landed dark: `lib/router/search-params.ts`, the replacement codec, wired to nothing.** Two
+  pure functions, no React and no router import, exercised by a property (`parse(stringify(v)) === v`
+  over a 22-value corpus — a table of examples is what let the library's asymmetry survive), by a
+  byte-identity check against the library's output for every value the app writes, and by a
+  **differential** naming param by param where the flip changes an answer. That list is M4's expected
+  diff, written before M4 exists.
+- **Its first prediction failed, and the correction relocates the defect precisely.** The suite was
+  written as "the library pair loses some of these and ours does not"; it went red, because the
+  library pair round-trips **everything it wrote itself** — its stringifier re-quotes exactly the
+  values its parser would coerce, so it is self-consistent. The damage is confined to search strings
+  **this app did not write**: a Better Auth link, a typed or edited URL, a foreign bookmark. Which is
+  where both recorded symptoms actually happened.
+
+**What is left:** M4 (the flip — the router-level codec), M5 (reconciliation and the ADR).
 
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
