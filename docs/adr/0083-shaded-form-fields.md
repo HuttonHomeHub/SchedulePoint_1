@@ -570,6 +570,27 @@ Per CLAUDE.md §19.9 / ADR-0076, the decision-bearing ones:
   for date inputs specifically — which is the honest state of this claim, not a caveat added to look
   careful.
 
+  > **Partially discharged 2026-09-02, in Chromium 1194 (Playwright), and the residue is named.**
+  > Two things were observed rather than reasoned:
+  >
+  > - **`showPicker()` on a `readonly` date input throws `InvalidStateError`**, exactly as it does on
+  >   a `disabled` one, while it resolves on a plain one. So the platform does refuse to open the
+  >   picker programmatically for a read-only control — the substance of the second claim.
+  > - **`readonly` keeps the control focusable and `disabled` does not** (`document.activeElement`
+  >   after `focus()`: true, true, **false** for plain / readonly / disabled). That is D1's whole
+  >   premise, and it is now observed on this platform rather than taken from the specification.
+  >
+  > **What is still NOT verified, and why:** whether the picker _indicator glyph_ is visually
+  > suppressed cannot be measured here — `getComputedStyle(el, '::-webkit-calendar-picker-indicator')`
+  > silently falls back to the element, proved by a control that asked for a **nonsense**
+  > pseudo-element and got the identical width, so the first reading of this claim measured nothing
+  > and was discarded. **Safari was not tested at all**: only Chromium is installed in this
+  > environment, and Playwright's WebKit would not be Safari even if it were. And the AT half — the
+  > announcement — needs a real screen reader and a person, which no instrument here substitutes for.
+  >
+  > So the claim moves from _reasoned_ to _partially observed_, and acceptance still waits on the AT
+  > pass and on Safari.
+
 ## Checklist for the implementer
 
 1. Read `docs/DESIGN_SYSTEM.md` "Buttons" + "Forms & inputs" and ADR-0082 §3 before writing code —

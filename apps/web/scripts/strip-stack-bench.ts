@@ -31,6 +31,13 @@ function probe(): BenchProbe {
   return (globalThis as unknown as { __stripProbe__?: BenchProbe }).__stripProbe__ ?? {};
 }
 
+/**
+ * A frame above this is in the periodic band rather than the painter's own cost. Chosen well above
+ * the measured p50 (0.2-0.9 ms across every segment count tried) and well below the band (~10-17 ms),
+ * so it separates the two populations rather than slicing either.
+ */
+const SLOW_FRAME_MS = 5;
+
 function skewedSegments(count: number, buckets: number, fills: string[]) {
   const segments = [];
   for (let s = 0; s < count; s += 1) {
@@ -53,6 +60,9 @@ export interface BenchResult {
   p50: number;
   p95: number;
   samples: number;
+  /** Frames costing more than {@link BenchResult.slowFrameMs}; see the note in the loop. */
+  slowFrames: number;
+  slowFrameMs: number;
 }
 
 export function runStripBench(opts: {
@@ -128,6 +138,15 @@ export function runStripBench(opts: {
     paintResourceStrip(ctx, snapshot, panned, band, palette, opts.dpr);
     times.push(performance.now() - t0);
   }
+  // **The share of frames in the periodic slow band, and it is why `p95` alone lied**
+  // (`docs/TECH_DEBT.md` #226). A handful of frames in every run cost ~10-17 ms while the median
+  // stays under a millisecond, and they arrive on a REGULAR period (measured: every ~19-21 frames
+  // at both eight and nine segments) — a compositor flush absorbed by whichever paint call it lands
+  // on, not the painter's own work. Their COUNT rises smoothly with segment count; nothing about it
+  // is discontinuous. `p95` over 300 frames reads `times[285]`, which is a slow frame exactly when
+  // fifteen or more are slow — so the estimator flips from ~1 ms to ~16 ms between eight slow-frame
+  // counts of 14 and 15, and reports a 20x "cliff" that does not exist in the code.
+  const slowFrames = times.filter((t) => t > SLOW_FRAME_MS).length;
   times.sort((a, b) => a - b);
 
   // How many buckets actually survived the cull, so a "fast" number cannot be fast because nothing
@@ -145,6 +164,8 @@ export function runStripBench(opts: {
     p50: times[Math.floor(times.length * 0.5)] ?? 0,
     p95: times[Math.floor(times.length * 0.95)] ?? 0,
     samples: times.length,
+    slowFrames,
+    slowFrameMs: SLOW_FRAME_MS,
   };
 }
 

@@ -141,6 +141,14 @@ for (const [label, pxPerDay] of ZOOMS) {
 
   const delta = stacked.p95 - baseline.p95;
   const verdict = delta <= 2.0 ? 'PASS' : 'FAIL';
+  // **A p95 verdict is unstable when the slow band straddles the percentile** (`docs/TECH_DEBT.md`
+  // #226). `p95` reads `times[floor(frames * 0.95)]`, so over 300 frames it is a slow frame exactly
+  // when 15 or more are slow — and the slow-frame count rises SMOOTHLY with segment count (measured
+  // 9, 12, 13, 14, 15, 16, 19 at 4/6/7/8/9/10/12 segments), crossing 15 at nine. That is the whole
+  // of the "20x cliff" this row was raised on: the estimator, not the painter.
+  const boundary = FRAMES - Math.floor(FRAMES * 0.95);
+  const straddles =
+    Math.abs(stacked.slowFrames - boundary) <= 2 || Math.abs(baseline.slowFrames - boundary) <= 2;
   console.log(`  ${label} (${pxPerDay.toFixed(2)} px/day)`);
   console.log(
     `    drew ${String(stacked.visibleBuckets)}/${String(stacked.bucketCount)} buckets x ${String(stacked.segmentCount)} segments`,
@@ -152,7 +160,19 @@ for (const [label, pxPerDay] of ZOOMS) {
     `    stacked  (${String(SEGMENTS)} segs) p50 ${stacked.p50.toFixed(3)} ms · p95 ${stacked.p95.toFixed(3)} ms`,
   );
   console.log(
-    `    delta p95 ${delta >= 0 ? '+' : ''}${delta.toFixed(3)} ms — ${verdict} (condition: <= +2.0 ms)\n`,
+    `    delta p95 ${delta >= 0 ? '+' : ''}${delta.toFixed(3)} ms — ${verdict} (condition: <= +2.0 ms)`,
+  );
+  console.log(
+    `    slow frames (> ${String(stacked.slowFrameMs)} ms): ${String(stacked.slowFrames)}/${String(FRAMES)} stacked, ` +
+      `${String(baseline.slowFrames)}/${String(FRAMES)} baseline — p95 turns slow at ${String(boundary)}`,
+  );
+  console.log(
+    straddles
+      ? `    NOTE: a slow-frame count within 2 of the boundary means this delta is decided by the
+` +
+          `          ESTIMATOR, not by paint cost. Read the counts above and p50 first (#226).
+`
+      : '',
   );
 }
 
