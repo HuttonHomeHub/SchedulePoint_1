@@ -23,10 +23,29 @@
  * ADR-0120. This only checks that the decision and the code say the same thing.
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
-const read = (p) => readFileSync(join(root, p), 'utf8');
+
+/**
+ * Read a repository-relative path, **refusing one that escapes the repository**.
+ *
+ * The paths below are taken out of `package.json`'s script strings by regex, and the character class
+ * that matches them admits `.` — so `scripts/../../etc/foo.mjs` would resolve outside the tree and be
+ * read. That is not a privilege boundary (anyone who can edit `package.json` can edit this file), and
+ * it is still wrong: a gate should read what it says it reads, and fail closed when it cannot.
+ */
+const read = (p) => {
+  const full = resolve(root, p);
+  const rel = relative(resolve(root), full);
+  if (rel.startsWith('..')) {
+    console.error(
+      `check:advisory-agreement: refusing to read ${p} — it resolves outside the repository.`,
+    );
+    process.exit(1);
+  }
+  return readFileSync(join(root, p), 'utf8');
+};
 
 const prepush = read('scripts/prepush.sh');
 const block = /^ADVISORY_GATES=\(([^)]*)\)/m.exec(prepush);
