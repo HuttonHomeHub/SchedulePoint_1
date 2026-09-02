@@ -184,6 +184,55 @@ describe('wbsBandGroups', () => {
     expect(rows.map((r) => r.id)).toEqual(['s']);
   });
 
+  /**
+   * The count a band row's accessible name states (`docs/TECH_DEBT.md` #232). **A summary's count
+   * is its whole subtree**, which is a decision rather than an implementation detail — see the
+   * field's docblock. These cases exist so the obvious "fix" to direct children fails loudly.
+   */
+  describe('count', () => {
+    it('counts a summary’s WHOLE subtree, not its direct children', () => {
+      const rows = wbsBandGroups([
+        summary('outer', 'Superstructure'),
+        summary('inner', 'Frame', 'outer'),
+        activity({ id: 'a', parentId: 'inner' }),
+        activity({ id: 'b', parentId: 'inner' }),
+      ]);
+      // 3 = the nested summary + its two members. Direct children would say 1.
+      expect(rows.find((r) => r.id === 'outer')?.count).toBe(3);
+      expect(rows.find((r) => r.id === 'inner')?.count).toBe(2);
+    });
+
+    it('gives an empty summary zero rather than omitting it', () => {
+      const rows = wbsBandGroups([summary('s', 'Fit-out')]);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.count).toBe(0);
+    });
+
+    it('counts the bucket’s members, which for the bucket is also its subtree', () => {
+      const rows = wbsBandGroups([activity({ id: 'a' }), activity({ id: 'b' })]);
+      expect(rows.at(-1)).toMatchObject({ id: null, count: 2 });
+    });
+
+    /**
+     * An orphan — a `parentId` naming a row that is not present — counts as top-level everywhere
+     * else in this module, so it must not be counted into a phantom parent's subtree either.
+     */
+    it('does not count an orphan into a summary that is not there', () => {
+      const rows = wbsBandGroups([summary('s'), activity({ id: 'lost', parentId: 'gone' })]);
+      expect(rows.find((r) => r.id === 's')?.count).toBe(0);
+      expect(rows.at(-1)).toMatchObject({ id: null, count: 1 });
+    });
+
+    /**
+     * Render-path code must not hang the canvas on data the server forbids (ADR-0038). A cycle in
+     * the parent tree stops the walk rather than looping — the `depthOf` guard's mirror.
+     */
+    it('terminates on a cycle instead of hanging', () => {
+      const rows = wbsBandGroups([summary('x', 'X', 'y'), summary('y', 'Y', 'x')]);
+      expect(rows.every((r) => Number.isFinite(r.count))).toBe(true);
+    });
+  });
+
   it('carries a summary’s engine dates through as its span', () => {
     const rows = wbsBandGroups([
       summary('s', 'Substructure', null, { earlyStart: '2026-01-05', earlyFinish: '2026-06-30' }),

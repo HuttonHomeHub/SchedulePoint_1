@@ -2,6 +2,7 @@ export { ActivityMembersPanel } from './components/ActivityMembersPanel';
 export { WbsBulkAssignBar } from './components/WbsBulkAssignBar';
 export { bulkParentChanges, membershipDiff, type MembershipChange } from './model/membership-diff';
 export { deriveWbsBandSource, type WbsBandSource } from './model/wbs-band-source';
+export { wbsGroupAccessibleName } from './model/wbs-group-name';
 export {
   deriveWbsGroups,
   groupHasBar,

@@ -62,6 +62,7 @@ import type { SelectionBarContext } from '@/features/plan-actions/selection-acti
 import type { ZoomLevel } from '@/features/tsld/render/render-model';
 import { pxPerDayForPreset } from '@/features/tsld/render/time-scale';
 import { addCalendarDays, daysBetween } from '@/features/tsld/render/working-time';
+import { wbsGroupAccessibleName } from '@/features/wbs';
 import { barDatesFor, type BarDateSource } from '@/lib/bar-dates';
 import { cn } from '@/lib/utils';
 
@@ -1333,9 +1334,9 @@ function GanttBucketRowView({
   onToggle: (id: string, collapse: boolean) => void;
 }): React.ReactElement {
   const bracket = spanGeometry(row, anchorIso, pxPerDay);
-  // The count is part of the accessible name, not a decoration beside it: "Unassigned" alone does
-  // not say whether the row is worth expanding.
-  const label = `${row.label}, ${String(row.count)} ${row.count === 1 ? 'activity' : 'activities'}`;
+  // One composer, shared with the TSLD's WBS band (`docs/TECH_DEBT.md` #232) — the reasoning that
+  // used to sit here moved into its docblock rather than being deleted with the literal.
+  const label = wbsGroupAccessibleName({ label: row.label, count: row.count });
 
   return (
     <div
