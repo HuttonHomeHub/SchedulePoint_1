@@ -380,10 +380,11 @@ export function createActivityCommand(params: {
  * reason: a redo is a new delete and therefore a new batch, so an undo reusing the first id would
  * restore nothing and report success.
  *
- * Still leaf-only at the recording seam — a summary-with-subtree delete truncates the history there.
- * That deferral's reason has lapsed (this restore takes the subtree too) but reversing an ADR-0048
- * decision is a capability change rather than a defect fix, so it is filed rather than smuggled in
- * here (`docs/TECH_DEBT.md` #230).
+ * **Every delete records one of these, a WBS phase included.** The recording seam used to branch: a
+ * summary with a subtree truncated the history instead, because ADR-0048 M2 assumed the inverse
+ * could only re-create the summary. It cannot re-create anything — it restores a batch, and a
+ * cascade stamps ONE `deleteBatchId` across the whole subtree — so the branch is gone and this
+ * command is what a phase delete records too (ADR-0048's amendment; `docs/TECH_DEBT.md` #230).
  */
 export function deleteActivityCommand(params: {
   activity: ActivitySummary;

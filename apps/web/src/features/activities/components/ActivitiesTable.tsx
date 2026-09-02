@@ -143,6 +143,8 @@ export function ActivitiesTable({
   onOpenEditor,
   onOpenLogic,
   onDuplicate,
+  onDeleted,
+  onDissolved,
   onOpenResources,
   varianceByActivityId,
   noteCountByActivityId,
@@ -186,6 +188,28 @@ export function ActivitiesTable({
    * do nothing, which is the ADR-0064 §7 dead-end shape.
    */
   onDuplicate?: (activity: ActivitySummary) => void;
+  /**
+   * Tell the host a row was deleted, so it can put the delete on the undo stack
+   * (`docs/TECH_DEBT.md` #230). Host-owned like {@link onOpenLogic}: the history is workspace
+   * state and this feature must not learn about it.
+   *
+   * **Until this existed, the same act was undoable from the canvas and silently not from here.**
+   * `ActivityCrudDialogs` has called the seam since ADR-0048 M2; this table mutated, announced and
+   * told the history nothing — so a planner who deleted a phase from the panel got no undo, and no
+   * word to say why not. Optional, so the table's own suites (which mount it with no host) keep
+   * today's behaviour.
+   *
+   * The batch id is the delete's own, which is what the restore is keyed on.
+   */
+  onDeleted?: (activity: ActivitySummary, deleteBatchId: string) => void;
+  /**
+   * Tell the host a summary was dissolved. Same reason as {@link onDeleted}, opposite consequence:
+   * a dissolve has **no inverse the client can compose**, so the host records a non-undoable
+   * boundary and the history is truncated (ADR-0048 M2, unchanged by #230). Wiring it therefore
+   * makes this table's Dissolve destroy a history it used to leave intact-but-stale, which is the
+   * honest behaviour and is named in the changeset.
+   */
+  onDissolved?: () => void;
   /**
    * Open the resource-assignment surface for a row. Like {@link onOpenLogic} the host owns it, so
    * both row actions resolve to the **same** editor the canvas opens rather than to a second one
@@ -826,13 +850,17 @@ export function ActivitiesTable({
   const confirmDelete = (): void => {
     if (!deleting) return;
     const name = deleting.name;
-    deleteActivity.mutate(deleting.id, {
-      onSuccess: () => {
+    const snapshot = deleting;
+    deleteActivity.mutate(snapshot.id, {
+      onSuccess: (result) => {
         // Close the dialog synchronously before moving focus (see ClientsTable).
         flushSync(() => {
           setDeleting(null);
           setDeleteError(null);
         });
+        // Record BEFORE announcing, so a spoken "deleted" can never precede the step that makes it
+        // undoable. Absent host ⇒ today's behaviour, unrecorded (`docs/TECH_DEBT.md` #230).
+        onDeleted?.(snapshot, result.deleteBatchId);
         announce(`Activity “${name}” deleted.`);
         regionRef.current?.focus();
       },
@@ -849,6 +877,7 @@ export function ActivitiesTable({
           setDissolving(null);
           setDissolveError(null);
         });
+        onDissolved?.();
         // Names what actually happened, not just that something did: the summary is gone AND the
         // work is not, which is the whole distinction from Delete.
         announce(`Summary “${name}” dissolved. Its activities were kept.`);

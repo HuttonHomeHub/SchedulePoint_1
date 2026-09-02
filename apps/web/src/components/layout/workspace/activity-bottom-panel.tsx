@@ -125,6 +125,14 @@ export function ActivityBottomPanel({
           onOpenLogic={model.onOpenLogic}
           onOpenResources={model.onResourcesActivity}
           onDuplicate={(a) => void model.onDuplicateActivity(a)}
+          /*
+           * **The same act must be undoable from both surfaces** (`docs/TECH_DEBT.md` #230). The
+           * canvas has recorded its deletes through `ActivityCrudDialogs` since ADR-0048 M2; this
+           * table recorded nothing, so deleting a phase from the panel silently had no undo. Both
+           * seams come from the ONE history the workspace owns — the table never learns it exists.
+           */
+          onDeleted={model.recordActivityDelete}
+          onDissolved={model.recordDissolveBoundary}
           calendars={model.calendars.data ?? []}
           calendarsLoading={model.calendars.isPending}
           {...(model.plan.data?.calendarId == null
