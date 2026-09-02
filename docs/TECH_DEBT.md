@@ -923,9 +923,9 @@ reading as owed work, which is the drift class this register exists to catch.
 
 ---
 
-### 243. `e2e-csp`'s authenticated case fails on its own interceptor, not on a violation
+### 243. `e2e-csp`'s authenticated case fails LOCALLY on its own interceptor, not on a violation
 
-**Status:** open
+**Status:** open · **corrected within hours of filing — see the correction below**
 
 **Found:** 2026-09-02, by the full journey sweep run for #96 M4 — and established as **not that
 epic's** by running the same suite on the pre-flip tree, where it fails identically.
@@ -942,16 +942,31 @@ error: one inside the sweep on the flipped tree, one on the pre-flip tree with `
 untouched. Recorded that way because "the sweep found a failure" and "the change caused a failure"
 are different facts, and the sweep's output is only useful as a comparison.
 
-**What it costs while open.** The CSP gate covers three cases and two of them run, so the policy
-itself is still checked and a violation still fires. What is not covered is the authenticated shell
-— i.e. every screen behind sign-in, which is most of the product. That is the case ADR-0074's
-report-only window existed to watch, so the gap is real rather than cosmetic.
+**CORRECTION, same day, before this row's own PR merged.** The paragraph that stood here said the
+CSP gate "did not cover the authenticated shell during this flip", and **that is false in CI.**
+`.github/workflows/ci.yml:748` runs `test:e2e:csp` on every pull request, and the End-to-end job on
+PR #460's head passed at 09:01 today with this suite in it. So the gate covers the authenticated
+shell exactly as designed; what fails is **this machine**, under the load of a 44-suite Playwright
+sweep running beside other work — which is consistent with the error, a fetched response being
+disposed while an interceptor awaits it.
+
+That paragraph is an ADR-0076 Class 3 claim: asserted from two local runs, never checked against the
+signal that would have disproved it, and written into a register row whose whole subject is not
+trusting an unobserved failure. It is corrected in place rather than deleted, because the wrong
+version is the more instructive one — and because it took less than an hour to write, ship and
+disprove.
+
+**So what this row actually is:** a local-only failure, cost limited to a developer's own sweep
+reporting a red suite that CI will pass, and the fix is still worth making because a suite that
+fails on the machine where people run it stops being read. Do not restate it as a coverage gap.
 
 The likely shape is a lifetime problem rather than a policy one: `route.fetch()`'s response is
 disposed when its route is handled or the page navigates, and an interceptor that awaits per request
-across a burst can hold one past that point. Worth confirming against Playwright's own source before
-fixing, and worth checking whether the pass-through branch needs to fulfil at all — a route with no
-header to add could simply `continue()`.
+across a burst can hold one past that point — which fits a loaded machine failing where an idle CI
+runner does not. Worth confirming against Playwright's own source before fixing (a registered
+citation, per ADR-0076), and worth checking whether the pass-through branch needs to fulfil at all:
+a route with no header to add could simply `continue()`, which sidesteps the response lifetime
+entirely.
 
 ### 242. `/forgot-password?email=` is a specified capability with no producer
 
