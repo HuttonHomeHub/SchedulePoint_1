@@ -208,7 +208,7 @@ before. See §4's user-flow diagram.
 
 | Criterion                                                                                                                                             | How it is proved                                             |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| S1 — With the Tailwind citation present and its register entry absent, `pnpm check:claims` **exits 1** naming `preflight.css:202-205`.                | Red-verification step, run before the fix is called done     |
+| S1 — With the Tailwind citation present and its register entry absent, `pnpm check:claims` **exits 1** naming `preflight.css:202-206`.                | Red-verification step, run before the fix is called done     |
 | S2 — With both present, it exits 0 and prints **no** "no longer cited anywhere" note for that ref.                                                    | Same run, after                                              |
 | S3 — Every repo-owned `.css` / `.d.ts` citation already in the tree (~86 refs, `globals.css` and friends) produces **zero** findings.                 | Full `pnpm check:claims` run                                 |
 | S4 — Reverting only the own-file half of the change makes the gate fail with roughly that same ~86, proving the two halves are load-bearing together. | Deliberate red run, recorded                                 |
@@ -231,7 +231,7 @@ blocking.
 >
 > **Acceptance criteria**
 >
-> - **Given** `preflight.css:202-205` appears in a scanned file **and** no register entry exists,
+> - **Given** `preflight.css:202-206` appears in a scanned file **and** no register entry exists,
 >   **when** `check:claims` runs, **then** it exits 1 and names the ref, the file citing it, and what
 >   to record.
 > - **Given** the entry exists with anchor `list-style: none;`, **when** it runs, **then** it exits 0
@@ -474,14 +474,14 @@ sequenceDiagram
   participant NM as node_modules (via link)
   participant Reg as dependency-claims.json
 
-  Dev->>Doc: writes "preflight.css:202-205" beside the decision
+  Dev->>Doc: writes "preflight.css:202-206" beside the decision
   Dev->>Gate: pnpm check:claims
   Gate->>Reg: read verifiedAgainst + claims
   Gate->>NM: resolve tailwindcss → 4.3.3
   alt version moved
     Gate-->>Dev: exit 1 — "Re-READ each cited location"
   else version pinned
-    Gate->>NM: read preflight.css lines 202-205
+    Gate->>NM: read preflight.css lines 202-206
     Gate->>Gate: range.includes("list-style: none;") ?
   end
   Gate->>Git: ls-files per CITED_EXTENSIONS → own basenames

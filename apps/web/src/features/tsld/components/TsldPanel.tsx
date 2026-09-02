@@ -2889,15 +2889,16 @@ export function TsldPanel({
             {wbsBandGroupRows !== null && wbsBandGroupRows.length > 0 ? (
               // `jsx-a11y/no-redundant-roles` is right in general and wrong here, so it is
               // suppressed at exactly these two lines with the reason rather than turned off:
-              // Tailwind v4's Preflight sets `list-style: none` on every `ul` and `ol` (read in
-              // tailwindcss **4.3.3**, its preflight stylesheet, under the comment "Make lists
-              // unstyled by default"), which is a documented cause of WebKit/VoiceOver dropping
-              // the implicit list semantics. The role is redundant in the DOM and load-bearing in
-              // the accessibility tree.
+              // Tailwind v4's Preflight sets `list-style: none` on every `ul` and `ol`
+              // (`preflight.css:202-206`, under the comment "Make lists unstyled by default"),
+              // which is a documented cause of WebKit/VoiceOver dropping the implicit list
+              // semantics. The role is redundant in the DOM and load-bearing in the accessibility
+              // tree.
               //
-              // The version is named here rather than pinned by `pnpm check:claims`, because that
-              // gate's citation patterns match `.js`/`.mjs` only and structurally cannot see a CSS
-              // claim — `docs/TECH_DEBT.md` #240.
+              // That citation is now **registered**, so a Tailwind bump fails `pnpm check:claims`
+              // and somebody re-reads it. It could not be until `docs/TECH_DEBT.md` #240 was
+              // fixed: both of that gate's citation patterns ended in a JavaScript extension, so a
+              // claim about a stylesheet was invisible to it in both directions.
               // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
               <ul className="sr-only" role="list" aria-label="Work breakdown bands">
                 {wbsBandDescribedRows(wbsBandGroupRows).map((group) => (

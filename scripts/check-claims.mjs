@@ -30,11 +30,35 @@
  *    the code turns this gate into a rubber stamp.
  * 2. **Anchor.** The recorded snippet must still appear within the cited line range. This catches
  *    a citation that was wrong when it was written, which a version pin alone cannot.
- * 3. **Completeness.** Every citation of a `.js`/`.mjs` file by line in `docs/` and in the app
+ * 3. **Completeness.** Every citation of a cited-extension file by line in `docs/` and in the app
  *    sources must be in the register — in either the `file.mjs:234` form or the prose form
  *    "`file.mjs`, lines **234**". This is the half that keeps the register honest over time: a new
- *    citation cannot be added without recording what it says and what proves it. Files this
- *    repository owns are excluded (they have no version to pin and nothing to rot).
+ *    citation cannot be added without recording what it says and what proves it.
+ *
+ * ## The extension class, and why it is ONE list
+ *
+ * What counts as a citable file lives in `scripts/lib/citation-patterns.mjs`, as a single
+ * `CITED_EXTENSIONS` constant feeding **both** the two recognisers and the `git ls-files` argument
+ * list that excludes this repository's own files. That symmetry is the gate's central invariant
+ * and it is asserted, not described: `scripts/lib/citation-patterns.test.mjs` runs first in the
+ * `check:claims` script.
+ *
+ * It is one list because writing it twice is how the hole in `docs/TECH_DEBT.md` **#240** was made.
+ * Both patterns ended `\.m?js`, written separately from the exclusion's `'*.js' '*.mjs' '*.cjs'`,
+ * so the matcher and the exclusion disagreed about what JavaScript even is — and a `.css` or
+ * `.d.ts` citation was invisible in **both** directions: never demanded when unregistered, and a
+ * register entry for one reading as uncited. Both halves failed towards green, which is why nothing
+ * ever went red. And widening only the obvious half is worse than leaving it: measured, patterns
+ * alone produces **87 findings** on the first run, nearly all this repository's own stylesheets,
+ * because the exclusion could not see them (`docs/specs/claims-citation-scan/m0-measurement.md`).
+ *
+ * ## Three ownership categories, not two
+ *
+ * A cited file is one of: **a dependency's** (register it), **ours** (excluded — no version to pin
+ * and nothing to rot), or **neither**. The third is `FOREIGN_UNVERIFIABLE`, and it is deliberately
+ * one name: the previous Flask application's `auth.css`, which no installed package resolves and
+ * `git ls-files` will never list, yet whose line ranges are load-bearing evidence in ADR-0077 and
+ * `docs/DESIGN_SYSTEM.md`. Its admission rule is written beside it so it cannot become a bin.
  *
  * ## What it deliberately does NOT check
  *
@@ -46,6 +70,8 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { CITATIONS, FOREIGN_UNVERIFIABLE, ownGlobs } from './lib/citation-patterns.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
 const register = JSON.parse(readFileSync(join(root, 'scripts/dependency-claims.json'), 'utf8'));
@@ -166,8 +192,12 @@ function installed(name) {
 }
 
 /**
- * Basenames of this repository's OWN JavaScript, so the completeness scan can tell a dependency
+ * Basenames of this repository's OWN cited files, so the completeness scan can tell a dependency
  * citation from a self-citation.
+ *
+ * **Not "JavaScript" any more** (`docs/TECH_DEBT.md` #240) — it never quite was, since this already
+ * listed `*.cjs` while the patterns could not match one. It now covers every member of
+ * `CITED_EXTENSIONS`.
  *
  * Without this the scan demands a register entry for `check-counts.mjs:42` — a file sitting in this
  * repo, readable by anyone, with no version to pin and nothing to rot. It is not just `scripts/`:
@@ -181,10 +211,24 @@ function installed(name) {
  * accepted before this set is consulted. Recorded as `docs/TECH_DEBT.md` #101 rather than solved
  * with path matching, because prose cites `dist/api/routes/sign-in.mjs` and `sign-in.mjs`
  * interchangeably and neither form is wrong.
+ *
+ * **#240 enlarges that blind spot, and here is its exact shape today.** The set now also holds
+ * `globals.css`, `print-document.css`, `PrintSurface.css`, `GanttPrintSurface.css`,
+ * `HealthPrintDocument.css`, `m0-recovered-block.css` and `vite-env.d.ts`, so a dependency file
+ * sharing one of those basenames would be silently skipped. **No dependency in this tree collides
+ * with any of them** — checked, not assumed: Tailwind ships `preflight.css`, `theme.css`,
+ * `utilities.css` and `index.css`, and none of the registered packages ships a `globals.css` or a
+ * `vite-env.d.ts`. #101's trade still holds, and it is bounded rather than open.
  */
-function ownJsBasenames() {
+function ownBasenames() {
   const names = new Set();
-  for (const line of execFileSync('git', ['ls-files', '*.js', '*.mjs', '*.cjs'], {
+  // **Derived from `CITED_EXTENSIONS`, not listed** (`docs/TECH_DEBT.md` #240). Widening the
+  // patterns without widening this is not a smaller version of the change — it is a different and
+  // much worse one: measured, it turns **94** citations of this repository's own `globals.css`,
+  // `PrintSurface.css` and `GanttPrintSurface.css` into gate failures on the first run, against 7
+  // when both halves move together. A gate that fails on day one gets deleted rather than fixed
+  // (ADR-0058), so the two are one constant apart on purpose.
+  for (const line of execFileSync('git', ['ls-files', ...ownGlobs()], {
     cwd: root,
     encoding: 'utf8',
   }).split('\n')) {
@@ -265,20 +309,7 @@ for (const claim of register.claims) {
 // by acting on #101's item 2 and would have stayed invisible while the only dotted-basename
 // dependency file nobody had cited yet went uncited. `/` is deliberately absent from the class, so a
 // leading path still falls away.
-const CITATIONS = [
-  // `sign-in.mjs:264` / `dist/api/routes/sign-in.mjs:234-240` / `dist/throttler.guard.js:148-150`
-  // …and `useBlocker.js:35`. **The class carries `A-Z` because dependencies are increasingly
-  // camelCase module files**, and a case-sensitive class made those citations invisible in BOTH
-  // directions: not demanded when unregistered, and a registered entry for one reading as uncited
-  // (`docs/TECH_DEBT.md` #183). The prose form below always carried an `i` flag, so the two halves
-  // of one gate disagreed about which citations existed. Measured before widening: 15 occurrences
-  // across the unsaved-work-guard artefacts, resolving to FIVE load-bearing claims that had never
-  // been version-pinned — into `useBlocker.js` and `Transitioner.js`, which is the exact behaviour
-  // ADR-0108's design rests on.
-  /\b([a-zA-Z0-9.-]+\.m?js):(\d+(?:-\d+)?)\b/g,
-  // `` `dist/api/routes/sign-in.mjs`, lines **234** `` — also "line", "on lines", ``234``, 234–240
-  /`[^`\n]*?([a-z0-9.-]+\.m?js)`[,;]?\s*(?:on\s+)?lines?\s*\**`?(\d+(?:\s*[-–]\s*\d+)?)/gi,
-];
+
 /**
  * This file is not scanned for citations.
  *
@@ -287,8 +318,15 @@ const CITATIONS = [
  * registered claim — which would make the format impossible to document. Excluding one file by name
  * is the smaller cost, and it is the only file in the tree whose job is to describe the notation.
  */
-const CITATION_SCAN_EXCLUDES = new Set(['scripts/check-claims.mjs']);
-const own = ownJsBasenames();
+const CITATION_SCAN_EXCLUDES = new Set([
+  'scripts/check-claims.mjs',
+  // The patterns and their worked examples moved here at `docs/TECH_DEBT.md` #240, and the
+  // exclusion had to move with them — otherwise the module defining the notation demands a register
+  // entry for every example of it, which is the exact trap the docblock above describes. Two files
+  // now, for one job, and the set stays that narrow deliberately.
+  'scripts/lib/citation-patterns.mjs',
+]);
+const own = ownBasenames();
 const known = new Set(register.claims.map((c) => c.ref));
 const found = new Map();
 // `scripts/` is in the walk because that is where the measurement harnesses live, and a harness is
@@ -350,9 +388,13 @@ for (const dir of [
     }
   })(dir);
 }
+// **registered → own → foreign → finding.** A registered ref still wins first, which is the
+// property that makes `index.js:733-739` work despite the basename blind spot above.
 for (const [ref, where] of [...found].sort()) {
+  const base = ref.slice(0, ref.lastIndexOf(':'));
   if (known.has(ref)) continue;
-  if (own.has(ref.slice(0, ref.lastIndexOf(':')))) continue;
+  if (own.has(base)) continue;
+  if (FOREIGN_UNVERIFIABLE.has(base)) continue;
   problems.push(
     `${ref}: cited in ${[...where].join(', ')} but not in scripts/dependency-claims.json.\n` +
       `    Add it — record the package, the path, the line range and a short anchor from the\n` +

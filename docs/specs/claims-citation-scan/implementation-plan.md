@@ -216,7 +216,7 @@ was written for.
   moved ⇒ fail).
 - **Development steps:**
   1. `verifiedAgainst`: add `"tailwindcss": "<version read in M0-T2>"`.
-  2. `claims`: add `{ ref: "preflight.css:202-205", package: "tailwindcss", path: "preflight.css",
+  2. `claims`: add `{ ref: "preflight.css:202-206", package: "tailwindcss", path: "preflight.css",
 lines: "202-205", anchor: "list-style: none;", citedBy: [...] }` — **`path` relative to the
      package directory**, so no `dist/` prefix. Use the exact range M0-T2 recorded; the numbers here
      are the spec's reading and must be confirmed, not copied.
@@ -269,7 +269,7 @@ check:claims`, because that gate's citation patterns match `.js`/`.mjs` only and
 - **Testing:** this task **is** the testing.
 - **Development steps:**
   1. **The defect itself.** With the call-site citation present and the Tailwind register entry
-     removed: expect exit 1 naming `preflight.css:202-205` and `TsldPanel.tsx` as its citer. Restore
+     removed: expect exit 1 naming `preflight.css:202-206` and `TsldPanel.tsx` as its citer. Restore
      → expect exit 0 and **no** "registered but no longer cited anywhere" note for that ref. _(Also
      record the pre-change state for the record: with today's script, both configurations exit 0 —
      the gate cannot tell them apart, which is the finding.)_
