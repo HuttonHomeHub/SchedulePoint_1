@@ -923,51 +923,6 @@ reading as owed work, which is the drift class this register exists to catch.
 
 ---
 
-### 243. `e2e-csp`'s authenticated case fails LOCALLY on its own interceptor, not on a violation
-
-**Status:** open · **corrected within hours of filing — see the correction below**
-
-**Found:** 2026-09-02, by the full journey sweep run for #96 M4 — and established as **not that
-epic's** by running the same suite on the pre-flip tree, where it fails identically.
-
-`e2e-csp/csp.spec.ts:123` ("the authenticated shell raises no CSP violation") fails with
-`Error: route.fulfill: Fetch response has been disposed` at `csp.spec.ts:62`. That line is the
-interceptor's own non-HTML pass-through: `armCspRecording` routes `**/*`, fetches the response,
-and re-fulfils it. The other two cases in the file pass, so the policy is being applied and a
-deliberate violation is still detected — it is the **authenticated** page's traffic that trips it,
-which is the one with many concurrent sub-resource requests.
-
-**It is not a flake and it is not #96's.** Two runs, both failing on the same test with the same
-error: one inside the sweep on the flipped tree, one on the pre-flip tree with `createRouter`
-untouched. Recorded that way because "the sweep found a failure" and "the change caused a failure"
-are different facts, and the sweep's output is only useful as a comparison.
-
-**CORRECTION, same day, before this row's own PR merged.** The paragraph that stood here said the
-CSP gate "did not cover the authenticated shell during this flip", and **that is false in CI.**
-`.github/workflows/ci.yml:748` runs `test:e2e:csp` on every pull request, and the End-to-end job on
-PR #460's head passed at 09:01 today with this suite in it. So the gate covers the authenticated
-shell exactly as designed; what fails is **this machine**, under the load of a 44-suite Playwright
-sweep running beside other work — which is consistent with the error, a fetched response being
-disposed while an interceptor awaits it.
-
-That paragraph is an ADR-0076 Class 3 claim: asserted from two local runs, never checked against the
-signal that would have disproved it, and written into a register row whose whole subject is not
-trusting an unobserved failure. It is corrected in place rather than deleted, because the wrong
-version is the more instructive one — and because it took less than an hour to write, ship and
-disprove.
-
-**So what this row actually is:** a local-only failure, cost limited to a developer's own sweep
-reporting a red suite that CI will pass, and the fix is still worth making because a suite that
-fails on the machine where people run it stops being read. Do not restate it as a coverage gap.
-
-The likely shape is a lifetime problem rather than a policy one: `route.fetch()`'s response is
-disposed when its route is handled or the page navigates, and an interceptor that awaits per request
-across a burst can hold one past that point — which fits a loaded machine failing where an idle CI
-runner does not. Worth confirming against Playwright's own source before fixing (a registered
-citation, per ADR-0076), and worth checking whether the pass-through branch needs to fulfil at all:
-a route with no header to add could simply `continue()`, which sidesteps the response lifetime
-entirely.
-
 ### 242. `/forgot-password?email=` is a specified capability with no producer
 
 **Status:** open
@@ -1231,6 +1186,7 @@ One line each. The story lives where the link points, not here.
 | 96  | The router JSON-parsed every search param, so a foreign one arrived as the wrong type  | 2026-09-02 | ADR-0123 and `docs/specs/router-search-params/`. The codec is replaced at the router, which is the only place it could be — `parseSearch` has no per-route override. Three of the epic's own load-bearing claims were false and each correction changed the work: the row's proposed remedy (`parseSearchWith(v => v)`) would have fixed nothing, because the decode step coerces before the parser is reached; a validator cannot rename a key any more than remove one; and the library pair round-trips everything it wrote itself, so the damage was only ever to URLs this app did not compose. Two census gates keep the next route and the next reader honest. Follow-up filed as #242.                                                                                                                                                                                                                                                                                                                                                                        |
 | 238 | `restoreDeleteBatch`'s response fetch threw above 32,767 activities                    | 2026-09-02 | Chunked through the new shared `common/db/id-chunks.ts`, which is the expiry runner's own measured constant and helper **extracted rather than copied** — two copies of a limit measured once would drift, and the drift would be invisible. The comment states the trade (the fetch is the endpoint's dominant cost, so chunking is slower at every size and correct above the ceiling), why re-keying on `deleteBatchId` is impossible (`restoreBatch` nulls it), and why the file's six other `{ in: ids }` sites need nothing — all six read request ids bounded at 2,000 by `@ArrayMaxSize`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 241 | A wall-clock assertion in the unit suite, next to the test that argues against it      | 2026-09-02 | All four absolute wall-clock assertions in `apps/api` deleted — the row named one, a sweep found four, and **three of them sat under a comment arguing against exactly that assertion** ("assert completion + shape, not a CI wall-clock", then a CI wall-clock on the next line). Nothing was wrong in any single file; the wrongness was between each comment and the line beneath it. The deterministic assertions and the ratio gate stay, and the discriminator is written where the next reader will meet it: an elapsed-time assertion is legitimate only when the noise divides out.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 243 | `e2e-csp`'s authenticated case failed locally on its own interceptor                   | 2026-09-02 | The interceptor fetched and re-fulfilled **every** request to read a content-type, and `Route.fulfill({ response })` asserts the fetched body is still held by uid (`playwright-core` `coreBundle.js:13373`, now a registered claim) — on a loaded machine a burst of sub-resource fetches outlives its own routes. A CSP header only means anything on a **document**, so every one of those round trips was work done to hand a response back unchanged; `resourceType()` is known before any fetch, so a sub-resource takes `continue()` now. Exposure drops from every request on the page to one per navigation — stated as a reduction, not an impossibility. Three of three pass, including the violation-still-fires case, so the policy is still applied. The row's first version claimed the gate was blind to the authenticated shell; corrected before it merged, because CI ran that suite green throughout.                                                                                                                                             |
 | 95  | `apps/api`'s three Vite configs were ESM in a CommonJS package                         | 2026-09-01 | Renamed to `.mts` (the row's own smaller alternative — `"type": "module"` would have meant auditing NestJS's CommonJS assumptions one at a time). Warning reproduced first, then gone; all three configs load, ESLint still reaches them, and the API e2e suite passed 572/572 under the renamed ones. The sweep for the same class then found a **second** occurrence the row did not know about, in `apps/web/vitest.config.ts` — an extensionless `./vite.config` import, fixed the same way; every other workspace is clean.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 151 | The Gantt grid splitter had no browser-level coverage                                  | 2026-09-01 | `e2e-gantt/gantt.spec.ts` now drives the separator to its floor and one step above it and asserts the pinned columns end exactly where the chart begins — verified red by understating `ganttFixedWidth` by 80 px, which reproduced ADR-0095's incident verbatim (`Float` at 881–941 against a chart starting at 861). It then found **two live defects** on its first extension: the `vs baseline` column is not a `GanttColumn`, so the pinned block summed to `pane + 72` whenever a baseline was active; and `useResizablePanelPrefs` clamped a stored size only in its `useState` initialiser, so a floor that rose afterwards never reached it. Both fixed with cases verified red. `grid-width.structural.test.ts` was green against both and now records why it structurally cannot see the second.                                                                                                                                                                                                                                                           |
 | 71  | The WBS band's derived bucket was distinguished by colour alone                        | 2026-09-01 | `docs/specs/wbs-bucket-bracket/`. The bucket is now an unfilled three-sided bracket, open at the foot — the language the Gantt already uses, for the reason it states: it is not a scheduled thing, it is the extent of things that are. **Decided by looking, not by reviewing.** The two specialist reviews disagreed; both remedies were mocked up on a real canvas with the product's own tokens, geometry and `truncateToWidth`, with a greyscale toggle applying the actual 1.4.1 test. The rejected remedy — a dashed outline over the fill — had been argued to "stay visually distinct at any bar width above a couple of px", and at 12px with colour withdrawn it reads as a slightly textured block: `--muted-foreground` and `--foreground` are both mid-greys once hue is gone. The label's ink moved with the fill in the same change, because it was `--background` — the canvas ground itself — so removing the fill alone would have painted the name invisible. `paint.wbs-band.test.ts` is the band's first paint-level test, verified red first. |
