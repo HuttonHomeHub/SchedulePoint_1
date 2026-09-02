@@ -51,9 +51,63 @@ reach, so it moved into a test of its own. That is the same rule ADR-0081 states
 harness — say where you bypass the product — applied one step earlier: **do not make the product
 do something it would not, inside a test that other assertions depend on.**
 
-### Probe 1 — after a sign-out
+### Probe 1 — after a sign-out (run 2026-09-02, Chromium, `scripts/e2e-local.sh web:public`)
 
-Deferred to the same commit as the standalone probe above; the sign-out helper is in
-`e2e-public/support.ts` and its assertion order (heading first, URL second) is set by the plan for
-a recorded reason — ADR-0077 M8's helper had a locator matching nothing and nobody noticed, because
-nothing had ever called it.
+`account-chip.tsx:182` navigates with `search: { signedOut: 'true' }` — a four-character string.
+Read from the raw query the router wrote:
+
+```
+?signedOut=%22true%22
+```
+
+Twenty-one characters carried for four. Both probes therefore contain `%22`, and **the rule's
+condition is not met on either.** Nothing is withdrawn; the epic keeps its scope beyond M1.
+
+The signed-out confirmation was asserted **before** the URL, which is the plan's ordering and not a
+stylistic one: this file's `signOut()` helper shipped once with a locator that matched nothing and
+nobody noticed, because nothing had ever called it (ADR-0077 M8). A URL read after a sign-out that
+did not happen would have reported a passing measurement of the wrong screen. It is also a test of
+its own rather than two assertions inside the shipped sign-out test, for the reason the library
+probe established the hard way one section up.
+
+The whole suite was re-run: 14 passed, so the probe perturbs nothing here.
+
+## What M0-T1 measured that the reading did not predict
+
+M0-T1's 23 codec assertions were written from F1's reading of `qss.js` and `searchParams.js` and
+**all 23 passed on the first execution** — which is independent evidence that F1 is sound, and the
+strongest form of that evidence available, since the prediction was committed before the run.
+
+The two **merge** assertions are the exception, and they are the useful part. F5 says a validator
+cannot remove a param, and that is confirmed: a validator returning `{}` against `?q=a&n=1` leaves
+a consumer seeing `{ q: 'a', n: 1 }`. But the second case was **not** what the reading predicted —
+a validator that renames a key leaves the source key in place beside the new one:
+
+```
+validateSearch: (s) => ({ kept: s.q })   over   /thing?q=a&n=1
+match.search                             →      { q: 'a', n: 1, kept: 'a' }
+```
+
+So `validateSearch`'s return is **added to** the parsed search, not substituted for it. F5's
+phrasing ("a validator cannot remove a param") understates it and is left standing rather than
+rewritten, because it is true; this is the stronger fact underneath it, and it is what makes the
+per-route alternative in D-alternatives unarguable rather than merely awkward — a route that
+sanitises its own keys leaves every other key exactly as the default codec produced it.
+
+Established against a real `createRouter` over a real `createMemoryHistory`, in
+`apps/web/src/app/router-search.characterisation.test.ts`. It could not have been established any
+other way: `preMatchSearch` is not exported, and every existing test of this in the repository
+feeds `useSearch` a literal and never crosses the router — which is the same blind spot ADR-0074 M5
+records as the reason `?verified=1` shipped broken with a green suite.
+
+## M0-T3 — the citations were already registered
+
+`pnpm check:claims` is **green**: 93 claims, and all thirteen of this spec's `@tanstack/router-core`
+and `@tanstack/react-router` citations resolve at their pinned `package@version + path + anchor`,
+each naming this spec in its `citedBy`. The plan sized the task at "14 entries" of work owed; the
+entries had been written into the register when the spec was, so the task was already done and its
+definition of done — _that the command has been run_ — is what this line records.
+
+The intended consequence stands and is worth restating where the ADR will pick it up: a Dependabot
+bump of either TanStack package now fails CI and forces these thirteen citations to be re-read,
+which is exactly the moment they need it (ADR-0076).
