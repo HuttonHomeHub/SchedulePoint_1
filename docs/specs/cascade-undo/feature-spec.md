@@ -217,10 +217,26 @@ announced → the Undo control now offers the step _before_ the delete, which is
 **Alternate — redo.** From the state above, `Ctrl+Shift+Z` re-deletes exactly what was restored
 (`deleteActivityCommand.redo`, ids stable across the restore) and rethreads the new batch id.
 
-**Alternate — the ancestor is gone.** Planner deletes phase `A` on the canvas, then deletes `A`'s
+**Alternate — the ancestor is gone.** ~~Planner deletes phase `A` on the canvas, then deletes `A`'s
 parent phase `P` from the activities panel, then presses Undo. The restore is refused (409
-`PARENT_DELETED`); the stacks are not popped, server truth is refetched, the redo branch is cleared,
-and the planner is told which phase must come back first. See §2 US-3.
+`PARENT_DELETED`)…~~
+
+> **WITHDRAWN 2026-09-02 — this flow was DRIVEN and does not produce a refusal.**
+> `apps/web/e2e-undo/undo.spec.ts` performs exactly these steps and both undos succeed. The stack is
+> last-in-first-out and a cascade resolves its subtree with `deletedAt: null`
+> (`hierarchy-lifecycle.service.ts`, `resolveActivitySubtree`), so deleting `P` after `A` does not
+> sweep `A` into `P`'s batch: `P`'s delete is recorded **last** and is therefore undone **first**,
+> leaving the parent active before the child's restore runs.
+>
+> It was reachable when this was written, for the one reason F-3 records — the activities panel
+> recorded nothing, so `P`'s delete never entered the stack and Undo popped `A`'s. **Answering CQ-3
+> "in scope" closed that route**, which the plan's own M2-T2 risk note predicted. The refusal stays
+> reachable across sessions (a stale tab, a pen hand-off, a direct API caller), so its message
+> ships and is pinned by a unit case of `handleFailure`; naming the phase is deferred, because the
+> client cannot — the 409 carries a reason only, and the ancestor is itself deleted and therefore
+> absent from the activity list the client holds.
+>
+> See §2 US-3, and the ADR-0048 amendment §3.
 
 **Alternate — the pen was taken.** The inverse gets a 423 and the whole history is dropped, exactly
 as for every other command (`use-plan-undo-redo.ts:90-98`). Unchanged.

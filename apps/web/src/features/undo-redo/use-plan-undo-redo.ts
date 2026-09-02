@@ -22,6 +22,38 @@ export const REDO_CONFLICT_MESSAGE =
   'This plan changed since you opened it — your redo wasn’t applied. Refresh to see the latest.';
 export const UNDO_FAILED_MESSAGE = 'Couldn’t undo just now. Please try again.';
 export const REDO_FAILED_MESSAGE = 'Couldn’t redo just now. Please try again.';
+/**
+ * The 409 that means "a phase this was filed under has since been deleted" (`docs/TECH_DEBT.md`
+ * #230 M2). The server refuses the restore rather than re-parenting the subtree to the top level,
+ * which would silently discard the planner's structure — and refusing is correct, so the only thing
+ * missing was words.
+ *
+ * It gets its own message because the general one is **actively wrong here**: "Refresh to see the
+ * latest" is what a reader is told, and refreshing does not help. Restoring the phase does. This
+ * says which action recovers it.
+ *
+ * **It does not name the phase, and that is a decision rather than an omission.** The client cannot:
+ * the 409 carries only a reason, and the ancestor is itself soft-deleted, so it is not in the
+ * activity list the client holds. Naming it needs the server to say which row blocked — real work,
+ * for a state the UI cannot reach in one pen session (`apps/web/e2e-undo/undo.spec.ts` drives the
+ * spec's own alternate flow and both undos succeed). Deferred with that reason rather than built.
+ */
+export const UNDO_PARENT_DELETED_MESSAGE =
+  'Couldn’t undo — a phase this was filed under has since been deleted. Restore that phase first, then undo again.';
+export const REDO_PARENT_DELETED_MESSAGE =
+  'Couldn’t redo — a phase this was filed under has since been deleted. Restore that phase first, then try again.';
+
+/**
+ * The machine-readable reason on a `{ error: { details } }` envelope, when it carries one.
+ *
+ * Read rather than assumed (ADR-0076): `ApiFetchError` carries the whole envelope error as
+ * `.error` (`lib/api/client.ts`), `DomainError.details` is copied straight through by
+ * `all-exceptions.filter.ts`, and `lib/api/calendar-scope-errors.ts` already reads
+ * `details.reason` exactly this way — so this is an established path, not a new one.
+ */
+function reasonOf(err: ApiFetchError): string | undefined {
+  return (err.error.details as { reason?: string } | undefined)?.reason;
+}
 
 /** Lowercase a command label's first letter so it reads naturally after "Undid "/"Redid ". */
 function phrase(label: string): string {
@@ -98,9 +130,20 @@ export function usePlanUndoRedo(params: {
       }
       if (err instanceof ApiFetchError && (err.status === 409 || err.status === 404)) {
         // Row moved / deleted — abort non-destructively, refetch, and drop the stale redo branch.
+        // Everything below is unchanged for every reason; only the WORDS branch, and only for the
+        // one reason whose recovery is a different action (#230 M2).
         refetchServerTruth();
         history.clearRedo();
-        announce(direction === 'undo' ? UNDO_CONFLICT_MESSAGE : REDO_CONFLICT_MESSAGE);
+        const parentDeleted = reasonOf(err) === 'PARENT_DELETED';
+        announce(
+          direction === 'undo'
+            ? parentDeleted
+              ? UNDO_PARENT_DELETED_MESSAGE
+              : UNDO_CONFLICT_MESSAGE
+            : parentDeleted
+              ? REDO_PARENT_DELETED_MESSAGE
+              : REDO_CONFLICT_MESSAGE,
+        );
         return;
       }
       // Anything else — leave the stacks intact so the user can retry.
