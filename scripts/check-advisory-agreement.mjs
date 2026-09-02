@@ -48,7 +48,7 @@ const read = (p) => {
 };
 
 const prepush = read('scripts/prepush.sh');
-const block = /^ADVISORY_GATES=\(([^)]*)\)/m.exec(prepush);
+const block = /^ADVISORY_GATES=\(([\s\S]*?)\)\s*$/m.exec(prepush);
 if (!block) {
   console.error(
     'check:advisory-agreement: no ADVISORY_GATES=( … ) array found in scripts/prepush.sh.\n' +
@@ -56,8 +56,24 @@ if (!block) {
   );
   process.exit(1);
 }
-const declared = new Set([...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+// **Comments are stripped and BOTH quote styles are accepted.** The first version matched
+// double-quoted entries only, so rewriting the array with single quotes — a cosmetic edit that
+// changes nothing in bash — produced an EMPTY declared set and the gate then accused
+// `check:reconcile-due` of being unlisted. It also ended the array at the first `)`, so a `)` inside
+// an in-array comment truncated the capture and silently dropped every gate named on a later line.
+// Both reproduced by the ADR-0124 devops review; both are the shape this gate exists to catch.
+const arrayBody = block[1].replace(/#[^\n]*/g, '');
+const declared = new Set([...arrayBody.matchAll(/"([^"]+)"|'([^']+)'/g)].map((m) => m[1] ?? m[2]));
+if (declared.size === 0) {
+  console.error(
+    'check:advisory-agreement: ADVISORY_GATES parsed to an EMPTY list.\n' +
+      '    An empty list is indistinguishable from a parse failure, and every assertion below is\n' +
+      '    over a list. If no gate is advisory any more, delete this check and the mechanism with it.',
+  );
+  process.exit(1);
+}
 
+const SELF = 'scripts/check-advisory-agreement.mjs';
 const scripts = JSON.parse(read('package.json')).scripts ?? {};
 const gates = Object.keys(scripts).filter((k) => k.startsWith('check:'));
 if (gates.length === 0) {
@@ -72,7 +88,7 @@ if (gates.length === 0) {
 //
 // **A `*.test.mjs` is excluded, and that is a measurement rather than an assumption.** The first
 // version of this check scanned every named file and reported `check:doc-register` as capable —
-// because `doc-register.test.mjs` names `advisory` eleven times while TESTING `report()`, capturing
+// because `doc-register.test.mjs` names `advisory` five times while TESTING `report()`, capturing
 // its return value through a `quiet()` helper rather than exiting on it. Forcing a failure in that
 // file and reading the code gives **1**, never 2. So a test runner exercises the mechanism as a
 // subject; it does not use it as its own exit path.
@@ -80,11 +96,17 @@ if (gates.length === 0) {
 // That false positive is worth leaving recorded: it is a scan matching something that discusses its
 // subject rather than something that is its subject — the exact class `check:counts`' inline-code
 // escape and `check:claims`' self-exclusion both exist for, arriving in the check written about it.
-const capable = new Set();
+const capable = new Map();
 for (const gate of gates) {
   const files = [...scripts[gate].matchAll(/(scripts\/[\w./-]+\.mjs)/g)].map((m) => m[1]);
   for (const file of files) {
     if (file.endsWith('.test.mjs')) continue;
+    // **This file excludes itself, for the reason `check-claims.mjs` does.** Its comments and its
+    // failure messages necessarily quote the shapes it searches for — `report({ advisory })` is in
+    // the sentence it prints when it finds one — so scanning itself makes it report itself as an
+    // advisory gate. It did, on the first run after the detection was widened. A gate that reads its
+    // own documentation as input is a gate nobody can write about.
+    if (file === SELF) continue;
     let src;
     try {
       src = read(file);
@@ -92,7 +114,18 @@ for (const gate of gates) {
       console.error(`check:advisory-agreement: ${gate} names ${file}, which does not exist.`);
       process.exit(1);
     }
-    if (/advisory:\s*true/.test(src) || /^\s*advisory,\s*$/m.test(src)) capable.add(gate);
+    // **Two ways a gate can exit 2, not one.** The `advisory` flag is the declared way. The other
+    // is `report()`'s warnings path, which hard-codes a 2 REGARDLESS of `advisory` — so a gate that
+    // never writes the word can still exit 2 by pushing a warning. The first version of this check
+    // matched only the flag and its docblock asserted that "can exit 2" was decidable from it,
+    // which was **false**: the ADR-0124 devops review demonstrated a passing `OK` over a gate that
+    // exits 2 at runtime. That claim is corrected on `report()` and the detection now covers both.
+    const declaresAdvisory = /advisory:\s*true/.test(src) || /(^|[\s{,])advisory\s*[,}]/m.test(src);
+    const pushesWarnings = /\bwarnings\.push\s*\(/.test(src);
+    if (declaresAdvisory || pushesWarnings) {
+      // The message names WHICH of the two routes was found: they have different remedies.
+      capable.set(gate, declaresAdvisory ? 'report({ advisory })' : "report()'s warnings path");
+    }
   }
 }
 if (capable.size === 0) {
@@ -113,11 +146,12 @@ for (const g of declared) {
     );
   }
 }
-for (const g of capable) {
+for (const [g, via] of capable) {
   if (!declared.has(g)) {
     problems.push(
-      `${g} can exit 2 (it calls report({ advisory })) but is not in ADVISORY_GATES, so prepush ` +
-        'will report its advisory finding as a blocking FAIL.',
+      `${g} can exit 2 (via ${via}) but is not in ADVISORY_GATES, so prepush will report its ` +
+        'advisory finding as a blocking FAIL. If it should block, remove the advisory route ' +
+        'instead of listing it — listing it downgrades its real findings too.',
     );
   }
 }

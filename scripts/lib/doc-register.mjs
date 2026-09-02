@@ -206,6 +206,26 @@ export function tableRows(md, headingText) {
  * that reads 2 as WARN: **pnpm itself treats exit 2 as failure**, so `pnpm check:reconcile-due` run
  * directly reports a failed script. That is a fair reading of "this needs attention" and a poor
  * reading of "this does not block"; the convention lives inside the pre-push runner.
+ *
+ * **The `warnings` channel returns 2 UNCONDITIONALLY, so it is usable only by a gate that is
+ * declared advisory** (found 2026-09-02, by the devops review of ADR-0124). The `advisory ? 2 : 1`
+ * floor below covers the `problems` and `population` paths and **not** the warnings path, which
+ * hard-codes a 2 — so a gate that never mentions `advisory` anywhere can still exit 2 the moment it
+ * pushes a warning. Under the inverted `ADVISORY_GATES` default that now BLOCKS, which is a soft
+ * finding stopping a push.
+ *
+ * The tempting fix — make the warnings path return 0 for a non-advisory gate — is **wrong**, and
+ * worth recording so it is not tried again: `prepush.sh` sends a passing gate's output to a log and
+ * prints nothing, so a warning returned with 0 is a warning nobody ever reads. That is the exact
+ * silence the third result state was introduced to remove. The equally tempting "declare the gate
+ * advisory then" is also wrong, because `advisory` is per-GATE: declaring `check:debt-status`
+ * advisory to carry one soft note would stop its real findings blocking.
+ *
+ * So the channel is left as it is, its constraint is stated here, and
+ * `scripts/check-advisory-agreement.mjs` detects a live `warnings.push` as well as the `advisory`
+ * flag — so the day a blocking gate grows a warning, a gate says so rather than a push failing for
+ * a reason nobody can see. A third exit code meaning "passed, but print this" is the real answer and
+ * is deliberately not invented here.
  */
 export function report({
   name,

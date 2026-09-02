@@ -1000,6 +1000,43 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 244. CI's gate roster is hand-written while `prepush.sh` derives its own
+
+**Status:** open · **Raised:** 2026-09-02 (the ADR-0124 devops gate pass) · **Size:** S ·
+**Owner:** repo
+
+`scripts/prepush.sh` derives its gate list from `package.json` — deliberately, and its own comment
+says why: _"a hard-coded roster beside a set that grows is the ADR-0073 C4 defect: an eleventh
+`check:*` script lands and this gate silently stops covering the estate, with nothing failing."_
+
+`.github/workflows/ci.yml` hand-writes a `run:` step per gate. So the two rosters can disagree, and
+**they did**: ADR-0124 added `check:advisory-agreement`, `prepush.sh` picked it up for free, and CI
+did not — leaving a blocking gate enforced only by a locally-run `pnpm prepush`, for a mechanism
+whose whole subject is that local-only enforcement is the thing that does not happen. The epic's own
+spec asserted it added no new `check:*` script, which was false as built.
+
+**Found by comparing the two rosters, not by anything failing.** One command:
+
+```
+node -e 'const ci=require("fs").readFileSync(".github/workflows/ci.yml","utf8");
+  const s=require("./package.json").scripts;
+  console.log(Object.keys(s).filter(k=>k.startsWith("check:")).filter(k=>!ci.includes("pnpm "+k)))'
+```
+
+Today that prints `["check:reconcile-due"]`, which is the one **documented, deliberate** exclusion —
+it is advisory, and adding it to CI would turn a product-owner decision into a blocking gate by the
+back door. So any assertion has to carry that exemption, with its reason, the way
+`scripts/adr-coverage.json` does.
+
+**Not fixed in the epic that found it.** Making CI derive its roster, or asserting the two agree, is
+a change to a shared gate and an ADR-0105 full-spec trigger; smuggling it into a gate pass is the
+judgement that rule exists to remove. `#240` refused to widen `check:claims` inside the milestone
+that found it for the same reason, and that refusal is why this register works.
+
+**Why it is debt and not a defect today:** the rosters agree as of this row, and CI's steps carry
+per-gate comments explaining what each exists for — which a derived loop would lose. That is a real
+cost of the obvious fix and should be weighed rather than assumed away.
+
 ### 239. The plan's members query and its restore both scale with a fetch nobody profiles
 
 **Status:** unverified · **Raised:** 2026-09-02 (#230 M0's backend-performance gate) · **Size:** S

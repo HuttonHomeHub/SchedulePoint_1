@@ -167,7 +167,26 @@ const documents = [
  * inside an inline code span — so the escape removes no live claim, and an author who needs to write
  * about a number has a way to say so.
  */
-const escapeMentions = (text) => text.replace(/`[^`\n]*`/g, (m) => ' '.repeat(m.length));
+const escapeMentions = (text) =>
+  text
+    .split('\n')
+    .map((line) => {
+      // **A line with an ODD number of backticks is left alone, and that direction is deliberate.**
+      // The first version replaced spans line-agnostically, so a stray unpaired backtick BEFORE a
+      // real claim paired with any later backtick on the line and blanked everything between them —
+      // the claim included. Demonstrated: `Note\`: the docs currently claim 5 ADRs; check \`this\``
+      // loses `5 ADRs` entirely, and the gate then passes over a genuinely wrong number. Measured:
+      // 56 odd-backtick lines outside fences across the four gated documents today, so the shape is
+      // ordinary rather than contrived — it is what a code span wrapped across a line break leaves.
+      //
+      // Not escaping such a line makes the gate **over-eager** on it, which is the safe direction
+      // and the one `#222` itself argues for: it can then invent a finding an author must phrase
+      // around, but it can never hide a real one.
+      const ticks = (line.match(/`/g) ?? []).length;
+      if (ticks % 2 !== 0) return line;
+      return line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length));
+    })
+    .join('\n');
 
 const problems = [];
 for (const { path, label: where, required } of documents) {

@@ -292,7 +292,7 @@ It deliberately excludes the e2e half, which needs a database and a browser and 
 **What it costs, measured 2026-08-25** (one file changed in `apps/web`, turbo warm elsewhere):
 roughly **six minutes**, of which `pnpm test` is **345 s (94%)** — the whole 552-file web unit
 suite, every run — `typecheck` 6.5 s, `lint` 8 s, and every `check:*` gate **10.4 s between
-them** (thirteen gates and **11.5 s** re-measured 2026-08-30, after the two drift gates and their
+them** (the `check:*` gates measured at **11.5 s** on 2026-08-30, after the two drift gates and their
 fixture suite landed — the three additions cost about a second between them). Two things follow, and the second is the one people get wrong. The `check:*` scripts are
 **2%** of the gate and are the part that catches what a reviewer cannot see, so trimming _them_ to
 make the gate faster buys nothing and costs the drift control; and the gate is not saving wall

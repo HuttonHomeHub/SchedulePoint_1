@@ -146,6 +146,16 @@ jobs:
       - name: Check dependency-internal claims
         run: pnpm check:claims
 
+      # The advisory allow-list in `scripts/prepush.sh` agrees with the code, both ways (ADR-0124).
+      # **This step exists because the epic that added the gate said it would not need one.** Its
+      # spec asserted "does the epic add a new `check:*` script? No", which was false as built, and
+      # the gate therefore shipped enforced only by a locally-run `pnpm prepush` — for a mechanism
+      # whose whole subject is that local-only enforcement is the thing that does not happen. Found
+      # by the epic's own devops review, which checked CI's hand-written roster against
+      # `package.json` rather than believing the spec.
+      - name: Check the advisory allow-list agrees with the code
+        run: pnpm check:advisory-agreement
+
       # Every ADR is reachable from the document a reader navigates product direction by.
       # Written because THREE consecutive reconciliation passes found `docs/ROADMAP.md` silent on
       # the newest ADRs — 0067–0073, then 0074–0085, then 0087–0092 — each time found by hand, and

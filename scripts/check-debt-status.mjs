@@ -44,7 +44,11 @@ function rowNumber(heading) {
 function main(argv) {
   const md = readRepoDoc(DOC);
   const problems = [];
-  const warnings = [];
+  // **No `warnings` array here, deliberately.** One was declared and never pushed to for months.
+  // `report()`'s warnings path returns 2 unconditionally, and under the inverted `ADVISORY_GATES`
+  // default a 2 from a gate that is not declared advisory BLOCKS — so the first `warnings.push` in
+  // this file would have stopped a push over a soft note, with nothing explaining why. See the
+  // constraint recorded on `report()`.
 
   // ── Parse ────────────────────────────────────────────────────────────────────────────────────
   //
@@ -166,7 +170,17 @@ function main(argv) {
     );
   }
   const detailedLine = raw.findIndex((l) => l.startsWith('## Detailed items'));
-  for (let i = detailedLine + 1; i < raw.length; i += 1) {
+  // **Refuse loudly rather than widen silently.** With no `## Detailed items` heading, `findIndex`
+  // returns -1 and the loop below would start at 0 and sweep the WHOLE document for stray `###`
+  // headings — a flood of unrelated findings instead of one clear diagnostic. That is the opposite
+  // of A9's own philosophy two assertions up, which refuses on a broken precondition.
+  if (detailedLine === -1) {
+    problems.push(
+      `A10: ${DOC} has no "## Detailed items" heading, so the region this assertion scopes itself ` +
+        'to cannot be located. Restore the heading, or update this check — do not let it widen.',
+    );
+  }
+  for (let i = detailedLine + 1; detailedLine !== -1 && i < raw.length; i += 1) {
     if (!raw[i].startsWith('### ') || CANONICAL.test(raw[i])) continue;
     if (/^#{2,3} #?\d+[a-z]?[.\s\u2014-]/.test(raw[i])) continue; // already reported above
     problems.push(
@@ -293,7 +307,6 @@ function main(argv) {
   return report({
     name: 'check:debt-status',
     problems,
-    warnings,
     population: items.length,
     summary,
   });

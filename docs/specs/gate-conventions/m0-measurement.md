@@ -212,3 +212,77 @@ the scan excludes those files with the measurement written beside the exclusion.
 is the same class as `#222` itself — a scan matching something that _discusses_ its subject rather
 than something that _is_ it — arriving inside the check written about that class, and caught only by
 verifying the red rather than believing it.
+
+## M6 — the gate pass
+
+Three specialists over `2e0e6bcb..25d46751`. **Security passed with nothing blocking**, having
+re-derived the central claim itself: `check:nginx`, `check:frontend-only`, `check:flags` and
+`check:surface-contract` can only ever exit 0 or 1, so no security-relevant gate could reach the
+advisory path under either the old or the new code — the change is a strengthening. Its one
+suggestion was folded: the path regex admits `.`, so a `scripts/../../../etc/passwd.mjs` entry in
+`package.json` resolved to `/home/etc/passwd.mjs`. Not a boundary crossing, and a gate should still
+read what it says it reads; it now refuses, verified red against that input.
+
+**The devops review blocked, and it was right four times.** Every finding was reproduced before
+being fixed (CLAUDE.md §19.11 — a reviewer's claim is checked like any other).
+
+**1. The new gate's central claim was false.** `check-advisory-agreement`'s docblock asserted that
+`report()` "is the only thing that lowers a blocking exit to 2, so 'can exit 2' is decidable
+statically" from the `advisory` flag. It is not: `report()`'s **warnings path returns a hard-coded
+2 regardless of `advisory`** (`doc-register.mjs:248-251` — the `advisory ? 2 : 1` floor covers only
+the `problems` and `population` paths). Reproduced: `report({ population: 5, warnings: ['x'] })`
+returns 2 from a gate that never writes the word, and `check:advisory-agreement` reported `OK` over
+it. Worse, `check-debt-status.mjs` already declared a `warnings` array and threaded it in — dead,
+never pushed to, and one `warnings.push` from silently exiting 2 with this gate vouching for it.
+
+The two tempting fixes are both wrong and the reasons are recorded on `report()` so they are not
+tried again: returning 0 for a non-advisory gate's warnings makes them **invisible**, because
+`prepush` sends a passing gate's output to a log — the exact silence the third result state exists
+to remove; and "declare the gate advisory then" is worse, because `advisory` is per-**gate**, so
+declaring `check:debt-status` advisory to carry one soft note would stop its real findings blocking.
+So the constraint is stated where it binds, the dead array is removed, and the **detector now covers
+both routes** and names which one it found. A third exit code meaning "passed, but print this" is
+the real answer and is deliberately not invented under time pressure.
+
+**2. The `ADVISORY_GATES` parse was fragile.** Single-quoted entries — a cosmetic bash edit —
+produced an **empty** declared set, and the gate then falsely accused `check:reconcile-due` of being
+unlisted. A `)` inside an in-array comment truncated the capture and silently dropped any gate named
+on a later line. Both reproduced. Now: comments stripped, both quote styles accepted, multi-line
+handled, and an empty parse **refused** rather than treated as "no advisory gates", because an empty
+list is indistinguishable from a parse failure and every assertion is over a list.
+
+**3. The gate was not wired into CI**, and the epic's own spec asserted it would not need to be —
+`feature-spec.md`'s risk table said "does the epic add a new `check:*` script? **No.**" That was
+false as built. The gate shipped enforced only by a locally-run `pnpm prepush`, for a mechanism
+whose entire subject is that local-only enforcement is the thing that does not happen. The step is
+added and the spec cell corrected in place. Found by checking CI's hand-written roster against
+`package.json` rather than believing the cell.
+
+**4. `escapeMentions` could blank a genuine claim.** A stray unpaired backtick **before** a claim
+pairs with any later backtick on the same line and blanks everything between them. Demonstrated:
+`` Note`: the docs currently claim 5 ADRs; check `this` `` loses `5 ADRs` entirely, and the gate
+then passes over a wrong number. Measured: **56 odd-backtick lines outside fences** across the four
+gated documents, so the shape is ordinary — it is what a code span wrapped across a line break
+leaves. Now parity-aware per line: an odd-backtick line is left **unescaped**, which makes the gate
+over-eager on it. That is the safe direction and the one `#222` itself argues for — it can invent a
+finding an author must phrase around, but it can never hide a real one. Both directions verified.
+
+Non-blocking, folded: A10's second limb now **refuses** a missing `## Detailed items` heading rather
+than silently widening its scan to the whole document (verified red by renaming the heading); and
+`docs/TESTING.md`'s "thirteen gates" was stale the moment this epic added the fourteenth — the
+number is removed rather than re-stated, since a count in prose beside a growing set is the defect
+these gates exist for.
+
+**And the review caught one of my own unverified claims, in the file about unverified claims.** The
+`*.test.mjs` exclusion's comment said `doc-register.test.mjs` "names `advisory` **eleven** times".
+Measured, it is **five**. It changes nothing about the exclusion's correctness, and it is ADR-0076
+Class 3 committed inside the epic whose subject is exactly that.
+
+### One finding is filed rather than fixed
+
+CI's gate roster is **hand-written** while `prepush.sh` **derives** its list from `package.json` —
+which is why the missing step could exist at all, and is the ADR-0073 C4 defect that `prepush.sh`'s
+own comment says it avoided. Making CI derive its roster, or asserting the two agree, is a change to
+a shared gate and therefore an ADR-0105 full-spec trigger. Smuggling it into this epic's gate pass
+is exactly the judgement that rule exists to remove — the same reason `#240` refused to widen
+`check:claims` inside the accessibility milestone that found it. Filed as a register row.
