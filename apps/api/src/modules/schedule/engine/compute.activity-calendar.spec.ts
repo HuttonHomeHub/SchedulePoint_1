@@ -96,8 +96,17 @@ describe('per-activity calendars (M5, ADR-0037)', () => {
   it('computes a 2,000-activity mixed-calendar chain within budget (scale — no O(n²), no per-minute walk)', () => {
     // The instant axis costs one extra O(log) calendar-port round-trip per activity vs the old pure
     // offset add; this proves it stays linear across three calendars at the ADR-0036 §7 ceiling. We
-    // assert COMPLETION + shape (not a CI wall-clock — see docs/PERFORMANCE.md), with a generous 5 s
-    // guard that only trips on a pathological blow-up, never on normal timing noise.
+    // assert COMPLETION + shape (not a CI wall-clock — see docs/PERFORMANCE.md).
+    //
+    // **And now that is true, where it used to say it and then not do it** (`docs/TECH_DEBT.md`
+    // #241). The line below the comment was `expect(elapsedMs).toBeLessThan(5000)`. The sweep that
+    // closed #241 found **four** absolute wall-clock assertions in `apps/api`, and **three of them
+    // sat under a comment arguing against exactly that assertion** — this one, and two in
+    // `level.spec.ts`. Nothing was wrong in any single file; the wrongness was between each comment
+    // and the line beneath it, which is why reading one at a time never caught it.
+    //
+    // A hang still fails: the vitest timeout is the backstop, and it does not depend on how busy the
+    // runner is relative to a number somebody picked.
     const SIX_DAY = buildWorkingTimeCalendar(fullDayWeek([0, 1, 2, 3, 4, 5]), []);
     const cals = [undefined, TWENTY_FOUR_SEVEN, SIX_DAY];
     const activities: EngineActivity[] = [];
@@ -106,12 +115,9 @@ describe('per-activity calendars (M5, ADR-0037)', () => {
       activities.push(task(`N${i}`, DAY, cals[i % 3]));
       if (i > 0) edges.push(edge(`N${i - 1}`, `N${i}`));
     }
-    const started = performance.now();
     const output = computeSchedule(activities, edges, { dataDate: DATA_DATE, calendar: FIVE_DAY });
-    const elapsedMs = performance.now() - started;
     expect(output.results).toHaveLength(2000);
     expect(output.summary.projectFinish).not.toBeNull();
-    expect(elapsedMs).toBeLessThan(5000);
   });
 
   it('keeps a mixed-calendar critical chain free of spurious negative float (forward/backward inverse)', () => {

@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
+import { chunkIds } from '../db/id-chunks';
+
 /**
  * **The permanent deletion of one expired subtree, in FK-safe order.**
  *
@@ -33,32 +35,11 @@ import type { Prisma } from '@prisma/client';
  */
 
 /**
- * **The largest number of ids one `{ in: [...] }` may carry.**
- *
- * Prisma does not chunk an `in` list — it sends one bind parameter per element, and Postgres'
- * extended protocol refuses more than 32,767 in a prepared statement. Measured against this
- * repository's own generated client: 32,767 succeeds, 32,768 fails with `P2035` ("too many bind
- * variables in prepared statement"). The cross-plan-edge delete below puts `activityIds` into the
- * predicate **twice**, so it exhausts the budget at half that — measured failing at 16,384 ids.
- *
- * 8,000 leaves headroom for the plan ids and literals sharing the same statement, and the
- * consequence of getting it wrong is not a slow query: a batch cannot be split (expiring half of
- * one leaves an unrestorable remnant), so a statement that throws makes that subtree **permanently
- * unexpirable**, retried hourly forever. The failure was inside the service's own worked example —
- * its docblock reasons about a 200,000-activity cascade that would have thrown at 8% of the way
- * there. Found by the ADR-0096 backend-performance review, by running the real client rather than
- * reading the driver.
+ * **Moved to `common/db/id-chunks.ts`** at `docs/TECH_DEBT.md` #238, unchanged, because
+ * `restoreDeleteBatch` hit the same ceiling from a different module. The reasoning behind the
+ * number — including why it is 8,000 and not 32,767, and that this runner's cross-plan-edge delete
+ * puts the list into its predicate twice — lives there now, with the measurement that produced it.
  */
-const MAX_IDS_PER_STATEMENT = 8_000;
-
-/** Split a list into `MAX_IDS_PER_STATEMENT`-sized chunks; an empty list yields no chunks. */
-function chunked(ids: readonly string[]): string[][] {
-  const out: string[][] = [];
-  for (let i = 0; i < ids.length; i += MAX_IDS_PER_STATEMENT) {
-    out.push(ids.slice(i, i + MAX_IDS_PER_STATEMENT));
-  }
-  return out;
-}
 
 /** Run one delete per chunk and sum the counts. Order within a table does not matter; across does. */
 async function deleteChunked(
@@ -66,7 +47,7 @@ async function deleteChunked(
   run: (chunk: string[]) => Promise<{ count: number }>,
 ): Promise<number> {
   let total = 0;
-  for (const chunk of chunked(ids)) total += (await run(chunk)).count;
+  for (const chunk of chunkIds(ids)) total += (await run(chunk)).count;
   return total;
 }
 
@@ -100,7 +81,7 @@ export async function deleteExpiredScope(
   // Resolved once. Every activity-keyed delete below reads this, so a second query would be a
   // second answer to "which activities are in scope" — and the two could differ under concurrency.
   const activityIds: string[] = [];
-  for (const chunk of chunked(planIds)) {
+  for (const chunk of chunkIds(planIds)) {
     const rows = await tx.activity.findMany({
       where: { planId: { in: chunk } },
       select: { id: true },
@@ -149,7 +130,7 @@ export async function deleteExpiredScope(
     );
 
     const baselineIds: string[] = [];
-    for (const chunk of chunked(planIds)) {
+    for (const chunk of chunkIds(planIds)) {
       const rows = await tx.baseline.findMany({
         where: { planId: { in: chunk } },
         select: { id: true },
@@ -184,7 +165,7 @@ export async function deleteExpiredScope(
     // are RESTRICT into it. PROJECT-scoped only — an ORG calendar is shared and outlives this
     // project entirely (ADR-0053). `calendar_shifts` and exception windows go by cascade.
     const calendarIds: string[] = [];
-    for (const chunk of chunked(projectIds)) {
+    for (const chunk of chunkIds(projectIds)) {
       const rows = await tx.calendar.findMany({
         where: { projectId: { in: chunk } },
         select: { id: true },

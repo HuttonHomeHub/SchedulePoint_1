@@ -12,6 +12,7 @@ import type { PageMeta, ProgressWarning } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
+import { chunkIds } from '../../common/db/id-chunks';
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import type { RequestContext } from '../../common/decorators/request-context.decorator';
 import {
@@ -1453,9 +1454,36 @@ export class ActivitiesService {
       'activity delete-batch restored',
     );
 
-    const items = await this.prisma.activity.findMany({
-      where: { organizationId: organization.id, planId, id: { in: ids }, deletedAt: null },
-    });
+    // **Chunked, because Prisma does not chunk an `in` list** (`docs/TECH_DEBT.md` #238). Above
+    // ~32,767 ids the statement exceeds Postgres' bind-parameter ceiling and throws `P2035`,
+    // reproduced live against a real database by the #230 M0 backend-performance review. That is
+    // 16x the largest case anybody has measured (2,000 activities at 312-337 ms), and the restore
+    // itself has already committed in the transaction above — so the throw would report failure for
+    // a restore that had succeeded, which is the worst answer available.
+    //
+    // **It is slower, and that is the trade taken deliberately.** The same review measured this
+    // fetch as the endpoint's dominant cost — ~168-214 ms at 2,001 rows, 8-15x the members query —
+    // so splitting it into round trips adds latency at every size. Correct and slightly slower
+    // beats fast and wrong above a threshold no test would ever reach.
+    //
+    // It cannot be re-keyed on `deleteBatchId` instead: `restoreBatch` writes `deleteBatchId: null`
+    // as part of restoring (`common/hierarchy/hierarchy-lifecycle.service.ts`), so by the time this
+    // runs the batch has no id left to select on. Checked rather than assumed.
+    //
+    // **And this is the only `{ in: ids }` in this file that needs it**, which is worth stating so
+    // the next reader does not chunk six safe call sites for symmetry. The other six —
+    // `updatePositions`, `updatePlacements`, `updateParents` and `bulkDelete` — read ids that came
+    // from a request body, and every one of those DTOs carries `@ArrayMaxSize(2000)`, so they are
+    // bounded at a quarter of the limit by the validation layer. This one's size comes from a
+    // cascade, which no DTO bounds.
+    const items: Awaited<ReturnType<typeof this.prisma.activity.findMany>> = [];
+    for (const chunk of chunkIds(ids)) {
+      items.push(
+        ...(await this.prisma.activity.findMany({
+          where: { organizationId: organization.id, planId, id: { in: chunk }, deletedAt: null },
+        })),
+      );
+    }
     return { items: await this.withDayFactors(items), canReadCost };
   }
 

@@ -361,10 +361,22 @@ describe('levelSchedule — exclusion types are pinned; levellable work levels a
 
 describe('levelSchedule — never hangs even when a resource window can never fit the run (§6, §F)', () => {
   it('terminates and flags every activity pushed past a one-day hire window', () => {
-    // A capacity-1 crane on hire for a SINGLE day (2026-01-01). Five 1-day activities serialise onto it;
-    // only the first lands in the window, the other four are pushed past it. The single-sweep placement
-    // cannot loop, so this returns (a wall-clock guard makes a regression to a hang a hard failure) and
-    // each over-run activity is flagged `levelingWindowExceeded`.
+    // A capacity-1 crane on hire for a SINGLE day (2026-01-01). Five 1-day activities serialise onto
+    // it; only the first lands in the window, the other four are pushed past it. The single-sweep
+    // placement cannot loop, so this returns and each over-run activity is flagged
+    // `levelingWindowExceeded`.
+    //
+    // **The `elapsedMs < 1000` guard that used to sit here is gone** (`docs/TECH_DEBT.md` #241).
+    // Its own comment said what it was for — *"proves termination — a hang would blow the vitest
+    // timeout"* — and that sentence is the argument for deleting it: the vitest timeout already
+    // proves termination, so the bound added nothing except a second way for a busy runner to fail
+    // a test about correctness. Five activities run in well under a millisecond; a 1,000 ms bound is
+    // not a budget, it is a hang detector with a thousandfold margin, standing in front of a hang
+    // detector that does not need one.
+    //
+    // The discriminator, so the next reader does not delete the wrong thing: an elapsed-time
+    // assertion is legitimate **only** when the noise divides out — the ratio test above is the one
+    // example in this file. An absolute millisecond bound on a shared machine is not a gate.
     const craneCal = buildWorkingTimeCalendar(fullDayWeek([]), [
       {
         startDate: '2026-01-01',
@@ -377,10 +389,7 @@ describe('levelSchedule — never hangs even when a resource window can never fi
     );
     const resources: EngineResource[] = [{ id: 'R', capacity: 1, calendar: craneCal }];
     const assignments = activities.map((a) => assign(a.id, 'R', 1));
-    const started = performance.now();
     const { byId, leveled } = run(activities, [], assignments, resources);
-    const elapsedMs = performance.now() - started;
-    expect(elapsedMs).toBeLessThan(1000); // proves termination — a hang would blow the vitest timeout
     expect(byId.get('N0')!.levelingWindowExceeded).toBe(false); // in the window
     for (const i of [1, 2, 3, 4]) {
       expect(byId.get(`N${i}`)!.levelingWindowExceeded).toBe(true); // pushed past the window
@@ -418,9 +427,22 @@ describe('levelSchedule — negative-float within-float cap does not underflow p
 describe('levelSchedule — single-resource many-way contention performance (ADR-0041 §2)', () => {
   it('serialises 2,000 activities all contending for one capacity-1 resource, sub-second', () => {
     // The pathological case the retry-loop placement took ~21 s on: EVERY activity assigns the one
-    // capacity-1 crane, so each is serialised behind all prior placements. The single blackout-gap sweep
-    // is O(k log k) per placement, so the whole run stays well under budget. Assert the exact
-    // serialisation (activity i → offset i × duration) AND a generous wall-clock bound.
+    // capacity-1 crane, so each is serialised behind all prior placements. The single blackout-gap
+    // sweep is O(k log k) per placement, so the whole run stays bounded.
+    //
+    // **The wall-clock assertion that used to close this test is gone** (`docs/TECH_DEBT.md` #241).
+    // It read `expect(elapsedMs).toBeLessThan(3000)`, and it failed on a GitHub runner on a pull
+    // request that touched no API code at all — which is what an absolute wall-clock bound on a
+    // shared machine does, sooner or later. The argument against it was already written in the
+    // docblock of the very next test in this file, in this repository's own words: *budgets are
+    // gated by call-count tests, CI timings are noise*; and it allowed 3,000 ms where the run
+    // measures ~840, so a pass three times slower would have stayed green. It was gating nothing
+    // and flaking anyway.
+    //
+    // What remains is stronger, not weaker: the **exact** serialisation (activity i lands at
+    // offset i × duration), the result count, and the delayed-activity count — all deterministic,
+    // none hardware-dependent. The pass's *shape* is gated by the ratio test below, which cancels
+    // the hardware by dividing two runs on the same machine.
     const N = 2000;
     const activities: EngineActivity[] = [];
     const assignments: EngineAssignment[] = [];
@@ -429,15 +451,12 @@ describe('levelSchedule — single-resource many-way contention performance (ADR
       assignments.push(assign(`N${i}`, 'R', 1));
     }
     const resources: EngineResource[] = [{ id: 'R', capacity: 1 }];
-    const started = performance.now();
     const { byId, leveled } = run(activities, [], assignments, resources);
-    const elapsedMs = performance.now() - started;
     expect(leveled.results).toHaveLength(N);
     // Serialised in priority order: the last activity starts after the other N−1 one-day runs.
     expect(byId.get(`N${N - 1}`)!.leveledStartOffset).toBe((N - 1) * DAY);
     expect(byId.get(`N${N - 1}`)!.leveledFinishOffset).toBe(N * DAY);
     expect(leveled.summary.leveledActivityCount).toBe(N - 1); // all but the first were delayed
-    expect(elapsedMs).toBeLessThan(3000);
   });
 
   /**
@@ -500,8 +519,13 @@ describe('levelSchedule — single-resource many-way contention performance (ADR
 describe('levelSchedule — performance (2,000 activities, ADR-0041 §2)', () => {
   it('levels 2,000 activities across 200 capacity-1 resources well under budget', () => {
     // 10 activities per resource all start at the data date → each resource serialises its 10. The
-    // per-resource interval sweep keeps this bounded (contention is local); assert completion + shape,
-    // not a CI wall-clock — a generous 5 s guard that only trips on a pathological blow-up.
+    // per-resource interval sweep keeps this bounded, because contention is local.
+    //
+    // **Its wall-clock guard is gone too** (`docs/TECH_DEBT.md` #241, which names only the sibling
+    // above). This one is the sharper case: the comment here said in as many words to *"assert
+    // completion + shape, not a CI wall-clock"* — and then asserted a CI wall-clock, on the next
+    // line. Leaving it because the row did not name it is the one-correct-pattern-applied-to-a-
+    // control-and-not-its-neighbour shape this repository has recorded shipping six times.
     const activities: EngineActivity[] = [];
     const assignments: EngineAssignment[] = [];
     const resources: EngineResource[] = [];
@@ -511,13 +535,10 @@ describe('levelSchedule — performance (2,000 activities, ADR-0041 §2)', () =>
       activities.push(task(`N${i}`, 1, { levelingPriority: i }));
       assignments.push(assign(`N${i}`, `R${i % RES}`, 1));
     }
-    const started = performance.now();
     const { leveled } = run(activities, [], assignments, resources);
-    const elapsedMs = performance.now() - started;
     expect(leveled.results).toHaveLength(2000);
     // Each resource's 10th activity is serialised behind the first nine → a real delay was applied.
     expect(leveled.summary.leveledActivityCount!).toBeGreaterThan(0);
-    expect(elapsedMs).toBeLessThan(5000);
   });
 });
 
