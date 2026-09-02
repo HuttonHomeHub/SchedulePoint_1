@@ -99,7 +99,7 @@ import { Surface } from '@/components/ui/surface';
 import { CANVAS_AUTHORING_FLOW_ENABLED, WBS_IMPROVEMENTS_ENABLED } from '@/config/env';
 import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { buildSelectionBarContext } from '@/features/plan-actions/build-selection-context';
-import { deriveWbsBandSource } from '@/features/wbs';
+import { deriveWbsBandSource, wbsBandDescribedRows, wbsGroupAccessibleName } from '@/features/wbs';
 import { formatCalendarDate } from '@/lib/format-date';
 import { cn } from '@/lib/utils';
 
@@ -2861,6 +2861,53 @@ export function TsldPanel({
               live region: a standing fact re-announced on every re-render is noise. Today is
               named only when it differs — absence a reader can distinguish from a fact.
             */}
+            {/*
+              **The WBS band's text equivalent** (`docs/TECH_DEBT.md` #232). The band canvas is
+              `aria-hidden`, so this is the only route to it — and until now there was none, while
+              two places in the repository said there was. The Gantt has named its bucket row since
+              ADR-0059; the diagram, the surface this product exists to be, named nothing.
+
+              **Inside the region and before the listbox**, deliberately: a landmark-navigating
+              reader lands INSIDE the diagram and never passes a preceding sibling (the ADR-0073
+              C2.5 finding the data-date paragraph below records). It is NOT `aria-describedby`-
+              linked like that paragraph, because a description is flattened to a string and would
+              destroy the `aria-level` structure that carries the nesting.
+
+              `role="list"`/`role="listitem"` are explicit rather than implicit: Tailwind v4's
+              Preflight sets `list-style: none` on every `ul`, which is a documented cause of
+              WebKit/VoiceOver dropping the implicit roles. Nothing else in this codebase
+              compensates for that, so there is no precedent to lean on.
+
+              `aria-level` mirrors `GanttPanel`'s treatment of the same hierarchy. It is what stops
+              a reader summing a parent's count and a child's — the counts are subtree totals, so a
+              nested group's is already inside its ancestors'.
+
+              Nothing here is focusable or operable: a band group is not a bar, and ADR-0063 §7
+              refuses selection for the derived bucket. It therefore adds no `option` to the
+              listbox and cannot change the count of AT-reachable activities (ADR-0063 §4).
+            */}
+            {wbsBandGroupRows !== null && wbsBandGroupRows.length > 0 ? (
+              // `jsx-a11y/no-redundant-roles` is right in general and wrong here, so it is
+              // suppressed at exactly these two lines with the reason rather than turned off:
+              // Tailwind v4's Preflight sets `list-style: none` on every `ul` and `ol` (read in
+              // tailwindcss **4.3.3**, its preflight stylesheet, under the comment "Make lists
+              // unstyled by default"), which is a documented cause of WebKit/VoiceOver dropping
+              // the implicit list semantics. The role is redundant in the DOM and load-bearing in
+              // the accessibility tree.
+              //
+              // The version is named here rather than pinned by `pnpm check:claims`, because that
+              // gate's citation patterns match `.js`/`.mjs` only and structurally cannot see a CSS
+              // claim — `docs/TECH_DEBT.md` #240.
+              // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
+              <ul className="sr-only" role="list" aria-label="Work breakdown bands">
+                {wbsBandDescribedRows(wbsBandGroupRows).map((group) => (
+                  // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
+                  <li key={group.id ?? 'unassigned'} role="listitem" aria-level={group.depth + 1}>
+                    {wbsGroupAccessibleName({ label: group.label, count: group.count })}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             {CANVAS_DATA_DATE_ENABLED ? (
               <p id={`${listboxId}-data-date`} className="sr-only">
                 {`Data date ${formatCalendarDate(dataDate)}.`}

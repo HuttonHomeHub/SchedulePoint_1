@@ -1023,6 +1023,32 @@ sweep that ends with a count of failures, named, would have surfaced this the fi
 Not built here, because the sweep is a local convenience rather than a CI gate and this is the
 milestone that found it, not a milestone about it.
 
+### 240. `check:claims` cannot see a claim about a dependency's CSS
+
+**Status:** open · **Raised:** 2026-09-02 (building ADR-0122) · **Size:** S
+
+ADR-0076 makes a decision-bearing claim about a dependency's internals a **registered** claim, so a
+Dependabot bump of that package fails CI and somebody re-reads the citation. `check-claims.mjs`'s
+two citation patterns both end in a JavaScript extension, so **only a JavaScript file can be
+cited**. A claim about a dependency's stylesheet is invisible to the gate in both directions: it is
+not demanded when unregistered, and a register entry for one reads as uncited and is suggested for
+deletion.
+
+Found by hitting it. ADR-0122's decision to write `role="list"` explicitly rests on Tailwind v4's
+Preflight setting `list-style: none` on every `ul` — verified by reading `tailwindcss@4.3.3`'s
+preflight stylesheet. Registering it produced `is registered but no longer cited anywhere. Consider
+removing it.` The version is named in the call-site comment instead, which satisfies §19.11's
+"carry your evidence" and **not** ADR-0076's "a bump re-opens the citation".
+
+This is the third hole in this gate's citation scan, after the two `docs/TECH_DEBT.md` #101 records
+and the dotted-basename one the script's own comments describe — and it is the same shape: the scan
+cannot tell that it is not looking.
+
+**Not fixed here** because widening the pattern is a change to a shared gate, which ADR-0105 makes
+a full-spec trigger; smuggling it into an unrelated accessibility milestone is the judgement that
+rule exists to remove. Cheap when picked up: widen the extension class and re-run, then check
+whether anything else in the tree was silently uncited.
+
 ### 238. `restoreDeleteBatch`'s response fetch throws above 32,767 activities
 
 **Status:** open · **Raised:** 2026-09-02 (#230 M0's backend-performance gate) · **Size:** S

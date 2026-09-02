@@ -2197,9 +2197,16 @@ export function TsldCanvas({
       </div>
       {/* Layer 4 — the pinned WBS band (ADR-0063): an aria-hidden sibling canvas between the ruler
           and the scene. Unlike the resource strip it DOES take pointer events, because it is
-          select-only and a click has to reach a summary; its a11y equivalent is the band group in
-          the parallel DOM listbox. Mounted only when the band has height, so the scene is
-          byte-for-byte today's when the band is off (the parity gate). */}
+          select-only and a click has to reach a summary. Mounted only when the band has height, so
+          the scene is byte-for-byte today's when the band is off (the parity gate).
+
+          Its a11y equivalent is the `Work breakdown bands` list `TsldPanel` renders beside the
+          activity listbox. **This comment used to say "the band group in the parallel DOM
+          listbox", and there was no such thing** (`docs/TECH_DEBT.md` #232): the listbox is built
+          from activities, and the derived bucket has no activity id, so it structurally could not
+          be an option in it. The claim was true of a real summary — an ordinary activity, and
+          therefore already a row — and false of the one group with no other route, which is why
+          nobody reading it noticed. */}
       {wbsBandHeightPx > 0 ? (
         <canvas
           ref={wbsBandCanvasRef}
