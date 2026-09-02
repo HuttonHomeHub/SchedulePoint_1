@@ -9,7 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearDomainData } from './audit-reset';
 
 /**
  * End-to-end tests for the baselines capture/list/get endpoints (M7 Task B1,
@@ -50,42 +50,12 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
   // their snapshot rows reference plans (RESTRICT), so they go before plans; snapshot
   // rows reference their baseline (RESTRICT), so they go first of all.
   async function resetDatabase(): Promise<void> {
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baseline.deleteMany();
-    await prisma.activityDependency.deleteMany();
-    // Notes hold `activity_id`/`plan_id` FKs, so they must go before what they annotate. The
-    // e2e database is shared with the Playwright run and `apps/web/e2e-notes` leaves notes
-    // behind, so without this the failure lands in a spec that has never heard of notes — the
-    // same way `plan_shares` did, one table along.
-    await prisma.note.deleteMany();
-    // Resource assignments hold `activity_id` FKs and resources are organisation-scoped, so both
-    // are swept here for the same shared-database reason as the link tables above
-    // (docs/TECH_DEBT.md #119): a leftover row from a sibling suite or a Playwright run against
-    // the same `app_test` otherwise fails a spec that never touches resources — which happened
-    // on 2026-08-28, in `beforeEach`, to every test in the file at once.
-    // Weighted steps hold `activity_id` (ADR-0044 §33), and they are the THIRD table to fail this
-    // way — after `plan_shares` and `resource_assignments` (`docs/TECH_DEBT.md` #119a). Found the
-    // same way and recorded here rather than in one file: a full API run on 2026-08-31 failed 282
-    // tests across 10 files in `beforeEach` on `activity_steps_activity_id_fkey`, and by the time
-    // anyone looked the database was clean, because a later suite in the same run had swept it.
-    // The log was kept, which is the only reason this was diagnosable at all.
-    await prisma.activityStep.deleteMany();
-    await prisma.resourceAssignment.deleteMany();
-    await prisma.resource.deleteMany();
-    await prisma.activity.deleteMany();
-    await prisma.plan.deleteMany();
-    await prisma.calendarException.deleteMany();
-    await prisma.calendar.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.client.deleteMany();
-    await prisma.invitation.deleteMany();
-    await prisma.orgMember.deleteMany();
-    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
-    await clearAuditEvents(prisma);
-    await prisma.organization.deleteMany();
-    await prisma.verification.deleteMany();
-    await prisma.user.deleteMany();
+    // **The shared list, not a private copy** (`docs/TECH_DEBT.md` #119a). This hand-rolled its own
+    // sweep and omitted `plan_shares`, so `plan.deleteMany()` died on `plan_shares_plan_id_fkey`
+    // whenever a Playwright run left a share behind on the same database — the failure that took all
+    // 45 of `activities.e2e-spec.ts` down. `clearDomainData` is a strict superset in the same
+    // deepest-first order, ending identically, and it handles the append-only audit triggers itself.
+    await clearDomainData(prisma);
   }
 
   afterAll(async () => {

@@ -923,36 +923,6 @@ reading as owed work, which is the drift class this register exists to catch.
 
 ---
 
-### 243. `e2e-csp`'s authenticated case fails on its own interceptor, not on a violation
-
-**Status:** open
-
-**Found:** 2026-09-02, by the full journey sweep run for #96 M4 — and established as **not that
-epic's** by running the same suite on the pre-flip tree, where it fails identically.
-
-`e2e-csp/csp.spec.ts:123` ("the authenticated shell raises no CSP violation") fails with
-`Error: route.fulfill: Fetch response has been disposed` at `csp.spec.ts:62`. That line is the
-interceptor's own non-HTML pass-through: `armCspRecording` routes `**/*`, fetches the response,
-and re-fulfils it. The other two cases in the file pass, so the policy is being applied and a
-deliberate violation is still detected — it is the **authenticated** page's traffic that trips it,
-which is the one with many concurrent sub-resource requests.
-
-**It is not a flake and it is not #96's.** Two runs, both failing on the same test with the same
-error: one inside the sweep on the flipped tree, one on the pre-flip tree with `createRouter`
-untouched. Recorded that way because "the sweep found a failure" and "the change caused a failure"
-are different facts, and the sweep's output is only useful as a comparison.
-
-**What it costs while open.** The CSP gate covers three cases and two of them run, so the policy
-itself is still checked and a violation still fires. What is not covered is the authenticated shell
-— i.e. every screen behind sign-in, which is most of the product. That is the case ADR-0074's
-report-only window existed to watch, so the gap is real rather than cosmetic.
-
-The likely shape is a lifetime problem rather than a policy one: `route.fetch()`'s response is
-disposed when its route is handled or the page navigates, and an interceptor that awaits per request
-across a burst can hold one past that point. Worth confirming against Playwright's own source before
-fixing, and worth checking whether the pass-through branch needs to fulfil at all — a route with no
-header to add could simply `continue()`.
-
 ### 242. `/forgot-password?email=` is a specified capability with no producer
 
 **Status:** open
@@ -977,6 +947,23 @@ puts an address a stranger typed into a URL that lands in browser history; or de
 its validator branch and the spec line, and let the reader type it. Deliberately not decided here —
 #96's scope was the codec, and deciding this inside it would have been the drive-by that row
 warns about.
+
+**Narrowed 2026-09-02, by reading how it would be built rather than by weighing the two in the
+abstract.** They are not symmetric, and both are ADR-0105 spec triggers:
+
+- **Carrying it** needs `SignInForm` to expose its current email to the screen — the link lives in
+  `routes/sign-in.tsx`, outside the form — which is a change to that component's **public
+  contract**.
+- **Deleting it** removes `?email=` from `/forgot-password`'s declared search, which is a change to
+  a **route's** contract, and takes the spec line with it.
+
+So "just pick one" is not available, and neither is a drive-by. Also worth carrying into whichever
+spec picks this up: the capability was specified **by analogy** with the row directly beneath it in
+the same table — `/verify-email`'s _"optional `?email=` so resend works session-less"_ — and the
+analogy does not hold. That one has real producers (Better Auth's verification redirect, and
+sign-up's own `callbackURL`); nothing composes a forgot-password redirect at all. A specification
+inherited from a neighbouring row is the same shape as a docblock inherited from a neighbouring
+file, one layer up.
 
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
@@ -1042,42 +1029,6 @@ sweep that ends with a count of failures, named, would have surfaced this the fi
 Not built here, because the sweep is a local convenience rather than a CI gate and this is the
 milestone that found it, not a milestone about it.
 
-### 241. A wall-clock assertion in the unit suite, next to the test that argues against it
-
-**Status:** open · **Raised:** 2026-09-02 (it failed CI on PR #460) · **Size:** S
-
-`apps/api/src/modules/schedule/engine/level.spec.ts:440` asserts
-`expect(elapsedMs).toBeLessThan(3000)` on a 2,000-activity levelling run. It **failed on a GitHub
-runner** on a pull request that touches no API code at all — the first time it has been seen to,
-and the cause is what the assertion is: an absolute wall-clock bound on a shared machine. It passes
-locally (the whole API unit suite: 1,774 tests, green, run immediately after).
-
-**The argument against it is already written, in the docblock of the very next test.** That sibling
-gates the pass's **shape** with a ratio and says why:
-
-> _A ratio, not a second absolute, because a ratio cancels the hardware. … This is the one place a
-> wall-clock assertion earns its keep against this repository's "budgets are gated by call-count
-> tests, CI timings are noise" doctrine — the noise is in the numerator and the denominator, and
-> divides out._
-
-and, of the absolute bound above it:
-
-> _It allows 3,000 ms where the run measures ~840; a pass that got **three times** slower would
-> still be green._
-
-So it is loose enough to miss a real regression and tight enough to flake — the worst of both, on a
-runner three times slower than the box the number came from.
-
-**The proposed patch is to delete the assertion, not to raise the number.** Everything else in that
-test — the exact serialisation, `leveledActivityCount`, the result length — is deterministic and
-worth keeping. The cost gate is the ratio test beside it, which was designed for this and measured
-before its bound was chosen. Raising 3,000 to 10,000 keeps a gate that was already established not
-to catch anything.
-
-**Not fixed in the PR that hit it**, which is frontend-only: changing an unrelated engine test to
-get a green is exactly the widening the babysit rules refuse. One re-run confirmed the failure is
-not that PR's.
-
 ### 240. `check:claims` cannot see a claim about a dependency's CSS
 
 **Status:** open · **Raised:** 2026-09-02 (building ADR-0122) · **Size:** S
@@ -1103,31 +1054,6 @@ cannot tell that it is not looking.
 a full-spec trigger; smuggling it into an unrelated accessibility milestone is the judgement that
 rule exists to remove. Cheap when picked up: widen the extension class and re-run, then check
 whether anything else in the tree was silently uncited.
-
-### 238. `restoreDeleteBatch`'s response fetch throws above 32,767 activities
-
-**Status:** open · **Raised:** 2026-09-02 (#230 M0's backend-performance gate) · **Size:** S
-
-`ActivitiesService.restoreDeleteBatch` ends by re-reading the restored rows with
-`findMany({ where: { id: { in: ids } } })`. Prisma does not chunk an `{ in: [...] }` list, so at
-roughly **32,767 members** the query exceeds Postgres's bind-parameter ceiling and the request
-fails with `too many bind variables in prepared statement, expected maximum of 32767`.
-**Reproduced live** by the reviewer against a real database, not inferred from the schema.
-
-It is the same defect class ADR-0096's gate pass already found and fixed one module along, which is
-why it is filed rather than argued about: the pattern is known to be wrong here and this is another
-instance of it, not a new judgement.
-
-**Why it is not urgent.** The restore is inside a transaction, so the throw rolls the whole thing
-back — nothing is half-restored. The ceiling is 16× the largest measured case (#230 M0-T3 timed
-2,000 activities at 312–337 ms), and a 32,000-activity phase is not a shape any measured plan has.
-
-**Two things a fix should not get wrong.** The chunked read must preserve the response's current
-shape and ordering contract, and the same reviewer measured that this fetch is already the
-endpoint's dominant cost — **~168–214 ms at 2,001 rows and ~805–932 ms at 10,001**, 8–15× the
-members query beside it — so chunking it will make it slower, not faster. That is the right trade
-(a slower correct read beats a fast one that throws) and should be stated in the fix rather than
-discovered later.
 
 ### 239. The plan's members query and its restore both scale with a fetch nobody profiles
 
@@ -1275,6 +1201,9 @@ One line each. The story lives where the link points, not here.
 | #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | --- | -------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 96  | The router JSON-parsed every search param, so a foreign one arrived as the wrong type  | 2026-09-02 | ADR-0123 and `docs/specs/router-search-params/`. The codec is replaced at the router, which is the only place it could be — `parseSearch` has no per-route override. Three of the epic's own load-bearing claims were false and each correction changed the work: the row's proposed remedy (`parseSearchWith(v => v)`) would have fixed nothing, because the decode step coerces before the parser is reached; a validator cannot rename a key any more than remove one; and the library pair round-trips everything it wrote itself, so the damage was only ever to URLs this app did not compose. Two census gates keep the next route and the next reader honest. Follow-up filed as #242.                                                                                                                                                                                                                                                                                                                                                                        |
+| 238 | `restoreDeleteBatch`'s response fetch threw above 32,767 activities                    | 2026-09-02 | Chunked through the new shared `common/db/id-chunks.ts`, which is the expiry runner's own measured constant and helper **extracted rather than copied** — two copies of a limit measured once would drift, and the drift would be invisible. The comment states the trade (the fetch is the endpoint's dominant cost, so chunking is slower at every size and correct above the ceiling), why re-keying on `deleteBatchId` is impossible (`restoreBatch` nulls it), and why the file's six other `{ in: ids }` sites need nothing — all six read request ids bounded at 2,000 by `@ArrayMaxSize`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 241 | A wall-clock assertion in the unit suite, next to the test that argues against it      | 2026-09-02 | All four absolute wall-clock assertions in `apps/api` deleted — the row named one, a sweep found four, and **three of them sat under a comment arguing against exactly that assertion** ("assert completion + shape, not a CI wall-clock", then a CI wall-clock on the next line). Nothing was wrong in any single file; the wrongness was between each comment and the line beneath it. The deterministic assertions and the ratio gate stay, and the discriminator is written where the next reader will meet it: an elapsed-time assertion is legitimate only when the noise divides out.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 243 | `e2e-csp`'s authenticated case failed locally on its own interceptor                   | 2026-09-02 | The interceptor fetched and re-fulfilled **every** request to read a content-type, and `Route.fulfill({ response })` asserts the fetched body is still held by uid (`playwright-core` `coreBundle.js:13373`, now a registered claim) — on a loaded machine a burst of sub-resource fetches outlives its own routes. A CSP header only means anything on a **document**, so every one of those round trips was work done to hand a response back unchanged; `resourceType()` is known before any fetch, so a sub-resource takes `continue()` now. Exposure drops from every request on the page to one per navigation — stated as a reduction, not an impossibility. Three of three pass, including the violation-still-fires case, so the policy is still applied. The row's first version claimed the gate was blind to the authenticated shell; corrected before it merged, because CI ran that suite green throughout.                                                                                                                                             |
 | 95  | `apps/api`'s three Vite configs were ESM in a CommonJS package                         | 2026-09-01 | Renamed to `.mts` (the row's own smaller alternative — `"type": "module"` would have meant auditing NestJS's CommonJS assumptions one at a time). Warning reproduced first, then gone; all three configs load, ESLint still reaches them, and the API e2e suite passed 572/572 under the renamed ones. The sweep for the same class then found a **second** occurrence the row did not know about, in `apps/web/vitest.config.ts` — an extensionless `./vite.config` import, fixed the same way; every other workspace is clean.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 151 | The Gantt grid splitter had no browser-level coverage                                  | 2026-09-01 | `e2e-gantt/gantt.spec.ts` now drives the separator to its floor and one step above it and asserts the pinned columns end exactly where the chart begins — verified red by understating `ganttFixedWidth` by 80 px, which reproduced ADR-0095's incident verbatim (`Float` at 881–941 against a chart starting at 861). It then found **two live defects** on its first extension: the `vs baseline` column is not a `GanttColumn`, so the pinned block summed to `pane + 72` whenever a baseline was active; and `useResizablePanelPrefs` clamped a stored size only in its `useState` initialiser, so a floor that rose afterwards never reached it. Both fixed with cases verified red. `grid-width.structural.test.ts` was green against both and now records why it structurally cannot see the second.                                                                                                                                                                                                                                                           |
 | 71  | The WBS band's derived bucket was distinguished by colour alone                        | 2026-09-01 | `docs/specs/wbs-bucket-bracket/`. The bucket is now an unfilled three-sided bracket, open at the foot — the language the Gantt already uses, for the reason it states: it is not a scheduled thing, it is the extent of things that are. **Decided by looking, not by reviewing.** The two specialist reviews disagreed; both remedies were mocked up on a real canvas with the product's own tokens, geometry and `truncateToWidth`, with a greyscale toggle applying the actual 1.4.1 test. The rejected remedy — a dashed outline over the fill — had been argued to "stay visually distinct at any bar width above a couple of px", and at 12px with colour withdrawn it reads as a slightly textured block: `--muted-foreground` and `--foreground` are both mid-greys once hue is gone. The label's ink moved with the fill in the same change, because it was `--background` — the canvas ground itself — so removing the fill alone would have painted the name invisible. `paint.wbs-band.test.ts` is the band's first paint-level test, verified red first. |
@@ -2244,6 +2173,45 @@ those would be a real defect in the suite's isolation, and calling it flake is h
 independently. But a gate that fails one run in three and is green on the retry is a gate people
 learn to re-run rather than read, which is the failure mode `docs/RECONCILE.md` describes for
 documentation and applies just as well here.
+
+**2026-09-02 — the count, and the fifth table.** It happened again, from the same cause and one
+table further on: `activities.e2e-spec.ts`'s hand-rolled sweep omitted `plan_shares`, so its
+`plan.deleteMany()` died on `plan_shares_plan_id_fkey` after a full Playwright sweep left a share
+behind on the same database, failing **all 45** of that file's tests with a message naming a
+constraint and no producer.
+
+The file's own docblock describes this class in four paragraphs and cites this row three times, and
+the code beneath it _was_ the class — nothing wrong in either half, the wrongness only in the
+relationship, which is why reading the file never caught it.
+
+That file now calls the shared `clearDomainData`, checked line by line first: it is a strict
+superset in the same deepest-first order, ending identically. **Twenty-four other spec files still
+hand-roll a sweep that omits `plan_shares`** — enumerated rather than estimated:
+`activity-batch-ops`, `baselines`, `calendars`, `clients`, `cross-plan-dependencies`,
+`dependencies`, `interchange`, `interchange-export`, `invitations`, `library-archive`,
+`library-search`, `me`, `members`, `notes`, `organizations`, `overview`, `plan-lock`,
+`plan-lock-write-gate`, `plans`, `programme-schedule`, `projects`, `recycle-bin`,
+`resource-hierarchy`, `resources`.
+
+Each was latent in the same way and **local-only**: CI provisions a fresh database per job, so the
+residue can only come from a developer's own Playwright run against `app_test`.
+
+**All twenty-four are now converted, and the fix was verified against the real defect rather than
+against a reading.** Every one calls `clearDomainData`; a scan for a hand-rolled sweep missing
+`plan_shares` returns nothing. Two of the twenty-four named `calendar_shifts` and
+`calendar_exception_windows`, which the shared list does not — checked against the schema rather
+than assumed, and both are `onDelete: Cascade` from their parents, so the shared list is a true
+superset behaviourally as well as by name.
+
+The proof is the sequence that produced the defect, run deliberately: `scripts/e2e-local.sh
+web:share` leaves exactly one `plan_shares` row, and against it `plans.e2e-spec.ts` **fails all 14
+tests on `plan_shares_plan_id_fkey` with the old sweep and passes with the shared one.** Then the
+whole suite: 44 files, 573 passed, 1 skipped.
+
+This row stays open on its remaining half: nothing stops a twenty-seventh copy being written. The
+list is shared by convention, not by a gate, and the gate is not obvious — a census of `deleteMany`
+call sites would sweep in every legitimate one inside a test body. Worth a thought, not worth a bad
+rule.
 
 ### 142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
 

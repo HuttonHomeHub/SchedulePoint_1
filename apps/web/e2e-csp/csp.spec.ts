@@ -55,13 +55,31 @@ declare global {
 async function armCspRecording(page: Page): Promise<void> {
   const policy = deployedCspPolicy();
 
+  // **Only DOCUMENT requests are fetched and re-fulfilled** (`docs/TECH_DEBT.md` #243).
+  //
+  // This used to `route.fetch()` **every** request, read its content-type, and re-`fulfill` the
+  // non-HTML ones unchanged. That is where it failed locally: `Route.fulfill` with a `response`
+  // looks the fetched body up by uid and asserts it is still there
+  // (`playwright-core` `coreBundle.js:13373` — `assert(buffer, "Fetch response has been
+  // disposed")`), and on a loaded machine a burst of sub-resource fetches can outlive their own
+  // routes. CI, on an idle runner, never saw it.
+  //
+  // A Content-Security-Policy header only means anything on a **document**, so every one of those
+  // round trips was work done to hand back a response unchanged. `resourceType()` is decided before
+  // any fetch, so a sub-resource now takes `continue()` — the browser's own path, no body copied
+  // into Node and back, and no uid to go stale.
+  //
+  // **What this does not claim:** the document fulfill still holds a fetched response, so the same
+  // assertion is still reachable in principle. The exposure drops from every request on the page to
+  // one per navigation, which is the difference between a suite that fails on a busy machine and one
+  // that does not.
   await page.route('**/*', async (route) => {
-    const response = await route.fetch();
-    const headers = response.headers();
-    if (!(headers['content-type'] ?? '').includes('text/html')) {
-      await route.fulfill({ response });
+    if (route.request().resourceType() !== 'document') {
+      await route.continue();
       return;
     }
+    const response = await route.fetch();
+    const headers = response.headers();
     await route.fulfill({
       response,
       headers: {

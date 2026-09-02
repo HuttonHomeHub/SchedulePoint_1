@@ -50,8 +50,18 @@ were written at M0 to record a measurement nobody could otherwise see, and they 
 flip's effect visible in a real browser rather than in a docblock — the failure arrived with the
 sentence chosen for it three milestones earlier.
 
-## What the sweep does not prove
+## What the sweep does not prove — and one thing this file got wrong
 
-The `csp` suite's authenticated case has been failing since before this work, so the CSP gate did
-not cover the authenticated shell during this flip. That is #243's cost, recorded there rather than
-implied here.
+The `csp` suite's authenticated case has been failing since before this work. **This section first
+said that meant "the CSP gate did not cover the authenticated shell during this flip", and that is
+false.** `.github/workflows/ci.yml:748` runs `test:e2e:csp` on every pull request, and PR #460's
+End-to-end job passed at 09:01 the same day with that suite in it. The failure is local — this
+machine, under the load of a 44-suite sweep running beside other work — and the gate covered the
+authenticated shell throughout.
+
+Corrected in place within the hour, and kept rather than deleted: it is an ADR-0076 Class 3 claim
+asserted from two local runs, in a document whose whole subject is not trusting a failure you have
+not accounted for. #243 carries the same correction.
+
+What the sweep genuinely does not prove is anything about a **browser other than Chromium**, which
+is this repository's standing limitation and not this epic's.

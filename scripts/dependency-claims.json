@@ -12,7 +12,8 @@
     "@axe-core/playwright": "4.13.0",
     "@tanstack/react-router": "1.170.27",
     "@tanstack/history": "1.162.1",
-    "@tanstack/router-core": "1.171.22"
+    "@tanstack/router-core": "1.171.22",
+    "playwright-core": "1.62.1"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
@@ -403,14 +404,6 @@
       ]
     },
     {
-      "ref": "searchParams.js:7",
-      "package": "@tanstack/router-core",
-      "path": "dist/esm/searchParams.js",
-      "lines": "7",
-      "anchor": "const defaultStringifySearch = stringifySearchWith(JSON.stringify, JSON.parse);",
-      "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
-    },
-    {
       "ref": "searchParams.js:18-30",
       "package": "@tanstack/router-core",
       "path": "dist/esm/searchParams.js",
@@ -433,12 +426,58 @@
       ]
     },
     {
+      "ref": "searchParams.js:7",
+      "package": "@tanstack/router-core",
+      "path": "dist/esm/searchParams.js",
+      "lines": "7",
+      "anchor": "const defaultStringifySearch = stringifySearchWith(JSON.stringify, JSON.parse);",
+      "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
+    },
+    {
       "ref": "axe.js:19564-19569",
       "package": "axe-core",
       "path": "axe.js",
       "lines": "19564-19569",
       "anchor": "throw new Error('No elements found for include in ' + env + ' Context');",
       "citedBy": ["docs/specs/graphite/m5-command-strip.md", "CLAUDE.md"]
+    },
+    {
+      "ref": "create-context.mjs:174-180",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "174-180",
+      "anchor": "storage: options.rateLimit?.storage || (options.secondaryStorage ? \"secondary-storage\" : \"",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
+    },
+    {
+      "ref": "create-context.mjs:210",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "210",
+      "anchor": "skipOriginCheck: options.advanced?.disableOriginCheck !== void 0 ? options.advanced.disabl",
+      "citedBy": ["apps/api/src/common/auth/better-auth.ts"]
+    },
+    {
+      "ref": "create-context.mjs:217-227",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "217-227",
+      "anchor": "if (promise instanceof Promise) options.advanced.backgroundTasks.handler(promise.catch((e)",
+      "citedBy": [
+        "docs/adr/0075-mail-delivery-is-best-effort.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "create-context.mjs:220",
+      "package": "better-auth",
+      "path": "dist/context/create-context.mjs",
+      "lines": "220",
+      "anchor": "} else await promise;",
+      "citedBy": [
+        "docs/TECH_DEBT.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
     },
     {
       "ref": "dispatch.mjs:119-128",
@@ -455,49 +494,6 @@
       "lines": "255-257",
       "anchor": "return shouldReturnResponse ? toResponse(result.response, {",
       "citedBy": ["docs/specs/mail-delivery-failure-visibility/feature-spec.md"]
-    },
-    {
-      "ref": "index.mjs:168",
-      "package": "better-auth",
-      "path": "dist/api/index.mjs",
-      "lines": "168",
-      "anchor": "const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);",
-      "citedBy": [
-        "docs/adr/0075-mail-delivery-is-best-effort.md",
-        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "index.mjs:311-324",
-      "package": "better-auth",
-      "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "311-324",
-      "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
-      "citedBy": [
-        "docs/TECH_DEBT.md",
-        "docs/adr/0077-public-screens-brand-surface.md",
-        "docs/specs/public-screens-brand/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "index.mjs:311-325",
-      "package": "better-auth",
-      "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "311-325",
-      "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
-      "citedBy": ["docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"]
-    },
-    {
-      "ref": "index.mjs:64-70",
-      "package": "better-auth",
-      "path": "dist/api/rate-limiter/index.mjs",
-      "lines": "64-70",
-      "anchor": "function rateLimitResponse(retryAfter) {",
-      "citedBy": [
-        "docs/adr/0077-public-screens-brand-surface.md",
-        "docs/specs/public-screens-brand/feature-spec.md",
-        "docs/specs/public-screens-brand/implementation-plan.md"
-      ]
     },
     {
       "ref": "email-verification.mjs:108-121",
@@ -545,6 +541,57 @@
       "lines": "285-286",
       "anchor": "if (ctx.query.callbackURL) throw ctx.redirect(ctx.query.callbackURL);",
       "citedBy": ["apps/web/src/routes/verify-email.tsx"]
+    },
+    {
+      "ref": "index.mjs:168",
+      "package": "better-auth",
+      "path": "dist/api/index.mjs",
+      "lines": "168",
+      "anchor": "const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);",
+      "citedBy": [
+        "docs/adr/0075-mail-delivery-is-best-effort.md",
+        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "index.mjs:311-324",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "311-324",
+      "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
+      "citedBy": [
+        "docs/TECH_DEBT.md",
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/feature-spec.md"
+      ]
+    },
+    {
+      "ref": "index.mjs:311-325",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "311-325",
+      "anchor": "return path === \"/request-password-reset\" || path === \"/send-verification-email\" || path.s",
+      "citedBy": ["docs/adr/0074-account-recovery-verification-enforcement-and-csp.md"]
+    },
+    {
+      "ref": "index.mjs:64-70",
+      "package": "better-auth",
+      "path": "dist/api/rate-limiter/index.mjs",
+      "lines": "64-70",
+      "anchor": "function rateLimitResponse(retryAfter) {",
+      "citedBy": [
+        "docs/adr/0077-public-screens-brand-surface.md",
+        "docs/specs/public-screens-brand/feature-spec.md",
+        "docs/specs/public-screens-brand/implementation-plan.md"
+      ]
+    },
+    {
+      "ref": "internal-adapter.mjs:773-783",
+      "package": "better-auth",
+      "path": "dist/db/internal-adapter.mjs",
+      "lines": "773-783",
+      "anchor": "* return it. The first concurrent caller receives the latest row for the",
+      "citedBy": ["docs/specs/account-security/feature-spec.md"]
     },
     {
       "ref": "password.mjs:127-163",
@@ -776,52 +823,6 @@
       ]
     },
     {
-      "ref": "create-context.mjs:174-180",
-      "package": "better-auth",
-      "path": "dist/context/create-context.mjs",
-      "lines": "174-180",
-      "anchor": "storage: options.rateLimit?.storage || (options.secondaryStorage ? \"secondary-storage\" : \"",
-      "citedBy": ["docs/specs/account-security/feature-spec.md"]
-    },
-    {
-      "ref": "create-context.mjs:210",
-      "package": "better-auth",
-      "path": "dist/context/create-context.mjs",
-      "lines": "210",
-      "anchor": "skipOriginCheck: options.advanced?.disableOriginCheck !== void 0 ? options.advanced.disabl",
-      "citedBy": ["apps/api/src/common/auth/better-auth.ts"]
-    },
-    {
-      "ref": "create-context.mjs:217-227",
-      "package": "better-auth",
-      "path": "dist/context/create-context.mjs",
-      "lines": "217-227",
-      "anchor": "if (promise instanceof Promise) options.advanced.backgroundTasks.handler(promise.catch((e)",
-      "citedBy": [
-        "docs/adr/0075-mail-delivery-is-best-effort.md",
-        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "create-context.mjs:220",
-      "package": "better-auth",
-      "path": "dist/context/create-context.mjs",
-      "lines": "220",
-      "anchor": "} else await promise;",
-      "citedBy": [
-        "docs/TECH_DEBT.md",
-        "docs/specs/mail-delivery-failure-visibility/feature-spec.md"
-      ]
-    },
-    {
-      "ref": "internal-adapter.mjs:773-783",
-      "package": "better-auth",
-      "path": "dist/db/internal-adapter.mjs",
-      "lines": "773-783",
-      "anchor": "* return it. The first concurrent caller receives the latest row for the",
-      "citedBy": ["docs/specs/account-security/feature-spec.md"]
-    },
-    {
       "ref": "verification-token-storage.mjs:11-13",
       "package": "better-auth",
       "path": "dist/db/verification-token-storage.mjs",
@@ -900,6 +901,14 @@
       "lines": "932-957",
       "anchor": "_formatError(message, type, response, command) {",
       "citedBy": ["apps/api/src/common/mail/smtp-mail.service.spec.ts"]
+    },
+    {
+      "ref": "coreBundle.js:13373",
+      "package": "playwright-core",
+      "path": "lib/coreBundle.js",
+      "lines": "13373",
+      "anchor": "assert(buffer, \"Fetch response has been disposed\");",
+      "citedBy": ["apps/web/e2e-csp/csp.spec.ts", "docs/TECH_DEBT.md"]
     },
     {
       "ref": "index.esm.mjs:2739",

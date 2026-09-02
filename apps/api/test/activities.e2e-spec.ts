@@ -8,7 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearDomainData } from './audit-reset';
 
 /**
  * End-to-end tests for activities: nested create/list under a parent plan, the
@@ -89,25 +89,21 @@ describe.skipIf(!hasDatabase)('Activities API (e2e)', () => {
     // Diagnosed the same day only because `scripts/e2e-local.sh` tees the whole log to a file — the
     // observer piped the command through `tail` exactly as that row warns them not to, and the
     // mechanism caught what the habit lost. That is ADR-0058 working as advertised.
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baseline.deleteMany();
-    await prisma.activityStep.deleteMany();
-    await prisma.resourceAssignment.deleteMany();
-    await prisma.resource.deleteMany();
-    await prisma.activity.deleteMany();
-    await prisma.plan.deleteMany();
-    await prisma.calendarException.deleteMany();
-    await prisma.calendar.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.client.deleteMany();
-    await prisma.invitation.deleteMany();
-    await prisma.orgMember.deleteMany();
-    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
-    await clearAuditEvents(prisma);
-    await prisma.organization.deleteMany();
-    await prisma.verification.deleteMany();
-    await prisma.user.deleteMany();
+    // **The shared list, not a twenty-sixth private copy** (`docs/TECH_DEBT.md` #119a).
+    //
+    // This block used to hand-roll the sweep, and it omitted `plan_shares` — so a `plan.deleteMany()`
+    // here died on `plan_shares_plan_id_fkey` after a Playwright run left a share behind on the same
+    // database, taking all 45 of this file's tests with it. `clearDomainData` already sweeps that
+    // table, and its own docblock says why one list exists: *"a second copy would drift again, and
+    // the drift would be invisible until an unrelated change reordered the files."* It had, and it
+    // was. The comment above this one describes the class in detail and the code beneath it was the
+    // class — which is the shape this repository keeps recording: nothing wrong in either half, and
+    // the wrongness only in the relationship.
+    //
+    // It is a strict superset of what was here, in the same deepest-first order, ending the same
+    // way (`organization` → `verification` → `user`), and it handles `audit_events`' append-only
+    // triggers itself. Checked line by line before swapping, not assumed from the name.
+    await clearDomainData(prisma);
   });
 
   const server = () => app.getHttpServer();
