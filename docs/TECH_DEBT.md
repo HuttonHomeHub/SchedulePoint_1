@@ -1023,6 +1023,57 @@ sweep that ends with a count of failures, named, would have surfaced this the fi
 Not built here, because the sweep is a local convenience rather than a CI gate and this is the
 milestone that found it, not a milestone about it.
 
+### 238. `restoreDeleteBatch`'s response fetch throws above 32,767 activities
+
+**Status:** open · **Raised:** 2026-09-02 (#230 M0's backend-performance gate) · **Size:** S
+
+`ActivitiesService.restoreDeleteBatch` ends by re-reading the restored rows with
+`findMany({ where: { id: { in: ids } } })`. Prisma does not chunk an `{ in: [...] }` list, so at
+roughly **32,767 members** the query exceeds Postgres's bind-parameter ceiling and the request
+fails with `too many bind variables in prepared statement, expected maximum of 32767`.
+**Reproduced live** by the reviewer against a real database, not inferred from the schema.
+
+It is the same defect class ADR-0096's gate pass already found and fixed one module along, which is
+why it is filed rather than argued about: the pattern is known to be wrong here and this is another
+instance of it, not a new judgement.
+
+**Why it is not urgent.** The restore is inside a transaction, so the throw rolls the whole thing
+back — nothing is half-restored. The ceiling is 16× the largest measured case (#230 M0-T3 timed
+2,000 activities at 312–337 ms), and a 32,000-activity phase is not a shape any measured plan has.
+
+**Two things a fix should not get wrong.** The chunked read must preserve the response's current
+shape and ordering contract, and the same reviewer measured that this fetch is already the
+endpoint's dominant cost — **~168–214 ms at 2,001 rows and ~805–932 ms at 10,001**, 8–15× the
+members query beside it — so chunking it will make it slower, not faster. That is the right trade
+(a slower correct read beats a fast one that throws) and should be stated in the fix rather than
+discovered later.
+
+### 239. The plan's members query and its restore both scale with a fetch nobody profiles
+
+**Status:** unverified · **Raised:** 2026-09-02 (#230 M0's backend-performance gate) · **Size:** S
+
+Two suggestions from that review, recorded rather than acted on because neither is worth its cost
+today. Both were **measured**, not estimated.
+
+**(a) The anchor could be one correlated subquery instead of a full member fetch.**
+`batchRestoreAnchor` reads every member to pick one id. The predicate is self-referential ("parent
+not in the batch") so no single-row Prisma query can express it — but raw SQL can, as a
+`NOT EXISTS` self-join with `LIMIT 1`, measured at **0.11–3.3 ms across 2,000–50,000 rows** in
+natural scan order. Declined for now: it trades the typed query builder for hand-written SQL on a
+correctness-sensitive predicate, to save a few milliseconds of a cost that is itself a small
+fraction of #238's fetch. Revisit only if a profile shows the whole restore near its budget **and**
+this query is a meaningful share of it.
+
+**(b) The scale harness measures an unrepresentative phase.**
+`apps/api/test/cascade-restore-scale.e2e-spec.ts` seeds 2,000 flat `TASK` children of one summary
+with no dependencies, notes, steps, assignments or baselines — so six of the twelve `updateMany`s
+in `restoreBatch`, and both of `restoreLinksInBatch`'s queries, run as **0-row no-ops**. A real WBS
+phase has internal logic and often assignments. Everything skipped is index-backed (all twelve
+`delete_batch_id` indexes confirmed present), so this is unlikely to move the verdict — the
+measured 337 ms sits 15× inside its 5,000 ms condition — but the number is not representative of
+the shape #230 M1 actually restores, and saying so is cheaper than letting a later reader assume it
+is.
+
 ### 235. A failing typecheck did not block the pre-push gate, because `tsc` exits 2
 
 **Status:** open · **Found and fixed:** 2026-09-01 · **Size:** S (fixed) · **Owner:** repo
@@ -3812,6 +3863,15 @@ the batch's root (a member whose parent is outside the batch), which is the only
 `assertParentActive` can accept, and falls back to the lowest id so a batch with no such member
 still names one rather than throwing. Pinned by `batch-restore-anchor.spec.ts`, verified red against
 `(members) => members[0]?.id`.
+
+**M0's gate pass found nothing blocking.** Security traced every gate and confirmed none moves, that
+the widened `select` cannot leak (`assertValidParent` guarantees every `parentId` was same-org and
+same-plan when it was written), and that a crafted `parentId` cannot steer the sweep, because
+`restoreBatch` keys on the anchor ROW's own `deleteBatchId` read inside the transaction. Two
+non-blocking suggestions were folded: the fallback now says it fell back, and the scale harness
+cleans up in `finally`. Backend-performance re-derived the M0-T3 numbers from the code and put the
+anchor change's own cost at **~0.9 ms of a 312 ms restore**; its two substantive findings are #238
+and #239.
 
 **And the attempt to make the API e2e case discriminating is recorded in that file rather than
 hidden, because it is the more useful half.** Written the obvious way it PASSES against the defect;
