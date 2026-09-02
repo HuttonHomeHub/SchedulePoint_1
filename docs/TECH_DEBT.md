@@ -948,6 +948,23 @@ its validator branch and the spec line, and let the reader type it. Deliberately
 #96's scope was the codec, and deciding this inside it would have been the drive-by that row
 warns about.
 
+**Narrowed 2026-09-02, by reading how it would be built rather than by weighing the two in the
+abstract.** They are not symmetric, and both are ADR-0105 spec triggers:
+
+- **Carrying it** needs `SignInForm` to expose its current email to the screen — the link lives in
+  `routes/sign-in.tsx`, outside the form — which is a change to that component's **public
+  contract**.
+- **Deleting it** removes `?email=` from `/forgot-password`'s declared search, which is a change to
+  a **route's** contract, and takes the spec line with it.
+
+So "just pick one" is not available, and neither is a drive-by. Also worth carrying into whichever
+spec picks this up: the capability was specified **by analogy** with the row directly beneath it in
+the same table — `/verify-email`'s _"optional `?email=` so resend works session-less"_ — and the
+analogy does not hold. That one has real producers (Better Auth's verification redirect, and
+sign-up's own `callbackURL`); nothing composes a forgot-password redirect at all. A specification
+inherited from a neighbouring row is the same shape as a docblock inherited from a neighbouring
+file, one layer up.
+
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
 **Status:** unverified · **Found:** 2026-08-05, by the five specialist gates over the M0–M5 diff. Each was raised as
