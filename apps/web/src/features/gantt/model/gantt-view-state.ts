@@ -6,6 +6,8 @@ import {
   type GanttSortKey,
 } from '../layout/row-model';
 
+import { searchString } from '@/lib/router/search-string';
+
 /**
  * **The Gantt's view memory** (ADR-0095 M5-T6): sort, hidden columns and the collapse set, as
  * typed URL search params.
@@ -97,15 +99,12 @@ export const GANTT_VIEW_PARAMS = {
 /**
  * Coerce a search value to a string, or null.
  *
- * The single place the #96 trap is handled: a number, a boolean and a one-element array all become
- * their string form, because a planner who typed `?gsort=1` meant the text `1` and should get the
- * default rather than a crash. Anything else (an object, an empty array) is null.
+ * **Was** "the single place the #96 trap is handled", and it was one of four — which is what #96 M1
+ * closes. The rule now lives in `lib/router/search-string.ts`; this keeps its own name and
+ * `string | null` return so no consumer here changes.
  */
 function asSearchString(value: unknown): string | null {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value) && value.length > 0) return asSearchString(value[0]);
-  return null;
+  return searchString(value) ?? null;
 }
 
 /**

@@ -2,6 +2,15 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { onboard } from './support';
 
+/** Create an organisation-library calendar from the Calendars screen. */
+async function createCalendar(page: Page, name: string): Promise<void> {
+  await page.getByRole('button', { name: 'New calendar' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Name').fill(name);
+  await dialog.getByRole('button', { name: 'Create calendar' }).click();
+  await expect(dialog).toBeHidden();
+}
+
 /** The organisation nav's link, scoped so it does not also match the breadcrumb. */
 function navLink(page: Page, name: string): ReturnType<Page['getByRole']> {
   return page.getByLabel('Organisation', { exact: true }).getByRole('link', { name, exact: true });
@@ -42,4 +51,50 @@ test('#96 M0 — a numeric search term is re-quoted in the URL', async ({ page }
   // The measured answer, pinned so a future fix has to come here and say it changed the URL.
   // `%22` is `"`: four characters typed, six carried.
   expect(raw, 'the numeric term is no longer re-quoted — see #96 M0').toContain('q=%222026%22');
+});
+
+/**
+ * **#96 M1's acceptance case: a hand-typed numeric search term reaches the search box.**
+ *
+ * This is the milestone's entry point (ADR-0081), and the only place it can be checked. `?q=2026`
+ * decodes to the NUMBER `2026`, so before M1 `pickText`'s `typeof value === 'string'` test threw it
+ * away: the planner got an unfiltered table with an empty search box, and nothing said why. Every
+ * unit test of that reader hands it a literal and never crosses the parser — the same blind spot
+ * that let `?verified=1` ship broken with a green suite (ADR-0074 M5).
+ *
+ * **Both halves are asserted, and that is the plan's stated risk.** Asserting only the table would
+ * pass against a screen that filtered correctly while showing an empty field, which is a worse bug
+ * than the one being fixed — the planner cannot tell what they are looking at. Asserting only the
+ * field would pass against a field that echoed the URL and filtered nothing.
+ *
+ * **The negative control is not decoration.** Without it a green run cannot distinguish "the filter
+ * works" from "the filter is ignored and everything shows", because the positive case's expected
+ * row is present either way.
+ */
+test('#96 M1 — a numeric term typed into the URL filters the library and fills the field', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  await onboard(page, stamp);
+  await navLink(page, 'Calendars').click();
+  await expect(page.getByRole('button', { name: 'New calendar' })).toBeVisible();
+
+  await createCalendar(page, '2026 shutdown');
+  await createCalendar(page, 'Night shift');
+  await expect(page.getByRole('cell', { name: '2026 shutdown', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Night shift', exact: true })).toBeVisible();
+
+  // Arrive by URL, the way a colleague receiving a pasted link does — never by typing, which would
+  // put a string into the field without the router ever parsing one.
+  const url = new URL(page.url());
+  await page.goto(`${url.pathname}?q=2026`);
+
+  await expect(page.getByLabel('Search calendars')).toHaveValue('2026');
+  await expect(page.getByRole('cell', { name: '2026 shutdown', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Night shift', exact: true })).toHaveCount(0);
+
+  // The negative control: a term matching nothing reaches the filter too, and says so.
+  await page.goto(`${url.pathname}?q=notacalendar`);
+  await expect(page.getByLabel('Search calendars')).toHaveValue('notacalendar');
+  await expect(page.getByText('No calendars match these filters.')).toBeVisible();
 });

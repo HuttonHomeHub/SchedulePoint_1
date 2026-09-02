@@ -925,7 +925,7 @@ reading as owed work, which is the drift class this register exists to catch.
 
 ### 96. The router JSON-parses every search param, so a foreign one can arrive as the wrong type
 
-**Status:** unverified
+**Status:** open · M0 and M1 landed 2026-09-02 (`docs/specs/router-search-params/`); M2–M5 remain
 
 > **Corrected 2026-08-08.** The body below says `/accept-invite` has "the same latent shape" and is
 > not normalised. **It is** — `app/router.tsx:409-413`. The remaining work is the router-level
@@ -958,6 +958,36 @@ coercing what it wants. That is a change to **every** route's search handling �
 typed URL params (ADR-0053 M6) and the Gantt's `?view=` among them — so it needs its own pass with
 the flag-on journeys run, not a drive-by. Routes outside ADR-0074 are **not** normalised today, and
 that is the other half of the row: `/accept-invite?token=` has the same latent shape.
+
+**Progress, 2026-09-02** (`docs/specs/router-search-params/`).
+
+- **M0 measured, against a verdict rule committed first.** Two browser probes read the **raw** query
+  a real Chromium address bar holds. A four-character library search term is carried as
+  `?q=%222026%22`; a sign-out writes `?signedOut=%22true%22`. Both contain `%22`, so the rule ("no
+  `%22` and the symptom is withdrawn") does not falsify and the epic keeps its scope.
+- **The row's own mechanism sentence is HALF RIGHT, and the half it misses decides the remedy.**
+  `JSON.parse` is not what turns `?verified=1` into a number. The **decode** step coerces `"true"`,
+  `"false"` and canonical numeric strings (`qss.js:41-46`) _before_ the parser is consulted, and
+  `JSON.parse` (`searchParams.js:18-30`) only ever sees values that are still strings. So the remedy
+  named above — "a `parseSearch` that leaves values as strings" — would **not** fix `?verified=1` if
+  written as `parseSearchWith(v => v)`: it has to replace the codec, not the parser. Recorded
+  executably in `apps/web/src/app/router-search.characterisation.test.ts`.
+- **A second fact, measured against a real `createRouter`**: `validateSearch`'s return is _added to_
+  the parsed search rather than substituted for it, so a validator can neither remove a key nor
+  rename one — the source key stays beside the new one. That is what makes the per-route alternative
+  unarguable rather than merely awkward.
+- **M1 landed: one reader vocabulary.** `lib/router/search-string.ts` replaces four private helpers
+  that had each worked this out separately and answered it differently (the array case disagreed —
+  one took the first element, one dropped the param). The visible change is `pickText`: a typed
+  `…/calendars?q=2026` now filters and fills the Search field, proved by a journey verified red
+  against the old reader. The enum readers are a measured no-op, pinned per vocabulary rather than
+  asserted in prose.
+- **A premise corrected on the way** (spec F6): `router.tsx`'s invitation-token comment said "a
+  64-character hex string". The token is 43 characters of base64url; the 64-char hex is the SHA-256
+  hash, which never leaves the database. The conclusion was unaffected.
+
+**What is left:** M2 (the route and consumer census gates), M3 (the serialiser pair, pure and
+unwired), M4 (the flip — the router-level codec), M5 (reconciliation and the ADR).
 
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
