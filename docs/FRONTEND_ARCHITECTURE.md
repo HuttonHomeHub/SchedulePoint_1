@@ -114,21 +114,32 @@ and components. Deleting a feature should mean deleting one folder.
   `/account`, `/me/activity` — because a tree with no root is navigation that
   cannot navigate (`docs/TECH_DEBT.md` #165a); the shell derives that fact once and
   the rail button, the drawer column and the below-`lg` sheet all read it.
-- **Typed params & search.** Path params and search params are validated with
-  schemas; filters/pagination/sort live in typed search params (shareable,
-  reload-safe). **`validateSearch` does not receive raw strings.** The router's
-  default `parseSearch` is `parseSearchWith(JSON.parse)`, so any value that is
-  valid JSON arrives parsed — `?verified=1` is the **number** `1`, `?x=true` a
-  boolean — and a validator written as `typeof search.x === 'string' ? … : {}`
-  drops it silently, with no error and a screen that renders its empty state. For
-  params **another system** composes (Better Auth writes the verification and
-  reset redirects), route through `readForeignParam` in `app/router.tsx`; see its
-  docblock for what that cannot repair, and `docs/TECH_DEBT.md` #96. The shared helper is `hooks/use-url-filter-state.ts`
-  (`useUrlFilterState`): it reads a screen's filters out of the URL, writes them
-  back with `replace: true` (so typing in a search box never pushes one history
-  entry per keystroke), and **omits any value equal to its default**, so an
-  untouched screen keeps a clean URL. Validation is permissive — an unknown value
-  in a hand-edited URL degrades to that filter's default rather than throwing.
+- **A search param is a `string`, and the shape is decided at the router** (ADR-0123). Path params
+  and search params are validated with schemas; filters/pagination/sort live in typed search params
+  (shareable, reload-safe). `createRouter` carries
+  `parseSearch`/`stringifySearch` from `lib/router/search-params.ts`, so **every value reaches a
+  validator and every reader as the text it was written as** — including the values the library's
+  default codec used to type (`?verified=1` as the number `1`, `?x=true` as a boolean, `?q=a&q=b`
+  as an array), and including a value whose `String()` does not reproduce the source, which no
+  reader could ever have repaired for itself.
+  Three rules follow, and they are the ones a new route or a new reader needs:
+  1. **Readers stay total.** `useSearch` is typed `unknown` at every call site, so coerce with
+     `lib/router/search-string.ts` and degrade to a default rather than throwing. It is now a safety
+     net rather than the mechanism, and it is the rollback contract if the two options are ever
+     reverted — which is why it stays.
+  2. **A validator can neither remove nor rename a key.** Its return is _added to_ the parsed
+     search, so a key it drops still reaches every consumer, and a key it renames stays beside the
+     new name. Seven of this app's search params are declared by no validator at all and work
+     entirely through that merge. Sanitise at the reader, not by hoping a validator hid something.
+  3. **A new route declaring `validateSearch` needs a case in `app/router-search.test.ts`**, or
+     `router-search-census.structural.test.ts` fails naming it; a new file that reads a search param
+     needs a line in `search-consumer-census.structural.test.ts` saying where its coverage is.
+     The shared helper is `hooks/use-url-filter-state.ts`
+     (`useUrlFilterState`): it reads a screen's filters out of the URL, writes them
+     back with `replace: true` (so typing in a search box never pushes one history
+     entry per keystroke), and **omits any value equal to its default**, so an
+     untouched screen keeps a clean URL. Validation is permissive — an unknown value
+     in a hand-edited URL degrades to that filter's default rather than throwing.
 - **The route owns URL state; the table takes it as props.** The hook needs a
   router, but list components are also rendered directly by their unit tests, so
   they stay router-free: the route calls `useUrlFilterState` and passes

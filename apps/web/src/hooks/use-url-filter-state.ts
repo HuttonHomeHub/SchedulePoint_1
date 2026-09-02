@@ -1,6 +1,8 @@
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 
+import { searchString } from '@/lib/router/search-string';
+
 /**
  * Typed, reload-safe **filter state in the URL** for a list screen (`docs/UX_STANDARDS.md`
  * "Deep-linkable everything: filters, tabs, and pagination live in the URL";
@@ -68,14 +70,21 @@ export function pickParam<T extends string>(
   allowed: readonly T[],
   fallback: T,
 ): T {
-  const value = raw[key];
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
+  const value = searchString(raw[key]);
+  return value !== undefined && (allowed as readonly string[]).includes(value)
     ? (value as T)
     : fallback;
 }
 
-/** Read one free-text search param (trimmed of nothing — the user's spacing is theirs). */
+/**
+ * Read one free-text search param (trimmed of nothing — the user's spacing is theirs).
+ *
+ * **This is the one reader #96 M1 changes behaviour for**, and it is the point of the milestone:
+ * `?q=2026` decodes to the NUMBER `2026`, so the old `typeof === 'string'` test discarded a real
+ * search term and showed an unfiltered table with an empty search box. Its siblings above coerce
+ * too, but for them it is a no-op — no enum vocabulary in this app has a JSON-parseable member, so
+ * a coerced value still fails `allowed` and still falls back.
+ */
 export function pickText(raw: Record<string, unknown>, key: string): string {
-  const value = raw[key];
-  return typeof value === 'string' ? value : '';
+  return searchString(raw[key]) ?? '';
 }

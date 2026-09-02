@@ -12,6 +12,8 @@ import {
   type AuditSurface,
 } from '@repo/types';
 
+import { searchString } from '@/lib/router/search-string';
+
 /**
  * The filter as the URL carries it — **all strings**, because `useUrlFilterState` is typed
  * `Record<string, string>` and a search param is a string whatever we wish it were.
@@ -113,7 +115,7 @@ export function toAuditQuery(filter: AuditFilterState, surface: AuditSurface): A
 }
 
 function asString(value: unknown): string {
-  return typeof value === 'string' ? value : '';
+  return searchString(value) ?? '';
 }
 
 /** `YYYY-MM-DD` or nothing. A malformed date is dropped rather than sent to be 422'd. */

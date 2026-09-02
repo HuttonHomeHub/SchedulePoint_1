@@ -1,16 +1,21 @@
-import { defaultParseSearch } from '@tanstack/react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import { router } from './router';
 
-// `/reset-password` joins the tree only when `VITE_PASSWORD_RESET` is on (ADR-0074 M4), and the
-// route is where its `token` is read. The flag is default-ON since 2026-08-05, so this mock is a
-// no-op today and pinned deliberately: these assertions are about the route's validator, and they
-// must not start passing or failing because somebody changed a default elsewhere.
-// `/verify-email` is registered either way.
+// **Every route-gating flag is pinned ON, not just the one this file started with.** Each is
+// default-on today, so the mock is a no-op — and pinned deliberately, for the reason the original
+// comment gave about `VITE_PASSWORD_RESET` alone: these assertions are about route validators, and
+// they must not start passing or failing because somebody changed a default elsewhere. Widened at
+// #96 M2 because the census below asserts an absolute route count, and a flag flipped off would
+// otherwise shrink the census silently instead of failing it — the `docs/TECH_DEBT.md`
+// #178/#181/#183 shape, a rule going quiet rather than wrong.
 vi.mock('@/config/env', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   PASSWORD_RESET_ENABLED: true,
+  RESOURCES_ENABLED: true,
+  AUDIT_LOG_ENABLED: true,
+  ACCOUNT_SETTINGS_ENABLED: true,
+  GUEST_SHARE_LINKS_ENABLED: true,
 }));
 
 /**
@@ -19,14 +24,20 @@ vi.mock('@/config/env', async (importOriginal) => ({
  *
  * **This is the only shape of test that could have caught the defect it exists for.** Every screen
  * test in the repository mocks `useSearch` and hands the component a literal, so it never crosses
- * `parseSearch` — and the router's default is `parseSearchWith(JSON.parse)`, which parses *every*
- * value that happens to be valid JSON. `?verified=1` therefore reaches `validateSearch` as the
- * **number** `1`, a `typeof search.verified === 'string'` test dropped it, and `/verify-email`
- * rendered its "still waiting" state after a verification that had actually succeeded. The unit
- * suite was green throughout; only the flag-on journey, following a real emailed link, saw it.
+ * `parseSearch`. `?verified=1` reached `validateSearch` as the **number** `1`, a
+ * `typeof search.verified === 'string'` test dropped it, and `/verify-email` rendered its "still
+ * waiting" state after a verification that had actually succeeded. The unit suite was green
+ * throughout; only the flag-on journey, following a real emailed link, saw it.
  *
- * So these compose the two halves the way the browser does — `defaultParseSearch` into the route's
- * own `validateSearch` — rather than testing either alone.
+ * **The mechanism, corrected** (#96 F1). This said the coercion was `parseSearchWith(JSON.parse)`
+ * "parsing every value that happens to be valid JSON". Half true, and the missing half decided the
+ * remedy: the **decode** step coerced `"true"`, `"false"` and canonical numeric strings
+ * (`qss.js:41-46`) **before** the parser was consulted, and `JSON.parse` (`searchParams.js:18-30`)
+ * only ever saw values that were still strings — so `parseSearchWith(v => v)`, the obvious minimal
+ * fix, would have left `?verified=1` a number. #96 M4 replaced the codec instead.
+ *
+ * So these compose the two halves the way the browser does — the router's **own** parser into the
+ * route's own `validateSearch` — rather than testing either alone.
  */
 function validate(path: string, search: string): Record<string, unknown> {
   const route = router.routesByPath[path as keyof typeof router.routesByPath];
@@ -37,7 +48,13 @@ function validate(path: string, search: string): Record<string, unknown> {
     }
   ).validateSearch;
   if (!validateSearch) throw new Error(`Route ${path} has no validateSearch`);
-  return validateSearch(defaultParseSearch(search));
+  // **`router.options.parseSearch`, not `defaultParseSearch`** — and this line is a #96 M4 finding
+  // in its own right. This helper's docblock says it composes "the router's real parser", and it
+  // named the library's default by hand. The moment M4 gave the router a parser of its own, that
+  // stopped being true: every assertion below would have kept passing while describing a codec the
+  // product no longer used. A test pinned to a dependency's default rather than to the object under
+  // test is the `docs/TECH_DEBT.md` #178/#181/#183 shape — a rule going quiet rather than wrong.
+  return validateSearch(router.options.parseSearch(search) as Record<string, unknown>);
 }
 
 describe('/verify-email search params', () => {
@@ -68,19 +85,19 @@ describe('/reset-password search params', () => {
     });
   });
 
-  it('cannot recover an all-digit token, and this pins that limit rather than hiding it', () => {
-    // Written expecting the opposite, and the run corrected it: `JSON.parse` has already produced
-    // `1.2345678901234567e+31` by the time any validator runs, so re-stringifying recovers a
-    // different token, not the original. `readForeignParam` fixes values whose `String()` round
-    // trips — `1`, `true`, small integers — and it cannot fix this one. The real remedy is a
-    // router-level `parseSearch` that leaves values alone, which is a change to every route's
-    // search handling: `docs/TECH_DEBT.md` #96.
-    //
-    // Kept because the alternative is silence: a token composed only of digits is astronomically
-    // unlikely from Better Auth's generator, and a reader who assumes this line defends against it
-    // would be wrong.
+  /**
+   * **CHANGED BY M4, and predicted.** This asserted `'1.2345678901234567e+31'` for two years'
+   * worth of releases and its own comment named the remedy: *"the real remedy is a router-level
+   * `parseSearch` that leaves values alone, which is a change to every route's search handling —
+   * `docs/TECH_DEBT.md` #96."* That is now what the router has, so the token arrives as written.
+   *
+   * The limit is gone rather than pinned, so the case is kept and inverted rather than deleted: it
+   * is the clearest single assertion that the codec was replaced, and the one value no reader could
+   * ever have repaired for itself.
+   */
+  it('carries an all-digit token verbatim, which no reader could ever repair', () => {
     expect(validate('/reset-password', '?token=12345678901234567890123456789012')).toEqual({
-      token: '1.2345678901234567e+31',
+      token: '12345678901234567890123456789012',
     });
   });
 });
@@ -117,8 +134,8 @@ describe('/sign-in `?redirect=` is same-origin by shape (#102(1))', () => {
   });
 
   it('drops a foreign-typed value rather than stringifying it into a path', () => {
-    // `?redirect=1` reaches the validator as the NUMBER 1 (the default parser JSON-parses every
-    // value — #96). `readForeignParam` turns it into `'1'`, which is not a path, so it is dropped
+    // `?redirect=1` used to reach the validator as the NUMBER 1 (#96); since M4 it arrives as the
+    // string `'1'`, which is what it was written as. Either way it is not a path, so it is dropped
     // rather than pushed. Before the shape check, `'1'` would have been pushed as a destination.
     expect(validate('/sign-in', '?redirect=1')).toEqual({});
   });
@@ -126,5 +143,106 @@ describe('/sign-in `?redirect=` is same-origin by shape (#102(1))', () => {
   it('leaves `signedOut` alone', () => {
     // The sibling param on the same route, asserted so the shape check cannot quietly widen.
     expect(validate('/sign-in', '?signedOut=true')).toEqual({ signedOut: 'true' });
+  });
+});
+
+/**
+ * **The five validators this file did not cover** (`docs/TECH_DEBT.md` #96, M2-T2).
+ *
+ * The census below refuses a route that declares `validateSearch` and has no case here. It was
+ * added because three of the eight were covered and nobody had noticed the other five — which is
+ * the same shape as the defect the file exists for: a rule applied to one control and not its
+ * neighbour.
+ *
+ * **These record TODAY'S answers, including the ones M4 will change.** Writing them against the
+ * behaviour we want would make M4's diff meaningless; written against the behaviour we have, the
+ * flip's diff is pre-reviewed. Each case M4 changes says so on the line.
+ */
+describe('/forgot-password search params', () => {
+  it('carries a prefilled address', () => {
+    expect(validate('/forgot-password', '?email=ada%40example.com')).toEqual({
+      email: 'ada@example.com',
+    });
+  });
+
+  it('coerces a foreign-typed address rather than dropping it', () => {
+    // `?email=1` arrives as the NUMBER 1. Silly as an address, and the point is that the route
+    // carries what was written instead of rendering its empty state as though nothing was sent.
+    expect(validate('/forgot-password', '?email=1')).toEqual({ email: '1' });
+  });
+});
+
+describe('/accept-invite search params', () => {
+  it('carries a real base64url token unchanged', () => {
+    // 43 characters of base64url is what `generateOpaqueToken` produces
+    // (`apps/api/src/common/tokens/token.ts:16`) — not JSON, so it arrives as written.
+    const token = 'Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZmdoaWo';
+    expect(validate('/accept-invite', `?token=${token}`)).toEqual({ token });
+  });
+
+  it('yields nothing when the link was truncated', () => {
+    expect(validate('/accept-invite', '')).toEqual({});
+  });
+});
+
+describe('the library screens’ filter params', () => {
+  /**
+   * **This validator still tests `typeof === "string"`, and the screens work anyway.** That is not
+   * luck and it is not a second bug: `validateSearch`'s return is *added to* the parsed search
+   * rather than substituted for it (`router.js:685-696`), so a key this drops is still on the match
+   * and still reaches `pickText` — which since #96 M1 coerces it. Pinned in
+   * `router-search.characterisation.test.ts`, and proved end to end by
+   * `apps/web/e2e-library/search-param-probe.spec.ts`.
+   *
+   * So the assertions below are about **the validator alone**, and they are the clearest statement
+   * in the repository of why a per-route fix would not have worked.
+   */
+  it('keeps ordinary text filters', () => {
+    expect(validate('/orgs/$orgSlug/calendars', '?q=crane&scope=all&archived=only')).toEqual({
+      q: 'crane',
+      scope: 'all',
+      archived: 'only',
+    });
+  });
+
+  it('keeps a numeric search term — CHANGED BY M4, exactly as the line above predicted', () => {
+    // Was `{}`: the validator's `typeof === 'string'` test saw the NUMBER 2026 and dropped it, and
+    // `pickText` rescued it through the merge. Now the value never stops being a string, so the
+    // validator keeps it and the rescue is a no-op safety net rather than the mechanism.
+    expect(validate('/orgs/$orgSlug/calendars', '?q=2026')).toEqual({ q: '2026' });
+  });
+
+  it('drops an empty value, which is how "no filter" is spelled', () => {
+    expect(validate('/orgs/$orgSlug/calendars', '?q=')).toEqual({});
+  });
+
+  it('ignores a key it was not given', () => {
+    // `kind` belongs to Resources. The merge still delivers it to the match; this asserts only that
+    // the calendars validator does not claim it.
+    expect(validate('/orgs/$orgSlug/calendars', '?kind=LABOUR')).toEqual({});
+  });
+
+  it('keeps the resources screen’s own three', () => {
+    expect(validate('/orgs/$orgSlug/resources', '?q=crew&kind=LABOUR&archived=include')).toEqual({
+      q: 'crew',
+      kind: 'LABOUR',
+      archived: 'include',
+    });
+  });
+});
+
+describe('the plan workspace’s ?view=', () => {
+  it('keeps a view name', () => {
+    expect(validate('/orgs/$orgSlug/plans/$planId', '?view=gantt')).toEqual({ view: 'gantt' });
+  });
+
+  it('keeps a numeric view — CHANGED BY M4, exactly as the line above predicted', () => {
+    // The visible behaviour is unchanged either way: `1` is not a view name, so the screen still
+    // falls back to the diagram. Recorded because the answer moved and the diff had to be legible.
+    expect(validate('/orgs/$orgSlug/plans/$planId', '?view=1')).toEqual({ view: '1' });
+  });
+
+  it('drops an empty view, which is how the default is spelled', () => {
+    expect(validate('/orgs/$orgSlug/plans/$planId', '?view=')).toEqual({});
   });
 });

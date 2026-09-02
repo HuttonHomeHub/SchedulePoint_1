@@ -236,6 +236,49 @@ test.describe('one fact, one place on the screen (ADR-0077 §9)', () => {
 
     await expect(page.getByRole('status')).toContainText('You have been signed out.');
   });
+
+  /**
+   * **The `docs/TECH_DEBT.md` #96 M0 probe: what the sign-out leaves in the address bar.**
+   *
+   * `account-chip.tsx:182` navigates with `search: { signedOut: 'true' }` — a four-character
+   * string. This reads the **raw** query the router actually wrote, because `searchParams.get(...)`
+   * decodes and decoding hides the quoting, which is the whole subject.
+   *
+   * **The banner is asserted FIRST, and that ordering is the plan's, for a recorded reason.** This
+   * file's `signOut()` helper shipped once with a locator that matched nothing and nobody noticed,
+   * because nothing had ever called it (ADR-0077 M8). Reading a URL after a sign-out that did not
+   * happen would report a passing measurement of the wrong screen; asserting the confirmation first
+   * makes that failure a sign-out failure.
+   *
+   * Its verdict rule was committed before it ran, on its own
+   * (`docs/specs/router-search-params/m0-measurement.md`): no `%22` in either probe's URL and
+   * symptom (b) is withdrawn and the epic re-scoped.
+   *
+   * It is a test of its own rather than two assertions inside the one above, for the reason the
+   * library probe established the hard way: a probe sharing a journey perturbs it.
+   */
+  test('#96 — the sign-out confirmation is carried as written (was: re-quoted)', async ({
+    page,
+  }) => {
+    const stamp = Date.now();
+    await onboard(page, `probe-signed-out-${stamp}@example.com`, `Probe ${stamp}`);
+    await signOut(page);
+    // First, and deliberately: a helper that did not sign out must fail here, not below.
+    await expect(page.getByRole('status')).toContainText('You have been signed out.');
+
+    const raw = new URL(page.url()).search;
+    // eslint-disable-next-line no-console -- the probe's output IS the measurement (#96 M0-T2)
+    console.log(`[#96 M0 probe] sign-out raw query: ${raw}`);
+
+    // **Re-baselined at M4** (ADR-0106's rule: audit a re-baseline line by line, never take it with
+    // `-u`). M0 measured `?signedOut=%22true%22` — twenty-one characters carried for four — and this
+    // line asserted exactly that, so the codec flip could not land without coming here and saying it
+    // had changed the URL. It did, and the sweep reported it with the message written for it. The
+    // old value stays in the comment; a measurement is worth more with its before than without.
+    expect(raw, 'the sign-out flag is no longer carried as written — #96 M4 regressed').toBe(
+      '?signedOut=true',
+    );
+  });
 });
 
 test.describe('the card does not resize between screens', () => {

@@ -6,6 +6,8 @@ import {
   type GanttSortKey,
 } from '../layout/row-model';
 
+import { searchString } from '@/lib/router/search-string';
+
 /**
  * **The Gantt's view memory** (ADR-0095 M5-T6): sort, hidden columns and the collapse set, as
  * typed URL search params.
@@ -18,14 +20,19 @@ import {
  *
  * ## Every reader here is TOTAL, and that is not defensive coding
  *
- * `docs/TECH_DEBT.md` **#96**: TanStack Router's default `parseSearch` is
- * `parseSearchWith(JSON.parse)`, so `?gsort=1` arrives as the **number** `1`, `?x=true` as a
- * boolean, and a repeated param as an array. ADR-0074 M5 shipped a live defect from exactly this —
- * a `typeof === 'string'` test discarded a verification that had succeeded — and it was invisible
- * to every unit test, because those mock `useSearch` and never cross the parser.
+ * `docs/TECH_DEBT.md` **#96**, and the mechanism corrected: this said the default `parseSearch` is
+ * `parseSearchWith(JSON.parse)`, "so `?gsort=1` arrives as the number 1". Half true, and the half it
+ * missed is the one that decided the remedy. The **decode** step coerced `"true"`, `"false"` and
+ * canonical numeric strings (`qss.js:41-46`) **before** the parser was consulted, and `JSON.parse`
+ * (`searchParams.js:18-30`) only ever saw values that were still strings — so replacing the parser
+ * alone would have fixed nothing. ADR-0074 M5 shipped a live defect from exactly this, a
+ * `typeof === 'string'` test discarding a verification that had succeeded, invisible to every unit
+ * test because those mock `useSearch` and never cross the parser.
  *
- * So each parser takes `unknown`, coerces what it can and degrades to the default otherwise. A
- * hand-edited URL lands the planner on a working chart, never an error boundary.
+ * **#96 M4 replaced the codec**, so a value now reaches these readers as the string it was written
+ * as. They stay total anyway: `useSearch` is typed `unknown` at every call site, and these are the
+ * rollback contract if the two `createRouter` options are ever reverted. A hand-edited URL lands the
+ * planner on a working chart, never an error boundary.
  *
  * ## What is NOT here, and why
  *
@@ -97,15 +104,12 @@ export const GANTT_VIEW_PARAMS = {
 /**
  * Coerce a search value to a string, or null.
  *
- * The single place the #96 trap is handled: a number, a boolean and a one-element array all become
- * their string form, because a planner who typed `?gsort=1` meant the text `1` and should get the
- * default rather than a crash. Anything else (an object, an empty array) is null.
+ * **Was** "the single place the #96 trap is handled", and it was one of four — which is what #96 M1
+ * closes. The rule now lives in `lib/router/search-string.ts`; this keeps its own name and
+ * `string | null` return so no consumer here changes.
  */
 function asSearchString(value: unknown): string | null {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value) && value.length > 0) return asSearchString(value[0]);
-  return null;
+  return searchString(value) ?? null;
 }
 
 /**

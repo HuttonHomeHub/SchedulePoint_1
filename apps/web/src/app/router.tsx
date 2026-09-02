@@ -20,6 +20,8 @@ import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
+import { parseSearchStrings, stringifySearchStrings } from '@/lib/router/search-params';
+import { searchString } from '@/lib/router/search-string';
 import { AcceptInviteScreen } from '@/routes/accept-invite';
 import { AccountScreen } from '@/routes/account';
 import { AuditLogScreen } from '@/routes/audit-log';
@@ -49,39 +51,10 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: () => <Outlet />,
 });
 
-/**
- * Read a search param **another system** put in the URL, as the string it was written as.
- *
- * TanStack Router's default `parseSearch` is `parseSearchWith(JSON.parse)` — it attempts to
- * JSON-parse **every** value — so a param that happens to be valid JSON never reaches a validator
- * as a string. `?verified=1` arrives as the **number** `1`; `?x=true` arrives as a boolean. A
- * validator written as `typeof search.x === 'string' ? … : {}` therefore drops it silently, with
- * no error and a screen that renders its "nothing here" state as though the param were absent.
- *
- * That is not hypothetical: it is what `?verified=1` did (ADR-0074 M5). The unit suite was green
- * throughout, because it feeds `useSearch` a literal and never crosses the router — only the
- * flag-on journey, following a real emailed link through a real redirect, could see it.
- *
- * It matters wherever the value is composed **outside this app** — Better Auth writes the
- * verification and reset redirects itself — because we do not get to choose the shape.
- *
- * **What it does not fix**, because the damage happens before it runs: a value whose `String()`
- * does not reproduce the source is already lost. A 32-digit token parses to
- * `1.2345678901234567e+31` and re-stringifies to *that*, not to the token. The only real remedy is
- * a router-level `parseSearch` that leaves values alone, which changes every route's search
- * handling — `docs/TECH_DEBT.md` #96. Pinned by `router-search.test.ts` so the limit is visible
- * rather than assumed away.
- */
-function readForeignParam(value: unknown): string | undefined {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return undefined;
-}
-
 const signInRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sign-in',
-  // `readForeignParam` here too (ADR-0077 M2-T4). `?redirect=` is composed by the `_authed`
+  // `searchString` here too (ADR-0077 M2-T4). `?redirect=` is composed by the `_authed`
   // guard, so it is ours — but it is also whatever a person types or a mail client mangles, and
   // `?redirect=1` parses to the NUMBER 1 and was silently dropped. Being applied on three of six
   // public routes was drift, not a decision.
@@ -97,7 +70,7 @@ const signInRoute = createRoute({
     // protocol-relative URL the browser resolves to another origin, and `https://evil.test` is not
     // a path at all. A malformed value is DROPPED rather than repaired — the fallback is `/`, which
     // is exactly where a reader with no destination should land.
-    const requested = readForeignParam(search.redirect);
+    const requested = searchString(search.redirect);
     const redirect = requested !== undefined && /^\/(?!\/)/.test(requested) ? requested : undefined;
     // `?signedOut` is how a completed sign-out reaches its confirmation, since the action and the
     // message it earns happen on two different screens (ADR-0077 §9).
@@ -105,10 +78,10 @@ const signInRoute = createRoute({
     // **A string, not a boolean, and that is not a style choice.** `useSearch({ strict: false })`
     // resolves this key as `string | undefined` regardless of what the validator declares —
     // established by annotating it `never` and reading what tsc said it was, not by assuming. A
-    // boolean therefore compiles here and fails at the only place that reads it. `readForeignParam`
+    // boolean therefore compiles here and fails at the only place that reads it. `searchString`
     // normalises the default parser's boolean `true` to `'true'`, which is also what every other
     // param on these public routes already is.
-    const signedOut = readForeignParam(search.signedOut);
+    const signedOut = searchString(search.signedOut);
     return {
       ...(redirect ? { redirect } : {}),
       ...(signedOut === 'true' || signedOut === '1' ? { signedOut } : {}),
@@ -410,7 +383,7 @@ const forgotPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/forgot-password',
   validateSearch: (search: Record<string, unknown>): { email?: string } => {
-    const email = readForeignParam(search.email);
+    const email = searchString(search.email);
     return email ? { email } : {};
   },
   component: ForgotPasswordScreen,
@@ -419,11 +392,11 @@ const forgotPasswordRoute = createRoute({
 const resetPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reset-password',
-  // Both params are composed by Better Auth's own redirect, so they go through `readForeignParam`
+  // Both params are composed by Better Auth's own redirect, so they go through `searchString`
   // — see its docblock for the rule and for what dropping one costs.
   validateSearch: (search: Record<string, unknown>): { token?: string; error?: string } => {
-    const token = readForeignParam(search.token);
-    const error = readForeignParam(search.error);
+    const token = searchString(search.token);
+    const error = searchString(search.error);
     return { ...(token ? { token } : {}), ...(error ? { error } : {}) };
   },
   component: ResetPasswordScreen,
@@ -440,7 +413,7 @@ const resetPasswordRoute = createRoute({
  *
  * `validateSearch` is deliberately permissive: Better Auth composes the success and failure
  * redirects itself, so an unrecognised param must be carried, not rejected — and every one of them
- * goes through `readForeignParam`, because `?verified=1` is the exact value the router's JSON
+ * goes through `searchString`, because `?verified=1` is the exact value the router's JSON
  * parsing turns into a number and a `typeof === 'string'` test then throws away.
  */
 const verifyEmailRoute = createRoute({
@@ -449,9 +422,9 @@ const verifyEmailRoute = createRoute({
   validateSearch: (
     search: Record<string, unknown>,
   ): { email?: string; verified?: string; error?: string } => {
-    const email = readForeignParam(search.email);
-    const verified = readForeignParam(search.verified);
-    const error = readForeignParam(search.error);
+    const email = searchString(search.email);
+    const verified = searchString(search.verified);
+    const error = searchString(search.error);
     return {
       ...(email ? { email } : {}),
       ...(verified ? { verified } : {}),
@@ -465,11 +438,15 @@ const verifyEmailRoute = createRoute({
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/accept-invite',
-  // An invitation token is a 64-character hex string, so it never round-trips as a number — but
-  // the rule is the rule, and the next token format might (`readForeignParam`'s own docblock names
-  // the 32-digit case it cannot save).
+  // **The premise here was wrong and the conclusion was not** (#96 F6). This said "a 64-character
+  // hex string"; the token is 43 characters of **base64url**
+  // (`apps/api/src/common/tokens/token.ts:16` — `randomBytes(32).toString('base64url')`, measured
+  // at 43, not reasoned about). The 64-char hex is the SHA-256 **hash**, which never leaves the
+  // database. base64url still cannot be all digits at that length in any realistic draw, so the
+  // token does not round-trip as a number either way — but the rule is the rule, and the next token
+  // format might (`searchString`'s own docblock names the 32-digit case it cannot save).
   validateSearch: (search: Record<string, unknown>): { token?: string } => {
-    const token = readForeignParam(search.token);
+    const token = searchString(search.token);
     return token ? { token } : {};
   },
   component: AcceptInviteScreen,
@@ -518,6 +495,18 @@ export const queryClient = createQueryClient();
 export const router = createRouter({
   routeTree,
   context: { queryClient },
+  // **The search codec, replaced** (`docs/TECH_DEBT.md` #96 M4). The two go together or neither
+  // does: the library's parser coerces on the way in and its stringifier re-quotes on the way out,
+  // so replacing one alone produces a URL that rewrites itself on the next navigation
+  // (`parseLocation` re-stringifies every location — `router.js:183-194`).
+  //
+  // These are router-level options, not per-route ones (`router.js:634-635`), which is why this is
+  // the whole fix in two lines and why it could never have been done route by route. See
+  // `lib/router/search-params.ts` for what changes and, more usefully, for what does not: the
+  // library pair never lost a value it wrote itself, so this only affects search strings the app
+  // did not compose.
+  parseSearch: parseSearchStrings,
+  stringifySearch: stringifySearchStrings,
   defaultPreload: 'intent',
   scrollRestoration: true,
   defaultErrorComponent: () => (

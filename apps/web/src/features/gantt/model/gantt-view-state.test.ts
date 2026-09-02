@@ -20,10 +20,15 @@ import {
 /**
  * **The view memory's readers, driven with what the ROUTER actually hands them.**
  *
- * The cases that earn their place are the non-string ones. `docs/TECH_DEBT.md` #96: TanStack
- * Router JSON-parses every search param, so `?gsort=1` arrives as a **number** — and ADR-0074 M5
- * shipped a live defect from precisely that, invisible to a unit suite because those mock
- * `useSearch` and never cross the parser. These do cross it, by passing the parsed shapes.
+ * The cases that earn their place are the non-string ones. `docs/TECH_DEBT.md` #96: the router's
+ * codec used to coerce `?gsort=1` to the **number** `1` — by its decode step, not by `JSON.parse`,
+ * which is the correction #96 M4 turned on — and ADR-0074 M5 shipped a live defect from precisely
+ * that, invisible to a unit suite because those mock `useSearch` and never cross the parser.
+ *
+ * Since M4 the router hands these readers strings, so the non-string cases below describe a shape
+ * the product no longer produces. They stay: the readers are the rollback contract for the two
+ * `createRouter` options, and a suite that only covers what the current configuration emits would
+ * pass just as happily against readers that had quietly stopped being total.
  */
 
 describe('the sort param', () => {
