@@ -986,8 +986,20 @@ that is the other half of the row: `/accept-invite?token=` has the same latent s
   64-character hex string". The token is 43 characters of base64url; the 64-char hex is the SHA-256
   hash, which never leaves the database. The conclusion was unaffected.
 
-**What is left:** M2 (the route and consumer census gates), M3 (the serialiser pair, pure and
-unwired), M4 (the flip — the router-level codec), M5 (reconciliation and the ADR).
+- **M2 landed: two census gates, one for each half of the defect.** Gate A
+  (`router-search-census.structural.test.ts`) refuses a route declaring `validateSearch` with no
+  case composing the real parser with that route's real validator — **three of the eight were
+  covered and five were not**, and nobody had noticed, because each later route brought its
+  validator with it and nothing compared the two lists. Gate B
+  (`search-consumer-census.structural.test.ts`) censuses the **readers**, which is the half Gate A
+  structurally cannot see: seven of the eighteen params the app reads are declared by no validator
+  at all and reach their readers through the merge. Both carry a pinned positive case, because
+  "every unclassified X is a failure" passes perfectly against a census that found no X (ADR-0093).
+  Verified red five ways between them; Gate B's `git ls-files` blind spot is measured and written
+  into its own docblock rather than left implicit.
+
+**What is left:** M3 (the serialiser pair, pure and unwired), M4 (the flip — the router-level
+codec), M5 (reconciliation and the ADR).
 
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
