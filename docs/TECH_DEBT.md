@@ -2220,11 +2220,25 @@ hand-roll a sweep that omits `plan_shares`** — enumerated rather than estimate
 `plan-lock-write-gate`, `plans`, `programme-schedule`, `projects`, `recycle-bin`,
 `resource-hierarchy`, `resources`.
 
-Each is latent in the same way and **local-only**: CI provisions a fresh database per job, so the
-residue can only come from a developer's own Playwright run against `app_test`. Converting all
-twenty-four is a change to shared test scaffolding rather than a drive-by, so it is recorded here
-with the list rather than swept in beside an unrelated fix. The right fix is the one this row has
-been saying since it opened: **one list, not twenty-six.**
+Each was latent in the same way and **local-only**: CI provisions a fresh database per job, so the
+residue can only come from a developer's own Playwright run against `app_test`.
+
+**All twenty-four are now converted, and the fix was verified against the real defect rather than
+against a reading.** Every one calls `clearDomainData`; a scan for a hand-rolled sweep missing
+`plan_shares` returns nothing. Two of the twenty-four named `calendar_shifts` and
+`calendar_exception_windows`, which the shared list does not — checked against the schema rather
+than assumed, and both are `onDelete: Cascade` from their parents, so the shared list is a true
+superset behaviourally as well as by name.
+
+The proof is the sequence that produced the defect, run deliberately: `scripts/e2e-local.sh
+web:share` leaves exactly one `plan_shares` row, and against it `plans.e2e-spec.ts` **fails all 14
+tests on `plan_shares_plan_id_fkey` with the old sweep and passes with the shared one.** Then the
+whole suite: 44 files, 573 passed, 1 skipped.
+
+This row stays open on its remaining half: nothing stops a twenty-seventh copy being written. The
+list is shared by convention, not by a gate, and the gate is not obvious — a census of `deleteMany`
+call sites would sweep in every legitimate one inside a test body. Worth a thought, not worth a bad
+rule.
 
 ### 142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
 

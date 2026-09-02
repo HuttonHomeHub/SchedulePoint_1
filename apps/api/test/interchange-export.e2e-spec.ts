@@ -9,7 +9,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { OrganizationRole } from '../src/common/auth/principal';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
-import { clearAuditEvents } from './audit-reset';
+import { clearDomainData } from './audit-reset';
 
 /**
  * End-to-end tests for the schedule-interchange EXPORT endpoint (ADR-0050 M4a). A plan is seeded by
@@ -176,32 +176,12 @@ describe.skipIf(!hasDatabase)('Interchange export API (e2e)', () => {
     // Diagnosed the same day only because `scripts/e2e-local.sh` tees the whole log to a file — the
     // observer piped the command through `tail` exactly as that row warns them not to, and the
     // mechanism caught what the habit lost. That is ADR-0058 working as advertised.
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baseline.deleteMany();
-    await prisma.activityStep.deleteMany();
-    await prisma.resourceAssignment.deleteMany();
-    await prisma.activityDependency.deleteMany();
-    // Notes hold `activity_id`/`plan_id` FKs, so they must go before what they annotate. The
-    // e2e database is shared with the Playwright run and `apps/web/e2e-notes` leaves notes
-    // behind, so without this the failure lands in a spec that has never heard of notes — the
-    // same way `plan_shares` did, one table along.
-    await prisma.note.deleteMany();
-    await prisma.activity.deleteMany();
-    await prisma.resource.deleteMany();
-    await prisma.planLock.deleteMany();
-    await prisma.plan.deleteMany();
-    await prisma.calendarException.deleteMany();
-    await prisma.calendar.deleteMany();
-    await prisma.project.deleteMany();
-    await prisma.client.deleteMany();
-    await prisma.invitation.deleteMany();
-    await prisma.orgMember.deleteMany();
-    // Append-only + ON DELETE RESTRICT: audit rows must go before their org can.
-    await clearAuditEvents(prisma);
-    await prisma.organization.deleteMany();
-    await prisma.verification.deleteMany();
-    await prisma.user.deleteMany();
+    // **The shared list, not a private copy** (`docs/TECH_DEBT.md` #119a). This hand-rolled its own
+    // sweep and omitted `plan_shares`, so `plan.deleteMany()` died on `plan_shares_plan_id_fkey`
+    // whenever a Playwright run left a share behind on the same database — the failure that took all
+    // 45 of `activities.e2e-spec.ts` down. `clearDomainData` is a strict superset in the same
+    // deepest-first order, ending identically, and it handles the append-only audit triggers itself.
+    await clearDomainData(prisma);
   }
 
   afterAll(async () => {
