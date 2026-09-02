@@ -537,6 +537,20 @@ discriminators. Each becomes a spec/plan before build:
   because the probe styled a button whose `px-2` an inline `padding-left` replaces rather than adds
   to — caught only because the prediction had been written down first.
 
+- **The WBS band reaches assistive technology** — **shipped** (ADR-0122, 2026-09-02,
+  `docs/specs/wbs-bucket-a11y/`). The diagram's pinned WBS band is an `aria-hidden` canvas, so a
+  screen-reader user reached it through a text equivalent or not at all — and there was none, while
+  **two places in the repository said there was**. Both were right about a real `WBS_SUMMARY`,
+  which is an ordinary activity and therefore already a listbox row, and wrong about the derived
+  "Unassigned" bucket, which has no activity id and structurally cannot be one; being right about
+  half its subject is why nobody reading either noticed. A screen-reader user could learn a plan had
+  unfiled work in the Gantt and not in the diagram. Now a non-focusable `sr-only` list names every
+  group with its count, sharing **one composer** with the Gantt so the two views cannot describe the
+  same grouping two ways. A summary's count is its **whole subtree**, which makes the counts
+  non-additive across nesting — so the rows carry their parent, are emitted depth-first and state
+  `aria-level`, or a reader would sum a parent's number and a child's. Nothing visible changes and
+  ADR-0063 §4's invariant is structurally safe: a `listitem` cannot enter the `option` set its two
+  assertions count, and both were left unedited. Closes `docs/TECH_DEBT.md` #232; files #240.
 - **The resource histogram stacks** — **shipped** (ADR-0121, 2026-08-31,
   `docs/specs/stacked-resource-histogram/`). The histogram showed one resource at a time; it now
   stacks every resource in the dialog, and stacks by **trade group** as well as by resource — which

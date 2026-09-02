@@ -2,12 +2,20 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
 import {
+  apiActivities,
+  apiDependencies as apiDependenciesShared,
+  seedActivities,
+  seedLink,
+} from '../e2e-copy-paste/support';
+
+import {
   addLink,
   apiDependencies,
   drawTask,
   onboard,
   openLogic,
   openNewPlan,
+  showActivities,
   startEditing,
 } from './support';
 
@@ -145,4 +153,202 @@ test('a planner undoes an Edit-link save, and the stored lag comes back exactly'
   // And the link itself survived: an inverse that deleted and re-created it would also satisfy the
   // lag assertion while handing the row a new id.
   expect((await apiDependencies(page))[0]?.id).toBe(created.id);
+});
+
+/**
+ * **Deleting a WBS phase is one undo step** (`docs/TECH_DEBT.md` #230, ADR-0048 M2 amended by its
+ * own M4).
+ *
+ * Until this milestone the client **cleared the whole history** after a cascade delete, so a
+ * planner who removed a phase lost not only the ability to undo that but every earlier edit of the
+ * session too. The reason ADR-0048 gave had lapsed: the inverse is no longer a re-create, it is
+ * `POST …/activities/restore-batch/:batchId`, and a cascade stamps ONE batch across the subtree.
+ *
+ * **Only a journey can prove this.** Every mutation in the unit suites is a `vi.fn()`, so the pen
+ * (ADR-0028), the optimistic `version` and — the one that matters here — the server's
+ * parent-active guard are invisible to them. A restore the server refused with 409
+ * `PARENT_DELETED` would look identical to a successful one at that level.
+ *
+ * It asserts through the **REST API**, not the DOM: the subject is what was *stored*, and a DOM
+ * assertion would pass against a restore that brought the bars back and lost the links.
+ */
+test('a planner undoes deleting a WBS phase, and the earlier edits are still undoable', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  // A phase with three members, one link inside it, and one crossing its boundary. The crossing
+  // link is the sharper case: both its endpoints are live again after the restore, so the endpoint
+  // guard must reactivate it too.
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Substructure', type: 'WBS_SUMMARY' },
+    { name: 'Excavate', parentOf: 0 },
+    { name: 'Pour slab', parentOf: 0 },
+    { name: 'Cure', parentOf: 0 },
+    { name: 'Site setup' },
+  ]);
+  const byName = new Map(seeded.map((a) => [a.name, a.id]));
+  const inside = byName.get('Excavate');
+  const alsoInside = byName.get('Pour slab');
+  const outside = byName.get('Site setup');
+  if (!inside || !alsoInside || !outside) throw new Error('seeding did not return the fixture');
+  await seedLink(page, orgSlug, inside, alsoInside);
+  await seedLink(page, orgSlug, outside, inside);
+
+  const before = {
+    activities: (await apiActivities(page, orgSlug)).length,
+    links: (await apiDependenciesShared(page, orgSlug)).length,
+  };
+  expect(before.activities).toBe(5);
+  expect(before.links).toBe(2);
+
+  // An earlier, unrelated edit — this is what the truncation used to destroy, and a count
+  // assertion on the delete alone cannot see it.
+  await drawTask(page, 'Snagging', { x: 420, y: 240 });
+  await expect(page.getByRole('option', { name: /Snagging/ })).toHaveCount(1, { timeout: 15_000 });
+
+  await test.step('deleting the phase takes its whole subtree', async () => {
+    await showActivities(page);
+    await page.getByRole('button', { name: 'Actions for Substructure' }).click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    // `alertdialog`, not `dialog` — the confirm is a destructive-action prompt. Its own copy
+    // already tells the planner "You can restore them together later", which the truncation this
+    // milestone removes made false on this one surface.
+    const confirm = page.getByRole('alertdialog', { name: 'Delete activity' });
+    await expect(confirm).toContainText('3 activities below it');
+    await confirm.getByRole('button', { name: 'Delete' }).click();
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(before.activities + 1 - 4); // + Snagging, − the phase and its three members
+  });
+
+  await test.step('one Ctrl+Z brings the phase, its work and its links back', async () => {
+    // Focus a workspace control first: the accelerator is a React `onKeyDown` on the workspace
+    // root, so a keystroke from `<body>` never reaches it.
+    await page.getByRole('button', { name: /^Undo\b/ }).focus();
+    await page.keyboard.press('Control+z');
+
+    // 20 s, not the default 5: a restore, a recalculation and a refetch outrun Playwright's poll
+    // (ADR-0080's retrospective records exactly this).
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(before.activities + 1);
+
+    const restored = await apiActivities(page, orgSlug);
+    // Id-stable, and the nesting comes back — not just the rows.
+    expect(restored.map((a) => a.id)).toEqual(expect.arrayContaining([...byName.values()]));
+    const members = restored.filter((a) => a.parentId === byName.get('Substructure'));
+    expect(members.map((a) => a.name).sort()).toEqual(['Cure', 'Excavate', 'Pour slab']);
+
+    // BOTH links: the one wholly inside the subtree, and the one crossing its boundary.
+    const links = await apiDependenciesShared(page, orgSlug);
+    expect(links).toHaveLength(before.links);
+    expect(
+      links.some((l) => l.predecessorId === inside && l.successorId === alsoInside),
+      'the link inside the phase did not come back',
+    ).toBe(true);
+    expect(
+      links.some((l) => l.predecessorId === outside && l.successorId === inside),
+      'the link crossing the phase boundary did not come back',
+    ).toBe(true);
+  });
+
+  await test.step('the history was not truncated — the earlier edit is still undoable', async () => {
+    // **This is the actual subject of #230**, and no count assertion above can see it: the phase
+    // could come back perfectly while the rest of the session's history had been thrown away.
+    const undo = page.getByRole('button', { name: /^Undo\b/ });
+    await expect(undo).toBeEnabled();
+    await undo.focus();
+    await page.keyboard.press('Control+z');
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(before.activities);
+    expect((await apiActivities(page, orgSlug)).some((a) => a.name === 'Snagging')).toBe(false);
+  });
+});
+
+/**
+ * **The spec's "ancestor is gone" alternate flow, driven** (`docs/specs/cascade-undo/`
+ * feature-spec §"Alternate — the ancestor is gone", M2-T2 step 4).
+ *
+ * That flow reads: delete phase `A` on the canvas, delete `A`'s parent `P` from the activities
+ * panel, press Undo, and be refused with 409 `PARENT_DELETED`. This drives exactly that, because
+ * the plan's own instruction was to **establish** whether it is reachable rather than assume it —
+ * and if the linear stack makes it unreachable, to say so instead of inventing a route.
+ *
+ * **It does not happen, and this test is the evidence.** Both undos succeed. The stack is linear
+ * and last-in-first-out, and a cascade delete resolves its subtree with `deletedAt: null`
+ * (`hierarchy-lifecycle.service.ts`, `resolveActivitySubtree`) — so deleting `P` after `A` does not
+ * sweep `A` into `P`'s batch, `P`'s delete is recorded last, and Undo therefore restores `P`
+ * BEFORE `A`. The parent is always active again by the time the child's restore runs.
+ *
+ * The spec's flow was reachable when it was written, for one reason it names: the activities panel
+ * recorded nothing, so `P`'s delete never entered the stack and Undo popped `A`'s. **The product
+ * owner's CQ-3 answer — that the panel is in scope — closed that route**, which the plan's own
+ * M2-T2 risk note predicted in as many words. Every delete surface now records: the canvas and the
+ * Gantt through `ActivityCrudDialogs`, the panel through this milestone.
+ *
+ * So the refusal is not dead code, but it is not reachable from one pen session either: it needs a
+ * stack that predates somebody else's delete — a stale tab, or a pen hand-off. That is why its
+ * message is pinned by a unit test of `handleFailure` rather than by a step here.
+ */
+test('deleting a phase and then its parent undoes in the order it was done', async ({ page }) => {
+  const stamp = Date.now();
+  const orgSlug = await onboard(page, stamp);
+  await openNewPlan(page);
+  await startEditing(page);
+
+  const seeded = await seedActivities(page, orgSlug, [
+    { name: 'Structure', type: 'WBS_SUMMARY' },
+    { name: 'Substructure', type: 'WBS_SUMMARY', parentOf: 0 },
+    { name: 'Excavate', parentOf: 1 },
+    { name: 'Site setup' },
+  ]);
+  expect(seeded).toHaveLength(4);
+  const before = (await apiActivities(page, orgSlug)).length;
+
+  await showActivities(page);
+  const deletePhase = async (name: string): Promise<void> => {
+    await page.getByRole('button', { name: `Actions for ${name}` }).click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await page
+      .getByRole('alertdialog', { name: 'Delete activity' })
+      .getByRole('button', { name: 'Delete' })
+      .click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+  };
+
+  // The child phase first, then its parent — the spec's alternate flow, in its order.
+  await deletePhase('Substructure');
+  await expect
+    .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+    .toBe(before - 2); // Substructure + Excavate
+  await deletePhase('Structure');
+  await expect
+    .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+    .toBe(before - 3);
+
+  // First Undo restores the PARENT, because the stack is linear and last-in-first-out — the
+  // parent's delete was recorded last.
+  await page.getByRole('button', { name: /^Undo\b/ }).focus();
+  await page.keyboard.press('Control+z');
+  await expect
+    .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+    .toBe(before - 2);
+
+  // Second Undo restores the child phase and its work, under a parent that is active again.
+  await page.getByRole('button', { name: /^Undo\b/ }).focus();
+  await page.keyboard.press('Control+z');
+  await expect
+    .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+    .toBe(before);
+
+  const restored = await apiActivities(page, orgSlug);
+  const structure = restored.find((a) => a.name === 'Structure');
+  const substructure = restored.find((a) => a.name === 'Substructure');
+  expect(substructure?.parentId).toBe(structure?.id);
+  expect(restored.find((a) => a.name === 'Excavate')?.parentId).toBe(substructure?.id);
 });

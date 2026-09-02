@@ -1023,6 +1023,68 @@ sweep that ends with a count of failures, named, would have surfaced this the fi
 Not built here, because the sweep is a local convenience rather than a CI gate and this is the
 milestone that found it, not a milestone about it.
 
+### 241. A wall-clock assertion in the unit suite, next to the test that argues against it
+
+**Status:** open · **Raised:** 2026-09-02 (it failed CI on PR #460) · **Size:** S
+
+`apps/api/src/modules/schedule/engine/level.spec.ts:440` asserts
+`expect(elapsedMs).toBeLessThan(3000)` on a 2,000-activity levelling run. It **failed on a GitHub
+runner** on a pull request that touches no API code at all — the first time it has been seen to,
+and the cause is what the assertion is: an absolute wall-clock bound on a shared machine. It passes
+locally (the whole API unit suite: 1,774 tests, green, run immediately after).
+
+**The argument against it is already written, in the docblock of the very next test.** That sibling
+gates the pass's **shape** with a ratio and says why:
+
+> _A ratio, not a second absolute, because a ratio cancels the hardware. … This is the one place a
+> wall-clock assertion earns its keep against this repository's "budgets are gated by call-count
+> tests, CI timings are noise" doctrine — the noise is in the numerator and the denominator, and
+> divides out._
+
+and, of the absolute bound above it:
+
+> _It allows 3,000 ms where the run measures ~840; a pass that got **three times** slower would
+> still be green._
+
+So it is loose enough to miss a real regression and tight enough to flake — the worst of both, on a
+runner three times slower than the box the number came from.
+
+**The proposed patch is to delete the assertion, not to raise the number.** Everything else in that
+test — the exact serialisation, `leveledActivityCount`, the result length — is deterministic and
+worth keeping. The cost gate is the ratio test beside it, which was designed for this and measured
+before its bound was chosen. Raising 3,000 to 10,000 keeps a gate that was already established not
+to catch anything.
+
+**Not fixed in the PR that hit it**, which is frontend-only: changing an unrelated engine test to
+get a green is exactly the widening the babysit rules refuse. One re-run confirmed the failure is
+not that PR's.
+
+### 240. `check:claims` cannot see a claim about a dependency's CSS
+
+**Status:** open · **Raised:** 2026-09-02 (building ADR-0122) · **Size:** S
+
+ADR-0076 makes a decision-bearing claim about a dependency's internals a **registered** claim, so a
+Dependabot bump of that package fails CI and somebody re-reads the citation. `check-claims.mjs`'s
+two citation patterns both end in a JavaScript extension, so **only a JavaScript file can be
+cited**. A claim about a dependency's stylesheet is invisible to the gate in both directions: it is
+not demanded when unregistered, and a register entry for one reads as uncited and is suggested for
+deletion.
+
+Found by hitting it. ADR-0122's decision to write `role="list"` explicitly rests on Tailwind v4's
+Preflight setting `list-style: none` on every `ul` — verified by reading `tailwindcss@4.3.3`'s
+preflight stylesheet. Registering it produced `is registered but no longer cited anywhere. Consider
+removing it.` The version is named in the call-site comment instead, which satisfies §19.11's
+"carry your evidence" and **not** ADR-0076's "a bump re-opens the citation".
+
+This is the third hole in this gate's citation scan, after the two `docs/TECH_DEBT.md` #101 records
+and the dotted-basename one the script's own comments describe — and it is the same shape: the scan
+cannot tell that it is not looking.
+
+**Not fixed here** because widening the pattern is a change to a shared gate, which ADR-0105 makes
+a full-spec trigger; smuggling it into an unrelated accessibility milestone is the judgement that
+rule exists to remove. Cheap when picked up: widen the extension class and re-run, then check
+whether anything else in the tree was silently uncited.
+
 ### 238. `restoreDeleteBatch`'s response fetch throws above 32,767 activities
 
 **Status:** open · **Raised:** 2026-09-02 (#230 M0's backend-performance gate) · **Size:** S
@@ -3821,6 +3883,17 @@ compares the same quantity on both sides can only ever agree with itself.
 ### 230. A cascade delete's undo still truncates the history, and its reason has lapsed
 
 **Status:** open · **Raised:** 2026-08-31 (closing #92) · **Size:** S
+
+**Built, not yet merged.** M0 (the anchor fix) is released on its own as `api-v0.55.3`. M1 removed
+the truncation and M2-T0 wired the activities panel's delete and dissolve to the same history; M2-T1
+gave the `PARENT_DELETED` refusal words that name the recovering action; M3 appended the ADR-0048
+amendment. Delete this row and ledger it once that is merged and released — not before, because a
+row that says "closed" while the code sits on a branch is the drift this register exists to stop.
+
+What is deliberately NOT built, with its reason, is **naming the blocked phase** — see the ADR-0048
+amendment §3 and the withdrawn alternate flow in the spec. The short form: the flow that case was
+designed around was driven and does not produce a refusal, because answering CQ-3 "in scope" closed
+the only route to it.
 
 Deleting a WBS summary with a subtree clears the undo stack
 (`use-plan-workspace-model.ts` `recordActivityDelete`). That is ADR-0048 M2's decision, and its

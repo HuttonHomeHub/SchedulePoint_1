@@ -7,8 +7,10 @@ import type { PlanEditHistory } from './use-plan-edit-history';
 import {
   REDO_CONFLICT_MESSAGE,
   REDO_FAILED_MESSAGE,
+  REDO_PARENT_DELETED_MESSAGE,
   UNDO_CONFLICT_MESSAGE,
   UNDO_FAILED_MESSAGE,
+  UNDO_PARENT_DELETED_MESSAGE,
   usePlanUndoRedo,
 } from './use-plan-undo-redo';
 
@@ -20,8 +22,12 @@ import { ApiFetchError } from '@/lib/api/client';
  * (non-destructive), 423 → clear whole history + run the shared pen contract, other → generic status.
  */
 
-const err = (status: number): ApiFetchError =>
-  new ApiFetchError(status, { code: 'X', message: 'nope' });
+const err = (status: number, details?: unknown): ApiFetchError =>
+  new ApiFetchError(status, {
+    code: 'X',
+    message: 'nope',
+    ...(details === undefined ? {} : { details }),
+  });
 
 /** A minimal history double whose undo/redo resolve or reject as the test sets up. */
 function fakeHistory(over: Partial<PlanEditHistory> = {}): PlanEditHistory {
@@ -98,6 +104,59 @@ describe('usePlanUndoRedo — 409 / 404 conflict (abort non-destructively)', () 
     act(() => result.current.redo());
     await waitFor(() => expect(announce).toHaveBeenCalledWith(REDO_CONFLICT_MESSAGE));
     expect(history.clearRedo).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * **The one 409 whose recovery is a different action** (`docs/TECH_DEBT.md` #230 M2). The general
+   * copy tells the reader to refresh, and refreshing does not help — restoring the phase does. So
+   * the words branch and nothing else does.
+   *
+   * The reason is read from `error.details.reason`, which was verified rather than assumed: it is
+   * the same path `lib/api/calendar-scope-errors.ts` already reads, and the server's
+   * `ConflictError('…', { reason })` is copied straight into the envelope by the exceptions filter.
+   *
+   * **This branch is the only cover this case has, and that is deliberate.** Its journey does not
+   * exist because the state is not reachable from one pen session — `apps/web/e2e-undo` drives the
+   * spec's own alternate flow and both undos succeed, because the stack is LIFO and a cascade never
+   * sweeps an already-deleted subtree. It stays reachable across sessions (a stale tab, a pen
+   * hand-off), which is why the words are worth having at all.
+   */
+  it('undo 409 PARENT_DELETED: says which action recovers it, not "refresh"', async () => {
+    const history = fakeHistory({
+      undo: vi.fn().mockRejectedValue(err(409, { reason: 'PARENT_DELETED' })),
+    });
+    const { result, announce } = setup(history);
+    act(() => result.current.undo());
+    await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_PARENT_DELETED_MESSAGE));
+    expect(announce).not.toHaveBeenCalledWith(UNDO_CONFLICT_MESSAGE);
+    // Everything else about the branch is unchanged — only the words move.
+    expect(history.clearRedo).toHaveBeenCalledTimes(1);
+    expect(history.clear).not.toHaveBeenCalled();
+  });
+
+  it('redo 409 PARENT_DELETED: the redo-flavoured wording', async () => {
+    const history = fakeHistory({
+      redo: vi.fn().mockRejectedValue(err(409, { reason: 'PARENT_DELETED' })),
+    });
+    const { result, announce } = setup(history);
+    act(() => result.current.redo());
+    await waitFor(() => expect(announce).toHaveBeenCalledWith(REDO_PARENT_DELETED_MESSAGE));
+  });
+
+  /**
+   * The pinned positive that stops the branch swallowing every 409: a conflict with SOME OTHER
+   * reason, and a conflict with no `details` at all, both still get the general copy. Without
+   * these, "the new message appears" would be indistinguishable from "the new message always
+   * appears".
+   */
+  it('keeps the general copy for a 409 with another reason, or none', async () => {
+    for (const details of [{ reason: 'VERSION_CONFLICT' }, undefined]) {
+      const history = fakeHistory({ undo: vi.fn().mockRejectedValue(err(409, details)) });
+      const { result, announce } = setup(history);
+      act(() => result.current.undo());
+      await waitFor(() => expect(announce).toHaveBeenCalledWith(UNDO_CONFLICT_MESSAGE));
+      expect(announce).not.toHaveBeenCalledWith(UNDO_PARENT_DELETED_MESSAGE);
+    }
   });
 });
 

@@ -167,6 +167,49 @@ export interface WbsBandGroupInput {
   depth: number;
   start: string | null;
   finish: string | null;
+  /**
+   * How much work this group holds — the number this group's accessible name states
+   * (`docs/TECH_DEBT.md` #232).
+   *
+   * **For a real `WBS_SUMMARY` this is the WHOLE SUBTREE, at every depth, and it counts nested
+   * summaries as members too.** That is a decision, not an implementation detail, and it is stated
+   * here because the obvious "fix" is to make it direct children — which `SummaryGroup.memberIds`
+   * holds, one type up. A phase's size is the work inside it, not how many boxes it was split into
+   * at the first level, and a planner reading "Substructure, 40 activities" containing "Piling, 12
+   * activities" is reading a work breakdown the way work breakdowns are read.
+   *
+   * For the derived bucket the distinction does not arise: the bucket holds top-level non-summary
+   * activities and has no nesting, so its members and its subtree are the same set. That is also
+   * why this agrees with the Gantt, whose bucket row is the only place in that view carrying a
+   * count (`gantt/layout/row-model.ts:244`); a real summary is a `GanttActivityRow` and has no
+   * count at all, so there is nothing there to disagree with.
+   *
+   * **The counts are NOT additive across nesting**, and this sentence is here because the obvious
+   * reading of two adjacent rows is to add them: a nested summary's count is *included inside* its
+   * ancestors', so "Structure, 30" containing "Substructure, 10" describes 30 activities and not
+   * 40. That is why anything announcing these rows has to carry a nesting cue rather than a flat
+   * list of numbers — see {@link WbsBandGroupInput.parentId}.
+   *
+   * Deliberately absent from the render tier's `WbsBandGroup` (`tsld/render/wbs-band.ts`), which
+   * this type otherwise mirrors: a count is not geometry, and the painter must not grow a reason
+   * to read it.
+   */
+  count: number;
+  /**
+   * The **resolved** parent of this group — `null` for a top-level summary, for the derived bucket,
+   * and for a summary whose `parentId` names a row that is not present (an orphan is top-level
+   * here exactly as it is everywhere else in this module, so one rule serves every reader).
+   *
+   * It exists because the band conveys **containment** visually — a child's bar sits inside its
+   * parent's span — and a consumer that renders these rows as a flat list throws that away. With
+   * subtree counts (above) that is worse than cosmetic: a reader who cannot tell a parent from a
+   * sibling will sum two numbers that overlap. An accessibility review of `docs/TECH_DEBT.md` #232
+   * found exactly that, and this field is what lets a text equivalent say `aria-level`.
+   *
+   * Like `count`, deliberately absent from the render tier's `WbsBandGroup`: the painter derives a
+   * row's y from the SET of depths present, not from any one row's parent.
+   */
+  parentId: string | null;
 }
 
 /**
@@ -201,6 +244,41 @@ export function wbsBandGroups(
     return depth;
   };
 
+  // Children by parent, over the SAME resolved-parent rule `deriveWbsGroups` uses — an activity
+  // whose `parentId` names a row that is not present is an orphan and counts as top-level, so it
+  // belongs to no summary's subtree rather than to a phantom one.
+  const present = new Set(activities.map((a) => a.id));
+  const childrenOf = new Map<string, string[]>();
+  for (const activity of activities) {
+    const parentId = activity.parentId;
+    if (parentId === null || !present.has(parentId)) continue;
+    const siblings = childrenOf.get(parentId);
+    if (siblings) siblings.push(activity.id);
+    else childrenOf.set(parentId, [activity.id]);
+  }
+
+  /**
+   * Everything under `id`, at any depth. The `seen` guard is the `depthOf` guard's mirror and is
+   * there for the same reason: the server forbids a cycle in the parent tree (ADR-0038), but this
+   * is render-path code and must not hang the canvas if one ever exists.
+   */
+  const subtreeCount = (id: string): number => {
+    let total = 0;
+    const seen = new Set<string>([id]);
+    const stack = [id];
+    while (stack.length > 0) {
+      const next = stack.pop();
+      if (next === undefined) break;
+      for (const child of childrenOf.get(next) ?? []) {
+        if (seen.has(child)) continue;
+        seen.add(child);
+        total += 1;
+        stack.push(child);
+      }
+    }
+    return total;
+  };
+
   const rows: WbsBandGroupInput[] = groups.summaries
     .map((group) => {
       const span = drawnSpan(group.summary, source);
@@ -210,6 +288,13 @@ export function wbsBandGroups(
         depth: depthOf(group.summary),
         start: span.start,
         finish: span.finish,
+        count: subtreeCount(group.summary.id),
+        // The RESOLVED parent, not the raw column: an orphan is top-level here, as it is in
+        // `deriveWbsGroups` and in the Gantt row model.
+        parentId:
+          group.summary.parentId !== null && present.has(group.summary.parentId)
+            ? group.summary.parentId
+            : null,
       };
     })
     .sort((a, b) => a.depth - b.depth);
@@ -221,6 +306,8 @@ export function wbsBandGroups(
       depth: 0,
       start: groups.unassigned.start,
       finish: groups.unassigned.finish,
+      count: groups.unassigned.memberIds.length,
+      parentId: null,
     });
   }
   return rows;

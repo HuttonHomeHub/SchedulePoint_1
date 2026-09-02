@@ -133,8 +133,23 @@ test('WBS: group, see, dissolve — without losing work', async ({ page }) => {
   const bandBox = await page.getByTestId('tsld-wbs-band').boundingBox();
   expect(bandBox?.height ?? 0).toBeGreaterThan(0);
 
+  // **And the band has a text equivalent** (`docs/TECH_DEBT.md` #232). The band canvas is
+  // `aria-hidden`, so this list is the only route to it — and for months two places in the
+  // repository claimed one existed when none did. This asserts it in a real browser, where the
+  // roles are the ones an AT actually computes rather than the ones jsdom reports from the tag.
+  const bandList = page.getByRole('list', { name: 'Work breakdown bands' });
+  await expect(bandList).toHaveCount(1);
+  const bandItems = bandList.getByRole('listitem');
+  await expect(bandItems.first()).toHaveText(/, \d+ activit(y|ies)$/);
+  // It is a description, not a control: nothing in it is focusable, and it adds no option to the
+  // listbox — which is what makes the §4 invariant above structurally safe rather than lucky.
+  await expect(bandList.locator('[tabindex]')).toHaveCount(0);
+  await expect(bandList.getByRole('option')).toHaveCount(0);
+
   await toggleView(page, 'WBS band');
   await expect(page.getByTestId('tsld-wbs-band')).toHaveCount(0);
+  // It goes with the band it describes.
+  await expect(page.getByRole('list', { name: 'Work breakdown bands' })).toHaveCount(0);
 
   // ------------------------------------------------- M3: the derived Unassigned bucket
   // Everything is filed right now, so there is nothing unassigned. Add one loose activity and the

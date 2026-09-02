@@ -779,6 +779,51 @@ describe('deleteActivityCommand', () => {
     await command.undo(); // already present — no-op
     expect(restoreBatch).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * **A WBS phase records the same command as a leaf** (`docs/TECH_DEBT.md` #230). The recording
+   * seam used to branch on `type` and truncate the history instead; the command itself never did,
+   * and never needed to — a cascade stamps ONE `deleteBatchId` across the whole subtree, so one
+   * `restoreBatch` call is the whole inverse.
+   *
+   * **What this cannot see, stated so it is not mistaken for end-to-end proof:** every mutation
+   * here is a `vi.fn()`, so the pen (ADR-0028), the optimistic `version` and — the one that matters
+   * for a cascade — the server's parent-active guard are all invisible. A restore that the server
+   * refused with 409 `PARENT_DELETED` would look identical to a successful one at this level.
+   * `apps/web/e2e-undo/` drives that against a real API.
+   */
+  it('a summary delete is the same command: one restore, and the rethreaded id on a second undo', async () => {
+    const phase = activity({ id: 'phase-1', name: 'Substructure', type: 'WBS_SUMMARY' });
+    // The restore hands back the whole subtree, which is the point — the summary AND its members,
+    // with the ids they had.
+    const restoreBatch = vi.fn(() =>
+      Promise.resolve([
+        activity({ id: 'phase-1', type: 'WBS_SUMMARY' }),
+        activity({ id: 'member-1', parentId: 'phase-1' }),
+        activity({ id: 'member-2', parentId: 'phase-1' }),
+      ]),
+    );
+    const deleteActivity = vi.fn(() => Promise.resolve({ deleteBatchId: 'cascade-2' }));
+    const command = deleteActivityCommand({
+      activity: phase,
+      deleteBatchId: 'cascade-1',
+      restoreBatch,
+      deleteActivity,
+    });
+
+    await command.undo();
+    expect(restoreBatch).toHaveBeenCalledExactlyOnceWith({ deleteBatchId: 'cascade-1' });
+    expect(command.label).toBe('Delete “Substructure”');
+
+    // Redoing deletes the SUMMARY id — the server cascades from there — and the second undo must
+    // use the batch that delete returned, not the first one. This is the trap `bulkDeleteCommand`'s
+    // docblock records, and it bites harder here: reusing `cascade-1` would restore nothing and
+    // report success, leaving a whole phase deleted with an undo that claimed to have worked.
+    await command.redo();
+    expect(deleteActivity).toHaveBeenCalledExactlyOnceWith('phase-1');
+    await command.undo();
+    expect(restoreBatch).toHaveBeenLastCalledWith({ deleteBatchId: 'cascade-2' });
+  });
 });
 
 describe('dependency add / remove commands', () => {

@@ -925,22 +925,31 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     },
     [editHistory, updateActivity.mutateAsync],
   );
-  // Record an activity DELETE on the undo stack (ADR-0048 M2). Called by `ActivityCrudDialogs` after a
-  // successful delete, with the pre-delete row **and the batch the delete returned**. A **leaf**
-  // delete is reversible: undo restores that batch, ids and links intact (`docs/TECH_DEBT.md` #92 —
-  // it used to re-create, which minted a new id and silently dropped every dependency the activity
-  // had). A **cascade** (a WBS summary with a subtree, ADR-0038) still records an explicit
-  // non-undoable boundary that **truncates** the history; the restore would take the subtree too, so
-  // that deferral's reason has lapsed, and lifting it is a capability change filed as #230 rather
-  // than made here. A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
+  /**
+   * Record an activity DELETE on the undo stack (ADR-0048 M2, amended). Called by
+   * `ActivityCrudDialogs` after a successful delete, with the pre-delete row **and the batch the
+   * delete returned**.
+   *
+   * **Every delete is one undo step, a phase included** (`docs/TECH_DEBT.md` #230). Undo restores
+   * that batch, ids and links intact (#92 — it used to re-create, which minted a new id and
+   * silently dropped every dependency the activity had).
+   *
+   * A **cascade** — a WBS summary with a subtree (ADR-0038) — used to take a different branch and
+   * **truncate** the history instead, on ADR-0048 M2's stated grounds that a re-create could only
+   * rebuild the summary and "a partial re-create would be a broken undo". That reason lapsed when
+   * ADR-0048's own M4 landed: a cascade stamps ONE `deleteBatchId` across the whole subtree, and
+   * `POST …/activities/restore-batch/:batchId` brings the phase, its work, its nesting and its
+   * links back together. Nothing here special-cases a summary any more, which is the point — a
+   * planner who deletes a phase keeps the rest of their session's history too.
+   *
+   * `recordDissolveBoundary` below still truncates, and that asymmetry is deliberate: a dissolve
+   * has no inverse the client can compose at all.
+   *
+   * A no-op unless `VITE_UNDO_REDO` is on — byte-identical when off.
+   */
   const recordActivityDelete = useCallback(
     (activity: ActivitySummary, deleteBatchId: string): void => {
       if (!UNDO_REDO_ENABLED) return;
-      const hasSubtree = (activities.data ?? []).some((a) => a.parentId === activity.id);
-      if (activity.type === 'WBS_SUMMARY' && hasSubtree) {
-        editHistory.clear();
-        return;
-      }
       editHistory.record(
         deleteActivityCommand({
           activity,
@@ -950,7 +959,7 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
         }),
       );
     },
-    [editHistory, activities.data, restoreBatch, deleteActivity.mutateAsync],
+    [editHistory, restoreBatch, deleteActivity.mutateAsync],
   );
   /**
    * Record a summary **dissolve** as a non-undoable boundary (WBS improvements M2). Dissolve is one
@@ -2150,9 +2159,10 @@ export function usePlanWorkspaceModel(orgSlug: string, planId: string) {
     // the TSLD callbacks. A no-op when `VITE_UNDO_REDO` is off; undo/redo controls arrive in M3.
     recordActivityUpdate,
     // Undo/redo recording seams for delete (ADR-0048 M2). `ActivityCrudDialogs` calls
-    // `recordActivityDelete` after a successful delete, with the batch it returned (leaf → id-stable
-    // restore; cascade → history truncation); the `DependencyEditor` calls `recordDependencyRemove` after a successful link
-    // removal. No-ops when `VITE_UNDO_REDO` is off.
+    // `recordActivityDelete` after a successful delete, with the batch it returned — an id-stable
+    // restore, a WBS phase and its subtree included (`docs/TECH_DEBT.md` #230); the
+    // `DependencyEditor` calls `recordDependencyRemove` after a successful link removal. No-ops
+    // when `VITE_UNDO_REDO` is off.
     recordActivityDelete,
     // Dissolve's undo boundary (WBS improvements M2) — see `recordDissolveBoundary`.
     recordDissolveBoundary,

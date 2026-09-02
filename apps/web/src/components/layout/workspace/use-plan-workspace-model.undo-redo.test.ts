@@ -150,10 +150,20 @@ const ACTIVITY: ActivitySummary = {
   updatedAt: '2026-01-01T00:00:00Z',
 };
 
-// A WBS summary (`sum-1`) with a child (`child-1`) — the cascade-delete case (ADR-0038 / ADR-0048 M2.3):
-// deleting the summary truncates history rather than offering a broken partial undo.
+// A WBS summary (`sum-1`) with a child (`child-1`) — the cascade-delete case (ADR-0038). Deleting
+// the summary used to truncate history rather than offer a broken partial undo; since
+// `docs/TECH_DEBT.md` #230 it records one command, because the inverse is the id-stable batch
+// restore and not a re-create.
 const SUMMARY: ActivitySummary = { ...ACTIVITY, id: 'sum-1', name: 'Phase 1', type: 'WBS_SUMMARY' };
 const CHILD: ActivitySummary = { ...ACTIVITY, id: 'child-1', name: 'Child', parentId: 'sum-1' };
+// A summary with nothing under it — a shape the old predicate treated differently from `SUMMARY`
+// and the new one does not, which is exactly why it needs its own case.
+const EMPTY_SUMMARY: ActivitySummary = {
+  ...ACTIVITY,
+  id: 'sum-2',
+  name: 'Phase 2',
+  type: 'WBS_SUMMARY',
+};
 
 // **Partial**, not total — the `@/features/dependencies` lesson, one feature along. A total mock
 // blanks every export the workspace host imports, not only the ones this suite meant to stub, so a
@@ -162,7 +172,7 @@ const CHILD: ActivitySummary = { ...ACTIVITY, id: 'child-1', name: 'Child', pare
 // `ActivityCreateDialog`).
 vi.mock('@/features/activities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  useActivities: () => query([ACTIVITY, SUMMARY, CHILD]),
+  useActivities: () => query([ACTIVITY, SUMMARY, CHILD, EMPTY_SUMMARY]),
   useCreateActivity: () => ({ mutateAsync: vi.fn().mockResolvedValue(ACTIVITY) }),
   useCreatePlacedActivity: () => ({ mutateAsync: vi.fn().mockResolvedValue(ACTIVITY) }),
   useUpdateActivity: () => ({ mutateAsync: h.updateMutateAsync }),
@@ -310,7 +320,20 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     expect(h.record).toHaveBeenCalledTimes(1);
   });
 
-  it('flag ON: a leaf delete records one command; a cascade (summary+subtree) truncates history', () => {
+  /**
+   * **A cascade delete is one undo step like any other** (`docs/TECH_DEBT.md` #230, ADR-0048's M2
+   * boundary lifted by its own M4). It used to truncate, on the stated grounds that an undo could
+   * only re-create the summary and "a partial re-create would be a broken undo". That reason
+   * lapsed when the leaf inverse moved to `POST …/activities/restore-batch/:batchId`: a cascade
+   * stamps ONE `deleteBatchId` across the whole subtree, and restoring that batch brings the
+   * phase, its work, its nesting and its internal links back with their original ids.
+   *
+   * This asserts the capability, not the absence of a branch — which is why it counts `clear` as
+   * well as `record`. What it CANNOT see is the server: the mutation is mocked, so the pen, the
+   * optimistic version and the parent-active guard are all invisible here. `apps/web/e2e-undo/`
+   * is where those are proven.
+   */
+  it('flag ON: a cascade delete records one command, exactly like a leaf', () => {
     h.undoRedo = true;
     const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
 
@@ -320,11 +343,23 @@ describe('usePlanWorkspaceModel undo/redo recording seam', () => {
     expect(h.clear).not.toHaveBeenCalled();
 
     h.record.mockClear();
-    // A WBS summary WITH a subtree still truncates: the restore would take the subtree too, but
-    // lifting ADR-0048 M2's boundary is a capability change filed as `docs/TECH_DEBT.md` #230.
+    // …and so is a WBS summary WITH a subtree. This is the capability.
     act(() => result.current.recordActivityDelete(SUMMARY, 'batch-2'));
-    expect(h.clear).toHaveBeenCalledTimes(1);
-    expect(h.record).not.toHaveBeenCalled();
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.clear).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A summary with NOTHING under it, recorded the same way — a guard against a "fix" that keeps
+   * branching on `type` and only stops looking at the subtree. Before #230 this case already
+   * recorded, so it is the one member of this group that was green throughout.
+   */
+  it('flag ON: an empty summary records one command', () => {
+    h.undoRedo = true;
+    const { result } = renderHook(() => usePlanWorkspaceModel('acme', 'p1'), { wrapper });
+    act(() => result.current.recordActivityDelete(EMPTY_SUMMARY, 'batch-3'));
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.clear).not.toHaveBeenCalled();
   });
 
   it('flag OFF: neither a leaf delete nor a cascade delete touches the history', () => {

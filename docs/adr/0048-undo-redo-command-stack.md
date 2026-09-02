@@ -87,3 +87,81 @@ Concretely:
   ADR-0031 (toolbar registry), ADR-0032 (coalesced auto-recalc), ADR-0033 (`visualStart`)
 - TECH_DEBT #25 (Back/Forward suppression for editing keybindings)
 - `docs/specs/undo-redo/feature-spec.md` + `docs/specs/undo-redo/implementation-plan.md`
+
+---
+
+## Amendment — 2026-09-02: a cascade delete is one undo step, and the panel records too
+
+**Status:** Accepted · **Register row:** `docs/TECH_DEBT.md` #230 · **Amends:** M2's cascade
+boundary, and the "Negative / accepted" bullet above.
+
+The accepted text is unchanged; what follows says which of its statements have stopped being true
+and why.
+
+### 1. The cascade-delete history truncation is removed
+
+M2 recorded a WBS summary's delete as a **non-undoable boundary that truncates the whole history**,
+on the stated grounds that the inverse could only re-create the summary and _"a partial re-create
+would be a broken undo"_. That reason has lapsed. **This ADR's own M4** replaced the leaf inverse
+with `POST …/activities/restore-batch/:batchId`, and a cascade stamps **one** `deleteBatchId` across
+the whole subtree — so the same call returns the phase, its work, its nesting and every link inside
+it, with the ids they had. The predicate is gone; nothing special-cases a summary any more.
+
+The "Negative / accepted" bullet's clause _"cascade/WBS delete-undo is not clean until M4"_ is
+therefore discharged rather than contradicted: M4 landed, and this is what it bought.
+
+**What does NOT change.** The stack is still client-side, in-memory, per pen session, and lost on
+reload and hand-off. Every inverse still rides the unchanged `assertHoldsPen` (423), RBAC,
+org-scope and optimistic (409) gates, so the API remains the sole trust boundary. `restore-batch`
+already existed and already had all of them; **no permission moves.** The CPM engine is not
+imported and the ADR-0034 recalculation parity gate is untouched.
+
+**Dissolve still truncates**, and the asymmetry is deliberate: a dissolve has no inverse the client
+can compose from the existing mutations, because re-creating the summary mints a new id and would
+rebuild a different grouping while stranding the original in Recently deleted.
+
+### 2. Recording a delete is a property of the plan, not of the surface it was done from
+
+`ActivityCrudDialogs` had called the recording seam since M2; `ActivitiesTable` mutated, announced,
+and told the history nothing. So the same act was undoable from the diagram and silently not from
+the activities panel — one surface apart, with nothing on screen saying so. Nothing in either file
+was wrong; the wrongness lived only in the relationship, which is the ADR-0093 shape.
+
+Both surfaces now report to the **one** history the workspace owns, through optional host-provided
+callbacks — the pattern the table already used for five other host-owned actions, so the direction
+of the dependency is unchanged and the table still knows nothing about a history.
+
+Its honest cost: the panel's **Dissolve** now ends a history it used to leave intact-but-stale.
+That is the correct behaviour and it matches the diagram, and it is named in the changeset because
+it is a behaviour change rather than a fix.
+
+### 3. The ancestor-gone refusal keeps its words but loses its route, which was measured
+
+A batch whose root's own WBS parent is soft-deleted is refused by the server (409 `PARENT_DELETED`)
+rather than re-parented to the top level, which would silently discard the planner's structure. That
+was already true and already handled non-destructively — stacks intact, server truth refetched, redo
+branch cleared. What was missing was words: the general copy says _"Refresh to see the latest"_, and
+refreshing does not help. Restoring the phase does, and the message now says so.
+
+**It does not name the phase, and the reason is worth recording.** The spec's own alternate flow —
+delete phase `A`, delete its parent `P` from the activities panel, press Undo — **was driven and
+does not produce a refusal.** Both undos succeed. The stack is last-in-first-out and a cascade
+resolves its subtree with `deletedAt: null`, so deleting `P` after `A` does not sweep `A` into `P`'s
+batch: `P`'s delete is recorded last and is therefore undone first, leaving the parent active before
+the child's restore runs.
+
+That flow was reachable when the spec was written, for exactly the reason §2 above fixes — the panel
+recorded nothing. **Answering CQ-3 "in scope" closed the only route to the case the milestone was
+designed around**, which the plan's own risk note predicted in as many words. The refusal remains
+reachable across sessions (a stale tab, a pen hand-off, a direct API caller), so the words are worth
+having; naming the phase would need the server to say which row blocked, which is real work for a
+state the UI cannot reach in one session. Deferred with that reason rather than built.
+
+### 4. The enabling endpoint was unreliable for exactly this shape, and that shipped first
+
+`restoreDeleteBatch` handed `ids[0]` from an unordered query to the guard that asks whether the
+batch may come back. In a cascade batch every non-root member's parent is another still-deleted
+member, so the restore worked only when the database happened to return the root first — and an
+ordinary rename moves a row to the end of the heap, which flips it. Fixed and released on its own
+before this milestone, so the capability was never built on top of a rare, invisible failure
+(`api-v0.55.3`).
