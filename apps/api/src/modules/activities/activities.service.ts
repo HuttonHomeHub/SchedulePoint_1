@@ -1407,8 +1407,19 @@ export class ActivitiesService {
     // **Not `ids[0]`** — see `batch-restore-anchor.ts`. The guard `restoreBatch` runs before it
     // restores anything asks whether the anchor's parent is active, and in a cascade batch every
     // non-root member's parent is another member of the same batch (`docs/TECH_DEBT.md` #230).
-    const anchorId = batchRestoreAnchor(members);
-    if (anchorId === undefined) throw new NotFoundError('Deleted batch not found in this plan.');
+    const anchor = batchRestoreAnchor(members);
+    if (anchor === undefined) throw new NotFoundError('Deleted batch not found in this plan.');
+    if (anchor.viaFallback) {
+      // Every member's parent is inside the batch — a cycle the acyclic parent tree (ADR-0038)
+      // forbids, so this should be unreachable. The restore below will refuse with
+      // `PARENT_DELETED`, which describes the symptom and names nothing; this names the batch, so
+      // a corrupt one is diagnosable rather than looking like an ordinary refusal.
+      this.logger.error(
+        { organizationId: organization.id, planId, deleteBatchId, count: members.length },
+        'delete batch has no member whose parent is outside it',
+      );
+    }
+    const anchorId = anchor.id;
 
     await this.prisma.$transaction(async (tx) => {
       await acquirePlanWriteLock(tx, planId);

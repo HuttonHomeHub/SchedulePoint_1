@@ -9,6 +9,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
+import { clearDomainData } from './audit-reset';
+
 /**
  * **How long does restoring a 2,000-activity phase take?** (`docs/TECH_DEBT.md` #230, M0-T3.)
  *
@@ -67,7 +69,6 @@ describe.skipIf(!enabled)('Cascade restore at scale (measurement)', () => {
     const slug = `scale-${Date.now()}`;
     const org = await agent.post('/api/v1/organizations').send({ name: slug }).expect(201);
     const orgSlug = org.body.data.slug as string;
-    const orgId = org.body.data.id as string;
     const client = await agent
       .post(`/api/v1/organizations/${orgSlug}/clients`)
       .send({ name: 'Northgate' })
@@ -88,58 +89,71 @@ describe.skipIf(!enabled)('Cascade restore at scale (measurement)', () => {
     const summaryId = summary.body.data.id as string;
     const template = await prisma.activity.findUniqueOrThrow({ where: { id: summaryId } });
 
-    // One insert, not 2,000 REST calls — see the docblock. Every row copies the summary's own
-    // scalar columns, so nothing here invents a shape the write path would not produce.
-    const {
-      id: _id,
-      name: _name,
-      type: _type,
-      parentId: _parentId,
-      createdAt: _createdAt,
-      updatedAt: _updatedAt,
-      ...shared
-    } = template;
-    await prisma.activity.createMany({
-      data: Array.from({ length: SUBTREE }, (_unused, i) => ({
-        ...shared,
-        name: `Member ${i}`,
-        type: 'TASK' as const,
-        parentId: summaryId,
-      })),
-    });
-    expect(await prisma.activity.count({ where: { planId, deletedAt: null } })).toBe(SUBTREE + 1);
+    try {
+      // One insert, not 2,000 REST calls — see the docblock. Every row copies the summary's own
+      // scalar columns, so nothing here invents a shape the write path would not produce.
+      const {
+        id: _id,
+        name: _name,
+        type: _type,
+        parentId: _parentId,
+        createdAt: _createdAt,
+        updatedAt: _updatedAt,
+        ...shared
+      } = template;
+      await prisma.activity.createMany({
+        data: Array.from({ length: SUBTREE }, (_unused, i) => ({
+          ...shared,
+          name: `Member ${i}`,
+          type: 'TASK' as const,
+          parentId: summaryId,
+        })),
+      });
+      expect(await prisma.activity.count({ where: { planId, deletedAt: null } })).toBe(SUBTREE + 1);
 
-    const deleteStart = performance.now();
-    const deleted = await agent
-      .delete(`/api/v1/organizations/${orgSlug}/activities/${summaryId}`)
-      .expect(200);
-    const deleteMs = performance.now() - deleteStart;
-    const batchId = deleted.body.data.deleteBatchId as string;
-    expect(await prisma.activity.count({ where: { planId, deletedAt: null } })).toBe(0);
+      const deleteStart = performance.now();
+      const deleted = await agent
+        .delete(`/api/v1/organizations/${orgSlug}/activities/${summaryId}`)
+        .expect(200);
+      const deleteMs = performance.now() - deleteStart;
+      const batchId = deleted.body.data.deleteBatchId as string;
+      expect(await prisma.activity.count({ where: { planId, deletedAt: null } })).toBe(0);
 
-    const restoreStart = performance.now();
-    await agent
-      .post(`/api/v1/organizations/${orgSlug}/plans/${planId}/activities/restore-batch/${batchId}`)
-      .expect(200);
-    const restoreMs = performance.now() - restoreStart;
-    expect(await prisma.activity.count({ where: { planId, deletedAt: null } })).toBe(SUBTREE + 1);
+      const restoreStart = performance.now();
+      await agent
+        .post(
+          `/api/v1/organizations/${orgSlug}/plans/${planId}/activities/restore-batch/${batchId}`,
+        )
+        .expect(200);
+      const restoreMs = performance.now() - restoreStart;
+      expect(await prisma.activity.count({ where: { planId, deletedAt: null } })).toBe(SUBTREE + 1);
 
-    // Written to a file, not `console.log`: vitest's default reporter swallowed the log line on
-    // the first run, which is exactly the shape of instrument failure this repository keeps
-    // recording — a harness that looks like it reported and did not.
-    const report =
-      `subtree            ${SUBTREE} activities\n` +
-      `cascade delete     ${deleteMs.toFixed(0)} ms\n` +
-      `cascade restore    ${restoreMs.toFixed(0)} ms\n` +
-      `budget             ${BUDGET_MS} ms\n` +
-      `verdict            ${restoreMs < BUDGET_MS ? 'PASS' : 'FAIL — M1 stops'}\n`;
-    writeFileSync(process.env.SP_MEASURE_OUT ?? 'cascade-restore-scale.txt', report);
+      // Written to a file, not `console.log`: vitest's default reporter swallowed the log line on
+      // the first run, which is exactly the shape of instrument failure this repository keeps
+      // recording — a harness that looks like it reported and did not.
+      const report =
+        `subtree            ${SUBTREE} activities\n` +
+        `cascade delete     ${deleteMs.toFixed(0)} ms\n` +
+        `cascade restore    ${restoreMs.toFixed(0)} ms\n` +
+        `budget             ${BUDGET_MS} ms\n` +
+        `verdict            ${restoreMs < BUDGET_MS ? 'PASS' : 'FAIL — M1 stops'}\n`;
+      writeFileSync(process.env.SP_MEASURE_OUT ?? 'cascade-restore-scale.txt', report);
 
-    await prisma.activity.deleteMany({ where: { planId } });
-    await prisma.plan.deleteMany({ where: { id: planId } });
-    await prisma.project.deleteMany({ where: { organizationId: orgId } });
-    await prisma.client.deleteMany({ where: { organizationId: orgId } });
-
-    expect(restoreMs).toBeLessThan(BUDGET_MS);
+      expect(restoreMs).toBeLessThan(BUDGET_MS);
+    } finally {
+      // **`finally`, and through the SHARED sweep.** The first version cleaned up after the budget
+      // assertion, so a failure anywhere above left up to 2,001 activities and an orphan tenant in
+      // a database shared with 44 other spec files — the exact shape of leftover row that
+      // `activity-batch-ops.e2e-spec.ts`'s `beforeEach` docblock records failing three unrelated
+      // suites (`docs/TECH_DEBT.md` #119a). A security review caught it.
+      //
+      // The second version hand-rolled a tenant-scoped list and failed on
+      // `calendars_organization_id_fkey`, because creating an organisation seeds its calendars —
+      // which is precisely why `clearDomainData` exists ("one list, because two drifted") and why
+      // a third copy would have been the wrong fix to reach for. It also handles `audit_events`,
+      // which is append-only and RESTRICTs its organisation, so no hand-rolled sweep can drop an
+      // org at all.
+      await clearDomainData(prisma);
+    }
   }, 300_000);
 });

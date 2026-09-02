@@ -25,12 +25,30 @@
  */
 
 /**
+ * What the anchor selection concluded. `viaFallback` exists so the caller can SAY that a batch had
+ * no member with an out-of-batch parent, rather than that state passing silently — a security
+ * review's finding, and a fair one: the fallback cannot succeed (every parent is still deleted, so
+ * `assertParentActive` refuses), and without a word from here the operator sees only a
+ * `PARENT_DELETED` that describes the symptom and names nothing.
+ *
+ * It is deliberately **not** a thrown error. The state is unreachable through the API — the parent
+ * tree is acyclic by ADR-0038 and `assertValidParent` enforces it under the plan write lock — so
+ * inventing a new failure mode for it would add a path nothing can test, on the strength of a state
+ * that should not exist. The existing guard already refuses; this only makes the refusal legible.
+ */
+export interface BatchRestoreAnchor {
+  id: string;
+  /** No member had an out-of-batch parent — an impossible batch. Worth a log line. */
+  viaFallback: boolean;
+}
+
+/**
  * @param members every soft-deleted row in the batch, with its WBS parent (`activity.parentId`).
- * @returns the id to hand `restoreBatch`, or `undefined` when the batch is empty.
+ * @returns the anchor to hand `restoreBatch`, or `undefined` when the batch is empty.
  */
 export function batchRestoreAnchor(
   members: readonly { id: string; parentId: string | null }[],
-): string | undefined {
+): BatchRestoreAnchor | undefined {
   if (members.length === 0) return undefined;
   const inBatch = new Set(members.map((m) => m.id));
   // Sorted, so a batch with several eligible roots — an ADR-0080 bulk delete stamps ONE batch
@@ -42,10 +60,11 @@ export function batchRestoreAnchor(
     .map((m) => m.id)
     .sort();
   const root = roots[0];
-  if (root !== undefined) return root;
+  if (root !== undefined) return { id: root, viaFallback: false };
   // No member qualifies. That means every parent is inside the batch — a cycle, which ADR-0021's
   // DAG invariant and ADR-0038's acyclic parent tree both forbid. Rather than invent a new failure
   // mode for a state that should not exist, fall back to the old behaviour and let the guard speak:
-  // a corrupt batch then reports `PARENT_DELETED` exactly as it does today.
-  return [...inBatch].sort()[0];
+  // a corrupt batch then reports `PARENT_DELETED` exactly as it does today. The caller logs it.
+  const fallback = [...inBatch].sort()[0];
+  return fallback === undefined ? undefined : { id: fallback, viaFallback: true };
 }

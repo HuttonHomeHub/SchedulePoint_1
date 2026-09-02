@@ -12,6 +12,9 @@ import { batchRestoreAnchor } from './batch-restore-anchor';
  * on the machine, with no database involved.
  *
  * Verified red against `(members) => members[0]?.id`: the first three cases return the child.
+ *
+ * The return is a `{ id, viaFallback }` shape rather than a bare id so the caller can report the
+ * impossible batch at the bottom of this file rather than letting it pass as an ordinary refusal.
  */
 
 /** `parentId` is the WBS parent (ADR-0038) — the field `assertParentActive` reads for an activity. */
@@ -27,13 +30,13 @@ describe('batchRestoreAnchor', () => {
       row('c-child', 'a-summary'),
       row('a-summary', null),
     ];
-    expect(batchRestoreAnchor(members)).toBe('a-summary');
+    expect(batchRestoreAnchor(members)).toEqual({ id: 'a-summary', viaFallback: false });
   });
 
   it('walks past an intermediate summary to the batch root', () => {
     // summary → sub-phase → leaf, all in one batch, listed deepest first.
     const members = [row('c-leaf', 'b-sub'), row('b-sub', 'a-root'), row('a-root', null)];
-    expect(batchRestoreAnchor(members)).toBe('a-root');
+    expect(batchRestoreAnchor(members)).toEqual({ id: 'a-root', viaFallback: false });
   });
 
   /**
@@ -43,7 +46,7 @@ describe('batchRestoreAnchor', () => {
    */
   it('treats a member whose parent is outside the batch as a root', () => {
     const members = [row('c-leaf', 'b-summary'), row('b-summary', 'untouched-parent')];
-    expect(batchRestoreAnchor(members)).toBe('b-summary');
+    expect(batchRestoreAnchor(members)).toEqual({ id: 'b-summary', viaFallback: false });
   });
 
   /**
@@ -53,13 +56,16 @@ describe('batchRestoreAnchor', () => {
    */
   it('is deterministic when a batch has several eligible roots', () => {
     const members = [row('z-one', null), row('a-two', null), row('m-three', null)];
-    expect(batchRestoreAnchor(members)).toBe('a-two');
-    expect(batchRestoreAnchor([...members].reverse())).toBe('a-two');
+    expect(batchRestoreAnchor(members)?.id).toBe('a-two');
+    expect(batchRestoreAnchor([...members].reverse())?.id).toBe('a-two');
   });
 
   it('handles the leaf batch that has always worked', () => {
-    expect(batchRestoreAnchor([row('only', null)])).toBe('only');
-    expect(batchRestoreAnchor([row('only', 'active-summary')])).toBe('only');
+    expect(batchRestoreAnchor([row('only', null)])).toEqual({ id: 'only', viaFallback: false });
+    expect(batchRestoreAnchor([row('only', 'active-summary')])).toEqual({
+      id: 'only',
+      viaFallback: false,
+    });
   });
 
   it('returns undefined for an empty batch, so the caller can 404', () => {
@@ -71,8 +77,11 @@ describe('batchRestoreAnchor', () => {
    * invent a failure mode for a state that cannot exist, it falls back deterministically and lets
    * the restore guard report `PARENT_DELETED` exactly as it does today.
    */
-  it('falls back rather than throwing on a batch with no root', () => {
+  it('falls back rather than throwing on a batch with no root, and SAYS it did', () => {
     const members = [row('b', 'a'), row('a', 'b')];
-    expect(batchRestoreAnchor(members)).toBe('a');
+    // `viaFallback` is the whole point of the flag: the restore will refuse with `PARENT_DELETED`
+    // either way, and that message names nothing. The caller logs the batch instead (a security
+    // review's finding — a corrupt state silently handled is worse to debug than a named one).
+    expect(batchRestoreAnchor(members)).toEqual({ id: 'a', viaFallback: true });
   });
 });
