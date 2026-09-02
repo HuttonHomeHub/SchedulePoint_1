@@ -1,5 +1,17 @@
 # @repo/web
 
+## 0.118.2
+
+### Patch Changes
+
+- [#456](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/456) [`53d488a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/53d488a2656368cd5d477f0aa93819e218d1c2e8) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Dragging or nudging a link's lag no longer destroys a sub-day value. The gesture now says how many
+  whole days it moved and the write carries minutes, so a four-hour cure nudged one day becomes
+  `1d 4h` rather than two whole days. Undo restores the stored minutes too.
+
+- [#456](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/456) [`53d488a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/53d488a2656368cd5d477f0aa93819e218d1c2e8) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A precondition placeholder is prose, not a framed empty state. "This plan has no other activities
+  to link to yet" and "Choose a file above and its report appears here" lose their dashed boxes — in
+  both, nothing is missing, so the frame announced a problem the screen did not have.
+
 ## 0.118.1
 
 ### Patch Changes
