@@ -67,6 +67,7 @@ test('a project calendar is scoped to its project, and archiving retires a resou
   await page.getByLabel('Scope').selectOption('all');
   await expect(page.getByRole('cell', { name: 'Site shutdown', exact: true })).toBeVisible();
   await expect(page).toHaveURL(/[?&]scope=all/);
+
   expect(
     (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()).violations,
   ).toEqual([]);

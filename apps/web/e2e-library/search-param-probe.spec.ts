@@ -1,0 +1,45 @@
+import { expect, test, type Page } from '@playwright/test';
+
+import { onboard } from './support';
+
+/** The organisation nav's link, scoped so it does not also match the breadcrumb. */
+function navLink(page: Page, name: string): ReturnType<Page['getByRole']> {
+  return page.getByLabel('Organisation', { exact: true }).getByRole('link', { name, exact: true });
+}
+
+/**
+ * **The `docs/TECH_DEBT.md` #96 M0 probe: what the address bar actually holds.**
+ *
+ * The register row says the router JSON-parses every search value, so a numeric term round-trips
+ * re-quoted — a URL a planner copies and sends is not the one they can read. This settles it by
+ * reading the **raw** query string in a real browser, because `searchParams.get(...)` decodes and
+ * decoding hides the quoting, which is the whole subject.
+ *
+ * **Its verdict rule was committed first, on its own**
+ * (`docs/specs/router-search-params/m0-measurement.md`): no `%22` ⇒ the symptom is withdrawn and
+ * the epic re-scoped. A measurement whose rule is written afterwards is read as whatever result
+ * arrives, which this register records twice.
+ *
+ * **It is a test of its own, and that is a finding rather than tidiness.** Written inline inside
+ * the shipped `e2e-library` journey it BROKE that journey — a later assertion went from one match
+ * to a strict-mode violation on two — established by running the suite stashed and unstashed back
+ * to back. A probe that perturbs the journey it borrows is measuring a state the product does not
+ * otherwise reach.
+ */
+test('#96 M0 — a numeric search term is re-quoted in the URL', async ({ page }) => {
+  await onboard(page, Date.now());
+  await navLink(page, 'Calendars').click();
+  const search = page.getByLabel('Search calendars');
+  await expect(search).toBeVisible();
+
+  await search.fill('2026');
+  await expect.poll(() => new URL(page.url()).search, { timeout: 10_000 }).toMatch(/[?&]q=/);
+
+  const raw = new URL(page.url()).search;
+  // eslint-disable-next-line no-console -- the probe's output IS the measurement (#96 M0-T2)
+  console.log(`[#96 M0 probe] calendars search raw query: ${raw}`);
+
+  // The measured answer, pinned so a future fix has to come here and say it changed the URL.
+  // `%22` is `"`: four characters typed, six carried.
+  expect(raw, 'the numeric term is no longer re-quoted — see #96 M0').toContain('q=%222026%22');
+});
