@@ -600,7 +600,7 @@ Three rules the pass that converted 34 hand-rolled boxes settled
   "you may not see this" — solid, because dashed means "nothing here yet" and a permission is
   settled, not pending; the error shape (`role="alert"` + retry) for a failed request. The shape
   table in [`docs/UX_STANDARDS.md`](UX_STANDARDS.md) is the full discriminator, and
-  `empty-state.structural.test.ts` fails on a hand-rolled dashed box outside its three-entry
+  `empty-state.structural.test.ts` fails on a hand-rolled dashed box outside its one-entry
   allow-list.
 
 `NoticeStrip` takes `role` from its caller rather than choosing one. That is deliberate: the same

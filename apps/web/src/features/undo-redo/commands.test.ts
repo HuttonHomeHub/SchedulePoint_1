@@ -365,7 +365,7 @@ describe('lagDragCommand (ADR-0052 M3)', () => {
     const command = lagDragCommand({
       updateDependency,
       dependency: dependency({ id: 'd7', type: 'SS', lagDays: 2, lagCalendar: 'TWENTY_FOUR_HOUR' }),
-      afterLagDays: 5,
+      after: { lagDays: 5 },
       version: 9,
     });
 
@@ -389,18 +389,74 @@ describe('lagDragCommand (ADR-0052 M3)', () => {
     expect(command.label).toBe('Change lag “Excavate” → “Pour”');
   });
 
+  /**
+   * **Undo restores the STORED minutes, not the rounded day** (`docs/TECH_DEBT.md` #233).
+   *
+   * The forward write was fixed to preserve a sub-day remainder; this is the same defect one layer
+   * along, and it would have been invisible to everything except somebody pressing Ctrl+Z on an
+   * edge carrying a ninety-minute lift. Against the pre-fix command — which took `afterLagDays` and
+   * undid to `dependency.lagDays` — this asserts 570 and would have been handed 1.
+   */
+  it('undo of a minutes write restores the exact stored minutes', async () => {
+    const updateDependency = fakeUpdateDependency();
+    const command = lagDragCommand({
+      updateDependency,
+      dependency: dependency({ id: 'd9', lagDays: 1, lagMinutes: 570 }),
+      after: { lagMinutes: 1050 },
+      version: 4,
+    });
+
+    await command.undo();
+    expect(updateDependency).toHaveBeenLastCalledWith(
+      expect.objectContaining({ dependencyId: 'd9', lagMinutes: 570 }),
+    );
+    expect(updateDependency).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ lagDays: expect.anything() }),
+    );
+
+    await command.redo();
+    expect(updateDependency).toHaveBeenLastCalledWith(
+      expect.objectContaining({ lagMinutes: 1050 }),
+    );
+  });
+
+  /** A burst that began on a sub-day row still undoes all the way back to its stored minutes. */
+  it('coalesces a minutes burst back to the first row’s stored minutes', async () => {
+    const updateDependency = fakeUpdateDependency();
+    const first = lagDragCommand({
+      updateDependency,
+      dependency: dependency({ lagDays: 1, lagMinutes: 570 }),
+      after: { lagMinutes: 1050 },
+      version: 2,
+    });
+    const second = lagDragCommand({
+      updateDependency,
+      dependency: dependency({ lagDays: 2, lagMinutes: 1050 }),
+      after: { lagMinutes: 1530 },
+      version: 3,
+    });
+
+    const merged = second.coalescing!.merge(first);
+    await merged.undo();
+    expect(updateDependency).toHaveBeenLastCalledWith(expect.objectContaining({ lagMinutes: 570 }));
+    await merged.redo();
+    expect(updateDependency).toHaveBeenLastCalledWith(
+      expect.objectContaining({ lagMinutes: 1530 }),
+    );
+  });
+
   it('coalesces per dependency: a drag/nudge burst collapses to first-before → last-after', async () => {
     const updateDependency = fakeUpdateDependency();
     const first = lagDragCommand({
       updateDependency,
       dependency: dependency({ lagDays: 0 }),
-      afterLagDays: 1,
+      after: { lagDays: 1 },
       version: 2,
     });
     const second = lagDragCommand({
       updateDependency,
       dependency: dependency({ lagDays: 1 }),
-      afterLagDays: -2,
+      after: { lagDays: -2 },
       version: 3,
     });
     expect(first.coalescing?.key).toBe('lag:d1');
