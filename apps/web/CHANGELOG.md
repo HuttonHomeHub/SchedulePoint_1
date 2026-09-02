@@ -1,5 +1,15 @@
 # @repo/web
 
+## 0.120.0
+
+### Minor Changes
+
+- [#463](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/463) [`177ffb6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/177ffb6da9e5280a8e02707cdc2a3d6bc1669f6b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Every URL in the app now carries the value it was given. Search params used to be typed on the way in and quoted on the way out, so a sign-out wrote `?signedOut=%22true%22`, a numeric library search wrote `?q=%222026%22`, and a link composed elsewhere — a verification email, a URL you typed or edited, a bookmark from another tool — could arrive as the wrong kind of thing entirely and be discarded without a word. Addresses, tokens, dates, search terms and view names are now carried and read exactly as written. Two consequences worth knowing: a bookmark saved before this update shows its quotes once and heals on the next keystroke, and a search term made only of digits now works where it previously did nothing.
+
+### Patch Changes
+
+- [#463](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/463) [`177ffb6`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/177ffb6da9e5280a8e02707cdc2a3d6bc1669f6b) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A numeric search term in a URL now reaches the search box. Opening or pasting `…/calendars?q=2026` filtered nothing and showed an empty Search field, because the router hands a reader the number `2026` rather than the text — and every filter in the app tested for text. `true`, `false`, `null` and `[…]`-shaped terms behaved the same way. They now all arrive as what was typed.
+
 ## 0.119.0
 
 ### Minor Changes
