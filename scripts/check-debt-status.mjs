@@ -135,6 +135,46 @@ function main(argv) {
     );
   }
 
+  // ── A10 — every row heading is in the canonical form (#227) ──────────────────────────────────
+  //
+  // **This asserts the form; it does NOT narrow what the parser reads.** `sections()` and
+  // `rowNumber` deliberately accept both heading levels and both title separators, because
+  // ADR-0120 Finding 0 is that a gate's job is to find every row — a row in the wrong form is
+  // still a row, and a parser that skips it reports green over the gap. Narrowing the reader to
+  // enforce the form would re-introduce that defect in the name of fixing this one. So finding
+  // stays generous and refusing is this separate, strict pass over what was found.
+  //
+  // The register states the convention at `docs/TECH_DEBT.md` — `### <number>. <title>`, always.
+  // Before this assertion existed the register had drifted to two other forms: 41 rows at `##`
+  // (repaired 2026-09-01) and 8 in an `### #<n> — <title>` form (repaired with this assertion).
+  //
+  // **Two limbs, because a heading can be wrong in two ways.** The first catches a row whose
+  // heading is misshapen. The second catches a `###` that is not a row at all — which the first
+  // structurally cannot see, since its predicate only fires on things already shaped like rows.
+  // That second case is not cosmetic: after the depth fix above, ANY `###` inside the detailed
+  // region terminates the row it sits in, so a sub-heading written at the wrong level silently
+  // truncates its own row's body. One such heading existed and was demoted to `####` with this
+  // assertion; nothing would have reported it.
+  const CANONICAL = /^### \d+[a-z]?\. \S/;
+  const raw = stripFences(md).split('\n');
+  for (const line of raw) {
+    if (!/^#{2,3} #?\d+[a-z]?[.\s\u2014-]/.test(line)) continue;
+    if (CANONICAL.test(line)) continue;
+    problems.push(
+      `A10: "${line.slice(0, 70)}" is not in the canonical row form. ` +
+        'A row heading is `### <number>. <title>` — three hashes, the number, a full stop.',
+    );
+  }
+  const detailedLine = raw.findIndex((l) => l.startsWith('## Detailed items'));
+  for (let i = detailedLine + 1; i < raw.length; i += 1) {
+    if (!raw[i].startsWith('### ') || CANONICAL.test(raw[i])) continue;
+    if (/^#{2,3} #?\d+[a-z]?[.\s\u2014-]/.test(raw[i])) continue; // already reported above
+    problems.push(
+      `A10: ${DOC}:${i + 1} "${raw[i].slice(4, 60)}" is a level-3 heading that is not a row. ` +
+        'Inside the detailed items a `###` ends the row above it — write a sub-heading at `####`.',
+    );
+  }
+
   // ── A1 — every item row has exactly one column-0 status line ────────────────────────────────
   const noStatus = items.filter((s) => fieldValue(s.body, 'Status') === null);
   for (const s of noStatus) {

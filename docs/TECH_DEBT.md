@@ -2631,7 +2631,7 @@ not change — so something other than this guard reverts the pop. Recorded rath
 
 ---
 
-### #208 — A journey that seeds through the API must tell the client itself
+### 208. A journey that seeds through the API must tell the client itself
 
 **Status:** open (audited 2026-08-31 — see below; kept as the standing rule, not as owed work)
 
@@ -2680,7 +2680,7 @@ Cost: one pass over nine files. There is no gate for this and a structural one l
 
 ---
 
-### #187 — The deck's labels sit 3 px apart and three hypotheses are falsified
+### 187. The deck's labels sit 3 px apart and three hypotheses are falsified
 
 **Status:** unverified
 
@@ -2719,7 +2719,7 @@ read from `distinctControlHeights` rather than from the label tops.
 
 ---
 
-### #191 — The local pre-push gate costs 8 minutes and 96% of it is two steps
+### 191. The local pre-push gate costs 8 minutes and 96% of it is two steps
 
 **Status:** unverified
 
@@ -2791,7 +2791,7 @@ of the gate that catches what a reviewer cannot see.
 
 ---
 
-### #193 — Four more toolbar docblocks and five exports describe deleted machinery
+### 193. Four more toolbar docblocks and five exports describe deleted machinery
 
 **Status:** unverified
 
@@ -2817,7 +2817,7 @@ because a reader who acted on the original is the risk this row now exists to de
 `triggersAreCompact`/`searchFieldWidth` always take their roomy branch. They are exercised only by
 their own tests — the ADR-0081 shape: tests validating code nothing calls.
 
-### Two more, and how the first grep missed them (2026-08-30 verification sweep)
+#### Two more, and how the first grep missed them (2026-08-30 verification sweep)
 
 **The four docblocks above are now all corrected** — each carries a paragraph naming what it used
 to say and citing this number.
@@ -2868,7 +2868,7 @@ and should be corrected whether or not the code goes. Decide the two questions s
 
 ---
 
-### #194 — "The epic's own gate pass removes it" has now failed twice as an instruction
+### 194. "The epic's own gate pass removes it" has now failed twice as an instruction
 
 **Status:** unverified
 
@@ -2911,7 +2911,7 @@ instance is not also fixed by writing a fourth sentence.
 
 ---
 
-### #195 — `pnpm prepush` cannot see uncommitted work in its diff-based checks
+### 195. `pnpm prepush` cannot see uncommitted work in its diff-based checks
 
 **Status:** unverified
 
@@ -2938,7 +2938,7 @@ with `#194` because both are about this gate, and both should be settled in one 
 
 ---
 
-### #197 — Three rules with two or three implementations each, agreeing by discipline
+### 197. Three rules with two or three implementations each, agreeing by discipline
 
 **Status:** unverified
 
@@ -2979,7 +2979,7 @@ Take them in the order above.
 
 ---
 
-### #200 — Two named-slot registries, one of them the better pattern, neither shared
+### 200. Two named-slot registries, one of them the better pattern, neither shared
 
 **Status:** unverified
 

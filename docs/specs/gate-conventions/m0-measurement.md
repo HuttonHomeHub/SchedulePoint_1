@@ -131,3 +131,35 @@ Moved to the foot. Verified a **pure relocation** by comparing the sorted multis
 non-blank line before and after: identical, so no line was added, dropped or edited. The gate's
 summary is unchanged (`71 / 43 / 113 / 3`), and the count of numbered rows after the ledger heading
 is now **0**.
+
+## F0.3 — the heading-form assertion (M2)
+
+**Condition:** _the census finds ~9 non-canonical `###` headings, all repairable by editing the
+title line alone, and A10 goes green immediately after the repair._
+
+**Verdict: holds, and the census split is the finding.** Nine, of two different kinds:
+
+- **Eight rows** in an `### #<n> — <title>` form (`#187`, `#191`, `#193`, `#194`, `#195`, `#197`,
+  `#200`, `#208`). Normalised to `### <n>. <title>`, per the register's own stated convention.
+- **One heading that is not a row at all** — `### Two more, and how the first grep missed them`,
+  a sub-heading belonging to `#193`. Demoted to `####`.
+
+**That ninth one is why A10 has two limbs.** The first limb's predicate only fires on lines already
+shaped like a row heading, so it is structurally incapable of seeing a `###` that carries no number
+— and after the depth fix in M1, such a heading **terminates the row it sits inside**, silently
+truncating that row's body. The first limb reports 8 of 9 and reads as complete. The second limb
+asserts that inside `## Detailed items` every `###` is a row, and reports the ninth.
+
+Both limbs were verified red against the state that preceded them: the first against the
+pre-repair register (8 findings), the second by re-promoting the demoted heading (1 finding, naming
+its line).
+
+**No inbound anchors break.** `grep` for `TECH_DEBT.md#` across `docs/`, `CLAUDE.md`, `README.md`,
+`apps/`, `scripts/` and `packages/` returns three links, all to `#closed-numbers`, which is
+unchanged. `check:doc-links` is green over 1,272 relative links.
+
+**A10 does not narrow what the parser reads, and that is the load-bearing part.** `sections()` and
+`rowNumber` still accept both heading levels and both separators, because ADR-0120 Finding 0 is that
+a gate's job is to find every row — a row in the wrong form is still a row, and a reader that skips
+it reports green over the gap. Finding stays generous; refusing is this separate strict pass over
+what was found.
