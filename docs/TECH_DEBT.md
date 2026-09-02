@@ -3806,3 +3806,18 @@ it raised the question.
 picking the work up: `restoreDeleteBatch` takes its anchor from a `findMany` with no `orderBy` and
 uses `ids[0]`, so a cascade restore succeeds only when an unrequested ordering happens to return the
 root first. Nothing in this repository has ever restored a cascade batch against a real database.
+
+**M0 (2026-09-02) fixed that anchor and shipped it on its own** — `batch-restore-anchor.ts` picks
+the batch's root (a member whose parent is outside the batch), which is the only member
+`assertParentActive` can accept, and falls back to the lowest id so a batch with no such member
+still names one rather than throwing. Pinned by `batch-restore-anchor.spec.ts`, verified red against
+`(members) => members[0]?.id`.
+
+**And the attempt to make the API e2e case discriminating is recorded in that file rather than
+hidden, because it is the more useful half.** Written the obvious way it PASSES against the defect;
+rewriting the summary's row to force a hostile heap order makes it fail — but only when the file
+runs alone, because a full suite's 44 `beforeEach` sweeps leave free space that hands the rewritten
+tuple an earlier slot. A probe asserting the hostile precondition caught that in the full run
+instead of reporting a green that proved nothing. **Physical order is not something a test can
+hold**, so the pure unit spec is the gate and the e2e case is a capability proof — the first time
+anything here has restored a cascade batch end to end.

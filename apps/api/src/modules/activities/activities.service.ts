@@ -37,6 +37,7 @@ import { PlanRepository } from '../plans/plan.repository';
 import { resolveTriad } from '../schedule/duration-type/resolve-triad';
 
 import { ActivityRepository, type ActivityPatch } from './activity.repository';
+import { batchRestoreAnchor } from './batch-restore-anchor';
 import {
   attachDayFactors,
   daysToMinutes,
@@ -1399,11 +1400,14 @@ export class ActivitiesService {
     // plan — reads as a batch that is not here rather than as a permission failure.
     const members = await this.prisma.activity.findMany({
       where: { organizationId: organization.id, planId, deleteBatchId, deletedAt: { not: null } },
-      select: { id: true },
+      select: { id: true, parentId: true },
     });
     if (members.length === 0) throw new NotFoundError('Deleted batch not found in this plan.');
     const ids = members.map((m) => m.id);
-    const anchorId = ids[0];
+    // **Not `ids[0]`** — see `batch-restore-anchor.ts`. The guard `restoreBatch` runs before it
+    // restores anything asks whether the anchor's parent is active, and in a cascade batch every
+    // non-root member's parent is another member of the same batch (`docs/TECH_DEBT.md` #230).
+    const anchorId = batchRestoreAnchor(members);
     if (anchorId === undefined) throw new NotFoundError('Deleted batch not found in this plan.');
 
     await this.prisma.$transaction(async (tx) => {

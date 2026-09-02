@@ -498,6 +498,66 @@ describe.skipIf(!hasDatabase)('Activity batch operations (e2e)', () => {
   // -------------------------------------------------------------------------
 
   describe('restore batch', () => {
+    /**
+     * **A CASCADE batch — a WBS summary deleted with its subtree — restored against a real
+     * database** (`docs/TECH_DEBT.md` #230).
+     *
+     * Nothing in this repository had ever done this. The bulk case below is structurally safe
+     * because its members' parents are outside the batch and already active; a cascade's are not.
+     * `restoreBatch` runs `assertParentActive` on the anchor BEFORE restoring anything, and every
+     * non-root member of a cascade batch has a parent that is still deleted at that instant — so
+     * the restore succeeded only when an unrequested `findMany` ordering happened to return the
+     * root first.
+     *
+     * **This case is a capability proof, not the gate — it does NOT go red against the defect, and
+     * that was established by running it rather than assumed.** Against the pre-fix `ids[0]` it
+     * passes, because Postgres returns the summary first when the summary was inserted first.
+     *
+     * Making it discriminating was attempted and abandoned, which is worth recording because the
+     * attempt looked like it worked. Rewriting the summary's row after its children exist moves
+     * its heap tuple to the end, a child becomes the first row back, and the pre-fix code then
+     * answers 409 `PARENT_DELETED` — verified red, running this file alone. It does not survive a
+     * full-suite run: `beforeEach` empties these tables 44 times, so the free-space map hands the
+     * rewritten tuple a slot EARLIER in the heap and the summary comes back first again. A probe
+     * asserting the hostile precondition caught that loudly instead of letting a green run prove
+     * nothing — so the conclusion is the probe's, not a guess: **physical order is not something a
+     * test can hold, so no e2e case can be the anchor's regression test.**
+     *
+     * What this does prove is that the cascade restore works end to end against a real database —
+     * ids, nesting and the link inside the subtree — which nothing in this repository had ever
+     * asserted. The anchor itself is pinned by `batch-restore-anchor.spec.ts`, child-first, where
+     * no database ordering can flatter it.
+     */
+    it('restores a WBS summary deleted with its whole subtree', async () => {
+      const { actor, planId } = await setup();
+      const summary = await task(actor, planId, 'Substructure', { type: 'WBS_SUMMARY' });
+      const first = await task(actor, planId, 'Excavate', { parentId: summary.id });
+      const second = await task(actor, planId, 'Pour slab', { parentId: summary.id });
+      // A link wholly inside the subtree — a re-create-based undo would lose it.
+      await actor.agent
+        .post(`/api/v1/organizations/acme/plans/${planId}/dependencies`)
+        .send({ predecessorId: first.id, successorId: second.id, type: 'FS' })
+        .expect(201);
+
+      const deleted = await actor.agent
+        .delete(`/api/v1/organizations/acme/activities/${summary.id}`)
+        .expect(200);
+      const batchId = deleted.body.data.deleteBatchId as string;
+      expect(await prisma.activity.count({ where: { planId, deletedAt: null } })).toBe(0);
+
+      await actor.agent.post(restoreBatchUrl(planId, batchId)).expect(200);
+
+      const live = await prisma.activity.findMany({
+        where: { planId, deletedAt: null },
+        select: { id: true, parentId: true },
+      });
+      expect(live.map((a) => a.id).sort()).toEqual([first.id, second.id, summary.id].sort());
+      // The nesting comes back, not just the rows — the subtree is what was deleted.
+      expect(live.find((a) => a.id === first.id)?.parentId).toBe(summary.id);
+      expect(live.find((a) => a.id === second.id)?.parentId).toBe(summary.id);
+      expect(await prisma.activityDependency.count({ where: { planId, deletedAt: null } })).toBe(1);
+    });
+
     it('brings every activity back with its ORIGINAL id and its links live again', async () => {
       const { actor, planId } = await setup();
       const refs: Ref[] = [];
