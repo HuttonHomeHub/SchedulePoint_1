@@ -8,6 +8,8 @@ import {
 } from '@tanstack/react-router';
 import { describe, expect, it } from 'vitest';
 
+import { router } from './router';
+
 /**
  * **What the router's search codec actually does today** (`docs/TECH_DEBT.md` #96, M0-T1).
  *
@@ -40,11 +42,22 @@ import { describe, expect, it } from 'vitest';
  * and the parser only ever sees values that are still strings. So a "parser that leaves values
  * alone" would not fix it — which is why #96's remedy has to bypass that helper entirely.
  *
- * **Expected to change at M4**, and the docblock says which assertions: everything under "coerced
- * before the parser" and "coerced by the parser" becomes string-preserving. The round-trip and
- * stringifier sections should barely move, and the merge section should not move at all — the
- * remedy changes the codec, not how a match assembles its search. If the reverse happens, the
- * design is wrong.
+ * **M4 happened, and NOT ONE ASSERTION BELOW MOVED. That is correct, and it is the point.** This
+ * file characterises the **library's** codec by calling `defaultParseSearch` /
+ * `defaultStringifySearch` by name, and M4 did not change those functions — it stopped the router
+ * using them (`app/router.tsx`, `parseSearch` / `stringifySearch`). So the record of *why* the
+ * codec was replaced survives the replacement, which is what a characterisation suite is for and
+ * what makes the revert a one-line decision rather than an archaeology exercise.
+ *
+ * The prediction written here before M4 said these assertions would become string-preserving. That
+ * was wrong about **this file** and right about the product: the values that changed are in
+ * `router-search.test.ts`, which composes the route validators with whatever parser the router
+ * actually holds. Three of its expectations moved, all three predicted on the line. Corrected here
+ * rather than quietly deleted, because a prediction that missed is worth more on the page than off
+ * it.
+ *
+ * The section at the foot asserts what the router does **now**, so this file remains an oracle of
+ * the seam rather than of a dependency the product no longer routes through.
  */
 describe('the router search codec — characterisation (records fact, not intent)', () => {
   describe('coerced BEFORE the parser is consulted', () => {
@@ -179,5 +192,41 @@ describe('the router search codec — characterisation (records fact, not intent
         kept: 'a',
       });
     });
+  });
+});
+
+/**
+ * **And what the router actually holds, since #96 M4.**
+ *
+ * Everything above describes the library's codec. These describe ours, reached through
+ * `router.options` rather than by importing the module — because what matters is the codec the
+ * product is *configured with*, and naming the module directly would pass just as happily if
+ * somebody removed the two options from `createRouter`.
+ */
+describe('the router’s own codec, as configured', () => {
+  it.each([
+    ['?x=1', '1'],
+    ['?x=true', 'true'],
+    ['?x=false', 'false'],
+    ['?x=null', 'null'],
+    ['?x=2.5', '2.5'],
+    ['?x=[1,2]', '[1,2]'],
+    ['?x=' + '1'.repeat(32), '1'.repeat(32)],
+  ])('%s stays the string it was written as → %o', (query, expected) => {
+    expect((router.options.parseSearch(query) as { x: unknown }).x).toBe(expected);
+  });
+
+  it('writes a value without quoting it, which is the half a parser alone would not fix', () => {
+    expect(router.options.stringifySearch({ q: '2026' })).toBe('?q=2026');
+    expect(router.options.stringifySearch({ signedOut: 'true' })).toBe('?signedOut=true');
+  });
+
+  it('round-trips through the configured pair, which is what a navigation does', () => {
+    for (const value of ['2026', 'true', 'name:asc', 'Site shutdown', '1'.repeat(32)]) {
+      const back = router.options.parseSearch(router.options.stringifySearch({ q: value })) as {
+        q: unknown;
+      };
+      expect(back.q).toBe(value);
+    }
   });
 });

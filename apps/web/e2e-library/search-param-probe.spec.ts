@@ -35,7 +35,7 @@ function navLink(page: Page, name: string): ReturnType<Page['getByRole']> {
  * to back. A probe that perturbs the journey it borrows is measuring a state the product does not
  * otherwise reach.
  */
-test('#96 M0 — a numeric search term is re-quoted in the URL', async ({ page }) => {
+test('#96 — a numeric search term is carried as typed (was: re-quoted)', async ({ page }) => {
   await onboard(page, Date.now());
   await navLink(page, 'Calendars').click();
   const search = page.getByLabel('Search calendars');
@@ -48,9 +48,12 @@ test('#96 M0 — a numeric search term is re-quoted in the URL', async ({ page }
   // eslint-disable-next-line no-console -- the probe's output IS the measurement (#96 M0-T2)
   console.log(`[#96 M0 probe] calendars search raw query: ${raw}`);
 
-  // The measured answer, pinned so a future fix has to come here and say it changed the URL.
-  // `%22` is `"`: four characters typed, six carried.
-  expect(raw, 'the numeric term is no longer re-quoted — see #96 M0').toContain('q=%222026%22');
+  // **Re-baselined at M4, and this is the whole point of having pinned it.** M0 measured
+  // `?q=%222026%22` — four characters typed, six carried — and this line asserted exactly that, so
+  // the codec flip could not land without coming here and saying it had changed the URL. It did,
+  // and the sweep reported it with the message written for the occasion. The old value stays in the
+  // comment because a re-baseline audited line by line is worth more than a clean file (ADR-0106).
+  expect(raw, 'the URL no longer carries the term as typed — #96 M4 regressed').toBe('?q=2026');
 });
 
 /**

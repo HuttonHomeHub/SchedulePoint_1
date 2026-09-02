@@ -146,3 +146,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0120](0120-a-documented-obligation-with-no-computed-observer.md)                       | A documented obligation with no computed observer                       | Accepted           |
 | [0121](0121-one-derivation-two-renderers-and-a-cap-set-by-height.md)                    | One stack derivation, two renderers, and a cap set by height            | Accepted           |
 | [0122](0122-a-picture-a-screen-reader-cannot-reach-is-not-described-by-saying-it-is.md) | A picture a screen reader cannot reach is not described by saying it is | Accepted           |
+| [0123](0123-a-search-param-is-a-string-and-the-shape-is-decided-at-the-router.md)       | A search param is a string, and the shape is decided at the router      | Accepted           |

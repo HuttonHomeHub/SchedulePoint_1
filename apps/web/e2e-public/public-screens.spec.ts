@@ -257,7 +257,9 @@ test.describe('one fact, one place on the screen (ADR-0077 §9)', () => {
    * It is a test of its own rather than two assertions inside the one above, for the reason the
    * library probe established the hard way: a probe sharing a journey perturbs it.
    */
-  test('#96 M0 — the sign-out confirmation is re-quoted in the URL', async ({ page }) => {
+  test('#96 — the sign-out confirmation is carried as written (was: re-quoted)', async ({
+    page,
+  }) => {
     const stamp = Date.now();
     await onboard(page, `probe-signed-out-${stamp}@example.com`, `Probe ${stamp}`);
     await signOut(page);
@@ -268,10 +270,13 @@ test.describe('one fact, one place on the screen (ADR-0077 §9)', () => {
     // eslint-disable-next-line no-console -- the probe's output IS the measurement (#96 M0-T2)
     console.log(`[#96 M0 probe] sign-out raw query: ${raw}`);
 
-    // The measured answer, pinned so a future fix has to come here and say it changed the URL.
-    // `%22` is `"`: the app passed `'true'`, the URL carries `"true"`.
-    expect(raw, 'the sign-out flag is no longer re-quoted — see #96 M0').toContain(
-      'signedOut=%22true%22',
+    // **Re-baselined at M4** (ADR-0106's rule: audit a re-baseline line by line, never take it with
+    // `-u`). M0 measured `?signedOut=%22true%22` — twenty-one characters carried for four — and this
+    // line asserted exactly that, so the codec flip could not land without coming here and saying it
+    // had changed the URL. It did, and the sweep reported it with the message written for it. The
+    // old value stays in the comment; a measurement is worth more with its before than without.
+    expect(raw, 'the sign-out flag is no longer carried as written — #96 M4 regressed').toBe(
+      '?signedOut=true',
     );
   });
 });

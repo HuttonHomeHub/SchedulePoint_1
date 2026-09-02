@@ -111,3 +111,10 @@ definition of done — _that the command has been run_ — is what this line rec
 The intended consequence stands and is worth restating where the ADR will pick it up: a Dependabot
 bump of either TanStack package now fails CI and forces these thirteen citations to be re-read,
 which is exactly the moment they need it (ADR-0076).
+
+## Postscript — both probes were re-baselined at M4
+
+The values recorded above are the **pre-flip** measurements, and both assertions went red in the M4
+sweep exactly as intended: `?q=%222026%22` became `?q=2026` and `?signedOut=%22true%22` became
+`?signedOut=true`. See [`m4-sweep.md`](m4-sweep.md). Nothing here is edited — a measurement is worth
+more with its before than without, and this file _is_ the before.

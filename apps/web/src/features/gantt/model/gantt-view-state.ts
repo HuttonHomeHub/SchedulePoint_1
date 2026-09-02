@@ -20,14 +20,19 @@ import { searchString } from '@/lib/router/search-string';
  *
  * ## Every reader here is TOTAL, and that is not defensive coding
  *
- * `docs/TECH_DEBT.md` **#96**: TanStack Router's default `parseSearch` is
- * `parseSearchWith(JSON.parse)`, so `?gsort=1` arrives as the **number** `1`, `?x=true` as a
- * boolean, and a repeated param as an array. ADR-0074 M5 shipped a live defect from exactly this —
- * a `typeof === 'string'` test discarded a verification that had succeeded — and it was invisible
- * to every unit test, because those mock `useSearch` and never cross the parser.
+ * `docs/TECH_DEBT.md` **#96**, and the mechanism corrected: this said the default `parseSearch` is
+ * `parseSearchWith(JSON.parse)`, "so `?gsort=1` arrives as the number 1". Half true, and the half it
+ * missed is the one that decided the remedy. The **decode** step coerced `"true"`, `"false"` and
+ * canonical numeric strings (`qss.js:41-46`) **before** the parser was consulted, and `JSON.parse`
+ * (`searchParams.js:18-30`) only ever saw values that were still strings — so replacing the parser
+ * alone would have fixed nothing. ADR-0074 M5 shipped a live defect from exactly this, a
+ * `typeof === 'string'` test discarding a verification that had succeeded, invisible to every unit
+ * test because those mock `useSearch` and never cross the parser.
  *
- * So each parser takes `unknown`, coerces what it can and degrades to the default otherwise. A
- * hand-edited URL lands the planner on a working chart, never an error boundary.
+ * **#96 M4 replaced the codec**, so a value now reaches these readers as the string it was written
+ * as. They stay total anyway: `useSearch` is typed `unknown` at every call site, and these are the
+ * rollback contract if the two `createRouter` options are ever reverted. A hand-edited URL lands the
+ * planner on a working chart, never an error boundary.
  *
  * ## What is NOT here, and why
  *

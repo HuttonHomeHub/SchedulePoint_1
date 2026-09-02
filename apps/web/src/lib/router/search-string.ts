@@ -7,6 +7,14 @@
  * falling back to a default. Four helpers had each worked that out separately and answered it
  * differently; this is the one they now share.
  *
+ * **Since #96 M4 this is a SAFETY NET, not the mechanism — and it stays** (D5). The router now
+ * carries `lib/router/search-params.ts`, so every value reaches a reader as a string and every
+ * branch below except the first is unreachable through the router. They are kept, with their unit
+ * cases, for two reasons: they are the rollback contract if the codec pair is ever reverted (one
+ * line each in `createRouter`), and `useSearch` is typed `unknown` at every call site, so a total
+ * reader is the only thing that makes those call sites honest. Deleting them would look like
+ * tidying and would quietly remove both.
+ *
  * **Two mechanisms, not one, and the difference decides the remedy.** Three docblocks in this
  * repository said "the default `parseSearch` is `parseSearchWith(JSON.parse)`, which JSON-parses
  * every value". Half true. The **decode** step coerces `"true"`, `"false"` and canonical numeric

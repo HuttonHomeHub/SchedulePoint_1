@@ -537,6 +537,20 @@ discriminators. Each becomes a spec/plan before build:
   because the probe styled a button whose `px-2` an inline `padding-left` replaces rather than adds
   to — caught only because the prediction had been written down first.
 
+- **A search param is a string** — **shipped** (ADR-0123, 2026-09-02,
+  `docs/specs/router-search-params/`). The router's default codec **typed** search values, so
+  `?verified=1` reached a screen as the number `1` and a hand-typed `?q=2026` filtered nothing while
+  showing an empty Search field. It is replaced at the router — two options, which is the only place
+  it can be done, since there is no per-route override — after four private coercion helpers were
+  collapsed into one and two census gates were built to keep the next route and the next reader
+  honest. **The register row's own proposed remedy would not have worked**: it named
+  `parseSearchWith(JSON.parse)` as the coercion, and the decode step coerces `true`/`false`/numerics
+  _before_ any parser is consulted, so a parser that left values alone would have changed nothing.
+  The M3 suite's first prediction failed too, and usefully: the library pair round-trips everything
+  it wrote itself, so the damage was only ever to URLs this app did not compose — a mailed link, a
+  typed URL, a foreign bookmark. A 32-digit token, the one value no reader could ever have repaired,
+  now arrives verbatim.
+
 - **The WBS band reaches assistive technology** — **shipped** (ADR-0122, 2026-09-02,
   `docs/specs/wbs-bucket-a11y/`). The diagram's pinned WBS band is an `aria-hidden` canvas, so a
   screen-reader user reached it through a text equivalent or not at all — and there was none, while

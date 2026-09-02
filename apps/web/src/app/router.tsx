@@ -20,6 +20,7 @@ import { sessionQueryOptions } from '@/features/auth';
 import { organizationsQueryOptions } from '@/features/organizations';
 import { getLastActiveOrg, setLastActiveOrg } from '@/lib/active-org';
 import { createQueryClient } from '@/lib/query/query-client';
+import { parseSearchStrings, stringifySearchStrings } from '@/lib/router/search-params';
 import { searchString } from '@/lib/router/search-string';
 import { AcceptInviteScreen } from '@/routes/accept-invite';
 import { AccountScreen } from '@/routes/account';
@@ -494,6 +495,18 @@ export const queryClient = createQueryClient();
 export const router = createRouter({
   routeTree,
   context: { queryClient },
+  // **The search codec, replaced** (`docs/TECH_DEBT.md` #96 M4). The two go together or neither
+  // does: the library's parser coerces on the way in and its stringifier re-quotes on the way out,
+  // so replacing one alone produces a URL that rewrites itself on the next navigation
+  // (`parseLocation` re-stringifies every location — `router.js:183-194`).
+  //
+  // These are router-level options, not per-route ones (`router.js:634-635`), which is why this is
+  // the whole fix in two lines and why it could never have been done route by route. See
+  // `lib/router/search-params.ts` for what changes and, more usefully, for what does not: the
+  // library pair never lost a value it wrote itself, so this only affects search strings the app
+  // did not compose.
+  parseSearch: parseSearchStrings,
+  stringifySearch: stringifySearchStrings,
   defaultPreload: 'intent',
   scrollRestoration: true,
   defaultErrorComponent: () => (

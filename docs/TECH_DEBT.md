@@ -923,95 +923,60 @@ reading as owed work, which is the drift class this register exists to catch.
 
 ---
 
-### 96. The router JSON-parses every search param, so a foreign one can arrive as the wrong type
+### 243. `e2e-csp`'s authenticated case fails on its own interceptor, not on a violation
 
-**Status:** open · M0 and M1 landed 2026-09-02 (`docs/specs/router-search-params/`); M2–M5 remain
+**Status:** open
 
-> **Corrected 2026-08-08.** The body below says `/accept-invite` has "the same latent shape" and is
-> not normalised. **It is** — `app/router.tsx:409-413`. The remaining work is the router-level
-> `parseSearch` override, which is genuinely large: nine `validateSearch` blocks, the four
-> `useUrlFilterState` consumers and the Gantt's `?view=`, with the journeys re-run because this whole
-> defect class is invisible to unit tests that mock `useSearch`.
+**Found:** 2026-09-02, by the full journey sweep run for #96 M4 — and established as **not that
+epic's** by running the same suite on the pre-flip tree, where it fails identically.
 
-**Found:** 2026-08-05, by the ADR-0074 M5 flag-on verification journey — the only test in the
-repository that follows a real emailed link through a real redirect.
+`e2e-csp/csp.spec.ts:123` ("the authenticated shell raises no CSP violation") fails with
+`Error: route.fulfill: Fetch response has been disposed` at `csp.spec.ts:62`. That line is the
+interceptor's own non-HTML pass-through: `armCspRecording` routes `**/*`, fetches the response,
+and re-fulfils it. The other two cases in the file pass, so the policy is being applied and a
+deliberate violation is still detected — it is the **authenticated** page's traffic that trips it,
+which is the one with many concurrent sub-resource requests.
 
-TanStack Router's default `parseSearch` is `parseSearchWith(JSON.parse)`
-(`@tanstack/router-core/searchParams.js`): it attempts to JSON-parse **every** value. `?verified=1`
-therefore reaches `validateSearch` as the **number** `1`, and `/verify-email`'s
-`typeof search.verified === 'string'` test dropped it — so a verification that had actually
-succeeded rendered the "still waiting" screen. Every screen test mocks `useSearch` and hands the
-component a literal, so none of them crosses the parser and the whole suite stayed green.
+**It is not a flake and it is not #96's.** Two runs, both failing on the same test with the same
+error: one inside the sweep on the flipped tree, one on the pre-flip tree with `createRouter`
+untouched. Recorded that way because "the sweep found a failure" and "the change caused a failure"
+are different facts, and the sweep's output is only useful as a comparison.
 
-`readForeignParam` in `apps/web/src/app/router.tsx` now normalises the three ADR-0074 routes'
-params, and `router-search.test.ts` composes the real parser with the real validator.
+**What it costs while open.** The CSP gate covers three cases and two of them run, so the policy
+itself is still checked and a violation still fires. What is not covered is the authenticated shell
+— i.e. every screen behind sign-in, which is most of the product. That is the case ADR-0074's
+report-only window existed to watch, so the gap is real rather than cosmetic.
 
-**What is left, and why it is a row rather than a fix.** That helper repairs only values whose
-`String()` reproduces the source — `1`, `true`, a small integer. A token composed entirely of digits
-is already `1.2345678901234567e+31` before any validator runs and **cannot** be recovered; the test
-pins that limit rather than implying a defence that does not exist. Astronomically unlikely from
-Better Auth's generator, and the failure would be a reset link that reports an invalid token with no
-way for the reader to act on it.
+The likely shape is a lifetime problem rather than a policy one: `route.fetch()`'s response is
+disposed when its route is handled or the page navigates, and an interceptor that awaits per request
+across a burst can hold one past that point. Worth confirming against Playwright's own source before
+fixing, and worth checking whether the pass-through branch needs to fulfil at all — a route with no
+header to add could simply `continue()`.
 
-The real remedy is a router-level `parseSearch` that leaves values as strings, with each route
-coercing what it wants. That is a change to **every** route's search handling — the library screens'
-typed URL params (ADR-0053 M6) and the Gantt's `?view=` among them — so it needs its own pass with
-the flag-on journeys run, not a drive-by. Routes outside ADR-0074 are **not** normalised today, and
-that is the other half of the row: `/accept-invite?token=` has the same latent shape.
+### 242. `/forgot-password?email=` is a specified capability with no producer
 
-**Progress, 2026-09-02** (`docs/specs/router-search-params/`).
+**Status:** open
 
-- **M0 measured, against a verdict rule committed first.** Two browser probes read the **raw** query
-  a real Chromium address bar holds. A four-character library search term is carried as
-  `?q=%222026%22`; a sign-out writes `?signedOut=%22true%22`. Both contain `%22`, so the rule ("no
-  `%22` and the symptom is withdrawn") does not falsify and the epic keeps its scope.
-- **The row's own mechanism sentence is HALF RIGHT, and the half it misses decides the remedy.**
-  `JSON.parse` is not what turns `?verified=1` into a number. The **decode** step coerces `"true"`,
-  `"false"` and canonical numeric strings (`qss.js:41-46`) _before_ the parser is consulted, and
-  `JSON.parse` (`searchParams.js:18-30`) only ever sees values that are still strings. So the remedy
-  named above — "a `parseSearch` that leaves values as strings" — would **not** fix `?verified=1` if
-  written as `parseSearchWith(v => v)`: it has to replace the codec, not the parser. Recorded
-  executably in `apps/web/src/app/router-search.characterisation.test.ts`.
-- **A second fact, measured against a real `createRouter`**: `validateSearch`'s return is _added to_
-  the parsed search rather than substituted for it, so a validator can neither remove a key nor
-  rename one — the source key stays beside the new one. That is what makes the per-route alternative
-  unarguable rather than merely awkward.
-- **M1 landed: one reader vocabulary.** `lib/router/search-string.ts` replaces four private helpers
-  that had each worked this out separately and answered it differently (the array case disagreed —
-  one took the first element, one dropped the param). The visible change is `pickText`: a typed
-  `…/calendars?q=2026` now filters and fills the Search field, proved by a journey verified red
-  against the old reader. The enum readers are a measured no-op, pinned per vocabulary rather than
-  asserted in prose.
-- **A premise corrected on the way** (spec F6): `router.tsx`'s invitation-token comment said "a
-  64-character hex string". The token is 43 characters of base64url; the 64-char hex is the SHA-256
-  hash, which never leaves the database. The conclusion was unaffected.
+**Found:** 2026-09-02, while scoping #96 — by asking which of the eighteen search params the
+application itself writes, and finding that this one is not among them.
 
-- **M2 landed: two census gates, one for each half of the defect.** Gate A
-  (`router-search-census.structural.test.ts`) refuses a route declaring `validateSearch` with no
-  case composing the real parser with that route's real validator — **three of the eight were
-  covered and five were not**, and nobody had noticed, because each later route brought its
-  validator with it and nothing compared the two lists. Gate B
-  (`search-consumer-census.structural.test.ts`) censuses the **readers**, which is the half Gate A
-  structurally cannot see: seven of the eighteen params the app reads are declared by no validator
-  at all and reach their readers through the merge. Both carry a pinned positive case, because
-  "every unclassified X is a failure" passes perfectly against a census that found no X (ADR-0093).
-  Verified red five ways between them; Gate B's `git ls-files` blind spot is measured and written
-  into its own docblock rather than left implicit.
+`docs/specs/account-security/feature-spec.md:805` specifies a prefilled address on the
+password-reset request screen, and `routes/forgot-password.tsx` reads `?email=` and prefills from
+it. **Nothing in `apps/web/src` or `apps/api/src` writes it.** The two in-app links to that
+screen — `routes/sign-in.tsx` and `routes/reset-password.tsx` — pass no search at all, and Better
+Auth composes its own redirects, none of which target this route.
 
-- **M3 landed dark: `lib/router/search-params.ts`, the replacement codec, wired to nothing.** Two
-  pure functions, no React and no router import, exercised by a property (`parse(stringify(v)) === v`
-  over a 22-value corpus — a table of examples is what let the library's asymmetry survive), by a
-  byte-identity check against the library's output for every value the app writes, and by a
-  **differential** naming param by param where the flip changes an answer. That list is M4's expected
-  diff, written before M4 exists.
-- **Its first prediction failed, and the correction relocates the defect precisely.** The suite was
-  written as "the library pair loses some of these and ours does not"; it went red, because the
-  library pair round-trips **everything it wrote itself** — its stringifier re-quotes exactly the
-  values its parser would coerce, so it is self-consistent. The damage is confined to search strings
-  **this app did not write**: a Better Auth link, a typed or edited URL, a foreign bookmark. Which is
-  where both recorded symptoms actually happened.
+So the reader is correct, the route validator is correct, the screen behaves correctly on the URL it
+never receives, and a planner who mistypes their address on sign-in retypes it on the next screen.
+That is ADR-0081's shape one layer below a screen: a capability with no entry point, where every
+piece in isolation looks right.
 
-**What is left:** M4 (the flip — the router-level codec), M5 (reconciliation and the ADR).
+**Two ways out, and neither is obviously correct**, which is why this is a row rather than a fix:
+carry the address from the sign-in form's own field into the link, which is a small kindness and
+puts an address a stranger typed into a URL that lands in browser history; or delete the parameter,
+its validator branch and the spec line, and let the reader type it. Deliberately not decided here —
+#96's scope was the codec, and deciding this inside it would have been the drive-by that row
+warns about.
 
 ### 97. The account-security epic's non-blocking review findings (ADR-0074 M5)
 
@@ -1309,6 +1274,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                            | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | --- | -------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 96  | The router JSON-parsed every search param, so a foreign one arrived as the wrong type  | 2026-09-02 | ADR-0123 and `docs/specs/router-search-params/`. The codec is replaced at the router, which is the only place it could be — `parseSearch` has no per-route override. Three of the epic's own load-bearing claims were false and each correction changed the work: the row's proposed remedy (`parseSearchWith(v => v)`) would have fixed nothing, because the decode step coerces before the parser is reached; a validator cannot rename a key any more than remove one; and the library pair round-trips everything it wrote itself, so the damage was only ever to URLs this app did not compose. Two census gates keep the next route and the next reader honest. Follow-up filed as #242.                                                                                                                                                                                                                                                                                                                                                                        |
 | 95  | `apps/api`'s three Vite configs were ESM in a CommonJS package                         | 2026-09-01 | Renamed to `.mts` (the row's own smaller alternative — `"type": "module"` would have meant auditing NestJS's CommonJS assumptions one at a time). Warning reproduced first, then gone; all three configs load, ESLint still reaches them, and the API e2e suite passed 572/572 under the renamed ones. The sweep for the same class then found a **second** occurrence the row did not know about, in `apps/web/vitest.config.ts` — an extensionless `./vite.config` import, fixed the same way; every other workspace is clean.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | 151 | The Gantt grid splitter had no browser-level coverage                                  | 2026-09-01 | `e2e-gantt/gantt.spec.ts` now drives the separator to its floor and one step above it and asserts the pinned columns end exactly where the chart begins — verified red by understating `ganttFixedWidth` by 80 px, which reproduced ADR-0095's incident verbatim (`Float` at 881–941 against a chart starting at 861). It then found **two live defects** on its first extension: the `vs baseline` column is not a `GanttColumn`, so the pinned block summed to `pane + 72` whenever a baseline was active; and `useResizablePanelPrefs` clamped a stored size only in its `useState` initialiser, so a floor that rose afterwards never reached it. Both fixed with cases verified red. `grid-width.structural.test.ts` was green against both and now records why it structurally cannot see the second.                                                                                                                                                                                                                                                           |
 | 71  | The WBS band's derived bucket was distinguished by colour alone                        | 2026-09-01 | `docs/specs/wbs-bucket-bracket/`. The bucket is now an unfilled three-sided bracket, open at the foot — the language the Gantt already uses, for the reason it states: it is not a scheduled thing, it is the extent of things that are. **Decided by looking, not by reviewing.** The two specialist reviews disagreed; both remedies were mocked up on a real canvas with the product's own tokens, geometry and `truncateToWidth`, with a greyscale toggle applying the actual 1.4.1 test. The rejected remedy — a dashed outline over the fill — had been argued to "stay visually distinct at any bar width above a couple of px", and at 12px with colour withdrawn it reads as a slightly textured block: `--muted-foreground` and `--foreground` are both mid-greys once hue is gone. The label's ink moved with the fill in the same change, because it was `--background` — the canvas ground itself — so removing the fill alone would have painted the name invisible. `paint.wbs-band.test.ts` is the band's first paint-level test, verified red first. |

@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1140 web
 > source files with 41 Playwright suites beside the base journey, and
-> 122 ADRs.
+> 123 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3739,6 +3739,52 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   the spec's "byte-identical apart from the group's name" was **not quite true** with one flag off;
   and two docblocks corrected for overstating what they protect. **The CPM engine is not imported
   and no migration runs.**
+
+- **ADR-0123** _(Accepted; M0–M5 landed 2026-09-02)_ — A search param is a string, and the shape is
+  decided at the router. TanStack Router's default codec **typed** search values: `?verified=1`
+  reached a validator as the number `1`, `?q=true` as a boolean, `?q=a&q=b` as an array — and
+  `useSearch` is typed `unknown` at all eighteen call sites, so every reader had to decide what a
+  non-string meant and four of them had decided separately. ADR-0074 M5 shipped the live version of
+  this: a verification screen rendering "still waiting" **after a verification that had succeeded**,
+  invisible to the unit suite by construction, because every screen test mocks `useSearch` and hands
+  the component a literal.
+  **Three of the epic's own load-bearing claims were false, and each correction changed the work.**
+  (1) The register row and three docblocks named the coercion as `parseSearchWith(JSON.parse)`,
+  "which JSON-parses every value" — half the mechanism, and the missing half decides the remedy: the
+  **decode** step coerces `"true"`, `"false"` and canonical numerics (`qss.js:41-46`) **before** any
+  parser is consulted, so `parseSearchWith(v => v)`, the row's own proposal, would have fixed
+  nothing. (2) The plan said a validator "cannot remove a key"; measured against a real
+  `createRouter`, it cannot **rename** one either — its output lands beside the source key, which is
+  what makes the per-route alternative unarguable rather than merely awkward. (3) M3's suite was
+  written as "the library pair loses values and ours does not" and went red proving the opposite: the
+  library pair round-trips **everything it wrote itself**, because its stringifier re-quotes exactly
+  what its parser would coerce. So the damage was only ever to URLs this application did not
+  compose — a mailed link, a typed URL, a foreign bookmark — which is where both recorded symptoms
+  happened.
+  **The decisions.** The codec pair is replaced **together**, at the router, because they are one
+  contract and `parseSearch` is a router-level option with no per-route override — two lines, and the
+  reason this could never have been done route by route. A repeated key takes its first value; the
+  parser returns a **null-prototype** object, because three screens test `'x' in search` and
+  `Object.prototype` answers `true` for `'toString'`; a stale bookmark's `%22` is **not** unquoted,
+  because a shim would permanently corrupt a term someone typed with quotes to tidy one that
+  self-heals on the next keystroke. The four coercion readers were unified into one
+  (`lib/router/search-string.ts`) **before** the flip and are **kept after it** as the rollback
+  contract, since `useSearch` stays `unknown`-typed. No `VITE_` flag (ADR-0088 D1).
+  **Two census gates, covering different halves.** Gate A refuses a route declaring `validateSearch`
+  with no case composing the router's real parser with that route's real validator — writing it found
+  that **three of the eight were covered and five were not**, each later route having brought its
+  validator with it while nothing compared the two lists. Gate B censuses the **readers**, which Gate
+  A structurally cannot see: seven of the eighteen params are declared by no validator at all and
+  arrive through the merge. Both carry a pinned positive case, because "every unclassified X is a
+  failure" passes perfectly against a census that found no X (ADR-0093); verified red five ways
+  between them, and Gate B's `git ls-files` blind spot is measured and written into its own docblock.
+  **A finding in the instrument, at the moment of the flip.** `router-search.test.ts`'s helper says
+  it composes "the router's real parser" and named `defaultParseSearch` by hand — so the day the
+  router got a parser of its own, every assertion in it would have kept passing while describing a
+  codec the product no longer used. It reads `router.options.parseSearch` now. Three expectations
+  then moved, all three predicted on the line, including one that had pinned an unrecoverable
+  32-digit token for two years under a comment naming this exact remedy.
+  **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
