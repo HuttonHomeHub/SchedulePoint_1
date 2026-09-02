@@ -124,6 +124,31 @@ common path for the most destructive gesture in the product.
   3. If it passes, note that the queries are set-wise on the indexed `delete_batch_id`
      (`schema.prisma:577-580`) and move on.
 
+###### Result (2026-09-02) — **PASS, with 16× headroom; M1 proceeds**
+
+Harness: `apps/api/test/cascade-restore-scale.e2e-spec.ts`, opt-in behind `SP_MEASURE=1` and
+skipped in every ordinary run — it asserts a budget on a shared machine, and a timing assertion in
+CI is a flake generator. Three runs against local Postgres 17, 2,000 activities under one summary:
+
+| run | cascade delete | cascade restore |
+| --- | -------------- | --------------- |
+| 1   | 148 ms         | **312 ms**      |
+| 2   | 212 ms         | **313 ms**      |
+| 3   | 169 ms         | **337 ms**      |
+
+Committed condition: > 5,000 ms stops M1. Measured p-max **337 ms — 6.7 % of the budget.** The
+restore is also consistently ~1.8× the delete that produced it, which is the shape one expects: the
+same set-wise `updateMany`s on the indexed `delete_batch_id`, plus the dependency-endpoint
+reactivation the delete has no counterpart for.
+
+**Where it bypasses the product, stated rather than implied** (ADR-0081): the 2,000 rows go in with
+one `createMany`, so this measures neither the REST write path nor the DTO layer. Everything it does
+measure is real — a real HTTP `DELETE` and a real HTTP `POST …/restore-batch` through the real
+guards, the real advisory lock, the real audit write and the real serialisation.
+
+**The number does not settle the client half.** It is the server's time only; M1 additionally pays a
+recalculation and a refetch, which is why the journey polls at 20 s (ADR-0080's retrospective).
+
 ---
 
 ## Milestone M1 — a cascade delete is one undo step

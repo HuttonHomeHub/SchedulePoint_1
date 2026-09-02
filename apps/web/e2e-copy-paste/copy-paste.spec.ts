@@ -171,6 +171,40 @@ test('copy, paste and duplicate — the whole journey', async ({ page }) => {
     expect(page.url()).toBe(urlBeforeUndo);
   });
 
+  await test.step('Ctrl+Shift+Z brings the whole band back, links included', async () => {
+    // The redo of a band paste is `restore-batch` — the ONLY user path in production today that
+    // restores a batch containing a WBS summary and its subtree, which is the shape whose anchor
+    // selection `docs/TECH_DEBT.md` #230 M0 fixed. The undo above deletes the summary and its three
+    // members under one `deleteBatchId`; every member except the summary has a parent that is still
+    // deleted at that instant, so a redo anchored on whichever row the database returned first
+    // answers 409 `PARENT_DELETED` and restores nothing.
+    //
+    // **This step does NOT go red against that defect, which was established by running it that
+    // way rather than assumed.** A freshly pasted band is written summary-first, so the unordered
+    // read returns the root first and the pre-fix anchor is accidentally correct. What flips it is
+    // an UPDATE to the summary — Postgres writes the new tuple at the heap end, so a sequential
+    // scan then returns a child first (demonstrated directly in psql, not reasoned about). Renaming
+    // a phase after filling it is an ordinary act, which is what makes the defect reachable rather
+    // than theoretical; it is not a shape this journey can hold, because physical order is not
+    // something a test controls. `batch-restore-anchor.spec.ts` is the gate.
+    //
+    // What this step IS worth: the band case asserted the counts falling and never that they come
+    // back, so the redo of the product's most destructive gesture had no end-to-end cover at all.
+    await diagramList(page).focus();
+    await page.keyboard.press('Control+Shift+z');
+
+    // Same 20 s poll as the undo above, for the same reason: a restore, a recalculation and a
+    // refetch outrun Playwright's 5 s default (ADR-0080's retrospective records exactly this).
+    await expect
+      .poll(async () => (await apiActivities(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(countsBeforeUndo.activities);
+    await expect
+      .poll(async () => (await apiDependencies(page, orgSlug)).length, { timeout: 20_000 })
+      .toBe(countsBeforeUndo.links);
+
+    expect(page.url()).toBe(urlBeforeUndo);
+  });
+
   await test.step('Ctrl+C with a live text selection does not capture activities', async () => {
     await newPlan(page, 'Text selection');
     await ensurePen(page);
