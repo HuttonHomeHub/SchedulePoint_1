@@ -630,3 +630,30 @@ nothing for the audience the row is about — the canvas is `aria-hidden`).
 </content>
 
 </invoke>
+
+## Product-owner decisions (2026-09-02)
+
+**CQ-1 — scope: the WHOLE BAND.** One entry per drawn grouping, every phase plus the derived
+bucket, not the bucket alone. A screen-reader user gets the shape the band paints rather than only
+the odd one out.
+
+**CQ-2 — the count: the WHOLE SUBTREE.** A phase containing three sub-phases of ten activities
+announces 30, not 3.
+
+> **The cost quoted with this question was false, and the correction is recorded rather than
+> quietly dropped.** It was put as "subtree would disagree with the Gantt unless that changes too".
+> Checked afterwards: `GanttActivityRow` (`features/gantt/layout/row-model.ts:38`) has **no `count`
+> field**; only `GanttBucketRow` (`:57-63`) carries one, and that row is the Unassigned bucket
+> alone. So **no count for a real phase exists anywhere in the product**, and there is nothing for
+> the subtree reading to contradict. For the bucket itself the two readings are identical, since an
+> unfiled activity has no parent by construction (`wbs-groups.ts:100-109`).
+>
+> What it does mean: the shared composer takes a count it is **given**, and the two call sites pass
+> different derivations — the Gantt bucket passes `memberIds.length` (unchanged), the band passes a
+> subtree count (new). That is not drift, because they are counting different subjects; but the
+> composer's docblock must say so, or the next reader will "fix" one to match the other.
+
+**CQ-3 — a visible count on the canvas band: NO** (the stated default, taken).
+The reasoning is stronger after CQ-2 than it was when the default was written: painting a subtree
+count on a 16 px band row would introduce a number that appears nowhere else in the product, on the
+surface least able to spare the width. If it is wanted later it is its own measured change.

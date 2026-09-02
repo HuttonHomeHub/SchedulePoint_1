@@ -676,3 +676,30 @@ and named in the register:
 - Docs to update on landing: `docs/adr/0048-…` (amendment), `docs/API.md` (restore-batch anchor
   sentence), `CLAUDE.md` (ADR-0048's register entry), `docs/TESTING.md` if the `e2e-undo` suite's
   scope statement is quoted there
+
+## Product-owner decisions (2026-09-02)
+
+**CQ-1 — a deleted phase whose OWN parent was deleted afterwards: REFUSE, naming the phase.**
+Today's behaviour is kept and its message improved. A partial restore would breach ADR-0038's
+no-orphan invariant and hand back a shape nobody authored — some activities returned, some not,
+with nothing on screen saying which.
+
+**CQ-2 — ship the anchor fix as its own release first: YES** (the stated default, taken). It has a
+live user path today through band-copy redo, it is a small self-contained correction, and releasing
+it separately keeps the two diffs reviewable apart.
+
+**CQ-3 — the activities table's unrecorded delete/dissolve: IN SCOPE.** Against the spec's default.
+
+> **This is the answer that changes the plan, and M2-T2's journey must be re-designed before it is
+> built** — the spec named that consequence when it raised the question, so it is not a surprise,
+> but it is real work rather than a line. Today `ActivitiesTable.tsx:826-859` deletes and dissolves
+> with **no undo seam call at all**, while its dialog sibling (`activity-crud-dialogs.tsx:118`,
+> `:166`) records both. So the same action is undoable from one surface and not the other, which is
+> the "one correct pattern applied to a control and not its neighbour" shape this register records
+> repeatedly — and the product owner's reading is that a planner does not know which surface they
+> used.
+>
+> Two things to settle while building it rather than assume: whether the table's dissolve should
+> record the ADR-0048 M2 non-undoable boundary (as the canvas does) or nothing at all, and whether
+> the table's delete path can reach the cascade case at all — both are read from the code, not
+> reasoned about, before the journey is written.

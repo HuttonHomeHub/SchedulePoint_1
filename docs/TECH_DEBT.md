@@ -1256,6 +1256,19 @@ One line each. The story lives where the link points, not here.
 usage count). Two pieces of work took the same number. The live row keeps it; this one is recorded
 here by title so neither reference is ambiguous.
 
+**DECIDED 2026-09-02 (product owner), spec at `docs/specs/wbs-bucket-a11y/`.** The equivalent is a
+non-focusable `sr-only` list beside the activity listbox, covering the **whole band** (every drawn
+grouping, not the bucket alone), announcing a **subtree** count for a real phase, and **not** painting
+a count on the canvas.
+
+**One thing the decision exposed, recorded because it corrects the question rather than the answer:**
+the subtree reading was put to the product owner with the cost "it would disagree with the Gantt".
+Checked afterwards, that is false — `GanttActivityRow` has no `count` field, only `GanttBucketRow`
+does, so **no count for a real phase exists anywhere in the product**. There is nothing to disagree
+with. The shared composer therefore takes a count it is _given_, and the two call sites pass
+different derivations of different subjects; its docblock has to say so, or the next reader will
+"fix" one to match the other.
+
 ### 99. `/request-password-reset` leaks account existence through timing
 
 **Status:** unverified · **Found:** 2026-08-05, by the ADR-0075 M4 backend-performance and security gates independently.
@@ -3778,3 +3791,18 @@ ADR-0048 amendment naming the M4 restore as what changed.
 **One thing to check before building it**, rather than assume: the restore is top-down
 parent-active, so a subtree whose summary's OWN parent was deleted afterwards is a case the
 amendment has to answer — refuse, or restore what it can and say so.
+
+**DECIDED 2026-09-02 (product owner), spec at `docs/specs/cascade-undo/`.** Restore the cascade;
+where the phase's own ancestor was deleted afterwards, **refuse and name the phase** rather than
+partially restore; ship the anchor fix as its own release first.
+
+**And the scope widened against the spec's default: the activities table's unrecorded
+delete/dissolve is IN.** Today that table deletes and dissolves with no undo seam call while its
+dialog sibling records both, so the same action is undoable from one surface and not the other. The
+plan's M2-T2 journey must be re-designed before it is built — the spec named that consequence when
+it raised the question.
+
+**The spec also found a live defect this row did not have**, which is why it is worth reading before
+picking the work up: `restoreDeleteBatch` takes its anchor from a `findMany` with no `orderBy` and
+uses `ids[0]`, so a cascade restore succeeds only when an unrequested ordering happens to return the
+root first. Nothing in this repository has ever restored a cascade batch against a real database.
