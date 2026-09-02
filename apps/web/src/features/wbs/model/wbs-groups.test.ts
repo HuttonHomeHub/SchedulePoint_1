@@ -225,11 +225,37 @@ describe('wbsBandGroups', () => {
 
     /**
      * Render-path code must not hang the canvas on data the server forbids (ADR-0038). A cycle in
-     * the parent tree stops the walk rather than looping — the `depthOf` guard's mirror.
+     * the parent tree stops the walk rather than looping — the `depthOf` guard's mirror, and the
+     * reason it needs its own: `depthOf` walks UPWARD and terminates naturally the moment it
+     * revisits a node, while a descending subtree sum has no equivalent natural stop.
      */
     it('terminates on a cycle instead of hanging', () => {
       const rows = wbsBandGroups([summary('x', 'X', 'y'), summary('y', 'Y', 'x')]);
       expect(rows.every((r) => Number.isFinite(r.count))).toBe(true);
+    });
+  });
+
+  /**
+   * The nesting cue a text equivalent needs (`docs/TECH_DEBT.md` #232). Without it a flat list of
+   * "label, N activities" throws away the containment the band draws — and with subtree counts a
+   * reader sums two numbers that overlap.
+   */
+  describe('parentId', () => {
+    it('names the resolved parent, and null at the top level', () => {
+      const rows = wbsBandGroups([
+        summary('outer', 'Superstructure'),
+        summary('inner', 'Frame', 'outer'),
+        activity({ id: 'loose' }),
+      ]);
+      expect(rows.find((r) => r.id === 'outer')?.parentId).toBeNull();
+      expect(rows.find((r) => r.id === 'inner')?.parentId).toBe('outer');
+      // The bucket is a sibling of the outermost summaries, not a child of anything.
+      expect(rows.at(-1)).toMatchObject({ id: null, parentId: null });
+    });
+
+    it('treats a summary whose parent is absent as top level, like every other reader', () => {
+      const rows = wbsBandGroups([summary('orphan', 'Orphan', 'gone')]);
+      expect(rows[0]?.parentId).toBeNull();
     });
   });
 

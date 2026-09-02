@@ -184,11 +184,32 @@ export interface WbsBandGroupInput {
    * count (`gantt/layout/row-model.ts:244`); a real summary is a `GanttActivityRow` and has no
    * count at all, so there is nothing there to disagree with.
    *
+   * **The counts are NOT additive across nesting**, and this sentence is here because the obvious
+   * reading of two adjacent rows is to add them: a nested summary's count is *included inside* its
+   * ancestors', so "Structure, 30" containing "Substructure, 10" describes 30 activities and not
+   * 40. That is why anything announcing these rows has to carry a nesting cue rather than a flat
+   * list of numbers — see {@link WbsBandGroupInput.parentId}.
+   *
    * Deliberately absent from the render tier's `WbsBandGroup` (`tsld/render/wbs-band.ts`), which
    * this type otherwise mirrors: a count is not geometry, and the painter must not grow a reason
    * to read it.
    */
   count: number;
+  /**
+   * The **resolved** parent of this group — `null` for a top-level summary, for the derived bucket,
+   * and for a summary whose `parentId` names a row that is not present (an orphan is top-level
+   * here exactly as it is everywhere else in this module, so one rule serves every reader).
+   *
+   * It exists because the band conveys **containment** visually — a child's bar sits inside its
+   * parent's span — and a consumer that renders these rows as a flat list throws that away. With
+   * subtree counts (above) that is worse than cosmetic: a reader who cannot tell a parent from a
+   * sibling will sum two numbers that overlap. An accessibility review of `docs/TECH_DEBT.md` #232
+   * found exactly that, and this field is what lets a text equivalent say `aria-level`.
+   *
+   * Like `count`, deliberately absent from the render tier's `WbsBandGroup`: the painter derives a
+   * row's y from the SET of depths present, not from any one row's parent.
+   */
+  parentId: string | null;
 }
 
 /**
@@ -268,6 +289,12 @@ export function wbsBandGroups(
         start: span.start,
         finish: span.finish,
         count: subtreeCount(group.summary.id),
+        // The RESOLVED parent, not the raw column: an orphan is top-level here, as it is in
+        // `deriveWbsGroups` and in the Gantt row model.
+        parentId:
+          group.summary.parentId !== null && present.has(group.summary.parentId)
+            ? group.summary.parentId
+            : null,
       };
     })
     .sort((a, b) => a.depth - b.depth);
@@ -280,6 +307,7 @@ export function wbsBandGroups(
       start: groups.unassigned.start,
       finish: groups.unassigned.finish,
       count: groups.unassigned.memberIds.length,
+      parentId: null,
     });
   }
   return rows;
