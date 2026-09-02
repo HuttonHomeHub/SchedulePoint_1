@@ -100,7 +100,6 @@ const capable = new Map();
 for (const gate of gates) {
   const files = [...scripts[gate].matchAll(/(scripts\/[\w./-]+\.mjs)/g)].map((m) => m[1]);
   for (const file of files) {
-    if (file.endsWith('.test.mjs')) continue;
     // **This file excludes itself, for the reason `check-claims.mjs` does.** Its comments and its
     // failure messages necessarily quote the shapes it searches for — `report({ advisory })` is in
     // the sentence it prints when it finds one — so scanning itself makes it report itself as an
@@ -120,6 +119,18 @@ for (const gate of gates) {
     // matched only the flag and its docblock asserted that "can exit 2" was decidable from it,
     // which was **false**: the ADR-0124 devops review demonstrated a passing `OK` over a gate that
     // exits 2 at runtime. That claim is corrected on `report()` and the detection now covers both.
+    // **A file is a gate ENTRY POINT if `report()`'s value reaches the process exit — a
+    // behavioural test, not a name.** The first version excluded `*.test.mjs` by suffix, justified
+    // only by the two files where that happens to be harmless. The ADR-0124 test-engineer review
+    // broke it by construction: a `.test.mjs` file that genuinely calls
+    // `process.exit(report({ advisory: true, … }))`, wired into `package.json` as a real gate,
+    // exits 2 and was invisible here — and this repository already runs two gates whose entry point
+    // IS a `.test.mjs` (`check:doc-register`, `check:claims`), so the shape is not hypothetical.
+    //
+    // `doc-register.test.mjs` calls `report()` many times and has no `process.exit(` at all (it
+    // sets `process.exitCode`), so it is excluded for what it does rather than what it is called.
+    const routesReportToExit = /process\.exit\(/.test(src) && /\breport\s*\(/.test(src);
+    if (!routesReportToExit) continue;
     const declaresAdvisory = /advisory:\s*true/.test(src) || /(^|[\s{,])advisory\s*[,}]/m.test(src);
     const pushesWarnings = /\bwarnings\.push\s*\(/.test(src);
     if (declaresAdvisory || pushesWarnings) {

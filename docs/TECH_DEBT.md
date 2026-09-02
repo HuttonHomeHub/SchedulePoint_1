@@ -1000,6 +1000,35 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
+
+**Status:** open · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
+**Owner:** repo
+
+`scripts/lib/doc-register.test.mjs` opens by calling itself _"the ONLY safety net both gates have"_,
+and it covers the shared **module** — `sections`, `fieldValue`, `stripFences`, `tableRows`, `report`.
+It does not cover the assertions that live in `check-debt-status.mjs` itself: A9's field limb, both
+A10 limbs, the `CANONICAL` regex and the ledger/compact classification.
+
+Those were verified — against real revisions, each made to fail first — but the verification lives in
+`docs/specs/gate-conventions/m0-measurement.md`, **a document rather than a re-runnable gate**. An
+edit to `CANONICAL` or to the field arithmetic regresses silently. That is one level up from the
+class ADR-0124 is about: a check whose own correctness is asserted in prose.
+
+**Why it is not a quick win.** `main()` reads a fixed `DOC` and also reads
+`scripts/debt-register.json`'s `compactTableRatchet`, so a fixture register fails the ratchet before
+reaching the assertion under test. Closing it properly needs either a document seam (an env or argv
+override, which is a public contract on a shared gate) or the assertions extracted into a pure
+function the gate calls — the `doc-register.mjs` shape, and the better answer. Either is an ADR-0105
+shared-gate trigger, which is why this is a row and not a commit: the epic that found it declined to
+widen a shared gate inside its own gate pass, for the same reason `#240` declined to widen
+`check:claims` inside the accessibility milestone that found it.
+
+**Interim mitigation, so this is not a bare deferral:** every assertion added by ADR-0124 was
+verified red against the specific defect it names, and each red run is recorded with the command that
+produced it. That is evidence the assertion worked **once**, which is exactly what a regression test
+adds to and does not replace.
+
 ### 244. CI's gate roster is hand-written while `prepush.sh` derives its own
 
 **Status:** open · **Raised:** 2026-09-02 (the ADR-0124 devops gate pass) · **Size:** S ·

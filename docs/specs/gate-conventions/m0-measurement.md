@@ -286,3 +286,50 @@ own comment says it avoided. Making CI derive its roster, or asserting the two a
 a shared gate and therefore an ADR-0105 full-spec trigger. Smuggling it into this epic's gate pass
 is exactly the judgement that rule exists to remove — the same reason `#240` refused to widen
 `check:claims` inside the accessibility milestone that found it. Filed as a register row.
+
+### The test-engineer pass — three more, each proved by construction
+
+Its single question was whether any new assertion can pass **vacuously**. Three could.
+
+**(a) Fixture case (d) was vacuous.** `assert.ok(!beta.body.includes('after the title'))` is a
+negative assertion, and the preconditions checked only the two heading lines — not the text the case
+names. Proved by deleting `after the title` from `depth.md`: all 20 cases stayed green while the case
+tested nothing. It now asserts **positively** as well (the body must still contain the section before
+the boundary) and the fixture precondition covers the referent. Verified red by re-running the
+deletion.
+
+**(b) The `.test.mjs` exclusion was a structural blind spot.** It was name-based, justified only by
+the two files where that happens to be harmless — and this repository already runs two gates whose
+entry point **is** a `.test.mjs` (`check:doc-register`, `check:claims`). Proved by constructing a
+real one: a `.test.mjs` calling `process.exit(report({ advisory: true, … }))`, wired into
+`package.json`, which genuinely exits 2 and which the gate reported `OK` over.
+
+The exclusion is now **behavioural**: a file is a gate entry point when `report()`'s value reaches
+the process exit (`process.exit(` present alongside a `report(` call). `doc-register.test.mjs` calls
+`report()` many times and has no `process.exit(` at all — it sets `process.exitCode` — so it is
+excluded for what it does rather than what it is named. Verified against the reviewer's construction,
+which is now caught.
+
+**(c) The claim/mention escape could hide a wrong figure — and the first fix for it was wrong.**
+`` `99` feature modules `` — the number alone in backticks — removed the figure from the scan while a
+correct sibling occurrence of the same label kept the per-label `found` flag satisfied, so a wrong
+number passed silently. This repository routinely states one figure twice, so the multi-occurrence
+shape is the documented norm rather than a contrivance.
+
+**The containment rewrite alone did not fix it**, and that is worth recording: with the blanking
+removed the pattern simply stopped matching across the backtick, so the site went **invisible**
+instead of being escaped — the same silent pass reached by a different route, and it took running the
+case to see that. The shipped answer blanks the backtick **characters** (preserving every offset) and
+decides mention-ness by whether the match is wholly inside a code span. So a whole phrase in one span
+is a mention; a figure formatted mid-phrase is a claim and is checked. Four cases verified: the
+review's case CAUGHT, an odd-backtick line CAUGHT, a genuine mention passed, a bare prose mention
+CAUGHT.
+
+**One suggestion folded:** A9's field limb counted `**Status:**` across the whole document, so a
+declaration in prose outside any row could compensate for a row missing one — netting to zero and
+silencing the limb that exists to be independent of A1. Now counted inside the detailed region only;
+verified against the reviewer's exact construction, where A9 and A1 both fire.
+
+**One filed rather than fixed** (`#245`): the assertions inside `check-debt-status.mjs` have no
+re-runnable coverage — they were each verified red, but in a document rather than a gate. Closing it
+needs a document seam or an extraction, both ADR-0105 shared-gate triggers.

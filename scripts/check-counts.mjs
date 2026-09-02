@@ -167,30 +167,58 @@ const documents = [
  * inside an inline code span — so the escape removes no live claim, and an author who needs to write
  * about a number has a way to say so.
  */
-const escapeMentions = (text) =>
-  text
-    .split('\n')
-    .map((line) => {
-      // **A line with an ODD number of backticks is left alone, and that direction is deliberate.**
-      // The first version replaced spans line-agnostically, so a stray unpaired backtick BEFORE a
-      // real claim paired with any later backtick on the line and blanked everything between them —
-      // the claim included. Demonstrated: `Note\`: the docs currently claim 5 ADRs; check \`this\``
-      // loses `5 ADRs` entirely, and the gate then passes over a genuinely wrong number. Measured:
-      // 56 odd-backtick lines outside fences across the four gated documents today, so the shape is
-      // ordinary rather than contrived — it is what a code span wrapped across a line break leaves.
-      //
-      // Not escaping such a line makes the gate **over-eager** on it, which is the safe direction
-      // and the one `#222` itself argues for: it can then invent a finding an author must phrase
-      // around, but it can never hide a real one.
-      const ticks = (line.match(/`/g) ?? []).length;
-      if (ticks % 2 !== 0) return line;
-      return line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length));
-    })
-    .join('\n');
+/**
+ * The character ranges of inline code spans, so a match can be tested for containment.
+ *
+ * **A line with an ODD number of backticks contributes no spans, and that direction is deliberate.**
+ * A stray unpaired backtick would otherwise pair with any later backtick on the line, and everything
+ * between them — a real claim included — would read as a mention. Demonstrated:
+ * `Note\`: the docs currently claim 5 ADRs; check \`this\`` loses its figure entirely. Measured: 56
+ * odd-backtick lines outside fences across the four gated documents, so the shape is ordinary rather
+ * than contrived — it is what a code span wrapped across a line break leaves. Contributing no spans
+ * makes the gate **over-eager** on such a line, which is the safe direction and the one `#222` argues
+ * for: it can invent a finding an author must phrase around, and it can never hide a real one.
+ */
+function codeSpans(text) {
+  const spans = [];
+  let offset = 0;
+  for (const line of text.split('\n')) {
+    if ((line.match(/`/g) ?? []).length % 2 === 0) {
+      for (const m of line.matchAll(/`[^`]*`/g)) {
+        spans.push([offset + m.index, offset + m.index + m[0].length]);
+      }
+    }
+    offset += line.length + 1;
+  }
+  return spans;
+}
+
+/**
+ * **A mention is the WHOLE phrase inside one code span; a formatted number beside prose is not.**
+ *
+ * The first version blanked spans and matched the remainder, so `` `99` feature modules `` — the
+ * number alone in backticks — removed the figure from the scan and the claim was never checked. That
+ * passed silently, because `found` is a per-LABEL boolean OR'd across every occurrence in a document
+ * and this repository routinely states one figure twice (the stage banner and the layout tree), so a
+ * correct sibling kept the "did this document state it at all?" safety net satisfied. Demonstrated by
+ * the ADR-0124 test-engineer review against the shipped code.
+ *
+ * Requiring containment of the entire match fixes it in the right direction: `` `8 ADRs` `` is a
+ * mention, `` `99` feature modules `` is a claim with a formatted number and is checked.
+ */
+const isMention = (spans, from, to) => spans.some(([a, b]) => from >= a && to <= b);
 
 const problems = [];
 for (const { path, label: where, required } of documents) {
-  const text = escapeMentions(read(path));
+  const text = read(path);
+  const spans = codeSpans(text);
+  // **Backtick CHARACTERS are blanked for matching, and the spans are computed from the original.**
+  // Not the span contents — blanking those was the first fix and it made ``\`99\` feature modules``
+  // stop matching at all rather than be checked, so the site went invisible and a correct sibling
+  // occurrence kept the per-label `found` flag satisfied. Replacing each backtick with a space keeps
+  // every offset identical, so a match's range can still be tested against the spans below, and a
+  // figure formatted mid-phrase is matched instead of vanishing.
+  const scan = text.replace(/`/g, ' ');
   for (const [label, patterns] of Object.entries(claimed)) {
     // **Every occurrence, not the first.** A document states a figure more than once — CLAUDE.md
     // carries the module count in its stage banner AND in its repository-layout tree — and checking
@@ -198,7 +226,8 @@ for (const { path, label: where, required } of documents) {
     // shape of failure this whole script exists to remove, so it must not have it internally.
     let found = false;
     for (const pattern of patterns) {
-      for (const match of text.matchAll(new RegExp(pattern.source, 'g'))) {
+      for (const match of scan.matchAll(new RegExp(pattern.source, 'g'))) {
+        if (isMention(spans, match.index, match.index + match[0].length)) continue;
         found = true;
         const stated = Number(match[1]);
         if (stated !== actual[label]) {

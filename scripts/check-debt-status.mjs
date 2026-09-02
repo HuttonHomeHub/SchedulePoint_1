@@ -43,6 +43,8 @@ function rowNumber(heading) {
 
 function main(argv) {
   const md = readRepoDoc(DOC);
+  // One fence-stripped line array, shared by every assertion that scans the raw document.
+  const raw = stripFences(md).split('\n');
   const problems = [];
   // **No `warnings` array here, deliberately.** One was declared and never pushed to for months.
   // `report()`'s warnings path returns 2 unconditionally, and under the inverted `ADVISORY_GATES`
@@ -124,7 +126,15 @@ function main(argv) {
   //
   // **Anchored at column 0**, for the reason `fieldValue` is: an unanchored count reads 74 here,
   // three of them prose discussing the field rather than declaring it.
-  const declaredStatuses = md.split('\n').filter((l) => l.startsWith('**Status:**')).length;
+  // **Counted inside the detailed region only.** Counting the whole document lets a declaration in
+  // prose OUTSIDE any row compensate for a row that is missing one, netting to zero — demonstrated
+  // by the ADR-0124 test-engineer review, which removed `#58`'s status and added a column-0
+  // `**Status:**` line to the preamble; this limb then stayed silent (A1 still caught it, but this
+  // limb exists precisely to be the independent check that does not depend on A1).
+  const detailedStart = raw.findIndex((l) => l.startsWith('## Detailed items'));
+  const declaredStatuses = raw
+    .slice(detailedStart + 1)
+    .filter((l) => l.startsWith('**Status:**')).length;
   if (items.length !== declaredStatuses) {
     // **The two directions mean different things, so the message says which one happened.** More
     // rows than declarations means a row has no field of its own and A1 will name it. Fewer means
@@ -160,7 +170,6 @@ function main(argv) {
   // truncates its own row's body. One such heading existed and was demoted to `####` with this
   // assertion; nothing would have reported it.
   const CANONICAL = /^### \d+[a-z]?\. \S/;
-  const raw = stripFences(md).split('\n');
   for (const line of raw) {
     if (!/^#{2,3} #?\d+[a-z]?[.\s\u2014-]/.test(line)) continue;
     if (CANONICAL.test(line)) continue;

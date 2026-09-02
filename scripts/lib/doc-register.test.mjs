@@ -60,6 +60,13 @@ assert.ok(
   /\n# A level-one title\n/.test(depth),
   'depth.md must keep a bare `# ` heading outside any fence',
 );
+// Case (d) below is a NEGATIVE assertion, so it passes trivially if its referent disappears — which
+// the ADR-0124 test-engineer review proved by deleting this line and watching all 20 cases stay
+// green. Both the terminator and the text after it are now preconditions.
+assert.ok(
+  /\n# A level-one title\n\s*after the title/.test(depth),
+  'depth.md must keep "after the title" AFTER the level-one heading — case (d) is vacuous without it',
+);
 
 let run = 0;
 const it = (what, fn) => {
@@ -143,7 +150,15 @@ it('(c) a `# ` inside a fenced block ends nothing — this is the stripFences de
 
 it('(d) a bare `# ` outside a fence DOES end a ## body', () => {
   const beta = sections(depth, 2).find((s) => s.heading === 'Beta');
-  assert.ok(!beta.body.includes('after the title'));
+  // **Asserted positively as well as negatively.** The negative half alone passes when the text it
+  // names is simply gone, which is how a case stops testing the boundary and starts testing
+  // nothing. The positive half pins where the body actually ends, so the fixture losing content
+  // fails here rather than passing quietly.
+  assert.ok(
+    beta.body.includes('row three body'),
+    'Beta must still contain the section before the # ',
+  );
+  assert.ok(!beta.body.includes('after the title'), 'Beta must end at the level-one heading');
 });
 
 it('(e) a body never keeps the heading that ends it', () => {
