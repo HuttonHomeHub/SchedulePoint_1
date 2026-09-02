@@ -1,0 +1,168 @@
+docs/TECH_DEBT.md	L2	89	94	5	Principles for managing debt
+docs/TECH_DEBT.md	L2	95	1160	1065	Detailed items
+docs/TECH_DEBT.md	L2	1161	3933	2772	Closed numbers
+docs/TECH_DEBT.md	L3	114	141	27	58. The tiered ruler and TODAY chip (ADR-0055 S4, deferred)
+docs/TECH_DEBT.md	L3	142	163	21	60. The Gantt's scroll behaviour is unmeasured on real hardware
+docs/TECH_DEBT.md	L3	164	209	45	62. `canReadCost` is derived from the role because the DTO cannot say
+docs/TECH_DEBT.md	L3	210	248	38	64. `AssignmentRow` unmounts its editors when the pen goes, dropping focus to `<body>`
+docs/TECH_DEBT.md	L3	249	260	11	69. Two idioms for editing a row in place
+docs/TECH_DEBT.md	L3	261	292	31	70. The API e2e harness cannot reproduce a same-plan write race
+docs/TECH_DEBT.md	L3	293	322	29	72. The bulk-selection checkboxes are hand-rolled
+docs/TECH_DEBT.md	L3	323	358	35	74. The plan advisory lock's contention headroom is unmeasured
+docs/TECH_DEBT.md	L3	359	574	215	75. The draw budget, measured on real hardware — and the budget itself was misquoted
+docs/TECH_DEBT.md	L3	575	626	51	76. Deferred follow-ups from the ADR-0064/0065 enablement review
+docs/TECH_DEBT.md	L3	627	668	41	81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
+docs/TECH_DEBT.md	L3	669	706	37	84. Levelling is quadratic in the number of activities contending on ONE resource
+docs/TECH_DEBT.md	L3	707	764	57	86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
+docs/TECH_DEBT.md	L3	765	824	59	88. An email link scanner reaches the verification URL before the recipient
+docs/TECH_DEBT.md	L3	825	885	60	89. The reverse proxy forwards `X-Forwarded-Proto: http` on an HTTPS request
+docs/TECH_DEBT.md	L3	886	925	39	93. The audit epic's non-blocking review findings (ADR-0073 C4.1)
+docs/TECH_DEBT.md	L3	926	967	41	242. `/forgot-password?email=` is a specified capability with no producer
+docs/TECH_DEBT.md	L3	968	1002	34	97. The account-security epic's non-blocking review findings (ADR-0074 M5)
+docs/TECH_DEBT.md	L3	1003	1031	28	237. The journey sweep has never run the base journey
+docs/TECH_DEBT.md	L3	1032	1057	25	239. The plan's members query and its restore both scale with a fetch nobody profiles
+docs/TECH_DEBT.md	L3	1058	1090	32	235. A failing typecheck did not block the pre-push gate, because `tsc` exits 2
+docs/TECH_DEBT.md	L3	1091	1123	32	234. Fifteen page and panel loading states are spinners where the shape is known
+docs/TECH_DEBT.md	L3	1124	1160	36	232. The WBS band's derived bucket has no accessible name or count
+docs/TECH_DEBT.md	L3	1309	1363	54	99. `/request-password-reset` leaks account existence through timing
+docs/TECH_DEBT.md	L3	1364	1478	114	100. The operator-facing mail signal still has no operator-facing channel
+docs/TECH_DEBT.md	L3	1479	1547	68	101. `check:claims` completeness has structural blind spots
+docs/TECH_DEBT.md	L3	1548	1605	57	102. The public screens' deferred review findings (ADR-0077 M6-T2)
+docs/TECH_DEBT.md	L3	1606	1628	22	105. Two follow-ups from the canvas status & feedback gate pass
+docs/TECH_DEBT.md	L3	1629	1678	49	110. Milestone B (server-side duplicate endpoint) deferred, with the measurement attached
+docs/TECH_DEBT.md	L3	1679	1725	46	116. Consolidation-pass findings that were not folded
+docs/TECH_DEBT.md	L3	1726	1777	51	117. CSP report delivery is unverified end to end
+docs/TECH_DEBT.md	L3	1778	1861	83	118. Staff-console M6 review findings that were not folded
+docs/TECH_DEBT.md	L3	1862	1889	27	118a. `audit_events`' 12-month `auth.*` period is still unenforced, and the sweep may never enforce it
+docs/TECH_DEBT.md	L3	1890	1911	21	118b. The CSP period bounds staleness, not data age — and the sweep does not change that
+docs/TECH_DEBT.md	L3	1912	1955	43	123. One create-dialog earned-value case failed once in a full run and has not repeated
+docs/TECH_DEBT.md	L3	1956	1987	31	121. The base Playwright journey proves editing in a world no shipped bundle can produce
+docs/TECH_DEBT.md	L3	1988	2018	30	120. The first retention drain leaves 10–20% dead tuples for several ticks, and nothing says so
+docs/TECH_DEBT.md	L3	2019	2203	184	119a. The API e2e suite fails intermittently, and the failure has never been captured
+docs/TECH_DEBT.md	L3	2204	2275	71	142. `<Link to="/orgs/$orgSlug/clients">` warns that the router matched a different template
+docs/TECH_DEBT.md	L3	2276	2340	64	149. The Graphite M10 gate pass's non-blocking findings
+docs/TECH_DEBT.md	L3	2341	2365	24	154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
+docs/TECH_DEBT.md	L3	2366	2397	31	155. The minimap M4 gate pass's non-blocking findings
+docs/TECH_DEBT.md	L3	2398	2507	109	165. Five screens photographed for the first time, and what they showed
+docs/TECH_DEBT.md	L3	2508	2565	57	174. The axis-markers gate pass's non-blocking findings
+docs/TECH_DEBT.md	L3	2566	2629	63	180. A workflow's renamed INPUTS have no equivalent of the output guard
+docs/TECH_DEBT.md	L3	2630	2683	53	181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
+docs/TECH_DEBT.md	L3	2684	2781	97	184. Unsaved-work guard: the findings its gate pass did not block on
+docs/TECH_DEBT.md	L3	2782	2830	48	#208 — A journey that seeds through the API must tell the client itself
+docs/TECH_DEBT.md	L3	2831	2869	38	#187 — The deck's labels sit 3 px apart and three hypotheses are falsified
+docs/TECH_DEBT.md	L3	2870	2941	71	#191 — The local pre-push gate costs 8 minutes and 96% of it is two steps
+docs/TECH_DEBT.md	L3	2942	2967	25	#193 — Four more toolbar docblocks and five exports describe deleted machinery
+docs/TECH_DEBT.md	L3	2968	3018	50	Two more, and how the first grep missed them (2026-08-30 verification sweep)
+docs/TECH_DEBT.md	L3	3019	3061	42	#194 — "The epic's own gate pass removes it" has now failed twice as an instruction
+docs/TECH_DEBT.md	L3	3062	3088	26	#195 — `pnpm prepush` cannot see uncommitted work in its diff-based checks
+docs/TECH_DEBT.md	L3	3089	3129	40	#197 — Three rules with two or three implementations each, agreeing by discipline
+docs/TECH_DEBT.md	L3	3130	3167	37	#200 — Two named-slot registries, one of them the better pattern, neither shared
+docs/TECH_DEBT.md	L3	3168	3300	132	202. Six non-blocking findings from the foot-row gate pass
+docs/TECH_DEBT.md	L3	3301	3382	81	204. Four things the foot-row-and-deck epic found and did not fix
+docs/TECH_DEBT.md	L3	3383	3432	49	206. Health-check review suggestions consciously not folded at the M5 gate pass
+docs/TECH_DEBT.md	L3	3433	3460	27	211. Fix-slice M-G suggestions consciously not folded at the gate pass
+docs/TECH_DEBT.md	L3	3461	3507	46	215. Dense rows are 28 px on touch, and their height is a JavaScript constant
+docs/TECH_DEBT.md	L3	3508	3539	31	216. The favicon's brand glyph is set in `system-ui`, and no gate can reach it
+docs/TECH_DEBT.md	L3	3540	3566	26	218. Two review suggestions from the typeface gate pass, not folded
+docs/TECH_DEBT.md	L3	3567	3602	35	225. A resource's histogram colour follows its rank, so re-ranking repaints the chart
+docs/TECH_DEBT.md	L3	3603	3652	49	226. The strip painter has an unexplained 20x cost cliff at nine stacked segments
+docs/TECH_DEBT.md	L3	3653	3694	41	228. Stacked-histogram gate-pass suggestions, consciously not folded
+docs/TECH_DEBT.md	L3	3695	3721	26	227. Nothing asserts the register's heading form, so it drifts silently
+docs/TECH_DEBT.md	L3	3722	3749	27	223. The canvas resource strip does not export or print, and the gate for that cannot see it
+docs/TECH_DEBT.md	L3	3750	3787	37	229. Two latent primitive keyboard residuals, carried out of #196
+docs/TECH_DEBT.md	L3	3788	3821	33	222. `check:counts` reads any "N ADRs" in a gated file as a claim about the repository
+docs/TECH_DEBT.md	L3	3822	3858	36	231. `sections()` ends a row at the next SAME-level heading, so a `###` row borrows its neighbour's fields
+docs/TECH_DEBT.md	L3	3859	3933	74	230. A cascade delete's undo still truncates the history, and its reason has lapsed
+docs/RECONCILE.md	L2	15	25	10	Why this exists
+docs/RECONCILE.md	L2	26	38	12	When to run it
+docs/RECONCILE.md	L2	39	60	21	What is already automated (do not redo by hand)
+docs/RECONCILE.md	L2	61	211	150	The manual pass
+docs/RECONCILE.md	L2	212	231	19	Passes run
+docs/RECONCILE.md	L2	232	237	5	The one rule
+docs/RECONCILE.md	L3	66	124	58	1. Re-derive the counts
+docs/RECONCILE.md	L3	125	160	35	2. Check the dependency claims
+docs/RECONCILE.md	L3	161	166	5	3. Reconcile accepted-but-unbuilt ADRs
+docs/RECONCILE.md	L3	167	175	8	4. Verify each register row against the code
+docs/RECONCILE.md	L3	176	185	9	5. Check the docs still describe the system
+docs/RECONCILE.md	L3	186	194	8	6. Check the exemplars and the agents
+docs/RECONCILE.md	L3	195	205	10	7. Run the specialist agents over recent work
+docs/RECONCILE.md	L3	206	211	5	8. Record the pass
+docs/DECISIONS.md	L2	13	77	64	2026-09-01 — Verifying the register, and what a register is wrong about
+docs/DECISIONS.md	L2	78	117	39	2026-09-01 — The context drawer is deleted, and ADR-0097 D2 is closed as not wanted
+docs/DECISIONS.md	L2	118	167	49	2026-08-30 — A register row is a claim frozen at the moment it was written
+docs/DECISIONS.md	L2	168	202	34	2026-08-30 — Paper follows the reader, and the document owns the identity
+docs/DECISIONS.md	L2	203	247	44	2026-08-29 — Carrying the typeface to the layers that opt out of the cascade
+docs/DECISIONS.md	L2	248	272	24	2026-08-29 — Fix-slice M-E/M-F: the small decisions the ADR does not carry
+docs/DECISIONS.md	L2	273	321	48	2026-08-28 — Reconciliation pass: one register, two numbering styles, and a seam fixed once
+docs/DECISIONS.md	L2	322	2017	1695	2026-08-25 — Reconciliation pass: the cadence itself had stopped
+docs/DECISIONS.md	L2	2018	2053	35	Plan edit-lock — web "pen" layer (edit-lock M2, 2026-07-11)
+docs/DECISIONS.md	L2	2054	2075	21	TSLD editing + edit-lock pen: web flags default ON (2026-07-12)
+docs/DECISIONS.md	L2	2076	2190	114	Informative TSLD canvas — the viewport/command/ruler seam (2026-07-12)
+docs/DECISIONS.md	L2	2191	2516	325	M4 advanced constraints — acceptance gate & the violation-output contract (2026-07-16)
+docs/DECISIONS.md	L2	2517	2566	49	2026-07-31 — Three defects from the imported Unit 300 programme
+docs/DECISIONS.md	L2	2567	2613	46	2026-07-31 — The seed catalogue (ADR-0066 M0–M5): what a test bed for the _application_ found
+docs/DECISIONS.md	L2	2614	2630	16	2026-08-01 — The Continental preset keeps 06:00–18:00, every day
+docs/DECISIONS.md	L2	2631	2652	21	2026-08-07 — The search field's Escape, and who owns the live region
+docs/DECISIONS.md	L2	2653	2681	28	2026-08-08 — Space toggles the selection; the logic summary moves to `i`
+docs/DECISIONS.md	L2	2682	2703	21	2026-08-08 — Copy names disambiguate, and it is deliberately not `disambiguate`
+docs/DECISIONS.md	L2	2704	2747	43	An ADR clause outlives the mechanism it was written for (2026-08-12)
+docs/DECISIONS.md	L2	2748	2782	34	2026-08-19 — A gate that counts its own documentation
+docs/DECISIONS.md	L2	2783	2830	47	2026-08-19 — Two of four symptoms had already been fixed
+docs/DECISIONS.md	L2	2831	2873	42	2026-08-19 — A gate that answered from an `undefined`
+docs/DECISIONS.md	L2	2874	2909	35	2026-08-21 — A debt register entry can prescribe a fix that has gone stale
+docs/DECISIONS.md	L2	2910	2948	38	2026-08-21 — The architecture decision inside a debt fix, recorded where it belongs
+docs/DECISIONS.md	L2	2949	3036	87	2026-08-22 — A shell control whose subject is an organisation is withheld where there is none
+docs/DECISIONS.md	L2	3037	3116	79	2026-08-22 — The #165a spec was written after the build, as a check, and it found four things
+docs/DECISIONS.md	L2	3117	3152	35	2026-09-01 — The WBS band's derived bucket, and a claim settled by looking
+docs/DECISIONS.md	L3	365	416	51	2026-08-20 — Reconciliation pass at the ADR-0099 epic boundary
+docs/DECISIONS.md	L3	417	440	23	2026-08-20 — Four milestones lost their headline task to re-reading the problem
+docs/DECISIONS.md	L3	441	461	20	2026-08-20 — Two guesses about React's effect ordering, and a probe that settled it
+docs/DECISIONS.md	L3	462	487	25	2026-08-18 — A flag's class was wrong, and the gate that checks it cannot see the shape
+docs/DECISIONS.md	L3	488	559	71	2026-08-18 — Reconciliation pass at the ADR-0095 epic boundary
+docs/DECISIONS.md	L3	560	626	66	2026-08-17 — Reconciliation pass at the ADR-0088 D3 flag-retirement boundary
+docs/DECISIONS.md	L3	627	689	62	2026-08-13 — Reconciliation pass at the ADR-0092 epic boundary
+docs/DECISIONS.md	L3	690	728	38	2026-08-09 — Reconciliation pass at the ADR-0086 epic boundary
+docs/DECISIONS.md	L3	729	774	45	2026-08-09 — Reconciliation pass at the ADR-0083/0084 epic boundary
+docs/DECISIONS.md	L3	775	866	91	2026-08-04 — Reconciliation pass at the ADR-0073 epic boundary
+docs/DECISIONS.md	L3	867	900	33	2026-08-03 — The deprecated day float field is removed, not carried
+docs/DECISIONS.md	L3	901	940	39	2026-08-02 — Float paths ship as a panel with one-path emphasis, in both views
+docs/DECISIONS.md	L3	941	972	31	2026-07-28 — Printing the Gantt: a print document, not a print stylesheet
+docs/DECISIONS.md	L3	973	997	24	2026-07-28 — The Gantt's review pass, and the control that was lit but did nothing
+docs/DECISIONS.md	L3	998	1049	51	2026-07-28 — The documentation rebaseline pass, and what it found
+docs/DECISIONS.md	L3	1050	1087	37	2026-07-27 — Tech-debt register reconciled against the code
+docs/DECISIONS.md	L3	1088	1116	28	2026-07-27 — `SelectField` lands, and stops at the sites that are genuinely different
+docs/DECISIONS.md	L3	1117	1146	29	2026-07-27 — The recycle bin merges in the database, not the service
+docs/DECISIONS.md	L3	1147	1179	32	2026-07-27 — A dialog closes only on its own close event
+docs/DECISIONS.md	L3	1180	1204	24	2026-07-27 — A list declares `order` only if it honours it
+docs/DECISIONS.md	L3	1205	1226	21	2026-07-27 — `verify-template.sh` restores what was there, not what was committed
+docs/DECISIONS.md	L3	1227	1253	26	2026-07-27 — The Prisma datamodel stops describing indexes it cannot describe
+docs/DECISIONS.md	L3	1254	1302	48	2026-07-27 — Toolbar labels are a policy, not a side-effect of priority
+docs/DECISIONS.md	L3	1303	1328	25	2026-07-27 — Header three-column grid: centred while it fits, filling when it does not
+docs/DECISIONS.md	L3	1329	1349	20	2026-07-20 — TSLD canvas nav (Stage B review): Isolate split-button + visible conflict chip
+docs/DECISIONS.md	L3	1350	1373	23	2026-07-19 — TSLD canvas insight lenses: client render state, not an ADR
+docs/DECISIONS.md	L3	1374	1398	24	2026-07-19 — Auto-deploy via an opt-in, host-side Watchtower pull (ADR-0047)
+docs/DECISIONS.md	L3	1399	1423	24	2026-07-19 — Notes: polymorphic single table, `plan_id` on every note, fail-closed parent CHECK (ADR-0046)
+docs/DECISIONS.md	L3	1424	1454	30	2026-07-17 — L1 resource-levelling schema: `leveling_priority` is nullable (NULL = unset), not defaulted
+docs/DECISIONS.md	L3	1455	1473	18	2026-07-16 — M4-F8 duplicate-relationship policy: reject per-(pair, type), not per-pair
+docs/DECISIONS.md	L3	1474	1496	22	2026-07-16 — M2 recalc modes: finish-side float + Actual-Dates = max(data date, actual start)
+docs/DECISIONS.md	L3	1497	1519	22	2026-07-16 — M5 per-activity calendars: float on the activity's own calendar; activity → plan → 24/7 resolution
+docs/DECISIONS.md	L3	1520	1542	22	2026-07-15 — M3 lag-calendar scope: only the 24-Hour half is a differential (setting-sensitive → M5)
+docs/DECISIONS.md	L3	1543	1581	38	2026-07-13 — On-canvas TSLD activity labels (extension within ADR-0026 D1)
+docs/DECISIONS.md	L3	1582	1614	32	2026-07-12 — Navigator in-tree CRUD: `Menu` primitive + shell-layer coordinator seam (ADR-0029 Phase 2)
+docs/DECISIONS.md	L3	1615	1646	31	2026-07-10 — Activity dependencies: `dependency:*` permission set + link cascade behaviour
+docs/DECISIONS.md	L3	1647	1674	27	2026-07-10 — Activity progress: dedicated endpoint, derived status, paired-constraint invariant
+docs/DECISIONS.md	L3	1675	1720	45	2026-07-10 — Recycle bin: one org-scoped `/deleted` endpoint over a keyset-merged union
+docs/DECISIONS.md	L3	1721	1746	25	2026-07-09 — Hierarchy: denormalised org id + cascade soft-delete via a batch id
+docs/DECISIONS.md	L3	1747	1772	25	2026-07-09 — Web walking skeleton: code-based routing + a tsconfig-extends workaround
+docs/DECISIONS.md	L3	1773	1794	21	2026-07-09 — Generalise the repository into a domain-neutral base ("Blank App")
+docs/DECISIONS.md	L3	1795	1813	18	2026-07-09 — Establish a formal delivery process for features
+docs/DECISIONS.md	L3	1814	1830	16	2026-07-08 — Adopt the requested stack for the foundation
+docs/DECISIONS.md	L3	1831	1842	11	2026-07-08 — Money stored as integer minor units
+docs/DECISIONS.md	L3	1843	1856	13	2026-07-08 — Defer hosting-platform choice
+docs/DECISIONS.md	L3	1857	1871	14	2026-07-11 — TSLD editing gesture-routing policy (M2)
+docs/DECISIONS.md	L3	1872	1884	12	2026-07-11 — Interim TSLD editing concurrency posture (M2)
+docs/DECISIONS.md	L3	1885	1908	23	2026-07-11 — Defer client-side link legality pre-check (M2 Slice 2.3)
+docs/DECISIONS.md	L3	1909	1944	35	2026-07-11 — Driving-edge definition (TSLD M3)
+docs/DECISIONS.md	L3	1945	1968	23	2026-07-11 — Free-2D bar drag over dominant-axis lock (TSLD M4)
+docs/DECISIONS.md	L3	1969	1991	22	2026-07-11 — Auto-pack lane batch: all-or-nothing concurrency posture (TSLD M4)
+docs/DECISIONS.md	L3	1992	2017	25	2026-07-11 — TSLD accessibility model & canonical keymap (M5)

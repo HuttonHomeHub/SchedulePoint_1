@@ -1,0 +1,5 @@
+
+> schedulepoint@0.1.0 check:debt-status /home/user/SchedulePoint_1
+> node scripts/check-debt-status.mjs
+
+check:debt-status: OK. 71 detailed rows (71 with a status, 0 without), 43 compact-table rows, 113 ledgered, 3 section headings.

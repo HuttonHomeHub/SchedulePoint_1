@@ -89,33 +89,58 @@ export function stripFences(md) {
  * `file:line` the way every other tool in this repository does. Fences are stripped first, so a
  * `## ` inside a code block is not a section — that is not hypothetical, the register holds 16
  * fenced blocks.
+ *
+ * **A section ends at the next heading of the same level OR SHALLOWER** (`docs/TECH_DEBT.md`
+ * #231). It used to end only at the same level, so a `###` row followed by `##` headings ran
+ * past every one of them to the next `###` and picked up whatever fields it met on the way.
+ * That is not a hypothetical either: `#117` carried no `**Status:**` line at all while
+ * `check:debt-status` reported "71 with a status, 0 without", because its body ran 1,115 lines
+ * and read `#118`'s.
+ *
+ * The change makes a **shallower** heading significant to a deeper section for the first time,
+ * and this repository's documents contain shell comments beginning `# ` — five in
+ * `docs/RECONCILE.md` alone. Those are inside fenced blocks, so `stripFences` above already
+ * blanks them and the hazard is covered. **That cover is load-bearing rather than incidental**,
+ * which is why `doc-register.test.mjs` pins both halves: a `# ` inside a fence ends nothing, and
+ * a `# ` outside one ends a `##` section. Without those cases the dependency is invisible and
+ * the next person to touch `stripFences` breaks this silently.
  */
 export function sections(md, level = 2) {
   const marker = '#'.repeat(level);
   const lines = stripFences(md).split('\n');
   const found = [];
+  const boundaries = [];
   for (let i = 0; i < lines.length; i += 1) {
     // Column 0 only. An indented heading is not a heading, and a `##` mid-sentence never was one.
+    const depth = /^(#{1,6}) /.exec(lines[i])?.[1].length;
+    if (depth === undefined) continue;
+    // 0-based, and it is the index of the boundary heading itself — `slice` excludes it, so a
+    // body never keeps the heading that ends it. The first version pushed `i + 1` here and every
+    // body carried its own terminator; the fixture case below caught it, which is why it exists.
+    if (depth <= level) boundaries.push(i);
     if (lines[i].startsWith(`${marker} `)) {
       found.push({ heading: lines[i].slice(marker.length + 1).trim(), line: i + 1, start: i + 1 });
     }
   }
-  return found.map((s, i) => ({
+  return found.map((s) => ({
     heading: s.heading,
     line: s.line,
-    body: lines
-      .slice(s.start, i + 1 < found.length ? found[i + 1].line - 1 : lines.length)
-      .join('\n'),
+    body: lines.slice(s.start, boundaries.find((b) => b >= s.start) ?? lines.length).join('\n'),
   }));
 }
 
 /**
  * The value of a `**Field:**` line, or `null`.
  *
- * **Column 0, and the field must open the line.** `#219` contains the literal `**Status:**` inside
- * a sentence asking for this gate; an unanchored search finds it and reports a status the row does
- * not have. Inline code spans are stripped first so a field named inside backticks is likewise not
- * a claim.
+ * **Column 0, and the field must open the line — that anchor is the ONLY guard.** `#219` contains
+ * the literal `**Status:**` inside a sentence asking for this gate; an unanchored search finds it
+ * and reports a status the row does not have. The anchor already excludes it, because prose does
+ * not begin a line with the field.
+ *
+ * **Inline code spans are deliberately NOT stripped**, and this docblock claimed for some time that
+ * they were — a false sentence in the shared module, three lines above the comment recording why
+ * (`docs/TECH_DEBT.md` #231's epic found it). Stripping was tried and removed as actively wrong:
+ * see the comment inside the loop below. Do not "restore" it.
  */
 export function fieldValue(body, field) {
   for (const raw of body.split('\n')) {

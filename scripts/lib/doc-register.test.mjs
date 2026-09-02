@@ -26,6 +26,7 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const traps = readRepoDoc(join(here, 'fixtures/traps.md'));
 const unterminated = readRepoDoc(join(here, 'fixtures/unterminated.md'));
+const depth = readRepoDoc(join(here, 'fixtures/depth.md'));
 
 // ── Fixture preconditions ──────────────────────────────────────────────────────────────────────
 //
@@ -46,6 +47,18 @@ assert.equal(
   (unterminated.match(/^```/gm) ?? []).length,
   1,
   'unterminated.md must hold exactly one fence marker — a second one terminates it',
+);
+
+// `depth.md`'s two hazards are the whole point of the file and both are one careless edit from
+// vanishing: the `# ` INSIDE a fence (which must end nothing) and the `# ` OUTSIDE one (which must
+// end a `##` section). If either stops being present the cases below pass for the wrong reason.
+assert.ok(
+  /```sh\n# a shell comment/.test(depth),
+  'depth.md must keep a `# ` line inside a fenced block',
+);
+assert.ok(
+  /\n# A level-one title\n/.test(depth),
+  'depth.md must keep a bare `# ` heading outside any fence',
 );
 
 let run = 0;
@@ -99,6 +112,56 @@ it('counts only real headings, and never one inside a fence', () => {
 it('reports 1-based line numbers a reader can cite', () => {
   const first = sections(traps, 2)[0];
   assert.equal(traps.split('\n')[first.line - 1], `## ${first.heading}`);
+});
+
+// ── sections — a body ends at the same level OR SHALLOWER (#231) ───────────────────────────────
+//
+// `sections()` used to end a body only at the next heading of the SAME level, so a `###` row
+// followed by `##` headings ran past every one of them. Live consequence: `#117` carried no
+// `**Status:**` line at all, its body ran 1,115 lines, it read `#118`'s status on the way, and
+// `check:debt-status` reported "71 with a status, 0 without". Cases (a) and (d) were verified RED
+// against the pre-change module; (b) and (c) were green before and after, and are here because
+// they pin what must NOT change.
+
+it('(a) a ### body ends at the next ## heading, not at the next ###', () => {
+  const row = sections(depth, 3).find((s) => s.heading === 'Row one');
+  assert.equal(row.body.trim(), 'row one body');
+});
+
+it('(b) a deeper #### heading does NOT end a ### body', () => {
+  const row = sections(depth, 3).find((s) => s.heading === 'Row two');
+  assert.ok(row.body.includes('sub body'));
+});
+
+it('(c) a `# ` inside a fenced block ends nothing — this is the stripFences dependency', () => {
+  const row = sections(depth, 3).find((s) => s.heading === 'Row three');
+  assert.ok(
+    row.body.includes('still row three'),
+    'a shell comment in a code block must not be read as a level-one heading',
+  );
+});
+
+it('(d) a bare `# ` outside a fence DOES end a ## body', () => {
+  const beta = sections(depth, 2).find((s) => s.heading === 'Beta');
+  assert.ok(!beta.body.includes('after the title'));
+});
+
+it('(e) a body never keeps the heading that ends it', () => {
+  // The first version of the depth rule pushed the boundary one line late and every body carried
+  // its own terminator. Both gates still reported byte-identical output, because a heading line is
+  // not a field declaration — so nothing else in this repository could have caught it.
+  for (const level of [2, 3]) {
+    // Only a heading at this level or SHALLOWER is a terminator; a deeper one belongs inside, which
+    // is what (b) pins. The first draft of this case asserted no heading at all and went red on a
+    // correct parser — the assertion was wrong, not the code.
+    const terminator = new RegExp(`^#{1,${level}} `, 'm');
+    for (const s of sections(depth, level)) {
+      assert.ok(
+        !terminator.test(s.body),
+        `section "${s.heading}" (level ${level}) kept a heading line in its body`,
+      );
+    }
+  }
 });
 
 // ── fieldValue — the six-instance prose trap ───────────────────────────────────────────────────
