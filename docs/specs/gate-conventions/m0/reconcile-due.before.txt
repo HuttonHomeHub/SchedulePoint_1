@@ -1,0 +1,5 @@
+
+> schedulepoint@0.1.0 check:reconcile-due /home/user/SchedulePoint_1
+> node scripts/check-reconcile-due.mjs
+
+check:reconcile-due: OK. last pass 2026-08-30 (3d ago), 3 of 123 ADRs since, threshold 8.

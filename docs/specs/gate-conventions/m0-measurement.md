@@ -1,0 +1,335 @@
+# Gate conventions — M0, and where it corrects the spec
+
+Run 2026-09-02 against `a1d665d8` (recorded in `m0/baseline-rev.txt`), on a tree whose only
+uncommitted change was this epic's own spec and plan.
+
+## F0.1 — the parser boundary
+
+**Condition, committed before the run** (`implementation-plan.md` M0-T1): _the proposed rule moves
+**at most two** section boundaries across the three documents, and changes **zero** findings and
+zero summary figures in either gate's output._ Predicted from reading: exactly one boundary moves,
+`### 232.` at `docs/TECH_DEBT.md:1124`.
+
+**Verdict: the first half is FALSIFIED, the second half holds.** Three boundaries move, and the
+prediction named the smallest of them:
+
+| Document            | Section                                       | Body lines, before → after |
+| ------------------- | --------------------------------------------- | -------------------------- |
+| `docs/TECH_DEBT.md` | `### 232.`                                    | 184 → **36**               |
+| `docs/RECONCILE.md` | `### 8. Record the pass`                      | 31 → **5**                 |
+| `docs/DECISIONS.md` | `### 2026-07-11 — TSLD accessibility model …` | **1160 → 25**              |
+
+Both gates' output is **byte-identical** before and after (`m0/debt-status.before.txt`,
+`m0/reconcile-due.before.txt`, diffed empty), all pre-existing fixture cases stay green, and the
+summary figures are unchanged: `71 detailed rows (71 with a status, 0 without), 43 compact-table
+rows, 113 ledgered, 3 section headings`, and `last pass 2026-08-30 (3d ago), 3 of 123 ADRs since,
+threshold 8`.
+
+**What the falsification is worth reading for.** The condition put a **proxy** and the **thing it
+cared about** in one sentence joined by "and". The proxy — how many bodies move — was wrong by 50%
+and named the wrong one. The thing it cared about — does any answer change — was right. Had the
+condition been the proxy alone, the plan's "if falsified" branch would have fired and this milestone
+would have become repair-then-arm on the strength of a number that decides nothing.
+
+So the branch does **not** fire, and the reason is written down rather than inferred: a boundary
+moving is only interesting where a body was carrying a field that belonged to somebody else, and
+`docs/DECISIONS.md` and `docs/RECONCILE.md` have no field readers at all. Only `docs/TECH_DEBT.md`
+does, and its one moved body changed nothing.
+
+**Note what the prediction missed and why.** The spec found `### 232.` by reading `docs/TECH_DEBT.md`
+— the document the row is about. The other two live in documents the row never mentions, and the
+larger of them is a `###` entry silently swallowing **1,160 lines**. This is the epic's own subject:
+a claim established by reading a document rather than by running something over all of its inputs.
+
+## The off-by-one, and the case that caught it
+
+The first implementation of the depth rule pushed the boundary one line late, so **every body kept
+the heading that terminated it**. Both consumer gates still reported byte-identical output — a
+heading line is not a column-0 field declaration, so nothing they assert could see it — and all
+fifteen pre-existing fixture cases stayed green.
+
+It was caught by fixture case (a), written before the change and run against the pre-change module
+first. Case (e) was then added to state the property directly, and **verified red by restoring the
+off-by-one**: `(a)` and `(e)` both fail, everything else passes.
+
+That is ADR-0110 D5 doing exactly its job, on a defect that no gate in this repository could
+otherwise have reported.
+
+**Case (e)'s first draft was itself wrong**, and is recorded rather than quietly fixed: it asserted
+that no body contains any heading line, and went red against a **correct** parser, because a deeper
+heading legitimately belongs inside. The assertion now excludes only headings at the section's own
+level or shallower. An assertion that fails against correct code is not a stricter assertion, it is
+a wrong one.
+
+## Verified corrections to the rows
+
+Three of the spec's corrections to `#231` and `#222` were re-checked here rather than inherited:
+
+- **`check:doc-links` does not use the parser.** `scripts/check-doc-links.mjs:22-24` imports only
+  node built-ins. The two real consumers are `check-debt-status.mjs:25` and
+  `check-reconcile-due.mjs:35` — and `#231` named the first, missed the second, and named a third
+  that was never a consumer.
+- **`#231`'s headline instance is already patched.** `#117` carries a status line today, so the
+  parser change is a recurrence fix with no red state left in the tree — which is why A9's field
+  limb has to be verified against a prior revision rather than against `HEAD`.
+- **`fieldValue`'s docblock was false.** It claimed inline code spans are stripped; they are not,
+  and the comment three lines below records that guard being removed as actively wrong because it
+  ate two real declarations. Corrected as prose only — restoring the stripping would re-introduce
+  the defect that comment exists to record.
+
+## F0.2 — A9's field limb
+
+**Condition, committed before the run:** _today the limb reports N = N and produces zero findings;
+at the prior revision it reports N−1 against N and fails._ Predicted: 71 = 71 today, 70 against 71
+before.
+
+**Verdict: holds, in both halves.** Today: `71 detailed rows (71 with a status, 0 without)`, no
+finding. Against `6b3f740b` — the parent of `d250104d`, the commit that gave `#117` its status line
+— the real gate reports:
+
+```
+✗ A9: the parser sees 71 numbered rows but the raw document declares 70 column-0 **Status:** lines.
+      Some row has no declaration of its own — A1 names it.
+✗ A1: docs/TECH_DEBT.md:1501 "117. CSP report delivery is unverified end to end" has no **Status:** line.
+```
+
+**A1 fires there too, and that is not redundancy — it is the point.** At that revision, with the
+**old** parser, A1 was silent: `#117`'s body ran 1,115 lines and picked up `#118`'s declaration, so
+the row satisfied A1 by borrowing. With the boundary fixed, A1 sees the row honestly. The field
+limb is the independent control for the case where the parser is wrong again in some _new_ way, and
+the two firing together is what a correct instrument and a correct control look like on a document
+that really is missing a field.
+
+The unanchored count at that revision is 70 as well; the 74-vs-71 divergence the spec predicted is
+a property of today's register, not that one. Both are recorded because the anchoring decision has
+to be right for both.
+
+### The probe was wrong first, and the gate corrected it
+
+The first measurement of this condition reported **63 parsed rows against 70 declarations** — the
+wrong number and the wrong direction. It came from a throwaway probe that **reimplemented the
+gate's `rowNumber` matcher** rather than running the gate, and the reimplementation required a
+trailing `.`, so every row titled in the `### #208 —` em-dash form fell out of the count.
+
+Running the real `check:debt-status` against the same file, by swapping the document into place,
+gives 71 against 70 — precisely what the condition predicted.
+
+This is the epic's own subject, committed inside the milestone that is about it: **a measurement
+taken with a copy of an instrument measures the copy.** The copy looked right, produced a plausible
+number, and would have been written into this document as evidence. It is recorded rather than
+quietly replaced, because the corrected number is less instructive than the reason the first one
+was wrong.
+
+## F0.1 addendum — the ledger move (M1-T3)
+
+`## Closed numbers` sat at `:1161` with **40 numbered detailed rows after it**, and
+`check-debt-status.mjs` classifies any `| N |` line after that heading as a ledger entry. Measured
+before the move: **113 matched rows after the heading, the last at `:1290`** — all of them the
+ledger's own table, so the misclassification was **latent, not live**, exactly as the spec said.
+
+Moved to the foot. Verified a **pure relocation** by comparing the sorted multiset of every
+non-blank line before and after: identical, so no line was added, dropped or edited. The gate's
+summary is unchanged (`71 / 43 / 113 / 3`), and the count of numbered rows after the ledger heading
+is now **0**.
+
+## F0.3 — the heading-form assertion (M2)
+
+**Condition:** _the census finds ~9 non-canonical `###` headings, all repairable by editing the
+title line alone, and A10 goes green immediately after the repair._
+
+**Verdict: holds, and the census split is the finding.** Nine, of two different kinds:
+
+- **Eight rows** in an `### #<n> — <title>` form (`#187`, `#191`, `#193`, `#194`, `#195`, `#197`,
+  `#200`, `#208`). Normalised to `### <n>. <title>`, per the register's own stated convention.
+- **One heading that is not a row at all** — `### Two more, and how the first grep missed them`,
+  a sub-heading belonging to `#193`. Demoted to `####`.
+
+**That ninth one is why A10 has two limbs.** The first limb's predicate only fires on lines already
+shaped like a row heading, so it is structurally incapable of seeing a `###` that carries no number
+— and after the depth fix in M1, such a heading **terminates the row it sits inside**, silently
+truncating that row's body. The first limb reports 8 of 9 and reads as complete. The second limb
+asserts that inside `## Detailed items` every `###` is a row, and reports the ninth.
+
+Both limbs were verified red against the state that preceded them: the first against the
+pre-repair register (8 findings), the second by re-promoting the demoted heading (1 finding, naming
+its line).
+
+**No inbound anchors break.** `grep` for `TECH_DEBT.md#` across `docs/`, `CLAUDE.md`, `README.md`,
+`apps/`, `scripts/` and `packages/` returns three links, all to `#closed-numbers`, which is
+unchanged. `check:doc-links` is green over 1,272 relative links.
+
+**A10 does not narrow what the parser reads, and that is the load-bearing part.** `sections()` and
+`rowNumber` still accept both heading levels and both separators, because ADR-0120 Finding 0 is that
+a gate's job is to find every row — a row in the wrong form is still a row, and a reader that skips
+it reports green over the gap. Finding stays generous; refusing is this separate strict pass over
+what was found.
+
+## F0.4 — the claim/mention escape (M3)
+
+**Condition:** _the escape removes zero live claims — every one of the six claim sites is matched
+before and after._
+
+**Verdict: holds.** 19 matches across the four gated documents today; **0** of them sit inside an
+inline code span, so the escape costs nothing. Verified in both directions by appending a sentence
+to `CLAUDE.md`: bare, `The reconciliation threshold sits at 8 ADRs since the last pass` fails with
+`says 8, the repository has 123`; wrapped as `` `8 ADRs` `` it passes. The failure message now names
+the escape, so an author meets the remedy at the moment the gate fires.
+
+**The row's own proposed fix was rejected on measurement.** It said to narrow the match "to the shape
+a claim takes rather than the shape a mention takes", on the premise that the banner states counts in
+one known form. Four of the six live sites are not in a banner: `CLAUDE.md`'s two are inside a fenced
+repository-layout tree and `docs/ARCHITECTURE.md`'s two are plain prose. A banner-shaped pattern would
+have silently stopped checking them — this gate's own failure mode, introduced by the fix for a
+different one. Fences therefore stay in scope and only inline code spans are escaped.
+
+## F0.5 — the advisory posture (M4)
+
+**Condition:** _all `check:*` gates are `node scripts/*.mjs`, and exactly one can exit 2._
+
+**Verdict: holds.** Thirteen `check:*` scripts, all node; `report()` in `scripts/lib/doc-register.mjs`
+is the only producer of a 2, and `check-reconcile-due.mjs` its only caller.
+
+The default is **inverted** rather than patched: a non-zero exit blocks unless the gate is named in
+`ADVISORY_GATES`. The previous fix marked three gates "never advisory", which covers the three
+somebody thought of and leaves the default on the dangerous side for everything else. Inverting makes
+the residual risk **harmless instead of closed** — an unanticipated exit 2 now blocks, which is the
+safe direction — and `run_strict` retires as a special case rather than being the safe path nobody
+remembered to take. Proven by dispatch: `typecheck` exiting 2 FAILs, `check:reconcile-due` exiting 2
+WARNs, `check:counts` exiting 2 FAILs.
+
+`check:advisory-agreement` asserts the list against the code both ways, reading `ADVISORY_GATES` out
+of `prepush.sh` rather than restating it. Verified red in both directions: a declared gate that
+cannot warn, and a capable gate that is not declared.
+
+### The check's first run was a false positive, and it is left recorded
+
+It reported `check:doc-register` as capable of exiting 2, because `doc-register.test.mjs` names
+`advisory` eleven times — while **testing** `report()`, capturing its return through a `quiet()`
+helper rather than exiting on it. Forcing a failure in that file and reading the code gives **1**.
+
+So a `*.test.mjs` exercises the mechanism as a subject and does not use it as its own exit path, and
+the scan excludes those files with the measurement written beside the exclusion. The false positive
+is the same class as `#222` itself — a scan matching something that _discusses_ its subject rather
+than something that _is_ it — arriving inside the check written about that class, and caught only by
+verifying the red rather than believing it.
+
+## M6 — the gate pass
+
+Three specialists over `2e0e6bcb..25d46751`. **Security passed with nothing blocking**, having
+re-derived the central claim itself: `check:nginx`, `check:frontend-only`, `check:flags` and
+`check:surface-contract` can only ever exit 0 or 1, so no security-relevant gate could reach the
+advisory path under either the old or the new code — the change is a strengthening. Its one
+suggestion was folded: the path regex admits `.`, so a `scripts/../../../etc/passwd.mjs` entry in
+`package.json` resolved to `/home/etc/passwd.mjs`. Not a boundary crossing, and a gate should still
+read what it says it reads; it now refuses, verified red against that input.
+
+**The devops review blocked, and it was right four times.** Every finding was reproduced before
+being fixed (CLAUDE.md §19.11 — a reviewer's claim is checked like any other).
+
+**1. The new gate's central claim was false.** `check-advisory-agreement`'s docblock asserted that
+`report()` "is the only thing that lowers a blocking exit to 2, so 'can exit 2' is decidable
+statically" from the `advisory` flag. It is not: `report()`'s **warnings path returns a hard-coded
+2 regardless of `advisory`** (`doc-register.mjs:248-251` — the `advisory ? 2 : 1` floor covers only
+the `problems` and `population` paths). Reproduced: `report({ population: 5, warnings: ['x'] })`
+returns 2 from a gate that never writes the word, and `check:advisory-agreement` reported `OK` over
+it. Worse, `check-debt-status.mjs` already declared a `warnings` array and threaded it in — dead,
+never pushed to, and one `warnings.push` from silently exiting 2 with this gate vouching for it.
+
+The two tempting fixes are both wrong and the reasons are recorded on `report()` so they are not
+tried again: returning 0 for a non-advisory gate's warnings makes them **invisible**, because
+`prepush` sends a passing gate's output to a log — the exact silence the third result state exists
+to remove; and "declare the gate advisory then" is worse, because `advisory` is per-**gate**, so
+declaring `check:debt-status` advisory to carry one soft note would stop its real findings blocking.
+So the constraint is stated where it binds, the dead array is removed, and the **detector now covers
+both routes** and names which one it found. A third exit code meaning "passed, but print this" is
+the real answer and is deliberately not invented under time pressure.
+
+**2. The `ADVISORY_GATES` parse was fragile.** Single-quoted entries — a cosmetic bash edit —
+produced an **empty** declared set, and the gate then falsely accused `check:reconcile-due` of being
+unlisted. A `)` inside an in-array comment truncated the capture and silently dropped any gate named
+on a later line. Both reproduced. Now: comments stripped, both quote styles accepted, multi-line
+handled, and an empty parse **refused** rather than treated as "no advisory gates", because an empty
+list is indistinguishable from a parse failure and every assertion is over a list.
+
+**3. The gate was not wired into CI**, and the epic's own spec asserted it would not need to be —
+`feature-spec.md`'s risk table said "does the epic add a new `check:*` script? **No.**" That was
+false as built. The gate shipped enforced only by a locally-run `pnpm prepush`, for a mechanism
+whose entire subject is that local-only enforcement is the thing that does not happen. The step is
+added and the spec cell corrected in place. Found by checking CI's hand-written roster against
+`package.json` rather than believing the cell.
+
+**4. `escapeMentions` could blank a genuine claim.** A stray unpaired backtick **before** a claim
+pairs with any later backtick on the same line and blanks everything between them. Demonstrated:
+`` Note`: the docs currently claim 5 ADRs; check `this` `` loses `5 ADRs` entirely, and the gate
+then passes over a wrong number. Measured: **56 odd-backtick lines outside fences** across the four
+gated documents, so the shape is ordinary — it is what a code span wrapped across a line break
+leaves. Now parity-aware per line: an odd-backtick line is left **unescaped**, which makes the gate
+over-eager on it. That is the safe direction and the one `#222` itself argues for — it can invent a
+finding an author must phrase around, but it can never hide a real one. Both directions verified.
+
+Non-blocking, folded: A10's second limb now **refuses** a missing `## Detailed items` heading rather
+than silently widening its scan to the whole document (verified red by renaming the heading); and
+`docs/TESTING.md`'s "thirteen gates" was stale the moment this epic added the fourteenth — the
+number is removed rather than re-stated, since a count in prose beside a growing set is the defect
+these gates exist for.
+
+**And the review caught one of my own unverified claims, in the file about unverified claims.** The
+`*.test.mjs` exclusion's comment said `doc-register.test.mjs` "names `advisory` **eleven** times".
+Measured, it is **five**. It changes nothing about the exclusion's correctness, and it is ADR-0076
+Class 3 committed inside the epic whose subject is exactly that.
+
+### One finding is filed rather than fixed
+
+CI's gate roster is **hand-written** while `prepush.sh` **derives** its list from `package.json` —
+which is why the missing step could exist at all, and is the ADR-0073 C4 defect that `prepush.sh`'s
+own comment says it avoided. Making CI derive its roster, or asserting the two agree, is a change to
+a shared gate and therefore an ADR-0105 full-spec trigger. Smuggling it into this epic's gate pass
+is exactly the judgement that rule exists to remove — the same reason `#240` refused to widen
+`check:claims` inside the accessibility milestone that found it. Filed as a register row.
+
+### The test-engineer pass — three more, each proved by construction
+
+Its single question was whether any new assertion can pass **vacuously**. Three could.
+
+**(a) Fixture case (d) was vacuous.** `assert.ok(!beta.body.includes('after the title'))` is a
+negative assertion, and the preconditions checked only the two heading lines — not the text the case
+names. Proved by deleting `after the title` from `depth.md`: all 20 cases stayed green while the case
+tested nothing. It now asserts **positively** as well (the body must still contain the section before
+the boundary) and the fixture precondition covers the referent. Verified red by re-running the
+deletion.
+
+**(b) The `.test.mjs` exclusion was a structural blind spot.** It was name-based, justified only by
+the two files where that happens to be harmless — and this repository already runs two gates whose
+entry point **is** a `.test.mjs` (`check:doc-register`, `check:claims`). Proved by constructing a
+real one: a `.test.mjs` calling `process.exit(report({ advisory: true, … }))`, wired into
+`package.json`, which genuinely exits 2 and which the gate reported `OK` over.
+
+The exclusion is now **behavioural**: a file is a gate entry point when `report()`'s value reaches
+the process exit (`process.exit(` present alongside a `report(` call). `doc-register.test.mjs` calls
+`report()` many times and has no `process.exit(` at all — it sets `process.exitCode` — so it is
+excluded for what it does rather than what it is named. Verified against the reviewer's construction,
+which is now caught.
+
+**(c) The claim/mention escape could hide a wrong figure — and the first fix for it was wrong.**
+`` `99` feature modules `` — the number alone in backticks — removed the figure from the scan while a
+correct sibling occurrence of the same label kept the per-label `found` flag satisfied, so a wrong
+number passed silently. This repository routinely states one figure twice, so the multi-occurrence
+shape is the documented norm rather than a contrivance.
+
+**The containment rewrite alone did not fix it**, and that is worth recording: with the blanking
+removed the pattern simply stopped matching across the backtick, so the site went **invisible**
+instead of being escaped — the same silent pass reached by a different route, and it took running the
+case to see that. The shipped answer blanks the backtick **characters** (preserving every offset) and
+decides mention-ness by whether the match is wholly inside a code span. So a whole phrase in one span
+is a mention; a figure formatted mid-phrase is a claim and is checked. Four cases verified: the
+review's case CAUGHT, an odd-backtick line CAUGHT, a genuine mention passed, a bare prose mention
+CAUGHT.
+
+**One suggestion folded:** A9's field limb counted `**Status:**` across the whole document, so a
+declaration in prose outside any row could compensate for a row missing one — netting to zero and
+silencing the limb that exists to be independent of A1. Now counted inside the detailed region only;
+verified against the reviewer's exact construction, where A9 and A1 both fire.
+
+**One filed rather than fixed** (`#245`): the assertions inside `check-debt-status.mjs` have no
+re-runnable coverage — they were each verified red, but in a document rather than a gate. Closing it
+needs a document seam or an extraction, both ADR-0105 shared-gate triggers.

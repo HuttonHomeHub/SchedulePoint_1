@@ -39,7 +39,8 @@ warned=()
 # **Three result states, not two** (`docs/specs/drift-gates/`, product-owner decision 2026-08-30).
 #
 #   0  ok    — clean.
-#   2  WARN  — advisory. Printed loudly, does NOT fail the push.
+#   2  WARN  — advisory, and ONLY for a gate named in ADVISORY_GATES below. Printed loudly, does
+#              NOT fail the push.
 #   *  FAIL  — blocking.
 #
 # The discriminator is written down because the tempting one ("how important is it?") has no stable
@@ -57,29 +58,43 @@ warned=()
 # `check:*` script was COMPLETELY SILENT. There is no design in which an advisory gate is visible
 # without this branch.
 #
-# **`run_strict` exists because `tsc` uses exit 2 for type errors, and that collided with the
-# advisory convention above — silently.** Measured 2026-09-01: `tsc --noEmit` exits **2** when it
-# reports errors, turbo propagates it, and `pnpm typecheck` therefore fails a real type error with
-# the exit code this script reads as "advisory, does not block". So from the day the three states
-# landed until that measurement, **a failing typecheck printed a yellow WARN and let the push
-# through**. `pnpm lint` and `pnpm test` were checked in the same pass and exit 1 correctly, so the
-# hole was typecheck alone.
+# **Exit 2 alone was never enough, because `tsc` uses it for type errors.** Measured 2026-09-01:
+# `tsc --noEmit` exits **2** when it reports errors, turbo propagates it, and `pnpm typecheck`
+# therefore failed a real type error with the exit code this script read as "advisory, does not
+# block". So from the day the three states landed until that measurement, **a failing typecheck
+# printed a yellow WARN and let the push through**. `pnpm lint` and `pnpm test` were checked in the
+# same pass and exit 1 correctly, so the hole was typecheck alone — which is why nobody noticed. A
+# gate that goes quiet is conspicuous; one that goes yellow looks like it is working.
 #
 # The lesson is not "typecheck is important" — it is that a convention numbered 0/2/other collides
 # with any tool that already uses those numbers for its own meanings, and the collision is invisible
-# because the gate still prints something. So the three core gates declare that they are NEVER
-# advisory rather than relying on the tools underneath them to avoid a number.
-run_strict() {
-  local label="$1"; shift
-  "$@" >/tmp/prepush-last.log 2>&1
-  local code=$?
-  if [ $code -eq 0 ]; then
-    printf '  \033[32mok\033[0m    %s\n' "$label"
-  else
-    printf '  \033[31mFAIL\033[0m  %s\n' "$label"
-    tail -12 /tmp/prepush-last.log | sed 's/^/        /'
-    failed+=("$label")
-  fi
+# because the gate still prints something. The first fix marked three gates "never advisory", which
+# fixes the three somebody thought of; the list below inverts the default instead, so the next
+# collision blocks rather than whispers.
+#
+# **ADVISORY_GATES — advisory is a DECLARATION, not a number any tool can reach** (#235).
+#
+# The 0/2/other convention above collided with `tsc`, which uses exit 2 for "I reported type
+# errors", so a broken typecheck printed a yellow WARN and let the push through from the day the
+# three states landed until 2026-09-01. That was patched by marking three gates "never advisory" —
+# which fixes the three we thought of and leaves the default on the dangerous side for everything
+# else. A future non-node gate can still pick 2 for its own reasons and be silently downgraded.
+#
+# So the default is inverted: **a non-zero exit blocks unless the gate is named here.** The residual
+# risk does not disappear, it becomes harmless — an unanticipated exit 2 now blocks, which is the
+# safe direction, and the only cost is a gate that has to be added to this list on the day it is
+# genuinely made advisory.
+#
+# Measured 2026-09-02: all thirteen `check:*` scripts are `node scripts/*.mjs`, and `report()` in
+# `scripts/lib/doc-register.mjs` is the ONLY producer of exit 2 — `check-reconcile-due.mjs` is its
+# only caller. `scripts/check-advisory-agreement.mjs` asserts that both ways and reads this list from
+# this file rather than restating it, so the two cannot drift.
+ADVISORY_GATES=("check:reconcile-due")
+
+is_advisory() {
+  local needle="$1"
+  for g in "${ADVISORY_GATES[@]}"; do [ "$g" = "$needle" ] && return 0; done
+  return 1
 }
 
 run() {
@@ -88,7 +103,7 @@ run() {
   local code=$?
   if [ $code -eq 0 ]; then
     printf '  \033[32mok\033[0m    %s\n' "$label"
-  elif [ $code -eq 2 ]; then
+  elif [ $code -eq 2 ] && is_advisory "$label"; then
     printf '  \033[33mWARN\033[0m  %s\n' "$label"
     tail -12 /tmp/prepush-last.log | sed 's/^/        /'
     warned+=("$label")
@@ -101,11 +116,11 @@ run() {
 
 echo "Pre-push gate (docs/TESTING.md) — $(pwd)"
 if [ "$CHECKS_ONLY" -eq 0 ]; then
-  # Never advisory: each of these fails because of an edit to a file, which is exit 1's category —
-  # and `typecheck` in particular reaches this line with tsc's exit 2. See `run_strict`.
-  run_strict "lint" pnpm lint
-  run_strict "typecheck" pnpm typecheck
-  run_strict "test" pnpm test
+  # These are not in ADVISORY_GATES, so `run` blocks on any non-zero exit — including tsc's 2,
+  # which is the collision that made `run_strict` necessary before the default was inverted.
+  run "lint" pnpm lint
+  run "typecheck" pnpm typecheck
+  run "test" pnpm test
 fi
 # **Derived from package.json, never listed here.** A hard-coded roster beside a set that grows is
 # the ADR-0073 C4 defect: an eleventh `check:*` script lands and this gate silently stops covering

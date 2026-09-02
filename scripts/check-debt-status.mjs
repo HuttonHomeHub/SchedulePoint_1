@@ -43,8 +43,14 @@ function rowNumber(heading) {
 
 function main(argv) {
   const md = readRepoDoc(DOC);
+  // One fence-stripped line array, shared by every assertion that scans the raw document.
+  const raw = stripFences(md).split('\n');
   const problems = [];
-  const warnings = [];
+  // **No `warnings` array here, deliberately.** One was declared and never pushed to for months.
+  // `report()`'s warnings path returns 2 unconditionally, and under the inverted `ADVISORY_GATES`
+  // default a 2 from a gate that is not declared advisory BLOCKS — so the first `warnings.push` in
+  // this file would have stopped a push over a soft note, with nothing explaining why. See the
+  // constraint recorded on `report()`.
 
   // ── Parse ────────────────────────────────────────────────────────────────────────────────────
   //
@@ -107,6 +113,88 @@ function main(argv) {
       `A9: the parser sees ${items.length} numbered rows but a naive scan of both heading levels ` +
         `sees ${naiveRows}. One of them is wrong; a gate that reads less than it thinks reports ` +
         'green over the gap.',
+    );
+  }
+
+  // **A9's second limb counts FIELDS, because the first counts headings and so does A1.**
+  // `#231`: `sections()` used to end a body only at the next SAME-level heading, so a `###` row
+  // followed by `##` headings ran past them and read whatever fields it met. `#117` carried no
+  // `**Status:**` line at all, its body ran 1,115 lines, it borrowed `#118`'s, and A1 below was
+  // satisfied — while the limb above compared 71 headings against 71 headings and agreed with
+  // itself. A control that measures the same quantity as the thing it controls cannot report a
+  // disagreement; this one measures a different quantity, which is the whole point.
+  //
+  // **Anchored at column 0**, for the reason `fieldValue` is: an unanchored count reads 74 here,
+  // three of them prose discussing the field rather than declaring it.
+  // **Counted inside the detailed region only.** Counting the whole document lets a declaration in
+  // prose OUTSIDE any row compensate for a row that is missing one, netting to zero — demonstrated
+  // by the ADR-0124 test-engineer review, which removed `#58`'s status and added a column-0
+  // `**Status:**` line to the preamble; this limb then stayed silent (A1 still caught it, but this
+  // limb exists precisely to be the independent check that does not depend on A1).
+  const detailedStart = raw.findIndex((l) => l.startsWith('## Detailed items'));
+  const declaredStatuses = raw
+    .slice(detailedStart + 1)
+    .filter((l) => l.startsWith('**Status:**')).length;
+  if (items.length !== declaredStatuses) {
+    // **The two directions mean different things, so the message says which one happened.** More
+    // rows than declarations means a row has no field of its own and A1 will name it. Fewer means
+    // a declaration sits somewhere the parser found no row — a heading form it cannot see, which
+    // is the shape A10 exists for.
+    problems.push(
+      `A9: the parser sees ${items.length} numbered rows but the raw document declares ` +
+        `${declaredStatuses} column-0 **Status:** lines. ` +
+        (items.length > declaredStatuses
+          ? 'Some row has no declaration of its own — A1 names it.'
+          : 'Some declaration belongs to a heading the parser did not read as a row.'),
+    );
+  }
+
+  // ── A10 — every row heading is in the canonical form (#227) ──────────────────────────────────
+  //
+  // **This asserts the form; it does NOT narrow what the parser reads.** `sections()` and
+  // `rowNumber` deliberately accept both heading levels and both title separators, because
+  // ADR-0120 Finding 0 is that a gate's job is to find every row — a row in the wrong form is
+  // still a row, and a parser that skips it reports green over the gap. Narrowing the reader to
+  // enforce the form would re-introduce that defect in the name of fixing this one. So finding
+  // stays generous and refusing is this separate, strict pass over what was found.
+  //
+  // The register states the convention at `docs/TECH_DEBT.md` — `### <number>. <title>`, always.
+  // Before this assertion existed the register had drifted to two other forms: 41 rows at `##`
+  // (repaired 2026-09-01) and 8 in an `### #<n> — <title>` form (repaired with this assertion).
+  //
+  // **Two limbs, because a heading can be wrong in two ways.** The first catches a row whose
+  // heading is misshapen. The second catches a `###` that is not a row at all — which the first
+  // structurally cannot see, since its predicate only fires on things already shaped like rows.
+  // That second case is not cosmetic: after the depth fix above, ANY `###` inside the detailed
+  // region terminates the row it sits in, so a sub-heading written at the wrong level silently
+  // truncates its own row's body. One such heading existed and was demoted to `####` with this
+  // assertion; nothing would have reported it.
+  const CANONICAL = /^### \d+[a-z]?\. \S/;
+  for (const line of raw) {
+    if (!/^#{2,3} #?\d+[a-z]?[.\s\u2014-]/.test(line)) continue;
+    if (CANONICAL.test(line)) continue;
+    problems.push(
+      `A10: "${line.slice(0, 70)}" is not in the canonical row form. ` +
+        'A row heading is `### <number>. <title>` — three hashes, the number, a full stop.',
+    );
+  }
+  const detailedLine = raw.findIndex((l) => l.startsWith('## Detailed items'));
+  // **Refuse loudly rather than widen silently.** With no `## Detailed items` heading, `findIndex`
+  // returns -1 and the loop below would start at 0 and sweep the WHOLE document for stray `###`
+  // headings — a flood of unrelated findings instead of one clear diagnostic. That is the opposite
+  // of A9's own philosophy two assertions up, which refuses on a broken precondition.
+  if (detailedLine === -1) {
+    problems.push(
+      `A10: ${DOC} has no "## Detailed items" heading, so the region this assertion scopes itself ` +
+        'to cannot be located. Restore the heading, or update this check — do not let it widen.',
+    );
+  }
+  for (let i = detailedLine + 1; detailedLine !== -1 && i < raw.length; i += 1) {
+    if (!raw[i].startsWith('### ') || CANONICAL.test(raw[i])) continue;
+    if (/^#{2,3} #?\d+[a-z]?[.\s\u2014-]/.test(raw[i])) continue; // already reported above
+    problems.push(
+      `A10: ${DOC}:${i + 1} "${raw[i].slice(4, 60)}" is a level-3 heading that is not a row. ` +
+        'Inside the detailed items a `###` ends the row above it — write a sub-heading at `####`.',
     );
   }
 
@@ -228,7 +316,6 @@ function main(argv) {
   return report({
     name: 'check:debt-status',
     problems,
-    warnings,
     population: items.length,
     summary,
   });

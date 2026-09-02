@@ -292,7 +292,7 @@ It deliberately excludes the e2e half, which needs a database and a browser and 
 **What it costs, measured 2026-08-25** (one file changed in `apps/web`, turbo warm elsewhere):
 roughly **six minutes**, of which `pnpm test` is **345 s (94%)** — the whole 552-file web unit
 suite, every run — `typecheck` 6.5 s, `lint` 8 s, and every `check:*` gate **10.4 s between
-them** (thirteen gates and **11.5 s** re-measured 2026-08-30, after the two drift gates and their
+them** (the `check:*` gates measured at **11.5 s** on 2026-08-30, after the two drift gates and their
 fixture suite landed — the three additions cost about a second between them). Two things follow, and the second is the one people get wrong. The `check:*` scripts are
 **2%** of the gate and are the part that catches what a reviewer cannot see, so trimming _them_ to
 make the gate faster buys nothing and costs the drift control; and the gate is not saving wall
@@ -368,6 +368,18 @@ its own reports failure. The convention lives inside `scripts/prepush.sh`, which
 in no CI step; adding it to `ci.yml` by copying a neighbour would turn a product-owner decision into
 a blocking gate by the back door.
 
+**Exit 2 alone is not enough to be advisory, since 2026-09-02** (ADR-0124 D4). `tsc` uses exit 2 for
+"I reported type errors", so a broken typecheck printed a yellow `WARN` and let the push through
+from the day the three states landed until it was measured. The default is now **inverted**: a
+non-zero exit blocks unless the gate is named in `prepush.sh`'s `ADVISORY_GATES` array, which today
+has exactly one member. `pnpm check:advisory-agreement` asserts that list against the code in both
+directions — a gate listed but incapable of warning would have its **real** failures downgraded, and
+a gate capable but unlisted would have its advisory finding reported as blocking — and it reads the
+array out of `prepush.sh` rather than restating it.
+
+So making a gate advisory is now **two edits**: `report({ advisory: true })` in the gate, and its
+name in `ADVISORY_GATES`. Doing one without the other fails `check:advisory-agreement`, by design.
+
 **Step 4a is not covered by step 4**, and the difference cost a CI round on 2026-08-18. Every `web:`
 target maps to `test:e2e:<suite>`; the base journey is `test:e2e` with no suffix, so until that day
 `scripts/e2e-local.sh` had no way to run the suite covering the **shipped default configuration** —
@@ -377,6 +389,14 @@ nobody could run. Change a screen, run the base journey.
 
 **Step 4c — when the change is under every journey, sweep every journey.** `scripts/e2e-sweep.sh`
 runs every flag-on suite in series, each against its own freshly-started servers.
+
+**Read its last line, not its forty.** Since 2026-09-02 (ADR-0124 D5) the sweep ends with a verdict
+— `SWEEP: N/M suites passed`, or the **names** of the failures and the log to read for each — and
+exits non-zero when any suite fails. Before that it aggregated nothing and always exited 0, so one
+`EXIT=1` among forty scrolled past: that is how the base journey went unrun for weeks while the
+sweep reported it on every line. Failures are named rather than counted, because "1 failure" is a
+number somebody scrolls past. It also refuses to report success when it ran **no** suites at all,
+since every assertion in it is over a list and an empty list satisfies "nothing failed" perfectly.
 
 **Its list is derived from `apps/web/package.json`, and this paragraph deliberately does not say how
 many there are.** It used to be typed into the script, and on 2026-08-26 that list was found wrong in
