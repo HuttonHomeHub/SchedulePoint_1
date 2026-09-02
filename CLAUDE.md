@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 58 migrations, 1140 web
 > source files with 41 Playwright suites beside the base journey, and
-> 123 ADRs.
+> 124 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3784,6 +3784,56 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   codec the product no longer used. It reads `router.options.parseSearch` now. Three expectations
   then moved, all three predicted on the line, including one that had pinned an unrecoverable
   32-digit token for two years under a comment naming this exact remedy.
+  **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0124** _(Accepted; landed 2026-09-02)_ — A register parser finds by structure and refuses
+  by declaration. Five `docs/TECH_DEBT.md` rows in five costumes are one failure — **an instrument
+  reported something, so nobody looked.** The shared parser ended a section at the next **same-level**
+  heading and never at a shallower one, so `#117` carried no `**Status:**` line at all, its body ran
+  1,115 lines, it read `#118`'s on the way, and `check:debt-status` reported "71 with a status, 0
+  without". `check:counts` read a sentence that merely **mentions** a number of ADRs as a stated
+  count — and fired on prose inside the entry documenting the gates built to stop that. `prepush.sh`'s
+  0/2/other convention collided with `tsc`, which exits 2 for type errors, so a broken typecheck
+  printed a yellow `WARN` and let the push through. And a 43-suite sweep aggregated nothing and always
+  exited 0, so `web EXIT=1` scrolled past on every run for weeks. ADR-0120 built gates for drift;
+  these are **those gates drifting**, which is why they are one epic and not five commits.
+  **The load-bearing rule: finding is generous, refusing is strict, and they are separate passes.** A
+  row the parser cannot see is a row it cannot check, silently (ADR-0120 Finding 0) — so `sections()`
+  still reads every heading form and A10 asserts the canonical one afterwards; narrowing the _reader_
+  to enforce the form would re-introduce the defect it fixes. Structure means position **and extent**,
+  so a section now ends at the same level **or shallower** — which makes a `# ` line significant to a
+  `##` section for the first time, covered by `stripFences` and therefore pinned by fixtures in both
+  directions, because a cover provided by an existing behaviour is what a refactor removes with
+  nothing going red. **Every generous reader owes a control that measures a DIFFERENT quantity**: A9
+  compared heading counts against heading counts and could only agree with itself, so its second limb
+  counts column-0 field declarations in the raw document. **A claim is prose; a mention is code** — an
+  inline code span escapes, and the row's own proposed narrowing was rejected on measurement, since
+  four of six live claim sites are not in a banner and narrowing would have silently stopped checking
+  them. **Advisory is a declaration, not a number any tool can reach** (amending ADR-0120's exit
+  convention): the default inverts, so an unanticipated exit 2 blocks — harmless rather than closed —
+  and `check:advisory-agreement` asserts the allow-list against the code both ways, reading it out of
+  `prepush.sh` rather than restating it. The sweep gains a **named** verdict and a matching exit
+  status, and refuses an empty population.
+  **Three of the rows' own decision-bearing claims were false**, each correction narrowing the work:
+  `#231` named a consumer that imports only node built-ins and missed the real one; its headline
+  instance was **already patched**, making this a recurrence fix with no red state left in the tree;
+  and `#222`'s remedy would have broken the gate. A fourth finding belonged to no row — `fieldValue`'s
+  docblock claimed inline code spans are stripped, three lines above the comment recording that guard
+  being removed as _actively wrong_.
+  **Falsification condition F0.1 came apart into its two halves, and only the half that decides
+  nothing failed.** It predicted at most two moved boundaries and named one; three move, and the two
+  it missed by reading are the large ones — a `docs/DECISIONS.md` entry was silently swallowing
+  **1,160 lines**. Its second half, zero findings changed, held exactly.
+  **And the epic got three things wrong, each caught by running rather than reading.** The parser fix
+  had an **off-by-one that both consumer gates reported byte-identically**, because a heading line is
+  not a field declaration — caught by a fixture written before the change and run red first; that
+  fixture's own successor then went red against a _correct_ parser, an assertion that fails on correct
+  code being wrong rather than stricter. A9's limb was first measured with a **copy** of the gate,
+  which reimplemented `rowNumber`, dropped every em-dash-titled row and reported the wrong number in
+  the wrong direction — a measurement taken with a copy of an instrument measures the copy. And
+  `check:advisory-agreement`'s first run was a **false positive** on a test file that names `advisory`
+  eleven times while _testing_ `report()`: the same class as `#222`, inside the check written about
+  that class, caught only by verifying the red instead of believing it.
   **The CPM engine is not imported and no migration runs.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes

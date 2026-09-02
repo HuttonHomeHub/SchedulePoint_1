@@ -55,6 +55,20 @@ DERIVED="$(node -e '
   process.stdout.write(names.join(" "));
 ')"
 SUITES="${*:-web $DERIVED}"
+# **The sweep ends with a verdict and a matching exit status** (`docs/TECH_DEBT.md` #237).
+#
+# It printed one line per suite and aggregated nothing, so a single `EXIT=1` among forty scrolled
+# past — and it always exited 0, which meant no caller could ever act on the result either. That is
+# not hypothetical: the base journey reported `web EXIT=1` on every run for weeks (see the comment
+# in the loop below) and nobody saw it, because reading forty lines for one that differs is a task
+# people do once.
+#
+# Two of this repository's instruments have now been found silently running against nothing — this
+# one, and `#124`'s axe scan with an empty include — and BOTH were found by somebody reading the
+# output rather than the exit code. So the summary names the failures rather than counting them:
+# "1 failure" is a number somebody scrolls past, and the name is what tells you whether to care.
+failures=()
+passes=0
 for s in $SUITES; do
   # Fresh servers per suite: the flags bake at webServer start, so reusing one is how a suite
   # silently runs against another's configuration.
@@ -69,6 +83,27 @@ for s in $SUITES; do
   # same file, ten lines down. Found 2026-09-01 by the first sweep to read its own output.
   if [ "$s" = "web" ]; then target="web"; else target="web:$s"; fi
   timeout 900 scripts/e2e-local.sh "$target" > "/tmp/sweep-$s.log" 2>&1
-  echo "$s EXIT=$?"
+  code=$?
+  echo "$s EXIT=$code"
+  if [ $code -eq 0 ]; then passes=$((passes + 1)); else failures+=("$s"); fi
 done
+
+# **Refuse an empty population.** Every assertion below is over a list, and a list that came back
+# empty satisfies "nothing failed" perfectly — the shape ADR-0093 records a suite passing in, unable
+# to tell "the duplicate is gone" from "the capability is gone".
+total=$((passes + ${#failures[@]}))
+echo
+if [ "$total" -eq 0 ]; then
+  echo "SWEEP: ran NO suites at all. The derivation is broken, not the estate."
+  echo "SWEEP-DONE"
+  exit 1
+fi
+if [ ${#failures[@]} -eq 0 ]; then
+  echo "SWEEP: $passes/$total suites passed."
+  echo "SWEEP-DONE"
+  exit 0
+fi
+echo "SWEEP: ${#failures[@]}/$total suite(s) FAILED — ${failures[*]}"
+for f in "${failures[@]}"; do echo "  see /tmp/sweep-$f.log"; done
 echo "SWEEP-DONE"
+exit 1
