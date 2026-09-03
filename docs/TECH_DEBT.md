@@ -1112,6 +1112,57 @@ symbol is stable, the way `docs/specs/better-auth-1-7-account-issuer/migration-d
 does; or run this sweep on a schedule, since its cost is bounded and its yield was high. Both are
 changes to how the register is written, so both need the spec ADR-0105 requires.
 
+**And this sweep's own result could not be recorded in the field meant for it** — see `#247`. The
+`Verified:` field is written inline and read at column 0, so `A8` has never fired and the sixteen
+rows this sweep checked and found accurate carry no machine-readable trace of having been checked.
+
+### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
+
+**Status:** open · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
+**Owner:** repo
+
+`check-debt-status.mjs` reads exactly two fields through `fieldValue`: `Status` and `Verified`.
+`Status` is written at column 0 on all 66 detailed rows and is read correctly. `Verified` is written
+**only inline**, in the header block's `**Status:** … · **Verified:** … · **Size:** …` form — and
+`fieldValue` anchors on `^`, so it returns `null` for every one of the six rows that carry a date.
+Of the two fields the gate reads, one is 100% readable and the other is 0% readable.
+
+So **A8 has never been able to fire**, and the contradiction it names is in the register right now:
+`#117` reads `**Status:** unverified · **Verified:** 2026-09-01`, which is precisely the "one of the
+two is wrong" case A8 was written to refuse. Measured rather than reasoned about — a script over the
+real document reports `fieldValue` seeing `Verified` on **0** rows, and a whole-line scan finding it
+on **6**, one of them `unverified`.
+
+**Two assertions in the same file disagree about the document's shape, and the one that disagrees is
+the silent one.** A2 splits the status value on `[\s·—|]` before checking the vocabulary, so it was
+written by somebody who knew fields are `·`-separated on one line. A8 was written as though they are
+not. Nothing was wrong in either assertion read alone; the wrongness is in the relationship — the
+ADR-0093 shape, inside the gate rather than the product.
+
+**This is `#245` stopping being hypothetical.** That row says the gate's assertions have no
+re-runnable coverage and argues from principle. A8 is the first one shown to be dead, and it was
+found by trying to _use_ the field rather than by reading the code — which is also why it survived
+ADR-0120, its own red run, and two register sweeps.
+
+**Do not fix it here.** `fieldValue` is shared by `check:debt-status` and `check:reconcile-due`
+(ADR-0124 established both consumers), so widening it is a shared-gate change and ADR-0105 makes the
+spec mandatory. It also needs a decision rather than a patch, because **A8's premise may be the
+wrong half**: `#117`'s date is not a mistake — the row was verified on 2026-09-01 and its _subject_
+(CSP report delivery from a real browser) genuinely remains unverifiable without a deployed host. If
+"this row was checked" and "the thing this row describes is confirmed" are two different facts, then
+`unverified` + a `Verified:` date is a legitimate state and A8 should be deleted rather than
+repaired. Settle that before touching the parser.
+
+**A near-miss worth knowing about while deciding.** `docs/TECH_DEBT.md:1235` opens a sentence with
+`**Unverified:**` at column 0 — prose, not a field. It is harmless today because no assertion reads
+that name, and it is exactly what a column-0 reader would misclassify if one were added.
+
+**What the sweep could not do because of this.** The 2026-09-03 pass verified 32 rows and could
+record the result only as prose, because the field meant for it is unreadable. Sixteen rows carry a
+dated correction note and can be identified from the diff; the other sixteen were checked, found
+accurate, and left **no trace at all** — so the next sweep will re-verify them from scratch. A clean
+check that leaves no record is work that gets done twice.
+
 ### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
 
 **Status:** open · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
