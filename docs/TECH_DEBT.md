@@ -1074,6 +1074,20 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 The 2026-09-03 sweep verified all 32 substantive `unverified` rows against the code. The
 distribution is the finding, and it is not the one the previous sweep would have predicted.
 
+**What was in scope, stated rather than implied.** The register held **43** `unverified` rows.
+Thirty-two were verified: `58 60 62 69 70 74 75 76 81 84 86 88 89 99 117 118a 118b 120 121 123 154
+165 181 187 191 193 194 195 197 200 215 239`. Sixteen of those needed a correction (`60 74 75 76 81
+86 99 120 165 181 187 191 193 194 197 200`) and sixteen were checked and found accurate (`58 62 69
+70 84 88 89 117 118a 118b 121 123 154 195 215 239`) — the second list is here because otherwise a
+clean check leaves no record and the next sweep repeats it.
+
+The other **eleven were deliberately skipped, not overlooked**: `93 97 118 149 155 174 184 202 204
+206 211` are deferred-review piles — collections of findings from a gate pass, each of which is its
+own question. Verifying a pile means verifying its members, which is a different exercise from
+checking whether a row's diagnosis still holds, and it was scoped out at the start rather than
+abandoned partway. `32 + 11 = 43`, with nothing unaccounted; the arithmetic was reconciled against
+the document rather than counted by hand.
+
 **Almost nothing was already fixed.** The 2026-09-01 sweep found six of seven verified rows already
 resolved, and `#232` on 2026-09-02 was a seventh. This sweep found **zero** wholly-stale rows out of 32. That difference is explainable rather than lucky: most of these rows carry dated notes recording
 a deliberate, measured decision to leave the gap open, so they were accurate when filed and nobody
@@ -1159,9 +1173,17 @@ that name, and it is exactly what a column-0 reader would misclassify if one wer
 
 **What the sweep could not do because of this.** The 2026-09-03 pass verified 32 rows and could
 record the result only as prose, because the field meant for it is unreadable. Sixteen rows carry a
-dated correction note and can be identified from the diff; the other sixteen were checked, found
-accurate, and left **no trace at all** — so the next sweep will re-verify them from scratch. A clean
-check that leaves no record is work that gets done twice.
+dated correction note and are identifiable from the diff; the other sixteen were checked, found
+accurate, and left no trace **in the repository**. A clean check that leaves no record is work that
+gets done twice.
+
+**That sentence first read "left no trace at all", and it was wrong** — corrected here rather than
+edited quietly, because how it was wrong is the useful part. The list of which rows were checked did
+survive, in the scheduled wake-up message driving the sweep, which is outside the repository and
+dies with the session. So the work was recoverable by luck for a few hours and unrecoverable after
+that, which is worse than plainly lost: it reads as recorded right up until somebody needs it. The
+list is now written into `#246`, so the practical half is closed and what remains is the mechanism —
+a field the register writes and its own gate cannot read.
 
 ### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
 
