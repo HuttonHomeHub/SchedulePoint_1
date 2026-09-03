@@ -1,7 +1,7 @@
 # Feature Spec: Revision Compare
 
-- **Status:** **APPROVED 2026-09-03** for M0–M2 (the implementation plan states the boundary). §6's
-  four critical questions are answered there.
+- **Status:** **Awaiting approval.** §6's four critical questions are answered; the specialist
+  review pass is the remaining precondition.
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-03
 - **Tracking issue / epic:** _(to be opened on approval)_

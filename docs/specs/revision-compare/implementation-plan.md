@@ -1,8 +1,10 @@
 # Implementation Plan: Revision Compare
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** **APPROVED 2026-09-03** for M0–M2 (see the boundary below). The four critical
-  questions are answered in the spec's §6.
+- **Status:** **Awaiting approval.** The four critical questions are answered (spec §6); the
+  specialist review pass is the remaining precondition. M0-T1/T2 ran under an earlier reading of
+  the product owner's answers as approval — that was premature, and is corrected here rather than
+  left standing. Their output is evidence, not committed scope.
 - **Owner:** repo
 
 > **Approving this plan approves M0, M1 and M2 only.**
