@@ -803,6 +803,17 @@ Three. The product owner has already answered four questions on this epic and ch
 this list is deliberately short: each of these changes the design or the schema, and everything else
 below the line has a stated default and is not blocking.
 
+> ## ANSWERED 2026-09-03 — the product owner chose the most feature-rich option in all three
+>
+> |          | Answer                                | Consequence taken on                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+> | -------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **CQ-1** | **(b) Freeze the three scalars**      | A schema change. `database-architect` is now **mandatory and unconditional** (`CLAUDE.md` §19.3) and runs before any migration is written.                                                                                                                                                                                                                                                                                                                                       |
+> | **CQ-2** | **(a) Both from the start**           | `to` is a union, not a required literal. The query contract is settled now rather than after it ships.                                                                                                                                                                                                                                                                                                                                                                           |
+> | **CQ-3** | **(b) Also a chip in the status bar** | **Conditional on M0's measurement, which is the spec's own condition and not a re-litigation of the answer.** The intent is agreed; the width cost is not yet known, and this repository has eight consecutive epics whose width expectations were contradicted by their own measurement (ADR-0113). If the chip costs the canvas a wrapped row, that number goes back to the product owner with the option of the dock alone — the decision is theirs, the measurement is mine. |
+>
+> The instruction was "go with the most feature rich defaults", so where a question offered more
+> capability at a stated cost, the cost is accepted and named here rather than quietly discounted.
+
 ### CQ-1 — Should a baseline freeze the criticality **settings** it was computed under? _(the only schema question)_
 
 `isCritical` is not a property of an activity; it is the output of a rule the plan holds —
