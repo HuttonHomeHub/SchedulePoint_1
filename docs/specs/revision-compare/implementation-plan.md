@@ -1,5 +1,14 @@
 # Implementation Plan: Revision Compare
 
+> **M0 HAS RUN, AND ITS ANSWER IS NO.** See [`m0-measurement.md`](./m0-measurement.md). C1 and C3-a
+> pass, C4 passes (so the failure is not vacuous), and **C2 and C3-b fail**: the same change is
+> attributed 30, 18, 2 or 0 days depending only on its position in the replay, the top-three rank
+> order is unstable across the six permutations, and seven engine passes at 2,058 activities take
+> 2,793 ms — 93% of the whole end-to-end budget. **Tier 3 as specified is WITHDRAWN.** Every
+> description of a ranked, summing attribution below is therefore superseded; it is annotated rather
+> than rewritten because the replacement depends on the product owner's choice between fallbacks (a)
+> and (b), which the falsification clause reserves for them (CQ-4).
+
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
 - **Status:** **Awaiting the product owner's approval.** CQ-1–CQ-4 are answered (spec §6), the six
   specialist reviews are folded, and the two scope decisions they surfaced are taken (spec §4.5).
