@@ -8,6 +8,12 @@
 > description of a ranked, summing attribution below is therefore superseded; it is annotated rather
 > than rewritten because the replacement depends on the product owner's choice between fallbacks (a)
 > and (b), which the falsification clause reserves for them (CQ-4).
+>
+> **That choice has now been made: the product owner chose (b), the critical-path delta only
+> (2026-09-03).** This document is superseded and is kept as the record of what was specified and
+> why it did not survive measurement. The reshape is a new spec rather than an amendment, because
+> (b) changes what the feature is — a read model over two computed snapshots, with no causal claim
+> and no change vocabulary at all.
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
 - **Status:** **Awaiting the product owner's approval.** CQ-1–CQ-4 are answered (spec §6), the six

@@ -176,17 +176,37 @@ originally written could not fail at the size that matters. It failed at exactly
   the downgrade not been written before the run, a `PASS` on three of four conditions would have
   read far stronger than it is: C1 could not have failed except on rounding.
 
-## The decision that is not mine
+## The decision, taken by the product owner
 
-Per the falsification clause and CQ-4, the choice is the product owner's, with these numbers:
+Per the falsification clause and CQ-4 the choice was put to the product owner with the numbers
+below, and on **2026-09-03 they chose (b), the critical-path delta only.**
+
+Recording what that decision costs as well as what it buys, because a decision minuted only by its
+upside reads later as having been free. **It gives up the causal claim entirely** — the feature will
+not tell a planner which change moved the completion, which is the question they will actually ask,
+and the one Revision Compare was conceived to answer. What it gives in exchange is that **everything
+it does say is true**, at two engine passes rather than seven, which is the only shape that clears
+C3-b at scale without further cost work. Given C2, the alternative was not "a ranked answer" but "a
+ranked answer that changes depending on an ordering no planner supplied" — so the causal claim was
+not available to give up in the first place.
+
+The two options as they were put:
 
 - **(a) Contribution without ranking** — each class's _isolated_ effect from `R_old`, order-free by
   construction, labelled "if this were the only change". Those are the six numbers in the C4 table
   above; they sum to 109 d against an actual 139 d, and the honest presentation says so rather than
   scaling them to fit. Costs the same 7 passes, so C3-b's cost finding applies to it unchanged.
-- **(b) The critical-path delta only** — which activities entered and left the critical path and by
-  how much, with no causal claim. **Two passes, not seven**, so it is the only one of the three that
-  clears C3-b at scale without further work.
+- **(b) The critical-path delta only — CHOSEN** — which activities entered and left the critical
+  path and by how much, with no causal claim. **Two passes, not seven**, so it is the only one of
+  the three that clears C3-b at scale without further work.
 
 Both remain subject to the honesty requirement: a residual is displayed as an **Interaction** row and
 is never distributed across classes.
+
+**The reshape is a new spec, not an amendment.** (b) changes what the feature _is_ — a read model
+over two computed snapshots rather than a replay engine — so `feature-spec.md` and
+`implementation-plan.md` are rewritten against it rather than edited, and the eight-class change
+vocabulary that took a scope decision to settle is **no longer needed at all**: the delta is derived
+from `isCritical` and `totalFloat` on two snapshots and never from a classified change. That is the
+largest simplification the decision buys, and it was not visible when the vocabulary was being
+argued over.
