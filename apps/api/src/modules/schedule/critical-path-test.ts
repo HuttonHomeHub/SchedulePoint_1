@@ -1,5 +1,10 @@
 import type { HealthMetricResult } from '@repo/types';
 
+import {
+  isPerturbableType,
+  measureCarrierMovementDays,
+  selectCompletionCarrier,
+} from './completion-carrier';
 import { computeSchedule, type ComputeOptions } from './engine/compute';
 import type { EngineActivity, EngineEdge } from './engine/types';
 import { HEALTH_METRICS } from './health/thresholds';
@@ -46,7 +51,6 @@ export const CRITICAL_PATH_TEST_TOLERANCE_DAYS = 5;
  * (span-derived — their duration is an output), and milestones (zero duration by definition, so
  * "extend its duration" has no meaning on one).
  */
-const PERTURBABLE_TYPES = new Set(['TASK', 'RESOURCE_DEPENDENT']);
 
 const METRIC_12 = HEALTH_METRICS.find((m) => m.id === 'CRITICAL_PATH_TEST');
 if (!METRIC_12) throw new Error('HEALTH_METRICS lost its CRITICAL_PATH_TEST row');
@@ -116,9 +120,7 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
   const eligible = control.results
     .filter((r) => {
       const a = activityById.get(r.activityId);
-      return (
-        a !== undefined && r.isCritical && !complete.has(a.id) && PERTURBABLE_TYPES.has(a.type)
-      );
+      return a !== undefined && r.isCritical && !complete.has(a.id) && isPerturbableType(a.type);
     })
     // The front of the critical path, deterministically: earliest early start, ties by id.
     .sort(
@@ -154,13 +156,7 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
   // DCMA's question is "does the project completion move", and the completion is the thing that
   // finished last BEFORE the injection. When the subject IS the carrier — a single chain ending
   // at the subject — its own movement legitimately is the completion moving.
-  const summaryIds = new Set(activities.filter((a) => a.type === 'WBS_SUMMARY').map((a) => a.id));
-  const carrier = control.results
-    .filter((r) => !summaryIds.has(r.activityId))
-    .sort(
-      (x, y) =>
-        y.earlyFinishOffset - x.earlyFinishOffset || x.activityId.localeCompare(y.activityId),
-    )[0];
+  const carrier = selectCompletionCarrier(activities, control.results);
   if (carrier === undefined) return notAssessable('EMPTY_PLAN');
   const carrierPerturbed = perturbed.results.find((r) => r.activityId === carrier.activityId);
   if (carrierPerturbed === undefined) return notAssessable('EMPTY_PLAN');
@@ -171,12 +167,15 @@ export function runCriticalPathTest(input: CriticalPathTestInput): HealthMetricR
   // the plan (a 24/7 subject in a 5-day plan propagates 600 elapsed-calendar days ≈ 428
   // plan-frame days), and a false FAIL from frame mismatch is the one wrong answer this test must
   // never give.
-  const subjectCalendar = subject.calendar ?? options.calendar;
-  const deltaMinutes = subjectCalendar.workingTimeBetween(
-    carrier.earlyFinish,
-    carrierPerturbed.earlyFinish,
-  );
-  const deltaDays = Math.round((deltaMinutes / dayFactor) * 10) / 10;
+  // Metric 12 perturbs exactly ONE activity, so it measures on that SUBJECT'S calendar — see
+  // `measureCarrierMovementDays`, where the calendar is a required parameter precisely because the
+  // right answer differs by caller.
+  const deltaDays = measureCarrierMovementDays({
+    carrier,
+    carrierPerturbed,
+    calendar: subject.calendar ?? options.calendar,
+    dayFactorMinutes: dayFactor,
+  });
 
   const moved = deltaDays >= CRITICAL_PATH_TEST_INJECTED_DAYS - CRITICAL_PATH_TEST_TOLERANCE_DAYS;
   const label = labelOf(subject.id);
