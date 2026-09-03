@@ -19,15 +19,37 @@
  * `measure-band-copy` did exactly that — so nothing here should be read as evidence that Revision
  * Compare works.
  *
- * ## Verified equivalence to the seeded plan
+ * ## The harness does NOT reproduce the product's schedule — measured, and it invalidates the run
  *
- * `fixtureSpec()` → `specToEngineInput()` yields **147 activities / 188 edges**, with the type
- * breakdown `TASK 103 · WBS_SUMMARY 21 · FINISH_MILESTONE 12 · LEVEL_OF_EFFORT 5 ·
- * START_MILESTONE 4 · RESOURCE_DEPENDENT 2` — byte-identical to what `GET …/activities` returns for
- * the seeded plan, measured 2026-09-03. So this IS the network the product schedules, which is what
- * the committed Subject names. (The raw conformance fixture's `activities` array holds 129; the
- * difference is the 18 `wbs` nodes, three of which are already summaries in the array. Two
- * decompositions of one total — see `m0-condition.md`.)
+ * **This section previously claimed the opposite and the claim was false.** It read: "So this IS the
+ * network the product schedules, which is what the committed Subject names." That was verified on
+ * **counts and types only** — `fixtureSpec()` → `specToEngineInput()` does yield 147 activities /
+ * 188 edges with a type breakdown byte-identical to `GET …/activities`. Necessary, and nowhere near
+ * sufficient. Measured against the same plan through the API:
+ *
+ * | | in-process | API (and `docs/TEST_PLAYBOOK.md:43`) |
+ * | --- | --- | --- |
+ * | `activityCount` | 147 | 147 ✓ |
+ * | **`projectFinish`** | **2026-10-27** | **2027-03-12** ✗ |
+ * | **`criticalCount`** | **100** | **87** ✗ |
+ * | `nearCriticalCount` | 2 | 9 ✗ |
+ * | `resourceDriverMissingCount` | 0 | 2 ✗ |
+ * | `constraintViolationCount` | 1 | 1 ✓ |
+ *
+ * So the two networks schedule **differently**, and every number this harness produces is about a
+ * plan that is not the Subject `m0-condition.md` names. That is disqualifying for M0 as it stands.
+ *
+ * **The cause is not yet diagnosed and is deliberately not guessed at here.** `spec-to-engine.ts`
+ * exists for the pairwise differential and openly approximates in at least one place it names
+ * (`roundToWholeDays`, because no DTO accepts minutes — TECH_DEBT #78); the divergent counts point
+ * at driving-resource calendar resolution (`resourceDriverMissingCount` 0 vs 2) and at criticality,
+ * but pointing is not diagnosing.
+ *
+ * **What it costs.** A harness that is not measuring the Subject cannot produce a verdict about the
+ * Subject. Either the engine input is built the way the service builds it, or `m0-condition.md`'s
+ * Subject is restated to name this network and the difference from the product is stated — and the
+ * second is much weaker, because the whole point of naming the seeded plan was to measure
+ * attribution on a network a planner could actually be looking at.
  *
  * ## What M0 CANNOT test on this subject
  *
