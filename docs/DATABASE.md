@@ -647,7 +647,7 @@ activity's frozen copy. Both follow every house standard (UUID v7 PK, snake_case
 optimistic-locking `version`, scoped indexes).
 
 - **Snapshot-copy, not reference (ADR-0025).** `BaselineActivity` **duplicates** each
-  activity's identity (`code`, `name`, `type`, `duration_days`) and its captured CPM
+  activity's identity (`code`, `name`, `type`, `duration_minutes`) and its captured CPM
   dates (`baseline_start`/`baseline_finish` = the captured early start/finish,
   `late_start`/`late_finish`, `total_float`, `is_critical`). `source_activity_id` is a
   **plain correlation UUID with NO foreign key** — so the snapshot survives the source
