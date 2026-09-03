@@ -39,11 +39,25 @@
  * So the two networks schedule **differently**, and every number this harness produces is about a
  * plan that is not the Subject `m0-condition.md` names. That is disqualifying for M0 as it stands.
  *
- * **The cause is not yet diagnosed and is deliberately not guessed at here.** `spec-to-engine.ts`
- * exists for the pairwise differential and openly approximates in at least one place it names
- * (`roundToWholeDays`, because no DTO accepts minutes — TECH_DEBT #78); the divergent counts point
- * at driving-resource calendar resolution (`resourceDriverMissingCount` 0 vs 2) and at criticality,
- * but pointing is not diagnosing.
+ * **Partially diagnosed, and the obvious cause was tested and is NOT the main one.**
+ * `spec-to-engine.ts` rounds every duration to a multiple of **1440** (`roundToWholeDays`), which is
+ * the elapsed-day constant, while a working day on this fixture's plan calendar is **480** minutes.
+ * Measured: the database stores `A12600 = 3600` and `A12700 = 4800`; the mapper gives both **4320**.
+ * That rounding is correct for the pairwise differential — it applies the same approximation to both
+ * sides, where it cancels — and wrong here, where the harness is compared against the product.
+ *
+ * **But removing it moves the project finish by ONE DAY** (2026-10-27 → 2026-10-28), against a gap
+ * of four and a half months. So it is a real divergence and not the one that matters, which is
+ * recorded because finding *a* difference and assuming it is *the* difference is the same error one
+ * step along. What is still unexplained: `criticalCount` 100 vs 87, `nearCriticalCount` 2 vs 9, and
+ * `resourceDriverMissingCount` 0 vs 2 — the last strongly suggesting driving-resource calendar
+ * resolution differs, since the mapper resolves it from the spec's assignments and the service from
+ * persisted rows. **That is a lead, not a diagnosis, and it is not written here as one.**
+ *
+ * **Conclusion: `spec-to-engine.ts` cannot be made faithful by patching.** It was built for a
+ * differential whose divergences are tolerated by design. M0's input must come from the service's
+ * own `buildEngineGraph`, extracted so both callers share it — the `completion-carrier.ts`
+ * precedent.
  *
  * **What it costs.** A harness that is not measuring the Subject cannot produce a verdict about the
  * Subject. Either the engine input is built the way the service builds it, or `m0-condition.md`'s
