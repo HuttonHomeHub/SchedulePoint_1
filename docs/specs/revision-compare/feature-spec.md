@@ -744,11 +744,41 @@ here:**
 | `CONSTRAINT` + `EXTERNAL_BOUND` → `BOUNDS`      | ADR-0043 makes an external bound **SNET/FNLT-shaped** and clamps it inside the same passes — it is literally a constraint by another name                                                                                 | High                                        |
 | `WBS_PARENT` — may not be replayable at all     | A summary carries no logic (ADR-0038) and its dates are a rollup, so reparenting changes what spans what, **not** when work happens. If so it joins `DATE` as derived and costs no pass — which alone gets the count to 9 | **Unverified — check before relying on it** |
 
-That is 11 → 9 with two high-confidence merges, or **11 → 8** if `WBS_PARENT` proves derived. **Do
-not assume the third.** If it turns out to move dates, one more merge is owed, and `PLAN_OPTION` +
-`RESOURCE` is the next candidate (both are plan-level scalars rather than per-activity edits) — with
-the cost to legibility stated, because a planner reading "plan settings" learns less than one reading
-"levelling was switched on".
+**SETTLED 2026-09-03 — `WBS_PARENT` is NOT replayable, verified rather than assumed, and the count
+lands on 8 exactly.**
+
+The engine's own rollup comment is decisive (`compute.ts:544-553`): a `WBS_SUMMARY` carries no logic,
+its dates are derived from its direct children, and it "is never critical, never driving, never on
+the longest path and never defines the project finish … so **nothing here can feed back into another
+activity's schedule**." `compute.wbs.spec.ts:143` says the same from the other side — "`parentId` is
+not a schedule input, so it is not part of the compared result rows."
+
+The decisive half is the **carrier**: it is selected from **non-summary** rows only
+(`critical-path-test.ts:157-159`). So a reparent changes summary rollup dates, cannot reach any other
+activity's schedule, and cannot move the carrier — it contributes **exactly zero** to attribution, by
+construction rather than by measurement. It costs no replay pass.
+
+**`WBS_PARENT` remains a change class in the LIST.** A planner wants to see that an activity was
+reparented; that is a real thing that happened to their plan. It is simply not a class the
+attribution replays, which is the same standing `DATE` already has. The two counts are different
+questions and the spec now keeps them apart: **11 classes in the change list, 8 replayed.**
+
+|                                                         |       |
+| ------------------------------------------------------- | ----- |
+| Named classes                                           | 11    |
+| − `DATE` (derived: no input delta to apply)             | 10    |
+| − `WBS_PARENT` (cannot move the carrier, above)         | 9     |
+| + `RESOURCE` (Decision 2 freezes the levelling surface) | 10    |
+| − merge `ACTIVITY_ADDED` + `ACTIVITY_REMOVED` → `SCOPE` | 9     |
+| − merge `CONSTRAINT` + `EXTERNAL_BOUND` → `BOUNDS`      | **8** |
+
+**The replayed eight:** `SCOPE`, `DURATION`, `LOGIC`, `BOUNDS`, `CALENDAR`, `PROGRESS`,
+`PLAN_OPTION`, `RESOURCE`. At the measured ≈240–343 ms per pass at 2,000 activities, 8 passes plus a
+control is **2.2–3.1 s** — which clears the 3.0 s bar at the lower measurement and grazes it at the
+upper. **So C3-b is now a genuine test rather than a formality**, and that is the right place for it
+to sit: tight enough to fail, not so tight that it fails on arithmetic alone. `PLAN_OPTION` +
+`RESOURCE` remains the next merge if it does, with the legibility cost stated — a planner reading
+"plan settings" learns less than one reading "levelling was switched on".
 
 **M0-T3 therefore starts by fixing the vocabulary**, and C3-b measures the fixed one. Measuring a
 vocabulary the epic intends to change would answer a question nobody is going to ask.

@@ -89,6 +89,32 @@ _user-facing_ milestone, which is M2.)
   3. Record any disagreement with the playbook **as a finding**, and fix the playbook in the same
      commit rather than stepping over it (the ADR-0071 lesson).
 
+> **M0-T3 gains a step 0, because the instruction it was given cannot be followed as written
+> (found 2026-09-03, before any prototype code).** The spec says of the completion-carrier and
+> measurement rules: _"Reuse that rule; do not restate it."_ **There is nothing to import.**
+> `critical-path-test.ts` exports exactly four things — `CRITICAL_PATH_TEST_INJECTED_DAYS`,
+> `CRITICAL_PATH_TEST_TOLERANCE_DAYS`, `CriticalPathTestInput` and `runCriticalPathTest`. The carrier
+> selection is **inline** inside that function and `PERTURBABLE_TYPES` is a module-private `const`.
+> So the only two ways to obey the instruction are to extract the rules or to restate them, and
+> restating is exactly what it forbids.
+>
+> **M0-T3-T0 — extract before reusing.** Lift the carrier selection and the perturbable-type set into
+> exported functions, behaviour-preserving, with `critical-path-test.spec.ts` as the before/after
+> oracle (the ADR-0078 barrel-preserving argument: a refactor changes no assertion). This touches
+> shipped code and that is the point — one derivation with two callers, rather than a second copy
+> that drifts invisibly.
+>
+> **And the measurement rule does NOT transfer unchanged — it is a new rule, not a reused one.**
+> `critical-path-test.ts:174` measures on `subject.calendar ?? options.calendar` — the **injected
+> activity's** calendar. That is coherent for metric 12, which perturbs exactly **one** activity.
+> Tier 3 perturbs a whole **class**, potentially a dozen activities across four calendars, so "the
+> subject's calendar" does not exist. The carrier's own calendar is almost certainly right — it is
+> the thing whose movement is being reported — but it must be **argued rather than inherited**. So
+> the extracted measurement takes the calendar as an **explicit parameter**, and the two call sites
+> choose differently and say why: metric 12 passes the subject's, Tier 3 passes the carrier's.
+> Sharing where it is genuinely shared, diverging explicitly where it is not, is the only version of
+> this that does not quietly give one caller the other's semantics.
+
 ##### M0-T3 — Build the attribution prototype (outside the product)
 
 - **Description:** A script under `apps/api/scripts/` that loads the fixture through the
