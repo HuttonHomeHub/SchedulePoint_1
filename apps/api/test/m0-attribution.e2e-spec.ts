@@ -1,4 +1,6 @@
 import { appendFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { NestFactory } from '@nestjs/core';
 import { afterAll, describe, it } from 'vitest';
@@ -36,10 +38,33 @@ interface Input {
   options: ComputeOptions;
 }
 
-const REPORT = process.env['M0_REPORT'] ?? '/tmp/claude-0/m0-report.txt';
-/** Vitest buffers `console.log` per-task; the run's numbers have to survive it. Write them out. */
+/**
+ * Vitest buffers `console.log` per-task, so the run's numbers have to survive it — they are written
+ * to a file as well as to stdout.
+ *
+ * **Every filesystem write here is best-effort and swallowed.** The first version wrote to a
+ * hard-coded developer scratchpad path and did it BEFORE the fixture check, so on CI — where that
+ * directory does not exist — the spec threw `ENOENT` and failed the whole e2e job. It looked
+ * perfectly fine locally, and the PR that carried it claimed "skips cleanly when the fixture is
+ * absent, so CI is unaffected". CI was affected. A measurement harness must never be able to fail a
+ * build over where it puts its own notes.
+ *
+ * The path is **fixed**, under the OS temp directory. It was briefly configurable through an
+ * `M0_REPORT` environment variable, and CodeQL was right to flag that as `js/path-injection`
+ * (high): an environment value flowing unchecked into a filesystem write is a real sink, and the
+ * configurability bought nothing — nobody needs to choose where a throwaway measurement log lands.
+ * Removing the parameter removes the taint source outright, which beats sanitising it.
+ */
+const REPORT = join(tmpdir(), 'schedulepoint-m0-report.txt');
+const write = (fn: typeof appendFileSync, body: string): void => {
+  try {
+    fn(REPORT, body);
+  } catch {
+    // The stdout copy below is the one that matters; a report file is a convenience.
+  }
+};
 const say = (line: string): void => {
-  appendFileSync(REPORT, `${line}\n`);
+  write(appendFileSync, `${line}\n`);
   process.stdout.write(`${line}\n`);
 };
 
@@ -128,7 +153,6 @@ describe('M0 — attribution', () => {
   });
 
   it('runs C4 then C1 then C2 against the product graph', async () => {
-    writeFileSync(REPORT, `M0 attribution run ${new Date().toISOString()}\n`);
     const app = await NestFactory.createApplicationContext(AppModule);
     close = () => app.close();
     const prisma = app.get(PrismaService);
@@ -139,9 +163,12 @@ describe('M0 — attribution', () => {
       orderBy: { createdAt: 'desc' },
     });
     if (plan === null) {
+      // The seeded fixture is a developer-machine artefact (ADR-0066 catalogue), not part of CI's
+      // provisioning, so this is the normal path on a CI runner.
       console.warn('SKIP: fixture plan not seeded');
       return;
     }
+    write(writeFileSync, `M0 attribution run ${new Date().toISOString()}\n`);
     const planned = (plan as { plannedStart?: Date | null }).plannedStart;
     const dataDate =
       planned instanceof Date ? planned.toISOString().slice(0, 10) : String(planned ?? '');
