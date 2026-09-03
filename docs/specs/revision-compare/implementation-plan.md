@@ -161,8 +161,16 @@ surfaces it, via Analysis ▾ → Compare revisions…`**
      merged.
   3. Run `database-architect` on Q1–Q8. Feed it the enumerated input surface, not a summary.
   4. Fold the design; record any place it disagreed with §4.4 and why the agent was right.
-  5. Update `docs/DATABASE.md` and `docs/adr/README.md` in the same PR. Fix the `duration_days` →
-     `durationMinutes` drift at `docs/DATABASE.md:650` while there.
+  5. Update `docs/DATABASE.md` and `docs/adr/README.md` in the same PR. **The `duration_days` fix
+     this step used to name is DONE (`4abae7f9`) — do not "fix" it again; the line reads
+     `duration_minutes` and following the old instruction would damage a correct document.**
+
+> **M1-T2's acceptance bar is blind to levelling until its fixture changes (2026-09-03).** The
+> replay-equivalence test runs against the fixture plan, which reports `leveledActivityCount: 0` with
+> `level_resources = false` and 45 resource assignments — so a snapshot freezing **no** levelling
+> input passes it. Either the fixture gains a `levelResources = true` case, or the test states in its
+> own docblock that it does not cover levelling. The red run must omit a **levelling** field as well
+> as a calendar field, or Q9's answer is untested by the gate written to test it.
 
 ##### M1-T2 — Migration + the replay-equivalence test (**the acceptance bar**)
 
@@ -196,10 +204,30 @@ surfaces it, via Analysis ▾ → Compare revisions…`**
   1. Add `revision:read` to `HIERARCHY_READ`, `revision:create`/`revision:delete` to
      `HIERARCHY_WRITE` (`org-permissions.ts`).
   2. Controller/service/repository from the `modules/baselines` exemplar (ADR-0057).
-  3. `revision.captured` audit row **inside the capture transaction** — an audited create on the
+  3. **`revision.deleted` too** — _added 2026-09-03 (security review)._ The design already claims
+     "symmetry with `baseline:delete`" for the **permission** and never carried it to the **audit
+     action**, though `DELETE …/baselines/:baselineId` is audited as `baseline.deleted`
+     (`audit-coverage.structural.spec.ts:116`). Both ADR-0073 tests land on "audit it": deleting a
+     captured plan-of-record is durable evidence, and it removes a comparison point other members
+     rely on. **The census gate will not catch this** — it forces _some_ decision for the new route
+     and passes equally if an implementer files it under `UNAUDITED_ROUTES` with a plausible reason —
+     so name it in `AUDITED_ROUTES` at build time, and check 403 for Contributor/Viewer on delete as
+     well as on capture.
+  4. **The HARD delete is a different file, and neither document mentioned it.** M1-T3 named
+     `HierarchyLifecycleService` (the **soft**-delete cascade); the expiry runner
+     (`common/hierarchy/hierarchy-expiry.runner.ts:100-187`) carries a hand-enumerated, order-critical
+     delete list pinned literally by `hierarchy-expiry.structural.spec.ts:85-109`. The new tables go
+     in **before `'plan'`**. The gate goes red usefully, but it is satisfiable by inserting names
+     without adding the deletes, and **nothing catches a plan-child table omitted entirely** —
+     ADR-0096 D5 records that failure: a 23503 the batch can never recover from, retried hourly
+     forever, on exactly the plans that have revisions. Add an API e2e that soft-deletes a plan
+     holding a revision, arms the expiry, and asserts the plan is actually removed. Note also that
+     `HierarchyLifecycleService` needs **six** edits, not one: `counts.revisions`, a
+     `deleteRevisionsUnderPlans` helper called from three scopes, and the restore branch.
+  5. `revision.captured` audit row **inside the capture transaction** — an audited create on the
      ADR-0073 blast-radius test, the `baseline.captured` precedent.
-  4. `HierarchyLifecycleService` gains a `'revision'` level.
-  5. Declare **every** reachable status on the OpenAPI, including the 422 and 409.
+  6. `HierarchyLifecycleService` gains a `'revision'` level.
+  7. Declare **every** reachable status on the OpenAPI, including the 422 and 409.
 
 ##### M1-T4 — Measure the storage before it ships
 
@@ -301,6 +329,59 @@ asserts one seeded change appears with its old and new value, against a **real A
 ---
 
 ## Milestone M3 — The change picture
+
+> **Five findings from the web review (2026-09-03), each verified against the painter. Four are
+> traps that fail SILENTLY — they paint a plausible picture rather than an error — which is why they
+> are listed before the tasks rather than inside them.**
+>
+> **M3-T0 (new, and it comes first): Tier 2 gets a falsification condition, like Tier 3 has.** The
+> epic applies committed-condition discipline to attribution and **none at all** to the ghost — S1–S7
+> cover list latency, both parity gates, convergence, Tier 3 cost and the journey, and nothing covers
+> the ghost's frame cost. That is the largest asymmetry in the plan, on a surface
+> `docs/TECH_DEBT.md:504-512` already measures at **10.2% dropped frames and 33.4 ms interval p95 at
+> Fit** with ~8 ms of each frame unattributed. Follow ADR-0100's M0: paired same-session runs,
+> treatment ≤ baseline + a stated margin, **committed before the prototype**. The ghost needs its own
+> `cull` (removed activities have no live counterpart, so it cannot be a filter over the live set),
+> so this is approximately a second bar pass **and** a second cull on the reading that is already
+> failing.
+>
+> **The `RectCache` trap.** `RectCache` is `Map<string, Rect | null>` keyed on `activity.id` alone
+> (`render/geometry.ts:481`, `:498-503`), and the frame holds one (`paint-frame.ts:104`). A ghost
+> activity carries its live counterpart's id. Threading the frame's cache — the obvious thing, and
+> what every other layer does — returns the **live** rect and paints every ghost bar exactly under
+> its live bar, so the picture says "nothing moved". No throw, no warning, and a unit test with a
+> fresh cache passes. Needs a separate or id-namespaced cache, and a test verified red.
+>
+> **The data-date trap.** `computeActivityRect` measures `daysBetween(dataDateIso, …)`
+> (`geometry.ts:514,528`) and the two revisions have **different data dates**. Passing the frozen one
+> shifts the whole ghost by their delta — a uniform offset that reads as "everything moved by exactly
+> the same amount", which a planner will believe. The rule is about the **arguments**, not the
+> functions: the ghost is projected on the **live** frame's axis, and the frozen data date is a fact
+> in the change list, never an input to the projection. "Reuses `screenXOfDay` verbatim" does not
+> cover it.
+>
+> **The palette trap, aimed at the wrong half.** M3-T1 said "resolve through the canvas surface
+> root". `render/palette.ts:122-129` says that guard "was necessary and was **NOT** sufficient" — the
+> reads still named `--color-*` aliases, which `@theme inline` substitutes at `:root`, so a surface
+> rebind cannot reach them. The fix is reading **unprefixed** names, and no gate can see the
+> difference (`token-contrast.test.ts` follows the rebind itself). So: add the ghost fields to
+> `TsldPalette` and resolve them **inside `resolveTsldPalette`** (`:142`) rather than writing a new
+> resolver — that inherits the fixed call site, the guard and `palette.test.ts`, and forces the print
+> sibling to declare them. A second resolver is a second copy of the rule, which is what went wrong.
+>
+> **The dev-throw is new work, not reuse.** The unresolved-`var()` guard exists only inside
+> `paintResourceStrip` (one `IS_DEV` block, `paint.ts:2138`). There is no equivalent in `paintScene`.
+>
+> **Module layout, forced by the gate.** `health-engine-free.structural.spec.ts:26-38` scans a whole
+> directory (`readdirSync`) and is **non-recursive**. Putting the pure diff and the engine-importing
+> attribution in one `revisions` module makes Claim B's gate fail on day one — or degrades it to a
+> single-file allowlist, which is the "found nothing" class. They go in separate directories, and the
+> new gate's docblock states both blind spots: non-recursive, and direct imports only.
+>
+> **Two more, cheap:** the dock's open state is ephemeral React state
+> (`plan-workspace-toolbar.tsx:208`) while `from`/`to` live in the URL — so a shared link opens with
+> the dock closed and the comparison invisible; and ADR-0123's Gate A and Gate B both fire on a new
+> search-param consumer. Name the params `cmpFrom`/`cmpTo`, per this route's existing `g*` convention.
 
 **Outcome:** the old revision is drawn beneath the new one, and changed logic is lit.
 **Entry point:** **`View ▾ → Structure → "Old revision"`**, plus an inline toggle in the revisions

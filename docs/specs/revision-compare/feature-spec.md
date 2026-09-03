@@ -667,14 +667,37 @@ All under the existing plan-nested path, mirroring `BaselinesController`
 full OpenAPI including **every** declared status (the ADR-0053 M6 / ADR-0116 M5 finding: an
 undeclared-but-reachable 422 is a real defect).
 
-| Method   | Path (under `/api/v1/organizations/:orgSlug/plans/:planId`) | Permission        | Notes                                                                                 |
-| -------- | ----------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------- |
-| `GET`    | `/revisions`                                                | `revision:read`   | Cursor-paginated, newest first                                                        |
-| `POST`   | `/revisions`                                                | `revision:create` | 201 · 403 · 409 `DUPLICATE_REVISION` · 422 `SCHEDULE_NOT_CALCULATED`                  |
-| `GET`    | `/revisions/:id`                                            | `revision:read`   | 404 uniform                                                                           |
-| `DELETE` | `/revisions/:id`                                            | `revision:delete` | 204, soft delete                                                                      |
-| `GET`    | `/revisions/compare?from=&to=`                              | `revision:read`   | **Tier 1 + 2.** Engine-free. No lock, no transaction. `to` may be `live`.             |
-| `GET`    | `/revisions/compare/attribution?from=&to=`                  | `revision:read`   | **Tier 3.** Own throttle. Own, weaker parity sentence on its own OpenAPI description. |
+| Method   | Path (under `/api/v1/organizations/:orgSlug/plans/:planId`) | Permission        | Notes                                                                                                    |
+| -------- | ----------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/revisions`                                                | `revision:read`   | Cursor-paginated, newest first                                                                           |
+| `POST`   | `/revisions`                                                | `revision:create` | 201 · 403 · 409 `DUPLICATE_REVISION` · 422 `SCHEDULE_NOT_CALCULATED`                                     |
+| `GET`    | `/revisions/:id`                                            | `revision:read`   | 404 uniform                                                                                              |
+| `DELETE` | `/revisions/:id`                                            | `revision:delete` | 204, soft delete                                                                                         |
+| `GET`    | `/revisions/compare?from=&to=`                              | `revision:read`   | **Tier 1 + 2.** Engine-free. No lock, no transaction. `to` may be `live` — see the `to=live` rule below. |
+| `GET`    | `/revisions/compare/attribution?from=&to=`                  | `revision:read`   | **Tier 3.** Own throttle. Own, weaker parity sentence on its own OpenAPI description.                    |
+
+> **Three corrections from the API and architecture reviews (2026-09-03).**
+>
+> **(a) This route shape cannot express M5, which is inside this epic.** Every path is under one
+> `:planId` and both `from` and `to` resolve within it, while M5's own written entry point is "the
+> `from` picker offers plans in the same project, not only revisions of this plan". CQ-2's answer
+> promised the **identity model** would not preclude cross-plan comparison; the part that actually
+> breaks is the **route contract**, and M2 would ship a query shape M5 has to break. So `from`/`to`
+> accept a **composite `planId:revisionId`** from the outset, with the bare-UUID form read as "this
+> plan" — reserved now, exercised at M5. Deciding it later is an API-version conversation.
+>
+> **(b) The change list needs a stated bound, and ER-9's cap is not one.** ER-9 truncates with
+> "Showing the first N of M changes" and no continuation — right for ADR-0116's 14-metric report,
+> which is bounded by construction, and wrong here: one calendar edit can push every downstream
+> activity on a 2,000-activity plan, and there is no way to reach change 101. `PaginationQueryDto`
+> caps `limit` at 100 (`:18-24`; `limit=200` returns 422, measured). **The change list is
+> cursor-paginated like every other list in this API**; ER-9's cap is retained only for the
+> **attribution** payload, which genuinely is a bounded document.
+>
+> **(c) `GET /revisions/:id` returns a SUMMARY, not the frozen graph.** A revision is a whole input
+> surface; an unbounded single-resource read is the one shape "cap every list" does not cover, since
+> there is no list to cap. It returns the `BaselineResponseDto` analogue — capture instant, name,
+> data date, project finish, row counts. The graph is reachable only through `compare`.
 
 **The two read routes are deliberately separate**, and that is a decision rather than a layout
 choice — it is ADR-0116 D7's split, taken for the same three reasons: the cheap read stays cheap and
@@ -682,6 +705,40 @@ un-throttled; the throttles can differ because the costs differ by an order of m
 **parity sentences stay textually apart**, so the wrong one cannot be copied onto the other. ADR-0116
 calls that "the single most likely wrong claim in the epic" and it is the single most likely wrong
 claim in this one.
+
+#### The `to=live` rule
+
+_Added 2026-09-03; raised independently by the architecture and web reviews._ §1's happy path is
+`from = Rev B`, `to = Live`, and §1 also calls the result "a handover artefact: one URL, one printed
+document". **Those cannot both be true** — a URL carrying `to=live` renders a different document
+tomorrow, which is the failure the epic exists to remove. And M4-T2's rule ("reconstruct both graphs
+from **frozen** columns only") is simply false for a live side, which has no frozen columns.
+
+The rule, stated rather than left to the implementer:
+
+1. **Tiers 1 and 2 accept `to=live`.** They read live rows for that side, and the response states
+   the comparison instant. This is the common working case and it is worth keeping cheap.
+2. **Tier 3 accepts `to=live` and builds the live side from live rows** — so M4-T2's "frozen columns
+   only" is corrected to "frozen on the `from` side; live on the `to` side when `to=live`". The
+   verdict names which side was uncaptured, because the two sides are then frozen under **different
+   rules**: the live side uses today's calendar, which is exactly the defect §4.1 exists to prevent,
+   reintroduced by construction. It is correct here — the live side _is_ today — and it must be said
+   on screen rather than inferred.
+3. **The printed document refuses `to=live`** and offers "capture a revision first". A printed
+   comparison against an uncaptured side is a document of a moment nobody can return to, which is
+   precisely what a handover artefact must not be.
+
+#### Where capture lives
+
+_Added 2026-09-03 (web review)._ The only capture affordance the spec named was the compare dock's
+empty state — so the only way to create a revision was to first ask to compare things that do not
+exist. With CQ-1's answer (explicit + on import), a planner who never opened that dock before
+re-planning has nothing to compare, **forever**, and the product never told them. That is ADR-0081's
+shape: an entry point technically present and practically unreachable at the moment it matters.
+
+So capture gets a **second** entry point beside the comparison one, and **where** it goes is an M2
+design question rather than an empty-state detail. `Baselines…` is the conceptual sibling and the
+nearest precedent for both the affordance and its placement.
 
 ### 4.6 The recalculation parity gate (ADR-0034) — stated structurally, in three separate claims
 
