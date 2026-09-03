@@ -66,7 +66,10 @@ _user-facing_ milestone, which is M2.)
   1. Write C1–C4 verbatim, with the subject stated as **147 activity rows / 188 dependencies**, not
      129 (spec §0, V5).
   2. Name both fallbacks and state that the choice between them is the product owner's.
-  3. Commit alone, message `docs(specs): commit the revision-compare M0 falsification condition`.
+  3. Commit alone, message `docs(repo): commit the revision-compare M0 falsification condition`.
+     **Corrected 2026-09-03 while executing this step:** the plan said `docs(specs):`, and
+     `commitlint.config.*`'s `scope-enum` does not hold `specs` — the commit was refused. A plan
+     is a document too, and this one specified an artefact the repository's own gate rejects.
 
 ##### M0-T2 — Re-derive the problem, and the fixture's real shape
 
