@@ -26,14 +26,27 @@ are benign in that respect — so it is measured rather than assumed.
 
 ## Subject
 
-The seeded fixture plan `plan:fixture-p6-torture-v1` — **147 activity rows (129 tasks + 18
-`WBS_SUMMARY`) and 188 dependencies**.
+The seeded fixture plan `plan:fixture-p6-torture-v1` — **147 activity rows and 188 dependencies**,
+confirmed by M0-T2 through the public REST API.
 
 Not 129. `docs/TEST_PLAYBOOK.md` gives **both** numbers for **different objects**: `:24` and `:38`
-name the 129-activity _fixture file_, `:43` records the _seeded plan_ at 147. The counts here were
-re-derived by parsing `packages/engine-conformance/fixtures/p6_torture_test_v1.json`
-(`activities: 129`, `wbs: 18`, `relationships: 188`), and M0-T2 re-reads them through the public
-REST API rather than from the JSON.
+name the 129-activity _fixture file_, `:43` records the _seeded plan_ at 147.
+
+> **This paragraph said "147 activity rows (129 tasks + 18 `WBS_SUMMARY`)" when it was committed,
+> and M0-T2 disproved the parenthesis within the hour.** The total was right; the decomposition was
+> wrong in **both** terms. Read back by type, the plan is **126 non-summary + 21 `WBS_SUMMARY`** —
+> `TASK` 103, `FINISH_MILESTONE` 12, `LEVEL_OF_EFFORT` 5, `START_MILESTONE` 4, `RESOURCE_DEPENDENT`
+> 2, `WBS_SUMMARY` 21.
+>
+> The cause is the 129-vs-147 confusion **one level down**. `147 = 129 + 18` is true of the
+> **sources** — the fixture's `activities` array plus its `wbs` array. `147 = 126 + 21` is true of
+> the **types**, because **3 of the fixture's own 129 activities already carry
+> `activity_type: "WBS_SUMMARY"`**. Two correct decompositions of one total, describing different
+> objects — which is exactly the trap this section's own 129/147 warning exists to flag, fallen into
+> one line below the warning.
+>
+> Established by `GET …/plans/:id/activities` paged to exhaustion and tallied by `type`, against
+> `node -e` over the fixture JSON's `activity_type` field. Neither number was counted by eye.
 
 ## Setup
 
