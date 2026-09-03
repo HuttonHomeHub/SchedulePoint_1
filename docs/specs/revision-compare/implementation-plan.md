@@ -1,10 +1,10 @@
 # Implementation Plan: Revision Compare
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** **Awaiting approval.** The four critical questions are answered (spec §6); the
-  specialist review pass is the remaining precondition. M0-T1/T2 ran under an earlier reading of
-  the product owner's answers as approval — that was premature, and is corrected here rather than
-  left standing. Their output is evidence, not committed scope.
+- **Status:** **Awaiting the product owner's approval.** CQ-1–CQ-4 are answered (spec §6), the six
+  specialist reviews are folded, and the two scope decisions they surfaced are taken (spec §4.5).
+  What remains is approval itself. M0-T1/T2 ran under an earlier misreading of an adjacent answer as
+  approval; their output is evidence, not committed scope.
 - **Owner:** repo
 
 > **Approving this plan approves M0, M1 and M2 only.**

@@ -1,7 +1,7 @@
 # Feature Spec: Revision Compare
 
-- **Status:** **Awaiting approval.** §6's four critical questions are answered; the specialist
-  review pass is the remaining precondition.
+- **Status:** **Awaiting the product owner's approval.** §6's four critical questions are answered,
+  the six specialist reviews are folded, and the two scope decisions are taken (§4.5).
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-03
 - **Tracking issue / epic:** _(to be opened on approval)_
@@ -600,7 +600,10 @@ is the `BaselineActivity` shape and none of them is a new decision.
 and answered the partitioning question with data. Do the same here: bytes per activity per revision,
 and the implied cost of the CQ-1 capture policy at 2,000 activities × the expected revision count.
 
-**Q9 — Does the snapshot freeze the RESOURCE-LEVELLING surface?** _Added 2026-09-03; found
+**Q9 — the RESOURCE-LEVELLING surface. ANSWERED 2026-09-03: FREEZE IT.** The product owner chose
+this over the cheaper "scope it out explicitly" option, against my recommendation and correctly — a
+snapshot that cannot replay a levelled plan silently reports the wrong dates for every customer who
+turns levelling on. The architect's brief is therefore **how** to freeze it, not whether. _Found
 independently by the database and test reviewers, and it is the finding that most changes the
 schema._ **The persisted schedule is not `computeSchedule`'s output.** `schedule.service.ts:277-296`
 runs a **second** engine pass — `levelSchedule(...)` — whenever `plan.levelResources` is true, and
@@ -705,6 +708,50 @@ un-throttled; the throttles can differ because the costs differ by an order of m
 **parity sentences stay textually apart**, so the wrong one cannot be copied onto the other. ADR-0116
 calls that "the single most likely wrong claim in the epic" and it is the single most likely wrong
 claim in this one.
+
+#### Product-owner decisions, 2026-09-03 — and the tension between them
+
+Both were taken with the measured numbers in front of them, and **they pull in opposite directions**,
+which is recorded here rather than left for a milestone to trip over.
+
+**Decision 1 — shrink the replayable class vocabulary to ≤ 8, BEFORE M0 runs.** Chosen over
+restating S6 per plan size and over shipping Tier 3 small-plans-only. The consequence is accepted and
+should be said plainly: the verdict names **fewer, coarser causes**. That is the price of one bar at
+every plan size.
+
+**Decision 2 — FREEZE the resource-levelling surface (Q9), rather than scoping it out.** Chosen over
+the cheaper option, and it is the more correct one: a snapshot that cannot replay a levelled plan is
+a snapshot that silently reports the wrong dates for every customer who turns levelling on. It makes
+M1's schema materially larger — `EngineAssignment[]`, `EngineResource[]` with its own calendar port,
+plus `level_resources` and `level_within_float_only` — and it **obliges the fixture to gain a
+levelling case**, without which no gate can see the new tables at all.
+
+**The tension.** Decision 2 adds a class (levelling inputs move dates and therefore need a home in
+the taxonomy), so the merge target is **11 → 8, not 10 → 8**. The arithmetic:
+
+- The vocabulary is 11 named classes, but `DATE` is **derived, not an input** — "an activity whose
+  computed dates moved with no input change of its own". It has no delta to apply, so it is **not
+  replayable** and costs no pass. That leaves **10** replayable.
+- Decision 2 adds **`RESOURCE`** → **11** replayable, i.e. 11 passes plus a control against a budget
+  that affords about 8.
+
+**Candidate merges, to be settled in M0-T3 with the engine in front of you rather than asserted
+here:**
+
+| Merge                                           | Reason                                                                                                                                                                                                                    | Confidence                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `ACTIVITY_ADDED` + `ACTIVITY_REMOVED` → `SCOPE` | The same act seen from two sides; a planner reads "the scope changed", and the row still names the direction                                                                                                              | High                                        |
+| `CONSTRAINT` + `EXTERNAL_BOUND` → `BOUNDS`      | ADR-0043 makes an external bound **SNET/FNLT-shaped** and clamps it inside the same passes — it is literally a constraint by another name                                                                                 | High                                        |
+| `WBS_PARENT` — may not be replayable at all     | A summary carries no logic (ADR-0038) and its dates are a rollup, so reparenting changes what spans what, **not** when work happens. If so it joins `DATE` as derived and costs no pass — which alone gets the count to 9 | **Unverified — check before relying on it** |
+
+That is 11 → 9 with two high-confidence merges, or **11 → 8** if `WBS_PARENT` proves derived. **Do
+not assume the third.** If it turns out to move dates, one more merge is owed, and `PLAN_OPTION` +
+`RESOURCE` is the next candidate (both are plan-level scalars rather than per-activity edits) — with
+the cost to legibility stated, because a planner reading "plan settings" learns less than one reading
+"levelling was switched on".
+
+**M0-T3 therefore starts by fixing the vocabulary**, and C3-b measures the fixed one. Measuring a
+vocabulary the epic intends to change would answer a question nobody is going to ask.
 
 #### The `to=live` rule
 
