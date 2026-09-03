@@ -3999,9 +3999,18 @@ A lighter-weight running log of smaller decisions is in
   to every reader and every agent briefed from it. It was caught only when a
   performance reviewer, handed this framing as established fact, went and read
   the row.
-  What #75 actually establishes: **there is no §16 in ADR-0026** (its sections
-  run to §9a, and every "§16" citation in this repository points at a section
-  that does not exist); **4 ms was never a budget** but the measured p95 of a
+  What #75 actually establishes — **and the first half of this sentence was
+  itself withdrawn on 2026-09-01, which is why it now reads differently**: the
+  "no §16 in ADR-0026" finding is **retracted**. ADR-0026 §9b records the
+  retraction, and it is right — §9 says "on the **§16 target hardware
+  envelope**", an unqualified cross-document reference in the same style as its
+  neighbours, and `docs/PROJECT_BRIEF.md` **§16 Deployment** carries exactly the
+  browser envelope it names. The real failure was subtler than an invented
+  section: a citation that resolves at its origin and stops resolving the moment
+  it is copied. This bullet carried the withdrawn version for two days after the
+  ADR retracted it — the same propagation failure it was rewritten to record,
+  one turn of the wheel later, found by the 2026-09-03 register sweep.
+  What DOES stand, and is the half that matters: **4 ms was never a budget** but the measured p95 of a
   throwaway prototype, recorded as a PASS against a ≤ 16 ms frame; and the real
   gate in §9 is **frames per second** — ≥ 45 fps @ 500, ≥ 30 fps @ 2,000 under
   sustained pan.
@@ -4073,7 +4082,7 @@ When operating in this repo, Claude Code should:
    push". **It is one command — `pnpm prepush`** — and running its parts by hand
    is how a gate gets missed: this bullet used to name
    `pnpm lint && pnpm typecheck && pnpm test` plus two `check:*` scripts, and
-   `scripts/prepush.sh` derives **ten** of them from `package.json` precisely so
+   `scripts/prepush.sh` **derives** them from `package.json` precisely so
    nobody has to keep a list in their head. Following the old wording on
    2026-08-22 sent an ADR to CI that `check:adr-coverage` refused, in a change
    whose whole subject was filing one — a documented gate that could not fail

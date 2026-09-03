@@ -9,10 +9,15 @@ been measured on either device: `docs/TECH_DEBT.md` #59 said so for months and n
 because there was no command to run. There is now, and **§9b records the result** (measured
 2026-08-03: pass at both zooms on a 2,016-activity plan).
 
-Two corrections worth knowing before you read anything else about this, because they were repeated
-across this repository for months: the frequently-cited "**ADR-0026 §16**" **does not exist** (the
-sections end at §9a), and the "**≤ 4 ms p95 budget**" was never a budget — it is §9a's _measured
-prototype result_, recorded as a pass against a stated ≤ 16 ms frame budget.
+One correction worth knowing before you read anything else about this, because it was repeated
+across this repository for months: the "**≤ 4 ms p95 budget**" was never a budget — it is §9a's
+_measured prototype result_, recorded as a pass against a stated ≤ 16 ms frame budget. The binding
+gate is **fps**.
+
+_(A second "correction" used to stand here — that "ADR-0026 §16" does not exist. **It is retracted**;
+see ADR-0026 §9b, 2026-09-01. §9's "§16 target hardware envelope" is an unqualified reference to
+`docs/PROJECT_BRIEF.md` §16 Deployment, which carries precisely that envelope. The citation resolves
+at its origin and stops resolving when copied, which is a subtler fault than a phantom section.)_
 
 CI runners cannot stand in. A shared runner's absolute timings vary by more than the thing being
 measured, which is exactly why the repo's other canvas gates (`paint.dates-budget.test.ts` and its
