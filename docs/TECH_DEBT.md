@@ -161,6 +161,16 @@ envelope (a mid-tier laptop, iPad-class Safari), record dropped frames while scr
 the numbers in ADR-0059. Deliberately **not** turned into a CI gate: a millisecond threshold
 measured on a runner would be noise dressed as a guarantee.
 
+> **Two corrections, 2026-09-03 verification sweep.** This row refers twice to **#59**, which is not
+> an open row — it was folded into #75 and closed on 2026-08-03, so a reader following it lands in
+> the Closed-numbers ledger.
+>
+> And its stated obstacle has **lapsed**: the row says the only browser available is CI's headless
+> Chromium, but #75's Route A (`apps/web/scripts/measure-draw-in-browser.js` plus its runbook) is a
+> no-install DevTools method on the operator's own machine, added 2026-08-03. It has simply never
+> been pointed at the Gantt. That makes this row **cheaper than it reads**, which is the direction
+> that matters: it has been sitting behind an obstacle that was removed a month ago.
+
 ### 62. `canReadCost` is derived from the role because the DTO cannot say
 
 **Status:** unverified
@@ -339,11 +349,21 @@ ADR-0063 M6 component and UX gates.
 > a statement count and a citation to ADR-0053 M6's measurement of the same shape — neither is a
 > reading taken on this path. That measurement is the whole of what remains.
 
-Five write paths now serialise on the same per-plan advisory key — activity create/update (parent
-branch), the batch membership write, dissolve, and recalculate — and none of the `$transaction`
-calls sets an explicit timeout, so they share Prisma's 5 s default. At the ~2,000-activity ceiling,
-if recalculate's hold time approaches that default, a batch WBS write queued behind it would fail
-with a P2028 timeout rather than waiting cleanly.
+**Fourteen** call sites across five modules now serialise on the same per-plan advisory key —
+`activities.service.ts` (6), `baselines.service.ts` (3), `plan-lock.service.ts` (3),
+`dependency.repository.ts` (1) and `schedule.repository.ts` (1). If recalculate's hold time were to
+approach the transaction timeout, a batch WBS write queued behind it would fail with a P2028 rather
+than waiting cleanly.
+
+_(Both halves of this paragraph were wrong and are corrected 2026-09-03 by the register verification
+sweep. It said **"five write paths"**, an undercount of nearly three to one. And it said **"none of
+the `$transaction` calls sets an explicit timeout, so they share Prisma's 5 s default"** — false, and
+contradicted by this row's own header block: `prisma.service.ts` sets
+`transactionOptions: { timeout: TRANSACTION_TIMEOUT_MS }` with `TRANSACTION_TIMEOUT_MS = 15_000` on
+the client constructor, plus a 60 s batch override. So the headroom this row worries about is **3x
+larger** than it claimed, against a recalculate route measured at 694.3 ms p95 — which makes the
+P2028 scenario much less likely than the row implied, without making the measurement it asks for any
+less worth taking.)_
 
 **What would close it:** seed a 2,000-activity plan, measure recalculate's hold duration on the key
 and a concurrent `PATCH …/activities/parents`'s wait, then set explicit transaction timeouts against
@@ -572,6 +592,23 @@ would not exercise the code being budgeted.
 Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
 itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
 
+> **The "no §16 in ADR-0026" finding is RETRACTED, 2026-09-01 — by ADR-0026 itself** (§9b,
+> "Numbering correction — and a correction to the correction"), and this row carried the withdrawn
+> version until the 2026-09-03 verification sweep. §9 reads "on the **§16 target hardware
+> envelope**", an unqualified cross-document reference in the same style as its neighbours, and
+> `docs/PROJECT_BRIEF.md` **§16 Deployment** carries exactly that envelope. The drift was not an
+> invented number: it was a citation that resolves at its origin and stops resolving the moment it
+> is copied — subtler, and commoner.
+>
+> Two consequences for this row. **Step 4(a) — "fix the dead §16 citations repo-wide" — is now wrong
+> advice** and should not be done; §9b deliberately leaves them. **Step 4(b) is already done**: the
+> real-hardware numbers are recorded in ADR-0026 §9b. The sentence "every ADR-0026 §9 citation points
+> at a section that does not exist" is also literally false as written — §9 exists, and the same
+> sentence names it as the gate.
+>
+> **What stands, and is the half that matters:** 4 ms was never a budget, the gate is fps, and the
+> genuinely open residue is the 500-activity limb and the unattributed ~8 ms at Fit.
+
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
 **Status:** unverified
@@ -624,6 +661,16 @@ and the fix was a comment. These are the rest, recorded rather than rushed:
   test here would assert the client's optimism back at itself. It belongs in a flag-off Playwright
   run, which the repo has no configuration for today — that, not the assertion, is the work.
 
+> **All four line citations in this row are dead** (2026-09-03 sweep): ADR-0078 moved the code.
+> `crossedLanes` is not in `render-model.ts` — that file is now a 128-line barrel — it is defined and
+> called twice in `render/link-routing.ts`. The `RectCache` reference moved to `geometry.ts`.
+> **Both open items are still true**: `crossedLanes` really is computed twice per edge, and no
+> flag-off Playwright config pins `VITE_CANVAS_AUTHORING_FLOW` off (three configs name it, all
+> pinning it ON). But the second item's premise has weakened: `scripts/flag-retirement.json`
+> classifies that flag **Class B — formally kept**, and ADR-0088 records unit-level flag-off parity
+> suites having exactly one catch in the project's history. Building a flag-off harness for a
+> guard-only flag is a harder sell than it was when this was filed.
+
 ### 81. CodeQL `js/http-to-file-access` on the seeder's `--out` report
 
 **Status:** unverified
@@ -665,6 +712,17 @@ spend the operator's disk one finding at a time. Now clamped (2,000 / 500 / 100 
 truncation stated rather than trailing off mid-word). This does **not** clear the alert — the taint
 flow is unchanged — and it was not done to. It is the one genuine defect the rule's neighbourhood
 contained, found by taking the finding seriously rather than by trying to satisfy it.
+
+> **Two corrections, 2026-09-03 sweep.** The row describes **one** write site; there are **two** —
+> `main.ts` writes `results` (the expression the row quotes) and, later, `report`. The second is the
+> same taint flow and is unmentioned. And the clamp sentence pairs its fields and numbers in
+> **opposite orders**: it reads "`code`, `message` and `details` … (2,000 / 500 / 100)", which maps
+> `code` to 2,000. The real mapping is details 2,000 / message 500 / code 100. All three numbers are
+> right and the sentence is wrong.
+>
+> The alert's own open/dismissed state lives in GitHub's code-scanning UI and **cannot be read from a
+> checkout** — that half stays unverifiable here, which is worth stating rather than leaving as an
+> apparent omission.
 
 ### 84. Levelling is quadratic in the number of activities contending on ONE resource
 
@@ -761,6 +819,14 @@ engine is not involved and the recalc parity gate is untouched.
 > **So it needs a spec, not a register row** (ADR-0105): the panel's props are a component contract.
 > That is a bigger trigger than the row's own "three-line formatter fix" framing implies, and the
 > framing is what has kept it looking cheaper than it is.
+
+> **Two line citations drifted, and the row misses a call site** (2026-09-03 sweep).
+> `ActivityResourcesPanel`'s forward is at `:317-319`, not `:318-320`; `ActivitiesTable`'s Duration
+> column is at `:663`, not `:639`. More usefully: `ActivitiesTable` has a **second** call site
+> (`resourcesHoursPerDay`, the Resources dialog's join lag) on the same defect, which the row does
+> not mention. The defect itself is confirmed live and unfixed — `effectiveHoursPerDay()` takes no
+> activity type and no assignment input, so it has nothing to resolve a driver with — and the rest of
+> the scoping note verified exact, including the twelve call sites.
 
 ### 88. An email link scanner reaches the verification URL before the recipient
 
@@ -1000,6 +1066,125 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 **Remediation:** (a) with the next audit-coverage slice. (b) and (c) are closed.
 
+### 246. The register's diagnoses survive and its citations rot
+
+**Status:** open · **Raised:** 2026-09-03 (the 32-row verification sweep) · **Size:** M ·
+**Owner:** repo
+
+The 2026-09-03 sweep verified all 32 substantive `unverified` rows against the code. The
+distribution is the finding, and it is not the one the previous sweep would have predicted.
+
+**What was in scope, stated rather than implied.** The register held **43** `unverified` rows.
+Thirty-two were verified: `58 60 62 69 70 74 75 76 81 84 86 88 89 99 117 118a 118b 120 121 123 154
+165 181 187 191 193 194 195 197 200 215 239`. Sixteen of those needed a correction (`60 74 75 76 81
+86 99 120 165 181 187 191 193 194 197 200`) and sixteen were checked and found accurate (`58 62 69
+70 84 88 89 117 118a 118b 121 123 154 195 215 239`) — the second list is here because otherwise a
+clean check leaves no record and the next sweep repeats it.
+
+The other **eleven were deliberately skipped, not overlooked**: `93 97 118 149 155 174 184 202 204
+206 211` are deferred-review piles — collections of findings from a gate pass, each of which is its
+own question. Verifying a pile means verifying its members, which is a different exercise from
+checking whether a row's diagnosis still holds, and it was scoped out at the start rather than
+abandoned partway. `32 + 11 = 43`, with nothing unaccounted; the arithmetic was reconciled against
+the document rather than counted by hand.
+
+**Almost nothing was already fixed.** The 2026-09-01 sweep found six of seven verified rows already
+resolved, and `#232` on 2026-09-02 was a seventh. This sweep found **zero** wholly-stale rows out of 32. That difference is explainable rather than lucky: most of these rows carry dated notes recording
+a deliberate, measured decision to leave the gap open, so they were accurate when filed and nobody
+has since closed them by accident.
+
+**What rots instead is the evidence, not the argument.** Roughly half the rows carry at least one
+citation that no longer resolves — a line number moved by a refactor, a symbol renamed, a count that
+grew. The pattern is consistent enough to state as a rule: **a row's diagnosis survives; its
+file:line references and its numbers decay.** `#191` is the sharpest case — its argument is intact
+and not one of its four figures was current.
+
+**Three rows were wrong in a way that would have misled whoever picked them up**, and none of the
+three was wrong by decay:
+
+- `#74` contradicted its own header block, claiming a 5 s transaction timeout where the code sets
+  15 s, and undercounting its own blast radius nearly three to one.
+- `#99`'s mechanism table said the unknown-address branch does "nothing"; the library takes an
+  explicit not-found branch precisely to blunt the timing signal.
+- `#120`'s title said "nothing says so" about a behaviour its own ADR documents **in the commit that
+  created the row**.
+
+**And two rows were wrong at the moment of writing**, which decay cannot explain: `#165`(b)
+misdescribed a control that had rendered as a segmented radiogroup for eighteen days before the row
+was filed, and `#75`'s headline finding was retracted by the very ADR it exists to correct — with
+the withdrawn version still propagated into `CLAUDE.md` and a guide two days later.
+
+**Why this is a row and not a fixed thing.** The obvious remedy — gate the citations the way
+`check:claims` gates dependency citations — does not transfer. Those are pinned by package version
+and anchor text; a register row cites this repository's own moving files, where a line number is
+expected to change and only a human can say whether the surrounding claim still holds. A gate that
+demanded every `file.ts:123` in the register resolve would fire constantly and be silenced, which is
+ADR-0058's fails-on-day-one shape.
+
+**What might actually work, unbuilt and uncosted:** cite by **symbol** rather than line where the
+symbol is stable, the way `docs/specs/better-auth-1-7-account-issuer/migration-design.md` already
+does; or run this sweep on a schedule, since its cost is bounded and its yield was high. Both are
+changes to how the register is written, so both need the spec ADR-0105 requires.
+
+**And this sweep's own result could not be recorded in the field meant for it** — see `#247`. The
+`Verified:` field is written inline and read at column 0, so `A8` has never fired and the sixteen
+rows this sweep checked and found accurate carry no machine-readable trace of having been checked.
+
+### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
+
+**Status:** open · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
+**Owner:** repo
+
+`check-debt-status.mjs` reads exactly two fields through `fieldValue`: `Status` and `Verified`.
+`Status` is written at column 0 on all 66 detailed rows and is read correctly. `Verified` is written
+**only inline**, in the header block's `**Status:** … · **Verified:** … · **Size:** …` form — and
+`fieldValue` anchors on `^`, so it returns `null` for every one of the six rows that carry a date.
+Of the two fields the gate reads, one is 100% readable and the other is 0% readable.
+
+So **A8 has never been able to fire**, and the contradiction it names is in the register right now:
+`#117` reads `**Status:** unverified · **Verified:** 2026-09-01`, which is precisely the "one of the
+two is wrong" case A8 was written to refuse. Measured rather than reasoned about — a script over the
+real document reports `fieldValue` seeing `Verified` on **0** rows, and a whole-line scan finding it
+on **6**, one of them `unverified`.
+
+**Two assertions in the same file disagree about the document's shape, and the one that disagrees is
+the silent one.** A2 splits the status value on `[\s·—|]` before checking the vocabulary, so it was
+written by somebody who knew fields are `·`-separated on one line. A8 was written as though they are
+not. Nothing was wrong in either assertion read alone; the wrongness is in the relationship — the
+ADR-0093 shape, inside the gate rather than the product.
+
+**This is `#245` stopping being hypothetical.** That row says the gate's assertions have no
+re-runnable coverage and argues from principle. A8 is the first one shown to be dead, and it was
+found by trying to _use_ the field rather than by reading the code — which is also why it survived
+ADR-0120, its own red run, and two register sweeps.
+
+**Do not fix it here.** `fieldValue` is shared by `check:debt-status` and `check:reconcile-due`
+(ADR-0124 established both consumers), so widening it is a shared-gate change and ADR-0105 makes the
+spec mandatory. It also needs a decision rather than a patch, because **A8's premise may be the
+wrong half**: `#117`'s date is not a mistake — the row was verified on 2026-09-01 and its _subject_
+(CSP report delivery from a real browser) genuinely remains unverifiable without a deployed host. If
+"this row was checked" and "the thing this row describes is confirmed" are two different facts, then
+`unverified` + a `Verified:` date is a legitimate state and A8 should be deleted rather than
+repaired. Settle that before touching the parser.
+
+**A near-miss worth knowing about while deciding.** `docs/TECH_DEBT.md:1235` opens a sentence with
+`**Unverified:**` at column 0 — prose, not a field. It is harmless today because no assertion reads
+that name, and it is exactly what a column-0 reader would misclassify if one were added.
+
+**What the sweep could not do because of this.** The 2026-09-03 pass verified 32 rows and could
+record the result only as prose, because the field meant for it is unreadable. Sixteen rows carry a
+dated correction note and are identifiable from the diff; the other sixteen were checked, found
+accurate, and left no trace **in the repository**. A clean check that leaves no record is work that
+gets done twice.
+
+**That sentence first read "left no trace at all", and it was wrong** — corrected here rather than
+edited quietly, because how it was wrong is the useful part. The list of which rows were checked did
+survive, in the scheduled wake-up message driving the sweep, which is outside the repository and
+dies with the session. So the work was recoverable by luck for a few hours and unrecoverable after
+that, which is worse than plainly lost: it reads as recorded right up until somebody needs it. The
+list is now written into `#246`, so the practical half is closed and what remains is the mechanism —
+a field the register writes and its own gate cannot read.
+
 ### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
 
 **Status:** open · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
@@ -1135,13 +1320,22 @@ It is not uniform in **how long it takes**. Better Auth awaits the send
 (`runInBackgroundOrAwait` → `else await promise`, `better-auth@1.7.1`,
 `create-context.mjs:220`), so:
 
-| address | work done               | response time          |
-| ------- | ----------------------- | ---------------------- |
-| known   | token minted, mail sent | a real SMTP round trip |
-| unknown | nothing                 | immediate              |
+| address | work done                                      | response time           |
+| ------- | ---------------------------------------------- | ----------------------- |
+| known   | token minted, mail sent                        | a real SMTP round trip  |
+| unknown | a token generated and discarded, one DB lookup | one database round trip |
 
-A caller with a stopwatch can therefore distinguish the two, which is the thing the uniform body
-exists to prevent. Note this is the **opposite** shape to `/send-verification-email`, where Better
+_(Corrected 2026-09-03 by the register verification sweep. This row said the unknown branch does
+**"nothing"** and returns **"immediate"**, and that is false: `password.mjs` takes an explicit
+not-found branch that calls `generateId(24)` and awaits
+`findVerificationValue("dummy-verification-token")`, under a comment saying it does so "to mitigate
+timing attacks". The library already equalises the cheap half. That does **not** close this row — a
+database lookup is not an SMTP round trip, and the gap this row is about is the send — but it makes
+the signal smaller than the table claimed, and it would have sent whoever picked this up hunting for
+a branch that does nothing.)_
+
+A caller with a stopwatch can therefore still distinguish the two, which is the thing the uniform
+body exists to prevent. Note this is the **opposite** shape to `/send-verification-email`, where Better
 Auth mints a throwaway token and holds a 500 ms floor precisely to equalise the two branches
 (`email-verification.mjs:108-121`) — the machinery exists in the library, and this route does not
 use it.
@@ -1835,6 +2029,22 @@ self-heals; set a per-table `autovacuum_vacuum_scale_factor` on the two swept ta
 first — the last one trades a bounded connection hold for a faster vacuum, which is the opposite of
 what `RUN_CAP` exists for.
 
+> **Corrected 2026-09-03 by the register verification sweep — the title's second half is false, and
+> was false on the day this row was filed.** `docs/adr/0087-scheduled-retention-sweep.md` states the
+> dead-tuple behaviour explicitly under Consequences, gives the same measured figures, and cites
+> **#120 by number**; `retention-sweep.runner.ts`'s own docblock says it too. `git log -S` puts both
+> in the SAME COMMIT that created this row. So "nothing says so" described the state immediately
+> before its own commit.
+>
+> **The behaviour half stands and is re-derivable without a host**: `BATCH_SIZE = 1000` and
+> `RUN_CAP = 50_000` in `retention-sweep.runner.ts`, so a capped run leaves 50,000 dead tuples and
+> does not cross Postgres' ~100,050 default autovacuum threshold for a 500k table. No `reloptions`,
+> no `VACUUM` call, `RUN_CAP` unchanged.
+>
+> **What is genuinely open is narrower than the title**: nothing reports `n_dead_tup` at runtime.
+> The staff Retention panel exposes `oldestAt` / `oldestAgeDays` / `overdue` only. The row's remedy 1
+> — watch the dead-tuple count rather than assume it self-heals — is unbuilt.
+
 ### 119a. The API e2e suite fails intermittently, and the failure has never been captured
 
 **Status:** open · **Verified:** 2026-09-01
@@ -2252,6 +2462,18 @@ indistinguishable from coverage, which is the failure W1 exists to correct. What
 generated per-run one. That is a second onboarding path, not a shot entry, which is why it is filed
 rather than done inside a catalogue-only slice.
 
+> **Item (b) misdescribes the control, and did so when the row was filed** (2026-09-03 sweep). It
+> says `Outcome` is "plain text" beside `Show`'s chips, with no stated reason. `AuditFilterBar.tsx`
+> renders Outcome as a **`SegmentedControl`** — an APG radiogroup — with the reason written above
+> it: categories are independent booleans, an outcome is one of a set. `git log -S"SegmentedControl"`
+> puts that in a commit dated **2026-08-04, eighteen days before this row was filed**, so this is not
+> drift.
+>
+> What is defensible is the **appearance**: unselected options render `text-muted-foreground` with no
+> border or fill, so at rest — which is the screen's opening state, `outcome` unset — the group does
+> read as plain text beside filled chips. Reworded here as an appearance finding rather than a
+> "no stated reason" one, because the two have different remedies.
+
 ### 174. The axis-markers gate pass's non-blocking findings
 
 **Status:** unverified
@@ -2427,6 +2649,13 @@ The second is probably right; neither should be done inside an upgrade epic, bec
 then be changing underneath the citations it is checking.
 
 ---
+
+> **The worked example no longer reproduces** (2026-09-03 sweep). This row illustrates the defect
+> with a register entry "verified against 1.6.28"; the register now pins `better-auth` at **1.7.1**
+> (ADR-0107), so the specific collision described was dissolved by the version bump itself. The
+> **mechanism is untouched** — the ref is still `basename:lines`, built and matched with no version
+> anywhere, and `verifiedAgainst` still holds one version per package with nowhere to put one. The
+> row also says "a migration of all 78 entries"; the register now holds **97**.
 
 ### 184. Unsaved-work guard: the findings its gate pass did not block on
 
@@ -2614,6 +2843,21 @@ read from `distinctControlHeights` rather than from the label tops.
 
 ---
 
+> **Hypothesis 2's disposition is OVERTURNED, 2026-08-27 — and this row still recorded the
+> revert until the 2026-09-03 sweep.** The row says the type-scale change "costs 74 px and buys
+> nothing measurable" and was reverted twice. It **shipped**, in `docs/specs/object-bar-defects/`
+> M3, and the measurement did not survive contact: 75 px total, **zero extra lines**, deck height
+> unchanged at 108 px at both 1920 and 1646.
+>
+> It was kept for a reason this row never knew. The `text-micro` override produced **two type scales
+> by two mechanisms**: `> span:last-of-type` also lands on `ToolbarButton`'s `sr-only` span, so a
+> plain command's label grew from 10 px to 14 px **the moment it was disabled** — and three items
+> were live in that state. So the selector is gone; only the docblock recording its deletion remains,
+> which makes this row's citation of it dead as well.
+>
+> The falsification record for hypotheses 1 and 3 stands and is still the useful part, as does the
+> instrument's blind spot: `labelOf` selects `<span>` only, so an `<input>` control is invisible to it.
+
 ### 191. The local pre-push gate costs 8 minutes and 96% of it is two steps
 
 **Status:** unverified
@@ -2685,6 +2929,19 @@ Do **not** answer this by dropping `check:*` scripts. They are 2.2% of the cost 
 of the gate that catches what a reviewer cannot see.
 
 ---
+
+> **Every quantity in this row is stale; the diagnosis is intact** (2026-09-03 sweep). Re-derived:
+> **fourteen** `check:*` gates, not ten — the row's named list omits `doc-register`, `debt-status`,
+> `reconcile-due` and `advisory-agreement`; **12.3 s** for the whole `--checks` pass, not 10.4 s; and
+> **600** web unit test files, not 552. The argument — that `pnpm test` is the overwhelming majority
+> and the `check:*` gates are the cheap part that catches what a reviewer cannot — is unchanged and
+> if anything strengthened, since the gates grew by four and still cost seconds.
+>
+> **Its staleness had escaped the register**, which is the part worth acting on: `CLAUDE.md` said
+> `prepush.sh` "derives **ten** of them" and `docs/TESTING.md` carried both 10.4 s and 11.5 s. Both
+> are corrected — `CLAUDE.md` now says it **derives** them without a number, because the list is
+> derived and a hard count in prose beside a growing set is ADR-0076 Class 1 by construction; that
+> figure had already been wrong twice.
 
 ### 193. Four more toolbar docblocks and five exports describe deleted machinery
 
@@ -2763,6 +3020,19 @@ and should be corrected whether or not the code goes. Decide the two questions s
 
 ---
 
+> **Every line citation in the bullet list has moved** (2026-09-03 sweep) — the docblocks were
+> corrected and the file shifted underneath the references to them. The **substance is unchanged and
+> verified**: all four docblocks now name what they used to say, and the corrected list of four dead
+> exports is exact — `priorityOf` has no caller at all, `partitionByTier` and `resolveLayoutMode` are
+> test-only, and `TOOLBAR_LAYOUT_HYSTERESIS_PX` is read only inside `resolveLayoutMode`. The row's own
+> correction about `TOOLBAR_LAYOUT_BANDS` is also verified right: it is module-private and read by a
+> live feature, so deleting it would break something.
+>
+> **One residue the row does not cover:** `toolbar-registry.test.ts` still says "never enters
+> `computeLadder`'s companion lookup" — a surviving citation of deleted machinery, sitting a few lines
+> above the correction that was supposed to catch it. This row's own failure mode, one line from its
+> own fix.
+
 ### 194. "The epic's own gate pass removes it" has now failed twice as an instruction
 
 **Status:** unverified
@@ -2772,7 +3042,11 @@ own commit._
 
 `scripts/frontend-only.json` arms an opt-in gate: while an epic declares itself frontend-only, any
 change under `apps/api/` or `packages/` fails CI. It is a good gate and it has now gone stale
-**three times out of three**:
+**twice out of two** _(this said "three times out of three" until the 2026-09-03 verification
+sweep; the git history holds exactly TWO armings — armed 2026-08-17, deactivated 2026-08-18, armed
+2026-08-25, deactivated 2026-08-26 — and `frontend-only.json`'s `history` array has two entries.
+This row's own title and table both said "twice"; only this sentence and the JSON `reason` field
+said three, and they were wrong)_:
 
 | Epic                 | Released                    | Still armed until | What it then blocked                                  |
 | -------------------- | --------------------------- | ----------------- | ----------------------------------------------------- |
@@ -2874,6 +3148,14 @@ Take them in the order above.
 
 ---
 
+> **One citation corrected, and it weakens the row's own reasoning** (2026-09-03 sweep). Item 3
+> describes the fourth copy (Tooltip) as having "deliberately different semantics (no outside-press
+> close, no focus restore)". Tooltip **does** close on an outside press now — added by a later review
+> finding, on the grounds that a touch device has no Escape and no reliable blur. Only the "no focus
+> restore" half still holds. That makes the fourth copy **more** similar to the other three, so the
+> stated reason for not extracting a `useEscapeToClose` leaf — accommodating the variance — rests on
+> less variance than the row claims. Items 2 and 3 are otherwise confirmed at three and four copies.
+
 ### 200. Two named-slot registries, one of them the better pattern, neither shared
 
 **Status:** unverified
@@ -2906,11 +3188,19 @@ reset shell-scoped ones that should not reset.
 
 **What does not stop sharing the implementation.** `ChromeSlot` could call the same self-registering
 hook shape against `ChromeSlotContext`, which would delete `rowsSlotRef` / `identitySlotRef` /
-`drawerSlotRef` / `statusSlotRef` as props, `ChromeSlotHost`'s render-prop signature, and those
+`modeSlotRef` / `statusSlotRef` as props, `ChromeSlotHost`'s render-prop signature, and those
 eleven call sites.
 
 **Trigger:** the next named chrome slot. Adding a fifth this way pays the threading tax again, with
 the better pattern sitting one directory over.
+
+> **Citation corrected 2026-09-03 by the verification sweep.** This row listed `drawerSlotRef` among
+> the props a merge would delete. That name has **no matches anywhere** in `apps/web/src`: the
+> `drawer` slot was deleted on 2026-09-01 (`#156`) and `mode` added by the three-section header, so
+> `CHROME_SLOT_NAMES` is now `['rows', 'identity', 'mode', 'status']`. The count is still four by
+> coincidence, of a different set. The "eleven test call sites" figure is also historical — the test
+> side is now absorbed by `test-chrome-host.tsx` iterating `CHROME_SLOT_NAMES`, so three test files
+> reference these props. **The production-side threading tax the row is actually about is unchanged.**
 
 ### 202. Six non-blocking findings from the foot-row gate pass
 
