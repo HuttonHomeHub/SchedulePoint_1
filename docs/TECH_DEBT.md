@@ -1130,6 +1130,43 @@ changes to how the register is written, so both need the spec ADR-0105 requires.
 `Verified:` field is written inline and read at column 0, so `A8` has never fired and the sixteen
 rows this sweep checked and found accurate carry no machine-readable trace of having been checked.
 
+### 248. The DCMA what-if drops the levelling pass, and nothing says so
+
+**Status:** open · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** S · **Owner:** repo
+
+`schedule.service.ts:822` destructures `{ activities, edges, options, meta }` from
+`buildEngineGraph` — and the builder's return type also carries
+`leveling: { assignments: EngineAssignment[]; resources: EngineResource[] } | null`, which is
+**dropped on the floor**. So ADR-0116 M6's critical-path test runs `computeSchedule` twice and never
+calls `levelSchedule`, while `recalculate` (`schedule.service.ts:277-296`) runs the levelling pass
+whenever `plan.levelResources` is true and persists **that** result.
+
+On a levelled plan the what-if therefore perturbs a schedule the product does not display. Its
+control run reproduces the pure network dates, so the movement it reports is measured against the
+wrong baseline — and the answer looks entirely reasonable, because every number in it is internally
+consistent.
+
+**Nothing records this as a limitation.** `grep -ci "level" docs/adr/0116-*.md` returns **0**. The
+ADR is otherwise scrupulous about naming what its measurement does and does not cover — it carries
+its own deliberately weaker parity sentence and a written non-mutation proof — so the omission reads
+as an oversight rather than a decision, which is exactly what makes it worth a row: a reader
+auditing that endpoint would find a careful document that never mentions the gap.
+
+**Found by two independent reviewers** (database-architect and test-engineer) while reviewing the
+revision-compare spec, because that spec proposed to reuse this module's replay mechanism and would
+have inherited the gap. It is filed here rather than there because it is **live in shipped code**
+and stands whatever happens to that epic.
+
+**Why no gate caught it.** The seeded fixture plan reports `leveledActivityCount: 0` with
+`level_resources = false` and 45 resource assignments — so every test that exercises this route runs
+against a plan where the dropped pass would have been a no-op anyway.
+
+**The fix is one of two, and the choice is the decision.** Either thread `graph.leveling` through and
+run `levelSchedule` on both the control and the perturbed pass — which makes the what-if agree with
+what the planner sees, at the cost of a second pass per side — or state the limitation in the route's
+OpenAPI description and in ADR-0116, the way that ADR already states its parity caveat. The second is
+cheap and honest; the first is correct. **Do not do neither.**
+
 ### 247. A8 reads a field at column 0 that the register only ever writes inline, so it has never fired
 
 **Status:** open · **Raised:** 2026-09-03 (found while trying to record the sweep's result) · **Size:** S ·
