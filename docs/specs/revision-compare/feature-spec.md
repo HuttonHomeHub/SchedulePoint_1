@@ -37,10 +37,23 @@ were wrong or incomplete, and all three change the work.**
 | V6  | The backlog's problem statement is current (brief asks: check it)                               | It is **stale, in the helpful direction** — see §0.1.                                                                                                                                                                                                                                                                                                                                     | **Changed**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 **One more correction, out of scope but recorded rather than stepped over:**
-`docs/DATABASE.md:650` says `BaselineActivity` duplicates `duration_days`. The column is
+`docs/DATABASE.md:650` said `BaselineActivity` duplicates `duration_days`. The column is
 `durationMinutes` (`schema.prisma:1828`), changed by ADR-0036. A spec written from that document
-rather than from the schema would inherit a wrong field name. Not this epic's to fix; filed as a
-suggestion in the plan's rollup.
+rather than from the schema would inherit a wrong field name.
+
+> **FIXED 2026-09-03 in `4abae7f9`, and the review that read the file afterwards concluded this
+> claim was false.** It was not: `git show 4abae7f9^:docs/DATABASE.md | sed -n '650p'` returns the
+> `duration_days` line, and `git show 4abae7f9:…` returns the corrected one. The reviewer applied
+> exactly the right method — measure the artefact, do not trust the document — and reached a wrong
+> conclusion because **the artefact changed underneath it** between the claim being written and the
+> review being run. That is ADR-0099's "a sweep measures the tree it runs against", occurring inside
+> a review rather than inside a milestone, and it is worth keeping because the reviewer's instinct
+> was correct and its conclusion was not.
+>
+> What the review **was** right about is the consequence: the implementation plan's M1-T1 step 5 told
+> a future reader to fix a line that is already fixed. Following it would have edited a correct
+> document. That task is deleted rather than reworded. Not this epic's to fix; filed as a
+> suggestion in the plan's rollup.
 
 ### 0.1 The problem statement moved — verify the problem, not only the design
 
@@ -106,7 +119,7 @@ did you alter. The distinction is structural rather than a missing feature:
 
 | Engine input surface                                            | Count                                                                         | Frozen by a baseline                                                |
 | --------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `EngineActivity` fields                                         | 18                                                                            | **2** (`durationMinutes`, `type`)                                   |
+| `EngineActivity` fields                                         | 20                                                                            | **2** (`durationMinutes`, `type`)                                   |
 | `EngineEdge` fields                                             | 6 (`id`, `predecessorId`, `successorId`, `type`, `lagMinutes`, `lagCalendar`) | **0** — there is no `BaselineDependency` model                      |
 | `ComputeOptions` plan scalars                                   | 8 (`schedule.service.ts:1262-1280`)                                           | **0**                                                               |
 | Working-time definition (shifts, exceptions, exception windows) | —                                                                             | **0** — only the scalar `hoursPerDayMinutes` (`schema.prisma:1760`) |
@@ -529,7 +542,7 @@ judgement the agent exists to make. What follows is the requirement set to hand 
 **Q1 — Replay completeness.** The model must let `computeSchedule` be replayed **exactly** from the
 snapshot with **no reference to any live row**. That surface, enumerated from the code:
 
-- **Per activity, 18 fields** (`engine/types.ts:39-154`): `id`, `durationMinutes`, `type`,
+- **Per activity, 20 fields** (`engine/types.ts:39-154`): `id`, `durationMinutes`, `type`,
   `parentId`, `calendar` (see Q2), `externalEarlyStart`, `externalLateFinish`, `constraintType`,
   `constraintDate`, `secondaryConstraintType`, `secondaryConstraintDate`, `visualStart`,
   `scheduleAsLateAsPossible`, `actualStart`, `actualFinish`, `remainingMinutes`, `resumeDate`,
@@ -586,6 +599,66 @@ is the `BaselineActivity` shape and none of them is a new decision.
 **Q8 — Storage, measured before it ships.** The ADR-0072 M3 precedent measured 592 B/row at 1M rows
 and answered the partitioning question with data. Do the same here: bytes per activity per revision,
 and the implied cost of the CQ-1 capture policy at 2,000 activities × the expected revision count.
+
+**Q9 — Does the snapshot freeze the RESOURCE-LEVELLING surface?** _Added 2026-09-03; found
+independently by the database and test reviewers, and it is the finding that most changes the
+schema._ **The persisted schedule is not `computeSchedule`'s output.** `schedule.service.ts:277-296`
+runs a **second** engine pass — `levelSchedule(...)` — whenever `plan.levelResources` is true, and
+**that** result is what `writeResults` persists. So Q1's bar ("replayed **exactly** from the
+snapshot") is false as scoped for any levelled plan, and Tier 3's replay would reproduce the pure
+network dates while the product shows levelled ones.
+
+The missing surface: **2 more plan scalars** (`level_resources`, `level_within_float_only` — so §1's
+"8 plan scalars" is **10**), `EngineAssignment[]` (`activityId`, `resourceId`, `unitsPerHour`,
+`lagMinutes`) and `EngineResource[]` (`id`, `capacity`, **its own calendar port**).
+
+Three things make this sharp rather than routine. **This spec's own §0 V3 found it** — that
+`BaselineAssignment` does not freeze `units_per_hour`, so a baseline cannot report a
+levelling-relevant change — and then the finding never reached Q1: the gap diagnosed in the model
+being replaced, reproduced in its replacement. **The precedent inherits it silently**:
+`schedule.service.ts:822` destructures `{ activities, edges, options, meta }` and **drops
+`graph.leveling`**, which `buildEngineGraph` computes — so ADR-0116's DCMA what-if has never run the
+levelling overlay, and `grep -ci "level" docs/adr/0116-*.md` returns **0**, so nothing records that
+as a limitation. That is a live finding about shipped code, filed separately. And **both gates are
+blind**: the fixture plan reports `leveledActivityCount: 0` with levelling off and 45 assignments, so
+M1-T2's replay-equivalence acceptance test would go green against a snapshot with no levelling inputs
+at all.
+
+The conditional freeze is the likely right answer — a revision captured with levelling off
+legitimately has no rows, because it replays a plan that was not levelled — but **whichever way it
+goes it must be written down**, in the shape `BaselineAssignment`'s own docblock uses
+(`schema.prisma:1923-1927`, "WHAT IS DELIBERATELY _NOT_ FROZEN HERE"), never by silence.
+
+**Q10 — How is "this plan had no calendar" distinguished from "a calendar's snapshot rows are
+missing"?** `buildPlanCalendar(null)` returns `allMinutesWorkCalendar` — a 24/7 week
+(`plan-calendar.ts:53`). So a dropped snapshot row does **not** fail the replay; it silently
+schedules on a 24-hour week and the difference is attributed to whatever else moved. This needs a
+`NOT NULL` discriminator or a fail-closed CHECK, and it cannot be added once rows exist, because
+there is no evidence left to backfill from.
+
+**Q11 — Are `code` and `name` frozen?** They appear nowhere in Q1–Q8 — Q1 enumerates engine inputs,
+and neither is one. But `code` is the **only** available correlation key across separately-imported
+plans, and the live rows it would have come from are gone by the time M5 needs it. So a snapshot
+without `code` **precludes CQ-2 permanently** — which is precisely what CQ-2's answer promises not to
+do. `name` is separately required by US-2: an `ACTIVITY_REMOVED` row has no live row to read a label
+from. One line now (`code String?`, `name String`, the `BaselineActivity` shape verbatim,
+`schema.prisma:1825-1827`); a migration plus an unbackfillable gap later.
+
+**Q12 — What ENFORCES immutability?** Q7 states it as a property and nothing states the mechanism —
+and the proposed row carries `version`, an optimistic-locking column, which implies rows are
+updatable. ADR-0072's `audit_events` precedent is a `BEFORE UPDATE` database trigger; the alternative
+is a service-layer rule. This is the difference between "a snapshot that moves is not a snapshot"
+being a **structural** guarantee and a **procedural** one — exactly the distinction ADR-0085 D1 spent
+a whole decision on.
+
+> **Two of the original eight are less open than they were written.** **Q4** (freeze the output?) is
+> not a genuine two-sided trade: its rejected option is "recompute it", and §4.6 Claim B declares the
+> Tier 1+2 route engine-free and gates it with an import ban — so recomputation is **structurally
+> forbidden on the only route that reads it**. The answer is freeze; say so and let the architect
+> spend its judgement elsewhere. **Q6** (indexes) was measured during review: with
+> `(revision_id, source_activity_id)`, loading a whole revision is **0.167 ms at 147 activities and
+> 0.439 ms at 2,000** — an Index Cond at both. State it as a confirmed expectation, not a question.
+> The `revisions` parent list still needs `(plan_id, captured_at, id)` for the cursor.
 
 ### 4.5 API changes
 

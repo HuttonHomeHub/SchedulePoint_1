@@ -79,25 +79,88 @@ The residual is the interaction term. One day absorbs calendar-window rounding; 
 already accepts 5 days against a 600-day injection (`critical-path-test.ts:39`), so this is the
 stricter of the two bars.
 
+> **The carrier is FIXED ONCE, from the control run — and that makes C1 nearly a tautology, which
+> this condition now says out loud rather than discovering after the fact (2026-09-03, the
+> specialist review).** The review's question was the right one: if the carrier is fixed, `Σ` is a
+> telescoping sum of one fixed activity's consecutive deltas along a chain ending at `R_new`, and
+> `Σ = total` **by arithmetic**, not because the attribution means anything. C1 could then only fail
+> on day-snapping noise accumulated across up to 12 passes — which the ±1-day tolerance is designed
+> to absorb.
+>
+> Fixed is still the right choice: re-deriving the carrier per step sums the movements of
+> **different activities**, which is not a decomposition of anything, and it makes `total`'s own
+> carrier ambiguous. So the semantics stay, and **C1 is downgraded in what it claims**. It is an
+> arithmetic self-check — it catches a harness that drops a class, double-counts one, or accumulates
+> rounding — and it is **not** evidence that attribution is meaningful. **C2 and C4 carry that
+> weight alone.** Stating this now costs nothing; discovering it in the verdict would have meant
+> reporting a PASS that three quarters of the predicate did not support.
+
 ### C2 — order-stability
 
 Over **all 6 permutations** of the three largest-contributing classes (remaining classes held in a
 fixed tail): no class's attributed share moves by more than **10 percentage points of `total`**,
 **and** the rank order of the top three classes is **identical in all six runs**.
 
-### C3 — cost
+### C3 — cost (two limbs)
 
-One full attribution over the fixture completes in **≤ 3.0 s p95** measured end-to-end over the real
-route, and the number of engine passes is **O(classes present), capped at 12** — never O(changed
-activities).
+> **The cost basis this condition shipped with was WRONG, and C3 gains a second limb because of
+> it (2026-09-03, the specialist review).** It read: _"one extra pass at 2,000 activities measured
+> at ≈150 ms, from ADR-0116's 846.5 ms two-pass route against a 694.3 ms one-pass recalculate."_
+> That subtraction is invalid. The two routes do not differ only in pass count: `recalculate`
+> (`schedule.service.ts:265-312`) takes the plan advisory lock, asserts the pen, and then **writes**
+> — `writeResults`, `writeDrivingFlags`, `stampScheduleComputedAt`, thousands of rows.
+> `critical-path-test` writes nothing. So `846.5 − 694.3` is (one extra pass) **minus** (the entire
+> write-back), not (one extra pass). ADR-0116's own `m6-measurement.md:60` states the caveat; the
+> figure was quoted forward without it.
+>
+> Two reviewers measured the bare pass independently: **≈240 ms and ≈343 ms p95 at 2,000
+> activities**, against the ≈150 ms asserted. So the capped replay is **3.1–4.4 s of engine alone**
+> against a 3.0 s budget, before HTTP, hydrating two snapshots, building two graphs and diffing.
+>
+> **C3 as originally written could not have detected this**, because its subject is the 147-activity
+> fixture, where 12 passes ≈ 320 ms — it clears 3.0 s by an order of magnitude and says nothing
+> about the scale S6 is written for. A condition that cannot fail at the size that matters is not a
+> condition. Hence **C3-b**.
 
-Cost basis: one extra pass at 2,000 activities measured at ≈150 ms, from ADR-0116's 846.5 ms
-two-pass route against a 694.3 ms one-pass recalculate.
+**C3-a — cost on the fixture.** One full attribution over the 147-activity fixture completes in
+**≤ 3.0 s p95** measured end-to-end over the real route, and the number of engine passes is
+**O(classes present), capped at 12** — never O(changed activities).
+
+**C3-b — cost at scale (the limb that can actually fail).** The same attribution over a
+**2,000-activity** plan completes in **≤ 3.0 s p95** end-to-end. If it does not, C3 fails, and the
+remedy is a scope decision for the product owner rather than a softened bar: shrink the replayable
+class vocabulary until the pass count fits, restate S6 as a function of plan size, or accept that
+Tier 3 is available only below a stated size — each with the measured number beside it.
+
+Cost basis, corrected: **one bare `computeSchedule` pass at 2,000 activities is ≈240–343 ms p95**,
+measured directly in-process rather than derived by subtracting two routes. The lower figure is the
+more conservative of the two independent measurements and the higher was taken on a network
+replicated as disjoint components, which shortens critical paths — so the true figure is at or above
+240 ms, and the arithmetic above holds either way.
 
 ### C4 — non-vacuity (the pinned positive case)
 
 The generated change set moves the carrier by **≥ 10 working days** and touches **≥ 3 distinct
 classes**, at least one a **logic** change and one a **calendar** change.
+
+**C4-b — the adversarial requirement.** At least **two** of the changed classes must act on
+activities that **compete for the same float** — that is, they must share a float-bearing path to
+the carrier. Without this, C1 and C2 can be satisfied by three independent, non-interacting chains
+each carrying one class, which tests nothing about the order-dependence the epic exists to measure.
+The review named the incentive plainly: a generator built by someone hoping for PROCEED will produce
+exactly that change set unless the condition forbids it.
+
+**C4-c — per-class non-triviality.** **Each** touched class must move the carrier by a non-zero
+amount **on its own**, asserted per class rather than in aggregate. C4's ≥10-day/≥3-class bar can be
+met with two classes carrying the whole movement and a third contributing exactly zero — and the
+verdict would then claim to have validated a class that was never exercised.
+
+The concrete trap is already known: a `DURATION` change applied to a `WBS_SUMMARY` (no logic,
+ADR-0038), a `LEVEL_OF_EFFORT` (duration is an **output** — its span is derived) or a milestone (zero
+duration by definition) is **silently inert**. `critical-path-test.ts:44-48` already carries this
+knowledge as `PERTURBABLE_TYPES`. So the generator selects by a **type-aware candidate map per
+class** read back from the API — never by index into the fixture array — and reuses that constant
+rather than restating it.
 
 Without this, C1 and C2 pass **trivially** against a change set that moves nothing. That is the
 failure ADR-0093 and ADR-0108 both record — a green suite that cannot distinguish "all correct" from
