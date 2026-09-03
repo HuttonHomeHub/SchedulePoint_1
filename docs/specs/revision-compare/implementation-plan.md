@@ -1,8 +1,9 @@
 # Implementation Plan: Revision Compare
 
 - **Feature spec:** [`./feature-spec.md`](./feature-spec.md)
-- **Status:** Draft — **awaiting approval before implementation**
-- **Owner:** _(to be assigned on approval)_
+- **Status:** **APPROVED 2026-09-03** for M0–M2 (see the boundary below). The four critical
+  questions are answered in the spec's §6.
+- **Owner:** repo
 
 > **Approving this plan approves M0, M1 and M2 only.**
 > **M4 (the verdict) is not approved by approving this plan.** M0 is a measurement that is allowed

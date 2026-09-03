@@ -1,6 +1,7 @@
 # Feature Spec: Revision Compare
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** **APPROVED 2026-09-03** for M0–M2 (the implementation plan states the boundary). §6's
+  four critical questions are answered there.
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-03
 - **Tracking issue / epic:** _(to be opened on approval)_
@@ -764,6 +765,23 @@ per slice in the plan's sequencing table.
 ## 6. Critical questions
 
 Four. Everything else has a stated default above and is not blocking.
+
+> **ANSWERED by the product owner, 2026-09-03.** All four are settled; the reasoning below is kept
+> because it is what the answers were chosen against, and because CQ-4 is deliberately still open.
+>
+> - **CQ-1 → (b) explicit + auto on interchange import.** The "last Tuesday" weakness is **accepted
+>   knowingly**, not overlooked: option (c) buys it with a scheduled job and a retention policy, and
+>   this epic already carries a research risk in Tier 3. (c) stays available and additive — it needs
+>   no schema change beyond what M1 designs — so it is a later decision made on evidence that
+>   planners hit the gap, not a door this closes.
+> - **CQ-2 → the stated default.** Out of scope for M1–M4, specified as M5. The architect is still
+>   told the identity model must not **preclude** it (§4.4), because that is the part that cannot be
+>   retrofitted.
+> - **CQ-3 → schedule inputs only.** One URL, one document, every member can open it — which is what
+>   makes it a handover artefact rather than a Planner-only report. Cost arrives later as a
+>   `cost:read`-gated `?include=cost` projection whose absence is byte-identical, so adding it
+>   changes nothing for existing readers and needs no G4-style gate before it exists.
+> - **CQ-4 → do not pre-commit**, as the default states. The answer is to ask when the numbers exist.
 
 ### CQ-1 — What captures a revision?
 
