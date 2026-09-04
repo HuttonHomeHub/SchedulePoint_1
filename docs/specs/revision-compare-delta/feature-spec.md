@@ -460,7 +460,21 @@ Three properties make it worth stating as a decision rather than an implementati
 
 1. **The engine is not imported.** ADR-0116 D1's sentence, not its weaker D7 sibling. The ADR-0034
    recalculation parity gate is untouched **by construction**: `computeSchedule` is not called, its
-   signature is unchanged, no new input kind exists, and no engine-path file is touched.
+   signature is unchanged, and no new input kind exists.
+
+   > **This clause used to end "and no engine-path file is touched", and that became false on
+   > 2026-09-04** when the product owner accepted Option B (`cq1-schema-design.md` §7): the
+   > recalculation **persistence** path gains four `SET` clauses in `stampScheduleComputedAt`, so
+   > it records the criticality settings it actually ran with. Corrected here rather than left to
+   > be discovered, because a stale claim of engine-purity is exactly the drift this repository
+   > keeps recording — and it is the kind a reader has no reason to doubt.
+   >
+   > The accurate statement is narrower and still strong: **the recalculation persistence is
+   > touched; the engine is not.** `computeSchedule` neither reads nor writes the mirrors, its
+   > signature and behaviour are unchanged, and the mirrors are written by a statement that
+   > already ran in the same transaction — so the parity gate holds for the same structural reason
+   > it did before.
+
 2. **Nothing is written**, so the read takes no plan lock, no advisory lock, no transaction and no
    pen. As ADR-0116 D1 puts it, that is an advantage over the benchmark endpoints rather than a
    resemblance: it can neither block a recalculation nor be blocked by one, and the only concurrency

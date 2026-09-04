@@ -570,7 +570,28 @@ detect a definition change _at all_; with these four columns it detects every ca
 settings on the row were never applied to the output". That is a strict, large improvement, which is
 why the recommendation is to land it.
 
-### Option B — the complete fix, costed, and NOT taken here
+> ### ACCEPTED 2026-09-04 — the product owner chose Option B
+>
+> Finding F2 was put to the product owner with the four options costed, and they chose **to fold the
+> complete fix in now** rather than ship the proxy and file the remainder.
+>
+> Two consequences are taken on deliberately and must not be discovered later:
+>
+> 1. **This epic can no longer claim "no engine-path file is touched".** The recalculation
+>    persistence path is touched — four more `SET` clauses in `stampScheduleComputedAt`. The claim
+>    is reworded to _"the recalculation persistence is touched; the engine is not"_ everywhere it
+>    appears, and `computeSchedule`'s signature and behaviour are still untouched, so the ADR-0034
+>    parity gate holds. The reword is a task, not an aside: a stale claim of engine-purity is
+>    exactly the drift this repository keeps recording.
+> 2. **It is a second schema change, so it takes its own mandatory `database-architect` pass.**
+>    Accepting a design an agent sketched in a rejected-alternatives section is not the same as
+>    having designed it; §19.3 admits no exception, and "the architect already described it" is
+>    precisely the judgement the rule exists to remove.
+>
+> The four `baselines` columns in §5 are **unchanged** by this decision — only the source they copy
+> from changes (D7).
+
+### Option B — the complete fix, costed, and NOW ACCEPTED (see the banner above)
 
 Make the recalculation record what it ran with, and copy **that** into the baseline:
 
