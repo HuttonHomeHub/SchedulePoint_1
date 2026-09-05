@@ -142,32 +142,88 @@ milestone (ADR-0081 §2).
      entirely, and a comparison is only as good as the planner's baseline habit.
   3. Add the `docs/adr/README.md` entry and the `CLAUDE.md` §16 entry in the **same** commit.
 
-##### Task M0-T5 — **Conditional on CQ-1 = (b):** the criticality-settings freeze
+##### Task M0-T5 — the criticality-settings freeze **(CQ-1 answered (b) — this task exists)**
 
-- **Description:** Three constant-defaulted scalars on `baselines` — `critical_path_definition`,
-  `critical_float_threshold_minutes`, `make_open_ends_critical` — so a definition change can be
-  detected rather than silently reported as path movement.
+> **REWRITTEN 2026-09-05.** Everything below the heading was stale against the two mandatory
+> `database-architect` passes that ran after this plan was written, in three ways that would each
+> have produced wrong work. The wrong version said: _three_ constant-defaulted scalars, the epic's
+> _only_ schema change, written _from the plan row_. All three are false. Corrected in place rather
+> than deleted, because the plan being wrong about its own schema task is the finding.
+
+- **Description:** **Four** nullable columns on `baselines` — `criticality_definition`,
+  `criticality_threshold_minutes`, `criticality_float_mode`, `criticality_open_ends` — so a
+  definition change can be detected rather than silently reported as path movement.
 - **Complexity:** M
-- **Dependencies:** CQ-1 answered (b); **`database-architect` first**
-- **Risks:**
-  - **This task exists only if CQ-1 says so, and if it exists it is the epic's only schema change.**
-    `database-architect` is **mandatory and unconditional** (`CLAUDE.md` §19.3, §20). If the agent
-    returns nothing, fails or is slow, **re-run it** — an unavailable agent is a reason to wait,
-    never a reason to proceed. A migration is checksummed the moment it lands and applies to a real
-    database; a mistake costs a second migration in every environment rather than an edit.
-  - A non-constant default forces a table rewrite → constant DEFAULT only, the ADR-0068
-    `hours_per_day_minutes` precedent verbatim (`schema.prisma:1755-1760`).
-  - Existing baselines silently change meaning → the constant defaults are today's plan defaults,
-    so every pre-existing row keeps exactly today's behaviour. Say so in the column docblock, in the
-    "WHAT IS DELIBERATELY NOT FROZEN HERE" style `BaselineAssignment` already uses (`:1923-1927`).
-- **Testing:** `pnpm --filter @repo/api prisma migrate diff` drift check; a capture e2e asserting the
-  three values are written from the plan; the existing baselines suite unchanged.
+- **Dependencies:** **M0-T6 lands first and in an earlier release** (see below); design is
+  [`cq1-schema-design.md`](./cq1-schema-design.md)
+- **Corrections the design pass made, each of which the plan had wrong:**
+  - **Four columns, not three.** `total_float_mode` (`schema.prisma:706`) was omitted, and
+    `compute.ts:675-687` shows it deciding **both** the `total_float` this feature reports as float
+    movement **and** the left-hand side of the criticality test. Moving `FINISH → SMALLEST` changes
+    the critical set with **every date byte-identical** — which is the invisible false movement CQ-1
+    exists to prevent, reproduced one field along.
+  - **Nullable sentinels, not constant defaults.** ADR-0068 is the **wrong precedent** and its own
+    migration says why: `DEFAULT 1440` was legal because 1440 was _true of every existing row_. That
+    does not hold here — all four settings have been planner-writable since `20260716180000` — so a
+    constant default states, in a `NOT NULL` column a reader cannot doubt, a rule the baseline may
+    never have been computed under. The governing precedent is one table along:
+    `baseline_activities.budgeted_expense` is nullable, its docblock recording that
+    `NOT NULL DEFAULT 0` was rejected because **"0 is a claim"**. NULL here means _unknown_.
+  - **Not written from the plan row.** See M0-T6 — the row holds the _configuration_, which is not
+    necessarily what the engine ran.
+- **Testing:** the migration's own SQL read from the shipped file, never restated; a capture e2e
+  asserting the four values come from the **mirrors**; the existing baselines suite unchanged.
 - **Development steps:**
-  1. Run `database-architect` on the requirement, not on a proposed schema.
-  2. Migration + `schema.prisma` docblocks.
-  3. Write them in `createWithSnapshot` from the plan row inside the existing locked capture tx.
+  1. Apply `cq1-schema-design.md` — migration + `schema.prisma` docblocks. Two CHECKs:
+     `num_nonnulls(...) IN (0,4)` fail-closed, and a nullable-safe range mirroring
+     `ck_plans_critical_float_threshold_minutes_range`.
+  2. `CaptureInput` gains **one nullable grouped object**, not four required fields — the mirror is
+     NULL for any plan recalculated before M0-T6 shipped, and requiredness was the design's own
+     stated all-or-none mechanism.
+  3. Re-read the plan **inside the capture lock**: a recalculation can commit between capture's
+     outer plan read (`baselines.service.ts:122`) and its lock (`:127`).
   4. `docs/DATABASE.md` beside the Baseline section; `pnpm check:counts` for the model/migration
      figures in the `CLAUDE.md` banner.
+
+##### Task M0-T6 — the `plans` criticality mirror **(Option B, accepted; ships ONE RELEASE AHEAD of M0-T5)**
+
+- **Description:** Four nullable engine-owned columns on `plans`, written by the existing
+  `stampScheduleComputedAt` statement, recording the criticality settings the recalculation
+  **actually ran with**. Design is [`optionb-schema-design.md`](./optionb-schema-design.md).
+- **Complexity:** M
+- **Dependencies:** `database-architect` design exists and is accepted; **nothing applied yet**
+- **Why it exists:** a settings PATCH neither recalculates nor marks the schedule stale — verified,
+  `scheduleComputedAt` occurs nowhere in `src/modules/plans/`, and the UI says so on screen. So
+  freezing the plan's _current_ settings onto a baseline records the rule that was **configured**,
+  which may never be the rule its numbers came from. No column on `baselines` can close that.
+- **The trap this task exists to avoid, and it is not hypothetical:** the obvious implementation —
+  `SET criticality_definition = critical_path_definition` — copies the row's own configuration. The
+  plan is read at `schedule.service.ts:246`, **outside the transaction and before**
+  `lockPlanForWrite` at `:268`, and a settings PATCH takes no plan lock (the advisory locks in
+  `plans.service.ts` are calendar-scoped). **So the engine can run rule A while the row already
+  holds rule B** — Finding F2's defect reproduced inside F2's own fix, and undetectable afterwards.
+- **Risks:**
+  - Sourcing the mirror from `graph.options` needs `?? 'TOTAL_FLOAT'` / `?? 0` at the write site,
+    because all four `ComputeOptions` fields are optional (`compute.ts:71`, `:77`, `:83`, `:90`) —
+    the forbidden defaulting arriving through the write side. → **one shared required-typed
+    `CriticalityRule`** built where `options` is built, spread into `options` and passed as a
+    **required parameter**, so engine input and mirror cannot drift.
+  - **Release ordering is load-bearing and irreversible if skipped.** The mirror self-populates on
+    every recalculation, so each recalc between the two releases converts a plan from "next capture
+    is permanently UNKNOWN" to "next capture records a real rule". Free, and unrecoverable later.
+- **Testing:** the ADR-0022 property proved by execution (a five-clause raw `UPDATE` leaves
+  `version`, `updated_at` and `updated_by` untouched); all three CHECKs verified to refuse and admit
+  under `UPDATE`, which is the shape this write takes; the recalculation suites unchanged.
+- **Development steps:**
+  1. Apply `optionb-schema-design.md` — migration, the third CHECK
+     (`definition IS NULL OR schedule_computed_at IS NOT NULL`, which has no `baselines` analogue),
+     and the `CriticalityRule` extraction.
+  2. **Reword the engine-purity claims** wherever they appear: `schedule.service.ts` and
+     `schedule.repository.ts` both change, so _"no engine-path file is touched"_ is false. The
+     accurate form is **"the recalculation persistence is touched; the engine is not"** —
+     `computeSchedule`'s signature and behaviour are unchanged, it never reads the mirrors, and the
+     ADR-0034 parity gate holds structurally.
+  3. Ship, and let at least one release elapse before M0-T5.
 
 ---
 
@@ -481,17 +537,18 @@ Each slice keeps `main` releasable. **There is no `VITE_` flag** (spec D7 / ADR-
 constant is inlined at build time and has never been an operator rollback. **The rollback contract is
 the commit boundary**, and it is written down here per slice rather than left implicit.
 
-| Slice | Lands                                      | User-visible?          | Rollback contract                                                                                            |
-| ----- | ------------------------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| M0-T1 | The condition, alone                       | No                     | Revert one doc commit                                                                                        |
-| M0-T3 | The `completion-carrier.ts` correction     | No                     | Revert; `critical-path-test.spec.ts` is the oracle either way                                                |
-| M0-T2 | The harness + verdict                      | No                     | Revert; test-tier only                                                                                       |
-| M0-T4 | ADR-0125                                   | No                     | Revert one doc commit                                                                                        |
-| M0-T5 | _(CQ-1 = b only)_ the three frozen scalars | No                     | **A migration cannot be reverted by a revert** — additive, constant-default, so leaving it in place is inert |
-| M1    | The route, dark                            | No — **declared dark** | Revert the controller commit; nothing references it                                                          |
-| M2    | The dock + the menu item + the journey     | **Yes**                | Revert the menu-item commit alone: the dock becomes unreachable and the route stays dark                     |
-| M3    | Reveal + print                             | Yes                    | Revert either independently                                                                                  |
-| M4    | Gate-pass repairs                          | Yes                    | Per finding                                                                                                  |
+| Slice | Lands                                       | User-visible?          | Rollback contract                                                                                                                                                                                                                                       |
+| ----- | ------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0-T1 | The condition, alone                        | No                     | Revert one doc commit                                                                                                                                                                                                                                   |
+| M0-T3 | The `completion-carrier.ts` correction      | No                     | Revert; `critical-path-test.spec.ts` is the oracle either way                                                                                                                                                                                           |
+| M0-T2 | The harness + verdict                       | No                     | Revert; test-tier only                                                                                                                                                                                                                                  |
+| M0-T4 | ADR-0125                                    | No                     | Revert one doc commit                                                                                                                                                                                                                                   |
+| M0-T5 | The **four** frozen scalars on `baselines`  | No                     | **A migration cannot be reverted by a revert** — additive and **nullable**, so leaving it in place is inert. NULL means _unknown_, never a claim about the rule                                                                                         |
+| M0-T6 | The **four** criticality mirrors on `plans` | No                     | Additive and nullable, so inert if left. **But it must ship one release AHEAD of M0-T5** — the mirror self-populates on every recalculation, and recalcs in that window are the only thing that converts a plan from permanently-UNKNOWN to a real rule |
+| M1    | The route, dark                             | No — **declared dark** | Revert the controller commit; nothing references it                                                                                                                                                                                                     |
+| M2    | The dock + the menu item + the journey      | **Yes**                | Revert the menu-item commit alone: the dock becomes unreachable and the route stays dark                                                                                                                                                                |
+| M3    | Reveal + print                              | Yes                    | Revert either independently                                                                                                                                                                                                                             |
+| M4    | Gate-pass repairs                           | Yes                    | Per finding                                                                                                                                                                                                                                             |
 
 **If M0 says RESHAPE or WITHDRAW, M1 does not start.** The verdict goes to the product owner with the
 numbers, exactly as the previous M0's did — and the same rule applies: the remedy is a scope decision
