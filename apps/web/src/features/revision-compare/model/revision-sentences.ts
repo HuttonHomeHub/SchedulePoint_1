@@ -130,6 +130,22 @@ export const LEVELLING_CAVEAT =
   'from the levelled bars on the diagram.';
 
 /**
+ * The same fact for PAPER, and a sibling constant rather than a transformation of the one above.
+ *
+ * It differs in two ways, both deliberate. It prints **unconditionally**, because the screen's
+ * reader has the diagram beside them and can see which picture they are looking at while the paper's
+ * reader is somebody who was not in the room. And it is framed as what the numbers ARE rather than
+ * as a warning about what they are not, for the same reason.
+ *
+ * Written out rather than derived by string surgery from its sibling: the first draft did exactly
+ * that, and a later edit to one sentence would have produced a silently malformed one in the other
+ * — on the artefact where nobody is watching, which is the ADR-0063 M5 shape.
+ */
+export const LEVELLING_CAVEAT_PRINT =
+  'These figures read the network critical path. On a plan that levels resources, they can differ ' +
+  'from the levelled bars on the diagram.';
+
+/**
  * The one announcement, made when a comparison settles.
  *
  * "No baselines to compare" and "nothing entered or left" are DIFFERENT and stay different here,

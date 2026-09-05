@@ -122,7 +122,40 @@ test('a planner compares a revision against live and reads what entered the crit
   });
   expect(unreachable).toEqual([]);
 
-  // ── 7 · No axe violations on a POPULATED comparison ────────────────────────────────────────
+  // ── 7 · M3-T1: activating a row reaches the workspace selection ────────────────────────────
+  // Back to the width the rest of the journey runs at, so this claim is not judged on a viewport
+  // claim 6 narrowed for its own reason.
+  await page.setViewportSize({ width: 1646, height: 1080 });
+  await entered.getByRole('button', { name: new RegExp(enteringName) }).click();
+  // The canvas's parallel listbox is the a11y surface the reveal has to reach — the same seam the
+  // health epic's offender jump is asserted through, not a new one.
+  const listbox = page.getByRole('listbox', { name: 'Activities in the diagram' });
+  await expect(listbox.getByRole('option', { selected: true })).toContainText(enteringName);
+
+  // ── 8 · M3-T2: the printed comparison ──────────────────────────────────────────────────────
+  // `window.print` stubbed; the detached container stays mounted (teardown waits on `afterprint`,
+  // which a stub never fires), so its DOM can be read even though the screen stylesheet hides it.
+  await page.evaluate(() => {
+    window.print = () => {};
+  });
+  await panel.getByRole('button', { name: 'Print comparison' }).click();
+  const printed = await page.evaluate(() => {
+    const doc = document.querySelector('.tsld-print-container .revision-print');
+    return { rows: doc?.querySelectorAll('tbody tr').length ?? 0, text: doc?.textContent ?? '' };
+  });
+  // Every row printed — a print that emitted only what was scrolled into view is the founding
+  // defect `lib/print-document.ts` exists to prevent, and it looks complete.
+  expect(printed.rows).toBe(3);
+  expect(printed.text).toContain(enteringName);
+  expect(printed.text).toContain(leavingName);
+  // The honesty footer reaches PAPER, which outlives the conversation it came from.
+  expect(printed.text).toMatch(/does not say what caused it/i);
+  // A comparison against live is dated by the instant it was taken, or it is unreadable next week.
+  expect(printed.text).toMatch(/as at \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/);
+  // No code reaches paper, asserted against the REAL rendered document rather than a jsdom one.
+  expect(printed.text).not.toMatch(/PLAN_NOT_SCHEDULED|CARRIER_REMOVED|UNKNOWN|DIFFERS/);
+
+  // ── 9 · No axe violations on a POPULATED comparison ────────────────────────────────────────
   // Populated deliberately: an all-empty scan certifies nothing (the ADR-0116 M5 finding).
   const scan = await new AxeBuilder({ page })
     .include('[data-revision-compare-panel]')

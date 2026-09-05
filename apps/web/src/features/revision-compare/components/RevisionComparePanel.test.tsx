@@ -1,5 +1,5 @@
 import type { BaselineSummary, RevisionCompare, RevisionMovedActivity } from '@repo/types';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
 
@@ -266,6 +266,75 @@ describe('RevisionComparePanel', () => {
     renderPanel();
     const to = screen.getByLabelText(/compared with/i);
     expect(within(to).getByRole('option', { name: /live/i })).toBeInTheDocument();
+  });
+
+  /**
+   * M3-T1. A row activates and reaches the host once — the seam the journey then proves in the
+   * shipped layout.
+   */
+  it('activates a row that is on the live plan', () => {
+    const onActivateActivity = vi.fn();
+    renderPanel({
+      from: 'b1',
+      onActivateActivity,
+      compare: comparison({
+        criticalPath: { ...comparison().criticalPath, entered: [moved()], enteredTotal: 1 },
+      }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Roof covering/ }));
+    expect(onActivateActivity).toHaveBeenCalledExactlyOnceWith('a1');
+  });
+
+  /**
+   * **A row that cannot be activated is SHADED WITH A REASON, never silently inert and never
+   * hidden** (ADR-0082). `aria-disabled` plus a guard rather than the native attribute: a native
+   * `disabled` removes the control from the tab order along with the explanation, which is the
+   * defect one layer down, and blurs to `<body>` on a gate that flips.
+   */
+  it('shades a row that is not in the live plan, and says why', () => {
+    const onActivateActivity = vi.fn();
+    renderPanel({
+      from: 'b1',
+      onActivateActivity,
+      compare: comparison({
+        criticalPath: {
+          ...comparison().criticalPath,
+          left: [moved({ existsLive: false })],
+          leftTotal: 1,
+        },
+      }),
+    });
+    const row = screen.getByRole('button', { name: /Roof covering/ });
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    // Still focusable — the reason is reachable by keyboard, which a native `disabled` would take
+    // away along with the control.
+    expect(row).not.toHaveAttribute('disabled');
+    fireEvent.click(row);
+    expect(onActivateActivity).not.toHaveBeenCalled();
+    // The reason is a LINKED sibling, not folded into the name.
+    const reasonId = row.getAttribute('aria-describedby');
+    expect(reasonId).not.toBeNull();
+    expect(document.getElementById(reasonId!)!.textContent).toMatch(/not in the live plan/i);
+  });
+
+  /** With no host activation the rows are plain text: no shaded control claiming a missing action. */
+  it('renders plain rows when the host offers no activation', () => {
+    renderPanel({
+      from: 'b1',
+      compare: comparison({
+        criticalPath: { ...comparison().criticalPath, entered: [moved()], enteredTotal: 1 },
+      }),
+    });
+    expect(screen.queryByRole('button', { name: /Roof covering/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Roof covering')).toBeInTheDocument();
+  });
+
+  /** M3-T2's entry point. Withheld before a comparison exists — there is nothing to print. */
+  it('offers Print comparison only once a comparison exists', () => {
+    const { rerender, props } = renderPanel();
+    expect(screen.queryByRole('button', { name: /print comparison/i })).not.toBeInTheDocument();
+    rerender(<RevisionComparePanel {...props} from="b1" compare={comparison()} />);
+    expect(screen.getByRole('button', { name: /print comparison/i })).toBeInTheDocument();
   });
 
   it('has no axe violations with a populated result', async () => {

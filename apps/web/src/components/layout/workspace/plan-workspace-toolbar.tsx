@@ -227,6 +227,11 @@ export function ToolbarPlanWorkspace({
   // link 404 for anybody whose organisation does not hold those baselines. No VITE_ flag (spec D7 /
   // ADR-0088 D1): the rollback is a commit boundary.
   const [revisionsOpen, setRevisionsOpen] = useState(false);
+  // The comparison's Gantt reveal channel (M3-T1), the health dock's shape verbatim: an EVENT
+  // lifted into state, because the Gantt's scroll + ancestor-expand hang off
+  // `bringIntoViewActivityId` and selection alone scrolls nothing there. Cleared when the dock
+  // closes, so the standing sources resume.
+  const [revisionRevealId, setRevisionRevealId] = useState<string | null>(null);
   const [revisionFrom, setRevisionFrom] = useState<string | null>(null);
   const [revisionTo, setRevisionTo] = useState<string>(LIVE_REVISION);
   // **One closure over the set** (health M2-T2 step 7): each dock's closer, keyed by the member
@@ -244,7 +249,10 @@ export function ToolbarPlanWorkspace({
       },
       // The chosen sides deliberately SURVIVE a close: reopening the dock should not make a planner
       // pick the same two revisions again because another dock stole the column for a moment.
-      revisions: () => setRevisionsOpen(false),
+      revisions: () => {
+        setRevisionsOpen(false);
+        setRevisionRevealId(null);
+      },
     }),
     [setNotesOpen, modelFloatPathsClose],
   );
@@ -348,6 +356,7 @@ export function ToolbarPlanWorkspace({
   // is the honest destination (WCAG 2.4.3).
   const closeRevisionsAndFocus = useCallback(() => {
     setRevisionsOpen(false);
+    setRevisionRevealId(null);
     const target =
       document.querySelector<HTMLElement>('[data-toolbar-item="analysis"]') ??
       document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
@@ -1199,11 +1208,17 @@ export function ToolbarPlanWorkspace({
               // so this cannot go stale over the other two — the "whichever is set is an accident"
               // trap the comment above warns about, answered in writing for the third source.
               { bringIntoViewActivityId: healthRevealId }
-            : searchNavActive && ctx.currentMatchId !== null
-              ? { bringIntoViewActivityId: ctx.currentMatchId }
-              : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
-                ? { bringIntoViewActivityId: model.selectedActivityId }
-                : {})}
+            : revisionsDockActive && revisionRevealId !== null
+              ? // The comparison's row press, on the same footing and for the same reason. It sits
+                // BELOW health rather than above only because the two docks are mutually exclusive
+                // (`right-docks.ts`), so the order between them is unreachable — stated rather than
+                // left as an apparent precedence somebody later "fixes" without knowing it is inert.
+                { bringIntoViewActivityId: revisionRevealId }
+              : searchNavActive && ctx.currentMatchId !== null
+                ? { bringIntoViewActivityId: ctx.currentMatchId }
+                : floatPaths.emphasisIds.size > 0 && model.selectedActivityId !== null
+                  ? { bringIntoViewActivityId: model.selectedActivityId }
+                  : {})}
         />
         {/*
           The object-action bar, in the Gantt (M1). `CanvasDock` portals it into the Activities
@@ -1373,6 +1388,13 @@ export function ToolbarPlanWorkspace({
       onToChange={setRevisionTo}
       onClose={closeRevisionsAndFocus}
       levelResources={plan.levelResources}
+      onActivateActivity={(activityId) => {
+        canvasUi.requestSelectActivity(activityId);
+        model.onSelectionChange(activityId);
+        // The Gantt half of the reveal — selection alone scrolls nothing there. The SAME channel
+        // the health dock uses (M3-T2 of that epic), not a third one.
+        setRevisionRevealId(activityId);
+      }}
     />
   ) : null;
 

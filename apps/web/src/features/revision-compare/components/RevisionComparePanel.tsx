@@ -13,6 +13,7 @@ import {
   sideTitle,
   truncationNote,
 } from '../model/revision-sentences';
+import { printRevisionCompare } from '../print/RevisionComparePrintDocument';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,17 @@ export interface RevisionComparePanelProps {
   onClose: () => void;
   /** True when the plan levels resources — the caveat is a sentence, never silence (spec D6). */
   levelResources?: boolean;
+  /**
+   * Select an activity in the workspace and bring it into view (M3-T1). ONE prop for both views —
+   * the host lifts the selection and each view reveals it its own way: the canvas pans the selected
+   * bar in through the selection seam, and the Gantt through the host's reveal channel, because
+   * selection alone scrolls nothing there (the health epic's reviewer finding, reused rather than
+   * re-derived).
+   *
+   * Absent in a standalone host, in which case the rows are shaded WITH A REASON rather than
+   * silently inert.
+   */
+  onActivateActivity?: ((activityId: string) => void) | undefined;
 }
 
 /**
@@ -75,6 +87,7 @@ export function RevisionComparePanel({
   onToChange,
   onClose,
   levelResources = false,
+  onActivateActivity,
 }: RevisionComparePanelProps): React.ReactElement {
   const announce = useAnnounce();
   const headingId = useId();
@@ -121,6 +134,21 @@ export function RevisionComparePanel({
         titleClassName="text-sm font-medium"
         onClose={onClose}
         closeLabel="Close revision comparison"
+        actions={
+          compare === null ? null : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => printRevisionCompare(compare)}
+              // `h-7` overrides `size="sm"` for the panel's density; the coarse-pointer override is
+              // ADR-0118 M4's rule, applied here rather than left for a sweep to find — the health
+              // panel's twin shipped without it and the architecture gate caught it.
+              className="h-7 px-2 text-xs pointer-coarse:h-(--control-h)"
+            >
+              Print comparison
+            </Button>
+          )
+        }
       />
       <h2 id={headingId} className="sr-only">
         Compare revisions
@@ -253,6 +281,7 @@ export function RevisionComparePanel({
                   total={compare.criticalPath.enteredTotal}
                   cap={compare.criticalPath.cap}
                   emptyMessage="Nothing entered the critical path."
+                  onActivate={onActivateActivity}
                 />
                 <MovedSection
                   heading="Left the critical path"
@@ -261,6 +290,7 @@ export function RevisionComparePanel({
                   total={compare.criticalPath.leftTotal}
                   cap={compare.criticalPath.cap}
                   emptyMessage="Nothing left the critical path."
+                  onActivate={onActivateActivity}
                 />
               </>
             )}
@@ -302,6 +332,7 @@ function MovedSection({
   total,
   cap,
   emptyMessage,
+  onActivate,
 }: {
   heading: string;
   icon: typeof ArrowDownToLine;
@@ -309,6 +340,7 @@ function MovedSection({
   total: number;
   cap: number;
   emptyMessage: string;
+  onActivate?: ((activityId: string) => void) | undefined;
 }): React.ReactElement {
   const headingId = useId();
   const note = truncationNote(rows.length, total, cap);
@@ -325,20 +357,76 @@ function MovedSection({
         <ul className="space-y-1">
           {rows.map((row) => (
             <li key={row.activityId} className="text-sm">
-              <span>{row.name}</span>
-              {row.code === null ? null : (
-                <span className="text-muted-foreground"> · {row.code}</span>
-              )}
-              <span className="text-muted-foreground block text-xs">
-                {floatPhrase(row)}
-                {row.existsLive ? null : ' · not in the live plan'}
-              </span>
+              <MovedRow row={row} onActivate={onActivate} />
             </li>
           ))}
         </ul>
       )}
       {note === null ? null : <p className="text-muted-foreground text-xs">{note}</p>}
     </section>
+  );
+}
+
+/**
+ * One row, activatable when the host offers activation AND the activity is on the live plan.
+ *
+ * **A row that cannot be activated is shaded WITH A REASON, never silently inert and never hidden**
+ * (ADR-0082). A comparison of two baselines can name an activity that has since been deleted, and a
+ * control that navigates nowhere is worse than one that says why. `aria-disabled` plus a guard
+ * rather than the native attribute, because a native `disabled` on a control whose gate flips
+ * blurs to `<body>` — a defect this register records shipping at least four times — and because a
+ * disabled button is removed from the tab order along with its explanation, which is the ADR-0082
+ * finding one layer down.
+ *
+ * Where the host offers no activation at all, the row is plain text rather than a shaded button:
+ * there is no action to explain the absence of, and a shaded control on every row of a standalone
+ * host would be noise claiming a capability the host never had.
+ */
+function MovedRow({
+  row,
+  onActivate,
+}: {
+  row: RevisionMovedActivity;
+  onActivate?: ((activityId: string) => void) | undefined;
+}): React.ReactElement {
+  const detail = (
+    <>
+      <span>{row.name}</span>
+      {row.code === null ? null : <span className="text-muted-foreground"> · {row.code}</span>}
+      <span className="text-muted-foreground block text-xs">
+        {floatPhrase(row)}
+        {row.existsLive ? null : ' · not in the live plan'}
+      </span>
+    </>
+  );
+
+  if (onActivate === undefined) return <>{detail}</>;
+
+  const reasonId = `revision-row-reason-${row.activityId}`;
+  const shaded = !row.existsLive;
+  return (
+    <>
+      <button
+        type="button"
+        aria-disabled={shaded || undefined}
+        aria-describedby={shaded ? reasonId : undefined}
+        onClick={() => {
+          if (shaded) return;
+          onActivate(row.activityId);
+        }}
+        className="hover:bg-accent focus-visible:ring-ring w-full rounded px-1 py-0.5 text-left focus-visible:ring-2 focus-visible:outline-none aria-disabled:opacity-60"
+      >
+        {detail}
+      </button>
+      {shaded ? (
+        // An `sr-only` SIBLING linked by `aria-describedby`, never folded into the name: the
+        // `ToolbarButton` pattern, so a reader hears the activity and then why it cannot be opened,
+        // rather than one run-on label (ADR-0117's `purpose` distinction, one control along).
+        <span id={reasonId} className="sr-only">
+          This activity is not in the live plan, so it cannot be shown on the diagram.
+        </span>
+      ) : null}
+    </>
   );
 }
 
