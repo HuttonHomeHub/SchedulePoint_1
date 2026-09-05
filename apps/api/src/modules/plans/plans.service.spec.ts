@@ -57,6 +57,12 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     levelWithinFloatOnly: false,
     ignoreExternalRelationships: false,
     scheduleComputedAt: null,
+    // ADR-0125 mirrors: null = the rule that produced this plan's persisted criticality is
+    // unknown, which is what a never-recalculated fixture plan should say.
+    scheduleCriticalPathDefinition: null,
+    scheduleCriticalFloatThresholdMinutes: null,
+    scheduleTotalFloatMode: null,
+    scheduleMakeOpenEndsCritical: null,
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,

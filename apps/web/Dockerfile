@@ -26,6 +26,12 @@ COPY packages/layout/package.json packages/layout/
 # runs, whether or not a byte of it reaches the bundle. Omitting it fails the image build with
 # implicit-`any` errors in a file no local gate can flag, because a local checkout has it.
 COPY packages/seed/package.json packages/seed/
+# …and @repo/seed's own dependency, because the COPY obligation is transitive too. Without this
+# manifest `pnpm install --filter @repo/web...` never installs @repo/engine-conformance's
+# dependencies, and its build fails with `Set<unknown>` type errors from the types it is missing —
+# beside a `node_modules missing` warning that is the only honest clue. A closure that is built has
+# to be a closure that is installed.
+COPY packages/engine-conformance/package.json packages/engine-conformance/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @repo/web...
 
@@ -41,9 +47,19 @@ ENV VITE_API_URL=$VITE_API_URL
 # @repo/layout (the shared lane packer behind Auto-arrange, ADR-0069). Every package
 # it imports has to be listed here: a local checkout keeps a `dist/` from an earlier
 # build, so an omission is invisible outside this stage.
+#
+# **And the list is TRANSITIVE, not one level deep.** @repo/seed is here because the web
+# tsconfig covers its bench script, and @repo/engine-conformance is here because
+# @repo/seed imports it — building a package obliges you to its whole `dependencies`
+# closure, not just to the package itself. That line was missing for one commit and the
+# omission was invisible exactly as this comment predicts: `pnpm prepush` passed against
+# a checkout whose `packages/engine-conformance/dist` was left over from an earlier
+# build, and only a clean image build could see it. `pnpm check:build-contract` now
+# walks the closure, so the next transitive edge fails locally instead of here.
 RUN pnpm --filter @repo/types build \
     && pnpm --filter @repo/interchange build \
     && pnpm --filter @repo/layout build \
+    && pnpm --filter @repo/engine-conformance build \
     && pnpm --filter @repo/seed build \
     && pnpm --filter @repo/web build
 

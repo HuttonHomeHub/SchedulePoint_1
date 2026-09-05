@@ -14,6 +14,7 @@ import {
 import { acquirePlanWriteLock } from '../../common/db/plan-advisory-lock';
 import { PrismaService } from '../../prisma/prisma.service';
 
+import type { CriticalityRule } from './criticality-rule';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
 import type { EngineEdgeResult, EngineResult } from './engine';
 
@@ -870,18 +871,39 @@ export class ScheduleRepository {
   }
 
   /**
-   * Stamp the plan's schedule **freshness cursor** (F6 staleness, ADR-0045 §5 / ADR-0035 §30.7) — a raw,
-   * parameterised `UPDATE plans SET schedule_computed_at = now()`. Called inside `recalculatePlan`'s
-   * transaction right after {@link writeResults}/{@link writeDrivingFlags}, so it rides the SAME
-   * engine-owned write path for BOTH the single-plan recalc and the programme solve (which loops that
-   * unit). Like the two writes above it deliberately touches ONLY the cursor column — NEVER `version`,
-   * `updated_at`, or `updated_by` — so a recalculation cannot bump the optimistic lock or masquerade as a
-   * user edit (ADR-0022). A raw UPDATE, not a Prisma `update` (which would touch `updated_at`/`version`).
+   * Stamp the plan's schedule **freshness cursor** (F6 staleness, ADR-0045 §5 / ADR-0035 §30.7) **and
+   * the criticality rule this recalculation ran with** (ADR-0125 / CQ-1 Option B) — a raw,
+   * parameterised `UPDATE plans`. Called inside `recalculatePlan`'s transaction right after
+   * {@link writeResults}/{@link writeDrivingFlags}, so it rides the SAME engine-owned write path for
+   * BOTH the single-plan recalc and the programme solve (which loops that unit). Like the two writes
+   * above it deliberately touches ONLY engine-owned columns — NEVER `version`, `updated_at`, or
+   * `updated_by` — so a recalculation cannot bump the optimistic lock or masquerade as a user edit
+   * (ADR-0022). A raw UPDATE, not a Prisma `update` (which would touch `updated_at`/`version`).
+   *
+   * **`criticality` is REQUIRED, and the compiler is the enforcement.** The four mirrors and the
+   * cursor describe the same recalculation, and `ck_plans_schedule_criticality_requires_cursor` says
+   * so in the database; a required parameter is what stops a future caller stamping the cursor alone
+   * and leaving the mirror describing an older computation. It is the object spread into that
+   * computation's `ComputeOptions`, never a re-read of the plan's settings columns — those are the
+   * plan's CONFIGURATION, a settings PATCH writes them without recalculating, and the plan row is
+   * loaded before this transaction opens.
+   *
+   * The two enum parameters are cast explicitly: a raw parameter crosses as text, and PostgreSQL will
+   * not coerce text to an enum without one.
    */
-  async stampScheduleComputedAt(planId: string, db: Prisma.TransactionClient): Promise<void> {
+  async stampScheduleComputedAt(
+    planId: string,
+    criticality: CriticalityRule,
+    db: Prisma.TransactionClient,
+  ): Promise<void> {
     await db.$executeRaw`
       UPDATE plans
-      SET schedule_computed_at = now()
+      SET schedule_computed_at = now(),
+          schedule_critical_path_definition =
+            ${criticality.criticalPathDefinition}::"CriticalPathDefinition",
+          schedule_critical_float_threshold_minutes = ${criticality.criticalFloatThresholdMinutes},
+          schedule_total_float_mode = ${criticality.totalFloatMode}::"TotalFloatMode",
+          schedule_make_open_ends_critical = ${criticality.makeOpenEndsCritical}
       WHERE id = ${planId}::uuid
     `;
   }

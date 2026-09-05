@@ -1,4 +1,5 @@
 import { loadFixture } from '@repo/engine-conformance';
+
 import {
   DEFAULT_SEED_PLAN_OPTIONS,
   type SeedActivity,
@@ -10,7 +11,7 @@ import {
   type SeedResourceKind,
   type SeedSpec,
   type SeedUnplaceable,
-} from '@repo/seed';
+} from '../spec.js';
 
 /**
  * The **P6 torture fixture → `SeedSpec`** mapper (ADR-0066, Tier 1).

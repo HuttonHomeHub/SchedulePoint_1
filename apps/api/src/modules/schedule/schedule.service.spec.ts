@@ -11,6 +11,7 @@ import type { OrganizationsService } from '../organizations/organizations.servic
 import type { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import type { PlanRepository } from '../plans/plan.repository';
 
+import { type CriticalityRule, toCriticalityOptions } from './criticality-rule';
 import type { EngineResult } from './engine';
 import type {
   ScheduleActivityRow,
@@ -44,6 +45,12 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     levelWithinFloatOnly: false,
     ignoreExternalRelationships: false,
     scheduleComputedAt: null,
+    // ADR-0125 mirrors: null = the rule that produced this plan's persisted criticality is
+    // unknown, which is what a never-recalculated fixture plan should say.
+    scheduleCriticalPathDefinition: null,
+    scheduleCriticalFloatThresholdMinutes: null,
+    scheduleTotalFloatMode: null,
+    scheduleMakeOpenEndsCritical: null,
     eacMethod: 'CPI',
     currencyCode: null,
     version: 1,
@@ -239,6 +246,53 @@ describe('ScheduleService.recalculate', () => {
     expect(
       (plans as unknown as { updateIfVersionMatches?: unknown }).updateIfVersionMatches,
     ).toBeUndefined();
+  });
+
+  it('stamps the criticality rule the engine actually ran with, not the plan row read later (ADR-0125)', async () => {
+    // The plan snapshot the engine schedules from carries a NON-DEFAULT rule …
+    plans.findActiveByIdInOrg.mockResolvedValue(
+      plan({
+        criticalPathDefinition: 'LONGEST_PATH',
+        criticalFloatThresholdMinutes: 480,
+        totalFloatMode: 'START',
+        makeOpenEndsCritical: true,
+      }),
+    );
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, rule] = schedule.stampScheduleComputedAt.mock.calls[0] as [string, CriticalityRule];
+    // … and the stamp carries all four of those values. The rule is passed as a REQUIRED parameter
+    // from the same object spread into `ComputeOptions`, so this is the engine's own input rather
+    // than a second read of `plans` — which a settings PATCH could have moved, since it takes no
+    // plan lock and the plan is loaded before the recalculation's transaction opens.
+    expect(rule).toEqual({
+      criticalPathDefinition: 'LONGEST_PATH',
+      criticalFloatThresholdMinutes: 480,
+      totalFloatMode: 'START',
+      makeOpenEndsCritical: true,
+    });
+  });
+
+  it('spreads that same rule into the engine options, so the mirror cannot describe a different computation (ADR-0125)', async () => {
+    plans.findActiveByIdInOrg.mockResolvedValue(
+      plan({
+        criticalPathDefinition: 'LONGEST_PATH',
+        criticalFloatThresholdMinutes: 480,
+        totalFloatMode: 'START',
+        makeOpenEndsCritical: true,
+      }),
+    );
+    await service.recalculate(principalWith(CAN), 'acme', PLAN_ID);
+    const [, rule] = schedule.stampScheduleComputedAt.mock.calls[0] as [string, CriticalityRule];
+    // The engine names the definition `criticalDefinition` and the plan names it
+    // `criticalPathDefinition`; `toCriticalityOptions` is the one place the two vocabularies meet.
+    // Asserting the projection here is what makes "one derivation" checkable rather than asserted:
+    // sourcing the stamp from anywhere else would let these two drift with nothing going red.
+    expect(toCriticalityOptions(rule)).toEqual({
+      criticalDefinition: 'LONGEST_PATH',
+      criticalFloatThresholdMinutes: 480,
+      totalFloatMode: 'START',
+      makeOpenEndsCritical: true,
+    });
   });
 
   it('resolves an in-progress activity’s remaining from percent complete and floors it at the data date (M2)', async () => {
