@@ -605,5 +605,126 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     expect(engineTiePick, 'the engine must still order by minutes when the dates tie').toBe(
       'zzzz-later-minute',
     );
+
+    // ---------------------------------------------------------------------------------------
+    // F3 — COST, AND A CORRECTION TO THE CONDITION I WROTE.
+    //
+    // F3 asks for "<= 250 ms p95 end-to-end over the real HTTP route at 2,000 activities".
+    // THERE IS NO SUCH ROUTE. Verified: no `revision`/`delta` module under `src/modules`, nothing
+    // in `schedule.controller.ts`. The read model is M1's work, so M0 structurally cannot satisfy
+    // the limb as written — a condition committed before the harness existed, which is right, and
+    // never checked against what M0 could reach, which is not.
+    //
+    // Timing something else and calling it F3 is exactly the substitution the condition exists to
+    // prevent, so the limb is SPLIT and both halves are named:
+    //
+    //   MEASURED HERE  the two bulk loads the read model will make. That is what F3 exists to
+    //                  catch — an accidental N+1 or a per-row query — and those queries exist now.
+    //   DEFERRED       the genuine end-to-end HTTP figure, to M1's first measurement.
+    //
+    // The rows are inserted DIRECTLY, bypassing the write path. For a READ benchmark that is
+    // legitimate, and it is stated rather than hidden: these numbers describe queries, not writes.
+    // Seeding 2,000 activities over HTTP costs about an hour at this fixture's observed rate
+    // (147 activities took ~5 minutes), which would measure the seeder rather than the read.
+    // ---------------------------------------------------------------------------------------
+    const SCALE = 2_000;
+    const scalePlan = await prisma.plan.create({
+      data: {
+        organizationId: planRow.organizationId,
+        projectId: planRow.projectId,
+        name: 'F3 scale subject',
+        plannedStart: planRow.plannedStart,
+        createdBy: planRow.createdBy,
+        updatedBy: planRow.updatedBy,
+      },
+    });
+    const scaleBaseline = await prisma.baseline.create({
+      data: {
+        organizationId: planRow.organizationId,
+        planId: scalePlan.id,
+        name: 'F3 scale baseline',
+        createdBy: planRow.createdBy,
+        updatedBy: planRow.updatedBy,
+      },
+    });
+    await prisma.activity.createMany({
+      data: Array.from({ length: SCALE }, (_, i) => ({
+        organizationId: planRow.organizationId,
+        planId: scalePlan.id,
+        code: `F3-${i}`,
+        name: `Scale ${i}`,
+        durationMinutes: 480,
+        isCritical: i % 3 === 0,
+        totalFloat: i % 3 === 0 ? 0 : i,
+        createdBy: planRow.createdBy,
+        updatedBy: planRow.updatedBy,
+      })),
+    });
+    const scaleRows = await prisma.activity.findMany({
+      where: { planId: scalePlan.id },
+      select: { id: true },
+    });
+    await prisma.baselineActivity.createMany({
+      data: scaleRows.map((r, i) => ({
+        organizationId: planRow.organizationId,
+        baselineId: scaleBaseline.id,
+        sourceActivityId: r.id,
+        code: `F3-${i}`,
+        name: `Scale ${i}`,
+        durationMinutes: 480,
+        isCritical: i % 4 === 0,
+        totalFloat: i % 4 === 0 ? 0 : i,
+        createdBy: planRow.createdBy,
+        updatedBy: planRow.updatedBy,
+      })),
+    });
+
+    const loadBoth = async (): Promise<number> => {
+      const started = performance.now();
+      await Promise.all([
+        prisma.baselineActivity.findMany({
+          where: { baselineId: scaleBaseline.id },
+          select: {
+            sourceActivityId: true,
+            code: true,
+            isCritical: true,
+            totalFloat: true,
+            baselineFinish: true,
+            type: true,
+          },
+        }),
+        prisma.activity.findMany({
+          where: { planId: scalePlan.id, deletedAt: null },
+          select: {
+            id: true,
+            code: true,
+            isCritical: true,
+            totalFloat: true,
+            earlyFinish: true,
+            type: true,
+          },
+        }),
+      ]);
+      return performance.now() - started;
+    };
+
+    for (let i = 0; i < 3; i += 1) await loadBoth();
+    const samples: number[] = [];
+    for (let i = 0; i < 15; i += 1) samples.push(await loadBoth());
+    samples.sort((a, b) => a - b);
+    const p95 = samples[Math.min(samples.length - 1, Math.ceil(samples.length * 0.95) - 1)] ?? 0;
+    say(
+      `F3 loads at ${SCALE} activities (THE LOADS, NOT THE ROUTE — it does not exist yet): ` +
+        `p95=${p95.toFixed(1)} ms median=${samples[7]?.toFixed(1)} ms over 15 samples`,
+    );
+    say(
+      `F3 verdict: ${p95 <= 250 ? 'PASS' : 'FAIL'} against a 250 ms bar that is END-TO-END, ` +
+        `while this measures two loads only. End-to-end is DEFERRED to M1.`,
+    );
+    // Two bulk indexed reads. A per-row query would be orders of magnitude over this, which is
+    // precisely what the deliberately loose bar is for.
+    expect(p95, 'F3: the two bulk loads must be nowhere near the end-to-end budget').toBeLessThan(
+      250,
+    );
   }, 900_000);
 });
