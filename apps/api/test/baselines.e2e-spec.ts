@@ -7,6 +7,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
+import type { BaselineRepository } from '../src/modules/baselines/baseline.repository';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
@@ -31,6 +32,7 @@ interface Actor {
 describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let baselineRepo: BaselineRepository;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -44,6 +46,9 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(Token);
+    const { BaselineRepository: RepoToken } =
+      await import('../src/modules/baselines/baseline.repository');
+    baselineRepo = app.get(RepoToken);
   });
 
   // Delete children before parents so the FK restrictions never bite. Baselines and
@@ -207,6 +212,42 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
       totalFloatMode: 'START',
       makeOpenEndsCritical: true,
     });
+  });
+
+  it('projects both sides of the revision delta, carrying type and isCritical (M1-T3)', async () => {
+    const { actor, orgId } = await adminWithOrg();
+    const { planId, activityId } = await calculatedPlan(actor);
+    const created = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Rev A' })
+      .expect(201);
+
+    // The FROZEN side. `loadSnapshotRowsForVariance` does not cover this: it omits `isCritical` and
+    // `type`, which are exactly the two the delta turns on — criticality is what "entered" and
+    // "left" mean, and `type` is what excludes a summary from those sets and from carrier
+    // selection. Asserting both fields present is what makes the separate projection non-vacuous.
+    const frozen = await baselineRepo.loadSnapshotRowsForDelta(created.body.data.id as string);
+    expect(frozen).toHaveLength(1);
+    expect(frozen[0]).toMatchObject({
+      sourceActivityId: activityId,
+      name: 'A',
+      type: 'TASK',
+      isCritical: true,
+      totalFloat: 0,
+    });
+
+    // The LIVE side, carrying the same facts so both project to one row shape and the pure delta
+    // cannot tell them apart.
+    const live = await baselineRepo.loadActiveActivitiesForDelta(orgId, planId);
+    expect(live).toHaveLength(1);
+    expect(live[0]).toMatchObject({ id: activityId, name: 'A', type: 'TASK', isCritical: true });
+
+    // Org-scoped: a different organisation's id must return nothing rather than another org's rows.
+    // The uniform-404 story upstream depends on this read being scoped, not on the caller being
+    // careful.
+    expect(await baselineRepo.loadActiveActivitiesForDelta(randomUUID(), planId)).toEqual([]);
+    // Plan-scoped too — a real plan id in the right org, but not this one.
+    expect(await baselineRepo.loadActiveActivitiesForDelta(orgId, randomUUID())).toEqual([]);
   });
 
   it('captures, lists and reads a baseline of a computed plan', async () => {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ForbiddenError, LockedError, NotFoundError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { BaselineRepository } from '../baselines/baseline.repository';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
@@ -79,6 +80,9 @@ describe('ScheduleService.recalculateProgramme', () => {
       editLock as unknown as PlanEditLockService,
       {} as unknown as PrismaService,
       crossPlan as unknown as CrossPlanDependencyRepository,
+      // The revision comparison's two projections — unused by these cases, supplied rather than
+      // cast from `undefined` so a case that DOES reach it fails on a missing stub.
+      {} as unknown as BaselineRepository,
       logger as never,
     );
     // Stub the shared single-plan recalc unit: it is exercised by its own spec; here we only assert the

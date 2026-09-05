@@ -118,6 +118,11 @@ So the limb is split and both halves are named:
   exists to catch — an accidental N+1 or a per-row query would be orders of magnitude above this,
   which is what the deliberately loose bar is for.
 - **Deferred — the end-to-end figure**, to M1's first measurement, when the route exists.
+  **Measured at M1-T4 and it PASSED**: p95 58.7 ms against the 250 ms bar, at 2,000 activities
+  over the real route, with a non-vacuity control of 180 entered / 260 left checked first. See
+  [`m1-f3-measurement.md`](m1-f3-measurement.md). This bullet is updated rather than left
+  reading as owed, because a discharged deferral that still says "deferred" is the drift this
+  register keeps recording.
 
 **The write path is bypassed, and that is stated rather than hidden**: the 2,000 rows are inserted
 directly. For a read benchmark that is legitimate; the numbers describe queries, not writes. Seeding

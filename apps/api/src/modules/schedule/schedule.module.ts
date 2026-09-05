@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { BaselinesModule } from '../baselines/baselines.module';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependenciesModule } from '../cross-plan-dependencies/cross-plan-dependencies.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
@@ -18,7 +19,15 @@ import { ScheduleService } from './schedule.service';
  * recalc reads to derive live inter-project bounds (F4, ADR-0045 §2).
  */
 @Module({
-  imports: [OrganizationsModule, PlansModule, PlanLockModule, CrossPlanDependenciesModule],
+  // BaselinesModule exports BaselineRepository, which the revision comparison reads BOTH sides
+  // through (revision M1). It imports OrganizationsModule and PlansModule only, so there is no cycle.
+  imports: [
+    OrganizationsModule,
+    PlansModule,
+    PlanLockModule,
+    CrossPlanDependenciesModule,
+    BaselinesModule,
+  ],
   controllers: [ScheduleController],
   // CalendarRepository: the recalculation persists float in DAYS, and the factor comes from
   // each activity's own calendar (ADR-0068 §3a).

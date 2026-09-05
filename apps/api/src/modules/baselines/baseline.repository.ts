@@ -276,6 +276,90 @@ export class BaselineRepository {
     });
   }
 
+  /**
+   * A baseline's frozen snapshot rows projected to the fields the REVISION DELTA needs.
+   *
+   * **Separate from `loadSnapshotRowsForVariance` above rather than a widening of it.** That
+   * projection omits `isCritical` and `type`, which are precisely the two the delta turns on:
+   * criticality is what "entered" and "left" mean, and `type` is what excludes a `WBS_SUMMARY`
+   * from those sets and from carrier selection.
+   *
+   * The plan justified not widening it as "three existing readers depend on its contract". That was
+   * FALSE — measured 2026-09-05, there is one caller and one consumer — and the decision is kept on
+   * the reason that holds: a shared projection would load two columns the variance path never reads,
+   * on every variance call, to spare one duplicated `select`.
+   *
+   * One indexed read, on the existing `@@index([baselineId, sourceActivityId])`.
+   */
+  loadSnapshotRowsForDelta(
+    baselineId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<
+    {
+      sourceActivityId: string;
+      code: string | null;
+      name: string;
+      type: ActivityType;
+      isCritical: boolean;
+      totalFloat: number | null;
+      baselineStart: Date | null;
+      baselineFinish: Date | null;
+    }[]
+  > {
+    return db.baselineActivity.findMany({
+      where: { baselineId, deletedAt: null },
+      select: {
+        sourceActivityId: true,
+        code: true,
+        name: true,
+        type: true,
+        isCritical: true,
+        totalFloat: true,
+        baselineStart: true,
+        baselineFinish: true,
+      },
+    });
+  }
+
+  /**
+   * A plan's active live activities projected to the fields the REVISION DELTA needs — the live
+   * side's counterpart to {@link loadSnapshotRowsForDelta}, carrying the same facts so both project
+   * to one row shape and the pure delta cannot tell them apart.
+   *
+   * Org-scoped and soft-delete filtered, like every read in this repository.
+   */
+  loadActiveActivitiesForDelta(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<
+    {
+      id: string;
+      code: string | null;
+      name: string;
+      type: ActivityType;
+      isCritical: boolean;
+      totalFloat: number | null;
+      earlyStart: Date | null;
+      earlyFinish: Date | null;
+    }[]
+  > {
+    return db.activity.findMany({
+      where: { organizationId, planId, deletedAt: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        type: true,
+        isCritical: true,
+        totalFloat: true,
+        earlyStart: true,
+        earlyFinish: true,
+      },
+    });
+  }
+
   /** A plan's active live activities projected to the fields variance needs, in a stable order. */
   loadActiveActivitiesForVariance(
     organizationId: string,
