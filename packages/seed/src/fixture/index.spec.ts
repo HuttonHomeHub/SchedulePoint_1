@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fixtureSpec } from './fixture.js';
+import { fixtureSpec } from './index.js';
 
 /**
  * The **fixture mapper**'s own tests (ADR-0066 M1). They sit beside the mapper rather than beside

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'node:fs';
 
-import { negativeCases, scaleShapeOf, scaleSpec } from '@repo/seed';
+import { fixtureSpec, negativeCases, scaleShapeOf, scaleSpec } from '@repo/seed';
 import {
   formatNegativeReport,
   formatReport,
@@ -16,7 +16,6 @@ import {
 import { parseArgs, USAGE } from './args.js';
 import { coverageReport, formatCoverage } from './capabilities/coverage.js';
 import { capabilityFamilyKeys, capabilitySpecs } from './capabilities/index.js';
-import { fixtureSpec } from './fixture.js';
 import { KNOWN_TIERS, loadSpecs } from './specs.js';
 
 /**

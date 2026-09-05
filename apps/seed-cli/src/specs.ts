@@ -1,7 +1,6 @@
-import { scaleSpec, type SeedSpec } from '@repo/seed';
+import { fixtureSpec, scaleSpec, type SeedSpec } from '@repo/seed';
 
 import { capabilitySpecs } from './capabilities/index.js';
-import { fixtureSpec } from './fixture.js';
 
 /** How many activities `--tier scale` generates when `--activities` is not given. */
 export const DEFAULT_SCALE_ACTIVITIES = 500;

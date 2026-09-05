@@ -457,6 +457,9 @@ importers:
 
   packages/seed:
     dependencies:
+      '@repo/engine-conformance':
+        specifier: workspace:*
+        version: link:../engine-conformance
       zod:
         specifier: ^4.0.0
         version: 4.4.3
