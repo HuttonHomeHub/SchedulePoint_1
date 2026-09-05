@@ -44,9 +44,25 @@ exactly like one whose premise still holds (ADR-0114). The exclusion did not nee
 the gate looked correct; it needed re-reading because something it named had changed underneath it,
 which nothing was watching for.
 
-Verified red three ways before being accepted, each restored to green: the real defect, the
-pre-existing CI half, and a **brand-new** transitive edge synthesised for the purpose — the last
-being the only one that proves the closure rather than the single fix.
+Verified red four ways before being accepted, each restored to green: the real defect, the
+pre-existing CI half, a **brand-new** transitive edge synthesised for the purpose — the last being
+the only one that proves the closure rather than the single fix — and the COPY defect below.
+
+**It took two commits, and the second is the one worth reading.** The first widened only the _build_
+obligation, on a comment asserting that a package reached through the closure _"is already COPYd by
+whichever manifest names it"_. That is false — being named in another package's manifest does not put
+your manifest in the image — and it was written into the gate **in the same sitting as the commit
+about not asserting things without checking them**. CI found it one layer deeper: the chain now
+reached `@repo/engine-conformance` and _its_ build died on missing types, beside the only honest
+clue, `WARN Local package.json exists, but node_modules missing`. COPY and build take the same set.
+
+**And one check, run before it changed anything, stopped the gate being rewritten around a worse
+rule.** `pnpm --filter '<app>...' list --depth -1` looks like the authoritative answer to "which
+manifests does this image need". It is not: for `@repo/api...` it names seven packages while
+`apps/api/Dockerfile` COPYs four and builds correctly. pnpm tolerates an absent workspace manifest —
+it simply does not link that package — so what an image needs is not what pnpm _could_ link but what
+that image actually **compiles**. The API image is the control that settles it, and it was only
+consulted because the web result looked too neat to accept on its own.
 
 ---
 
