@@ -150,9 +150,19 @@ milestone (ADR-0081 §2).
 > _only_ schema change, written _from the plan row_. All three are false. Corrected in place rather
 > than deleted, because the plan being wrong about its own schema task is the finding.
 
-- **Description:** **Four** nullable columns on `baselines` — `criticality_definition`,
-  `criticality_threshold_minutes`, `criticality_float_mode`, `criticality_open_ends` — so a
+- **Description:** **Four** nullable columns on `baselines` — `critical_path_definition`,
+  `critical_float_threshold_minutes`, `total_float_mode`, `make_open_ends_critical` — so a
   definition change can be detected rather than silently reported as path movement.
+  **The names are a FOURTH correction to this task, made 2026-09-05.** They read
+  `criticality_definition` / `criticality_threshold_minutes` / `criticality_float_mode` /
+  `criticality_open_ends` until the M0-T5 design pass rejected them: one setting would then have
+  had FOUR names across the system (the plan column, the engine option, `CriticalityRule`, and a
+  baseline column unlike all three), on a setting whose entire history in this epic is people
+  mis-reading which name means what — `total_float_mode` was left out of the design in the first
+  place for exactly that reason, and `criticality_float_mode` re-plants the same half-reading.
+  Verbatim-from-source matches `baselines.hours_per_day_minutes`; the sibling's `schedule_`
+  prefix exists only because `plans` needs to distinguish a mirror from its same-row twin, which
+  `baselines` does not have.
 - **Complexity:** M
 - **Dependencies:** **M0-T6 lands first and in an earlier release** (see below); design is
   [`cq1-schema-design.md`](./cq1-schema-design.md)
@@ -184,6 +194,20 @@ milestone (ADR-0081 §2).
      outer plan read (`baselines.service.ts:122`) and its lock (`:127`).
   4. `docs/DATABASE.md` beside the Baseline section; `pnpm check:counts` for the model/migration
      figures in the `CLAUDE.md` banner.
+- **Landed 2026-09-05**, one release after M0-T6 (`api-v0.56.0`, tag and GHCR image confirmed).
+  Migration `20260905180000_baseline_criticality_snapshot`; `prisma:check-drift` reports no
+  difference. Three unit cases and one API e2e case, each **verified red first** — the two design
+  passes' own naive form (a pre-lock, un-org-scoped read with no 404 branch) fails two of the
+  three, and the forbidden coalescing form fails the third. The e2e walks
+  recalculate → capture → settings PATCH → capture → recalculate → capture and is the only place
+  the enum values cross a real database.
+- **It also discharged two obligations M0-T6 left behind**, both found by the design pass rather
+  than by anything automatic: four `schema.prisma` comments claiming the engine consumes these
+  options "in a later M6 task" (it consumes all of them today, `compute.ts:149-152`/`:676-696`) and
+  two claiming the `@repo/types` unions were "added in a later M6 task" (they exist); and
+  `docs/DATABASE.md`, which had **no** material on the plan mirrors at all. The stale
+  `total_float_mode` comment is the sharpest: this epic's own feature spec omitted that setting
+  from the frozen set on exactly that misreading.
 
 ##### Task M0-T6 — the `plans` criticality mirror **(Option B, accepted; ships ONE RELEASE AHEAD of M0-T5)**
 

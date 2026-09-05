@@ -76,6 +76,12 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     // ADR-0071 M3: what this baseline's cost snapshot decomposes to. ACTIVITY is the column's
     // constant default and what every capture writes until the M3 service slice lands.
     costSnapshotLevel: 'ACTIVITY',
+    // ADR-0125 mirrors: null = the rule this snapshot's criticality was computed under is
+    // unknown, which is what a baseline captured before the freeze shipped should say.
+    criticalPathDefinition: null,
+    criticalFloatThresholdMinutes: null,
+    totalFloatMode: null,
+    makeOpenEndsCritical: null,
     version: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -127,6 +133,7 @@ const ALL: Permission[] = [
 describe('BaselinesService', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let plans: { findActiveByIdInOrg: ReturnType<typeof vi.fn> };
+  let txPlanFindFirst: ReturnType<typeof vi.fn>;
   let baselines: {
     createWithSnapshot: ReturnType<typeof vi.fn>;
     loadActiveActivitiesForCapture: ReturnType<typeof vi.fn>;
@@ -168,13 +175,22 @@ describe('BaselinesService', () => {
       loadPlanCalendar: vi.fn().mockResolvedValue(null),
     };
     // The tx handle exposes $executeRaw (the plan advisory lock used by capture).
+    // `plan.findFirst` serves TWO in-transaction reads with different selects: the audit row's
+    // label lookup (ADR-0073 C3.2), and capture's in-lock read of the plan's criticality mirrors
+    // (ADR-0125). One mock answers both, so it returns the union; a test that needs a specific
+    // mirror state overrides `txPlanFindFirst` before calling.
+    txPlanFindFirst = vi.fn().mockResolvedValue({
+      name: 'Baseline plan',
+      scheduleCriticalPathDefinition: null,
+      scheduleCriticalFloatThresholdMinutes: null,
+      scheduleTotalFloatMode: null,
+      scheduleMakeOpenEndsCritical: null,
+    });
     prisma = {
-      // `plan.findFirst` is the audit row's label lookup (ADR-0073 C3.2) — it runs inside the
-      // same transaction as the write it describes.
       $transaction: vi.fn((cb: (tx: unknown) => unknown) =>
         cb({
           $executeRaw: vi.fn(),
-          plan: { findFirst: vi.fn().mockResolvedValue({ name: 'Baseline plan' }) },
+          plan: { findFirst: txPlanFindFirst },
         }),
       ),
     };
@@ -193,6 +209,60 @@ describe('BaselinesService', () => {
   });
 
   describe('capture', () => {
+    it('freezes the criticality rule the snapshot was COMPUTED under, from the plan mirrors (ADR-0125)', async () => {
+      // The plan's ENGINE-OWNED mirrors hold a non-default rule …
+      txPlanFindFirst.mockResolvedValue({
+        name: 'Baseline plan',
+        scheduleCriticalPathDefinition: 'LONGEST_PATH',
+        scheduleCriticalFloatThresholdMinutes: 480,
+        scheduleTotalFloatMode: 'START',
+        scheduleMakeOpenEndsCritical: true,
+      });
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+      // … and the capture freezes exactly those four, as ONE grouped object. They come from the
+      // mirrors, never from the plan's client-settable `critical*` options — those are the plan's
+      // configuration, and a settings PATCH writes them without recalculating.
+      expect(baselines.createWithSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          criticalityRule: {
+            criticalPathDefinition: 'LONGEST_PATH',
+            criticalFloatThresholdMinutes: 480,
+            totalFloatMode: 'START',
+            makeOpenEndsCritical: true,
+          },
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('freezes a null rule when the plan has never been recalculated under the mirror (ADR-0125)', async () => {
+      // The default mock: all four mirrors NULL, which is every plan not recalculated since the
+      // mirror shipped. The sentinel is carried through as one null, never as four defaults —
+      // `?? 'TOTAL_FLOAT'` here would manufacture a rule nothing ever ran under.
+      //
+      // BLIND SPOT, stated because it is not obvious: this case alone cannot tell "read the mirror
+      // and it was null" from "never read the mirror at all" — both produce a null. It was verified
+      // red only against the forbidden coalescing form. Its discriminator is the sibling case
+      // above, which fails if the read is absent or taken from the pre-lock row.
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+      expect(baselines.createWithSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({ criticalityRule: null }),
+        expect.anything(),
+      );
+    });
+
+    it('404s when the plan is soft-deleted between the outer check and the lock (ADR-0125)', async () => {
+      // The outer `findActiveByIdInOrg` succeeds, then the hierarchy cascade commits — it takes NO
+      // plan write lock, so this is reachable. Without the in-lock read the capture would insert an
+      // ACTIVE baseline under a soft-deleted plan, outside its delete batch, which no restore would
+      // reactivate and no recycle bin would show.
+      txPlanFindFirst.mockResolvedValue(null);
+      await expect(
+        service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' }),
+      ).rejects.toThrow(NotFoundError);
+      expect(baselines.createWithSnapshot).not.toHaveBeenCalled();
+    });
+
     it('captures a baseline, freezing identity + computed dates', async () => {
       const result = await service.capture(principalWith(ALL), 'acme', PLAN_ID, {
         name: 'Contract Baseline',

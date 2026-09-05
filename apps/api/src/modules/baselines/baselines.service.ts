@@ -20,6 +20,7 @@ import { AuditService } from '../audit/audit.service';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PlanRepository } from '../plans/plan.repository';
+import type { CriticalityRule } from '../schedule/criticality-rule';
 import { type WorkingTimeCalendar } from '../schedule/engine';
 import { buildPlanCalendar, buildPlanCalendarOrReject } from '../schedule/plan-calendar';
 
@@ -152,6 +153,47 @@ export class BaselinesService {
           { activityCalendarId: null, planCalendarId: plan.calendarId },
           tx,
         );
+        // The criticality rule the snapshot was COMPUTED under (ADR-0125 / CQ-1) — read from the
+        // plan's ENGINE-OWNED mirrors, inside the lock, on `tx`. NOT from the outer `plan` read
+        // above: that happens before this transaction and before the lock, so a recalculation can
+        // commit in between and the outer row's mirror would then describe a DIFFERENT run from
+        // the activity rows loaded under this lock. Both are written by the same locked
+        // recalculation, so reading them under the same lock is what pairs the rule with the
+        // output it produced.
+        //
+        // Org-scoped rather than a bare findUnique by id, matching `activate`'s re-read below: the
+        // id is trusted by this point, but an unscoped read in a service that is otherwise
+        // org-scoped throughout is a pattern the next reader copies somewhere it is not safe.
+        const mirrors = await tx.plan.findFirst({
+          where: { id: planId, organizationId: organization.id, deletedAt: null },
+          select: {
+            scheduleCriticalPathDefinition: true,
+            scheduleCriticalFloatThresholdMinutes: true,
+            scheduleTotalFloatMode: true,
+            scheduleMakeOpenEndsCritical: true,
+          },
+        });
+        // Soft-deleted between the check above and this lock. The hierarchy cascade does NOT take
+        // the plan write lock, so this is reachable — and 404 is both the honest answer and the
+        // thing that stops an ACTIVE baseline being inserted under a plan already in a delete
+        // batch, which no restore would reactivate and no recycle bin would show.
+        if (!mirrors) throw new NotFoundError('Plan not found.');
+
+        const criticalityRule: CriticalityRule | null =
+          mirrors.scheduleCriticalPathDefinition === null
+            ? // Recalculated before the mirror shipped, or never. All four are NULL together —
+              // ck_plans_schedule_criticality_all_or_none is what makes testing ONE of them total.
+              null
+            : {
+                criticalPathDefinition: mirrors.scheduleCriticalPathDefinition,
+                // The three non-null assertions are legitimate ONLY because of that constraint.
+                // Do not "tidy" them into `?? 0` / `?? 'FINISH'` — that manufactures a rule
+                // nothing ever ran under, which is the exact defect this column exists to remove.
+                criticalFloatThresholdMinutes: mirrors.scheduleCriticalFloatThresholdMinutes!,
+                totalFloatMode: mirrors.scheduleTotalFloatMode!,
+                makeOpenEndsCritical: mirrors.scheduleMakeOpenEndsCritical!,
+              };
+
         const baseline = await this.baselines.createWithSnapshot(
           {
             organizationId: organization.id,
@@ -164,6 +206,7 @@ export class BaselinesService {
             // reference rule): a later calendar edit must not rewrite what this baseline reports
             // as its captured durations and float.
             hoursPerDayMinutes: planDayFactorMinutes,
+            criticalityRule,
             actorId: principal.userId,
             activities,
           },
