@@ -31,6 +31,7 @@ import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import { runCriticalPathTest } from './critical-path-test';
+import { type CriticalityRule, toCriticalityOptions } from './criticality-rule';
 import {
   deriveExternalInstants,
   type DerivedExternalInstant,
@@ -306,7 +307,11 @@ export class ScheduleService {
         // version/updated_at (ADR-0022). Both the single-plan recalc and the programme solve (which loops
         // this unit, upstream-first) stamp every plan they write, so a downstream can compare freshness on
         // read and a programme recalc clears any staleness it introduced.
-        await this.schedule.stampScheduleComputedAt(planId, tx);
+        // …and the criticality rule the engine ABOVE actually ran with (ADR-0125 / CQ-1 Option B).
+        // `graph.criticality` is the very object spread into `graph.options`, not a re-read of the
+        // plan row: `plan` was loaded before this transaction opened and a settings PATCH takes no
+        // plan lock, so re-reading could stamp a rule this computation never used.
+        await this.schedule.stampScheduleComputedAt(planId, graph.criticality, tx);
         return summary;
       });
     } catch (error) {
@@ -1092,6 +1097,12 @@ export class ScheduleService {
     activities: EngineActivity[];
     edges: EngineEdge[];
     options: ComputeOptions;
+    /** The criticality rule spread into {@link options} above — carried out so the write path can
+     * stamp the SAME four values onto `plans` beside the freshness cursor (ADR-0125 / CQ-1 Option B).
+     * Read from here, never re-derived from the plan row: the plan is loaded OUTSIDE the transaction
+     * and before `lockPlanForWrite`, and a settings PATCH takes no plan lock, so a second read could
+     * return a rule the engine did not run with. */
+    criticality: CriticalityRule;
     /** The resource-levelling demand model — loaded ONLY when the plan opts in (`levelResources`) and
      * has active assignments; null keeps the byte-identical fast path (ADR-0041 §7). */
     leveling: { assignments: EngineAssignment[]; resources: EngineResource[] } | null;
@@ -1259,21 +1270,30 @@ export class ScheduleService {
     // The plan's out-of-sequence recalc mode (M2, ADR-0035 §1); default RETAINED_LOGIC. Expected-finish
     // (M4, §9) resizes in-progress remaining; the critical definition + float threshold (M6, §17) decide
     // criticality; the day-denominated threshold is converted to working minutes for the engine.
+    // The criticality rule this recalculation will run with, built ONCE and spread into the engine's
+    // options below — the same object the write path stamps onto `plans` beside the freshness cursor
+    // (ADR-0125 / CQ-1 Option B). One derivation, so the engine input and the persisted mirror cannot
+    // disagree about which rule produced this plan's `is_critical` / `total_float`.
+    //
+    // `criticalFloatThresholdMinutes` is stored in working MINUTES since the F8 migration, so it is
+    // passed through rather than converted. It used to be `× MINUTES_PER_DAY` from a day-denominated
+    // column, which compared a flat-1440 day against a float measured on the ACTIVITY's own calendar —
+    // three working days of float on an eight-hour calendar for a planner who asked for one
+    // (ADR-0068's defect, one field along). Never reintroduce a factor here: there is no scalar that
+    // is right for a plan whose activities sit on different calendars, which is why the column is
+    // minutes.
+    const criticality: CriticalityRule = {
+      criticalPathDefinition: plan.criticalPathDefinition,
+      criticalFloatThresholdMinutes: plan.criticalFloatThresholdMinutes,
+      totalFloatMode: plan.totalFloatMode,
+      makeOpenEndsCritical: plan.makeOpenEndsCritical,
+    };
     const options: ComputeOptions = {
       dataDate,
       calendar,
       progressMode: plan.progressRecalcMode,
       useExpectedFinishDates: plan.useExpectedFinishDates,
-      criticalDefinition: plan.criticalPathDefinition,
-      // Stored in working MINUTES since the F8 migration, so it is passed through rather than
-      // converted. It used to be `× MINUTES_PER_DAY` from a day-denominated column, which compared a
-      // flat-1440 day against a float measured on the ACTIVITY's own calendar — three working days
-      // of float on an eight-hour calendar for a planner who asked for one (ADR-0068's defect, one
-      // field along). Never reintroduce a factor here: there is no scalar that is right for a plan
-      // whose activities sit on different calendars, which is why the column is minutes.
-      criticalFloatThresholdMinutes: plan.criticalFloatThresholdMinutes,
-      totalFloatMode: plan.totalFloatMode,
-      makeOpenEndsCritical: plan.makeOpenEndsCritical,
+      ...toCriticalityOptions(criticality),
       // Ignore external / inter-project relationships (ADR-0043 / ADR-0035 §30.4): when on, the engine
       // drops every activity's external early-start / late-finish bounds. Default false = byte-parity.
       ignoreExternalRelationships: plan.ignoreExternalRelationships,
@@ -1330,6 +1350,7 @@ export class ScheduleService {
       activities,
       edges,
       options,
+      criticality,
       leveling,
       // The calendar each activity actually SCHEDULES on (its own, or its driving resource's).
       // The recalculation's write needs it to persist `total_float`/`free_float`/`visual_drift_days`

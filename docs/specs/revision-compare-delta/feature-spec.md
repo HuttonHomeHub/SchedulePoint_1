@@ -474,6 +474,14 @@ Three properties make it worth stating as a decision rather than an implementati
    > signature and behaviour are unchanged, and the mirrors are written by a statement that
    > already ran in the same transaction — so the parity gate holds for the same structural reason
    > it did before.
+   >
+   > **Landed 2026-09-05 (M0-T6), and this is now an observation rather than a prediction.** Two
+   > files on the recalculation path changed and no third: `schedule.repository.ts`
+   > (`stampScheduleComputedAt` takes a required `CriticalityRule` and its raw `UPDATE` grows from
+   > one `SET` clause to five) and `schedule.service.ts` (the rule is built once beside
+   > `ComputeOptions`, spread in, and carried out on the graph). Nothing under
+   > `src/modules/schedule/engine/` was edited — established by `git diff --stat`, not by reading —
+   > and the engine's own suites, including the conformance harness, passed unchanged.
 
 2. **Nothing is written**, so the read takes no plan lock, no advisory lock, no transaction and no
    pen. As ADR-0116 D1 puts it, that is an advantage over the benchmark endpoints rather than a

@@ -224,6 +224,33 @@ milestone (ADR-0081 §2).
      `computeSchedule`'s signature and behaviour are unchanged, it never reads the mirrors, and the
      ADR-0034 parity gate holds structurally.
   3. Ship, and let at least one release elapse before M0-T5.
+- **Landed 2026-09-05.** Migration `20260905120000_plan_schedule_criticality_mirror` applies in
+  `migrate deploy` and `prisma:check-drift` reports **no difference**. The risk above was real and
+  is closed as designed: all four `ComputeOptions` criticality fields are optional
+  (`engine/compute.ts:71`, `:77`, `:83`, `:90`) with `??` fallbacks applied inside `computeSchedule`
+  (`:149-152`), so a mirror projected back **out** of the options would have been `undefined`
+  wherever a caller omitted one. `criticality-rule.ts` therefore declares all four **required** and
+  projects **into** the options through `toCriticalityOptions`, whose
+  `Required<Pick<ComputeOptions, …>>` return type fails to compile if a fifth criticality option is
+  added to the engine and not to the mirror.
+  - **Proved by execution, not by reading.** Both unit cases were **verified red first** against a
+    stamp sourced from a hard-coded default rule. The e2e case
+    (`test/schedule.e2e-spec.ts`, "stamps the criticality rule it ran with") was **verified red**
+    against a stamp that wrote only the cursor, and it is the only place the raw write's enum casts
+    execute at all — the service unit suite mocks the repository, so a `text` parameter PostgreSQL
+    refused to coerce to `"CriticalPathDefinition"` would be invisible there. That case also
+    re-proves the ADR-0022 property on the **plan** row (the statement grew from one `SET` clause to
+    five), with an ordinary settings PATCH as its control so "version unchanged" is a property of
+    the engine-owned write rather than of a column nothing ever moves.
+  - **All three CHECKs proved under `UPDATE`** — the shape this write takes — nine cases, each
+    REFUSED case attributed to the constraint that refused it by name, and the probe carrying a
+    non-vacuity control. The control earned its place immediately: the first run read `plans` after
+    an e2e cleanup had emptied it, so all nine `UPDATE 0` results proved nothing and would have read
+    as a pass.
+  - **What the e2e cannot cover, recorded in its own docblock:** that the mirror is _sourced_ from
+    the engine's options rather than re-read from `plans` at stamp time. The two agree at every
+    stamp point in a sequential test and diverge only under a settings PATCH interleaved between the
+    plan load and the transaction, which this suite cannot produce. That half is the unit case.
 
 ---
 

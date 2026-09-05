@@ -268,6 +268,101 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     expect(drivingByPred.get(c)).toBe(false);
   });
 
+  it('stamps the criticality rule it ran with, and a settings PATCH alone does not move it (ADR-0125)', async () => {
+    const { actor } = await adminWithOrg();
+    const planId = await makePlan(actor, 'Northgate');
+    await makeActivity(actor, planId, 'A', 3);
+
+    const mirrors = async () =>
+      prisma.plan.findUniqueOrThrow({
+        where: { id: planId },
+        select: {
+          version: true,
+          updatedAt: true,
+          updatedBy: true,
+          scheduleComputedAt: true,
+          scheduleCriticalPathDefinition: true,
+          scheduleCriticalFloatThresholdMinutes: true,
+          scheduleTotalFloatMode: true,
+          scheduleMakeOpenEndsCritical: true,
+        },
+      });
+
+    // A plan that has never been calculated says so in all four columns. This is the sentinel, not a
+    // claim — and asserting it FIRST is what stops the rest of this case passing against a column
+    // that was simply defaulted at insert.
+    const never = await mirrors();
+    expect(never.scheduleComputedAt).toBeNull();
+    expect(never.scheduleCriticalPathDefinition).toBeNull();
+    expect(never.scheduleCriticalFloatThresholdMinutes).toBeNull();
+    expect(never.scheduleTotalFloatMode).toBeNull();
+    expect(never.scheduleMakeOpenEndsCritical).toBeNull();
+
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+
+    // After a recalculation all four hold the rule the engine ran with. This is also the only place
+    // the raw write's enum casts execute at all — the service unit suite mocks the repository, so a
+    // `text` parameter that PostgreSQL refused to coerce to `"CriticalPathDefinition"` would be
+    // invisible there and would fail here.
+    const first = await mirrors();
+    expect(first.scheduleComputedAt).not.toBeNull();
+    expect(first.scheduleCriticalPathDefinition).toBe('TOTAL_FLOAT');
+    expect(first.scheduleCriticalFloatThresholdMinutes).toBe(0);
+    expect(first.scheduleTotalFloatMode).toBe('FINISH');
+    expect(first.scheduleMakeOpenEndsCritical).toBe(false);
+    // The stamp grew from one SET clause to five, so the ADR-0022 property is re-proved on the PLAN
+    // row itself rather than inherited: a raw UPDATE that never names version/updated_at/updated_by
+    // cannot bump the optimistic lock or make a recalculation look like somebody's edit. The
+    // activity-side half of this invariant is the case below.
+    expect(first.version).toBe(never.version);
+    expect(first.updatedAt.getTime()).toBe(never.updatedAt.getTime());
+    expect(first.updatedBy).toBe(never.updatedBy);
+
+    // THE DEFECT THIS CLOSES. Move the plan's criticality CONFIGURATION without recalculating. The
+    // settings PATCH writes the four source columns and does not mark the schedule stale, so
+    // `is_critical` on every activity still reflects the OLD rule — and now the database can say so.
+    // The mirrors must not move: they describe a computation, not a configuration.
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({
+        criticalPathDefinition: 'LONGEST_PATH',
+        criticalFloatThresholdMinutes: 480,
+        totalFloatMode: 'START',
+        makeOpenEndsCritical: true,
+        version: 2,
+      })
+      .expect(200);
+
+    const afterPatch = await mirrors();
+    // The control for the equality above: an ordinary edit DOES bump the version, so "unchanged
+    // across the recalculation" is a property of the engine-owned write and not of a column that
+    // never moves for anyone.
+    expect(afterPatch.version).toBe(first.version + 1);
+    expect(afterPatch.scheduleCriticalPathDefinition).toBe('TOTAL_FLOAT');
+    expect(afterPatch.scheduleCriticalFloatThresholdMinutes).toBe(0);
+    expect(afterPatch.scheduleTotalFloatMode).toBe('FINISH');
+    expect(afterPatch.scheduleMakeOpenEndsCritical).toBe(false);
+    // …and the cursor is untouched too, so the pair still describes one event.
+    expect(afterPatch.scheduleComputedAt?.getTime()).toBe(first.scheduleComputedAt?.getTime());
+
+    // Recalculating is what moves them — with the non-default enum labels, which is the half a
+    // default-valued assertion cannot distinguish from a column nothing ever wrote.
+    await actor.agent.post(recalcUrl(planId)).expect(200);
+    const second = await mirrors();
+    expect(second.scheduleCriticalPathDefinition).toBe('LONGEST_PATH');
+    expect(second.scheduleCriticalFloatThresholdMinutes).toBe(480);
+    expect(second.scheduleTotalFloatMode).toBe('START');
+    expect(second.scheduleMakeOpenEndsCritical).toBe(true);
+
+    // WHAT THIS CASE DOES NOT COVER. It proves the raw write reaches the database with working enum
+    // casts, and that a configuration edit alone never moves a mirror. It cannot prove the mirror is
+    // SOURCED from the engine's own options rather than re-read from `plans` at stamp time: the two
+    // agree at every stamp point in a sequential test, and they diverge only under a settings PATCH
+    // landing between the plan load and the transaction — which this suite has no way to interleave.
+    // That half is pinned at the unit level (`schedule.service.spec.ts`, ADR-0125), where the stamp's
+    // argument is inspected directly and the case was verified red against a wrongly-sourced rule.
+  });
+
   it('leaves version and updated_by untouched (the engine-owned write)', async () => {
     const { actor } = await adminWithOrg();
     const planId = await makePlan(actor, 'Northgate');
