@@ -101,6 +101,13 @@ export function RevisionComparePanel({
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <section
       aria-labelledby={headingId}
+      // A structural hook for the journey, for the reason `[data-toolbar-item]` and
+      // `[data-activities-bar]` exist: an axe `.include()` and an `elementFromPoint` sweep both need
+      // a real CSS selector, and locating this panel by its COPY is what every layout epic here has
+      // broken. Playwright's `:text-is()` is a selector-engine extension and is not valid CSS —
+      // axe-core throws on it rather than scanning nothing, which is the right way round and is how
+      // this attribute came to exist.
+      data-revision-compare-panel=""
       className="flex h-full min-h-0 flex-col"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {

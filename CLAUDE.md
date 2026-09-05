@@ -21,7 +21,7 @@ browser-native team use. See the full product context in
 
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 29 Prisma models across 60 migrations, 1147 web
-> source files with 41 Playwright suites beside the base journey, and
+> source files with 42 Playwright suites beside the base journey, and
 > 124 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale

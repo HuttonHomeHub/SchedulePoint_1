@@ -432,6 +432,19 @@ jobs:
       - name: Web end-to-end tests (health check)
         run: pnpm --filter @repo/web test:e2e:health-check
 
+      # The revision comparison dock (revision M2-T4) against a real API. No VITE_ flag exists for
+      # it (spec D7 / ADR-0088 D1) — the flag-on-equivalent journey ADR-0081 requires, landing with
+      # the first user-facing milestone. What a mocked fetch and a mounted-in-isolation panel
+      # structurally cannot prove: that `Compare revisions…` exists in the SHIPPED layout and opens
+      # the dock; that the two pickers reach the real route and render a REAL comparison, with the
+      # delta asserted in BOTH directions so a panel listing everything twice would fail; that
+      # opening it closes the health dock, proven against the real sibling rather than a stub; and
+      # CQ-3's owed half — that the dock's controls are POINTER-REACHABLE at 1024, where that
+      # measurement recorded the dock squeezed to 137.6 px and said in its own words that it proved
+      # boxes and not reachability (the ADR-0114 M1 defect).
+      - name: Web end-to-end tests (revision compare)
+        run: pnpm --filter @repo/web test:e2e:revision-compare
+
       # Search that navigates (`VITE_CANVAS_SEARCH_NAV`) against a real API with the pen enforced.
       # What a mocked fetch and a mounted-in-isolation toolbar structurally cannot prove: that Enter
       # reaches the handler through the PORTALLED chrome band (React events follow the React tree,
@@ -797,6 +810,7 @@ jobs:
             apps/web/playwright-report-assignment-lag/
             apps/web/playwright-report-float-paths/
             apps/web/playwright-report-health-check/
+            apps/web/playwright-report-revision-compare/
             apps/web/playwright-report-search-nav/
             apps/web/playwright-report-multi-select/
             apps/web/playwright-report-copy-paste/
