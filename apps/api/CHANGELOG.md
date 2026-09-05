@@ -1,5 +1,17 @@
 # @repo/api
 
+## 0.56.0
+
+### Minor Changes
+
+- [#472](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/472) [`5a5f00d`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5a5f00dad951da2658a7814d6da73a06d7625e3f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Record the criticality rule each recalculation actually ran with. Four nullable engine-owned columns
+  on `plans`, written by the recalculation's own freshness stamp from the same object spread into the
+  engine's options. The plan's `criticalPathDefinition` / `criticalFloatThresholdMinutes` /
+  `totalFloatMode` / `makeOpenEndsCritical` columns are its configuration and a settings edit writes
+  them without recalculating, so they were never evidence of which rule produced the persisted
+  `is_critical` and `total_float`. NULL means the rule is unknown — never recalculated, or
+  recalculated before this shipped — and is never a claim.
+
 ## 0.55.4
 
 ### Patch Changes
