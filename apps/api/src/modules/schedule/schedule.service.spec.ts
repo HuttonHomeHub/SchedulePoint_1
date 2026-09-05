@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Principal, type Permission } from '../../common/auth/principal';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../common/errors/domain-errors';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { BaselineRepository } from '../baselines/baseline.repository';
 import type { CalendarRepository } from '../calendars/calendar.repository';
 import type { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import type { OrganizationsService } from '../organizations/organizations.service';
@@ -174,6 +175,10 @@ describe('ScheduleService.recalculate', () => {
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       prisma as unknown as PrismaService,
       crossPlan as unknown as CrossPlanDependencyRepository,
+      // The revision comparison's two projections. Unused by every case in this file, and
+      // supplied rather than cast from `undefined` so a case that DOES reach it fails on a
+      // missing stub rather than on a null dereference three frames down.
+      {} as unknown as BaselineRepository,
       logger as unknown as PinoLogger,
     );
   });
@@ -758,6 +763,9 @@ describe('ScheduleService.summary', () => {
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
       crossPlan as unknown as CrossPlanDependencyRepository,
+      // The revision comparison's two projections — unused by these cases, supplied rather than
+      // cast from `undefined` so a case that DOES reach it fails on a missing stub.
+      {} as unknown as BaselineRepository,
       logger,
     );
   });
@@ -912,6 +920,9 @@ describe('ScheduleService.getHealthCheck', () => {
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
       crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
+      // The revision comparison's two projections — unused by these cases, supplied rather than
+      // cast from `undefined` so a case that DOES reach it fails on a missing stub.
+      {} as unknown as BaselineRepository,
       logger,
     );
   });
@@ -1005,6 +1016,9 @@ describe('ScheduleService.getEarnedValue', () => {
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
       crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
+      // The revision comparison's two projections — unused by these cases, supplied rather than
+      // cast from `undefined` so a case that DOES reach it fails on a missing stub.
+      {} as unknown as BaselineRepository,
       logger,
     );
   });
@@ -1194,6 +1208,9 @@ describe('ScheduleService.getResourceHistogram (M7 rung 5, ADR-0044 §3 / ADR-00
       { assertHoldsPen: vi.fn().mockResolvedValue(undefined) } as unknown as PlanEditLockService,
       { $transaction: vi.fn() } as unknown as PrismaService,
       crossPlanRepoMock() as unknown as CrossPlanDependencyRepository,
+      // The revision comparison's two projections — unused by these cases, supplied rather than
+      // cast from `undefined` so a case that DOES reach it fails on a missing stub.
+      {} as unknown as BaselineRepository,
       logger,
     );
   });

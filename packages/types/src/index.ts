@@ -2578,3 +2578,175 @@ export interface ScheduleHealthReport {
   offenderCap: number;
   metrics: HealthMetricResult[];
 }
+
+// ---------------------------------------------------------------------------
+// Revision compare — the critical-path delta contract (ADR-0125, revision M1).
+// ---------------------------------------------------------------------------
+
+/**
+ * **The delta reports what MOVED. It never reports what CAUSED it**, and that is a measured
+ * decision rather than a gap in the contract: attributing a path change to one edit needs a
+ * sequential replay whose per-change attribution was measured order-dependent (the same change
+ * scored 30, 18, 2 or 0 working days depending only on its position), while the TOTAL is
+ * order-free. So there is deliberately no `cause`, `class`, `contribution`, `rank` or
+ * `interaction` field at any depth here, and a structural gate over the delta module bans those
+ * names so the next contributor's helpful addition fails rather than ships.
+ */
+
+/** Which side of the comparison a revision is. `LIVE` is the plan as it stands now. */
+export const REVISION_SIDE_KINDS = ['BASELINE', 'LIVE'] as const;
+
+export type RevisionSideKind = (typeof REVISION_SIDE_KINDS)[number];
+
+/**
+ * Why the completion movement could not be stated. A closed tuple for the `HEALTH_METRIC_IDS`
+ * reason — the API DTO derives its OpenAPI `enum:` from this same value, so the two cannot
+ * disagree about membership.
+ *
+ * `CARRIER_REMOVED` is the one worth reading twice: the activity that finished last on the OLD
+ * side is not on the new side at all, so there is no pair of dates to subtract. The criticality
+ * delta is still returned in that case, which is why the two are separate facts in this payload.
+ */
+export const REVISION_COMPLETION_REASONS = ['PLAN_NOT_SCHEDULED', 'CARRIER_REMOVED'] as const;
+
+export type RevisionCompletionReason = (typeof REVISION_COMPLETION_REASONS)[number];
+
+/**
+ * Whether the two sides' numbers were computed under the same criticality RULE.
+ *
+ * **Three-valued, and `UNKNOWN` must never render as `MATCH`.** `is_critical` and `total_float`
+ * are the OUTPUT of a rule, not properties of an activity: move the threshold, the definition, the
+ * float measure or the open-ends option and recalculate, and a planner gets a different critical
+ * set with every bar in the same place. A comparison across that reports a large, real-looking set
+ * as having "entered the critical path" and is wrong about all of it.
+ *
+ * `UNKNOWN` is what a side whose rule was never recorded reports — a baseline captured before the
+ * freeze shipped, or a plan not recalculated since the mirror did. It is a permanent sentinel on
+ * the baseline side (a capture cannot be re-run) and a self-clearing one on the live side. It is
+ * NOT a claim in either direction, and coalescing it (`?? 'MATCH'`, `?? 0` on a mirror field) is
+ * the exact lie the columns exist to prevent.
+ */
+export const REVISION_SETTINGS_VERDICTS = ['MATCH', 'DIFFERS', 'UNKNOWN'] as const;
+
+export type RevisionSettingsVerdict = (typeof REVISION_SETTINGS_VERDICTS)[number];
+
+/** One side of the comparison, identified. */
+export interface RevisionSide {
+  kind: RevisionSideKind;
+  /** The baseline's id; null on the live side, which has no id of its own. */
+  id: string | null;
+  /** The baseline's name; null on the live side, which the client labels as live. */
+  name: string | null;
+  /** `capturedAt` for a baseline, `scheduleComputedAt` for live; null = never calculated. */
+  computedAt: string | null;
+  /** `YYYY-MM-DD`; the data date the side's numbers were computed against. */
+  dataDate: string | null;
+}
+
+/**
+ * An activity that changed criticality, with BOTH sides' numbers so the reader need not ask again.
+ *
+ * `floatMovementDays` is `to - from`, or **null** when either side is unknown. Absence and zero are
+ * different facts, and this payload never collapses them.
+ */
+export interface RevisionMovedActivity {
+  activityId: string;
+  code: string | null;
+  name: string;
+  fromTotalFloatDays: number | null;
+  toTotalFloatDays: number | null;
+  floatMovementDays: number | null;
+  fromEarlyStart: string | null;
+  toEarlyStart: string | null;
+  fromEarlyFinish: string | null;
+  toEarlyFinish: string | null;
+  /**
+   * Whether the activity is on the LIVE plan, which is what decides whether a client may offer to
+   * reveal it. A row from a frozen side naming an activity since deleted is not activatable, and a
+   * control that does nothing is worse than one that says why (ADR-0082).
+   */
+  existsLive: boolean;
+}
+
+/** An activity present on only one side. **Appearing is not entering.** */
+export interface RevisionPresenceActivity {
+  activityId: string;
+  code: string | null;
+  name: string;
+  /** Its criticality on the side it exists on — a fact, not a movement. */
+  isCritical: boolean;
+  existsLive: boolean;
+}
+
+/**
+ * How far the project completion moved, or why that cannot be said.
+ *
+ * The carrier is the latest-finishing non-summary activity on the OLD side, ties broken by id.
+ * **It is not exact and the client must say so**: both sides persist a `YYYY-MM-DD`, so under a
+ * same-day tie this can pick a different activity than the engine's own minute-denominated carrier
+ * rule would. The panel names the carrier and states the tie-break rather than presenting the
+ * movement as if the choice were unique.
+ *
+ * `movementDays` is **working days on the plan calendar** measured with the old side's frozen
+ * hours-per-day factor (positive = later). That under-reads exactly when the carrier works a wider
+ * week than the plan; consistency with the variance read, which measures the same way, was
+ * preferred to the residual accuracy.
+ */
+export interface RevisionCompletion {
+  assessable: boolean;
+  /** Present iff `!assessable`. Prints as a sentence; a code reaching a screen is a defect. */
+  reason: RevisionCompletionReason | null;
+  carrierActivityId: string | null;
+  carrierName: string | null;
+  fromFinish: string | null;
+  toFinish: string | null;
+  movementDays: number | null;
+  /** True when the NEW side's own latest-finishing activity is a different one. A fact, not a cause. */
+  carrierChanged: boolean;
+  newSideCarrierActivityId: string | null;
+  newSideCarrierName: string | null;
+}
+
+/**
+ * The criticality delta. The four row sets plus the two membership counts **partition the union of
+ * both sides' activities** — a totality asserted by test, because six evaluators asked separately
+ * would answer "is an activity that appeared, critical, an ADDED row or an ENTERED row?"
+ * differently. It is ADDED.
+ */
+export interface RevisionCriticalPathDelta {
+  entered: RevisionMovedActivity[];
+  left: RevisionMovedActivity[];
+  /** The TRUE totals, which may exceed the returned rows. "Showing 50 of 412" is never a client's own number. */
+  enteredTotal: number;
+  leftTotal: number;
+  /** The server's cap on each set — carried so a client never hard-codes a second copy of it. */
+  cap: number;
+  remainedCriticalCount: number;
+  remainedNonCriticalCount: number;
+  added: RevisionPresenceActivity[];
+  removed: RevisionPresenceActivity[];
+  /** True when NEITHER side has a critical non-summary activity — a fact to state, not a crash. */
+  noCriticalPath: boolean;
+}
+
+/** The whole comparison. */
+export interface RevisionCompare {
+  planId: string;
+  planName: string;
+  from: RevisionSide;
+  to: RevisionSide;
+  /**
+   * The day↔minute factor the movement is measured over — the OLD side's frozen
+   * `hoursPerDayMinutes` (ADR-0068 §5). Carried so a client formatting a sub-day quantity uses the
+   * same factor the server did rather than defaulting to one, which after ADR-0068 reads a
+   * planner's `1d` on an eight-hour calendar as three days' work.
+   */
+  dayFactorMinutes: number;
+  /**
+   * Whether both sides' numbers came from the same criticality rule. Never coalesced; see
+   * {@link RevisionSettingsVerdict}.
+   */
+  settingsVerdict: RevisionSettingsVerdict;
+  completion: RevisionCompletion;
+  criticalPath: RevisionCriticalPathDelta;
+}

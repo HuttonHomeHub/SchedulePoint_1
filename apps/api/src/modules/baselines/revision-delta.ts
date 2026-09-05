@@ -180,11 +180,24 @@ function byMovementThenCodeThenId(a: RevisionMovedRow, b: RevisionMovedRow): num
 /**
  * The delta. `cap` bounds `entered`/`left`; the TRUE totals are returned alongside, because
  * "showing 50 of 412" is never a client's own number (ADR-0116 D4).
+ *
+ * `movementDaysBetween` is the **injected measurement frame** for the completion movement — the
+ * ADR-0024 pure-port pattern, and the only way this function can satisfy spec D4 while staying
+ * pure. D4 measures the movement in **working days on the plan calendar with the old side's frozen
+ * hours-per-day factor**, which needs a working-time port and a factor; a function over two arrays
+ * has neither, and inventing one here would be a second answer to a question `computeVariance`
+ * already answers one way. The API always injects that walker.
+ *
+ * The default is `daysBetweenIso` — **calendar** days — and it exists for this module's own unit
+ * cases, which pin the sign convention and the null handling without standing up a calendar. It is
+ * NOT the shipped behaviour: a reader must not conclude from the default that the product reports
+ * calendar days, and no caller in `apps/api` omits the argument.
  */
 export function computeRevisionDelta(
   fromRows: readonly RevisionRow[],
   toRows: readonly RevisionRow[],
   cap: number,
+  movementDaysBetween: (from: string, to: string) => number = daysBetweenIso,
 ): RevisionDelta {
   const fromById = new Map(fromRows.map((r) => [r.activityId, r]));
   const toById = new Map(toRows.map((r) => [r.activityId, r]));
@@ -251,7 +264,7 @@ export function computeRevisionDelta(
       movementDays:
         fromCarrier.earlyFinish === null
           ? null
-          : daysBetweenIso(fromCarrier.earlyFinish, sameActivityOnNewSide.earlyFinish),
+          : movementDaysBetween(fromCarrier.earlyFinish, sameActivityOnNewSide.earlyFinish),
       carrierChanged,
       ...(carrierChanged
         ? { newSideCarrierActivityId: toCarrier.activityId, newSideCarrierName: toCarrier.name }

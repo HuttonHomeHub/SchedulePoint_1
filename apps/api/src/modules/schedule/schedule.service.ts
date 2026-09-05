@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import type { ActivityType, Prisma } from '@prisma/client';
 import type {
   HistogramGranularity,
   PlanEarnedValue,
@@ -9,6 +9,10 @@ import type {
   ProgrammeScheduleResult,
   HealthMetricResult,
   ResourceHistogramSeries,
+  RevisionCompare,
+  RevisionMovedActivity,
+  RevisionPresenceActivity,
+  RevisionSide,
   ScheduleHealthReport,
 } from '@repo/types';
 import { DEFAULT_HOURS_PER_DAY_MINUTES } from '@repo/types';
@@ -24,6 +28,8 @@ import {
 import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
+import { BaselineRepository } from '../baselines/baseline.repository';
+import { computeRevisionDelta, type RevisionRow } from '../baselines/revision-delta';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -31,7 +37,12 @@ import { PlanEditLockService } from '../plan-lock/plan-lock.service';
 import { PlanRepository } from '../plans/plan.repository';
 
 import { runCriticalPathTest } from './critical-path-test';
-import { type CriticalityRule, toCriticalityOptions } from './criticality-rule';
+import {
+  compareCriticalityRules,
+  type CriticalityRule,
+  readCriticalityRule,
+  toCriticalityOptions,
+} from './criticality-rule';
 import {
   deriveExternalInstants,
   type DerivedExternalInstant,
@@ -180,6 +191,25 @@ type ActivePlan = NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdI
  * recalculation is invisible to optimistic locking and cannot masquerade as a
  * user edit.
  */
+/**
+ * The literal a caller sends for `to` to mean **the plan as it stands now**. A word rather than an
+ * omission, because `?to=` absent and `?to=live` must not be two spellings a reader has to know are
+ * the same — the default fills it in, and the value that reaches the service is always one of a
+ * UUID or this.
+ */
+export const LIVE_REVISION = 'live';
+
+/**
+ * The cap on each of `entered` / `left`. The TRUE totals travel beside the rows, so a client never
+ * computes "showing 50 of 412" from a number it holds itself (ADR-0116 D4).
+ *
+ * 200 is generous against what the panel can show and small enough that a pathological plan cannot
+ * turn one read into an unbounded response. It is deliberately NOT a page size: this is an analysis,
+ * and a planner paging through 412 activities that entered the critical path has a different problem
+ * from the one this feature solves.
+ */
+export const REVISION_ROW_CAP = 200;
+
 @Injectable()
 export class ScheduleService {
   constructor(
@@ -190,6 +220,10 @@ export class ScheduleService {
     private readonly editLock: PlanEditLockService,
     private readonly prisma: PrismaService,
     private readonly crossPlan: CrossPlanDependencyRepository,
+    // The revision comparison reads both sides through the baselines repository: the frozen side
+    // from `baseline_activities`, the live side from `activities`. ScheduleModule imports
+    // BaselinesModule for it; BaselinesModule imports neither, so there is no cycle.
+    private readonly baselines: BaselineRepository,
     @InjectPinoLogger(ScheduleService.name) private readonly logger: PinoLogger,
   ) {}
 
@@ -1386,6 +1420,223 @@ export class ScheduleService {
     // Shared with `BaselinesService.resolveCalendar`, which reaches the same state identically —
     // a second catch here would be free to drift from that one.
     return buildPlanCalendarOrReject(calendar, calendarId);
+  }
+
+  /**
+   * **The revision comparison** (ADR-0125, revision M1): what entered and left the critical path
+   * between two computed schedules of one plan, and how far the completion moved.
+   *
+   * **The CPM engine is not invoked.** Both sides are already computed and already persisted — a
+   * baseline freezes the engine's OUTPUT (`is_critical`, `total_float`, the early/late dates), and
+   * the live side is the plan's own persisted columns. So `computeSchedule` is not called here, its
+   * signature is unchanged, and no new input kind exists: the ADR-0034 recalculation parity gate is
+   * untouched **by construction** rather than by argument. A structural gate over the delta module
+   * pins the engine-free half; this docblock is the seam's half.
+   *
+   * No lock, no pen, no transaction, nothing written. It is a read.
+   *
+   * **No audit event**, and ADR-0073's two tests are why rather than an oversight: nothing durable
+   * changes, and it has no blast radius. Worth stating that this is a rule with a reason and not a
+   * gate — the route census reflects over controller metadata and forces a MUTATING route to be
+   * classified, so nothing would fail a PR that audited this one.
+   */
+  async revisionCompare(
+    principal: Principal,
+    orgSlug: string,
+    planId: string,
+    fromId: string,
+    to: string,
+  ): Promise<RevisionCompare> {
+    const startedAt = Date.now();
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    // BOTH codes, not one. They are granted to the same set today, so asserting both changes
+    // nothing now — and it means narrowing either later (the `calendar:manage_org` precedent,
+    // ADR-0053) cannot silently leave this route open on the strength of the other.
+    this.assertCan(principal, 'schedule:read', organization.id);
+    this.assertCan(principal, 'baseline:read', organization.id);
+
+    const plan = await this.plans.findActiveByIdInOrg(planId, organization.id);
+    if (!plan) throw new NotFoundError('Plan not found.');
+
+    // A revision compared with itself has nothing to report, and answering 200 with an empty delta
+    // would read as "nothing changed" rather than "you asked the wrong question".
+    if (fromId === to) {
+      // The code rides `details.reason`, matching every other specific 422 in this service
+      // (`PLAN_START_REQUIRED`, the calendar states): `ValidationError.code` is the fixed
+      // envelope code `VALIDATION_FAILED`, and a second convention for the same fact is how a
+      // client ends up with two places to look.
+      throw new ValidationError('Pick two different revisions to compare.', {
+        reason: 'SAME_REVISION',
+      });
+    }
+
+    // ANTI-IDOR: each side is resolved on the TARGET — a baseline of THIS plan in THIS org — and a
+    // miss is 404, never 403. A 403 would confirm the id names a real baseline somewhere, which is
+    // an existence oracle; the uniform 404 is what the rest of this codebase answers and it is not
+    // re-decided here.
+    const fromBaseline = await this.baselines.findActiveByIdInPlan(fromId, organization.id, planId);
+    if (!fromBaseline) throw new NotFoundError('Revision not found.');
+
+    const toBaseline =
+      to === LIVE_REVISION
+        ? null
+        : await this.baselines.findActiveByIdInPlan(to, organization.id, planId);
+    if (to !== LIVE_REVISION && !toBaseline) throw new NotFoundError('Revision not found.');
+
+    const [fromRows, toRows, liveRows, planCalendar] = await Promise.all([
+      this.baselines.loadSnapshotRowsForDelta(fromBaseline.id),
+      toBaseline ? this.baselines.loadSnapshotRowsForDelta(toBaseline.id) : Promise.resolve(null),
+      this.baselines.loadActiveActivitiesForDelta(organization.id, planId),
+      this.resolveCalendar(organization.id, plan.calendarId),
+    ]);
+
+    const date = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
+
+    const frozenSide = (
+      rows: {
+        sourceActivityId: string;
+        code: string | null;
+        name: string;
+        type: ActivityType;
+        isCritical: boolean;
+        totalFloat: number | null;
+        baselineStart: Date | null;
+        baselineFinish: Date | null;
+      }[],
+    ): RevisionRow[] =>
+      rows.map((r) => ({
+        activityId: r.sourceActivityId,
+        code: r.code,
+        name: r.name,
+        type: r.type,
+        isCritical: r.isCritical,
+        totalFloatDays: r.totalFloat,
+        earlyStart: date(r.baselineStart),
+        earlyFinish: date(r.baselineFinish),
+      }));
+
+    const liveSide: RevisionRow[] = liveRows.map((r) => ({
+      activityId: r.id,
+      code: r.code,
+      name: r.name,
+      type: r.type,
+      isCritical: r.isCritical,
+      totalFloatDays: r.totalFloat,
+      earlyStart: date(r.earlyStart),
+      earlyFinish: date(r.earlyFinish),
+    }));
+
+    // **The measurement frame, spec D4**: working days on the PLAN calendar, with the OLD side's
+    // FROZEN hours-per-day factor. Not the carrier's own calendar — `BaselineActivity` carries no
+    // `calendarId`, so that rule is unrecoverable from a snapshot, and resolving it from the live
+    // row would apply today's calendar to a frozen side (the drift ADR-0025's copy-not-reference
+    // rule exists to prevent). This matches `computeVariance`, deliberately: two numbers on one
+    // screen derived on different calendars is a worse defect than the residual this inherits,
+    // which is that it under-reads when the carrier works a wider week than the plan.
+    const dayFactorMinutes = fromBaseline.hoursPerDayMinutes;
+    const movementDaysBetween = (from: string, toDate: string): number =>
+      Math.round(planCalendar.workingTimeBetween(from, toDate) / dayFactorMinutes);
+
+    const delta = computeRevisionDelta(
+      frozenSide(fromRows),
+      toRows === null ? liveSide : frozenSide(toRows),
+      REVISION_ROW_CAP,
+      movementDaysBetween,
+    );
+
+    // `existsLive` is what decides whether a client may offer to reveal a row. It is a question
+    // about the LIVE plan and never about the comparison's `to` side: comparing two baselines can
+    // name an activity that has since been deleted, and a control that navigates nowhere is worse
+    // than one that says why (ADR-0082).
+    const liveIds = new Set(liveRows.map((r) => r.id));
+    const moved = (r: (typeof delta.entered)[number]): RevisionMovedActivity => ({
+      ...r,
+      existsLive: liveIds.has(r.activityId),
+    });
+    const present = (r: (typeof delta.added)[number]): RevisionPresenceActivity => ({
+      ...r,
+      existsLive: liveIds.has(r.activityId),
+    });
+
+    const result: RevisionCompare = {
+      planId,
+      planName: plan.name,
+      from: {
+        kind: 'BASELINE',
+        id: fromBaseline.id,
+        name: fromBaseline.name,
+        computedAt: fromBaseline.capturedAt.toISOString(),
+        dataDate: date(fromBaseline.dataDate),
+      },
+      to: toBaseline
+        ? {
+            kind: 'BASELINE',
+            id: toBaseline.id,
+            name: toBaseline.name,
+            computedAt: toBaseline.capturedAt.toISOString(),
+            dataDate: date(toBaseline.dataDate),
+          }
+        : ({
+            kind: 'LIVE',
+            id: null,
+            name: null,
+            computedAt: plan.scheduleComputedAt ? plan.scheduleComputedAt.toISOString() : null,
+            dataDate: date(plan.plannedStart),
+          } satisfies RevisionSide),
+      dayFactorMinutes,
+      settingsVerdict: compareCriticalityRules(
+        readCriticalityRule(fromBaseline),
+        toBaseline
+          ? readCriticalityRule(toBaseline)
+          : readCriticalityRule({
+              criticalPathDefinition: plan.scheduleCriticalPathDefinition,
+              criticalFloatThresholdMinutes: plan.scheduleCriticalFloatThresholdMinutes,
+              totalFloatMode: plan.scheduleTotalFloatMode,
+              makeOpenEndsCritical: plan.scheduleMakeOpenEndsCritical,
+            }),
+      ),
+      completion: {
+        assessable: delta.completion.assessable,
+        reason: delta.completion.reason ?? null,
+        carrierActivityId: delta.completion.carrierActivityId ?? null,
+        carrierName: delta.completion.carrierName ?? null,
+        fromFinish: delta.completion.fromFinish ?? null,
+        toFinish: delta.completion.toFinish ?? null,
+        movementDays: delta.completion.movementDays ?? null,
+        carrierChanged: delta.completion.carrierChanged ?? false,
+        newSideCarrierActivityId: delta.completion.newSideCarrierActivityId ?? null,
+        newSideCarrierName: delta.completion.newSideCarrierName ?? null,
+      },
+      criticalPath: {
+        entered: delta.entered.map(moved),
+        left: delta.left.map(moved),
+        enteredTotal: delta.enteredTotal,
+        leftTotal: delta.leftTotal,
+        cap: REVISION_ROW_CAP,
+        remainedCriticalCount: delta.remainedCriticalCount,
+        remainedNonCriticalCount: delta.remainedNonCriticalCount,
+        added: delta.added.map(present),
+        removed: delta.removed.map(present),
+        noCriticalPath: delta.noCriticalPath,
+      },
+    };
+
+    this.logger.info(
+      {
+        planId,
+        fromRevisionId: fromBaseline.id,
+        toRevisionId: toBaseline ? toBaseline.id : LIVE_REVISION,
+        fromRowCount: fromRows.length,
+        toRowCount: toRows === null ? liveSide.length : toRows.length,
+        enteredTotal: delta.enteredTotal,
+        leftTotal: delta.leftTotal,
+        settingsVerdict: result.settingsVerdict,
+        durationMs: Date.now() - startedAt,
+      },
+      'revision comparison read',
+    );
+
+    return result;
   }
 
   private assertCan(principal: Principal, permission: Permission, organizationId: string): void {
