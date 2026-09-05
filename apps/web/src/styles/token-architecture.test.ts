@@ -538,7 +538,14 @@ describe('weight is a governed axis', () => {
   // controls that moved there from the rail (workspace redesign, 2026-08-24). A caption naming a
   // cluster is exactly the kind of screen-level weight this ceiling governs rather than forbids —
   // it rose because a screen gained a label, not because a decision leaked out of a primitive.
-  const SCREEN_WEIGHT_CEILING = 165;
+  // ...and 165 -> 166: the revision comparison dock's TWO section headings ("Entered the critical
+  // path" / "Left the critical path"), which take the `font-medium` every docked panel's section
+  // headings already carry — and it is one site rather than two because they are one component
+  // rendered twice, which is the ratchet reading the code correctly rather than a concession. The
+  // panel's first draft placed FOUR weights and two were removed rather than absorbed: a
+  // `font-normal` that existed only to undo its own heading, and a name already distinguished from
+  // its subtitle by size AND colour, where a weight is a third channel saying what two already say.
+  const SCREEN_WEIGHT_CEILING = 166;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

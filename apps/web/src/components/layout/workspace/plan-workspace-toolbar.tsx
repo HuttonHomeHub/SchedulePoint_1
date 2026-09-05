@@ -63,6 +63,7 @@ import {
 } from '@/config/env';
 import { useUpdateActivityParents } from '@/features/activities';
 import { useUpdateActivityFields } from '@/features/activities/api/use-activities';
+import { useBaselines } from '@/features/baselines/api/use-baselines';
 import {
   FloatPathsPanel,
   useFloatPathsPanelPrefs,
@@ -80,6 +81,13 @@ import {
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
 import { CompactPenStatus } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS } from '@/features/plans';
+import {
+  LIVE_REVISION,
+  REVISION_PANEL_MIN_WIDTH,
+  RevisionComparePanel,
+  useRevisionCompare,
+  useRevisionComparePanelPrefs,
+} from '@/features/revision-compare';
 import { ProgrammeScheduleSection, useScheduleSummary } from '@/features/schedule';
 import {
   HEALTH_PANEL_MIN_WIDTH,
@@ -213,6 +221,14 @@ export function ToolbarPlanWorkspace({
   // Gantt moves the selection and reveals nothing. Cleared when the dock closes, so the standing
   // sources resume.
   const [healthRevealId, setHealthRevealId] = useState<string | null>(null);
+  // The docked revision comparison (ADR-0125, revision M2) — the fourth right dock. The two sides
+  // are EPHEMERAL state, not URL state: a comparison is a question a planner asks while looking at
+  // the plan, not a place they navigate to, and putting revision ids in the URL would make a shared
+  // link 404 for anybody whose organisation does not hold those baselines. No VITE_ flag (spec D7 /
+  // ADR-0088 D1): the rollback is a commit boundary.
+  const [revisionsOpen, setRevisionsOpen] = useState(false);
+  const [revisionFrom, setRevisionFrom] = useState<string | null>(null);
+  const [revisionTo, setRevisionTo] = useState<string>(LIVE_REVISION);
   // **One closure over the set** (health M2-T2 step 7): each dock's closer, keyed by the member
   // name, and `closeOtherDocks` derives what to close from `docksToClose` — so a fourth dock is one
   // map entry, never six hand-written statements of which five get written. Defined above every
@@ -226,6 +242,9 @@ export function ToolbarPlanWorkspace({
         setHealthOpen(false);
         setHealthRevealId(null);
       },
+      // The chosen sides deliberately SURVIVE a close: reopening the dock should not make a planner
+      // pick the same two revisions again because another dock stole the column for a moment.
+      revisions: () => setRevisionsOpen(false),
     }),
     [setNotesOpen, modelFloatPathsClose],
   );
@@ -324,6 +343,26 @@ export function ToolbarPlanWorkspace({
     setHealthOpen(true);
   }, [healthOpen, closeHealthAndFocus, closeOtherDocks]);
 
+  // Close the comparison dock AND return focus — the health rule verbatim: the menu item that
+  // opened this unmounts with its menu, so the stable ancestor (`analysis`, else the deck's `⋯`)
+  // is the honest destination (WCAG 2.4.3).
+  const closeRevisionsAndFocus = useCallback(() => {
+    setRevisionsOpen(false);
+    const target =
+      document.querySelector<HTMLElement>('[data-toolbar-item="analysis"]') ??
+      document.querySelector<HTMLElement>('[data-toolbar-item="__overflow__"]');
+    target?.focus();
+  }, []);
+
+  const toggleRevisionCompare = useCallback(() => {
+    if (revisionsOpen) {
+      closeRevisionsAndFocus();
+      return;
+    }
+    closeOtherDocks('revisions');
+    setRevisionsOpen(true);
+  }, [revisionsOpen, closeRevisionsAndFocus, closeOtherDocks]);
+
   // The view switch is router-backed, so the workspace (which is inside the router) owns it and
   // passes it down — exactly like `legend` and `revealComments`. Keeping `useNavigate` out of the
   // toolbar-context builder means the six spec files that render that builder standalone need no
@@ -391,6 +430,7 @@ export function ToolbarPlanWorkspace({
     revealComments,
     toggleFloatPaths,
     toggleHealthCheck,
+    toggleRevisionCompare,
     planView,
     setPlanView,
     barDateSource,
@@ -542,6 +582,26 @@ export function ToolbarPlanWorkspace({
     [healthPrefs, healthEffectiveMax],
   );
 
+  // The revision comparison dock — the fourth member of the right-dock set, on the same shared
+  // resizable prefs with its own storage key and its own DERIVED width floor (see its prefs
+  // docblock: the floor is the two side pickers side by side, not a number copied from a sibling).
+  const revisionPrefs = useRevisionComparePanelPrefs();
+  const revisionsDockActive = revisionsOpen;
+  const revisionEffectiveMax = Math.min(
+    NOTES_PANEL_MAX_WIDTH,
+    Math.max(REVISION_PANEL_MIN_WIDTH, bodyWidth - CANVAS_MIN_WIDTH),
+  );
+  const revisionWidth = Math.min(revisionPrefs.size, revisionEffectiveMax);
+  const revisionPointerToSize = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) =>
+      (bodyRef.current?.getBoundingClientRect().right ?? 0) - event.clientX,
+    [],
+  );
+  const onRevisionResize = useCallback(
+    (next: number) => revisionPrefs.setSize(Math.min(next, revisionEffectiveMax)),
+    [revisionPrefs, revisionEffectiveMax],
+  );
+
   // **The activities panel's clamp, computed BELOW the dock flags because it reads them** (the ux
   // gate's blocking finding on the polish pass, 2026-08-28). Since the dock-pushes-canvas-only
   // restructure, an open right dock's height IS the canvas row's height — so a clamp that reserved
@@ -551,7 +611,8 @@ export function ToolbarPlanWorkspace({
   // taxing the docks. With a dock open the row keeps `DOCK_MIN_HEIGHT` instead; the cost runs the
   // other way and is stated in that constant's docblock (a taller persisted panel is render-clamped
   // while a dock is open, and restored exactly on close — `panel.size` is never overwritten).
-  const anyRightDockActive = notesDockActive || floatPathsDockActive || healthDockActive;
+  const anyRightDockActive =
+    notesDockActive || floatPathsDockActive || healthDockActive || revisionsDockActive;
   const effectiveMax = Math.min(
     PANEL_MAX_HEIGHT,
     Math.max(
@@ -570,6 +631,15 @@ export function ToolbarPlanWorkspace({
   // The on-demand metric-12 what-if (health M6): a mutation, so nothing but the row's button can
   // fire the two engine passes; the result merges over the placeholder inside the panel.
   const criticalPathTest = useCriticalPathTest(model.orgSlug, model.planId);
+  // Enabled-gated on the dock being open AND on a pair being chosen, so a closed dock costs
+  // nothing and an unanswered picker is not a failed request.
+  const revisionCompare = useRevisionCompare(
+    model.orgSlug,
+    model.planId,
+    revisionFrom,
+    revisionTo,
+    revisionsDockActive,
+  );
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -1284,6 +1354,28 @@ export function ToolbarPlanWorkspace({
     />
   ) : null;
 
+  // The revision comparison dock's content (revision M2). `baselines` feeds both pickers and is
+  // the same query the Baselines dialog runs, so opening the dock after that dialog is a cache
+  // read; `enabled` is not gated here because the panel needs the list to tell "no revisions yet"
+  // from "still loading", which are its two distinct empty states.
+  const revisionBaselines = useBaselines(model.orgSlug, model.planId);
+  const revisionsDockContent = revisionsDockActive ? (
+    <RevisionComparePanel
+      baselines={revisionBaselines.data ?? null}
+      baselinesPending={revisionBaselines.isPending}
+      compare={revisionCompare.data ?? null}
+      isPending={revisionCompare.isPending && revisionFrom !== null}
+      isError={revisionCompare.isError}
+      onRetry={() => void revisionCompare.refetch()}
+      from={revisionFrom}
+      to={revisionTo}
+      onFromChange={(id) => setRevisionFrom(id === '' ? null : id)}
+      onToChange={setRevisionTo}
+      onClose={closeRevisionsAndFocus}
+      levelResources={plan.levelResources}
+    />
+  ) : null;
+
   // **Reveal a completed copy.** A clone lands below the plan's lowest lane, so on a 60-lane
   // imported programme a successful duplicate otherwise produces no visible change at all — the
   // planner reads "1 activity duplicated." and sees nothing move. The implementation plan named
@@ -1812,6 +1904,30 @@ export function ToolbarPlanWorkspace({
                         className="shrink-0"
                       >
                         {healthDockContent}
+                      </PanelSurface>
+                    </>
+                  ) : null}
+
+                  {revisionsDockActive ? (
+                    <>
+                      <PanelResizer
+                        orientation="vertical"
+                        size={revisionWidth}
+                        min={REVISION_PANEL_MIN_WIDTH}
+                        max={revisionEffectiveMax}
+                        label="Resize revision comparison panel"
+                        onResize={onRevisionResize}
+                        pointerToSize={revisionPointerToSize}
+                        reverseKeys
+                        className="bg-border/60 hover:bg-border focus-visible:bg-ring"
+                      />
+                      {/* `panel` scope — see the Float paths dock above (item 7). */}
+                      <PanelSurface
+                        border="start"
+                        style={{ width: revisionWidth }}
+                        className="shrink-0"
+                      >
+                        {revisionsDockContent}
                       </PanelSurface>
                     </>
                   ) : null}

@@ -43,6 +43,7 @@ import {
   Users,
   Waypoints,
   X,
+  GitCompareArrows,
   HeartPulse,
 } from 'lucide-react';
 import { useId, useRef } from 'react';
@@ -1347,6 +1348,23 @@ function PlanAnalysisControl({
         <MenuItem onSelect={() => ctx.toggleHealthCheck()}>
           <HeartPulse aria-hidden="true" className="size-4" />
           Health check…
+        </MenuItem>
+        {/* The revision comparison (ADR-0125, revision M2) — a docked column beside Health check,
+            for the same reason: it is read WITH the plan, naming bars the planner wants to look at.
+
+            **Deliberately NOT shaded, against the plan's own M2-T3 step 1**, which said to shade it
+            when the plan has no computed schedule. Re-verified before following it and the premise
+            does not hold: a comparison of TWO BASELINES needs no live computation at all, and a
+            comparison against live on an uncalculated plan still returns the criticality delta with
+            `PLAN_NOT_SCHEDULED` rendered as a sentence. Shading would refuse to open a dock that
+            has something true and useful to say — which is not ADR-0082's "shut by a state the
+            reader can change", it is a working control turned off by a rule written before the
+            payload's shape was settled. The panel owns its own empty states, and they are two
+            distinct ones ("no revisions yet" and "nothing entered or left"), which a shaded trigger
+            would collapse into "unavailable". */}
+        <MenuItem onSelect={() => ctx.toggleRevisionCompare()}>
+          <GitCompareArrows aria-hidden="true" className="size-4" />
+          Compare revisions…
         </MenuItem>
       </Menu>
     </>

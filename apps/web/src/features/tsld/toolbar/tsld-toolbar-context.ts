@@ -186,6 +186,10 @@ export interface TsldToolbarContext {
    * toggle, like the Notes and Float-paths docks) — `open` here once read as idempotent and was
    * not (an M5 component-review finding). */
   toggleHealthCheck: () => void;
+  /** Toggle the docked revision comparison (ADR-0125, revision M2) — what entered and left the
+   * critical path between two revisions, beside the plan. A toggle for the same reason the
+   * health item is one: a second select while the dock is open CLOSES it. */
+  toggleRevisionCompare: () => void;
   /** Whether the viewer may create/list/revoke External-Guest share links (`plan:share` — Planner +
    * Org Admin; ADR-0051 F-M4). Gates the toolbar **Share…** item ALONGSIDE `VITE_GUEST_SHARE_LINKS`
    * (both must hold). NOT pen-gated — sharing grants read access, it doesn't edit the plan. Populated on

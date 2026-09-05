@@ -69,6 +69,7 @@ export function makeTsldToolbarContext(
     openEarnedValue: vi.fn(),
     openResourceHistogram: vi.fn(),
     toggleHealthCheck: vi.fn(),
+    toggleRevisionCompare: vi.fn(),
     canShare: true,
     openShare: vi.fn(),
     editPlan: vi.fn(),
