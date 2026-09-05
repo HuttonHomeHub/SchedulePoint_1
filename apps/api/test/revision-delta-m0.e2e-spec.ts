@@ -1,14 +1,37 @@
+import { appendFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { fixtureSpec } from '@repo/seed';
-import { SeedClient, seedPlan } from '@repo/seed-http';
+import { PenHolder, SeedClient, seedPlan } from '@repo/seed-http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+
+/**
+ * The run's numbers have to survive vitest's per-task console buffering — the setup run's counts
+ * never reached the log, so the assertion was verified and the figures were not.
+ *
+ * The path is FIXED. It was briefly an env var in the previous epic's harness and CodeQL flagged
+ * that as `js/path-injection` (high), correctly: an environment value flowing unchecked into a
+ * filesystem write is a real sink. Every write is best-effort and swallowed — a measurement harness
+ * must never fail a build over where it puts its notes.
+ */
+const REPORT = join(tmpdir(), 'schedulepoint-delta-m0.txt');
+const say = (line: string): void => {
+  try {
+    appendFileSync(REPORT, `${line}\n`);
+  } catch {
+    // The stdout copy is the one that matters.
+  }
+  process.stdout.write(`${line}\n`);
+};
 
 /**
  * **M0-T2 — the critical-path delta's measurement harness.**
@@ -30,6 +53,15 @@ import { clearAuditEvents } from './audit-reset';
  * `fixtureSpec` moved into `@repo/seed`: it was the only catalogue tier living in an app, and an
  * app cannot be imported from here.
  */
+type Lever = 'extend' | 'shorten' | 'both';
+
+interface LiveActivity {
+  id: string;
+  code: string;
+  durationDays: number;
+  version: number;
+}
+
 const hasDatabase = Boolean(process.env.DATABASE_URL);
 
 /** See `interchange-roundtrip.e2e-spec.ts` — Better Auth validates Origin against trustedOrigins. */
@@ -136,12 +168,220 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     const rows = await prisma.baselineActivity.count({ where: { baselineId: captured.id } });
     const activities = await prisma.activity.count({ where: { planId, deletedAt: null } });
 
-    // eslint-disable-next-line no-console
-    console.warn(
-      `M0 setup: plan ${planId} — ${activities} activities, baseline ${captured.id} froze ${rows} rows`,
-    );
-
+    say(`M0 setup: plan ${planId} — ${activities} activities, baseline froze ${rows} rows`);
     expect(rows).toBeGreaterThan(0);
     expect(rows).toBe(activities);
-  }, 300_000);
+
+    // ---------------------------------------------------------------------------------------
+    // NON-VACUITY — the pinned positive case, run BEFORE any other limb.
+    //
+    // F1 compares two ways of computing the same delta, so it passes perfectly against two
+    // identical schedules. A green suite that cannot tell "all correct" from "found nothing" is
+    // the failure ADR-0093 and ADR-0108 both record, which is why this runs first and why a
+    // failure here is reported as the finding rather than worked around.
+    // ---------------------------------------------------------------------------------------
+    const oldSide = await prisma.baselineActivity.findMany({
+      where: { baselineId: captured.id },
+      select: {
+        sourceActivityId: true,
+        code: true,
+        isCritical: true,
+        totalFloat: true,
+        baselineFinish: true,
+        type: true,
+      },
+    });
+
+    // Perturb through the PUBLIC write path, under the pen — not by writing rows. The whole point
+    // is that the old and new sides are both things the product produced.
+    // The change set has to move criticality in BOTH directions, and the first version did not.
+    // Extending critical activities was measured at `entered=5 left=0`: lengthening critical work
+    // consumes float elsewhere, so activities JOIN the critical path, and nothing gains float, so
+    // nothing leaves. A one-directional perturbation cannot satisfy a two-directional bar, however
+    // large it is — which is a fact about CPM, not a threshold to tune.
+    //
+    // So the set is split: one group is extended (pulling work on) and a DISJOINT group is
+    // shortened hard (letting its chain fall off, once the extended paths outrun it). That is also
+    // what a real revision looks like — some work slips, some is re-sequenced shorter.
+    // ONE LEVER AT A TIME. Three levers were applied together and recalculated once — extend,
+    // shorten, cut — and every run reported the same `entered=5 left=0`, which attributes nothing:
+    // the +20-day extensions dominate the network and could be masking anything that would
+    // otherwise leave. This is the clean test of the only question still open, "can ANYTHING leave
+    // the critical path on this fixture": shorten, and change nothing else.
+    // MEASURED, one lever at a time, because three levers applied together reported the same
+    // `entered=5 left=0` four times and attributed nothing:
+    //
+    //   extend 4 x +20d   -> entered=5  left=0
+    //   shorten 12 x -20d -> entered=0  left=2   (A7210, A8200)
+    //
+    // Both levers work. They CANCEL: the extensions dominate the network and mask the exits, which
+    // is why every combined run looked like "nothing can leave". So the change set keeps both and
+    // the target sets are DISJOINT — an earlier version had extend `slice(0,4)` overlapping shrink
+    // `slice(0,12)`, which would patch four activities twice, the second time with a stale version.
+    // `as Lever` rather than a plain annotation: a `const` with a literal initialiser narrows to
+    // that literal, so TypeScript proves the other branches dead (TS2367) and the gate refuses it.
+    // The widening is the honest expression of what this is — a knob edited between runs to
+    // isolate one lever at a time, which is what produced the table above.
+    const LEVER = 'both' as Lever;
+    const critical = oldSide.filter((a) => a.isCritical && a.type === 'TASK');
+    const extend = LEVER === 'shorten' ? [] : critical.slice(0, 4);
+    const shrink = LEVER === 'extend' ? [] : critical.slice(4, 16);
+    say(
+      `non-vacuity [lever=${LEVER}]: ${critical.length} critical TASKs — extending ${extend.length}, shortening ${shrink.length}`,
+    );
+    expect(critical.length, 'the fixture has no critical TASKs to perturb').toBeGreaterThan(0);
+    expect(critical.length, 'too few critical TASKs to perturb').toBeGreaterThan(0);
+    const overlap = extend.filter((e) =>
+      shrink.some((h) => h.sourceActivityId === e.sourceActivityId),
+    );
+    expect(
+      overlap,
+      'extend and shrink must be disjoint or an activity is patched twice',
+    ).toHaveLength(0);
+    const targets = [...extend, ...shrink];
+
+    // There is no GET-by-id route for an activity — the first attempt assumed one and got a bare
+    // "Cannot GET" 404 from Express rather than an API error, which is what a route that does not
+    // exist looks like. The list is the public read, and it is PAGED: `getPage` is used rather than
+    // `get` precisely so a complete list is distinguishable from the first 100 rows of one, which
+    // is a defect `client.ts:155-160` records having shipped once already.
+    const live = new Map<string, { durationDays: number; version: number }>();
+    let cursor: string | null = null;
+    do {
+      const page: { rows: LiveActivity[]; meta: { nextCursor: string | null } } =
+        await client.getPage<LiveActivity>(
+          `/api/v1/organizations/${orgSlug}/plans/${planId}/activities?limit=100` +
+            (cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`),
+        );
+      for (const row of page.rows) {
+        live.set(row.id, { durationDays: row.durationDays, version: row.version });
+      }
+      cursor = page.meta.nextCursor;
+    } while (cursor !== null);
+    say(`non-vacuity: read ${live.size} live activities for their versions`);
+    expect(live.size).toBe(activities);
+
+    await PenHolder.withPen(client, orgSlug, planId, async () => {
+      for (const t of targets) {
+        const current = live.get(t.sourceActivityId);
+        expect(current, `target ${t.code} missing from the live list`).toBeDefined();
+        // The routes are ASYMMETRIC and this cost two runs to learn: the activity LIST is nested
+        // under a plan (`plans/:planId/activities`, used above), while a single activity is
+        // addressed at the ORG level (`organizations/:orgSlug/activities/:id`,
+        // `activities.controller.ts:52`). The seeder has always used the org-level form
+        // (`runner.ts:414`); guessing the plan-nested one produced a bare Express "Cannot PATCH"
+        // rather than an API error, which is what a route that does not exist looks like.
+        // Extended or shortened by which group it is in. A duration is floored at 1 working day:
+        // zero would make it a milestone by another name and change the activity's KIND, not its
+        // length, which is a different class of change from the one being measured.
+        const isExtend = extend.some((e) => e.sourceActivityId === t.sourceActivityId);
+        const next = isExtend
+          ? current!.durationDays + 20
+          : Math.max(1, current!.durationDays - 20);
+        await client.patch(`/api/v1/organizations/${orgSlug}/activities/${t.sourceActivityId}`, {
+          durationDays: next,
+          version: current!.version,
+        });
+      }
+    });
+    // Duration edits alone were measured at `left=0` twice, including with four critical tasks cut
+    // by 20 days. Removing a predecessor is a different lever: it does not shorten a path, it
+    // DETACHES one, so the successor's chain can float free. If that still moves nothing, the
+    // honest conclusion is that this fixture cannot produce a qualifying change set through the
+    // public write path — which the condition says is itself the finding, not a bar to soften.
+    const links = await client.getPage<{ id: string; successor: { id: string } }>(
+      `/api/v1/organizations/${orgSlug}/plans/${planId}/dependencies?limit=100`,
+    );
+    const criticalIds = new Set(oldSide.filter((a) => a.isCritical).map((a) => a.sourceActivityId));
+    const cuts =
+      LEVER === 'shorten'
+        ? []
+        : links.rows.filter((l) => criticalIds.has(l.successor.id)).slice(0, 3);
+    // Instrumented, because cutting three dependencies moved NOTHING off the path and the two
+    // candidate explanations need different fixes: either the cut edges were not driving (so
+    // removing them freed nothing that was binding), or something structural holds criticality
+    // here regardless. Guessing between them is what produced the wrong comment above.
+    const floatBefore = new Map(oldSide.map((a) => [a.sourceActivityId, a.totalFloat ?? 0]));
+    say(`non-vacuity: cutting ${cuts.length} dependencies into critical successors`);
+    for (const cut of cuts) {
+      say(
+        `  cut ${cut.id.slice(-12)} -> successor float before = ${floatBefore.get(cut.successor.id) ?? '(unknown)'}`,
+      );
+    }
+    if (cuts.length > 0) {
+      await PenHolder.withPen(client, orgSlug, planId, async () => {
+        for (const cut of cuts) {
+          await client.del(`/api/v1/organizations/${orgSlug}/dependencies/${cut.id}`);
+        }
+      });
+    }
+
+    await client.post(`/api/v1/organizations/${orgSlug}/plans/${planId}/schedule/recalculate`);
+
+    const newSide = await prisma.activity.findMany({
+      where: { planId, deletedAt: null },
+      select: {
+        id: true,
+        code: true,
+        isCritical: true,
+        totalFloat: true,
+        earlyFinish: true,
+        type: true,
+      },
+    });
+
+    const wasCritical = new Map(oldSide.map((a) => [a.sourceActivityId, a.isCritical]));
+    const entered = newSide.filter((a) => a.isCritical && wasCritical.get(a.id) === false);
+    const left = newSide.filter((a) => !a.isCritical && wasCritical.get(a.id) === true);
+
+    // Why nothing leaves is a question about the FIXTURE, and it is MEASURED.
+    //
+    // The first version of this comment asserted that mandatory constraints drive float deeply
+    // negative here — "-60,240 minutes to -50,640, still critical". That was wrong, and the
+    // readout below is what disproved it: the real spread is min=-108, p25=-42, median=0, p75=0,
+    // max=176 MINUTES, with 118 of 147 activities at float <= 0. Two float values remembered from
+    // a different plan in a different epic, reasoned from instead of measured — the exact ADR-0076
+    // Class 3 failure this harness exists to avoid, caught only because the number was printed
+    // before the explanation was committed.
+    //
+    // What the numbers actually say: the network is packed hard against zero float (80% of it at
+    // <= 0) across a total spread under 300 minutes. A "20 day" duration edit is enormous against
+    // that, which is why work joins the critical path easily — and why almost nothing has slack to
+    // gain, so almost nothing can leave.
+    const floats = newSide.map((a) => a.totalFloat ?? 0).sort((x, y) => x - y);
+    const pct = (q: number): number =>
+      floats[Math.min(floats.length - 1, Math.floor(floats.length * q))] ?? 0;
+    say(
+      `float distribution (minutes): min=${floats[0]} p25=${pct(0.25)} median=${pct(0.5)} ` +
+        `p75=${pct(0.75)} max=${floats[floats.length - 1]} | <=0: ${floats.filter((f) => f <= 0).length}/${floats.length}`,
+    );
+    say(`non-vacuity: entered=${entered.length} left=${left.length}`);
+    say(
+      `  entered: ${entered
+        .slice(0, 8)
+        .map((a) => a.code)
+        .join(', ')}`,
+    );
+    say(
+      `  left:    ${left
+        .slice(0, 8)
+        .map((a) => a.code)
+        .join(', ')}`,
+    );
+    const byId = new Map(newSide.map((a) => [a.id, a]));
+    for (const cut of cuts) {
+      const after = byId.get(cut.successor.id);
+      say(
+        `  detached successor ${after?.code ?? '?'}: float ${floatBefore.get(cut.successor.id) ?? '?'}` +
+          ` -> ${after?.totalFloat ?? '?'}, critical ${after?.isCritical ?? '?'}`,
+      );
+    }
+
+    // The bar the condition committed to, before any of this existed.
+    expect(
+      entered.length,
+      'non-vacuity: fewer than 3 activities entered the critical path',
+    ).toBeGreaterThanOrEqual(3);
+    expect(left.length, 'non-vacuity: nothing left the critical path').toBeGreaterThanOrEqual(1);
+  }, 600_000);
 });
