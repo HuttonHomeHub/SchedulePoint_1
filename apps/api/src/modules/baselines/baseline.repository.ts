@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, type ActivityType, type Baseline } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import type { CriticalityRule } from '../schedule/criticality-rule';
 import type { PlanCalendarInput } from '../schedule/plan-calendar';
 
 import type { BaselineWithActivities, BaselineWithCount } from './dto/baseline-response.dto';
@@ -64,6 +65,14 @@ export interface CaptureInput {
   capturedProjectFinish: Date | null;
   /** The plan calendar's hours-per-day at capture, in minutes (ADR-0068 §5). */
   hoursPerDayMinutes: number;
+  /**
+   * The criticality rule this snapshot's `is_critical`/`total_float` were COMPUTED under
+   * (ADR-0125 / CQ-1) — copied from the plan's ENGINE-OWNED `schedule_critical_*` mirrors, never
+   * from its client-settable options. ONE nullable object rather than four nullable fields, so the
+   * compiler enforces all-or-none: `null` means the plan's last recalculation predates the mirror
+   * and the rule is unrecoverable, which is the all-NULL sentinel the four columns store.
+   */
+  criticalityRule: CriticalityRule | null;
   actorId: string;
   activities: CaptureActivityRow[];
 }
@@ -109,6 +118,15 @@ export class BaselineRepository {
         // before this existed. A row count cannot tell those apart; this column is the only thing
         // that can, so it must never be conditional on there being something to count.
         costSnapshotLevel: 'ASSIGNMENT',
+        // ADR-0125 / CQ-1. Written unconditionally, exactly as costSnapshotLevel above is and for
+        // the same reason: a CONDITIONAL write is how a NULL meaning "the rule is unknowable"
+        // becomes indistinguishable from a NULL meaning "we happened not to set it this time".
+        // `?? null` here defaults to the SENTINEL, never to a value — `?? 'TOTAL_FLOAT'` / `?? 0`
+        // is the forbidden form, because it manufactures a rule nothing ever ran under.
+        criticalPathDefinition: input.criticalityRule?.criticalPathDefinition ?? null,
+        criticalFloatThresholdMinutes: input.criticalityRule?.criticalFloatThresholdMinutes ?? null,
+        totalFloatMode: input.criticalityRule?.totalFloatMode ?? null,
+        makeOpenEndsCritical: input.criticalityRule?.makeOpenEndsCritical ?? null,
         createdBy: input.actorId,
         updatedBy: input.actorId,
       },

@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 29
-> models across 59 committed migrations — is the single source of truth for the data model.
+> models across 60 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -682,6 +682,49 @@ AND deleted_at IS NULL`) guarantees **at most one active baseline per plan** —
   `HierarchyLifecycleService` gains a `'baseline'` level) — restore brings the set back.
   Capture reads its snapshot **inside the plan write-lock**, so it is never taken
   mid-recalculation.
+
+#### The criticality rule a snapshot was computed under
+
+ADR-0125 (CQ-1) amends ADR-0025 a third time. `baseline_activities.is_critical` and
+`.total_float` are the **output of a rule**, not properties of an activity, and until this
+existed a baseline froze the output and not the rule. Four plan settings —
+`critical_path_definition`, `critical_float_threshold_minutes`, `total_float_mode`,
+`make_open_ends_critical` — change that output while moving **no date**, so a planner who
+edited one and recalculated got a different critical set with every bar in the same place, and
+a comparison against an older baseline reported it as activities entering the critical path.
+
+The four columns of the same name on `baselines` freeze it. Two rules govern them:
+
+- **They are copied from the plan's ENGINE-OWNED mirrors** (`plans.schedule_critical_*`), never
+  from the plan's client-settable `critical*` options. Those options are the plan's
+  **configuration**: a settings PATCH writes them without recalculating and without marking the
+  schedule stale, so they may name a rule the snapshot's numbers never came from. The mirrors are
+  written only by the recalculation's own freshness stamp, from the same object spread into
+  `ComputeOptions`, so they name the rule that actually ran. The copy is taken **inside the plan
+  advisory lock the capture already holds**, which is what pairs the rule with the recalculation
+  that produced the rows being frozen — and, as a side effect, re-checks the plan's liveness after
+  the point the hierarchy cascade (which takes no plan lock) could have soft-deleted it.
+- **Nullable with no default; NULL is a sentinel, never a claim.** It means "the rule this
+  snapshot was computed under is unknown" — captured before the freeze shipped, or from a plan
+  whose last recalculation predated the mirror. The values are **unbackfillable**: nothing
+  surviving records which rule produced a historic snapshot, so a constant `DEFAULT` would state,
+  in a column a reader has no way to doubt, a rule that baseline may never have seen. This
+  deliberately does **not** follow `hours_per_day_minutes DEFAULT 1440` one field along — that
+  default was legal because 1440 was _true of every existing row_. The governing precedent is
+  `baseline_activities.budgeted_expense`, nullable, whose docblock records rejecting
+  `NOT NULL DEFAULT 0` because "0 is a claim".
+
+`ck_baselines_criticality_snapshot_all_or_none` (`num_nonnulls(...) IN (0, 4)`) makes half a rule
+unrepresentable, which is what lets a reader test one column and be right about all four;
+`ck_baselines_critical_float_threshold_minutes_range` bounds the threshold nullable-safely at the
+same 0…5 256 000 working minutes as its ultimate source. There is deliberately **no** third CHECK:
+the plans mirror carries one saying a rule may not exist without the `schedule_computed_at` it
+describes, and the analogue here would be a tautology, because `captured_at` is `NOT NULL`.
+
+Unlike the plan's mirror, **this sentinel is permanent**: a plan's mirror self-clears on its next
+recalculation, and a capture cannot be re-run. That is why the mirror shipped one release ahead —
+every recalculation in between converts a plan from "the next capture is permanently unknown" into
+"the next capture records a real rule".
 
 #### The cost snapshot's two levels — and why "no rows" is never the signal
 

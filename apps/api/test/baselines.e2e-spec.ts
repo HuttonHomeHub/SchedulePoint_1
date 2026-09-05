@@ -138,6 +138,77 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     return { planId, activityId };
   }
 
+  it('freezes the criticality rule the recalculation ran with, and a later settings change does not move it (ADR-0125)', async () => {
+    const { actor } = await adminWithOrg();
+    const { planId } = await calculatedPlan(actor);
+
+    const frozen = async (baselineId: string) =>
+      prisma.baseline.findUniqueOrThrow({
+        where: { id: baselineId },
+        select: {
+          criticalPathDefinition: true,
+          criticalFloatThresholdMinutes: true,
+          totalFloatMode: true,
+          makeOpenEndsCritical: true,
+        },
+      });
+
+    // `calculatedPlan` recalculates, so the plan's mirrors hold the default rule and the capture
+    // freezes it. This is also the only place the enum values cross a real database: the service
+    // unit suite mocks Prisma, so a value PostgreSQL refused to coerce would be invisible there.
+    const first = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'Under the default rule' })
+      .expect(201);
+    expect(await frozen(first.body.data.id as string)).toEqual({
+      criticalPathDefinition: 'TOTAL_FLOAT',
+      criticalFloatThresholdMinutes: 0,
+      totalFloatMode: 'FINISH',
+      makeOpenEndsCritical: false,
+    });
+
+    // Move the plan's CONFIGURATION without recalculating. A settings PATCH does not mark the
+    // schedule stale, so every activity's is_critical still reflects the OLD rule.
+    await actor.agent
+      .patch(`/api/v1/organizations/acme/plans/${planId}`)
+      .send({
+        criticalPathDefinition: 'LONGEST_PATH',
+        criticalFloatThresholdMinutes: 480,
+        totalFloatMode: 'START',
+        makeOpenEndsCritical: true,
+        version: 2,
+      })
+      .expect(200);
+
+    // THE POINT. A capture taken now must still freeze the rule the numbers were COMPUTED under,
+    // not the one the plan happens to hold — otherwise the baseline claims a provenance its own
+    // is_critical column contradicts, which is the defect this column exists to remove.
+    const second = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'After a settings change, before a recalculation' })
+      .expect(201);
+    expect(await frozen(second.body.data.id as string)).toEqual({
+      criticalPathDefinition: 'TOTAL_FLOAT',
+      criticalFloatThresholdMinutes: 0,
+      totalFloatMode: 'FINISH',
+      makeOpenEndsCritical: false,
+    });
+
+    // Recalculating is what moves it — with the non-default enum labels, which is the half a
+    // default-valued assertion cannot distinguish from a column nothing ever wrote.
+    await recalc(actor, planId);
+    const third = await actor.agent
+      .post(baselinesUrl(planId))
+      .send({ name: 'After the recalculation' })
+      .expect(201);
+    expect(await frozen(third.body.data.id as string)).toEqual({
+      criticalPathDefinition: 'LONGEST_PATH',
+      criticalFloatThresholdMinutes: 480,
+      totalFloatMode: 'START',
+      makeOpenEndsCritical: true,
+    });
+  });
+
   it('captures, lists and reads a baseline of a computed plan', async () => {
     const { actor } = await adminWithOrg();
     const { planId, activityId } = await calculatedPlan(actor);

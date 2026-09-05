@@ -333,19 +333,22 @@ enum ProgressRecalcMode {
 // How the CPM engine decides which activities are critical (ADR-0035 §17, M6 F2).
 // TOTAL_FLOAT (default, P6/behaviour-preserving) marks an activity critical when its
 // total float is at or below `critical_float_threshold_minutes`; LONGEST_PATH marks the
-// driving chain back from the finish drivers instead. The engine consumes this in
-// M6-F2. MUST stay in lock-step with the TypeScript `CriticalPathDefinition` union in
-// @repo/types (added in a later M6 task).
+// driving chain back from the finish drivers instead. The engine CONSUMES it today
+// (`engine/compute.ts:149`, `:684`). MUST stay in lock-step with the TypeScript
+// `CriticalPathDefinition` union in @repo/types, which exists — this said "(added in a later
+// M6 task)" until 2026-09-05, long after it was.
 enum CriticalPathDefinition {
   TOTAL_FLOAT
   LONGEST_PATH
 }
 
 // Which float an activity's total float is measured from (ADR-0035 §18, M6 F3).
-// FINISH (default, P6/behaviour-preserving — the engine currently computes finish
-// float) vs START vs SMALLEST (the smaller of the two). Stored now; the engine does
-// not consume it until a later M6 task (F3). MUST stay in lock-step with the
-// TypeScript `TotalFloatMode` union in @repo/types (added in a later M6 task).
+// FINISH (default, P6/behaviour-preserving) vs START vs SMALLEST (the smaller of the two).
+// The engine CONSUMES it today (`engine/compute.ts:151`, `:676-682`). This said "the engine
+// does not consume it until a later M6 task (F3)" until 2026-09-05, long after F3 landed —
+// and that mattered more than the usual stale note, because ADR-0125's own feature spec
+// omitted this setting from the frozen set on exactly that misreading. MUST stay in lock-step
+// with the TypeScript `TotalFloatMode` union in @repo/types, which exists.
 enum TotalFloatMode {
   START
   FINISH
@@ -699,15 +702,18 @@ model Plan {
   criticalFloatThresholdMinutes         Int                     @default(0) @map("critical_float_threshold_minutes")
   // Which float total float is measured from (ADR-0035 §18, M6 F3). Default FINISH is
   // the P6 default and behaviour-preserving (the engine currently computes finish float).
-  // Stored now; the engine consumes it in a later M6 task (F3). Like scheduling_mode, a
-  // single-row column read with the plan, never filtered across plans, so no index;
-  // additive with a constant DEFAULT. MUST stay in lock-step with the TypeScript
-  // `TotalFloatMode` union in @repo/types.
+  // The engine CONSUMES it — `engine/compute.ts:151` resolves it and `:676-682` selects which
+  // computed span is exposed as `total_float`. This said "the engine consumes it in a later M6
+  // task (F3)" until 2026-09-05, long after F3 landed; a stale "not yet wired" note is how a real
+  // input reads as inert. Like scheduling_mode, a single-row column read with the plan, never
+  // filtered across plans, so no index; additive with a constant DEFAULT. MUST stay in lock-step
+  // with the TypeScript `TotalFloatMode` union in @repo/types.
   totalFloatMode                        TotalFloatMode          @default(FINISH) @map("total_float_mode")
   // Mark open-ended activities (no successors) critical (ADR-0035 §20, M6 F4). Default
-  // false is P6/behaviour-preserving. Stored now; the engine consumes it in a later M6
-  // task (F4). Like scheduling_mode, a single-row column read with the plan, never
-  // filtered across plans, so no index; additive with a constant DEFAULT.
+  // false is P6/behaviour-preserving. The engine CONSUMES it — `engine/compute.ts:152` resolves
+  // it and `:696` ORs it into the criticality predicate. This said "in a later M6 task (F4)"
+  // until 2026-09-05, long after F4 landed. Like scheduling_mode, a single-row column read with
+  // the plan, never filtered across plans, so no index; additive with a constant DEFAULT.
   makeOpenEndsCritical                  Boolean                 @default(false) @map("make_open_ends_critical")
   // Resource-levelling opt-in switch (ADR-0041 §7). When true (and the plan has
   // assignments), the recalc runs the opt-in second levelling pass that resolves
@@ -1805,6 +1811,65 @@ model Baseline {
   // Set by the capture path, then IMMUTABLE like every other snapshot column. Constant DEFAULT
   // ⇒ metadata-only ADD COLUMN, no rewrite, and every existing baseline keeps today's meaning.
   costSnapshotLevel BaselineCostSnapshotLevel @default(ACTIVITY) @map("cost_snapshot_level")
+
+  /// ADR-0125 / CQ-1 — the criticality RULE this snapshot's numbers were COMPUTED under.
+  ///
+  /// `baseline_activities.is_critical` and `.total_float` are the OUTPUT of a rule, not properties
+  /// of an activity, and until this existed a baseline froze the output and not the rule. A planner
+  /// who moves the threshold, the definition, the float measure or the open-ends option and
+  /// recalculates gets a different critical set with EVERY BAR IN THE SAME PLACE — so a comparison
+  /// against an older baseline reported a large, real-looking set as having "entered the critical
+  /// path", and nothing in the database could say otherwise. These are exactly the four plan options
+  /// that can do that (verified against `engine/compute.ts:675-696`: they change is_critical /
+  /// total_float and move NO date); the other seven change the network, so movement they cause is
+  /// real. The set is the frozen image of `CriticalityRule`
+  /// (src/modules/schedule/criticality-rule.ts), whose `Required<Pick<ComputeOptions, …>>`
+  /// projection makes a fifth criticality option a compile error rather than a silent omission here.
+  ///
+  /// COPIED FROM THE PLAN'S ENGINE-OWNED MIRRORS (`plans.schedule_critical_*`), NEVER from its
+  /// client-settable `critical*` options. Those are the plan's CONFIGURATION, and a settings PATCH
+  /// writes them without recalculating and without marking the schedule stale — so they can name a
+  /// rule this snapshot's numbers never came from. The copy is read inside the plan advisory lock
+  /// the capture already holds, which is what pairs the rule with the recalculation that produced
+  /// the rows being frozen. Set by the capture path, then IMMUTABLE like every other snapshot
+  /// column: a soft-delete/restore stamps only `deletedAt`/`deleteBatchId` and never touches these.
+  ///
+  /// NULLABLE WITH NO DEFAULT, AND THE NULL IS A SENTINEL — "the rule is unknown", never a claim.
+  /// This deliberately does NOT follow the `hoursPerDayMinutes DEFAULT 1440` pattern above: that
+  /// default was legal because 1440 was TRUE of every pre-existing row (nothing could author a
+  /// non-full-day calendar). These four have been planner-writable since 20260716180000, so a
+  /// DEFAULT would tell an old baseline it was computed under a rule it may never have seen — and
+  /// the source is itself nullable, so a NOT NULL column here would have nothing to copy for any
+  /// plan not recalculated since the mirror shipped. The governing precedent is one table along:
+  /// `baseline_activities.budgetedExpense` (ADR-0071 M3), which rejected `NOT NULL DEFAULT 0`
+  /// because "0 is a claim". UNLIKE the plan's mirror this sentinel is PERMANENT — a plan's mirror
+  /// self-clears on its next recalculation, and a capture cannot be re-run.
+  ///
+  /// ALL FOUR OR NONE. `ck_baselines_criticality_snapshot_all_or_none` (raw SQL in the migration —
+  /// Prisma cannot express CHECK, so there is deliberately no declaration here that the database
+  /// does not have; prisma:check-drift, TECH_DEBT #54) makes "half a rule" unrepresentable, which is
+  /// what lets a reader test ONE column and be right about all four. There is therefore NO separate
+  /// `*_snapshot_level` discriminator: unlike `costSnapshotLevel` above, whose evidence lived in
+  /// another table (a row count), the discriminator here is `criticalPathDefinition IS NULL` on this
+  /// same row, and a fifth column would be the two-sources-of-truth defect that docblock warns
+  /// about. `ck_baselines_critical_float_threshold_minutes_range` bounds the threshold
+  /// (nullable-safe, the same 0…5_256_000 as `ck_plans_critical_float_threshold_minutes_range`).
+  /// There is deliberately NO third CHECK: the mirror's "may not exist without its cursor" has no
+  /// analogue here, because `capturedAt` is NOT NULL and coupling to it would be a tautology.
+  ///
+  /// WORKING MINUTES, NOT DAYS. `criticalFloatThresholdMinutes` is in the same unit the engine
+  /// compares it against, so it is copied and compared verbatim — `hoursPerDayMinutes` above is NOT
+  /// involved and must never be applied to it.
+  ///
+  /// No index: all four are read only alongside their own row, by id, when the comparison loads a
+  /// baseline. No route filters, sorts or groups baselines by a criticality setting — index query
+  /// patterns, not columns (docs/DATABASE.md).
+  ///
+  /// MUST stay in lock-step with the CriticalPathDefinition / TotalFloatMode unions in @repo/types.
+  criticalPathDefinition        CriticalPathDefinition? @map("critical_path_definition")
+  criticalFloatThresholdMinutes Int?                    @map("critical_float_threshold_minutes")
+  totalFloatMode                TotalFloatMode?         @map("total_float_mode")
+  makeOpenEndsCritical          Boolean?                @map("make_open_ends_critical")
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
