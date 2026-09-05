@@ -509,5 +509,101 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     expect(leftAgrees, 'F1: left sets disagree between the persisted columns and the engine').toBe(
       true,
     );
+
+    // ---------------------------------------------------------------------------------------
+    // F2 — CARRIER AGREEMENT. The carrier derived from DATE-ONLY persisted columns must be the
+    // same activity `selectCompletionCarrier` picks from engine results.
+    //
+    // The engine sorts by `earlyFinishOffset` in MINUTES and breaks ties by id
+    // (`completion-carrier.ts:53-63`). A frozen baseline stores `baseline_finish` as a DATE. So
+    // the two rules diverge precisely when two non-summary activities finish on the same DATE at
+    // different MINUTES: the engine takes the later minute, the date-only rule cannot see it and
+    // falls through to the id tie-break. That is not a hypothetical — it is the only way this
+    // design's cheaper input can pick a different activity from the shipped rule.
+    // ---------------------------------------------------------------------------------------
+    const dateOnlyCarrier = (
+      rows: readonly { sourceActivityId: string; type: string; baselineFinish: Date | null }[],
+    ): string | undefined =>
+      rows
+        .filter((r) => r.type !== 'WBS_SUMMARY' && r.baselineFinish !== null)
+        .sort((x, y) => {
+          const dx = (x.baselineFinish as Date).getTime();
+          const dy = (y.baselineFinish as Date).getTime();
+          // Same ordering discipline as the engine: latest first, then id ascending.
+          return dy - dx || x.sourceActivityId.localeCompare(y.sourceActivityId);
+        })[0]?.sourceActivityId;
+
+    const persistedCarrier = dateOnlyCarrier(oldSide);
+    const engineCarrier = carrier?.activityId;
+    say(
+      `F2 carrier: persisted=${persistedCarrier?.slice(-12) ?? '(none)'} ` +
+        `engine=${engineCarrier?.slice(-12) ?? '(none)'} — ` +
+        `${persistedCarrier === engineCarrier ? 'AGREE' : 'DISAGREE'}`,
+    );
+
+    // How many non-summary rows share the winning DATE. More than one means the fixture exercises
+    // the tie naturally; exactly one means the comparison above says nothing about ties, and the
+    // synthetic case below is doing the work. Stated either way rather than left ambiguous.
+    const winningDate = oldSide.find(
+      (r) => r.sourceActivityId === persistedCarrier,
+    )?.baselineFinish;
+    const sharingDate = oldSide.filter(
+      (r) =>
+        r.type !== 'WBS_SUMMARY' &&
+        r.baselineFinish !== null &&
+        winningDate != null &&
+        r.baselineFinish.getTime() === winningDate.getTime(),
+    ).length;
+    say(`F2 tie context: ${sharingDate} non-summary rows share the winning date`);
+
+    // The DELIBERATELY CONSTRUCTED tie the condition asks for. Synthetic and labelled as such: it
+    // is a property of the two ORDERING RULES, not of this plan, so building it in memory tests
+    // exactly the thing at issue without a second five-minute seed.
+    const tieDate = new Date('2027-03-12T00:00:00Z');
+    const syntheticTie = [
+      { sourceActivityId: 'zzzz-later-minute', type: 'TASK', baselineFinish: tieDate },
+      { sourceActivityId: 'aaaa-earlier-minute', type: 'TASK', baselineFinish: tieDate },
+    ];
+    const tieWinner = dateOnlyCarrier(syntheticTie);
+    say(`F2 synthetic tie: date-only rule picks ${tieWinner}`);
+    // Deterministic, and by the SAME discipline the engine uses — lowest id wins a tie. It can
+    // still differ from the engine when the engine can see minutes the date cannot, which is the
+    // residual this limb exists to surface rather than to eliminate.
+    expect(tieWinner, 'F2: the date-only tie-break must be deterministic and id-ascending').toBe(
+      'aaaa-earlier-minute',
+    );
+
+    expect(
+      persistedCarrier,
+      'F2: the date-only carrier disagrees with selectCompletionCarrier',
+    ).toBe(engineCarrier);
+
+    // The real comparison above AGREED, and it agreed WITHOUT a tie — the fixture puts exactly one
+    // non-summary row on the winning date. So it is true and says nothing about the residual, which
+    // is the only place these two rules can part company. Both rules are pure, so the question is
+    // answered directly rather than left to a fixture that happens not to contain the case.
+    //
+    // Two activities, same DATE, different MINUTES, and the LATER minute has the HIGHER id — so
+    // the id tie-break and the minute ordering point at different activities on purpose.
+    const tieActivities = [
+      { id: 'aaaa-earlier-minute', type: 'TASK', durationMinutes: 480 },
+      { id: 'zzzz-later-minute', type: 'TASK', durationMinutes: 480 },
+    ] as unknown as Parameters<typeof selectCompletionCarrier>[0];
+    const tieResults = [
+      { activityId: 'aaaa-earlier-minute', earlyFinishOffset: 1_000 },
+      { activityId: 'zzzz-later-minute', earlyFinishOffset: 1_400 },
+    ] as unknown as Parameters<typeof selectCompletionCarrier>[1];
+    const engineTiePick = selectCompletionCarrier(tieActivities, tieResults)?.activityId;
+    say(
+      `F2 residual: same date, different minutes — engine picks ${engineTiePick}, ` +
+        `date-only picks ${tieWinner} — ${engineTiePick === tieWinner ? 'AGREE' : 'DISAGREE'}`,
+    );
+
+    // This is REPORTED, not asserted equal. The condition says a disagreement here is recorded and
+    // the panel names the carrier — it is a known cost of the cheaper input, not a defect to fix by
+    // pretending the date carries minutes it does not.
+    expect(engineTiePick, 'the engine must still order by minutes when the dates tie').toBe(
+      'zzzz-later-minute',
+    );
   }, 900_000);
 });
