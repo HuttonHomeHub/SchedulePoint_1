@@ -10,6 +10,46 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-05 — A build contract is transitive, and its exclusion had a shelf life
+
+`check:build-contract` (ADR-0019) checked one level and `dependencies` only, with `devDependencies`
+excluded in writing and `@repo/seed` named as the one package built for a build-time reason that the
+gate _"stays quiet about"_. That was correct reasoning when it was written: `@repo/seed` had no
+`@repo/*` dependency of its own, so there was nothing beyond it to reach.
+
+Moving the fixture tier into `@repo/seed` gave it one — `@repo/engine-conformance` — and **the web
+image stopped building**. Nothing reported it. The gate could not, being two exclusions away from the
+edge; `pnpm prepush` could not, because a local checkout already had the missing `dist/`, which is
+precisely what the web Dockerfile's own comment says it will hide. It surfaced in CI, in an unrelated
+pull request, minutes into a clean image build, naming a module that exists.
+
+**The decision** is that the required set becomes a **closure** rather than a list, seeded from two
+places and computed as two obligations, because they are two different obligations:
+
+- a **Dockerfile** owes the closure over its app's runtime `dependencies` **and** whatever it has
+  already chosen to build — putting a package in the chain is a declared intent to compile it, and
+  compiling it needs everything it imports;
+- the **CI e2e step** owes only the closure over the apps' runtime dependencies, because it runs the
+  app from source and builds no image.
+
+The first draft conflated them and demanded `@repo/seed` of a step that neither builds an image nor
+imports it — a gate failing for a reason that is not a defect, which is how gates get deleted rather
+than fixed (ADR-0058).
+
+**No ADR**: ADR-0019's decision is unchanged and this widens the gate that enforces it. What is worth
+carrying is the shape rather than the fix. Every previous instance of this class in the register is a
+**document** describing the code wrongly. This is a **gate** whose written exclusion was accurate on
+the day it was written and silently stopped being so — and a deferral whose premise has lapsed reads
+exactly like one whose premise still holds (ADR-0114). The exclusion did not need re-reading because
+the gate looked correct; it needed re-reading because something it named had changed underneath it,
+which nothing was watching for.
+
+Verified red three ways before being accepted, each restored to green: the real defect, the
+pre-existing CI half, and a **brand-new** transitive edge synthesised for the purpose — the last
+being the only one that proves the closure rather than the single fix.
+
+---
+
 ## 2026-09-01 — Verifying the register, and what a register is wrong about
 
 Forty-two rows sat `unverified` — ADR-0120's honest default for rows nobody had read — and two rows

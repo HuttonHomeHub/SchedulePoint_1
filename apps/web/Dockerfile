@@ -26,6 +26,12 @@ COPY packages/layout/package.json packages/layout/
 # runs, whether or not a byte of it reaches the bundle. Omitting it fails the image build with
 # implicit-`any` errors in a file no local gate can flag, because a local checkout has it.
 COPY packages/seed/package.json packages/seed/
+# …and @repo/seed's own dependency, because the COPY obligation is transitive too. Without this
+# manifest `pnpm install --filter @repo/web...` never installs @repo/engine-conformance's
+# dependencies, and its build fails with `Set<unknown>` type errors from the types it is missing —
+# beside a `node_modules missing` warning that is the only honest clue. A closure that is built has
+# to be a closure that is installed.
+COPY packages/engine-conformance/package.json packages/engine-conformance/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter @repo/web...
 

@@ -26,10 +26,19 @@
  * past the first level and every local checkout already had the missing `dist/`. A deferral whose
  * premise has lapsed reads exactly like one whose premise still holds.
  *
- * So the required set is now a CLOSURE, seeded from two places: an app's runtime `dependencies`
- * (which must also be COPYd), and any `@repo/*` the Dockerfile already chooses to build (which need
- * not be, since the Dockerfile is the thing declaring the intent). Building a package obliges you
- * to its whole `dependencies` closure — the moment it is in the chain, its imports are too.
+ * So the required set is now a CLOSURE over two seeds: an app's runtime `dependencies`, and any
+ * `@repo/*` the Dockerfile already chooses to build. Building a package obliges you to its whole
+ * `dependencies` closure — the moment it is in the chain, its imports are too — and COPY and build
+ * take the SAME set, because a package whose manifest is absent from the deps stage is never
+ * installed, so its own build fails on missing types several layers from the cause.
+ *
+ * **`pnpm --filter '<app>...' list --depth -1` is NOT the oracle here, and it is worth saying so,
+ * because it looks like one.** That command reports every workspace package pnpm resolves through
+ * the filter, dev edges included: for `@repo/api...` it names seven, while `apps/api/Dockerfile`
+ * COPYs four and builds correctly. pnpm tolerates an absent workspace manifest — it simply does not
+ * link that package — so the manifests an image needs are not the ones pnpm *could* link, but the
+ * ones that image actually **compiles**. The API image is the control that settles it, and checking
+ * it is what stopped this gate being rewritten around the wider, wrong rule.
  */
 import { readFileSync } from 'node:fs';
 
@@ -86,25 +95,27 @@ const required = new Set();
 for (const app of APPS) {
   const dockerfile = read(app.dockerfile);
   const runtime = runtimeWorkspaceDeps(app.pkg);
-  // The COPY obligation follows the app's own runtime dependencies: those are the manifests pnpm
-  // must see to resolve the workspace link. A package pulled in only by the closure is already
-  // COPYd by whichever manifest names it.
-  for (const dep of runtime) {
-    const dir = dep.replace('@repo/', 'packages/');
-    if (!dockerfile.includes(`COPY ${dir}/package.json`)) {
-      problems.push(
-        `${app.dockerfile}: missing \`COPY ${dir}/package.json ${dir}/\` in the deps stage ` +
-          `(${app.name} depends on ${dep}).`,
-      );
-    }
-  }
   // The CI step below runs the app FROM SOURCE, so it needs only what the apps import at runtime.
   for (const dep of closureOf(runtime)) required.add(dep);
   // The Dockerfile's obligation is wider: the closure over its runtime deps AND whatever it has
   // already chosen to build — see the transitive note in the docblock above. A package that is in
   // the image chain for a build-time reason (`@repo/seed`, in the web tsconfig) is deliberately NOT
   // added to `required`, because the CI e2e job neither builds an image nor imports it.
+  //
+  // COPY and build take the SAME set. An earlier version of this gate checked COPY over the app's
+  // direct dependencies only, on the reasoning that a package reached through the closure "is
+  // already COPYd by whichever manifest names it". That is false, and asserting it cost a CI round:
+  // being named in another package's manifest does not put YOUR manifest in the image, so
+  // `pnpm install --frozen-lockfile --filter <app>...` never installs your dependencies and your
+  // build fails inside your own sources, on missing types, several layers from the cause.
   for (const dep of [...closureOf([...runtime, ...builtByDockerfile(dockerfile)])].sort()) {
+    const dir = dep.replace('@repo/', 'packages/');
+    if (!dockerfile.includes(`COPY ${dir}/package.json`)) {
+      problems.push(
+        `${app.dockerfile}: missing \`COPY ${dir}/package.json ${dir}/\` in the deps stage ` +
+          `(reached from ${app.name}'s dependencies or from a package this Dockerfile builds).`,
+      );
+    }
     if (!dockerfile.includes(`pnpm --filter ${dep} build`)) {
       problems.push(
         `${app.dockerfile}: missing \`pnpm --filter ${dep} build\` in the build stage ` +
