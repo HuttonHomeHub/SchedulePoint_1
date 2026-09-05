@@ -10,6 +10,11 @@ import { PenHolder, SeedClient, seedPlan } from '@repo/seed-http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { configureHttpApp } from '../src/app-setup';
+import {
+  measureCarrierMovementDays,
+  selectCompletionCarrier,
+} from '../src/modules/schedule/completion-carrier';
+import { computeSchedule } from '../src/modules/schedule/engine/compute';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
@@ -54,6 +59,34 @@ const say = (line: string): void => {
  * app cannot be imported from here.
  */
 type Lever = 'extend' | 'shorten' | 'both';
+
+/**
+ * The service's own graph builder, reached the way `m0-engine-input.e2e-spec.ts` reaches it.
+ *
+ * `buildEngineGraph` is PRIVATE, and the harness deliberately uses the product's builder rather
+ * than a copy — a second builder is how the previous epic's harness came to schedule a plan four
+ * and a half months different from the product. The widening lives in one narrow helper because an
+ * inline `as unknown as GraphBuilder` reads to `no-unnecessary-type-assertion` as removable, and
+ * `--fix` duly removed it; typecheck then caught the private-access error. A fixer cannot know why
+ * a cast is there, so the cast is placed where its purpose is written down beside it.
+ */
+type GraphBuilder = {
+  buildEngineGraph: (
+    orgId: string,
+    plan: unknown,
+    dataDate: string,
+    tx: unknown,
+  ) => Promise<{
+    activities: Parameters<typeof computeSchedule>[0] extends readonly (infer A)[] ? A[] : never;
+    edges: Parameters<typeof computeSchedule>[1] extends readonly (infer E)[] ? E[] : never;
+    options: Parameters<typeof computeSchedule>[2];
+  }>;
+};
+
+/** Widens past the private modifier at exactly one place. See {@link GraphBuilder}. */
+function graphBuilderOf(service: object): GraphBuilder {
+  return service as unknown as GraphBuilder;
+}
 
 interface LiveActivity {
   id: string;
@@ -180,6 +213,23 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     // the failure ADR-0093 and ADR-0108 both record, which is why this runs first and why a
     // failure here is reported as the finding rather than worked around.
     // ---------------------------------------------------------------------------------------
+    // F1 needs the ENGINE's own answer for both sides, so the old graph is built and computed
+    // BEFORE anything is perturbed. The baseline froze the OUTPUT; this is the INPUT the engine
+    // would have been handed, and it is the only way to get an authoritative old-side run to
+    // compare the frozen columns against.
+    const { ScheduleService } = await import('../src/modules/schedule/schedule.service');
+    const svc = graphBuilderOf(app.get(ScheduleService));
+    const planRow = await prisma.plan.findFirstOrThrow({ where: { id: planId } });
+    const dataDate = planRow.plannedStart.toISOString().slice(0, 10);
+    const graphOld = await prisma.$transaction((tx) =>
+      svc.buildEngineGraph(planRow.organizationId, planRow, dataDate, tx),
+    );
+    const engineOld = computeSchedule(graphOld.activities, graphOld.edges, graphOld.options);
+    say(
+      `F1 old side: engine sees ${graphOld.activities.length} activities, ` +
+        `finish ${engineOld.summary.projectFinish}, critical ${engineOld.summary.criticalCount}`,
+    );
+
     const oldSide = await prisma.baselineActivity.findMany({
       where: { baselineId: captured.id },
       select: {
@@ -383,5 +433,81 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
       'non-vacuity: fewer than 3 activities entered the critical path',
     ).toBeGreaterThanOrEqual(3);
     expect(left.length, 'non-vacuity: nothing left the critical path').toBeGreaterThanOrEqual(1);
-  }, 600_000);
+
+    // ---------------------------------------------------------------------------------------
+    // F1 — FIDELITY. The delta computed from persisted/frozen columns must equal the delta
+    // computed from two authoritative `computeSchedule` runs over the same two input states.
+    //
+    // This is the claim the whole design rests on, and nothing proved it before now: the
+    // persisted columns are day-denominated projections of minute quantities (ADR-0036 §7), and
+    // a baseline's frozen values were written by a possibly-older engine. If the two disagree,
+    // the failure names which side and which quantity; the remedy is a scope decision, not a
+    // softened bar.
+    // ---------------------------------------------------------------------------------------
+    const graphNew = await prisma.$transaction((tx) =>
+      svc.buildEngineGraph(planRow.organizationId, planRow, dataDate, tx),
+    );
+    const engineNew = computeSchedule(graphNew.activities, graphNew.edges, graphNew.options);
+
+    const engineWasCritical = new Map(engineOld.results.map((r) => [r.activityId, r.isCritical]));
+    const engineEntered = engineNew.results
+      .filter((r) => r.isCritical && engineWasCritical.get(r.activityId) === false)
+      .map((r) => r.activityId);
+    const engineLeft = engineNew.results
+      .filter((r) => !r.isCritical && engineWasCritical.get(r.activityId) === true)
+      .map((r) => r.activityId);
+
+    const persistedEntered = new Set(entered.map((a) => a.id));
+    const persistedLeft = new Set(left.map((a) => a.id));
+    const sameSet = (a: Set<string>, b: readonly string[]): boolean =>
+      a.size === b.length && b.every((id) => a.has(id));
+
+    say(
+      `F1 sets: persisted entered=${persistedEntered.size} left=${persistedLeft.size} | ` +
+        `engine entered=${engineEntered.length} left=${engineLeft.length}`,
+    );
+
+    // Carrier movement on the carrier's own calendar, through the SHARED ADR-0116 rules —
+    // imported, never restated, which is what the condition file instructs.
+    const carrier = selectCompletionCarrier(graphOld.activities, engineOld.results);
+    const carrierAfter = engineNew.results.find((r) => r.activityId === carrier?.activityId);
+    const carrierActivity = graphOld.activities.find((a) => a.id === carrier?.activityId);
+    const engineMovement =
+      carrier !== undefined && carrierAfter !== undefined
+        ? measureCarrierMovementDays({
+            carrier,
+            carrierPerturbed: carrierAfter,
+            calendar: carrierActivity?.calendar ?? graphOld.options.calendar,
+            dayFactorMinutes: 8 * 60,
+          })
+        : Number.NaN;
+    say(
+      `F1 carrier: ${carrier?.activityId.slice(-12) ?? '(none)'} moved ${engineMovement} working days`,
+    );
+
+    const enteredAgrees = sameSet(persistedEntered, engineEntered);
+    const leftAgrees = sameSet(persistedLeft, engineLeft);
+    say(
+      `F1 verdict: entered ${enteredAgrees ? 'AGREE' : 'DISAGREE'}, left ${leftAgrees ? 'AGREE' : 'DISAGREE'}`,
+    );
+    if (!enteredAgrees) {
+      const pOnly = [...persistedEntered].filter((id) => !engineEntered.includes(id)).length;
+      say(
+        `  entered persisted-only=${pOnly} engine-only=${engineEntered.filter((id) => !persistedEntered.has(id)).length}`,
+      );
+    }
+    if (!leftAgrees) {
+      const pOnly = [...persistedLeft].filter((id) => !engineLeft.includes(id)).length;
+      say(
+        `  left persisted-only=${pOnly} engine-only=${engineLeft.filter((id) => !persistedLeft.has(id)).length}`,
+      );
+    }
+    expect(
+      enteredAgrees,
+      'F1: entered sets disagree between the persisted columns and the engine',
+    ).toBe(true);
+    expect(leftAgrees, 'F1: left sets disagree between the persisted columns and the engine').toBe(
+      true,
+    );
+  }, 900_000);
 });
