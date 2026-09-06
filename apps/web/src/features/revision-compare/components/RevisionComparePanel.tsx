@@ -1,6 +1,6 @@
 import type { BaselineSummary, RevisionCompare, RevisionMovedActivity } from '@repo/types';
 import { ArrowDownToLine, ArrowUpFromLine, CirclePlus, CircleMinus } from 'lucide-react';
-import { useCallback, useEffect, useId, useRef } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { LIVE_REVISION } from '../api/use-revision-compare';
 import {
@@ -16,6 +16,8 @@ import {
   truncationNote,
 } from '../model/revision-sentences';
 import { printRevisionCompare } from '../print/RevisionComparePrintDocument';
+
+import { RevisionChangesView } from './RevisionChangesView';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -107,6 +109,13 @@ export function RevisionComparePanel({
   onOpenBaselines,
 }: RevisionComparePanelProps): React.ReactElement {
   const announce = useAnnounce();
+  /**
+   * Which reading of the comparison is showing. Resets to the delta whenever a new comparison
+   * settles is DELIBERATELY not done: a planner who switched to Changes and then changed one side
+   * of the pair is still reading changes, and yanking them back would be the surface deciding it
+   * knows better than the person driving it.
+   */
+  const [view, setView] = useState<'delta' | 'changes'>('delta');
   const headingId = useId();
   const fromId = useId();
   const toId = useId();
@@ -143,6 +152,24 @@ export function RevisionComparePanel({
     },
     [onActivateActivity, announce, compare],
   );
+
+  /**
+   * Which activities the change list may offer to reveal.
+   *
+   * Derived from the delta's OWN `existsLive` flags rather than fetched separately: the server
+   * already answered this question for the criticality rows, and a second source would eventually
+   * disagree with the first on the same screen. Rows the delta never mentions are absent from the
+   * set, so their controls shade with a reason rather than navigating nowhere (ADR-0082) — the
+   * conservative direction, and the one that cannot mislead.
+   */
+  const liveActivityIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of compare?.criticalPath.entered ?? []) if (r.existsLive) ids.add(r.activityId);
+    for (const r of compare?.criticalPath.left ?? []) if (r.existsLive) ids.add(r.activityId);
+    for (const r of compare?.criticalPath.added ?? []) if (r.existsLive) ids.add(r.activityId);
+    for (const r of compare?.criticalPath.removed ?? []) if (r.existsLive) ids.add(r.activityId);
+    return ids;
+  }, [compare]);
 
   const hasBaselines = baselines !== null && baselines.length > 0;
   const caveat = compare === null ? null : settingsCaveat(compare.settingsVerdict);
@@ -346,59 +373,104 @@ export function RevisionComparePanel({
               <p className="text-muted-foreground text-xs">{LEVELLING_CAVEAT}</p>
             ) : null}
 
-            {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
-              <p className="text-muted-foreground text-sm">
-                {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
-              </p>
-            ) : compare.criticalPath.noCriticalPath ? (
-              <p className="text-muted-foreground text-sm">
-                Neither revision has a critical path, so nothing can have entered or left it.
-              </p>
+            {/* **A view of ONE comparison, not a second dock.** `RIGHT_DOCKS` holds one column at
+                a time, and a planner reading a revision wants the critical-path delta and the
+                change list to be two readings of the same pair — not two panels competing for the
+                same edge. Local state rather than a URL param: the dock's own open/closed state is
+                already the host's, and a sub-view of a panel is not a destination.
+
+                Two buttons with `aria-pressed` rather than a tablist: a tablist promises arrow-key
+                navigation between tabs and a `tabpanel` relationship, and implementing half of that
+                pattern is how this repository has shipped a control that announces one contract and
+                honours another. */}
+            {compare.changes ? (
+              <div role="group" aria-label="Comparison view" className="flex gap-1">
+                <Button
+                  variant={view === 'delta' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  aria-pressed={view === 'delta'}
+                  onClick={() => {
+                    setView('delta');
+                  }}
+                >
+                  Critical path
+                </Button>
+                <Button
+                  variant={view === 'changes' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  aria-pressed={view === 'changes'}
+                  onClick={() => {
+                    setView('changes');
+                  }}
+                >
+                  Changes
+                </Button>
+              </div>
+            ) : null}
+
+            {view === 'changes' && compare.changes ? (
+              <RevisionChangesView
+                report={compare.changes}
+                onActivateActivity={announceActivation}
+                liveActivityIds={liveActivityIds}
+              />
             ) : (
               <>
-                <MovedSection
-                  heading="Entered the critical path"
-                  icon={ArrowDownToLine}
-                  rows={compare.criticalPath.entered}
-                  total={compare.criticalPath.enteredTotal}
-                  cap={compare.criticalPath.cap}
-                  emptyMessage="Nothing entered the critical path."
-                  onActivate={announceActivation}
-                />
-                <MovedSection
-                  heading="Left the critical path"
-                  icon={ArrowUpFromLine}
-                  rows={compare.criticalPath.left}
-                  total={compare.criticalPath.leftTotal}
-                  cap={compare.criticalPath.cap}
-                  emptyMessage="Nothing left the critical path."
-                  onActivate={announceActivation}
-                />
-                {/* The denominator. Without it "7 entered the critical path" could be 7 of 10 — a
+                {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
+                  <p className="text-muted-foreground text-sm">
+                    {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
+                  </p>
+                ) : compare.criticalPath.noCriticalPath ? (
+                  <p className="text-muted-foreground text-sm">
+                    Neither revision has a critical path, so nothing can have entered or left it.
+                  </p>
+                ) : (
+                  <>
+                    <MovedSection
+                      heading="Entered the critical path"
+                      icon={ArrowDownToLine}
+                      rows={compare.criticalPath.entered}
+                      total={compare.criticalPath.enteredTotal}
+                      cap={compare.criticalPath.cap}
+                      emptyMessage="Nothing entered the critical path."
+                      onActivate={announceActivation}
+                    />
+                    <MovedSection
+                      heading="Left the critical path"
+                      icon={ArrowUpFromLine}
+                      rows={compare.criticalPath.left}
+                      total={compare.criticalPath.leftTotal}
+                      cap={compare.criticalPath.cap}
+                      emptyMessage="Nothing left the critical path."
+                      onActivate={announceActivation}
+                    />
+                    {/* The denominator. Without it "7 entered the critical path" could be 7 of 10 — a
                     real story — or 7 of 400, which is probably noise. Computed and transmitted from
                     the first commit and rendered by nothing until the M4 ux review asked. */}
-                <p className="text-muted-foreground text-xs">
-                  {membershipSentence(
-                    compare.criticalPath.remainedCriticalCount,
-                    compare.criticalPath.remainedNonCriticalCount,
-                  )}
-                </p>
+                    <p className="text-muted-foreground text-xs">
+                      {membershipSentence(
+                        compare.criticalPath.remainedCriticalCount,
+                        compare.criticalPath.remainedNonCriticalCount,
+                      )}
+                    </p>
+                  </>
+                )}
+
+                {compare.criticalPath.addedTotal > 0 || compare.criticalPath.removedTotal > 0 ? (
+                  // The TRUE totals, not the returned arrays' lengths: those are capped like their
+                  // `entered`/`left` siblings, so a plan with more than the cap in either set would
+                  // otherwise be under-reported by a number the client computed itself.
+                  <p className="text-muted-foreground text-xs">
+                    <CirclePlus className="mr-1 inline size-3" aria-hidden="true" />
+                    {compare.criticalPath.addedTotal} added ·{' '}
+                    <CircleMinus className="mr-1 inline size-3" aria-hidden="true" />
+                    {compare.criticalPath.removedTotal} removed. An activity present in only one
+                    revision is listed as added or removed — it did not enter or leave a path it was
+                    never on.
+                  </p>
+                ) : null}
               </>
             )}
-
-            {compare.criticalPath.addedTotal > 0 || compare.criticalPath.removedTotal > 0 ? (
-              // The TRUE totals, not the returned arrays' lengths: those are capped like their
-              // `entered`/`left` siblings, so a plan with more than the cap in either set would
-              // otherwise be under-reported by a number the client computed itself.
-              <p className="text-muted-foreground text-xs">
-                <CirclePlus className="mr-1 inline size-3" aria-hidden="true" />
-                {compare.criticalPath.addedTotal} added ·{' '}
-                <CircleMinus className="mr-1 inline size-3" aria-hidden="true" />
-                {compare.criticalPath.removedTotal} removed. An activity present in only one
-                revision is listed as added or removed — it did not enter or leave a path it was
-                never on.
-              </p>
-            ) : null}
 
             <p id={footerId} className="text-muted-foreground border-border border-t pt-2 text-sm">
               {HONESTY_FOOTER}

@@ -503,3 +503,77 @@ describe('RevisionComparePanel', () => {
     expect((await axe(container)).violations).toEqual([]);
   });
 });
+
+describe('the Changes view', () => {
+  const withChanges = (): RevisionCompare => ({
+    ...comparison(),
+    changes: {
+      cap: 200,
+      classes: [
+        {
+          changeClass: 'RENAMED',
+          notAssessableReason: null,
+          rows: [
+            {
+              activityId: 'a1',
+              changeClass: 'RENAMED',
+              code: 'A10',
+              name: 'Piling',
+              from: 'Piling',
+              to: 'Piling rig',
+              orderKey: '2026-01-05',
+            },
+          ],
+          total: 1,
+        },
+        { changeClass: 'RELOGICKED', notAssessableReason: 'NOT_SNAPSHOTTED', rows: [], total: 0 },
+      ],
+    },
+  });
+
+  it('shows NO view switch when the payload carries no change list', () => {
+    // The switch is derived from the payload, not from a flag: a control that appears and then
+    // renders nothing is the dead end this epic's own register entry is about.
+    renderPanel({ compare: comparison() });
+    expect(screen.queryByRole('button', { name: 'Changes' })).not.toBeInTheDocument();
+  });
+
+  it('switches to the change list and back, with the pressed state on the right control', () => {
+    renderPanel({ compare: withChanges() });
+    const changes = screen.getByRole('button', { name: 'Changes' });
+    expect(changes).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(changes);
+    expect(changes).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('group', { name: 'Changes between these revisions' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Critical path' }));
+    // By ROLE, not by text: the phrase appears as a heading and inside a section's own copy, so a
+    // bare text query is ambiguous — and an ambiguous locator is how a suite comes to assert on
+    // whichever node happens to be first.
+    expect(screen.getByRole('region', { name: /Entered the critical path/i })).toBeVisible();
+  });
+
+  it('renders a class it could not assess as a REASON, never as "no changes"', () => {
+    // The epic in one assertion. An empty list and an un-looked-at list read identically unless
+    // the product says which it is, and the reassuring reading is the false one.
+    renderPanel({ compare: withChanges() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    const logic = screen.getByRole('region', { name: 'Logic changed' });
+    expect(within(logic).getByText(/cannot be compared/i)).toBeVisible();
+    expect(within(logic).queryByText(/No changes in this revision/i)).not.toBeInTheDocument();
+  });
+
+  it('shades a row whose activity is not in the live plan, with a reason', () => {
+    renderPanel({ compare: withChanges() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    // `a1` is not among the delta's `existsLive` rows in this fixture, so it cannot be revealed.
+    const row = screen.getByRole('button', { name: /A10/ });
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    expect(within(row).getByText(/cannot be shown in the diagram/i)).toBeInTheDocument();
+  });
+
+  it('has no axe violations in the change list', async () => {
+    const { container } = renderPanel({ compare: withChanges() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    expect((await axe(container)).violations).toEqual([]);
+  });
+});

@@ -9,19 +9,37 @@ export { scheduleKeys };
 /** The literal the API takes for `to` to mean the plan as it stands now. */
 export const LIVE_REVISION = 'live';
 
+/**
+ * Opt-in projections. Absent ⇒ the response is byte-identical to the delta-only one, which is what
+ * lets the change list land without touching the shipped surface.
+ */
+export type RevisionInclude = 'changes' | 'progress';
+
+/**
+ * What the plan workspace asks for. **One constant rather than an inline array at the call site**,
+ * so the panel's own tests and the journey assert against the same thing the product sends — an
+ * inline literal is how a surface comes to be tested in a configuration it never ships in.
+ */
+export const REVISION_COMPARE_INCLUDES: readonly RevisionInclude[] = ['changes'];
+
 export function revisionCompareQueryOptions(
   orgSlug: string,
   planId: string,
   from: string | null,
   to: string,
   enabled = true,
+  includes: readonly RevisionInclude[] = [],
 ) {
+  // Sorted, so ['changes','progress'] and ['progress','changes'] are ONE cache entry rather than
+  // two identical requests — the key is a value, and a caller's array order is not information.
+  const sorted = [...includes].sort();
   return queryOptions({
-    queryKey: scheduleKeys.revisionCompare(orgSlug, planId, from ?? '', to),
+    queryKey: scheduleKeys.revisionCompare(orgSlug, planId, from ?? '', to, sorted),
     queryFn: () =>
       apiFetch<RevisionCompare>(
         `/organizations/${orgSlug}/plans/${planId}/schedule/revision-compare` +
-          `?from=${encodeURIComponent(from ?? '')}&to=${encodeURIComponent(to)}`,
+          `?from=${encodeURIComponent(from ?? '')}&to=${encodeURIComponent(to)}` +
+          sorted.map((i) => `&include=${encodeURIComponent(i)}`).join(''),
       ),
     // `from` is REQUIRED by the route, so a null one is not a request to make — it is the state
     // before the planner has chosen. Gating here rather than rendering an error keeps "you have
@@ -57,6 +75,7 @@ export function useRevisionCompare(
   from: string | null,
   to: string,
   enabled = true,
+  includes: readonly RevisionInclude[] = [],
 ): UseQueryResult<RevisionCompare> {
-  return useQuery(revisionCompareQueryOptions(orgSlug, planId, from, to, enabled));
+  return useQuery(revisionCompareQueryOptions(orgSlug, planId, from, to, enabled, includes));
 }

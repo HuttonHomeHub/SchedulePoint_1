@@ -85,6 +85,7 @@ import {
   LIVE_REVISION,
   REVISION_PANEL_MIN_WIDTH,
   RevisionComparePanel,
+  REVISION_COMPARE_INCLUDES,
   useRevisionCompare,
   useRevisionComparePanelPrefs,
 } from '@/features/revision-compare';
@@ -648,6 +649,12 @@ export function ToolbarPlanWorkspace({
     revisionFrom,
     revisionTo,
     revisionsDockActive,
+    // **The change list is requested here or it does not exist.** The panel renders its view
+    // switch only when the payload carries `changes`, so omitting this include would leave the
+    // whole milestone dark behind a control nobody can reach — ADR-0081's shape, which this
+    // register has now recorded five times. Progress is deliberately NOT requested: it moves on
+    // nearly every activity every week and would bury the classes that explain a date move.
+    REVISION_COMPARE_INCLUDES,
   );
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
