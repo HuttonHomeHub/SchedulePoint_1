@@ -1,5 +1,22 @@
 # @repo/api
 
+## 0.58.0
+
+### Minor Changes
+
+- [#476](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/476) [`5953f4a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5953f4a79deeff6d581c793f9c03ca8d1863659e) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Add the revision comparison read model and its route: what entered and left the critical path
+  between two computed schedules of one plan, and how far the completion moved.
+  
+  The route (`GET …/schedule/revision-compare`) ships **dark** — nothing in the web client calls it
+  yet, and its entry point lands with the comparison dock. The CPM engine is not invoked: both sides
+  are already-computed persisted output, so the recalculation parity gate is untouched by
+  construction. It reports what moved and never what caused it.
+
+### Patch Changes
+
+- Updated dependencies [[`5953f4a`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5953f4a79deeff6d581c793f9c03ca8d1863659e)]:
+  - @repo/types@0.30.0
+
 ## 0.57.0
 
 ### Minor Changes
