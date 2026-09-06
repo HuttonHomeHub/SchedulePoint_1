@@ -55,7 +55,7 @@
     "@repo/engine-conformance": "workspace:*",
     "@repo/seed": "workspace:*",
     "@repo/seed-http": "workspace:*",
-    "@swc/core": "^1.15.47",
+    "@swc/core": "^1.16.1",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.7",
     "@types/nodemailer": "^8.0.1",
