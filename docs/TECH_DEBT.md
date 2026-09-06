@@ -4062,3 +4062,46 @@ that the recipe has already been got wrong twice in this codebase's record (once
 reason, once by using native `disabled` and losing the reason with the tab stop), and thirteen copies
 is thirteen chances to get it wrong again. The remedy is a `useShadedControl` hook; the trigger is
 the next epic that touches three or more of them.
+
+### 252. `pnpm measure:draw` cannot bundle, and the break shipped inside the epic that quotes it
+
+**Status:** open · **Raised:** 2026-09-06 (Revision Compare tiers 1–2, M0) · **Size:** S · **Owner:** repo
+
+`pnpm measure:draw` — the hand-run canvas draw benchmark whose numbers this repository quotes
+throughout #75, ADR-0026 §9 and ADR-0065 — **fails to bundle at HEAD.** Established by running it,
+not by reading:
+
+```
+pnpm exec esbuild scripts/link-routing-bench.ts --bundle --format=iife ...
+✘ [ERROR] Could not resolve "node:fs"   ../../packages/engine-conformance/dist/load [line 1]
+```
+
+Confirmed against the unmodified file by stashing (`AT HEAD esbuild exit: 1`), so it is not an
+artefact of this epic's edits.
+
+**The cause is one line, and it is mine.** `5a5f00da` (2026-09-05, the Revision Compare delta epic)
+moved the fixture tier into `packages/seed` and added `export * from './fixture/index.js'` to the
+barrel (`packages/seed/dist/index`, line 14). That module imports `@repo/engine-conformance`, which
+imports `node:fs` and `node:url`. So **the seed barrel now forces a Node-only module on every
+consumer**, and `apps/web/scripts/scale-scene.ts` imports `scaleSpec` from that barrel to build a
+picture for a browser.
+
+**Blast radius is the bench only, verified rather than assumed:** no file under `apps/web/src`
+imports `@repo/seed`, so the shipped bundle is untouched. What broke is an instrument.
+
+**Why nothing caught it.** `measure:draw` is hand-run and deliberately not in CI, for the good reason
+that a container's absolute timings are noise. The cost of that decision is that the script can rot
+silently, and it did — inside the very epic whose M0 needed it. This is `docs/TECH_DEBT.md` #124's
+shape (a check that is green because it is not running) applied to a tool rather than a test.
+
+**Worked around, not fixed.** `measure-revision-diff.mjs` passes `--external:node:fs`/`node:url`/
+`node:path`: the bench never calls `loadFixture`, so the module is bundled and never entered, and the
+run succeeds. That is a plaster on one caller. `measure:draw` **itself is still broken** and the
+existing script was deliberately left alone rather than given the same flags, because the real fix is
+architectural and belongs in one place.
+
+**The fix, and why it was not done here.** A package barrel should not force a Node-only module on
+browser consumers: `@repo/seed` wants a subpath export (`@repo/seed/scale`), or the fixture loader
+wants a lazy `import()`. Either changes a **package's public export contract**, which ADR-0105 names
+as a trigger requiring a spec — so doing it inside an M0 measurement slice would be exactly the
+mid-flight scope creep that rule exists to stop. Filed rather than smuggled.

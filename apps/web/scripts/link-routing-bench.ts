@@ -20,7 +20,14 @@ import type {
 
 import { scaleScene } from './scale-scene';
 
-const PALETTE: TsldPalette = {
+/**
+ * Exported so `revision-diff-bench.ts` measures against the SAME palette rather than a copy of it.
+ * A second bench palette would drift, and the drift would be invisible: each bench looks right
+ * alone, and only somebody comparing two published numbers taken months apart would ever see that
+ * one was measured against a different set of fills (the ADR-0065 `routeOrthogonal` argument).
+ * Exporting a const changes no behaviour here, so the numbers already published stand.
+ */
+export const PALETTE: TsldPalette = {
   canvasGround: '#14161c',
   gridLine: '#e5e7eb',
   gridLineDay: '#eef0f3',

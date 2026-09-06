@@ -174,3 +174,60 @@ finding and it goes in the plan before any migration is written.
 
 **If C1 fails for any class**, that class moves to the paid side and the milestone order changes
 before M1 is built — which is cheap now and expensive after M4.
+
+---
+
+## Results — 2026-09-06, and why NONE of them is quotable yet
+
+**Harness:** `apps/web/scripts/revision-diff-bench.ts` (the picture) +
+`apps/web/scripts/measure-revision-diff.mjs` (the driver and the verdict), both written after this
+file was committed. Half the treatment is the **shipped painter** — `baselineGhosts` is a field of
+`TsldScene` and has drawn the ADR-0025 overlay since it shipped — so only the changed-link pass is
+prototyped, and it is prototyped as an upper bound (it re-routes rather than reusing the main pass's
+routes, which the real implementation would not do).
+
+> **Every figure below is HEADLESS.** This container has no display, and headless Chromium can serve
+> Canvas 2D from a software rasteriser — the caveat `docs/TECH_DEBT.md` #75's own published numbers
+> carry. So these numbers measure a code path no planner runs. **They are a smoke test of the
+> instrument, not a measurement of the feature.** The quotable run needs a display, exactly as #75's
+> did.
+
+| Cell                              | Non-vacuity         | Baseline dropped      | Treatment | Delta        | Verdict                         |
+| --------------------------------- | ------------------- | --------------------- | --------- | ------------ | ------------------------------- |
+| `scale` / Week / **1646**         | 34 bars, 43 links   | 0.56 pp (spread 1.11) | 1.30 pp   | **+0.74 pp** | P1 PASS, P2 PASS (59.2 fps)     |
+| `scale` / Week / **1920**         | 37 bars, 51 links   | 0.93 pp (spread 2.22) | 3.15 pp   | **+2.22 pp** | **P1 FAIL**, P2 PASS (58.2 fps) |
+| `scale` / **Fit** / 1646          | 269 bars, 400 links | 99.07 pp              | 100.00 pp | +0.93 pp     | P3 — reported, not gated        |
+| `fixture` (control) / Week / 1646 | 19 bars, 24 links   | —                     | —         | —            | **THREW — non-vacuity failed**  |
+
+### Three findings, none of them softened
+
+**1. At 1920 the condition cannot be decided on this machine, and the criterion is NOT being
+relaxed.** P1 fails at +2.22 pp against a 2.00 pp bar — and the baseline's own run-to-run spread in
+that same cell is **2.22 pp**. The bar sits _below the instrument's noise floor_, so this cell
+discriminates nothing: the identical run could report a pass or a fail depending on which three
+pairs it happened to take. That is a statement about a software rasteriser, not about the feature.
+The remedy is a **headed run on real hardware**, which this file already required; it is emphatically
+not a larger bar. ADR-0121's precedent is the standard: both its conditions failed and **both
+remedies were applied rather than either criterion softened**.
+
+**2. The Fit baseline drops 99.07 % of frames — the SHIPPED painter, with no treatment at all.**
+That is not a tier-2 finding; it is what a software rasteriser does with this scene, and it is why
+P3 exists as report-only. It also confirms the headless caveat empirically rather than by assertion:
+#75 measured 10.2 % dropped at Fit on real hardware, so headless is out by an order of magnitude and
+nothing measured here transfers.
+
+**3. The control cell is unrunnable as specified, and the gate caught it by THROWING.** The
+non-vacuity floors (≥ 25 bars, ≥ 40 links) were written with the 2,160-activity scene in mind. The
+147-activity control has 188 links, so 12 % of them is ~23 — it can **never** reach 40. The harness
+refused to print a verdict, which is the one behaviour this file demanded of it, and it is recorded
+as a defect in the CONDITION rather than quietly fixed: an absolute floor across two scenes that
+differ by 15× was the wrong shape. **The fix is not to lower the floor** — that would make a
+meaningless run start passing. Either the control takes a larger changed fraction (defensible: a
+small plan's revision touches proportionally more of it), or the floor is expressed as a fraction of
+what is on screen. That decision is owed before the headed run, and it is the product owner's to
+approve because it edits a committed condition.
+
+### What is established
+
+The instrument works, it refuses to judge what it cannot see, and the ghost half of the treatment is
+real shipped code rather than a prototype. **Condition A is NOT yet answered.**
