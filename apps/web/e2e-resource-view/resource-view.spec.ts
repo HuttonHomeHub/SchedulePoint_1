@@ -73,6 +73,20 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
   const openView = async (): Promise<void> => {
     if ((await viewTrigger.getAttribute('aria-expanded')) !== 'true') await viewTrigger.click();
   };
+  // **The popover is dismissed before anything under it is clicked, and that is not tidiness.**
+  // `View ▾` opens downward from Row 1 of a deck that wraps, so its panel lies over Row 2 — where
+  // `Resource view` sits (ADR-0092 D5 brought it back onto the deck). This suite used to reach that
+  // button with the popover still open and it worked only because the panel happened to be short
+  // enough to stop above it; ADR-0127 added one row (`Compare on diagram`) and it stopped being.
+  // The product is not at fault — a popover covering what is under it is what a popover does, and a
+  // planner's click there dismisses it — but a test that reaches for a control it has left covered
+  // is one item away from failing at any time, and its failure names an unrelated epic.
+  const closeView = async (): Promise<void> => {
+    if ((await viewTrigger.getAttribute('aria-expanded')) === 'true') {
+      await page.keyboard.press('Escape');
+      await expect(viewTrigger).toHaveAttribute('aria-expanded', 'false');
+    }
+  };
   const resourceViewButton = lookToolbar.getByRole('button', { name: 'Resource view' });
   await expect(resourceViewButton).toBeEnabled();
   await resourceViewButton.click();
@@ -133,6 +147,8 @@ test('a planner reveals the canvas resource strip, reads a resource’s load, an
     .withTags(['wcag2a', 'wcag2aa'])
     .analyze();
   expect(results.violations).toEqual([]);
+
+  await closeView();
 
   // (4) Toggle Resource view back off — the panel unmounts and the strip canvas is gone (band reclaimed,
   // byte-for-byte parity with the inactive state).
