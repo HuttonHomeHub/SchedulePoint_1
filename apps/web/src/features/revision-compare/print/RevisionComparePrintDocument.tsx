@@ -273,7 +273,13 @@ function ChangeClassSection({
           {assessment.rows.length > 0 ? (
             // `<thead>` so the headings repeat on every page — the native pagination the printed
             // programme relies on (ADR-0059 M4), rather than a fixed header that prints once.
-            <table>
+            //
+            // `data-change-class` is a handle for the journey, and it exists because adding these
+            // tables BROKE an assertion that counted every `tbody tr` in the document. That count
+            // meant "every delta row printed, nothing cropped to a scroll position" — a real
+            // invariant — and a document-wide count stops expressing it the moment the document
+            // grows a second kind of table. The two are now countable apart.
+            <table data-change-class={assessment.changeClass}>
               <thead>
                 <tr>
                   <th>Code</th>

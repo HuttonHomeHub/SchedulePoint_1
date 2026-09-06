@@ -142,6 +142,22 @@ each as its own step. **A flag with no flag-on journey is untested in the state
 users actually see** — add the suite and the CI step in the same pull request as
 the flag.
 
+**Run a journey when the PRODUCT it drives changes, not only when the journey file changes.** The
+distinction is not pedantry — it is how a regression reached `main` on 2026-09-06. The revision
+comparison's printed document gained a change list; its unit tests were updated and passed, the
+journey file was not touched, so the journey was not run. It asserted `expect(printed.rows).toBe(3)`
+over every `tbody tr` in the document, the new tables took that to 8, and CI caught what the local
+gate had not been asked. The rule that would have caught it earlier is the one #133's neighbours
+already state for labels and layout, widened to its real subject: **a journey is a claim about a
+screen, so changing the screen is what invalidates it.** `pnpm prepush` cannot help here — it does
+not run journeys, deliberately, because they need a database and a browser.
+
+The repair is worth knowing too, because the obvious one is wrong. A document-wide `tbody tr` count
+stops expressing "every delta row printed, nothing cropped to a scroll position" the moment the
+document grows a second kind of table; loosening it to `toBeGreaterThan` would have kept it green
+and stopped it meaning anything. The two kinds are counted apart instead, each against its own
+expectation.
+
 `apps/web/e2e-recently-deleted/` is the counter-example to the sentence above: it drives a surface
 with **no flag at all** (ADR-0096 ships unflagged), and it exists because a journey is not only a
 flag's rollout gate — it is the only thing that navigates away from a screen and comes back.

@@ -189,11 +189,28 @@ test('a planner compares a revision against live and reads what entered the crit
   await panel.getByRole('button', { name: 'Print comparison' }).click();
   const printed = await page.evaluate(() => {
     const doc = document.querySelector('.tsld-print-container .revision-print');
-    return { rows: doc?.querySelectorAll('tbody tr').length ?? 0, text: doc?.textContent ?? '' };
+    const rows = (sel: string) => doc?.querySelectorAll(sel).length ?? 0;
+    return {
+      // **Counted APART, and that is the repair rather than a loosening.** This was one
+      // document-wide `tbody tr` count asserting "every delta row printed, nothing cropped to a
+      // scroll position". Adding the change list's tables took it from 3 to 8 and CI caught it —
+      // a real regression in a pushed commit. A document-wide count stops expressing that
+      // invariant the moment the document grows a second kind of table, so each kind is now
+      // counted against its own expectation and both keep their meaning.
+      deltaRows: rows('table:not([data-change-class]) tbody tr'),
+      changeRows: rows('table[data-change-class] tbody tr'),
+      text: doc?.textContent ?? '',
+    };
   });
-  // Every row printed — a print that emitted only what was scrolled into view is the founding
-  // defect `lib/print-document.ts` exists to prevent, and it looks complete.
-  expect(printed.rows).toBe(3);
+  // Every DELTA row printed — a print that emitted only what was scrolled into view is the
+  // founding defect `lib/print-document.ts` exists to prevent, and it looks complete.
+  expect(printed.deltaRows).toBe(3);
+  // And the change list reaches paper too (M3). Asserted as "some", not as an exact count: the
+  // seeded plan's change set is a property of the fixture, and pinning it here would make this
+  // assertion fail whenever the seed changed for an unrelated reason.
+  expect(printed.changeRows).toBeGreaterThan(0);
+  // The class that could not be assessed says so ON PAPER, not silently nothing.
+  expect(printed.text).toMatch(/cannot be compared/i);
   expect(printed.text).toContain(enteringName);
   expect(printed.text).toContain(leavingName);
   // The honesty footer reaches PAPER, which outlives the conversation it came from.
