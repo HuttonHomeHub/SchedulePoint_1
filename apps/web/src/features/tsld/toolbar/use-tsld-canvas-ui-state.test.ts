@@ -33,6 +33,7 @@ describe('useTsldCanvasUiState', () => {
     // Defaults are the "no lens active" identity.
     expect(result.current.lensState).toEqual({
       searchCursorId: null,
+      compareOverlay: false,
       filterQuery: '',
       filterAttrs: new Set(),
       colourMode: 'criticality',

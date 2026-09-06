@@ -184,6 +184,13 @@ export function useDiagramImage(args: {
         barFill: lenses.barFill,
         barInk: lenses.barInk,
         baselineGhosts: lenses.baselineGhosts,
+        // **Composed, not SCREEN_ONLY.** The comparison overlay is the one lens whose whole purpose
+        // is to be handed to somebody who was not in the room — "here is what changed since last
+        // month" — so an exported picture that silently drops it is the ADR-0103 defect exactly.
+        // It rides the same `getSceneLenses` handle as its baseline sibling, so the deliverable is
+        // the planner's picture rather than a second derivation (#167's argument, applied the way
+        // that row wants rather than deferred with it).
+        compareGhosts: lenses.compareGhosts,
         flaggedIds: lenses.flaggedIds,
       };
       const { viewport, size, dpr, scaledToFit } = buildExportViewport(renderActivities, dataDate, {

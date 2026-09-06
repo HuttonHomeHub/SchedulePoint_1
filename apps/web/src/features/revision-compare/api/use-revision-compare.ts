@@ -1,4 +1,4 @@
-import type { RevisionCompare } from '@repo/types';
+import type { RevisionCompare, RevisionInclude } from '@repo/types';
 import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
@@ -10,17 +10,17 @@ export { scheduleKeys };
 export const LIVE_REVISION = 'live';
 
 /**
- * Opt-in projections. Absent ⇒ the response is byte-identical to the delta-only one, which is what
- * lets the change list land without touching the shipped surface.
+ * Re-exported, never redeclared — see {@link RevisionInclude} in `@repo/types` for why. This
+ * module's existing consumers keep importing it from here.
  */
-export type RevisionInclude = 'changes' | 'progress';
+export type { RevisionInclude };
 
 /**
  * What the plan workspace asks for. **One constant rather than an inline array at the call site**,
  * so the panel's own tests and the journey assert against the same thing the product sends — an
  * inline literal is how a surface comes to be tested in a configuration it never ships in.
  */
-export const REVISION_COMPARE_INCLUDES: readonly RevisionInclude[] = ['changes'];
+export const REVISION_COMPARE_INCLUDES: readonly RevisionInclude[] = ['changes', 'ghosts'];
 
 export function revisionCompareQueryOptions(
   orgSlug: string,

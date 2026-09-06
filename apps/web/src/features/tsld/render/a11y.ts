@@ -161,6 +161,47 @@ export function baselineGhostClause(
   return ` (baseline ${span}${view}${variance})`;
 }
 
+/**
+ * The spoken equivalent of the revision-comparison change picture (ADR-0127) — a list of the work
+ * the overlay draws that a screen-reader user has **no other route to**.
+ *
+ * The canvas is `aria-hidden` and its parallel listbox is built from the plan's LIVE activities
+ * (ADR-0063), so a removed activity has no row there and no bar to focus: the picture would say
+ * something to a sighted planner that it says to nobody else (WCAG 1.4.1). Activities that merely
+ * MOVED are already reachable — their live row exists and gains a clause — so only removals are
+ * listed here.
+ *
+ * **Returns the sentences and not the markup**, so the one caller decides where they live: inside
+ * the diagram region, because a landmark-navigating reader lands INSIDE a region and never passes
+ * a preceding sibling (ADR-0122 D2).
+ *
+ * `undrawable` is stated rather than dropped: a diagram has no "showing N of M", so a picture
+ * quietly missing rows is unnoticeable — see `RevisionCompare.ghostsUndrawable`.
+ */
+export function compareOverlaySummary(
+  ghosts: readonly { name: string; removed: boolean }[],
+  undrawable: number,
+): { readonly heading: string; readonly removed: readonly string[] } | null {
+  if (ghosts.length === 0 && undrawable === 0) return null;
+  const removed = ghosts.filter((g) => g.removed).map((g) => g.name);
+  const moved = ghosts.length - removed.length;
+  const parts: string[] = [];
+  if (moved > 0) parts.push(`${String(moved)} moved`);
+  if (removed.length > 0) parts.push(`${String(removed.length)} removed`);
+  if (undrawable > 0) {
+    // Never "0 undrawable" and never silence: the reader is told the picture is incomplete AND why,
+    // because "the old revision did not record where they were" is a fact about the snapshot and
+    // not a fault they can act on.
+    parts.push(
+      `${String(undrawable)} not shown because the old revision did not record where they were`,
+    );
+  }
+  return {
+    heading: `Comparison overlay: ${parts.join(', ')}.`,
+    removed,
+  };
+}
+
 /** The parts of one parallel-listbox row, in the order they are spoken. */
 export interface ListboxRowParts {
   /** The memoised Tier-1 sentence ({@link describeActivity}). */

@@ -319,6 +319,14 @@ export interface TsldToolbarContext {
   varianceLoading: boolean;
   /** True when the baseline-variance query errored (overlay disabled, reason "Baseline unavailable"). */
   varianceError: boolean;
+  /** Whether the revision-comparison change picture is on (ADR-0127). */
+  compareOverlay: boolean;
+  /** Toggle it, gated by {@link hasRevisionPair} + a diagram to draw on. */
+  toggleCompareOverlay: () => void;
+  /** True when the comparison dock has BOTH sides of a pair chosen. Gates the overlay with a
+   * reason rather than hiding it: the control's whole subject is a comparison, so "choose two
+   * revisions first" is the useful sentence and an absent control is not (ADR-0082). */
+  hasRevisionPair: boolean;
 
   // --- Canvas navigation & authoring aids (VITE_CANVAS_NAV, spec `docs/specs/canvas-nav/`) ---------
   // Client view/navigation state over already-shipped data: Isolate logic path (dim off-chain) and

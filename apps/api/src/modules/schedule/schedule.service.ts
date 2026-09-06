@@ -37,12 +37,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
 import { BaselineRepository } from '../baselines/baseline.repository';
 import { classifyRevisionChanges } from '../baselines/revision-changes';
-import { buildRevisionGhosts } from '../baselines/revision-ghosts';
 import {
   computeRevisionDelta,
   type RevisionEdge,
   type RevisionRow,
 } from '../baselines/revision-delta';
+import { buildRevisionGhosts } from '../baselines/revision-ghosts';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';

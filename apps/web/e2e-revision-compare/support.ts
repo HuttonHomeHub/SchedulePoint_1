@@ -60,6 +60,8 @@ export interface SeededRevision {
   enteringName: string;
   /** One of the two that carry the critical path at capture and lose it afterwards. */
   leavingName: string;
+  /** In the baseline and deleted afterwards — the one thing only the change picture can show. */
+  removedName: string;
 }
 
 /**
@@ -105,12 +107,18 @@ export async function seedRevision(
       const a = await act('Groundworks', 10);
       const b = await act('Frame', 10);
       const cladding = await act('Cladding', 2);
+      // Baselined and then DELETED, so the comparison has work that is in the old revision and not
+      // in the plan. That is the one thing tier 2a can show and nothing else can: a removed
+      // activity has no live bar, no listbox row and no lane the cull knows about (ADR-0127).
+      const hoarding = await act('Site hoarding', 5);
       await call(`/plans/${planId}/dependencies`, 'POST', {
         predecessorId: a.id,
         successorId: b.id,
       });
       await call(`/plans/${planId}/schedule/recalculate`, 'POST');
       await call(`/plans/${planId}/baselines`, 'POST', { name: 'Contract Baseline' });
+      // AFTER the capture — the baseline froze it, the plan no longer has it.
+      await call(`/activities/${hoarding.id}`, 'DELETE');
 
       // Move the plan so the delta is NOT empty. The version is read back rather than assumed:
       // a recalculation writes engine-owned columns and bumps it, so `version: 1` would 409.
@@ -124,5 +132,5 @@ export async function seedRevision(
     },
     { slug: orgSlug, planId },
   );
-  return { enteringName: 'Cladding', leavingName: 'Frame' };
+  return { enteringName: 'Cladding', leavingName: 'Frame', removedName: 'Site hoarding' };
 }

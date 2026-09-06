@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { LIVE_REVISION } from '@repo/types';
+import { LIVE_REVISION, REVISION_INCLUDES, type RevisionInclude } from '@repo/types';
 import { Transform } from 'class-transformer';
 import { IsArray, IsIn, IsOptional, IsUUID, Matches } from 'class-validator';
 
@@ -27,8 +27,10 @@ import { UUID_REGEX } from '../../../common/validation/uuid';
 const UUID_PATTERN = UUID_REGEX.source.replace(/^\^/, '').replace(/\$$/, '');
 
 /** The opt-in projections this route understands. */
-export const REVISION_INCLUDES = ['changes', 'progress', 'ghosts'] as const;
-export type RevisionInclude = (typeof REVISION_INCLUDES)[number];
+// Re-exported from the shared vocabulary rather than declared here: two lists drifted once
+// already, and a projection the API accepts that no client can name is the shape of that drift.
+export { REVISION_INCLUDES };
+export type { RevisionInclude };
 
 export class RevisionCompareQueryDto {
   @ApiProperty({

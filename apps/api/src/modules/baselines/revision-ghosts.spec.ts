@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildRevisionGhosts } from './revision-ghosts';
 import type { RevisionRow } from './revision-delta';
+import { buildRevisionGhosts } from './revision-ghosts';
 
 /**
  * The builder is a pure function over two arrays, so every branch is reachable from a literal.

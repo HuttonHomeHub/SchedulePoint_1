@@ -39,6 +39,7 @@ import { resolveDockStrip } from '../model/dock-strip';
 import {
   announceChainStep,
   baselineGhostClause,
+  compareOverlaySummary,
   chainNeighbour,
   composeListboxRowText,
   describeActivity,
@@ -58,6 +59,7 @@ import {
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
+import type { CompareGhost } from '../render/paint';
 import { resolveLensPalette } from '../render/palette';
 import {
   addCalendarDays,
@@ -240,6 +242,20 @@ export interface TsldBulkOperations {
 export interface TsldPanelProps {
   activities: readonly ActivitySummary[];
   dependencies: readonly DependencySummary[];
+  /**
+   * The revision-comparison change picture (ADR-0127), supplied by whoever owns the comparison
+   * dock's state — this panel does not fetch it.
+   *
+   * `hasRevisionPair` is passed **separately from the ghosts** and is not derived from them, because
+   * they answer different questions. An empty ghost array is a real and common answer (a pair whose
+   * bars did not move), and inferring "no pair chosen" from it would shade the toggle with a
+   * sentence telling the planner to choose two revisions they have already chosen — the false
+   * refusal this epic removed one file along.
+   */
+  compareGhosts?: readonly CompareGhost[] | undefined;
+  /** Changed activities the old side never recorded a position for. Stated, never folded into zero. */
+  compareGhostsUndrawable?: number | undefined;
+  hasRevisionPair?: boolean;
   /** The plan's start (`plannedStart`) — the diagram's day-zero origin. Null → not schedulable. */
   dataDate: string | null;
   /** Whether the viewer may edit (Planner/Org Admin). Combined with the M2 flag to gate editing. */
@@ -511,6 +527,9 @@ interface PendingCreate {
  */
 export function TsldPanel({
   activities,
+  compareGhosts,
+  compareGhostsUndrawable = 0,
+  hasRevisionPair = false,
   dependencies,
   dataDate: dataDateProp,
   canEdit = false,
@@ -1069,7 +1088,8 @@ export function TsldPanel({
   // from them with zero per-frame allocation (ADR-0026 draw budget). ALL default to `undefined` — when
   // the flag is off, no filter is active, the mode is the default Criticality, or the overlay is off —
   // so the scene carries no lens fields and the paint is byte-for-byte today's.
-  const { filterQuery, filterAttrs, colourMode, baselineOverlay, searchCursorId } = lensState;
+  const { filterQuery, filterAttrs, colourMode, baselineOverlay, compareOverlay, searchCursorId } =
+    lensState;
   // Bumps on a light/dark/system switch so the Colour-by fill + ink maps re-resolve their token colours
   // (the canvas paints concrete colours, not `var()`), matching the base painter's re-theme (C1/U3).
   const themeVersion = useThemeVersion();
@@ -1164,6 +1184,34 @@ export function TsldPanel({
     const ghosts = buildBaselineGhosts(varianceRows, laneById);
     return ghosts.length > 0 ? ghosts : undefined;
   }, [baselineOverlay, varianceRows, activities]);
+  /**
+   * The revision-comparison change picture (ADR-0127), gated on the toggle AND on there being a
+   * pair — the server sends nothing without one, but the guard is stated rather than relied on,
+   * because a stale query result outliving a cleared pair is exactly how an overlay comes to
+   * describe a comparison nobody selected (M6-T2's second refusal).
+   *
+   * Undefined rather than an empty array when there is nothing to draw, so the layer is skipped
+   * entirely and the paint is byte-for-byte today's — the parity contract every sibling lens here
+   * keeps.
+   */
+  const compareGhostBars = useMemo(() => {
+    if (!compareOverlay || !hasRevisionPair || !compareGhosts || compareGhosts.length === 0) {
+      return undefined;
+    }
+    return compareGhosts;
+  }, [compareOverlay, hasRevisionPair, compareGhosts]);
+
+  /**
+   * The spoken twin of the comparison overlay. Built by walking `compareGhostBars` — what is
+   * DRAWN — rather than the raw prop, so the picture and its description can never disagree about
+   * whether the overlay is on.
+   */
+  const compareSummary = useMemo(
+    () =>
+      compareOverlaySummary(compareGhostBars ?? [], compareGhostBars ? compareGhostsUndrawable : 0),
+    [compareGhostBars, compareGhostsUndrawable],
+  );
+
   // The spoken twin of the ghost layer above (WCAG 1.4.1). Built by walking `baselineGhosts` itself
   // rather than re-filtering the variance rows, so "which rows have a ghost" is answered ONCE: a bar
   // drawn a ghost always says so, and one that isn't never does. Absent ⇒ no clause on any row.
@@ -2807,6 +2855,7 @@ export function TsldPanel({
               barFill={barFill}
               barInk={barInk}
               baselineGhosts={baselineGhosts}
+              compareGhosts={compareGhostBars}
               flaggedIds={flaggedIds}
               resourceStripActive={resourceStripActive}
               resourceStrip={resourceStrip}
@@ -2916,6 +2965,38 @@ export function TsldPanel({
                   ? ` Today is ${formatCalendarDate(todayIso)}.`
                   : ''}
               </p>
+            ) : null}
+            {compareSummary !== null ? (
+              /*
+                The spoken twin of the comparison overlay (ADR-0127, WCAG 1.4.1). INSIDE the
+                diagram region and before the listbox, because a landmark-navigating reader lands
+                inside a region and never passes a preceding sibling (ADR-0122 D2).
+
+                NOT focusable, and not part of the listbox: a removed activity is not selectable —
+                it is not in the plan — so giving it a tab stop would offer an interaction the
+                product cannot honour. Activities that merely MOVED are absent from this list on
+                purpose: their live row already exists in the listbox below.
+
+                `role="list"` and `role="listitem"` are stated explicitly. Tailwind Preflight sets
+                `list-style: none`, which drops the implicit roles in WebKit/VoiceOver (ADR-0122
+                D3) — so the markup that looks like a list is not announced as one.
+              */
+              <div className="sr-only">
+                <p>{compareSummary.heading}</p>
+                {compareSummary.removed.length > 0 ? (
+                  // ADR-0122 D3: Preflight's `list-style: none` drops the implicit roles in
+                  // WebKit/VoiceOver. Same reason and same file as the listbox below.
+                  // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
+                  <ul role="list" aria-label="Removed in this revision">
+                    {compareSummary.removed.map((name) => (
+                      // eslint-disable-next-line jsx-a11y/no-redundant-roles -- see above
+                      <li role="listitem" key={name}>
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             ) : null}
             {/*
               The accessible parallel representation: a focusable listbox mirroring the

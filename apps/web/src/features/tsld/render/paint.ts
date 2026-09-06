@@ -281,6 +281,13 @@ export interface TsldScene {
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay).
    * Absent ⇒ the overlay is off / no active baseline ⇒ no ghost layer (parity). */
   baselineGhosts?: readonly GhostBar[] | undefined;
+  /** The revision-comparison change picture (ADR-0127): where the CHANGED bars were on the `from`
+   * side of the pair the comparison dock has selected — including work that is no longer in the
+   * plan. A SEPARATE field from `baselineGhosts` rather than a widening of it, because the two
+   * answer different questions (this plan against its active baseline; one revision against
+   * another), can be on at the same time, and treat removed work differently. Absent ⇒ the overlay
+   * is off / no pair selected ⇒ no layer at all (parity). */
+  compareGhosts?: readonly CompareGhost[] | undefined;
   // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
   /** Ids of activities the engine flagged as over-allocated (`levelingWindowExceeded ||
    * selfOverAllocated`, ADR-0041), marked on the canvas with a distinct **mini-histogram badge** — a
@@ -404,6 +411,48 @@ const DATE_PLATE_H = 12;
 
 /** Line dash + width of a baseline ghost's outline (thin, dashed — visibly not a live bar). */
 const GHOST_DASH: readonly number[] = [2, 2];
+
+/**
+ * One frozen bar of the revision-comparison change picture (ADR-0127) — where a CHANGED activity
+ * was on the old side of the selected pair.
+ *
+ * Declared here rather than imported from `@repo/types`, so `render/` keeps its no-DTO rule and this
+ * file states exactly what it draws.
+ *
+ * `name` is carried even though NO painter reads it. It is here so the drawn array is
+ * self-describing: the spoken twin of this layer (`compareOverlaySummary`) walks the SAME array the
+ * painter walks, which is what stops the picture and its description disagreeing about what is on
+ * screen — the ADR-0121 finding, where a legend was decided by name, listed as a step, and never
+ * written, leaving colour as the sole channel.
+ */
+export interface CompareGhost {
+  readonly activityId: string;
+  readonly name: string;
+  /** `YYYY-MM-DD`, both non-null — a row with no old dates contributes no ghost (ADR-0126). */
+  readonly fromStart: string;
+  readonly fromFinish: string;
+  /** The FROZEN lane, never the live one and never a guess. Removed work has no live lane. */
+  readonly laneIndex: number;
+  readonly isMilestone: boolean;
+  readonly removed: boolean;
+}
+
+/**
+ * A horizontal line through the middle of a shape — the removed-work cue.
+ *
+ * A shape, deliberately, and not a second colour: colour alone would fail WCAG 1.4.1, and a NEW
+ * canvas token would risk the ADR-0100 M4 defect (a pair absent from `@theme inline` paints no
+ * colour at all in a real browser, invisibly to the contrast gate). Drawn solid over the dashed
+ * outline, so the two cues do not merge into one texture.
+ */
+function strikeThrough(ctx: Ctx2D, x: number, midY: number, width: number): void {
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(x, midY + 0.5);
+  ctx.lineTo(x + width, midY + 0.5);
+  ctx.stroke();
+  ctx.setLineDash(GHOST_DASH as number[]);
+}
 
 /**
  * The dash pattern that encodes criticality without relying on colour (WCAG 1.4.1):
@@ -1208,6 +1257,66 @@ export function paintScene(
         ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
         if (dimmed) ctx.globalAlpha = 1;
       }
+    }
+    ctx.setLineDash([]);
+  }
+
+  // Layer 2.6: the revision-comparison change picture (ADR-0127) — where the CHANGED bars were on
+  // the old side of the selected pair, drawn as a dashed outline beneath the live bars, with work
+  // that is no longer in the plan struck through.
+  //
+  // **It does NOT cull by `visibleIds`, and that is the one thing to know about this layer.** Its
+  // sibling above does, correctly: a baseline ghost always has a live bar to sit behind, so an
+  // off-screen live bar means an irrelevant ghost. Here, REMOVED work has no live activity at all —
+  // it is not in `scene.activities`, so it is never in `visibleIds`, and culling by it would
+  // silently drop exactly the rows this layer exists to show. The plan for this milestone said to
+  // cull by `visibleIds` first "as the ghost layer already does"; that instruction is right for the
+  // layer it was copied from and wrong here, and following it would have produced an overlay that
+  // looked correct on every plan where nothing had been deleted.
+  //
+  // The cull is therefore the per-ghost `rectsIntersect` alone — the same viewport test the layer
+  // above falls back on for a slipped ghost. `compareGhosts` holds only what CHANGED (the server
+  // decides that, ADR-0126), so the set is already a small fraction of the plan.
+  if (scene.compareGhosts && scene.compareGhosts.length > 0) {
+    const viewport: Rect = { x: 0, y: 0, w: size.width, h: size.height };
+    ctx.strokeStyle = palette.edge;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(GHOST_DASH as number[]);
+    for (const ghost of scene.compareGhosts) {
+      const startDay = daysBetween(scene.dataDate, ghost.fromStart);
+      const finishDay = daysBetween(scene.dataDate, ghost.fromFinish);
+      const x1 = screenXOfDay(startDay, view);
+      const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
+      const top = screenYOfLane(ghost.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
+      if (ghost.isMilestone) {
+        const cx = (x1 + x2) / 2;
+        const cy = top + BAR_HEIGHT / 2;
+        if (
+          !rectsIntersect(
+            {
+              x: cx - MILESTONE_RADIUS,
+              y: cy - MILESTONE_RADIUS,
+              w: MILESTONE_RADIUS * 2,
+              h: MILESTONE_RADIUS * 2,
+            },
+            viewport,
+          )
+        ) {
+          continue;
+        }
+        traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS, true);
+        ctx.stroke();
+        if (ghost.removed) strikeThrough(ctx, cx - MILESTONE_RADIUS, cy, MILESTONE_RADIUS * 2);
+        continue;
+      }
+      const w = Math.max(2, x2 - x1);
+      if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
+      ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+      // Removed work is distinguished by SHAPE, not by colour (WCAG 1.4.1) — and by a shape that
+      // needs no new token, which also sidesteps the ADR-0100 M4 trap of a canvas pair that is
+      // absent from `@theme inline` and therefore paints nothing at all in a real browser while the
+      // contrast gate stays green.
+      if (ghost.removed) strikeThrough(ctx, x1, top + BAR_HEIGHT / 2, w);
     }
     ctx.setLineDash([]);
   }

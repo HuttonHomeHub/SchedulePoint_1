@@ -2856,6 +2856,20 @@ export interface RevisionChangeReport {
 }
 
 /**
+ * **The opt-in projections, defined ONCE.**
+ *
+ * They were two literals — a union in `apps/web` and a `const` in the API's query DTO — and adding
+ * `ghosts` to one left the other describing a vocabulary the product no longer had. The compiler
+ * caught it only because the new value happened to be used immediately; a projection added and not
+ * used would have sat there as a silent disagreement between what the API accepts and what a client
+ * can name. Same argument as the change classes one type along.
+ *
+ * Absent ⇒ the response is byte-identical to the delta-only one (the ADR-0073 C2 pattern).
+ */
+export const REVISION_INCLUDES = ['changes', 'progress', 'ghosts'] as const;
+export type RevisionInclude = (typeof REVISION_INCLUDES)[number];
+
+/**
  * One activity's OLD geometry — where a bar was on the `from` side — for a canvas that draws the
  * difference behind the live scene.
  *
