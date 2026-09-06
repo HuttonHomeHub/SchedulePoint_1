@@ -56,6 +56,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     // failure appearing in a spec that has nothing to do with baselines (see the afterAll note).
     await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
+    await prisma.baselineDependency.deleteMany();
     await prisma.baseline.deleteMany();
     // Weighted steps hold `activity_id` (ADR-0044 §33), and they are the THIRD table to fail this
     // way — after `plan_shares` and `resource_assignments` (`docs/TECH_DEBT.md` #119a). Found the

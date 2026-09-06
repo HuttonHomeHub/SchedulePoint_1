@@ -120,79 +120,83 @@ enum OrganizationRole {
 }
 
 model Organization {
-  id                  String                @id @default(uuid(7)) @db.Uuid
-  name                String
+  id                   String                @id @default(uuid(7)) @db.Uuid
+  name                 String
   // URL-safe, unique per deployment, immutable in v1. Uniqueness is enforced by
   // a PARTIAL unique index that ignores soft-deleted rows (uq_organizations_slug
   // WHERE deleted_at IS NULL) — Prisma cannot express partial indexes, so it is
   // added as raw SQL in the migration. This index also serves slug lookups
   // (which always filter deleted_at IS NULL), so no separate @@index is needed.
-  slug                String
-  version             Int                   @default(1)
-  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
-  createdBy           String?               @map("created_by")
-  updatedBy           String?               @map("updated_by")
-  deletedAt           DateTime?             @map("deleted_at") @db.Timestamptz(3)
-  members             OrgMember[]
-  invitations         Invitation[]
+  slug                 String
+  version              Int                   @default(1)
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy            String?               @map("created_by")
+  updatedBy            String?               @map("updated_by")
+  deletedAt            DateTime?             @map("deleted_at") @db.Timestamptz(3)
+  members              OrgMember[]
+  invitations          Invitation[]
   // Audit events scoped to this organisation (ADR-0072). NULLABLE on the child and
   // RESTRICT, not cascade: an audit event must OUTLIVE the thing it records, which is
   // the opposite of every other child here. Org-less rows (authentication) carry NULL.
-  auditEvents         AuditEvent[]
+  auditEvents          AuditEvent[]
   // Domain hierarchy owned by this organisation. Project/Plan back-relations
   // exist because those tables carry a denormalised organization_id FK (see the
   // Client/Project/Plan models below), not because the org is their direct
   // parent — the tree is Organization → Client → Project → Plan.
-  clients             Client[]
-  projects            Project[]
-  plans               Plan[]
-  activities          Activity[]
+  clients              Client[]
+  projects             Project[]
+  plans                Plan[]
+  activities           Activity[]
   // Denormalised scope back-relation: dependencies carry organization_id directly
   // (copied from their endpoints), like Activity — see the ActivityDependency model.
-  dependencies        ActivityDependency[]
+  dependencies         ActivityDependency[]
   // Live cross-plan (inter-project) dependency edges owned by this org (M2, ADR-0045).
   // Like ActivityDependency, organization_id is denormalised from the (validated)
   // endpoints (both in this org), so the org-scoped adjacency load for the plan-level
   // cycle walk and org/IDOR checks filter one indexed column.
-  crossPlanDeps       CrossPlanDependency[]
+  crossPlanDeps        CrossPlanDependency[]
   // Org-scoped calendar library + its dated exceptions (M5, ADR-0024). Calendar's
   // organization_id is native (the org is its direct parent, like Client);
   // CalendarException's is denormalised from its parent calendar (like Activity).
-  calendars           Calendar[]
-  calendarExceptions  CalendarException[]
+  calendars            Calendar[]
+  calendarExceptions   CalendarException[]
   // Org-scoped resource library + activity assignments (M7.1, ADR-0039). Resource's
   // organization_id is native (the org is its direct parent, like Calendar);
   // ResourceAssignment's is denormalised from its endpoints (like Activity/Dependency).
-  resources           Resource[]
-  resourceAssignments ResourceAssignment[]
+  resources            Resource[]
+  resourceAssignments  ResourceAssignment[]
   // Weighted activity-step checklists (M7 rung 5, ADR-0044). ActivityStep's
   // organization_id is denormalised from its parent activity (copied by the service,
   // never client input — the Activity/ResourceAssignment pattern).
-  activitySteps       ActivityStep[]
+  activitySteps        ActivityStep[]
   // Plan-of-record snapshots (M7, ADR-0025). Baseline's organization_id is
   // denormalised from its plan; BaselineActivity's from its parent baseline — both
   // copied by the service, never client input (the Activity pattern), so an org-scope
   // / IDOR check and the cascade batch filter one indexed column.
-  baselines           Baseline[]
-  baselineActivities  BaselineActivity[]
+  baselines            Baseline[]
+  baselineActivities   BaselineActivity[]
   // The per-assignment cost decomposition inside a baseline (ADR-0071 M3). Its
   // organization_id is denormalised from the parent baseline, like BaselineActivity's.
-  baselineAssignments BaselineAssignment[]
+  baselineAssignments  BaselineAssignment[]
+  // The frozen LOGIC of a revision — one row per active dependency at capture (the
+  // revision-snapshot extension, the fourth amendment to ADR-0025). Its organization_id is
+  // denormalised from the parent baseline, exactly like the two siblings above.
+  baselineDependencies BaselineDependency[]
   // Ephemeral per-plan edit-lock coordination rows (ADR-0028). organization_id is
   // denormalised from the plan (copied by the service, never client input) purely as
   // a scope tag for scoped reads/audit; the row itself is owned by its plan.
-  planLocks           PlanLock[]
+  planLocks            PlanLock[]
   // Threaded annotations on plans & activities (M1, ADR-0046). Note's organization_id
   // is denormalised from its parent (plan or activity), copied by the service inside
   // the create transaction, never client input — the Activity/ResourceAssignment
   // pattern; so an org-scope/IDOR check and the cascade batch filter one indexed column.
-  notes               Note[]
+  notes                Note[]
   // External-Guest per-plan share links (Stage F, ADR-0051). PlanShare's organization_id
   // is denormalised from its plan (copied by the service inside the create transaction,
   // never client input — the PlanLock/Note pattern), purely as the tenant scope tag for
   // scoped audit reads; the row itself is owned by its plan.
-  planShares          PlanShare[]
+  planShares           PlanShare[]
 
   @@map("organizations")
 }
@@ -564,6 +568,52 @@ enum CalendarScope {
 enum BaselineCostSnapshotLevel {
   ACTIVITY
   ASSIGNMENT
+}
+
+// WHAT A BASELINE FROZE OF THE PLAN'S SHAPE — the revision-snapshot extension's discriminator
+// (the fourth amendment to ADR-0025, after ADR-0042's cost baseline, ADR-0071 M3's cost
+// decomposition and ADR-0125's criticality rule).
+//
+//   NONE  the snapshot recorded identity, duration, the four CPM dates, float/criticality and
+//         cost, and NOTHING about the plan's SHAPE. This is the constant DEFAULT and it is the
+//         literal truth of every baseline captured before this column existed.
+//   FULL  the snapshot additionally recorded, for every activity active at capture:
+//           * lane_index                                (the TSLD row it occupied)
+//           * parent_id                                 (its WBS summary, NULL = top level)
+//           * calendar_id                               (its own calendar, NULL = inherit the plan)
+//           * constraint_type / constraint_date         (the primary constraint, NULL = none)
+//           * secondary_constraint_type / _date         (the secondary constraint, NULL = none)
+//           * percent_complete                          (schedule %-complete, 0 = not started)
+//           * actual_start / actual_finish              (NULL = not started / not finished)
+//         and one `baseline_dependencies` row for every dependency active at capture.
+//
+// WHY A DISCRIMINATOR IS UNAVOIDABLE HERE, WHERE ADR-0125's CRITICALITY SET NEEDED NONE. That set
+// could use `critical_path_definition IS NULL` as its own discriminator, because a fail-closed
+// all-or-none CHECK made "half a rule" unrepresentable and none of the four has a legitimate NULL.
+// EVERY ONE of the ten columns above has a legitimate NULL (or a legitimate zero) under FULL: an
+// activity with no constraint, no parent, no own calendar, in lane 0, at 0 %, not yet started. So
+// no per-row test — and no combination of them — can separate "not recorded" from "recorded as
+// absent". Nor can a ROW COUNT: a plan with no dependencies captures zero `baseline_dependencies`
+// rows under FULL, which is the `cost_snapshot_level` argument verbatim, one table along. This
+// column is the ONLY thing that can answer the question, so the read branches on it and never on
+// a column's nullness or a list's length.
+//
+// THE PAIRING IS A SERVICE INVARIANT, NOT A CHECK — the columns it vouches for live in two other
+// tables and a CHECK sees one row of one table (the `cost_snapshot_level` reasoning, unchanged).
+// It is held inside the single capture transaction, which is why the DEFAULT is the conservative
+// value: a write path that has not been taught the new pass reads as NONE, never as
+// recorded-but-empty. Fail-closedness lives at the TypeScript boundary — read it with an
+// exhaustive switch so a future third level (PARTIAL? per-class?) is a compile error rather than a
+// silently fabricated change list.
+//
+// `NONE` IS PERMANENT for any baseline already captured. Nothing surviving records what a plan's
+// logic, constraints, calendars or WBS were at a past instant, and a capture cannot be re-run — so
+// a backfill could only stamp TODAY's shape as history, which is exactly what ADR-0025's
+// copy-not-reference rule exists to prevent. MUST stay in lock-step with the
+// `RevisionSnapshotLevel` union in @repo/types when the change list surfaces it.
+enum RevisionSnapshotLevel {
+  NONE
+  FULL
 }
 
 model Client {
@@ -1812,6 +1862,25 @@ model Baseline {
   // ⇒ metadata-only ADD COLUMN, no rewrite, and every existing baseline keeps today's meaning.
   costSnapshotLevel BaselineCostSnapshotLevel @default(ACTIVITY) @map("cost_snapshot_level")
 
+  /// WHAT this baseline froze of the plan's SHAPE — see the RevisionSnapshotLevel docblock, which
+  /// carries the reasoning and ENUMERATES what FULL vouches for. NONE (the constant DEFAULT, and
+  /// the literal truth of every baseline captured before this column) = identity, duration, dates,
+  /// float and cost only; FULL = those plus ten per-activity shape columns and one
+  /// `baseline_dependencies` row per active dependency.
+  ///
+  /// Like `costSnapshotLevel` this is a CAPTURE-level fact, not a per-activity one: one pass
+  /// freezes the whole plan inside one transaction, so every row of a baseline shares it — and the
+  /// change list needs the answer BEFORE it looks at any row, because it decides whether a NULL
+  /// `constraint_type` means "no constraint" or "unknown", and whether zero dependency rows means
+  /// "no logic" or "no record of the logic". NEVER infer it from a column's nullness or from a row
+  /// count: every one of those columns has a legitimate NULL under FULL.
+  ///
+  /// Set by the capture path, then IMMUTABLE like every other snapshot column: a soft-delete /
+  /// restore stamps only `deletedAt`/`deleteBatchId` and never touches it. Constant DEFAULT ⇒
+  /// metadata-only ADD COLUMN, no rewrite, and every existing baseline is described as exactly
+  /// what it is rather than as something it is not.
+  revisionSnapshotLevel RevisionSnapshotLevel @default(NONE) @map("revision_snapshot_level")
+
   /// ADR-0125 / CQ-1 — the criticality RULE this snapshot's numbers were COMPUTED under.
   ///
   /// `baseline_activities.is_critical` and `.total_float` are the OUTPUT of a rule, not properties
@@ -1886,6 +1955,10 @@ model Baseline {
   // AND on an ASSIGNMENT-level one whose plan has no assignments — read `costSnapshotLevel`,
   // never this list's length, to tell those apart.
   assignments  BaselineAssignment[]
+  // The frozen logic (the revision-snapshot extension). EMPTY on a NONE-level baseline AND on a
+  // FULL-level one whose plan has no dependencies — read `revisionSnapshotLevel`, never this
+  // list's length. The same sentence as `assignments` above, and for the same reason.
+  dependencies BaselineDependency[]
 
   // Baseline name is unique per PLAN among ACTIVE rows — partial unique
   // (uq_baselines_plan_name ON (plan_id, name) WHERE deleted_at IS NULL), raw SQL in
@@ -1968,6 +2041,75 @@ model BaselineActivity {
   // ck_baseline_activities_budgeted_expense_nonneg (nullable-safe `>= 0`) mirrors the live
   // ck_activities_budgeted_expense_nonneg exactly. No index (the snapshot is loaded whole).
   budgetedExpense BigInt? @map("budgeted_expense")
+
+  /// THE FROZEN SHAPE of the activity (the revision-snapshot extension; the fourth amendment to
+  /// ADR-0025). Until these existed a baseline froze WHERE the work was and WHAT it was called and
+  /// nothing about HOW THE PLAN WAS BUILT — so a comparison could report that an activity moved and
+  /// could not report that somebody re-parented it, re-constrained it, put it on a different
+  /// calendar or reported progress against it.
+  ///
+  /// ALL TEN ARE NULLABLE WITH NO DEFAULT, AND THAT IS THE LOAD-BEARING DECISION — but NOT because
+  /// the null is a per-row sentinel, which is where the ADR-0125 criticality precedent stops
+  /// applying. Every one of these columns has a LEGITIMATE null (or zero) in a snapshot that
+  /// recorded them fully: an activity with no constraint, no parent, no calendar of its own, in
+  /// lane 0, at 0 %, not yet started. So a reader CANNOT test any of them for "was this recorded?"
+  /// — the answer is `baselines.revision_snapshot_level`, and it is the only answer. See that
+  /// column's docblock; this one is the corroborating half, exactly as `budgetedExpense` above is
+  /// corroborating for `cost_snapshot_level`.
+  ///
+  /// WHY NOT COPY THE LIVE COLUMNS' SHAPES. `activities.lane_index` is `NOT NULL DEFAULT 0` and
+  /// `activities.percent_complete` is `NOT NULL DEFAULT 0`; copying either shape here is the trap.
+  /// LANE 0 IS A REAL LANE and 0 % IS A REAL PROGRESS FIGURE, so a constant DEFAULT would tell
+  /// every baseline captured before this migration that all its activities sat in the top row and
+  /// none of them had started — a confident, fabricated picture that a future ghost layer would
+  /// paint and a change list would report. That is `budgetedExpense`'s "0 is a claim" (ADR-0071 M3)
+  /// and ADR-0125's rejected `is_critical DEFAULT false`, in the one place where the live column
+  /// genuinely is NOT NULL and the temptation to mirror it is therefore strongest. The `hours_per_
+  /// day_minutes DEFAULT 1440` precedent does not license one either: that default was legal
+  /// because 1440 was TRUE of every pre-existing row, and none of these values is knowable for any.
+  ///
+  /// PLAIN CORRELATION UUIDs, NO FOREIGN KEYS, for `parentId` and `calendarId` — the
+  /// `sourceActivityId` rule (ADR-0025): a snapshot that referenced live rows would either block
+  /// their deletion or rot with them, and `calendars` in particular is hard-deleted by the ADR-0096
+  /// expiry when its project expires. `parentId` is in the SOURCE activity's id space (it names an
+  /// `activities.id`, not a `baseline_activities.id`), like `sourceActivityId` and for the same
+  /// reason: the join a change list makes is source-id to source-id.
+  ///
+  /// IMMUTABLE after capture. No index on any of them: they are read only alongside their own row
+  /// when the comparison loads a whole baseline through `(baseline_id, source_activity_id)`, and
+  /// no route filters, sorts or groups snapshot rows by any of them — index query patterns, not
+  /// columns (docs/DATABASE.md). Constraints (raw SQL in the migration; Prisma cannot express
+  /// CHECK, so nothing is declared here that the database does not have — prisma:check-drift,
+  /// TECH_DEBT #54): ck_baseline_activities_lane_index_nonneg and
+  /// ck_baseline_activities_percent_complete_range are the nullable-safe forms of the live
+  /// ck_activities_lane_index_nonneg / ck_activities_percent_complete, and
+  /// ck_baseline_activities_constraint_pair / _secondary_constraint_pair mirror the live pair
+  /// checks verbatim — a frozen copy must not be able to hold a value its source would refuse.
+  laneIndex               Int?            @map("lane_index")
+  parentId                String?         @map("parent_id") @db.Uuid
+  calendarId              String?         @map("calendar_id") @db.Uuid
+  constraintType          ConstraintType? @map("constraint_type")
+  constraintDate          DateTime?       @map("constraint_date") @db.Date
+  secondaryConstraintType ConstraintType? @map("secondary_constraint_type")
+  secondaryConstraintDate DateTime?       @map("secondary_constraint_date") @db.Date
+
+  /// The frozen PROGRESS (CQ-3, product owner 2026-09-06). The class is OPT-IN in the read model —
+  /// on a monthly comparison nearly every activity has progressed, so returned by default it would
+  /// out-number the other classes combined and drown the structural changes the change list exists
+  /// to surface. THE COLUMNS ARE WRITTEN ON EVERY CAPTURE REGARDLESS: opt-in is a read-model
+  /// default, and a column added later is a column no existing baseline has (CQ-1's permanence).
+  ///
+  /// `percentComplete` is the SCHEDULE %-complete — the one that feeds the engine's remaining work
+  /// — not the earned-value performance measure. `activities.percent_complete_type` and
+  /// `.physical_percent_complete` are deliberately NOT frozen here: they select and carry the EV
+  /// PERFORMANCE percentage, which "NEVER changes a CPM date" (`Activity.percentCompleteType`), so
+  /// they belong to a cost/EV comparison class that is out of scope. Named rather than omitted,
+  /// because CQ-1's permanence applies to them exactly as it applies to these three.
+  ///
+  /// Calendar days (`@db.Date`) like the live columns and like the CPM dates above (ADR-0023).
+  percentComplete Int?      @map("percent_complete")
+  actualStart     DateTime? @map("actual_start") @db.Date
+  actualFinish    DateTime? @map("actual_finish") @db.Date
 
   version       Int       @default(1)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -2106,6 +2248,121 @@ model BaselineAssignment {
   // organization_id is a FULL index (backs its FK RESTRICT + org-scoped IDOR loads).
   @@index([organizationId])
   @@map("baseline_assignments")
+}
+
+// A BaselineDependency — ONE logic edge's frozen snapshot inside a baseline (the
+// revision-snapshot extension; the FOURTH amendment to ADR-0025, after ADR-0042's cost baseline,
+// ADR-0071 M3's cost decomposition and ADR-0125's criticality rule). A sibling of
+// BaselineActivity in every respect: a self-contained COPY whose `source_*` ids are PLAIN
+// correlation UUIDs with NO foreign key, so the snapshot survives the live edge being re-typed,
+// re-lagged, deleted or hard-purged. Rows are immutable after capture and soft-delete with the
+// parent baseline under one `delete_batch_id`. Full housekeeping set (UUID v7 PK, timestamptz UTC,
+// TEXT audit ids, optimistic-locking `version`), matching its two siblings — a baseline row is a
+// historical record, not a value fragment.
+//
+// WHY IT EXISTS. A baseline froze the plan's OUTPUT and never its LOGIC, so the product could say
+// an activity moved and could not say anybody re-sequenced the work — which is the change a
+// planner is most often asked to defend, and the one thing a Gantt-shaped competitor structurally
+// cannot show. "Re-logicked" is the only change class with no partial answer available from the
+// existing columns: the whole edge set was absent.
+//
+// WHY A SIBLING TABLE AND NOT COLUMNS ON BaselineActivity. An activity has 0..n predecessors and
+// 0..n successors, so columns would be repeating columns (an arbitrary arity cap) or a JSONB blob
+// — and the BaselineAssignment docblock's rejection of JSONB applies here unchanged and for a
+// stronger reason: the database could enforce neither the signed lag range nor the no-self-loop
+// rule, and this would be the schema's FIRST json column, which is an ADR-level precedent rather
+// than a convenience. A relational child costs one batched `createMany` inside a capture
+// transaction that already writes one row per activity.
+//
+// EVERY VALUE COLUMN IS NOT NULL WITH NO DEFAULT — deliberately unlike its live counterpart, and
+// this is the BaselineAssignment.budgetedCost/lagMinutes precedent applied verbatim. `dependencies`
+// defaults `type` to FS, `lag_minutes` to 0, `lag_calendar` to PROJECT_DEFAULT and `is_driving` to
+// false because those are the sane values for a NEW EDGE A PLANNER IS CREATING. Here there are no
+// pre-existing rows to default for — the table IS the feature — and a default would let a capture
+// RECORD A FACT IT NEVER READ: a write path that forgot to select `type` would freeze every edge
+// in the plan as Finish-to-Start, which is a fabricated history of exactly the class this table
+// exists to report, and nothing downstream could ever doubt it. Without the defaults Prisma's
+// generated `create` input requires all four, so the compiler asks the question instead.
+//
+// WHAT IS DELIBERATELY *NOT* FROZEN HERE: nothing. `dependencies` carries exactly these four
+// value columns beside its scope and housekeeping, so this row is the complete edge — which is
+// what makes the change list's "re-logicked" class answerable rather than approximate.
+model BaselineDependency {
+  id             String @id @default(uuid(7)) @db.Uuid
+  // Denormalised from the parent baseline (never client input). RESTRICT.
+  organizationId String @map("organization_id") @db.Uuid
+  baselineId     String @map("baseline_id") @db.Uuid
+
+  // The three correlation ids — PLAIN UUIDs, NO foreign keys, exactly like
+  // BaselineActivity.source_activity_id and BaselineAssignment's three, for the same ADR-0025
+  // reason: a snapshot that referenced live rows would either block their deletion or rot with
+  // them, and `dependencies` / `activities` are hard-deleted by the ADR-0096 retention expiry.
+  //   * source_dependency_id — the `dependencies` row this froze. The edge's identity, and the
+  //     key the change list joins on to say "this same link was re-lagged".
+  //   * source_predecessor_id / source_successor_id — the ENDPOINTS, in the SOURCE activity id
+  //     space (they name `activities.id` values, matching `baseline_activities.source_activity_id`
+  //     — NOT `baseline_activities.id`). Frozen rather than resolved through the parent row
+  //     because an edge whose endpoint was deleted from the live plan must still name both ends,
+  //     and because it is what lets an added/removed edge be described without a join.
+  //     Their values always equal some `baseline_activities.source_activity_id` of the SAME
+  //     baseline — a service invariant of the one capture transaction, not an FK (the
+  //     `BaselineAssignment.sourceActivityId` precedent).
+  sourceDependencyId  String @map("source_dependency_id") @db.Uuid
+  sourcePredecessorId String @map("source_predecessor_id") @db.Uuid
+  sourceSuccessorId   String @map("source_successor_id") @db.Uuid
+
+  // The complete frozen edge, copied from `dependencies` at capture. `lag_minutes` is a SIGNED
+  // working-minute lag (negative = lead), bounded by ck_baseline_dependencies_lag_minutes_range
+  // to the same −5_256_000…5_256_000 as the live ck_dependencies_lag_minutes_range — a frozen copy
+  // must not be able to hold a value its source would refuse, and the schema gives ONE answer to
+  // "how large may a working-minute quantity be". `lag_calendar` is frozen because it decides
+  // which calendar the lag is measured on (ADR-0036 §6), so the number alone does not describe the
+  // edge. `is_driving` is the engine-owned output at capture: the capture path already refuses a
+  // plan with no computed schedule, so the value is always a real one rather than a pre-calculation
+  // false. See the model docblock for why none of the four carries a DEFAULT.
+  type        DependencyType    @map("type")
+  lagMinutes  Int               @map("lag_minutes")
+  lagCalendar LagCalendarSource @map("lag_calendar")
+  isDriving   Boolean           @map("is_driving")
+
+  version       Int       @default(1)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdBy     String?   @map("created_by")
+  updatedBy     String?   @map("updated_by")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  deleteBatchId String?   @map("delete_batch_id") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  baseline     Baseline     @relation(fields: [baselineId], references: [id], onDelete: Restrict)
+
+  // INDEXES — two declared here, one partial in raw SQL (Prisma cannot express a WHERE, so NO
+  // @@index is declared for it: a declared index the database does not have is the CI
+  // schema-drift failure of TECH_DEBT #54).
+  //   * (baseline_id, source_dependency_id) — the BaselineActivity shape, NOT the
+  //     BaselineAssignment one, and the difference is deliberate. That table's single index is a
+  //     PARTIAL unique `WHERE deleted_at IS NULL`, justified on the grounds that "baseline rows
+  //     soft-delete only, so the FK RESTRICT check never fires". ADR-0096 made that FALSE: the
+  //     retention expiry hard-deletes baselines, and a RESTRICT check's generated query carries no
+  //     `deleted_at`, so a `deleted_at IS NULL` predicate is not implied and the check falls back
+  //     to a sequential scan of the child table once per deleted parent — the measured
+  //     `idx_activities_parent_id_fk` finding (docs/DATABASE.md), which cost 3m47s for one plan.
+  //     A FULL composite covers the FK, the load-whole-baseline read (leftmost prefix
+  //     `baseline_id`) and the change list's join key in one, at the same width.
+  //     It deliberately does NOT state a freeze-once unique: the capture writes each edge once by
+  //     construction inside one transaction, and a third index on a bulk-insert path was measured
+  //     and rejected one table along (see BaselineAssignment) for buying 0.007 ms.
+  //   * organization_id — FULL, backing its FK (RESTRICT) + org-scoped IDOR loads, like every
+  //     sibling.
+  //   * idx_baseline_dependencies_delete_batch_id (delete_batch_id) WHERE ... IS NOT NULL — batch
+  //     restore, like every sibling.
+  // CHECKs (raw SQL): ck_baseline_dependencies_lag_minutes_range and
+  // ck_baseline_dependencies_no_self_loop, both mirroring the live `dependencies` constraints
+  // exactly. Nothing else is invented: the live table has no other CHECK, and a snapshot that
+  // refused what its source accepts would be unable to record a plan the product allows.
+  @@index([baselineId, sourceDependencyId])
+  @@index([organizationId])
+  @@map("baseline_dependencies")
 }
 
 // ---------------------------------------------------------------------------

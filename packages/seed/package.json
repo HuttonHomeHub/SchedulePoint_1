@@ -13,6 +13,31 @@
       "types": "./dist/index.d.ts",
       "development": "./src/index.ts",
       "default": "./dist/index.js"
+    },
+    "./spec": {
+      "types": "./dist/spec.d.ts",
+      "development": "./src/spec.ts",
+      "default": "./dist/spec.js"
+    },
+    "./scale": {
+      "types": "./dist/scale/index.d.ts",
+      "development": "./src/scale/index.ts",
+      "default": "./dist/scale/index.js"
+    },
+    "./pairwise": {
+      "types": "./dist/pairwise/index.d.ts",
+      "development": "./src/pairwise/index.ts",
+      "default": "./dist/pairwise/index.js"
+    },
+    "./negative": {
+      "types": "./dist/negative/index.d.ts",
+      "development": "./src/negative/index.ts",
+      "default": "./dist/negative/index.js"
+    },
+    "./fixture": {
+      "types": "./dist/fixture/index.d.ts",
+      "development": "./src/fixture/index.ts",
+      "default": "./dist/fixture/index.js"
     }
   },
   "files": [

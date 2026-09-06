@@ -281,6 +281,16 @@ export interface TsldScene {
   /** Baseline ghost bars drawn as a culled outline layer beneath the live bars (the Baseline overlay).
    * Absent ⇒ the overlay is off / no active baseline ⇒ no ghost layer (parity). */
   baselineGhosts?: readonly GhostBar[] | undefined;
+  /** The revision-comparison change picture (ADR-0127): where the CHANGED bars were on the `from`
+   * side of the pair the comparison dock has selected — including work that is no longer in the
+   * plan. A SEPARATE field from `baselineGhosts` rather than a widening of it, because the two
+   * answer different questions (this plan against its active baseline; one revision against
+   * another), can be on at the same time, and treat removed work differently. Absent ⇒ the overlay
+   * is off / no pair selected ⇒ no layer at all (parity). */
+  compareGhosts?: readonly CompareGhost[] | undefined;
+  /** The revision comparison's CHANGED LOGIC (ADR-0127) — the differentiating half: a re-sequence
+   * is only visible as a re-sequence if the links are drawn. Absent ⇒ no pass (parity). */
+  compareLinks?: readonly CompareLink[] | undefined;
   // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
   /** Ids of activities the engine flagged as over-allocated (`levelingWindowExceeded ||
    * selfOverAllocated`, ADR-0041), marked on the canvas with a distinct **mini-histogram badge** — a
@@ -404,6 +414,76 @@ const DATE_PLATE_H = 12;
 
 /** Line dash + width of a baseline ghost's outline (thin, dashed — visibly not a live bar). */
 const GHOST_DASH: readonly number[] = [2, 2];
+
+/**
+ * The comparison overlay's dash — **deliberately different from {@link GHOST_DASH}**.
+ *
+ * Both overlays draw a dashed outline in `palette.edge`, and they can be on at the same time, so a
+ * merely-moved compare ghost was pixel-identical to a baseline-drift ghost: a planner comparing two
+ * named revisions could be looking at baseline drift and believe it was the comparison, or the
+ * reverse. That undermines the one promise the overlay makes — *this picture is about these two
+ * revisions* — and the M8 ux review found it. A longer dash with a wider gap is a shape channel and
+ * needs no new token (the ADR-0100 M4 trap).
+ */
+const COMPARE_DASH: readonly number[] = [6, 3];
+
+/**
+ * One frozen bar of the revision-comparison change picture (ADR-0127) — where a CHANGED activity
+ * was on the old side of the selected pair.
+ *
+ * Declared here rather than imported from `@repo/types`, so `render/` keeps its no-DTO rule and this
+ * file states exactly what it draws.
+ *
+ * `name` is carried even though NO painter reads it. It is here so the drawn array is
+ * self-describing: the spoken twin of this layer (`compareOverlaySummary`) walks the SAME array the
+ * painter walks, which is what stops the picture and its description disagreeing about what is on
+ * screen — the ADR-0121 finding, where a legend was decided by name, listed as a step, and never
+ * written, leaving colour as the sole channel.
+ */
+export interface CompareGhost {
+  readonly activityId: string;
+  readonly name: string;
+  /** `YYYY-MM-DD`, both non-null — a row with no old dates contributes no ghost (ADR-0126). */
+  readonly fromStart: string;
+  readonly fromFinish: string;
+  /** The FROZEN lane, never the live one and never a guess. Removed work has no live lane. */
+  readonly laneIndex: number;
+  readonly isMilestone: boolean;
+  readonly removed: boolean;
+}
+
+/**
+ * One link the comparison found changed (ADR-0127).
+ *
+ * `REMOVED` is the one with no live counterpart, which is why the endpoints are carried: the
+ * painter cannot look the edge up in `scene.edges` because it is not there. Both endpoints ARE in
+ * the live plan — the server refuses to emit a link it cannot anchor, and counts it instead, since
+ * a link has no geometry of its own.
+ */
+export interface CompareLink {
+  readonly dependencyId: string;
+  readonly predecessorId: string;
+  readonly successorId: string;
+  readonly state: 'ADDED' | 'REMOVED' | 'CHANGED';
+}
+
+/**
+ * A horizontal line through the middle of a shape — the removed-work cue.
+ *
+ * A shape, deliberately, and not a second colour: colour alone would fail WCAG 1.4.1, and a NEW
+ * canvas token would risk the ADR-0100 M4 defect (a pair absent from `@theme inline` paints no
+ * colour at all in a real browser, invisibly to the contrast gate). Drawn solid over the dashed
+ * outline, so the two cues do not merge into one texture.
+ */
+function strikeThrough(ctx: Ctx2D, x: number, midY: number, width: number): void {
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(x, midY + 0.5);
+  ctx.lineTo(x + width, midY + 0.5);
+  ctx.stroke();
+  // Restores the COMPARE dash, which is the only layer that calls this.
+  ctx.setLineDash(COMPARE_DASH as number[]);
+}
 
 /**
  * The dash pattern that encodes criticality without relying on colour (WCAG 1.4.1):
@@ -1157,6 +1237,85 @@ export function paintScene(
       ctx.lineWidth = 1;
       ctx.strokeStyle = palette.edge;
     }
+
+    /*
+     * **Layer 2.4: the comparison's changed logic** (ADR-0127) — the differentiating half, because
+     * a re-sequence is only visible as a re-sequence if the links are drawn.
+     *
+     * **ONE router, and the treatment is a stroke style** (spec §4.4 D7). ADR-0065 made obstacle
+     * awareness an optional PARAMETER of `routeOrthogonal` precisely so a second
+     * `routeOrthogonalAvoiding` could not drift invisibly; a ghost router would be that mistake one
+     * epic along. So an ADDED or CHANGED link REUSES the line already computed for this frame —
+     * bundled, obstacle-aware, arrowheaded, identical to the one underneath it — and a REMOVED link
+     * is routed through the SAME `lineOf` closure with a synthetic edge.
+     *
+     * That reuse is what makes the pass cheap: no second routing for the common case, and the
+     * bundling decision above has already been taken over all the lines together.
+     *
+     * REMOVED is drawn dashed and ADDED/CHANGED solid-and-heavier, on top of the base passes, in
+     * the selection colour — a WEIGHT and DASH change alongside the colour, so neither cue is
+     * colour-only (WCAG 1.4.1), matching the incident-highlight passes immediately above.
+     *
+     * **No accessible claim is made for a link, and that is a decision** (spec §4.8): a link is not
+     * a selectable object in this product and there is no listbox of edges, so tier 1 — the change
+     * list, in text — is the route for logic changes. The toggle's own description says so rather
+     * than implying a parity that does not exist (ADR-0122).
+     */
+    if (scene.compareLinks && scene.compareLinks.length > 0) {
+      const byDependencyId = new Map<string, Point[]>();
+      for (const [edge, line] of lines) {
+        if (edge.id !== undefined) byDependencyId.set(edge.id, line);
+      }
+      const removed: Point[][] = [];
+      const present: Point[][] = [];
+      for (const link of scene.compareLinks) {
+        if (link.state === 'REMOVED') {
+          // Not in `scene.edges`, so it has no computed line — routed here through the same
+          // closure the live edges used. `FS` because a removed link's type is not carried: the
+          // picture's claim is "these two were linked", and the change list carries the type.
+          const pred = byId.get(link.predecessorId);
+          const succ = byId.get(link.successorId);
+          if (!pred || !succ) continue;
+          if (!visibleIds.has(link.predecessorId) && !visibleIds.has(link.successorId)) continue;
+          const line = lineOf(
+            {
+              predecessorId: link.predecessorId,
+              successorId: link.successorId,
+              type: 'FS',
+              // Not driving, and no lag: the picture's claim is "these two WERE linked". The
+              // change list carries the type and the lag in text, which is where a reader gets
+              // them (spec §4.8). Inventing a lag here would draw a time-true anchor for a
+              // quantity nobody supplied.
+              isDriving: false,
+            },
+            pred,
+            succ,
+          );
+          if (line) removed.push(line);
+          continue;
+        }
+        const line = byDependencyId.get(link.dependencyId);
+        if (line) present.push(line);
+      }
+      ctx.strokeStyle = palette.selection;
+      if (present.length > 0) {
+        ctx.lineWidth = 3;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        for (const line of present) drawPolyline(ctx, line);
+        ctx.stroke();
+      }
+      if (removed.length > 0) {
+        ctx.lineWidth = 2;
+        ctx.setLineDash(COMPARE_DASH as number[]);
+        ctx.beginPath();
+        for (const line of removed) drawPolyline(ctx, line);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = palette.edge;
+    }
   }
 
   // Layer 2.5: baseline ghost bars (the Baseline overlay lens, `docs/specs/canvas-lenses/`) — the
@@ -1208,6 +1367,66 @@ export function paintScene(
         ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
         if (dimmed) ctx.globalAlpha = 1;
       }
+    }
+    ctx.setLineDash([]);
+  }
+
+  // Layer 2.6: the revision-comparison change picture (ADR-0127) — where the CHANGED bars were on
+  // the old side of the selected pair, drawn as a dashed outline beneath the live bars, with work
+  // that is no longer in the plan struck through.
+  //
+  // **It does NOT cull by `visibleIds`, and that is the one thing to know about this layer.** Its
+  // sibling above does, correctly: a baseline ghost always has a live bar to sit behind, so an
+  // off-screen live bar means an irrelevant ghost. Here, REMOVED work has no live activity at all —
+  // it is not in `scene.activities`, so it is never in `visibleIds`, and culling by it would
+  // silently drop exactly the rows this layer exists to show. The plan for this milestone said to
+  // cull by `visibleIds` first "as the ghost layer already does"; that instruction is right for the
+  // layer it was copied from and wrong here, and following it would have produced an overlay that
+  // looked correct on every plan where nothing had been deleted.
+  //
+  // The cull is therefore the per-ghost `rectsIntersect` alone — the same viewport test the layer
+  // above falls back on for a slipped ghost. `compareGhosts` holds only what CHANGED (the server
+  // decides that, ADR-0126), so the set is already a small fraction of the plan.
+  if (scene.compareGhosts && scene.compareGhosts.length > 0) {
+    const viewport: Rect = { x: 0, y: 0, w: size.width, h: size.height };
+    ctx.strokeStyle = palette.edge;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(COMPARE_DASH as number[]);
+    for (const ghost of scene.compareGhosts) {
+      const startDay = daysBetween(scene.dataDate, ghost.fromStart);
+      const finishDay = daysBetween(scene.dataDate, ghost.fromFinish);
+      const x1 = screenXOfDay(startDay, view);
+      const x2 = screenXOfDay(finishDay + 1, view); // inclusive finish → +1 day right edge
+      const top = screenYOfLane(ghost.laneIndex, view) + (LANE_HEIGHT - BAR_HEIGHT) / 2;
+      if (ghost.isMilestone) {
+        const cx = (x1 + x2) / 2;
+        const cy = top + BAR_HEIGHT / 2;
+        if (
+          !rectsIntersect(
+            {
+              x: cx - MILESTONE_RADIUS,
+              y: cy - MILESTONE_RADIUS,
+              w: MILESTONE_RADIUS * 2,
+              h: MILESTONE_RADIUS * 2,
+            },
+            viewport,
+          )
+        ) {
+          continue;
+        }
+        traceMilestoneDiamond(ctx, cx, cy, MILESTONE_RADIUS, true);
+        ctx.stroke();
+        if (ghost.removed) strikeThrough(ctx, cx - MILESTONE_RADIUS, cy, MILESTONE_RADIUS * 2);
+        continue;
+      }
+      const w = Math.max(2, x2 - x1);
+      if (!rectsIntersect({ x: x1, y: top, w, h: BAR_HEIGHT }, viewport)) continue;
+      ctx.strokeRect(x1 + 0.5, top + 0.5, w - 1, BAR_HEIGHT - 1);
+      // Removed work is distinguished by SHAPE, not by colour (WCAG 1.4.1) — and by a shape that
+      // needs no new token, which also sidesteps the ADR-0100 M4 trap of a canvas pair that is
+      // absent from `@theme inline` and therefore paints nothing at all in a real browser while the
+      // contrast gate stays green.
+      if (ghost.removed) strikeThrough(ctx, x1, top + BAR_HEIGHT / 2, w);
     }
     ctx.setLineDash([]);
   }

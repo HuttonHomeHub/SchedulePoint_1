@@ -503,3 +503,175 @@ describe('RevisionComparePanel', () => {
     expect((await axe(container)).violations).toEqual([]);
   });
 });
+
+describe('the Changes view', () => {
+  const withChanges = (): RevisionCompare => ({
+    ...comparison(),
+    changes: {
+      cap: 200,
+      classes: [
+        {
+          changeClass: 'RENAMED',
+          notAssessableReason: null,
+          rows: [
+            {
+              activityId: 'a1',
+              subjectId: 'a1',
+              changeClass: 'RENAMED',
+              code: 'A10',
+              name: 'Piling',
+              from: 'Piling',
+              to: 'Piling rig',
+              orderKey: '2026-01-05',
+              // The shaded case by default: this row names something the live plan no longer has.
+              existsLive: false,
+            },
+          ],
+          total: 1,
+        },
+        { changeClass: 'RELOGICKED', notAssessableReason: 'NOT_SNAPSHOTTED', rows: [], total: 0 },
+      ],
+    },
+  });
+
+  /**
+   * A reachable change-list row **that appears in no delta list at all**.
+   *
+   * This fixture used to place the activity in the delta's `added`, because reachability was
+   * derived client-side from the delta's rows. It is not any more — the server answers it per row
+   * (`existsLive`) — and the reason is exactly what this fixture now depicts: once the paid classes
+   * landed, most change rows name activities that entered and left nothing, so deriving from the
+   * delta shaded them with a sentence saying they are not in the live plan while the reader could
+   * see the bar.
+   *
+   * The NAME half of the original finding survives and is what the test below still pins: the
+   * panel's fallback lookup searches only `entered` and `left`, so a row like this one announces a
+   * bare "Activity selected in the plan" unless it passes its own name.
+   */
+  const withChangesLive = (): RevisionCompare => {
+    const base = withChanges();
+    const [renamed, ...rest] = base.changes?.classes ?? [];
+    return {
+      ...base,
+      changes: {
+        cap: base.changes?.cap ?? 200,
+        classes: [
+          {
+            ...renamed!,
+            rows: (renamed?.rows ?? []).map((r) => ({ ...r, existsLive: true })),
+          },
+          ...rest,
+        ],
+      },
+    };
+  };
+
+  it('shows NO view switch when the payload carries no change list', () => {
+    // The switch is derived from the payload, not from a flag: a control that appears and then
+    // renders nothing is the dead end this epic's own register entry is about.
+    renderPanel({ compare: comparison() });
+    expect(screen.queryByRole('button', { name: 'Changes' })).not.toBeInTheDocument();
+  });
+
+  it('switches to the change list and back, with the pressed state on the right control', () => {
+    renderPanel({ compare: withChanges() });
+    const changes = screen.getByRole('button', { name: 'Changes' });
+    expect(changes).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(changes);
+    expect(changes).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('group', { name: 'Changes between these revisions' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Critical path' }));
+    // By ROLE, not by text: the phrase appears as a heading and inside a section's own copy, so a
+    // bare text query is ambiguous — and an ambiguous locator is how a suite comes to assert on
+    // whichever node happens to be first.
+    expect(screen.getByRole('region', { name: /Entered the critical path/i })).toBeVisible();
+  });
+
+  it('renders a class it could not assess as a REASON, never as "no changes"', () => {
+    // The epic in one assertion. An empty list and an un-looked-at list read identically unless
+    // the product says which it is, and the reassuring reading is the false one.
+    renderPanel({ compare: withChanges() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    const logic = screen.getByRole('region', { name: 'Logic changed' });
+    expect(within(logic).getByText(/cannot be compared/i)).toBeVisible();
+    expect(within(logic).queryByText(/No changes in this revision/i)).not.toBeInTheDocument();
+  });
+
+  it('shades a row whose activity is not in the live plan, with a reason', () => {
+    renderPanel({ compare: withChanges() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    // The SERVER said so: this row's `existsLive` is false. The client no longer infers it.
+    const row = screen.getByRole('button', { name: /A10/ });
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    // **The reason is the DESCRIPTION, and the name is the row.** Asserted on the accessible name
+    // itself rather than on "the sentence is somewhere inside the button", which is what the first
+    // version did and what let the sentence sit in the name for a whole milestone: a
+    // `{ name: /A10/ }` regex matches a polluted name just as happily. ADR-0109 records this exact
+    // shape shipping once before, for the same reason.
+    // Asserted as an ABSENCE from the name plus a presence in the description, rather than as an
+    // exact name string: jsdom's name computation concatenates the two spans without a separator
+    // ("A10Piling → Piling rig"), which is a property of the accumulator and not of the markup, and
+    // pinning it would make this case fail on a whitespace change that no reader would notice.
+    expect(row).not.toHaveAccessibleName(/not in the live plan/i);
+    expect(row).toHaveAccessibleDescription(/not in the live plan/i);
+    expect(within(row).queryByText(/cannot be shown on the diagram/i)).not.toBeInTheDocument();
+  });
+
+  it('announces the settled change list ONCE, and not again on a re-render', () => {
+    // The `spokenRef` guard, pinned. Its docblock cites the ADR-0079 stale-debounce lesson by
+    // name — a re-render must not re-arm the message, or a later one overwrites it — and nothing
+    // asserted it, while the panel's own sibling settle effect two components away IS pinned.
+    // Found by the component review, not by anything failing.
+    // **Cleared HERE, because `announce` is one module-level `vi.fn()` with no `beforeEach` in
+    // this file** — so a count taken without clearing measures every test that ran before it. The
+    // first version of this case asserted 1 and got 4, which was the suite's history and not a
+    // defect in the component.
+    announce.mockClear();
+    const compare = withChanges();
+    const { rerender, props } = renderPanel({ compare });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    const spoken = announce.mock.calls.filter((c) => String(c[0]).includes('categories'));
+    expect(spoken).toHaveLength(1);
+    // Same report object, new render: the guard is identity-keyed, so nothing re-announces.
+    rerender(<RevisionComparePanel {...props} />);
+    expect(announce.mock.calls.filter((c) => String(c[0]).includes('categories'))).toHaveLength(1);
+  });
+
+  it('offers to reveal a row that appears in NO delta list', () => {
+    // The M5 defect this exists to prevent. A re-laned, re-parented or progressed activity enters
+    // and leaves nothing, so it is in none of the delta's four lists — and under the old
+    // client-side derivation every such row was shaded with a sentence claiming it is not in the
+    // live plan, about a bar the reader can see. Verified red against that derivation.
+    renderPanel({ compare: withChangesLive() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    const row = screen.getByRole('button', { name: /A10/ });
+    expect(row).not.toHaveAttribute('aria-disabled', 'true');
+    expect(within(row).queryByText(/cannot be shown in the diagram/i)).not.toBeInTheDocument();
+  });
+
+  it('NAMES the activity when a change-list row is activated', () => {
+    // Reachability is derived from FOUR lists (entered, left, added, removed); the panel's name
+    // lookup searches TWO. So a change-list row whose activity sits in `added` or `removed` is
+    // pressable and announces a bare "Activity selected in the plan" — the name withheld from the
+    // one reader with no other way to learn which row they pressed. The row carries its own name
+    // and now passes it.
+    //
+    // **The first version of this test passed with the fix removed**, because its fixture put the
+    // row in `entered`, where the fallback finds the name anyway. It asserted a true thing for a
+    // reason that was not the fix, and the "verified red" note beside it was false until the
+    // fixture was rebuilt on the reachable case. Verified red for real: without the second
+    // argument this announces "Activity selected in the plan.".
+    const onActivateActivity = vi.fn();
+    renderPanel({ compare: withChangesLive(), onActivateActivity });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: /A10/ }));
+    expect(onActivateActivity).toHaveBeenCalledWith('a1');
+    expect(announce).toHaveBeenCalledWith('Piling selected in the plan.');
+  });
+
+  it('has no axe violations in the change list', async () => {
+    const { container } = renderPanel({ compare: withChanges() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    expect((await axe(container)).violations).toEqual([]);
+  });
+});

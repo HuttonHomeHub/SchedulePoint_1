@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 60 migrations, 1149 web
+> (`apps/api/src/modules/`), 30 Prisma models across 61 migrations, 1153 web
 > source files with 42 Playwright suites beside the base journey, and
-> 125 ADRs.
+> 127 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -108,7 +108,7 @@ SchedulePoint/
 │   │   ├── src/modules/      #   23 feature modules
 │   │   ├── src/modules/schedule/engine/  # The pure CPM/GPM engine
 │   │   ├── src/common/       #   Auth, guards, filters, locks, lifecycle
-│   │   ├── prisma/           #   Schema (29 models) + 60 migrations
+│   │   ├── prisma/           #   Schema (30 models) + 61 migrations
 │   │   └── test/             #   Supertest API e2e specs (+ test/pairwise/)
 │   └── seed-cli/             # `schedulepoint-seed` — seeds the catalogue (ADR-0066)
 ├── packages/
@@ -3913,6 +3913,104 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   while every height assertion passed. **The CPM engine is not imported and no migration runs** in
   M1–M4; the two schema changes shipped ahead of them, one release apart, so their halves could fail
   separately.
+
+- **ADR-0126** _(Accepted; M4–M5 landed 2026-09-06)_ — A baseline freezes the plan's shape, or a
+  comparison invents it. ADR-0125's change list could report eight classes and not six, for one
+  reason: **a baseline freezes the engine's OUTPUT and almost none of its INPUT**. Identity, type,
+  duration, dates, float and criticality were all there; logic, constraints, calendar, WBS parent,
+  lane and progress were not — so the tool that exists to show logic could not tell a planner the
+  logic had changed. Ten nullable columns on `baseline_activities` plus a `baseline_dependencies`
+  table close it, and **no backfill is possible, ever**: writing today's graph into a historic
+  snapshot would state as history something that baseline never saw. Put to the product owner as an
+  extension whose value is entirely prospective; they shipped it, because the alternative is that it
+  is still not recorded a year from now.
+  **The load-bearing decision is that the discriminator is a capture-level column and is the only
+  answer.** `revision_snapshot_level` is written `FULL` **unconditionally**, including for a plan
+  with no logic at all — zero edge rows on a FULL baseline means "there genuinely were none", zero
+  on a NONE baseline means nobody looked, a row count cannot tell those apart, and this column is
+  the only thing that can (the `costSnapshotLevel` rule, ADR-0071 M3, one column along). **Not one
+  of the ten columns carries a DEFAULT**, and `lane_index` is why: the live column is
+  `NOT NULL DEFAULT 0`, and **lane 0 is a real lane** exactly as 0 % is a real progress figure — so
+  mirroring it would tell every pre-migration baseline that all its activities sat in the top row
+  and none had started, a confident fabricated picture a ghost layer would paint. That is
+  `budgetedExpense`'s "0 is a claim" arriving where the temptation to mirror is strongest; the
+  `hours_per_day_minutes DEFAULT 1440` precedent licenses nothing, since 1440 was **true of every
+  pre-existing row** and none of these values is knowable for any. Per-row sentinels are refused for
+  the same reason and this is where ADR-0125's criticality precedent **stops applying**: those four
+  columns have no legitimate null and these ten all do. A pair either side of the line therefore
+  reports each paid class as **not assessable with a reason**, never as "no change" and never as a
+  zero.
+  **Three things were established by running rather than reading.** A comment called the
+  paid-class filter the guarantee; removing each candidate in turn showed `assess` is (six cases
+  red) and the filter is a saving, and the comment now says which — ADR-0076 Class 3 caught inside
+  the epic that quotes it. `is_driving` is frozen and **omitted from the projection** rather than
+  merely left uncompared, because it is the engine's output and comparing it would fire "Logic
+  changed" on every recalculation of an untouched graph; a lag calendar likewise counts only
+  alongside a lag, since switching it on a zero-lag link changes no date and renders two identical
+  labels. And `existsLive` moved to the **server, per row**: the client derived it from the delta's
+  own rows, which was conservative while only the free classes existed and becomes **false** with
+  the paid ones — an activity moved to another lane enters and leaves nothing, so it is in no delta
+  list, and the row would have been shaded with a sentence saying it is not in the live plan about a
+  bar the reader can see. Worse than a missing control, because it states something untrue.
+  `RevisionChangeRow` gains `subjectId` because a logic row's subject is an **edge**: two changed
+  links into one successor are two rows with one `activityId`, and keying on the activity would
+  render them as one; keying the diff on the dependency id is also what keeps an edge whose
+  endpoints were both deleted to a single row rather than one per endpoint.
+  **A fourth child table now hangs off `baseline`, and adding it broke 557 of 587 API e2e tests at
+  once** on a RESTRICT foreign key. That is the loud failure mode; the quiet one is the ADR-0096
+  retention runner, which catches, logs a permanent failure and retries every hour forever — which
+  is why M4 gave that path a DMMF-derived census. Thirteen hand-maintained copies of the delete
+  sweep are `docs/TECH_DEBT.md` #253. **The CPM engine is not imported and the ADR-0034
+  recalculation parity gate is untouched by construction** — the capture reads columns and writes
+  columns, and `computeSchedule` has never seen any of them.
+
+- **ADR-0127** _(Accepted; M6–M7 landed 2026-09-06)_ — An overlay draws what it knows, and counts
+  what it does not. ADR-0125 gave a planner the delta in words and ADR-0126 the change list; both
+  are lists, and a list is the wrong shape for "show me what changed" — a re-sequenced programme
+  reads as a re-sequence on a diagram and as thirty rows in a table. The obvious version, drawing
+  the old plan behind the new one, was put to the product owner with its costs and **rejected**
+  (CQ-2): a ghost behind every unchanged bar is a picture of the plan rather than of what happened
+  to it, and doubles a painter `docs/TECH_DEBT.md` #75 already measures at 10.2 % dropped frames at
+  Fit. So the overlay paints the **difference** — a bar is ghosted when it moved or is gone, and a
+  rename gets no ghost because its bar is in the same place.
+  **The load-bearing decision is that the lane is recorded, never guessed.** A removed activity has
+  no bar, no cull entry and no listbox row; putting it somewhere plausible would be a false
+  statement about where the work was, so it is drawn in its **frozen** lane (ADR-0126) — which is
+  why the product owner asked for `lane_index` to be frozen even though only the difference is
+  painted (CQ-2b), and which **disposes of the plan's "reserved band below the scene"**, a remedy
+  designed for a guess that no longer has to be made. What cannot be drawn is **counted beside the
+  array, never folded into its length**: a table can say "showing 10 of 250" and a diagram cannot,
+  so a picture quietly missing rows is unnoticeable — the absence this whole programme exists to
+  remove, arriving where a reader has no way to check it.
+  **One router, and the treatment is a stroke style** (ADR-0065's rule, ADR-0121's finding a third
+  time): an added or changed link reuses the line the frame already computed, and a removed link
+  goes through the same closure with a synthetic edge. Removed work is distinguished by **shape** —
+  a strike-through, a dash — not a second colour, which keeps WCAG 1.4.1 and needs no new canvas
+  token, structurally avoiding ADR-0100 M4's defect of a pair absent from `@theme inline` painting
+  nothing at all in a real browser while the contrast gate stays green.
+  **The layer deliberately does NOT cull by `visibleIds`, and its sibling does.** The milestone's
+  own plan said it should — "as the ghost layer already does" — and that instruction is right for
+  the layer it was copied from and wrong here: `visibleIds` comes from `scene.activities`, removed
+  work is by definition not there, and following it would have produced an overlay that looked
+  correct on every plan where nothing had been deleted. Verified red against exactly that cull.
+  **No accessible claim is made for a link, and the product says so** (ADR-0122): a changed activity
+  already has a listbox row, a removed one gets a non-focusable `sr-only` list **inside** the
+  diagram region, and a link gets a **count** plus "Logic changes are listed in words under
+  Changes." — because a link is not a selectable object here and inventing an edge list would invent
+  an interaction no other surface offers. The spoken summary walks the same array the painter walks,
+  which is what stops the picture and its description disagreeing.
+  **Composed into the export rather than filed as screen-only**, because it is the one lens whose
+  whole purpose is to be handed to somebody who was not in the room; the derived scene-parity gate
+  forced the decision instead of letting it be deferred with #167. **Default off, and the paint cost
+  is UNANSWERED**: the M0 harness works and refused to judge, because the baseline — the shipped
+  painter with no treatment — moved 0.56→1.85 pp at 1646 and 0.93→10.00 pp at 1920 between two runs
+  an hour apart with no code change, against a 2.00 pp bar. The environment is recorded as
+  **disqualified**; a headed run on real hardware is owed and outside this epic. Two more defects
+  were found by running rather than reading: the edge loading was gated on `include=changes`, so
+  `include=ghosts` alone received two empty edge sets and lit nothing (the ADR-0081 shape, caught by
+  the API e2e on its first run); and the journey's own seed, re-typing a link to create one, changed
+  the seeded topology and took `Cladding` off the critical path. **The CPM engine is not imported
+  and the ADR-0034 parity gate is untouched by construction.**
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

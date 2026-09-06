@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { scaleSpec } from '@repo/seed';
+// Subpath, not the barrel — see `docs/specs/seed-browser-safe/`.
+import { scaleSpec } from '@repo/seed/scale';
 
 import {
   createClient,

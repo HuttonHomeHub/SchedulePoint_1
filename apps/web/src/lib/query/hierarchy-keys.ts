@@ -220,8 +220,28 @@ export const scheduleKeys = {
   // recalculation, so a comparison held across one would be stale about the half a planner is
   // most likely to be watching. The revision ids are part of the key: two comparisons of one plan
   // are two documents, not one refetched.
-  revisionCompare: (orgSlug: string, planId: string, from: string, to: string) =>
-    [...scheduleKeys.all(orgSlug), 'plan', planId, 'revision-compare', from, to] as const,
+  /**
+   * `includes` is part of the key, not a detail. The route's opt-in projections change the SHAPE of
+   * the response, so a cached delta-only payload served to the change list would render a panel
+   * with no classes and no reason — the exact "absence a reader cannot tell from a fact" this
+   * feature exists to remove, arriving through the cache.
+   */
+  revisionCompare: (
+    orgSlug: string,
+    planId: string,
+    from: string,
+    to: string,
+    includes: readonly string[] = [],
+  ) =>
+    [
+      ...scheduleKeys.all(orgSlug),
+      'plan',
+      planId,
+      'revision-compare',
+      from,
+      to,
+      ...includes,
+    ] as const,
   // The resource-loading histogram read-model (M7 rung 5, ADR-0044 §3): a pure GET over the live
   // schedule + resource assignments, keyed under the same schedule namespace as the summary so a
   // recalc's schedule invalidation sweeps it too (dates move each assignment's units-over-time).

@@ -149,3 +149,5 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0123](0123-a-search-param-is-a-string-and-the-shape-is-decided-at-the-router.md)       | A search param is a string, and the shape is decided at the router      | Accepted           |
 | [0124](0124-a-register-parser-finds-by-structure-and-refuses-by-declaration.md)         | A register parser finds by structure and refuses by declaration         | Accepted           |
 | [0125](0125-a-delta-is-not-a-cause.md)                                                  | A delta is not a cause, and the snapshot already exists                 | Accepted           |
+| [0126](0126-a-baseline-freezes-the-plans-shape-or-a-comparison-invents-it.md)           | A baseline freezes the plan's shape, or a comparison invents it         | Accepted           |
+| [0127](0127-an-overlay-draws-what-it-knows-and-counts-what-it-does-not.md)              | An overlay draws what it knows, and counts what it does not             | Accepted           |

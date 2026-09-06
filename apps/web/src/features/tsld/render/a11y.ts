@@ -161,6 +161,86 @@ export function baselineGhostClause(
   return ` (baseline ${span}${view}${variance})`;
 }
 
+/**
+ * The spoken equivalent of the revision-comparison change picture (ADR-0127) — a list of the work
+ * the overlay draws that a screen-reader user has **no other route to**.
+ *
+ * The canvas is `aria-hidden` and its parallel listbox is built from the plan's LIVE activities
+ * (ADR-0063), so a removed activity has no row there and no bar to focus: the picture would say
+ * something to a sighted planner that it says to nobody else (WCAG 1.4.1). Activities that merely
+ * MOVED are already reachable — their live row exists and gains a clause — so only removals are
+ * listed here.
+ *
+ * **Returns the sentences and not the markup**, so the one caller decides where they live: inside
+ * the diagram region, because a landmark-navigating reader lands INSIDE a region and never passes
+ * a preceding sibling (ADR-0122 D2).
+ *
+ * `undrawable` is stated rather than dropped: a diagram has no "showing N of M", so a picture
+ * quietly missing rows is unnoticeable — see `RevisionCompare.ghostsUndrawable`.
+ */
+export function compareOverlaySummary(
+  ghosts: readonly { name: string; removed: boolean }[],
+  undrawable: number,
+  /**
+   * The changed-link counts. Stated as a NUMBER and never as a list of links, because a link is not
+   * a selectable object in this product and there is no listbox of edges — inventing one would
+   * invent an interaction no other surface offers (spec §4.8, ADR-0122). The sentence points at the
+   * change list, which carries every logic change in words.
+   */
+  links: { readonly drawn: number; readonly undrawable: number } = { drawn: 0, undrawable: 0 },
+): {
+  readonly heading: string;
+  readonly removed: readonly string[];
+  /** How many changed things the picture could not draw — bars plus links. */
+  readonly undrawn: number;
+  /** The VISIBLE sentence for that count. Empty when there is nothing withheld. */
+  readonly undrawnLabel: string;
+} | null {
+  if (ghosts.length === 0 && undrawable === 0 && links.drawn === 0 && links.undrawable === 0) {
+    return null;
+  }
+  const removed = ghosts.filter((g) => g.removed).map((g) => g.name);
+  const moved = ghosts.length - removed.length;
+  const parts: string[] = [];
+  if (moved > 0) parts.push(`${String(moved)} moved`);
+  if (removed.length > 0) parts.push(`${String(removed.length)} removed`);
+  if (undrawable > 0) {
+    // Never "0 undrawable" and never silence: the reader is told the picture is incomplete AND why,
+    // because "the old revision did not record where they were" is a fact about the snapshot and
+    // not a fault they can act on.
+    parts.push(
+      `${String(undrawable)} not shown because the old revision did not record where they were`,
+    );
+  }
+  if (links.drawn > 0) {
+    parts.push(`${String(links.drawn)} changed ${links.drawn === 1 ? 'link' : 'links'}`);
+  }
+  if (links.undrawable > 0) {
+    parts.push(
+      `${String(links.undrawable)} changed ${links.undrawable === 1 ? 'link' : 'links'} not shown ` +
+        `because an activity they joined is no longer in the plan`,
+    );
+  }
+  const logic =
+    links.drawn > 0 || links.undrawable > 0
+      ? ' Logic changes are listed in words under Changes.'
+      : '';
+  const undrawn = undrawable + links.undrawable;
+  return {
+    heading: `Comparison overlay: ${parts.join(', ')}.${logic}`,
+    removed,
+    undrawn,
+    // One sentence for both kinds, because the reader's question is "is this picture complete?"
+    // and the answer is no for the same reason in both cases: the old side did not record enough
+    // to place the thing. Never rendered as "0 not shown" — see the caller's guard.
+    undrawnLabel:
+      undrawn === 0
+        ? ''
+        : `${String(undrawn)} ${undrawn === 1 ? 'change is' : 'changes are'} not shown — the ` +
+          `earlier revision did not record where they were.`,
+  };
+}
+
 /** The parts of one parallel-listbox row, in the order they are spoken. */
 export interface ListboxRowParts {
   /** The memoised Tier-1 sentence ({@link describeActivity}). */
@@ -172,6 +252,29 @@ export interface ListboxRowParts {
   baseline?: string | undefined;
   /** {@link wbsGroupClause} for this row, when the WBS colour lens is the active mode. */
   wbsGroup?: string | undefined;
+  /** {@link compareClause} for this row, when the comparison overlay draws it a ghost. */
+  compare?: string | undefined;
+}
+
+/**
+ * The spoken twin of ONE compare ghost — where this activity was in the earlier revision.
+ *
+ * The sibling of {@link baselineGhostClause}, and it exists for the identical reason: the canvas is
+ * `aria-hidden`, so a dashed outline saying "this bar used to be here" reaches a sighted planner
+ * and nobody else (WCAG 1.4.1). ADR-0127 D6 asserted that a changed activity "already has a route,
+ * it is an option in the parallel listbox" — true about the ROW existing and silent about the
+ * comparison, which is a different claim; the M8 accessibility review caught the gap, and the
+ * epic's own plan had called this clause "real work, and it is not optional".
+ *
+ * Returns `''` where the overlay draws no ghost for the row — absence is not narrated — which is
+ * the same test the painter applies, because both walk the same gated array.
+ */
+export function compareClause(ghost: { fromStart: string; fromFinish: string }): string {
+  const span =
+    ghost.fromFinish !== ghost.fromStart
+      ? `${formatCalendarDate(ghost.fromStart)} to ${formatCalendarDate(ghost.fromFinish)}`
+      : formatCalendarDate(ghost.fromStart);
+  return ` (earlier revision ${span})`;
 }
 
 /**
@@ -187,7 +290,7 @@ export function composeListboxRowText(parts: ListboxRowParts): string {
   const reasons = parts.dimReasons ?? [];
   const dim = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
   const overAllocated = parts.overAllocated === true ? ' (over-allocated)' : '';
-  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}`;
+  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}${parts.compare ?? ''}`;
 }
 
 /**

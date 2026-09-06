@@ -550,7 +550,13 @@ describe('weight is a governed axis', () => {
   // line of body copy below two heavier section headings — the M4 ux review's hierarchy finding. A
   // screen emphasising its own headline is what this ceiling governs rather than forbids; a
   // decision leaking out of a primitive is what it stops.
-  const SCREEN_WEIGHT_CEILING = 167;
+  // ...and 167 -> 168 (revision changes M2): ONE weight, on the change list's section headings, so
+  // they match `MovedSection`'s h3 in the same panel — the two views of one comparison would
+  // otherwise weight their headings differently for no reason a reader could infer. The row's own
+  // code span was written with a weight too and it came OUT rather than the ceiling going up by
+  // two: the values beside it are already `text-muted-foreground`, so the weight was a second
+  // channel doing the first one's job, which is what this ratchet is for.
+  const SCREEN_WEIGHT_CEILING = 168;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

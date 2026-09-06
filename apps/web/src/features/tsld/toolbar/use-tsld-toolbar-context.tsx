@@ -72,6 +72,7 @@ export function useTsldToolbarContext({
   toggleFloatPaths = () => {},
   toggleHealthCheck = () => {},
   toggleRevisionCompare = () => {},
+  hasRevisionPair = false,
   planView = DEFAULT_PLAN_VIEW_MODE,
   ganttColumns,
   barDateSource,
@@ -80,6 +81,12 @@ export function useTsldToolbarContext({
 }: {
   model: PlanWorkspaceModel;
   plan: LoadedPlan;
+  /**
+   * Whether the comparison dock has BOTH sides of a pair chosen (ADR-0127). Passed in rather than
+   * read from `model`, because it is the dock's own transient selection and not plan data — the
+   * same reason `toggleRevisionCompare` above is a callback and not a model field.
+   */
+  hasRevisionPair?: boolean;
   canvasUi: TsldCanvasUiState;
   openDialog: (kind: PlanDialogKind) => void;
   /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
@@ -253,6 +260,7 @@ export function useTsldToolbarContext({
     toggleFilterAttr,
     setColourMode,
     toggleBaselineOverlay,
+    toggleCompareOverlay,
     navState,
     toggleIsolate,
     setIsolateMode,
@@ -561,6 +569,9 @@ export function useTsldToolbarContext({
       setColourMode,
       baselineOverlay: lensState.baselineOverlay,
       toggleBaselineOverlay,
+      compareOverlay: lensState.compareOverlay,
+      toggleCompareOverlay,
+      hasRevisionPair,
       hasActiveBaseline,
       varianceLoading,
       varianceError,
@@ -911,6 +922,8 @@ export function useTsldToolbarContext({
     toggleFilterAttr,
     setColourMode,
     toggleBaselineOverlay,
+    toggleCompareOverlay,
+    hasRevisionPair,
     hasActiveBaseline,
     varianceLoading,
     varianceError,

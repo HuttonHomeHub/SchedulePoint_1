@@ -85,6 +85,7 @@ import {
   LIVE_REVISION,
   REVISION_PANEL_MIN_WIDTH,
   RevisionComparePanel,
+  REVISION_COMPARE_INCLUDES,
   useRevisionCompare,
   useRevisionComparePanelPrefs,
 } from '@/features/revision-compare';
@@ -234,6 +235,16 @@ export function ToolbarPlanWorkspace({
   const [revisionRevealId, setRevisionRevealId] = useState<string | null>(null);
   const [revisionFrom, setRevisionFrom] = useState<string | null>(null);
   const [revisionTo, setRevisionTo] = useState<string>(LIVE_REVISION);
+  /**
+   * Whether a comparison pair is chosen — derived from the PICKERS and never from the payload.
+   *
+   * A stale query result outliving a cleared pair would otherwise leave the `Compare on diagram`
+   * toggle enabled over a comparison nobody selected (M6-T2's second refusal); and an empty ghost
+   * array is a real answer meaning "nothing moved", not "no pair", so inferring from it would
+   * refuse the overlay with a sentence telling the planner to choose two revisions they already
+   * chose. `to` always has a value (it defaults to the live plan), so the pair turns on `from`.
+   */
+  const hasRevisionPair = revisionFrom !== null;
   // **One closure over the set** (health M2-T2 step 7): each dock's closer, keyed by the member
   // name, and `closeOtherDocks` derives what to close from `docksToClose` — so a fourth dock is one
   // map entry, never six hand-written statements of which five get written. Defined above every
@@ -437,6 +448,7 @@ export function ToolbarPlanWorkspace({
     legend: { open: legend.open, toggle: legend.toggle },
     minimap: { open: minimap.open, toggle: minimap.toggle },
     revealComments,
+    hasRevisionPair,
     toggleFloatPaths,
     toggleHealthCheck,
     toggleRevisionCompare,
@@ -648,7 +660,22 @@ export function ToolbarPlanWorkspace({
     revisionFrom,
     revisionTo,
     revisionsDockActive,
+    // **The change list is requested here or it does not exist.** The panel renders its view
+    // switch only when the payload carries `changes`, so omitting this include would leave the
+    // whole milestone dark behind a control nobody can reach — ADR-0081's shape, which this
+    // register has now recorded five times. Progress is deliberately NOT requested: it moves on
+    // nearly every activity every week and would bury the classes that explain a date move.
+    //
+    // `ghosts` rides along for the same ADR-0081 reason `changes` does: the `Compare on diagram`
+    // toggle is derived from a pair being chosen, so omitting the include would leave a lit control
+    // that draws nothing. It costs one array on a response the dock has already asked for, and
+    // only for CHANGED activities.
+    REVISION_COMPARE_INCLUDES,
   );
+  const compareGhosts = revisionCompare.data?.ghosts;
+  const compareLinks = revisionCompare.data?.links;
+  const compareGhostsUndrawable = revisionCompare.data?.ghostsUndrawable ?? 0;
+  const compareLinksUndrawable = revisionCompare.data?.linksUndrawable ?? 0;
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -842,6 +869,11 @@ export function ToolbarPlanWorkspace({
       canvasUi={canvasUi}
       activities={model.activities.data ?? []}
       dependencies={model.dependencies.data ?? []}
+      compareGhosts={compareGhosts}
+      compareLinks={compareLinks}
+      compareGhostsUndrawable={compareGhostsUndrawable}
+      compareLinksUndrawable={compareLinksUndrawable}
+      hasRevisionPair={hasRevisionPair}
       dataDate={plan.plannedStart}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
       barDateSource={barDateSource}

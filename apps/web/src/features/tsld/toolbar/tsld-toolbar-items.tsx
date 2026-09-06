@@ -273,6 +273,38 @@ const LENS_TOGGLES: readonly LensToggle[] = [
               : undefined,
   },
   {
+    id: 'compare-overlay',
+    group: 'insight',
+    label: 'Compare on diagram',
+    // **The description states what the picture does NOT carry** (spec §4.8, ADR-0122). A link is
+    // not a selectable object in this product and there is no listbox of edges, so a screen-reader
+    // user gets nothing from the lit arrows — the change list is their route, and saying so beats
+    // implying a parity that does not exist.
+    note:
+      'Shows where the changed bars were, what was removed, and which links changed. ' +
+      'Logic changes are listed in words under Changes.',
+    // **Deliberately NOT promoted onto the deck.** The sibling above records the measurement:
+    // one promoted toggle keeps the deck at two lines at 1920 and 1646, three take it to three at
+    // 1646 as well as 1440. A second is not free, and this control is only useful while the
+    // comparison dock is open — which is exactly when the canvas is already narrower.
+    //
+    // Enabled with the comparison feature rather than with the lens flag: it draws no lens, and a
+    // control that appears with the lenses but does nothing without a comparison is the lit-but-
+    // inert dead end this register has recorded four times.
+    enabled: CANVAS_LENSES_ENABLED,
+    checked: (ctx) => ctx.compareOverlay,
+    toggle: (ctx) => ctx.toggleCompareOverlay(),
+    // **The two honest refusals** (M6-T2). In the Gantt there is no diagram to draw on, and with no
+    // pair chosen the overlay would describe a comparison nobody asked for. Both say which; neither
+    // appears on and does nothing.
+    reason: (ctx) =>
+      !ctx.hasDiagram
+        ? LENS_NO_DIAGRAM_REASON
+        : !ctx.hasRevisionPair
+          ? 'Choose two revisions in Compare revisions… first'
+          : undefined,
+  },
+  {
     id: 'resource-view',
     group: 'insight',
     label: 'Resource view',

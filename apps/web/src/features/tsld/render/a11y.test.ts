@@ -7,6 +7,8 @@ import {
   announceChainStep,
   baselineGhostClause,
   chainNeighbour,
+  compareClause,
+  compareOverlaySummary,
   composeListboxRowText,
   describeActivity,
   lagPhrase,
@@ -499,5 +501,61 @@ describe('composeListboxRowText', () => {
       'Excavate (filtered out, off the logic path) (over-allocated) ' +
         '(baseline 01 Jan 2026 to 05 Jan 2026) (group: A200)',
     );
+  });
+});
+
+describe('the comparison overlay’s spoken summary', () => {
+  const ghost = (name: string, removed = false) => ({ name, removed });
+
+  it('is absent when the overlay draws nothing', () => {
+    // A description of a picture nobody is looking at is noise, not an equivalent.
+    expect(compareOverlaySummary([], 0)).toBeNull();
+  });
+
+  it('lists the REMOVED activities and only those', () => {
+    // An activity that merely moved already has a listbox row; a removed one has none, which is
+    // the whole reason this list exists (ADR-0122).
+    const summary = compareOverlaySummary([ghost('Piling'), ghost('Site hoarding', true)], 0);
+    expect(summary?.removed).toEqual(['Site hoarding']);
+    expect(summary?.heading).toContain('1 moved');
+    expect(summary?.heading).toContain('1 removed');
+  });
+
+  it('states what it could NOT draw, and why, rather than going quiet', () => {
+    // A diagram has no "showing N of M", so a picture missing rows is unnoticeable.
+    const summary = compareOverlaySummary([ghost('Piling')], 3);
+    expect(summary?.heading).toContain('3 not shown');
+    expect(summary?.heading).toContain('did not record where they were');
+  });
+
+  it('counts changed links and points at the change list, never listing them', () => {
+    // A link is not a selectable object here and there is no listbox of edges (spec §4.8), so the
+    // honest answer is a count plus the route — not an invented list, and not silence.
+    const summary = compareOverlaySummary([], 0, { drawn: 2, undrawable: 1 });
+    expect(summary?.heading).toContain('2 changed links');
+    expect(summary?.heading).toContain('1 changed link not shown');
+    expect(summary?.heading).toContain('listed in words under Changes');
+  });
+
+  it('says nothing about logic when no link changed', () => {
+    const summary = compareOverlaySummary([ghost('Piling')], 0);
+    expect(summary?.heading).not.toContain('under Changes');
+  });
+});
+
+describe('the per-row compare clause', () => {
+  it('says where the bar WAS, which the canvas can only draw', () => {
+    // ADR-0127 D6 asserted a changed activity "already has a route: it is an option in the
+    // parallel listbox". True about the row and silent about the comparison — a different claim,
+    // and the epic's own plan called this clause "real work, and it is not optional".
+    expect(compareClause({ fromStart: '2026-01-05', fromFinish: '2026-01-09' })).toContain(
+      'earlier revision',
+    );
+    expect(compareClause({ fromStart: '2026-01-05', fromFinish: '2026-01-09' })).toContain('to');
+  });
+
+  it('states a single-day span once rather than as a range to itself', () => {
+    const clause = compareClause({ fromStart: '2026-01-05', fromFinish: '2026-01-05' });
+    expect(clause).not.toContain(' to ');
   });
 });

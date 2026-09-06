@@ -1,4 +1,9 @@
-import { scaleSpec, type SeedActivity, type SeedSpec } from '@repo/seed';
+// **Subpath, not the barrel** (`docs/specs/seed-browser-safe/`). The root export re-exports the
+// fixture tier, which reads the P6 fixture off disk with `node:fs` — so importing a pure object
+// builder from the barrel drags a filesystem reader into a browser bundle and `measure:draw`
+// stops bundling entirely. It did, on 2026-09-05 (`docs/TECH_DEBT.md` #252).
+import { scaleSpec } from '@repo/seed/scale';
+import { type SeedActivity, type SeedSpec } from '@repo/seed/spec';
 
 import type { RenderActivity, RenderEdge } from '../src/features/tsld/render/render-model';
 

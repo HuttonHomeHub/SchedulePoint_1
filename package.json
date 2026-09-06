@@ -41,7 +41,8 @@
     "version-packages": "changeset version",
     "release": "changeset publish",
     "check:frontend-only": "node scripts/check-frontend-only.mjs",
-    "prepush": "bash scripts/prepush.sh"
+    "prepush": "bash scripts/prepush.sh",
+    "check:browser-safe": "node scripts/check-browser-safe.mjs"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",

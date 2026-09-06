@@ -1,4 +1,5 @@
 export {
+  REVISION_COMPARE_INCLUDES,
   useRevisionCompare,
   revisionCompareQueryOptions,
   LIVE_REVISION,

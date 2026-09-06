@@ -71,6 +71,8 @@ export interface TsldCanvasUiState {
   setSearchCursorId: (id: string) => void;
   setColourMode: (mode: ColourMode) => void;
   toggleBaselineOverlay: () => void;
+  /** Toggle the revision-comparison change picture (ADR-0127). */
+  toggleCompareOverlay: () => void;
   /**
    * The **canvas navigation & authoring** view state (spec `docs/specs/canvas-nav/`, behind
    * `VITE_CANVAS_NAV`) — the *Isolate logic path* toggle + chain mode, the *Next conflict* cursor,
@@ -130,6 +132,9 @@ export interface LensState {
   filterAttrs: ReadonlySet<FilterAttr>;
   colourMode: ColourMode;
   baselineOverlay: boolean;
+  /** The revision-comparison change picture (ADR-0127). Session-local like its siblings — an
+   * overlay describing a pair the planner chose in this tab is not a preference to persist. */
+  compareOverlay: boolean;
   /**
    * The last search match the planner jumped to (`VITE_CANVAS_SEARCH_NAV`), or null before the first
    * Enter. It lives here rather than beside `conflictCursorId` in `NavState` because it is **reset by
@@ -145,6 +150,7 @@ const DEFAULT_LENS_STATE: LensState = {
   filterAttrs: new Set<FilterAttr>(),
   colourMode: 'criticality',
   baselineOverlay: false,
+  compareOverlay: false,
   searchCursorId: null,
 };
 
@@ -205,6 +211,10 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
   );
   const toggleBaselineOverlay = useCallback(
     (): void => setLensState((s) => ({ ...s, baselineOverlay: !s.baselineOverlay })),
+    [],
+  );
+  const toggleCompareOverlay = useCallback(
+    (): void => setLensState((s) => ({ ...s, compareOverlay: !s.compareOverlay })),
     [],
   );
   const toggleIsolate = useCallback(
@@ -275,6 +285,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       setSearchCursorId,
       setColourMode,
       toggleBaselineOverlay,
+      toggleCompareOverlay,
       navState,
       toggleIsolate,
       setIsolateMode,
@@ -301,6 +312,7 @@ export function useTsldCanvasUiState(): TsldCanvasUiState {
       setSearchCursorId,
       setColourMode,
       toggleBaselineOverlay,
+      toggleCompareOverlay,
       navState,
       toggleIsolate,
       setIsolateMode,

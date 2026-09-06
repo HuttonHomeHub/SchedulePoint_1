@@ -257,7 +257,14 @@ export class ScheduleController {
     @Query() query: RevisionCompareQueryDto,
   ): Promise<RevisionCompareDto> {
     return RevisionCompareDto.from(
-      await this.service.revisionCompare(principal, orgSlug, planId, query.from, query.to),
+      await this.service.revisionCompare(
+        principal,
+        orgSlug,
+        planId,
+        query.from,
+        query.to,
+        query.include ?? [],
+      ),
     );
   }
 

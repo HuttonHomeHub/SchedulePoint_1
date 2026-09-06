@@ -1,7 +1,13 @@
-import type { RevisionCompare, RevisionMovedActivity } from '@repo/types';
+import type { RevisionClassAssessment, RevisionCompare, RevisionMovedActivity } from '@repo/types';
 
 import './RevisionComparePrintDocument.css';
 
+import {
+  CHANGES_FOOTER,
+  classCountSentence,
+  classTitle,
+  notAssessableSentence,
+} from '../model/change-sentences';
 import {
   carrierChangedSentence,
   completionSentence,
@@ -128,6 +134,26 @@ export function RevisionComparePrintDocument({
         </>
       ) : null}
 
+      {/* **The change list prints too, and it prints the same honesty the screen shows.**
+          ADR-0116 D9 records the inverse as a defect — a printout stating provenance the live
+          panel withheld — so the rule here is symmetry rather than "the paper gets more": a class
+          the panel says it could not assess says exactly that on paper, and one the panel could
+          assess prints its rows. Withheld entirely when the payload carries no change list, so a
+          delta-only comparison prints exactly what it always did. */}
+      {compare.changes ? (
+        <>
+          <h2>What changed</h2>
+          {compare.changes.classes.map((assessment) => (
+            <ChangeClassSection
+              key={assessment.changeClass}
+              assessment={assessment}
+              cap={compare.changes?.cap ?? 0}
+            />
+          ))}
+          <p className="revision-print-footer">{CHANGES_FOOTER}</p>
+        </>
+      ) : null}
+
       <p className="revision-print-footer">{HONESTY_FOOTER}</p>
       <p className="revision-print-footer">{LEVELLING_CAVEAT_PRINT}</p>
     </div>
@@ -208,4 +234,74 @@ function floatCell(days: number | null): string {
 /** Print the comparison — the panel's header button calls this. */
 export function printRevisionCompare(compare: RevisionCompare, deps: PrintDocumentDeps = {}): void {
   mountPrintDocument(<RevisionComparePrintDocument compare={compare} />, deps);
+}
+
+/**
+ * One change class on paper.
+ *
+ * The cap is stated **in words** rather than implied by a shorter table, for the reason the
+ * sibling section records: paper has no "load more", so a reader who is not told the list is
+ * truncated has no way to discover it. And a class that could not be assessed prints its REASON
+ * and no table — never an empty table, which on paper reads as a searched-and-found-nothing.
+ */
+function ChangeClassSection({
+  assessment,
+  cap,
+}: {
+  assessment: RevisionClassAssessment;
+  cap: number;
+}): React.ReactElement {
+  const count = classCountSentence(assessment);
+  const reason =
+    assessment.notAssessableReason === null
+      ? null
+      : notAssessableSentence(assessment.notAssessableReason, assessment.changeClass);
+
+  return (
+    <>
+      <h3>{classTitle(assessment.changeClass)}</h3>
+      {reason !== null ? (
+        <p className="revision-print-statement">{reason}</p>
+      ) : (
+        <>
+          <p className="revision-print-meta">{count}</p>
+          {assessment.total > assessment.rows.length ? (
+            <p className="revision-print-meta">
+              Showing the first {cap} of {assessment.total}. The remainder is not printed.
+            </p>
+          ) : null}
+          {assessment.rows.length > 0 ? (
+            // `<thead>` so the headings repeat on every page — the native pagination the printed
+            // programme relies on (ADR-0059 M4), rather than a fixed header that prints once.
+            //
+            // `data-change-class` is a handle for the journey, and it exists because adding these
+            // tables BROKE an assertion that counted every `tbody tr` in the document. That count
+            // meant "every delta row printed, nothing cropped to a scroll position" — a real
+            // invariant — and a document-wide count stops expressing it the moment the document
+            // grows a second kind of table. The two are now countable apart.
+            <table data-change-class={assessment.changeClass}>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Activity</th>
+                  <th>Before</th>
+                  <th>After</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assessment.rows.map((row) => (
+                  <tr key={row.subjectId}>
+                    <td>{row.code ?? '—'}</td>
+                    <td>{row.name}</td>
+                    <td>{row.from ?? '—'}</td>
+                    <td>{row.to ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </>
+      )}
+    </>
+  );
 }

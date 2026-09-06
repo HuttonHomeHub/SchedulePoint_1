@@ -108,6 +108,7 @@ describe.skipIf(!hasDatabase)('Interchange round-trip fidelity (e2e)', () => {
     // from another suite, not from this one.
     await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
+    await prisma.baselineDependency.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.planShare.deleteMany();
     await prisma.crossPlanDependency.deleteMany();

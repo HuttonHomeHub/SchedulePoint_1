@@ -333,6 +333,39 @@ export const SELECTABLE_CONSTRAINT_TYPES = ['SNET', 'SNLT', 'FNET', 'FNLT', 'MSO
 export const PARKED_CONSTRAINT_TYPES = ['MANDATORY_START', 'MANDATORY_FINISH'] as const;
 
 /** True for a constraint kind the engine parks (applies as `MSO`/`MFO`, not as labelled). */
+/**
+ * **Human labels for the activity type and the constraint kind, defined ONCE.**
+ *
+ * They lived in `apps/web` alone, so the API's change list — which builds its own display strings
+ * — printed the raw enum: a planner reading "TASK → WBS_SUMMARY" or a bare "SNET 2026-02-01". The
+ * M8 ux review caught it and named the maps it should have been using. Moving them here rather
+ * than copying them is the `REVISION_INCLUDES` argument one type along: two lists of labels drift,
+ * and the drift surfaces as one surface calling a thing by a name no other surface uses.
+ *
+ * Exhaustive `Record<…>` in both cases, so a new enum member fails to compile until it is named.
+ * The web re-exports them from their old locations, so no call site changed.
+ */
+export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
+  TASK: 'Task',
+  START_MILESTONE: 'Start milestone',
+  FINISH_MILESTONE: 'Finish milestone',
+  HAMMOCK: 'Hammock',
+  LEVEL_OF_EFFORT: 'Level of effort',
+  WBS_SUMMARY: 'WBS summary',
+  RESOURCE_DEPENDENT: 'Resource-dependent',
+};
+
+export const CONSTRAINT_TYPE_LABELS: Record<ConstraintType, string> = {
+  SNET: 'Start no earlier than',
+  SNLT: 'Start no later than',
+  FNET: 'Finish no earlier than',
+  FNLT: 'Finish no later than',
+  MSO: 'Must start on',
+  MFO: 'Must finish on',
+  MANDATORY_START: 'Mandatory start',
+  MANDATORY_FINISH: 'Mandatory finish',
+};
+
 export function isParkedConstraintType(
   type: ConstraintType,
 ): type is (typeof PARKED_CONSTRAINT_TYPES)[number] {
@@ -2763,6 +2796,154 @@ export interface RevisionCriticalPathDelta {
 }
 
 /** The whole comparison. */
+/**
+ * The change classes decidable from what a baseline already freezes — no migration needed.
+ * A baseline freezes the engine's OUTPUT and almost none of its INPUT, which is exactly why these
+ * eight are free and the six below are not.
+ */
+export const REVISION_FREE_CHANGE_CLASSES = [
+  'ADDED',
+  'REMOVED',
+  'RENAMED',
+  'RECODED',
+  'RETYPED',
+  'REDURATIONED',
+  'REDATED',
+  'CRITICALITY',
+] as const;
+export type RevisionFreeChangeClass = (typeof REVISION_FREE_CHANGE_CLASSES)[number];
+
+/**
+ * The classes that need the snapshot extension. Named here rather than merely omitted: an absent
+ * class and an unchanged one are different facts, and a reader who cannot tell them apart concludes
+ * the plan's logic did not change when nobody ever looked.
+ */
+export const REVISION_PAID_CHANGE_CLASSES = [
+  'RELOGICKED',
+  'RECONSTRAINED',
+  'RECALENDARED',
+  'REPARENTED',
+  'RELANED',
+  'PROGRESSED',
+] as const;
+export type RevisionPaidChangeClass = (typeof REVISION_PAID_CHANGE_CLASSES)[number];
+export type RevisionChangeClass = RevisionFreeChangeClass | RevisionPaidChangeClass;
+
+/** Why a class could not be assessed. NEVER coalesced into "no change". */
+export type RevisionNotAssessableReason = 'NOT_SNAPSHOTTED' | 'SIDE_NOT_SCHEDULED';
+
+export interface RevisionChangeRow {
+  /**
+   * The activity a client may REVEAL when the reader activates this row. For a logic row this is
+   * the **successor**, because a link change decides when the successor can start and that is what
+   * a planner opens the row to look at — the predecessor is named in {@link name}.
+   */
+  readonly activityId: string;
+  /**
+   * The identity of what this row is ABOUT, unique within its class — and therefore the key a
+   * client renders it under.
+   *
+   * Equal to {@link activityId} for every activity-subject class, and to the dependency's id for
+   * `RELOGICKED`. It exists because the subject of a change is not always an activity: two changed
+   * links into one successor are two rows with one `activityId`, so keying on that would collide
+   * the moment logic became comparable. Added with the paid classes rather than retrofitted after
+   * a client rendered two rows as one.
+   */
+  readonly subjectId: string;
+  readonly changeClass: RevisionChangeClass;
+  readonly code: string | null;
+  readonly name: string;
+  /** Both sides' values as short display strings. Null on the side where the row did not exist. */
+  readonly from: string | null;
+  readonly to: string | null;
+  /** The instant the row is ordered by. Ordering is by TIME and never by magnitude. */
+  readonly orderKey: string | null;
+  /**
+   * Whether {@link activityId} is present in the LIVE plan, and therefore whether a client may
+   * offer to reveal it. Answered by the SERVER, exactly as the delta's rows answer it.
+   *
+   * A client cannot derive this from the delta's own rows, and the paid classes are what made that
+   * unarguable: an activity somebody moved to another lane, re-parented or reported progress
+   * against need not have entered or left the critical path, so it appears in no delta list at all.
+   * Inferring "not in the live plan" from that absence puts a **false sentence** on screen for an
+   * activity that is right there in the diagram — worse than a missing control, because it states
+   * something untrue rather than withholding something true.
+   */
+  readonly existsLive: boolean;
+}
+
+export interface RevisionClassAssessment {
+  readonly changeClass: RevisionChangeClass;
+  /** `null` when assessed; a reason when it could not be. */
+  readonly notAssessableReason: RevisionNotAssessableReason | null;
+  /** Always empty when `notAssessableReason` is set — absence is not evidence. */
+  readonly rows: readonly RevisionChangeRow[];
+  /** Rows found BEFORE the cap. "Showing N of M" is never the client's own arithmetic. */
+  readonly total: number;
+}
+
+export interface RevisionChangeReport {
+  /** Every class, assessed or not — total over the union, so a class is never simply missing. */
+  readonly classes: readonly RevisionClassAssessment[];
+  readonly cap: number;
+}
+
+/**
+ * **The opt-in projections, defined ONCE.**
+ *
+ * They were two literals — a union in `apps/web` and a `const` in the API's query DTO — and adding
+ * `ghosts` to one left the other describing a vocabulary the product no longer had. The compiler
+ * caught it only because the new value happened to be used immediately; a projection added and not
+ * used would have sat there as a silent disagreement between what the API accepts and what a client
+ * can name. Same argument as the change classes one type along.
+ *
+ * Absent ⇒ the response is byte-identical to the delta-only one (the ADR-0073 C2 pattern).
+ */
+export const REVISION_INCLUDES = ['changes', 'progress', 'ghosts'] as const;
+export type RevisionInclude = (typeof REVISION_INCLUDES)[number];
+
+/**
+ * One activity's OLD geometry — where a bar was on the `from` side — for a canvas that draws the
+ * difference behind the live scene.
+ *
+ * **Only activities that CHANGED appear here.** The product owner's call (CQ-2, 2026-09-06) was that
+ * the overlay paints the difference and not the whole old scene: a ghost behind every unchanged bar
+ * is a picture of the plan, not of what happened to it.
+ *
+ * `laneIndex` is the **frozen** lane (ADR-0126), never the live one and never a guess. That is what
+ * lets REMOVED work be drawn at all: it has no live activity to sit behind, and a guessed position
+ * would be a false statement about where the work was. On a baseline that never recorded the lane
+ * the activity is **listed and not drawn** — see `RevisionCompare.ghostsUndrawable`.
+ */
+export interface RevisionGhostBar {
+  readonly activityId: string;
+  readonly name: string;
+  /** `YYYY-MM-DD`, both non-null: a row with no old dates contributes no ghost. */
+  readonly fromStart: string;
+  readonly fromFinish: string;
+  readonly laneIndex: number;
+  readonly isMilestone: boolean;
+  /** In the old revision and not in the new. Drawn in a distinct treatment, never as a live bar. */
+  readonly removed: boolean;
+}
+
+/**
+ * One link the comparison found changed — the differentiating half of the change picture
+ * (ADR-0127). A re-sequence is only visible as a re-sequence if the logic is drawn.
+ *
+ * `state` is what happened to the EDGE, not to its endpoints: `ADDED` exists only in the new
+ * revision, `REMOVED` only in the old, `CHANGED` in both with a different type or lag.
+ *
+ * The endpoints are carried because a `REMOVED` edge is in no live edge list — the client cannot
+ * look it up, exactly as it cannot look up a removed activity's bar.
+ */
+export interface RevisionLinkChange {
+  readonly dependencyId: string;
+  readonly predecessorId: string;
+  readonly successorId: string;
+  readonly state: 'ADDED' | 'REMOVED' | 'CHANGED';
+}
+
 export interface RevisionCompare {
   planId: string;
   planName: string;
@@ -2782,4 +2963,44 @@ export interface RevisionCompare {
   settingsVerdict: RevisionSettingsVerdict;
   completion: RevisionCompletion;
   criticalPath: RevisionCriticalPathDelta;
+  /**
+   * The change list — present ONLY when the caller opted in with `?include=changes`.
+   *
+   * Absent rather than empty when not asked for, so a caller that did not opt in receives
+   * byte-identically what it received before this existed (the ADR-0073 C2 projection pattern).
+   * Each class carries its own assessability: a class that could not be judged says so with a
+   * reason and carries no rows, because an empty list and an un-looked-at list are the same thing
+   * to a reader and telling them apart is the point.
+   */
+  readonly changes?: RevisionChangeReport | undefined;
+  /**
+   * The old side's geometry for the changed activities — present ONLY when the caller opted in with
+   * `?include=ghosts`, so a caller that did not ask receives byte-identically what it received
+   * before this existed (the ADR-0073 C2 projection pattern).
+   */
+  readonly ghosts?: readonly RevisionGhostBar[] | undefined;
+  /**
+   * How many changed activities the overlay CANNOT draw, because the old side never recorded where
+   * they were (a baseline captured before ADR-0126). Present alongside `ghosts`.
+   *
+   * A count rather than silence, and never folded into the array's length: a picture missing rows
+   * nobody is told about is the absence this epic exists to remove, arriving in the one place a
+   * reader cannot check it — a diagram has no "showing N of M".
+   */
+  readonly ghostsUndrawable?: number | undefined;
+  /**
+   * How many changed bars there were BEFORE the cap, so a client can say "showing N of M" rather
+   * than compute it (ADR-0116 D3). Present alongside `ghosts`.
+   */
+  readonly ghostsTotal?: number | undefined;
+  /** The changed logic, alongside `ghosts` and under the same `?include=ghosts`. */
+  readonly links?: readonly RevisionLinkChange[] | undefined;
+  /** The pre-cap count of changed links. Same rule as {@link ghostsTotal}. */
+  readonly linksTotal?: number | undefined;
+  /**
+   * Changed links the overlay cannot draw, because an endpoint is not in the live plan and a link
+   * has no geometry of its own — it is anchored to two bars. Stated for the same reason
+   * {@link ghostsUndrawable} is: a diagram has no "showing N of M".
+   */
+  readonly linksUndrawable?: number | undefined;
 }

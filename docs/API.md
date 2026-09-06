@@ -1032,6 +1032,32 @@ problem, and saying so discloses nothing about the organisation's contents.
   capped at 200 with the cap and the true totals in the payload. Shares the
   global 100/60 s budget — measured, not assumed: p95 58.7 ms at 2,000
   activities (`docs/specs/revision-compare-delta/m1-f3-measurement.md`).
+- The same route takes **three opt-in projections** (ADR-0126, ADR-0127), each
+  absent unless asked for so a caller that does not opt in receives
+  byte-identically the delta-only response.
+  - **`?include=changes`** adds the change list — fourteen classes, **total over
+    the vocabulary**, so a class is never simply missing. Each carries its own
+    assessability: a class that could not be judged says so with a
+    `notAssessableReason` and carries **no rows and a zero total that must not be
+    read as "nothing changed"**. `NOT_SNAPSHOTTED` is **permanent for the two
+    revisions involved** — a baseline captured before the snapshot extension
+    recorded no logic, constraints, calendar, WBS parent, lane or progress, and
+    no backfill is possible. Rows are ordered by **time, never by magnitude**;
+    each carries `subjectId` (unique within its class — a logic row's subject is
+    the dependency, not an activity) and `existsLive`, which the **server**
+    answers because a re-laned or progressed activity appears in no delta list at
+    all and a client inferring from that absence would state something untrue.
+    Capped at the same 200 with the true total beside it.
+  - **`?include=progress`** additionally assesses the progress class, off by
+    default because it moves on nearly every activity every week.
+  - **`?include=ghosts`** adds the change picture's geometry: `ghosts` (where the
+    **changed** bars were, in their **frozen** lane, including work no longer in
+    the plan) and `links` (which links were added, removed or re-authored).
+    Neither is capped, and both are bounded by what CHANGED rather than by the
+    plan. Each carries a companion count — `ghostsUndrawable`, `linksUndrawable`
+    — for what the old side did not record or the picture cannot anchor; those
+    are **facts a client must render**, because a diagram has no
+    "showing N of M".
 
 ## Authentication
 

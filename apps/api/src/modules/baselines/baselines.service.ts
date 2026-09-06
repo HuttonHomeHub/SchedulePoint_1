@@ -133,6 +133,15 @@ export class BaselinesService {
           planId,
           tx,
         );
+        // The logic half of the snapshot (ADR-0126), under the SAME lock as the activities above,
+        // so the frozen graph and the frozen dates describe one moment. Sequential rather than
+        // concurrent with it: these run on the transaction client, and interleaving two queries on
+        // one connection is not a saving.
+        const dependencies = await this.baselines.loadActiveDependenciesForCapture(
+          organization.id,
+          planId,
+          tx,
+        );
         const projectFinish = latestFinish(activities);
         // Nothing meaningful to freeze: an empty plan, or one that was never
         // calculated (no computed finish). Reject before any write (ADR-0025 Q3).
@@ -209,6 +218,7 @@ export class BaselinesService {
             criticalityRule,
             actorId: principal.userId,
             activities,
+            dependencies,
           },
           tx,
         );

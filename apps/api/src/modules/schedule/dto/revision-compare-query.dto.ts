@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { LIVE_REVISION } from '@repo/types';
-import { IsUUID, Matches } from 'class-validator';
+import { LIVE_REVISION, REVISION_INCLUDES, type RevisionInclude } from '@repo/types';
+import { Transform } from 'class-transformer';
+import { IsArray, IsIn, IsOptional, IsUUID, Matches } from 'class-validator';
 
+import { toArray } from '../../../common/dto/to-array';
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
 /**
@@ -24,6 +26,12 @@ import { UUID_REGEX } from '../../../common/validation/uuid';
  */
 const UUID_PATTERN = UUID_REGEX.source.replace(/^\^/, '').replace(/\$$/, '');
 
+/** The opt-in projections this route understands. */
+// Re-exported from the shared vocabulary rather than declared here: two lists drifted once
+// already, and a projection the API accepts that no client can name is the shape of that drift.
+export { REVISION_INCLUDES };
+export type { RevisionInclude };
+
 export class RevisionCompareQueryDto {
   @ApiProperty({
     format: 'uuid',
@@ -45,4 +53,39 @@ export class RevisionCompareQueryDto {
     message: 'to must be a baseline id or the literal "live".',
   })
   to: string = LIVE_REVISION;
+
+  /**
+   * Opt-in projections. Absent ⇒ the response is **byte-identical** to what it was before the
+   * change list existed, which is what lets a new surface land without touching the shipped one —
+   * the ADR-0073 C2 `?include=attempts` pattern.
+   *
+   * `changes` adds the change list (what was added, removed, renamed, re-coded, re-typed,
+   * re-durationed, re-dated, and what happened to criticality). `progress` additionally assesses
+   * the progress class, which is **deliberately off by default**: progress moves on nearly every
+   * activity every week, so included unasked it would bury the classes that explain a date move —
+   * in exactly the meeting this feature exists for.
+   */
+  @ApiPropertyOptional({
+    enum: REVISION_INCLUDES,
+    isArray: true,
+    description:
+      'Opt-in projections. Absent ⇒ byte-identical to the delta-only response. `changes` adds ' +
+      'the change list; `progress` additionally assesses the progress class, which is off by ' +
+      'default because it moves on nearly every activity every week; `ghosts` adds the old ' +
+      "side's geometry for the activities that CHANGED, which only a canvas needs.",
+  })
+  @IsOptional()
+  // **`?include=changes` arrives as a STRING, not a one-element array.** Without this the single
+  // include — which is exactly what the shipped client sends — fails `@IsArray()` and the whole
+  // route answers 400. It shipped that way for one commit and no unit or API e2e test could see
+  // it: none of the 586 API specs passes `include`, and the panel's own tests are handed a
+  // fixture and never cross the route. The flag-on journey caught it on its first run, which is
+  // the argument ADR-0081 makes for landing a journey at the first user-facing milestone.
+  //
+  // `toArray` is the existing shared helper five other query DTOs already use — a second
+  // normaliser beside them would be the drift this repository keeps recording.
+  @Transform(({ value }: { value: unknown }) => toArray(value))
+  @IsArray()
+  @IsIn(REVISION_INCLUDES, { each: true })
+  include?: RevisionInclude[];
 }

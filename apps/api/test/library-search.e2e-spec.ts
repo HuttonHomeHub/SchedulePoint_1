@@ -82,6 +82,7 @@ describe.skipIf(!hasDatabase)('Library search / filter (e2e)', () => {
     // mechanism caught what the habit lost. That is ADR-0058 working as advertised.
     await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
+    await prisma.baselineDependency.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.activityStep.deleteMany();
     await prisma.resourceAssignment.deleteMany();

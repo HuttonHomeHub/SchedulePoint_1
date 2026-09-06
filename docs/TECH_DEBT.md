@@ -3873,6 +3873,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                         | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | --- | --------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 252 | `pnpm measure:draw` could not bundle: the seed barrel forced a Node-only module on a browser        | 2026-09-06 | `docs/specs/seed-browser-safe/`. `5a5f00da` moved the fixture tier into `packages/seed` and re-exported it from the barrel; that tier imports `@repo/engine-conformance`, which imports `node:fs`, so importing `scaleSpec` dragged a filesystem reader into a browser bundle and the benchmark this repository quotes for every canvas claim stopped bundling for a day. **No user was ever affected** — nothing under `apps/web/src` imports that package — which is exactly why nothing went red. Fixed additively with subpath exports (`./spec`, `./scale`, `./pairwise`, `./negative`, `./fixture`); the root export is untouched. The `--external:node:*` workaround was **removed**, not left, and the bundle verified to build without it. New gate `pnpm check:browser-safe` bundles every browser-side entry point for a browser and was verified red against the real defect — **and its own first run was wrong**, running esbuild from the repo root where it is unresolvable (a transitive Vite dependency) and reading only `stderr` where pnpm writes to `stdout`, so it failed all four entries while printing a blank, confident diagnosis about a widened barrel. A gate that always fails for a reason it misreports trains a reader to ignore it.                                                                                                                                                                                                                                                                                                                                                   |
 | 231 | `sections()` ended a row at the next SAME-level heading, so a `###` row read its neighbour's fields | 2026-09-02 | ADR-0124 and `docs/specs/gate-conventions/`. A section now ends at the next heading of the same level **or shallower**. The falsification condition predicted at most two moved boundaries and named one; **three** move, and the two it missed by reading are the large ones — `docs/RECONCILE.md`'s "Record the pass" (31 → 5 lines) and a `docs/DECISIONS.md` entry silently swallowing **1,160**. Its second half held exactly, so the repair-then-arm branch did not fire: a moved boundary only matters where a body carried a field belonging to another row, and only this document has a field reader. The fixtures then caught an **off-by-one in the fix itself** — every body kept the heading that terminated it, and both consumer gates still reported byte-identical output, because a heading line is not a column-0 field declaration. The row also named `check:doc-links` as a consumer (it imports only node built-ins) and missed `check:reconcile-due` (which does).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 227 | Nothing asserted the register's heading form, so it drifted silently                                | 2026-09-02 | ADR-0124. A10, in **two limbs**: the first refuses a misshapen row heading, the second refuses a `###` that is not a row at all — which the first structurally cannot see, since its predicate only fires on lines already shaped like a row. That second case is not cosmetic: after the depth fix, any `###` inside the detailed region **terminates the row it sits in**. Nine repaired, of two kinds — eight rows in an `### #<n> —` form and one sub-heading demoted to `####`. Both limbs verified red. A10 deliberately does **not** narrow what the parser reads: ADR-0120 Finding 0 says a row in the wrong form is still a row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 222 | `check:counts` read any "N ADRs" in a gated file as a claim about the repository                    | 2026-09-02 | ADR-0124. An **escape**, not a narrowing: an inline code span marks a mention, fenced blocks stay in scope. The row's own proposed remedy — narrow to "the shape a banner claim takes" — was **rejected on measurement**, because four of the six live claim sites are not in a banner (two inside a fenced repository-layout tree, two in plain prose) and narrowing would have silently stopped checking them: this gate's own failure mode, introduced by the fix for a different one. Measured before arming: 19 matches, **0** inside a code span. The failure message names the escape, so an author meets the remedy when the gate fires.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -4062,3 +4063,75 @@ that the recipe has already been got wrong twice in this codebase's record (once
 reason, once by using native `disabled` and losing the reason with the tab stop), and thirteen copies
 is thirteen chances to get it wrong again. The remedy is a `useShadedControl` hook; the trigger is
 the next epic that touches three or more of them.
+
+### 253. Thirteen hand-maintained copies of the baseline-children delete sweep
+
+**Status:** open · **Raised:** 2026-09-06 (revision-compare M5) · **Size:** S · **Owner:** repo
+
+Adding `baseline_dependencies` (ADR-0126) broke **557 of 587** API e2e tests at once, because
+`baseline` has a RESTRICT FK from each of its snapshot children and every place that deletes a
+baseline enumerates those children **by hand**. There are thirteen such places: `test/audit-reset.ts`
+plus twelve e2e specs that roll their own reset, and `common/hierarchy/hierarchy-expiry.runner.ts`
+does the same thing for the retention expiry.
+
+This row is about the **duplication**, not the breakage — the breakage is fixed, and it was the loud
+kind: an FK violation naming the constraint, on the first e2e run, in thirteen files at once. What
+makes it debt is the runner, where the same omission is **quiet**: it catches, logs a permanent
+failure, and retries every hour forever (which is why M4 added a DMMF-derived census for that one).
+A fourteenth child table added by somebody who greps for `baselineAssignment.deleteMany` and finds
+only the file they are editing repeats this, and the specs will tell them loudly while the runner
+will not.
+
+The remedy is one exported `clearBaselineTree(prisma)` the specs and the reset call, derived from
+`Prisma.dmmf` the way `hierarchy-expiry.structural.spec.ts` derives its census. Not done here
+because it is twelve spec files whose resets differ in scope, which is a refactor with no behaviour
+change in the middle of a feature epic. The trigger is the next snapshot child table.
+
+### 254. The revision-compare benchmark never exercises the projections it is quoted for
+
+**Status:** open · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+
+`apps/api/scripts/measure-revision-compare.mts` requests `revision-compare?from=…&to=live` with
+**no `?include=`**, so the 250 ms p95 bar quoted in `docs/API.md` covers only the four-query
+delta-only path. The seven-query path, the change classifier and the two geometry builders are
+never measured end to end — and the shipped client always asks for `changes` and `ghosts`
+together, so the measured configuration is the one nobody runs.
+
+Its seed is also sparser than the density the M8 review used: one dependency per twenty activities,
+against the ~1.6:1 of a real programme. Found by the M8 backend-performance review, which stood up
+a real Postgres at 2,000 activities / 3,200 dependencies and measured the pieces separately —
+every read indexed, `createMany` auto-chunking at 32,766 bind parameters, ~76 ms of DB time added
+to the capture's lock hold, and the classifier linear rather than quadratic. So the parts are
+known; what is not measured is the whole response.
+
+The remedy is to extend F3 (or add a sibling) with `?include=changes,ghosts` at that density. It is
+filed rather than done because the number would be quoted, and a benchmark written at the end of a
+long epic to confirm a bar is the wrong shape of instrument — this one should be written and its
+falsification condition committed before it runs, like every other measurement in this epic.
+
+### 255. Six non-blocking findings from the revision-compare gate pass
+
+**Status:** open · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+
+Each was judged real and not worth holding the release for.
+
+1. **`?include=ghosts` also returns `links`**, and neither the query DTO's description nor the enum
+   says so — a reader learns it only from `@repo/types`. There is no separate `links` value, so
+   this is naming rather than behaviour, but it is a sentence's worth of fix.
+2. **`?include=progress` alone is a silent no-op**: it only has an effect alongside `changes`,
+   because the classifier is only called when the change list is requested. The DTO implies it
+   stands on its own.
+3. **`TsldPanel` gained five props for one feature**, all plucked from one DTO at the call site.
+   The sibling lens threads raw data and derives inside; these could be one `compareChanges`
+   object, cutting the surface and removing the risk of the four being passed out of sync.
+4. **The compare overlay's ADDED/CHANGED link treatment is pixel-identical to the incident-highlight
+   pass** for a selected driving edge — same weight, same dash, same `palette.selection`. WCAG 1.4.1
+   is satisfied (weight and dash differ from colour alone), but a planner with an activity selected
+   while the overlay is on cannot tell "incident to my selection" from "changed in the comparison".
+5. **The overlay survives closing the comparison dock** with nothing on screen naming the pair —
+   `revisionFrom`/`revisionTo` are never cleared on close, so the ghosts remain with no caption.
+6. **`compareOverlaySummary`'s removed list keys on the NAME**, so two removed activities sharing a
+   name produce a duplicate React key. Carrying the id alongside would remove it cheaply.
+
+Findings 4 and 5 are the two worth doing first: both are about a picture that is honest in its
+words and ambiguous on screen, which is the failure mode this epic spent its whole gate pass on.
