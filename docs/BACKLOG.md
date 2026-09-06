@@ -103,27 +103,37 @@ a product idea that has not yet earned a roadmap line:
   so nothing can set it yet), and a **coarse-pointer** pass —
   `docs/TECH_DEBT.md` #133. `PROJECT_BRIEF.md` §8's "edit supported" is
   **substantially** met and deliberately not claimed closed.
-- `L` **Revision Compare — what changed between two revisions, and which change moved the
-  date.** Parked by the product owner on 2026-08-27, recorded here so the shape survives.
-  Three tiers: a change **list** (added/removed/re-dated/re-durationed/re-logicked/
-  re-constrained — the table P6's Claim Digger gives you), the change **picture** (the TSLD
-  painted twice, old revision ghosted under new, changed arrows lit — possible here because
-  the primary surface is a logic diagram, which is exactly what a Gantt-shaped competitor
-  lacks), and the **verdict**: completion slipped N days, here is the chain of changes
-  responsible, ranked by how much each cost. Tier 3 is causal attribution, not a diff — it is
-  answerable here because `computeSchedule` is a pure function with a conformance harness
-  (ADR-0034), so old inputs + one change class at a time can be re-run and measured. **Tier 3
-  is a research milestone and must be gated on a measurement** (the ADR-0100 pattern: prove
-  attribution converges on the seed catalogue's 129-activity fixture before committing).
-  Interchange (ADR-0050) makes the comparison work on _their_ files too — Rev B vs Rev C, both
-  exported from P6 — which is the version somebody pays for.
-  **The blocker, established by reading the schema rather than assuming (2026-08-27):**
-  baselines cannot carry this. `BaselineActivity` holds 25 fields — identity, frozen dates,
-  float, cost — and **there is no `BaselineDependency` model at all** (`grep -c 'model
-BaselineDependency' apps/api/prisma/schema.prisma` returns 0), no constraints, no calendar,
-  no WBS parent. A baseline answers _variance_ (is this activity late against plan); revision
-  comparison needs _what did you change_, which is a fuller **revision snapshot** — a real
-  schema change, so mandatory database-architect (§19.3) plus an ADR before any code.
+- `M` **Revision Compare — the two tiers that did NOT ship, and the one that was refused.**
+  **Tier 3's `how much` half shipped 2026-09-05 (ADR-0125)**, and this entry is rewritten to be
+  about what is left, per this file's own convention — it read "Parked by the product owner on
+  2026-08-27" for a day after the epic merged, which is the failure the entry above it records
+  four times.
+  **Delivered:** `GET …/schedule/revision-compare` and a fourth docked panel off
+  `Analysis ▾ → Compare revisions…` — what entered and left the critical path between two of a
+  plan's computed schedules, how far the completion moved, and which activity carries it, with a
+  printed comparison. **The engine is not imported at all**, because a baseline already freezes the
+  five quantities the delta needs; a baseline now also freezes the four criticality settings its
+  numbers were computed under, so a comparison across a changed rule says so rather than reporting
+  it as work that moved.
+  **Tier 3's `which change` half is REFUSED, not deferred, and that is a measurement rather than an
+  opinion.** Replayed in six orders on the seed catalogue's fixture, the same change scored 30, 18,
+  2 or 0 working days by position alone — 12.9 pp spread against a 10 pp bar, unstable top-three —
+  while the sum was order-free and stable at 139 d in every permutation. The ADR-0100-pattern gate
+  this entry itself demanded was applied and it **failed**, so the product says how much moved and
+  deliberately never says what caused it. Do not re-open it as a scoping decision; re-open it only
+  with a design that supplies the ordering the measurement showed is missing.
+  **Still unbuilt — the change list and the change picture.** The table P6's Claim Digger gives you
+  (added/removed/re-dated/re-durationed/re-logicked/re-constrained), and the TSLD painted twice with
+  the old revision ghosted under the new and changed arrows lit — which is possible here and not in
+  a Gantt-shaped competitor, because the primary surface is a logic diagram. Interchange (ADR-0050)
+  extends both to _their_ files — Rev B vs Rev C, both exported from P6 — which is the version
+  somebody pays for.
+  **Their blocker still holds, re-verified 2026-09-06 rather than carried:** `grep -c 'model
+BaselineDependency' apps/api/prisma/schema.prisma` still returns **0**. A baseline answers
+  _variance_ (is this activity late against plan) and ADR-0125 rode that exactly; a change list
+  needs _what did you change_ — logic, constraints, calendar, WBS parent — which is a fuller
+  **revision snapshot**, so a real schema change, mandatory database-architect (§19.3) and an ADR
+  before any code. Sized `M` rather than `L` now the verdict tier is closed.
 
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
