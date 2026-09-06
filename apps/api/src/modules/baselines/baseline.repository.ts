@@ -309,6 +309,7 @@ export class BaselineRepository {
       code: string | null;
       name: string;
       type: ActivityType;
+      durationMinutes: number;
       isCritical: boolean;
       totalFloat: number | null;
       baselineStart: Date | null;
@@ -322,6 +323,7 @@ export class BaselineRepository {
         code: true,
         name: true,
         type: true,
+        durationMinutes: true,
         isCritical: true,
         totalFloat: true,
         baselineStart: true,
@@ -347,6 +349,7 @@ export class BaselineRepository {
       code: string | null;
       name: string;
       type: ActivityType;
+      durationMinutes: number;
       isCritical: boolean;
       totalFloat: number | null;
       earlyStart: Date | null;
@@ -361,6 +364,7 @@ export class BaselineRepository {
         code: true,
         name: true,
         type: true,
+        durationMinutes: true,
         isCritical: true,
         totalFloat: true,
         earlyStart: true,

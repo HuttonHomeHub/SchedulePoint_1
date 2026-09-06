@@ -29,6 +29,13 @@ export interface RevisionRow {
   readonly code: string | null;
   readonly name: string;
   readonly type: ActivityType;
+  /**
+   * Working minutes, NEVER days. `baselines.hours_per_day_minutes` is frozen per capture
+   * (ADR-0068), so two baselines of one plan can carry different day-to-minute factors and a
+   * days-denominated comparison would report a pure calendar edit as a duration change.
+   * Added by the changes epic; the delta itself does not read it.
+   */
+  readonly durationMinutes: number | null;
   readonly isCritical: boolean;
   /** Working days, in the activity's own calendar. NULL means unknown, never zero. */
   readonly totalFloatDays: number | null;

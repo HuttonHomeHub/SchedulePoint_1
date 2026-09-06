@@ -18,6 +18,7 @@ const row = (o: Partial<RevisionRow> & { activityId: string }): RevisionRow => (
   code: null,
   name: o.activityId,
   type: 'TASK',
+  durationMinutes: 480,
   isCritical: false,
   totalFloatDays: 0,
   earlyStart: '2026-01-01',

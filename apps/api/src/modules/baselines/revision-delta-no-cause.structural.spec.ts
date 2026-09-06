@@ -1,7 +1,9 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+
+import { assertedRevisionSources, REVISION_SOURCE_FLOOR } from './revision-sources';
 
 /**
  * **The comparison never says WHY, and this bans the field that would claim it.**
@@ -24,7 +26,8 @@ import { describe, expect, it } from 'vitest';
  * length and a scan that matched its own prose would be the fourth such gate in this repository.
  */
 const HERE = join(__dirname);
-const SOURCES = ['revision-delta.ts'];
+/** Derived — see `revision-sources.ts`. A literal roster stops covering the family silently. */
+const SOURCES = assertedRevisionSources(HERE);
 
 /**
  * Names that would assert a cause. `driver`/`driving` are deliberately absent: they are the
@@ -49,7 +52,8 @@ describe('the revision delta names no cause', () => {
   it('scanned a non-zero number of delta source files', () => {
     // The pinned positive case. "No banned name appears" passes perfectly against a scan that read
     // nothing at all.
-    expect(readdirSync(HERE).filter((f) => SOURCES.includes(f))).toEqual(SOURCES);
+    expect(SOURCES.length).toBeGreaterThan(0);
+    for (const known of REVISION_SOURCE_FLOOR) expect(SOURCES).toContain(known);
   });
 
   it.each(SOURCES)('%s declares no causal field', (file) => {

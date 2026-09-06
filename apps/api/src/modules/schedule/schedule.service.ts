@@ -1500,6 +1500,7 @@ export class ScheduleService {
         code: string | null;
         name: string;
         type: ActivityType;
+        durationMinutes: number;
         isCritical: boolean;
         totalFloat: number | null;
         baselineStart: Date | null;
@@ -1511,6 +1512,7 @@ export class ScheduleService {
         code: r.code,
         name: r.name,
         type: r.type,
+        durationMinutes: r.durationMinutes,
         isCritical: r.isCritical,
         totalFloatDays: r.totalFloat,
         earlyStart: date(r.baselineStart),
@@ -1522,6 +1524,7 @@ export class ScheduleService {
       code: r.code,
       name: r.name,
       type: r.type,
+      durationMinutes: r.durationMinutes,
       isCritical: r.isCritical,
       totalFloatDays: r.totalFloat,
       earlyStart: date(r.earlyStart),
