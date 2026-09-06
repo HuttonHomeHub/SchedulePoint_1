@@ -7,6 +7,7 @@ import {
   announceChainStep,
   baselineGhostClause,
   chainNeighbour,
+  compareClause,
   compareOverlaySummary,
   composeListboxRowText,
   describeActivity,
@@ -539,5 +540,22 @@ describe('the comparison overlay’s spoken summary', () => {
   it('says nothing about logic when no link changed', () => {
     const summary = compareOverlaySummary([ghost('Piling')], 0);
     expect(summary?.heading).not.toContain('under Changes');
+  });
+});
+
+describe('the per-row compare clause', () => {
+  it('says where the bar WAS, which the canvas can only draw', () => {
+    // ADR-0127 D6 asserted a changed activity "already has a route: it is an option in the
+    // parallel listbox". True about the row and silent about the comparison — a different claim,
+    // and the epic's own plan called this clause "real work, and it is not optional".
+    expect(compareClause({ fromStart: '2026-01-05', fromFinish: '2026-01-09' })).toContain(
+      'earlier revision',
+    );
+    expect(compareClause({ fromStart: '2026-01-05', fromFinish: '2026-01-09' })).toContain('to');
+  });
+
+  it('states a single-day span once rather than as a range to itself', () => {
+    const clause = compareClause({ fromStart: '2026-01-05', fromFinish: '2026-01-05' });
+    expect(clause).not.toContain(' to ');
   });
 });

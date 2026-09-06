@@ -252,6 +252,29 @@ export interface ListboxRowParts {
   baseline?: string | undefined;
   /** {@link wbsGroupClause} for this row, when the WBS colour lens is the active mode. */
   wbsGroup?: string | undefined;
+  /** {@link compareClause} for this row, when the comparison overlay draws it a ghost. */
+  compare?: string | undefined;
+}
+
+/**
+ * The spoken twin of ONE compare ghost — where this activity was in the earlier revision.
+ *
+ * The sibling of {@link baselineGhostClause}, and it exists for the identical reason: the canvas is
+ * `aria-hidden`, so a dashed outline saying "this bar used to be here" reaches a sighted planner
+ * and nobody else (WCAG 1.4.1). ADR-0127 D6 asserted that a changed activity "already has a route,
+ * it is an option in the parallel listbox" — true about the ROW existing and silent about the
+ * comparison, which is a different claim; the M8 accessibility review caught the gap, and the
+ * epic's own plan had called this clause "real work, and it is not optional".
+ *
+ * Returns `''` where the overlay draws no ghost for the row — absence is not narrated — which is
+ * the same test the painter applies, because both walk the same gated array.
+ */
+export function compareClause(ghost: { fromStart: string; fromFinish: string }): string {
+  const span =
+    ghost.fromFinish !== ghost.fromStart
+      ? `${formatCalendarDate(ghost.fromStart)} to ${formatCalendarDate(ghost.fromFinish)}`
+      : formatCalendarDate(ghost.fromStart);
+  return ` (earlier revision ${span})`;
 }
 
 /**
@@ -267,7 +290,7 @@ export function composeListboxRowText(parts: ListboxRowParts): string {
   const reasons = parts.dimReasons ?? [];
   const dim = reasons.length > 0 ? ` (${reasons.join(', ')})` : '';
   const overAllocated = parts.overAllocated === true ? ' (over-allocated)' : '';
-  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}`;
+  return `${parts.description}${dim}${overAllocated}${parts.baseline ?? ''}${parts.wbsGroup ?? ''}${parts.compare ?? ''}`;
 }
 
 /**

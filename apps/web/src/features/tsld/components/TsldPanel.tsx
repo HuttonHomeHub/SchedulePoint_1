@@ -39,6 +39,7 @@ import { resolveDockStrip } from '../model/dock-strip';
 import {
   announceChainStep,
   baselineGhostClause,
+  compareClause,
   compareOverlaySummary,
   chainNeighbour,
   composeListboxRowText,
@@ -1216,6 +1217,23 @@ export function TsldPanel({
   }, [compareOverlay, hasRevisionPair, compareLinks]);
 
   /**
+   * The per-row spoken twin of the comparison overlay — where THIS activity was.
+   *
+   * Built by walking `compareGhostBars`, so a row gets a clause exactly when the picture draws it a
+   * ghost; two derivations would answer "does this bar have a ghost?" differently. Removed
+   * activities are absent by construction: they have no live row to attach a clause to, which is
+   * why the `sr-only` list below exists as their separate route.
+   */
+  const compareClauseById = useMemo<ReadonlyMap<string, string> | undefined>(() => {
+    if (!compareGhostBars) return undefined;
+    const clauses = new Map<string, string>();
+    for (const ghost of compareGhostBars) {
+      if (!ghost.removed) clauses.set(ghost.activityId, compareClause(ghost));
+    }
+    return clauses.size > 0 ? clauses : undefined;
+  }, [compareGhostBars]);
+
+  /**
    * The spoken twin of the comparison overlay. Built by walking `compareGhostBars` — what is
    * DRAWN — rather than the raw prop, so the picture and its description can never disagree about
    * whether the overlay is on.
@@ -1306,6 +1324,7 @@ export function TsldPanel({
           overAllocated: flaggedIds?.has(a.id) ?? false,
           baseline: baselineClauseById?.get(a.id),
           wbsGroup: wbsGroupClauseById?.get(a.id),
+          compare: compareClauseById?.get(a.id),
         }),
       );
     }

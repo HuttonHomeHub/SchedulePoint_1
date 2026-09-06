@@ -4086,3 +4086,52 @@ The remedy is one exported `clearBaselineTree(prisma)` the specs and the reset c
 `Prisma.dmmf` the way `hierarchy-expiry.structural.spec.ts` derives its census. Not done here
 because it is twelve spec files whose resets differ in scope, which is a refactor with no behaviour
 change in the middle of a feature epic. The trigger is the next snapshot child table.
+
+### 254. The revision-compare benchmark never exercises the projections it is quoted for
+
+**Status:** open · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+
+`apps/api/scripts/measure-revision-compare.mts` requests `revision-compare?from=…&to=live` with
+**no `?include=`**, so the 250 ms p95 bar quoted in `docs/API.md` covers only the four-query
+delta-only path. The seven-query path, the change classifier and the two geometry builders are
+never measured end to end — and the shipped client always asks for `changes` and `ghosts`
+together, so the measured configuration is the one nobody runs.
+
+Its seed is also sparser than the density the M8 review used: one dependency per twenty activities,
+against the ~1.6:1 of a real programme. Found by the M8 backend-performance review, which stood up
+a real Postgres at 2,000 activities / 3,200 dependencies and measured the pieces separately —
+every read indexed, `createMany` auto-chunking at 32,766 bind parameters, ~76 ms of DB time added
+to the capture's lock hold, and the classifier linear rather than quadratic. So the parts are
+known; what is not measured is the whole response.
+
+The remedy is to extend F3 (or add a sibling) with `?include=changes,ghosts` at that density. It is
+filed rather than done because the number would be quoted, and a benchmark written at the end of a
+long epic to confirm a bar is the wrong shape of instrument — this one should be written and its
+falsification condition committed before it runs, like every other measurement in this epic.
+
+### 255. Six non-blocking findings from the revision-compare gate pass
+
+**Status:** open · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+
+Each was judged real and not worth holding the release for.
+
+1. **`?include=ghosts` also returns `links`**, and neither the query DTO's description nor the enum
+   says so — a reader learns it only from `@repo/types`. There is no separate `links` value, so
+   this is naming rather than behaviour, but it is a sentence's worth of fix.
+2. **`?include=progress` alone is a silent no-op**: it only has an effect alongside `changes`,
+   because the classifier is only called when the change list is requested. The DTO implies it
+   stands on its own.
+3. **`TsldPanel` gained five props for one feature**, all plucked from one DTO at the call site.
+   The sibling lens threads raw data and derives inside; these could be one `compareChanges`
+   object, cutting the surface and removing the risk of the four being passed out of sync.
+4. **The compare overlay's ADDED/CHANGED link treatment is pixel-identical to the incident-highlight
+   pass** for a selected driving edge — same weight, same dash, same `palette.selection`. WCAG 1.4.1
+   is satisfied (weight and dash differ from colour alone), but a planner with an activity selected
+   while the overlay is on cannot tell "incident to my selection" from "changed in the comparison".
+5. **The overlay survives closing the comparison dock** with nothing on screen naming the pair —
+   `revisionFrom`/`revisionTo` are never cleared on close, so the ghosts remain with no caption.
+6. **`compareOverlaySummary`'s removed list keys on the NAME**, so two removed activities sharing a
+   name produce a duplicate React key. Carrying the id alongside would remove it cheaply.
+
+Findings 4 and 5 are the two worth doing first: both are about a picture that is honest in its
+words and ambiguous on screen, which is the failure mode this epic spent its whole gate pass on.

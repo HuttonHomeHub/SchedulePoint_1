@@ -92,7 +92,13 @@ against precisely that cull.
 
 ADR-0122's rule is that a picture a screen reader cannot reach is not described by saying it is.
 
-- A **changed activity** already has a route: it is an option in ADR-0026 D7's parallel listbox.
+- A **changed activity** has a listbox row, and **that is not the same as having a route to the
+  comparison** — a distinction this decision originally got wrong. It read "a changed activity
+  already has a route: it is an option in ADR-0026 D7's parallel listbox", which is true about the
+  row existing and silent about what the overlay drew: a dashed outline saying "this bar used to be
+  here" reached a sighted planner and nobody else. The M8 accessibility review caught it, and the
+  epic's own plan had called the remedy "real work, and it is not optional". `compareClause` is the
+  sibling of `baselineGhostClause` the plan named, and the row now says where the bar was.
 - A **removed activity** has none — it is not in the plan — so it gets a non-focusable `sr-only`
   list **inside** the diagram region (ADR-0122 D2: a landmark-navigating reader lands inside a
   region and never meets a preceding sibling). Not focusable, because it is not selectable: it does
