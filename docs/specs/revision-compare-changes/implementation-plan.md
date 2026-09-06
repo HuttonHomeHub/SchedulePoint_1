@@ -423,6 +423,24 @@ sentences were, for pairs captured after M4.
 
 ## Milestone 6 — Tier 2a · the change picture, bars
 
+> **Corrected after the fact — two instructions below are WRONG and are left in place rather than
+> edited, because a plan whose stale text is quietly deleted teaches nothing.** See ADR-0127 D2 and
+> D5.
+>
+> 1. **"cull by `visibleIds` **first**, as the ghost layer already does" (M6-T1) is wrong for this
+>    layer.** It is right for the layer it was copied from — a baseline ghost always has a live bar
+>    to sit behind — and `visibleIds` is derived from `scene.activities`, so REMOVED work is by
+>    definition never in it. Following the instruction would have silently dropped exactly the rows
+>    the overlay exists to show, on every plan where nothing had been deleted. The shipped layer
+>    culls by `rectsIntersect` alone, and there is a test verified red against the `visibleIds`
+>    version.
+> 2. **The "reserved band below the scene" for removed work is obsolete.** It was designed for a
+>    guessed lane; CQ-2b then froze `lane_index`, so the lane is RECORDED and there is nothing to
+>    guess. Removed work is drawn where it was.
+>
+> Both were found by building, not by reading — which is the §19 rule applied to a plan rather than
+> to a spec: working through a task list is evidence the tasks were done, not that they were right.
+
 **Outcome:** the old revision's bars — **including removed work** — show behind the new, for the pair
 the panel has selected.
 **Entry point:** `View ▾ ▸ Overlays ▸ **Compare on diagram**`, default off, shaded with a reason when
@@ -492,6 +510,18 @@ removed activity is present in the diagram region's accessible equivalent.
 ---
 
 ## Milestone 7 — Tier 2b · changed arrows
+
+> **Corrected after the fact.** The milestone shipped, and two things below did not survive contact.
+>
+> 1. **The gating clause reads "M0-T2's P1 and P2 both passing."** Neither passed and neither
+>    failed: `m0-condition.md` records the environment as **disqualified**, because the baseline —
+>    the shipped painter with no treatment — moved tenfold between two runs an hour apart with no
+>    code change. The product owner decided on those numbers to ship default-off and let a headed
+>    run on real hardware decide later. That run is owed and outside this epic.
+> 2. **"a re-measurement against a real captured pair" (M7-T2) was NOT done**, and doing it here
+>    would have been worse than not: this environment cannot produce a quotable number for any
+>    pair, real or synthetic, so a run against a real one would have added a figure with the same
+>    disqualification and more apparent authority. Recorded as owed rather than performed.
 
 **Outcome:** a re-sequence is visible as a re-sequence. **The differentiating half.**
 **Entry point:** the same **Compare on diagram** toggle — the arrows appear with the bars.
