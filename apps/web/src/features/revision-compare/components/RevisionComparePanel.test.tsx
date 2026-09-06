@@ -531,6 +531,30 @@ describe('the Changes view', () => {
     },
   });
 
+  /**
+   * A reachable change-list row whose activity is in `added` — NOT in `entered`/`left`.
+   *
+   * That combination is the whole point, and the first version of this fixture missed it: I put
+   * the row in `entered`, where the panel's fallback lookup finds the name anyway, so the test
+   * passed with the fix removed and my "verified red" note was simply false. Reachability is
+   * derived from FOUR lists (entered, left, added, removed) while the name lookup searches TWO, so
+   * an activity in `added` or `removed` is pressable and unnamed. That is a live case, not a
+   * hypothetical, and it is what this fixture now builds.
+   */
+  const withChangesLive = (): RevisionCompare => {
+    const base = withChanges();
+    return {
+      ...base,
+      criticalPath: {
+        ...base.criticalPath,
+        added: [
+          { activityId: 'a1', code: 'A10', name: 'Piling', isCritical: false, existsLive: true },
+        ],
+        addedTotal: 1,
+      },
+    };
+  };
+
   it('shows NO view switch when the payload carries no change list', () => {
     // The switch is derived from the payload, not from a flag: a control that appears and then
     // renders nothing is the dead end this epic's own register entry is about.
@@ -569,6 +593,26 @@ describe('the Changes view', () => {
     const row = screen.getByRole('button', { name: /A10/ });
     expect(row).toHaveAttribute('aria-disabled', 'true');
     expect(within(row).getByText(/cannot be shown in the diagram/i)).toBeInTheDocument();
+  });
+
+  it('NAMES the activity when a change-list row is activated', () => {
+    // Reachability is derived from FOUR lists (entered, left, added, removed); the panel's name
+    // lookup searches TWO. So a change-list row whose activity sits in `added` or `removed` is
+    // pressable and announces a bare "Activity selected in the plan" — the name withheld from the
+    // one reader with no other way to learn which row they pressed. The row carries its own name
+    // and now passes it.
+    //
+    // **The first version of this test passed with the fix removed**, because its fixture put the
+    // row in `entered`, where the fallback finds the name anyway. It asserted a true thing for a
+    // reason that was not the fix, and the "verified red" note beside it was false until the
+    // fixture was rebuilt on the reachable case. Verified red for real: without the second
+    // argument this announces "Activity selected in the plan.".
+    const onActivateActivity = vi.fn();
+    renderPanel({ compare: withChangesLive(), onActivateActivity });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    fireEvent.click(screen.getByRole('button', { name: /A10/ }));
+    expect(onActivateActivity).toHaveBeenCalledWith('a1');
+    expect(announce).toHaveBeenCalledWith('Piling selected in the plan.');
   });
 
   it('has no axe violations in the change list', async () => {

@@ -249,3 +249,81 @@ describe('the printed revision comparison', () => {
     expect(container.querySelector('thead')).not.toBeNull();
   });
 });
+
+describe('the printed change list', () => {
+  const withChanges = (): RevisionCompare =>
+    comparison({
+      changes: {
+        cap: 2,
+        classes: [
+          {
+            changeClass: 'RENAMED',
+            notAssessableReason: null,
+            rows: [
+              {
+                activityId: 'a1',
+                changeClass: 'RENAMED',
+                code: 'A10',
+                name: 'Piling',
+                from: 'Piling',
+                to: 'Piling rig',
+                orderKey: '2026-01-05',
+              },
+              {
+                activityId: 'a2',
+                changeClass: 'RENAMED',
+                code: 'A20',
+                name: 'Cladding',
+                from: 'Cladding',
+                to: 'Facade',
+                orderKey: '2026-02-05',
+              },
+            ],
+            total: 9,
+          },
+          { changeClass: 'RELOGICKED', notAssessableReason: 'NOT_SNAPSHOTTED', rows: [], total: 0 },
+        ],
+      },
+    });
+
+  it('prints nothing extra when the payload carries no change list', () => {
+    // A delta-only comparison prints exactly what it always did. The change list is additive on
+    // paper as well as on screen.
+    const { container } = render(<RevisionComparePrintDocument compare={comparison()} />);
+    expect(container.textContent).not.toContain('What changed');
+  });
+
+  it('prints the rows of a class it could assess', () => {
+    const { container } = render(<RevisionComparePrintDocument compare={withChanges()} />);
+    expect(container.textContent).toContain('What changed');
+    expect(container.textContent).toContain('Piling rig');
+    expect(container.textContent).toContain('Facade');
+  });
+
+  it('states the cap IN WORDS, because paper has no "load more"', () => {
+    const { container } = render(<RevisionComparePrintDocument compare={withChanges()} />);
+    expect(container.textContent).toContain('Showing the first 2 of 9');
+    expect(container.textContent).toContain('The remainder is not printed');
+  });
+
+  it('prints a REASON and no table for a class it could not assess', () => {
+    // The symmetry rule, first direction: whatever the panel withholds, the paper withholds. An
+    // empty table on paper reads as searched-and-found-nothing, which is the opposite of the truth.
+    const { container } = render(<RevisionComparePrintDocument compare={withChanges()} />);
+    expect(container.textContent).toContain('cannot be compared');
+    expect(container.textContent).not.toContain('No changes in this revision');
+  });
+
+  it('repeats its column headings per page via thead, not a printed-once header', () => {
+    const { container } = render(<RevisionComparePrintDocument compare={withChanges()} />);
+    const heads = container.querySelectorAll('table thead');
+    expect(heads.length).toBeGreaterThan(0);
+  });
+
+  it('carries the causation refusal on paper as well as on screen', () => {
+    // The document travels to somebody who was not in the room and cannot ask a follow-up
+    // question, so the refusal matters MORE here than on the panel, not less.
+    const { container } = render(<RevisionComparePrintDocument compare={withChanges()} />);
+    expect(container.textContent).toContain('does not say which change moved the completion date');
+  });
+});

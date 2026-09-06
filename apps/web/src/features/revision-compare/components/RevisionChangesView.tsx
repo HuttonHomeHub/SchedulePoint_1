@@ -35,7 +35,7 @@ import { useAnnounce } from '@/components/ui/announcer';
 export interface RevisionChangesViewProps {
   readonly report: RevisionChangeReport;
   /** Select and reveal an activity in whichever view is showing. */
-  readonly onActivateActivity: (activityId: string) => void;
+  readonly onActivateActivity: (activityId: string, name?: string) => void;
   /** Ids present in the LIVE plan — a row for something since deleted must not offer to reveal it. */
   readonly liveActivityIds: ReadonlySet<string>;
 }
@@ -46,7 +46,7 @@ function ClassSection({
   liveActivityIds,
 }: {
   assessment: RevisionClassAssessment;
-  onActivateActivity: (activityId: string) => void;
+  onActivateActivity: (activityId: string, name?: string) => void;
   liveActivityIds: ReadonlySet<string>;
 }): React.ReactElement {
   const headingId = useId();
@@ -86,7 +86,9 @@ function ClassSection({
                       // that navigates nowhere is worse than one that says why.
                       aria-disabled={!reachable}
                       onClick={() => {
-                        if (reachable) onActivateActivity(row.activityId);
+                        // The name travels WITH the id: this row knows it, and the panel's
+                        // lookup covers only the delta's rows (see `announceActivation`).
+                        if (reachable) onActivateActivity(row.activityId, row.name);
                       }}
                       className="hover:bg-muted/60 flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left text-xs aria-disabled:pointer-events-none aria-disabled:opacity-50"
                     >

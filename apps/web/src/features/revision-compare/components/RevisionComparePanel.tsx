@@ -142,13 +142,23 @@ export function RevisionComparePanel({
    * review one file away from the precedent it cites.
    */
   const announceActivation = useCallback(
-    (activityId: string) => {
+    /**
+     * `name` is supplied by the caller when it has one, and looked up otherwise.
+     *
+     * The lookup searches the DELTA's rows only, which was complete while the delta was the only
+     * thing with rows. The change list's rows are not in those arrays, so every activation from it
+     * would have announced a bare "Activity selected in the plan" — the name withheld from the one
+     * user who has no other way to learn which row they just pressed. Caught by asking what this
+     * function does for a caller it did not have when it was written, rather than by a test
+     * failing: an announcement that says something plausible does not fail anything.
+     */
+    (activityId: string, name?: string) => {
       onActivateActivity(activityId);
       const row = [
         ...(compare?.criticalPath.entered ?? []),
         ...(compare?.criticalPath.left ?? []),
       ].find((r) => r.activityId === activityId);
-      announce(`${row?.name ?? 'Activity'} selected in the plan.`);
+      announce(`${name ?? row?.name ?? 'Activity'} selected in the plan.`);
     },
     [onActivateActivity, announce, compare],
   );
