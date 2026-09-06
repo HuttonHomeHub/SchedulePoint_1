@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LIVE_REVISION } from '@repo/types';
+import { Transform } from 'class-transformer';
 import { IsArray, IsIn, IsOptional, IsUUID, Matches } from 'class-validator';
 
+import { toArray } from '../../../common/dto/to-array';
 import { UUID_REGEX } from '../../../common/validation/uuid';
 
 /**
@@ -70,6 +72,16 @@ export class RevisionCompareQueryDto {
       'default because it moves on nearly every activity every week.',
   })
   @IsOptional()
+  // **`?include=changes` arrives as a STRING, not a one-element array.** Without this the single
+  // include — which is exactly what the shipped client sends — fails `@IsArray()` and the whole
+  // route answers 400. It shipped that way for one commit and no unit or API e2e test could see
+  // it: none of the 586 API specs passes `include`, and the panel's own tests are handed a
+  // fixture and never cross the route. The flag-on journey caught it on its first run, which is
+  // the argument ADR-0081 makes for landing a journey at the first user-facing milestone.
+  //
+  // `toArray` is the existing shared helper five other query DTOs already use — a second
+  // normaliser beside them would be the drift this repository keeps recording.
+  @Transform(({ value }: { value: unknown }) => toArray(value))
   @IsArray()
   @IsIn(REVISION_INCLUDES, { each: true })
   include?: RevisionInclude[];

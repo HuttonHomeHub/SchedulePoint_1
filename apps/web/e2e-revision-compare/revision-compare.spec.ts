@@ -76,6 +76,43 @@ test('a planner compares a revision against live and reads what entered the crit
   // ── 4 · The honesty footer is present and says what the product will not claim ──────────────
   await expect(panel.getByText(/does not say what caused it/i)).toBeVisible();
 
+  // ── 4b · The CHANGE LIST — and this claim's real subject is the ENTRY POINT ────────────────
+  //
+  // The view switch renders only when the payload carries a change list, and the payload carries
+  // one only because the workspace asked for `?include=changes`. So the button being here is the
+  // proof that the host's request and the panel's render agree — the seam that ADR-0081 records
+  // five separate milestones shipping dark behind. A unit test cannot make that claim: it mounts
+  // the panel with a fixture and never crosses the host, the query key or the route.
+  const changesButton = panel.getByRole('button', { name: 'Changes' });
+  await expect(changesButton).toBeVisible();
+  await changesButton.click();
+  await expect(changesButton).toHaveAttribute('aria-pressed', 'true');
+
+  const changes = panel.getByRole('group', { name: 'Changes between these revisions' });
+  await expect(changes).toBeVisible();
+
+  // A class the snapshot never recorded says SO, in a sentence, rather than reporting no changes.
+  // This is the epic in one assertion: an empty list and an un-looked-at list read identically
+  // unless the product distinguishes them, and the reassuring reading is the false one.
+  const logic = changes.getByRole('region', { name: 'Logic changed' });
+  await expect(logic.getByText(/cannot be compared/i)).toBeVisible();
+  await expect(logic.getByText(/no changes in this revision/i)).toHaveCount(0);
+
+  // And an assessable class reports what it found rather than a reason.
+  const dates = changes.getByRole('region', { name: 'Dates moved' });
+  await expect(dates.getByText(/cannot be compared/i)).toHaveCount(0);
+
+  // The list's own footer refuses causation IN THE READER'S WORDS — a change list beside a moved
+  // completion is precisely where a reader joins the two, so the refusal has to be on this view
+  // and not only on the delta's.
+  await expect(
+    changes.getByText(/does not say which change moved the completion date/i),
+  ).toBeVisible();
+
+  // Back to the delta, so the rest of the journey runs against the view it was written for.
+  await panel.getByRole('button', { name: 'Critical path' }).click();
+  await expect(panel.getByRole('region', { name: /entered the critical path/i })).toBeVisible();
+
   // ── 5 · One dock at a time, against the REAL sibling rather than a stub ────────────────────
   await revealToolbarCommand(page, 'analysis');
   await page
