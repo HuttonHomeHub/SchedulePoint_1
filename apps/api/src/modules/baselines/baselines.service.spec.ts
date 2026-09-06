@@ -76,6 +76,10 @@ function baseline(overrides: Partial<Baseline> = {}): Baseline {
     // ADR-0071 M3: what this baseline's cost snapshot decomposes to. ACTIVITY is the column's
     // constant default and what every capture writes until the M3 service slice lands.
     costSnapshotLevel: 'ACTIVITY',
+    // NONE is what every baseline captured before the revision-snapshot extension is, and
+    // what this fixture's other fields describe — the shape frozen without logic,
+    // constraints, calendars, WBS or progress.
+    revisionSnapshotLevel: 'NONE',
     // ADR-0125 mirrors: null = the rule this snapshot's criticality was computed under is
     // unknown, which is what a baseline captured before the freeze shipped should say.
     criticalPathDefinition: null,

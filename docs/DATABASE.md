@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 29
-> models across 60 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 30
+> models across 61 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -676,12 +676,16 @@ AND deleted_at IS NULL`) guarantees **at most one active baseline per plan** —
   `(baseline_id, source_activity_id)` is both the variance join key and the
   load-all-rows-for-a-baseline path (so no standalone `baseline_id` index); each table's
   `organization_id` backs its FK and IDOR loads.
-- **Cascade.** Both FKs are `RESTRICT`; nothing is hard-deleted. A baseline and its
+- **Cascade.** Both FKs are `RESTRICT`. A baseline and its
   snapshot rows soft-delete together under one `delete_batch_id`, and a
   plan/project/client delete cascades to contained baselines the same way (the
   `HierarchyLifecycleService` gains a `'baseline'` level) — restore brings the set back.
   Capture reads its snapshot **inside the plan write-lock**, so it is never taken
-  mid-recalculation.
+  mid-recalculation. This bullet said "nothing is hard-deleted" until 2026-09-06, and
+  **ADR-0096 made that false**: the retention expiry permanently deletes an expired plan's
+  baselines and their snapshot rows, so these `RESTRICT` checks really do fire. What follows
+  from that for a new child table is spelled out under _The revision snapshot_ below — it is
+  the difference between a correct sweep and a plan that can never be expired again.
 
 #### The criticality rule a snapshot was computed under
 
@@ -805,6 +809,121 @@ index on every bulk capture insert. The unique is partial (not full) because bas
 only, so the FK `RESTRICT` check never fires — the `idx_plan_shares_plan_id` precedent. No index on
 `cost_snapshot_level` (read with its own row by id, never a predicate — the `scheduling_mode`
 precedent) or on `budgeted_expense` (part of a snapshot loaded whole).
+
+#### The revision snapshot — a baseline freezes the plan's SHAPE, not only its output
+
+**This is the fourth amendment to ADR-0025**, after ADR-0042's cost baseline, ADR-0071 M3's cost
+decomposition and ADR-0125's criticality rule. Until it, a baseline froze **where** the work was
+and **what** it was called, and nothing about **how the plan was built** — so the product could
+report that an activity moved and could not report that somebody re-sequenced it, re-constrained
+it, moved it to another calendar, re-parented it under a different summary, or reported progress
+against it. Enumerated against the schema, eight of the fourteen change classes a planner is asked
+to defend already fell out of existing columns; the six that did not are the ones argued over.
+
+| Addition                                     | Shape                                               | Meaning                                                                                                    |
+| -------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `baselines.revision_snapshot_level`          | `RevisionSnapshotLevel`, NOT NULL, `DEFAULT 'NONE'` | **the discriminator** — `NONE` = output only; `FULL` = output plus the ten columns and the edge rows below |
+| `baseline_activities.lane_index`             | `INTEGER` nullable, no default                      | the TSLD row it occupied                                                                                   |
+| `baseline_activities.parent_id`              | `UUID` nullable, no default, **no FK**              | its WBS summary, in the **source activity id space**; `NULL` = top level                                   |
+| `baseline_activities.calendar_id`            | `UUID` nullable, no default, **no FK**              | its own calendar; `NULL` = inherit the plan's                                                              |
+| `baseline_activities.constraint_type/_date`  | nullable pair, no default                           | the primary constraint; `NULL` = none                                                                      |
+| `baseline_activities.secondary_constraint_*` | nullable pair, no default                           | the secondary constraint; `NULL` = none                                                                    |
+| `baseline_activities.percent_complete`       | `INTEGER` nullable, no default                      | **schedule** %-complete; `0` = not started                                                                 |
+| `baseline_activities.actual_start/_finish`   | `DATE` nullable, no default                         | `NULL` = not started / not finished                                                                        |
+| `baseline_dependencies`                      | new table, one row per dependency active at capture | the frozen edge: `type`, signed `lag_minutes`, `lag_calendar`, `is_driving`                                |
+
+**`lane_index` is the trap, and it is worth naming on its own.** The live column is `NOT NULL
+DEFAULT 0`, so mirroring its shape is the reflex — and **lane 0 is a real lane**. A `NOT NULL
+DEFAULT 0` here would tell every baseline captured before this migration that all of its activities
+sat in one row of the diagram, in a column offering a reader no way to doubt it, and a future ghost
+layer would paint that fabricated picture confidently. `percent_complete` is the same trap one
+column along: 0 % is a real progress figure, not an absence. This is `budgeted_expense`'s "0 is a
+claim" (above) and ADR-0125's rejected `is_critical DEFAULT false`, in the two places where the
+live column genuinely **is** `NOT NULL` and the pull to copy it is therefore strongest. The
+`hours_per_day_minutes DEFAULT 1440` precedent licenses neither: that default was legal because
+1440 was **true of every pre-existing row**, and none of these ten values is knowable for any.
+
+**Why this needs a discriminator where ADR-0125's criticality set needed none.** That set could use
+`critical_path_definition IS NULL` as its own discriminator, because a fail-closed all-or-none CHECK
+made half a rule unrepresentable and none of its four columns has a legitimate `NULL`. **Every one
+of the ten above has a legitimate `NULL` (or zero) under `FULL`** — an activity with no constraint,
+no parent, no calendar of its own, in lane 0, at 0 %, not yet started — so an all-or-none CHECK
+would be **wrong** here rather than merely unnecessary, and no per-row test can separate "not
+recorded" from "recorded as absent". **Nor can a row count:** a plan with no dependencies captures
+zero `baseline_dependencies` rows under `FULL`. That is the `cost_snapshot_level` argument verbatim,
+one table along, and the two now read the same way on purpose. Never infer the level from a column's
+nullness or a list's length. Like its cost sibling the pairing **cannot be a CHECK** (three tables;
+a CHECK sees one row of one table): it is a service invariant of the single capture transaction,
+which is why the constant `DEFAULT 'NONE'` is also the safe direction — a write path not yet taught
+the new pass reads as _nothing recorded_, never as _recorded and empty_.
+
+**The value is entirely prospective, and that was put in front of the decision rather than left in a
+consequences section.** No baseline captured before this can ever be told what its logic,
+constraints, calendars, WBS or progress were: the data was never recorded, a capture cannot be
+re-run, and a backfill could only stamp today's shape as history. Every baseline on every host reads
+`NONE`, which is the literal truth about it, and the read model states that per class rather than
+omitting the class or reporting a silent "no change".
+
+`baseline_dependencies` is a **sibling of `baseline_activities` in every respect**: `source_*` ids
+are plain correlation UUIDs with **no** foreign key, rows are immutable after capture, the full
+housekeeping set applies, and the whole set soft-deletes with its parent baseline under one
+`delete_batch_id`. Its two endpoints are frozen rather than resolved through `baseline_activities`
+because an edge whose endpoint was later deleted must still name both ends. **Every value column is
+`NOT NULL` with no default**, deliberately unlike its live counterpart and following
+`baseline_assignments`: `dependencies` defaults `type` to `FS` because that is the sane value for a
+**new edge a planner is creating**, whereas here a default would let a capture record a fact it
+never read — a write path that forgot to select `type` would freeze every edge in the plan as
+Finish-to-Start, a fabricated history of exactly the class this table exists to report. Its two
+CHECKs (`ck_baseline_dependencies_lag_minutes_range`, signed ±5 256 000; and
+`ck_baseline_dependencies_no_self_loop`) mirror the live `dependencies` constraints exactly, and the
+four on `baseline_activities` (`ck_baseline_activities_lane_index_nonneg`,
+`_percent_complete_range`, `_constraint_pair`, `_secondary_constraint_pair`) are the nullable-safe
+forms of the live ones — a frozen copy must not be able to hold a value its source would refuse, nor
+refuse a plan the product allows.
+
+**`RESTRICT` on `baseline_dependencies.baseline_id` is not inert, and this is the part to read
+before adding the next sibling table.** `baseline_assignments`' comment says the referential check
+"never fires, so RESTRICT is defence in depth". **ADR-0096 made that false**: the retention expiry
+permanently deletes an expired plan's baselines. So a new child of `baselines` **must** be deleted
+before its parent in `common/hierarchy/hierarchy-expiry.runner.ts`. Omitted, the delete raises
+`23503`, `hierarchy-expiry.service.ts` catches it and logs `hierarchy_expiry.permanent_failure`, and
+**every plan holding one of the new rows becomes permanently unexpirable — retried hourly, forever,
+unattended, with nothing user-facing saying so.** `hierarchy-expiry.structural.spec.ts` pinned the
+order against a hand-maintained literal, which catches a **reorder** and is structurally blind to a
+**missing table**; it now also carries a **DMMF-derived completeness census** that asks the schema
+which models hold a to-one `RESTRICT` foreign key into anything the runner deletes and requires each
+to be deleted, earlier in the order. `Cascade` relations (`plan_locks`) and self-references
+(`activities.parent_id`) are excluded structurally; the single hand-written exemption
+(`resources.calendar_id`) is stated with its reason, because the sweep deletes only PROJECT-scoped
+calendars and `calendar-scope.guard.ts` refuses a resource one.
+
+There are **four** soft-delete/restore sites for a baseline's snapshot children, and the fourth is
+easy to miss: `HierarchyLifecycleService`'s delete sweep (shared by the client, project and plan
+paths) and its `restoreBatch`, plus `BaselineRepository.softDeleteWithSnapshot` — the direct
+"delete this baseline" path, which no hierarchy delete goes through. A child missing there stays
+active under a deleted parent and, because restore is keyed on `delete_batch_id`, never returns
+with it.
+
+**Indexes on `baseline_dependencies`.**
+
+| Index                                                        | On                                    | Kind    | Serves                                                                                                                           |
+| ------------------------------------------------------------ | ------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `baseline_dependencies_baseline_id_source_dependency_id_idx` | `(baseline_id, source_dependency_id)` | full    | the `baseline_id` FK `RESTRICT` check, the load-whole-baseline read (leftmost prefix) and the change list's join key — all three |
+| `baseline_dependencies_organization_id_idx`                  | `(organization_id)`                   | full    | `organization_id` FK (RESTRICT) + org-scoped IDOR loads                                                                          |
+| `idx_baseline_dependencies_delete_batch_id`                  | `(delete_batch_id)`                   | partial | batch restore lookup                                                                                                             |
+
+It takes the `baseline_activities` shape (a **full** composite) and not the `baseline_assignments`
+one (a **partial** unique), and the difference follows directly from the paragraph above: a `RESTRICT`
+check's generated query carries no `deleted_at`, so a `WHERE deleted_at IS NULL` index cannot serve
+it and the check falls back to a sequential scan once per hard-deleted parent — the measured
+`idx_activities_parent_id_fk` finding, which cost 3m47s for a single plan. Verified with `EXPLAIN`:
+the FK-shaped predicate (`WHERE baseline_id = ? FOR KEY SHARE`) resolves to a bitmap index scan on
+this composite. No freeze-once unique is declared: the capture writes each edge once by construction
+inside one transaction, and a second composite on this bulk-insert path was measured and rejected one
+table along for buying 0.007 ms. **`baseline_assignments` still has the gap this reasoning
+describes** — its only `baseline_id`-leading index is the partial unique, so its FK check cannot use
+one; that is a pre-existing finding, not something this change introduces, and it wants its own
+measured decision rather than an index smuggled in here.
 
 ### PlanLock: the edit-lock lease
 

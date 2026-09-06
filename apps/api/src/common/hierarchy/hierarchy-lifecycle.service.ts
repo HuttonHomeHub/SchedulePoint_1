@@ -127,6 +127,16 @@ export class HierarchyLifecycleService {
         where: { baseline: { planId: { in: planIds } }, deletedAt: null },
         data: stamp,
       });
+      // The frozen logic is a snapshot child too (the revision-snapshot extension) and rides the
+      // same batch, for the same reason as the cost decomposition above: left behind, its rows
+      // would stay active under a deleted parent — invisible to every read, and restored out of
+      // step with the activity rows they belong to, since restore is batch-cohesion-guarded. This
+      // helper is the delete sweep for all three of its call sites (client, project and plan), so
+      // one line covers them all.
+      await tx.baselineDependency.updateMany({
+        where: { baseline: { planId: { in: planIds } }, deletedAt: null },
+        data: stamp,
+      });
       return (
         await tx.baseline.updateMany({
           where: { planId: { in: planIds }, deletedAt: null },
@@ -539,6 +549,15 @@ export class HierarchyLifecycleService {
         });
         // …and its cost decomposition (ADR-0071 M3), swept in the same batch above.
         await tx.baselineAssignment.updateMany({
+          where: { deleteBatchId: batchId },
+          data: restore,
+        });
+        // …and its frozen logic (the revision-snapshot extension), swept in the same batch above.
+        // Like a note or a step and unlike a dependency, no endpoint guard is needed: a snapshot
+        // edge has exactly ONE parent (its baseline) and its two `source_*` endpoints are plain
+        // correlation ids naming rows in another table's id space, so there is nothing whose
+        // liveness could make restoring it inconsistent.
+        await tx.baselineDependency.updateMany({
           where: { deleteBatchId: batchId },
           data: restore,
         });

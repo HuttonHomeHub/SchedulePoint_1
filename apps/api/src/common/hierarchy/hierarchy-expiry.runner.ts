@@ -140,6 +140,22 @@ export async function deleteExpiredScope(
     await deleteChunked(baselineIds, (chunk) =>
       tx.baselineAssignment.deleteMany({ where: { baselineId: { in: chunk } } }),
     );
+    // The frozen logic (the revision-snapshot extension). `baseline_dependencies.baseline_id` is
+    // RESTRICT like its two siblings, so it MUST go before `baseline`. Its relative order among
+    // the three children is free — none of them references either of the others — and it is placed
+    // here to mirror the live sweep above, where edges precede activities.
+    //
+    // Its own table's comment records why this line is load-bearing rather than housekeeping: a
+    // missing delete here is a 23503 the batch can never recover from, so every plan holding a
+    // post-extension baseline would become permanently unexpirable, retried hourly forever with
+    // nothing user-facing saying so. Reproduced against a real database before this line was
+    // written — `DELETE FROM baselines` with one snapshot edge present raises
+    // `violates foreign key constraint "baseline_dependencies_baseline_id_fkey"` — and the
+    // DMMF-derived census in `hierarchy-expiry.structural.spec.ts` now fails if a future sibling
+    // arrives without one, which the literal order list structurally could not.
+    await deleteChunked(baselineIds, (chunk) =>
+      tx.baselineDependency.deleteMany({ where: { baselineId: { in: chunk } } }),
+    );
     await deleteChunked(baselineIds, (chunk) =>
       tx.baselineActivity.deleteMany({ where: { baselineId: { in: chunk } } }),
     );

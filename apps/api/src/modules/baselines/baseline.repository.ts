@@ -533,6 +533,17 @@ export class BaselineRepository {
       where: { baselineId: id, deletedAt: null },
       data: stamp,
     });
+    // The frozen logic rides the SAME batch too (the revision-snapshot extension). This is the
+    // FOURTH cascade site for a baseline's snapshot children and the one that is easy to miss: the
+    // other three live in `HierarchyLifecycleService` (its delete sweep, shared by the client,
+    // project and plan paths, and its `restoreBatch`), and this is the direct "delete THIS
+    // baseline" path, which no hierarchy delete goes through. Missing here, the edges would stay
+    // active under a deleted parent and — because restore is keyed on `delete_batch_id` — would
+    // never come back with it.
+    await db.baselineDependency.updateMany({
+      where: { baselineId: id, deletedAt: null },
+      data: stamp,
+    });
     await db.baseline.updateMany({ where: { id, deletedAt: null }, data: stamp });
     // Returned so the caller's audit row can carry it (ADR-0073 C3.2). The batch is what ties the
     // baseline to the snapshot rows that went with it, which is the same thread every other

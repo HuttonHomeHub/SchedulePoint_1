@@ -29,6 +29,7 @@ function makeTx() {
     baseline: model(),
     baselineActivity: model(),
     baselineAssignment: model(),
+    baselineDependency: model(),
     note: model(),
     planShare: model(),
     calendar: model(),
@@ -321,6 +322,13 @@ describe('HierarchyLifecycleService', () => {
         where: { baseline: { planId: { in: ['pl1'] } }, deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
       });
+      // …including the frozen logic (the revision-snapshot extension). Left out of the batch its
+      // rows would stay active under a deleted parent and never be restored with it, because
+      // restore is keyed on `delete_batch_id`.
+      expect(tx.baselineDependency.updateMany).toHaveBeenCalledWith({
+        where: { baseline: { planId: { in: ['pl1'] } }, deletedAt: null },
+        data: expect.objectContaining({ deleteBatchId: result.batchId }),
+      });
       expect(tx.baseline.updateMany).toHaveBeenCalledWith({
         where: { planId: { in: ['pl1'] }, deletedAt: null },
         data: expect.objectContaining({ deleteBatchId: result.batchId }),
@@ -333,6 +341,7 @@ describe('HierarchyLifecycleService', () => {
       expect(result.counts.baselines).toBe(0);
       expect(tx.baseline.updateMany).not.toHaveBeenCalled();
       expect(tx.baselineActivity.updateMany).not.toHaveBeenCalled();
+      expect(tx.baselineDependency.updateMany).not.toHaveBeenCalled();
     });
 
     it("sweeps a deleted activity subtree's steps into its batch (M7 rung 5, ADR-0044 §2)", async () => {
@@ -483,6 +492,12 @@ describe('HierarchyLifecycleService', () => {
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });
       expect(tx.baselineActivity.updateMany).toHaveBeenCalledWith({
+        where: { deleteBatchId: 'batch-b' },
+        data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
+      });
+      // …and the frozen logic, which was swept in the same batch (the revision-snapshot
+      // extension). A snapshot edge has exactly one parent, so no endpoint guard applies.
+      expect(tx.baselineDependency.updateMany).toHaveBeenCalledWith({
         where: { deleteBatchId: 'batch-b' },
         data: { deletedAt: null, deleteBatchId: null, updatedBy: ACTOR },
       });
