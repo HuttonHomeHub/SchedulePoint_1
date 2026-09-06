@@ -1,0 +1,69 @@
+/**
+ * Print styles for the revision comparison. Colours are hard-coded dark-on-white — the documented
+ * print exception (the health report and `GanttPrintSurface` precedent): a `@media print` sheet
+ * cannot read a runtime token, and paper wants ink whatever theme the app is in.
+ */
+.revision-print {
+  color: #111;
+  background: #fff;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.revision-print h1 {
+  font-size: 16px;
+  margin: 0 0 2px;
+}
+
+.revision-print h2 {
+  font-size: 12px;
+  margin: 10px 0 2px;
+}
+
+.revision-print-meta {
+  margin: 0 0 2px;
+  color: #333;
+}
+
+.revision-print-statement {
+  margin: 6px 0;
+}
+
+.revision-print-caveat {
+  margin: 4px 0;
+  padding: 4px 6px;
+  border-left: 3px solid #888;
+  color: #333;
+}
+
+.revision-print table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 2px 0 8px;
+}
+
+.revision-print th,
+.revision-print td {
+  border-bottom: 1px solid #ccc;
+  padding: 2px 4px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.revision-print th {
+  border-bottom: 1px solid #666;
+  font-weight: 600;
+}
+
+/* The heading row repeats on every printed page — the ADR-0059 M4 rule: pagination is delegated to
+   a native `<thead>`, so a list that runs over a page break does not lose its column names. */
+.revision-print thead {
+  display: table-header-group;
+}
+
+.revision-print-footer {
+  margin-top: 10px;
+  padding-top: 4px;
+  border-top: 1px solid #666;
+  color: #333;
+}

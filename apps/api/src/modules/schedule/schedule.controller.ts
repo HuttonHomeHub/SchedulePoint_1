@@ -29,6 +29,8 @@ import {
 import { PlanScheduleSummaryDto } from './dto/plan-schedule-summary.dto';
 import { ProgrammeScheduleResultDto } from './dto/programme-schedule-result.dto';
 import { ResourceHistogramQueryDto } from './dto/resource-histogram-query.dto';
+import { RevisionCompareQueryDto } from './dto/revision-compare-query.dto';
+import { RevisionCompareDto } from './dto/revision-compare.dto';
 import { ScheduleService } from './schedule.service';
 
 /**
@@ -204,6 +206,58 @@ export class ScheduleController {
   ): Promise<ScheduleHealthReportDto> {
     return ScheduleHealthReportDto.from(
       await this.service.getHealthCheck(principal, orgSlug, planId),
+    );
+  }
+
+  @Get('revision-compare')
+  @ApiOperation({
+    summary: 'What entered and left the critical path between two revisions (revision M1).',
+    description:
+      'A pure read over two persisted CPM snapshots — **the CPM engine is not invoked** (contrast ' +
+      'float-paths, which recomputes per call), no lock or transaction is taken, and nothing is ' +
+      'written. Both sides are already computed: a baseline freezes the engine’s OUTPUT, and the ' +
+      'live side is the plan’s own persisted columns. **It reports what moved between the two ' +
+      'schedules and makes no statement about what caused it** — the payload carries no ' +
+      'attribution, ranking or contribution field at any depth, because per-change attribution ' +
+      'was measured order-dependent (the same change scoring 30, 18, 2 or 0 working days by ' +
+      'position alone) while the total is order-free. The response does not vary by role: it ' +
+      'carries no cost, rate or budget field at any depth. Two honesty properties a consumer must ' +
+      'carry through to its own surface: `completion.carrier` is **not exact** under a same-day ' +
+      'tie, because both sides persist a date and the engine’s own carrier rule compares minutes; ' +
+      'and `settingsVerdict` is **three-valued**, where UNKNOWN means one side never recorded the ' +
+      'criticality rule its numbers came from and must never be rendered as a match.',
+  })
+  @ApiOkResponse({ type: RevisionCompareDto })
+  @ApiNotFoundResponse({
+    description:
+      'The organisation, the plan, or either revision — **uniformly**. A revision that belongs to ' +
+      'another plan or another organisation is 404 and never 403: a 403 would confirm the id ' +
+      'names a real baseline somewhere, which is an existence oracle.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      '`from` equals `to`, with `details.reason` = `SAME_REVISION` — a revision compared ' +
+      'with itself has nothing to ' +
+      'report, and a 200 with an empty delta would read as "nothing changed" rather than "you ' +
+      'asked the wrong question". Also field-level validation: `from` must be a UUID and `to` a ' +
+      'UUID or the literal `live`.',
+  })
+  @ApiTooManyRequestsResponse({
+    description:
+      'Rate limited by the global budget (100 requests / 60 s per IP). This route is a persisted ' +
+      'read — it runs no CPM computation — so it shares the generic budget with the health check ' +
+      'and the schedule summary rather than earning a tighter one, for the reason health-check ' +
+      'documents above. Deriving one from a measurement would have been right; **copying** ' +
+      'float-paths’ would not, and float-paths’ exists precisely because it recomputes.',
+  })
+  async revisionCompare(
+    @CurrentUser() principal: Principal,
+    @Param('orgSlug') orgSlug: string,
+    @Param('planId', ParseUuidPipe) planId: string,
+    @Query() query: RevisionCompareQueryDto,
+  ): Promise<RevisionCompareDto> {
+    return RevisionCompareDto.from(
+      await this.service.revisionCompare(principal, orgSlug, planId, query.from, query.to),
     );
   }
 

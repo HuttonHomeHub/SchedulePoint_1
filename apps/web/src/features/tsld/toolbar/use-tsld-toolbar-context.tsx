@@ -71,6 +71,7 @@ export function useTsldToolbarContext({
   revealComments,
   toggleFloatPaths = () => {},
   toggleHealthCheck = () => {},
+  toggleRevisionCompare = () => {},
   planView = DEFAULT_PLAN_VIEW_MODE,
   ganttColumns,
   barDateSource,
@@ -100,6 +101,8 @@ export function useTsldToolbarContext({
   toggleFloatPaths?: () => void;
   /** Toggle the docked Health check panel (health M2). Defaults to a no-op for standalone hosts. */
   toggleHealthCheck?: () => void;
+  /** Toggle the docked revision comparison (revision M2). Defaults to a no-op for standalone hosts. */
+  toggleRevisionCompare?: () => void;
   /**
    * Which projection the workspace is showing, and how to switch it (ADR-0059 §3).
    *
@@ -503,6 +506,9 @@ export function useTsldToolbarContext({
       // The DCMA health report is a DOCKED COLUMN, not a dialog — the workspace owns its state and
       // the one-dock-at-a-time set (right-docks.ts), so this is a callback the host supplies.
       toggleHealthCheck,
+      // The revision comparison is a DOCKED COLUMN too, for the health reason verbatim — the
+      // workspace owns its state and the one-dock-at-a-time set, so this is a host callback.
+      toggleRevisionCompare,
       // External-Guest share links (ADR-0051 F-M4): `canShare` from the model (role-only, `plan:share`);
       // `openShare` opens the workspace-hosted `ShareLinksDialog`. Inert while `VITE_GUEST_SHARE_LINKS`
       // is off (the `share` id resolves to its placeholder, so neither is read).
@@ -921,6 +927,7 @@ export function useTsldToolbarContext({
     model.floatPaths?.open,
     toggleFloatPaths,
     toggleHealthCheck,
+    toggleRevisionCompare,
     orderedConflictHits.length,
     currentConflict,
     goToNextConflict,

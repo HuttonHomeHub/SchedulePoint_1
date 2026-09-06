@@ -214,6 +214,14 @@ export const scheduleKeys = {
   // invalidation site to forget. Found by grepping the existing sites, not by adding one (M2-T1).
   health: (orgSlug: string, planId: string) =>
     [...scheduleKeys.all(orgSlug), 'plan', planId, 'health-check'] as const,
+  // The revision comparison (ADR-0125, revision M1): a pure GET over two persisted snapshots,
+  // keyed under the schedule namespace for the same reason the health report is — a recalculation
+  // already sweeps `scheduleKeys.all(orgSlug)`, and the LIVE side of a comparison moves with every
+  // recalculation, so a comparison held across one would be stale about the half a planner is
+  // most likely to be watching. The revision ids are part of the key: two comparisons of one plan
+  // are two documents, not one refetched.
+  revisionCompare: (orgSlug: string, planId: string, from: string, to: string) =>
+    [...scheduleKeys.all(orgSlug), 'plan', planId, 'revision-compare', from, to] as const,
   // The resource-loading histogram read-model (M7 rung 5, ADR-0044 §3): a pure GET over the live
   // schedule + resource assignments, keyed under the same schedule namespace as the summary so a
   // recalc's schedule invalidation sweeps it too (dates move each assignment's units-over-time).

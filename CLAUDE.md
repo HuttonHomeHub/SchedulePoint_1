@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 29 Prisma models across 60 migrations, 1140 web
-> source files with 41 Playwright suites beside the base journey, and
-> 124 ADRs.
+> (`apps/api/src/modules/`), 29 Prisma models across 60 migrations, 1149 web
+> source files with 42 Playwright suites beside the base journey, and
+> 125 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3835,6 +3835,84 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   eleven times while _testing_ `report()`: the same class as `#222`, inside the check written about
   that class, caught only by verifying the red instead of believing it.
   **The CPM engine is not imported and no migration runs.**
+
+- **ADR-0125** _(Accepted; M0–M4 landed 2026-09-05)_ — A delta is not a cause, and the snapshot
+  already exists. A planner is asked constantly, by people who do not use the tool, "what changed
+  since last month, and why is the job three weeks later?" — and the product could answer neither
+  half well: `variance` ranks by **lateness** while the meeting is about **criticality**, so an
+  activity that slipped five days with thirty days of float outranked one that slipped a day and
+  became critical. A previous epic set out to answer the "why" too, and its M0 **measured that it
+  could not**: replayed in six orders, the same change scored 30, 18, 2 or 0 working days by
+  position alone (12.9 pp spread against a 10 pp bar, unstable top-three), while seven engine passes
+  at 2,058 activities cost 2,793 ms — 93 % of the end-to-end budget before HTTP. Two limbs passed, so
+  the failure is not vacuous, and its precise shape decides the product: **the sum is order-free and
+  stable at 139 d in every permutation; the decomposition is not.** So the epic can say _how much_
+  the completion moved and cannot say _which change did it_, and it says so on screen and on paper
+  rather than leaving the omission to read as an oversight.
+  **The brief's hard constraint was "two engine passes, not seven" and asked for it to be verified.
+  Verified, it is ZERO.** A `Baseline` already freezes the engine's OUTPUT — `is_critical`,
+  `total_float`, the early/late dates, the type, the identity — which is exactly what the delta
+  reads; the live side is the plan's own persisted columns. `computeSchedule` is not called, not
+  imported and not reachable from the module graph, which is ADR-0116 **D1**'s sentence rather than
+  its weaker D7 sibling and makes the cost limb's failure mode **structurally unreachable** rather
+  than merely affordable. Reusing the baseline deleted a whole milestone of the superseded plan — no
+  model, no migration, no index question, no cascade, no retention decision, no new audit action, and
+  **no `database-architect` engagement because there was nothing to design, not because a change was
+  judged too small**. Baseline-vs-baseline then came free, because both sides project to one row
+  shape and the pure function cannot tell which came from where.
+  **It was not quite nothing, and the exception is the load-bearing half.** A baseline froze the
+  engine's output and **not the rule that produced it**: `is_critical` and `total_float` are the
+  OUTPUT of four planner-writable settings that change criticality and **move no date**, so somebody
+  who moves the threshold and recalculates gets a different critical set with **every bar in the same
+  place** — and a comparison across that would report a large, real-looking set as having "entered
+  the critical path" with nothing in the database able to disagree. Four nullable columns now freeze
+  the rule per baseline (plus four engine-owned mirrors on `plans` for the live side, copied from the
+  mirrors and never from the plan's client-settable options, inside the lock the capture already
+  holds), and the verdict is **three-valued**: `MATCH`, `DIFFERS`, `UNKNOWN`. **`UNKNOWN` is never
+  coalesced** — a `?? 'MATCH'` is the exact lie the columns exist to prevent, and silence would be
+  indistinguishable from agreement. A `DEFAULT` was rejected on the `budgetedExpense` precedent
+  ("0 is a claim"): the `hours_per_day_minutes` default was legal because 1440 was true of every
+  pre-existing row, and these four have been writable since 2026-07-16.
+  **The completion carrier is NOT exact and the product says so.** Both sides persist a
+  `YYYY-MM-DD` while the engine's own carrier rule compares minutes, so a same-day tie can pick a
+  different activity — the panel NAMES the carrier and states the tie-break rather than presenting
+  the number as if the choice were unique. The movement is measured in **working days on the plan
+  calendar with the old side's frozen factor**, which **corrects `completion-carrier.ts`'s
+  prescription** of the carrier's own calendar: that is unrecoverable from a snapshot
+  (`BaselineActivity` has no `calendarId`), resolving it live would apply today's calendar to a
+  frozen side, and consistency with the variance read outranks the residual — two numbers on one
+  screen derived on different calendars is the worse defect. D4's rule is satisfied by **injecting**
+  the walker into the pure delta (the ADR-0024 port pattern), whose default is calendar days for its
+  own unit cases and is documented as **not** the shipped behaviour, so a reader cannot conclude the
+  product reports calendar days.
+  **Two of the plan's own instructions did not survive contact and both are recorded rather than
+  followed or quietly dropped.** M1-T3 justified not widening the variance projection as "three
+  existing readers depend on its contract" — measured, there is **one caller and one consumer**; the
+  decision stands on the argument that survives (the delta needs `isCritical` and `type`, which
+  variance never reads). And M2-T3 said to shade the menu item when the plan has no computed
+  schedule: re-verified, comparing two baselines needs no live computation at all, and comparing
+  against live on an uncalculated plan still returns the criticality delta with the completion
+  explained in a sentence — so shading would refuse to open a dock that has something true to say,
+  which is a working control turned off by a rule written before the payload's shape settled.
+  **F3's end-to-end figure, deferred at M0 because the route did not exist, was measured and
+  re-derived**: p95 58.7 ms, then **65.8 ms against the shipped code**, both against a 250 ms bar
+  committed before the harness existed. The divergence is recorded rather than smoothed — a second
+  run agreeing to the decimal is more suspicious than one that does not — with the evidence that it
+  is variance and not regression (identical delta; `git diff --stat` shows `apps/api` untouched
+  between the runs). Its non-vacuity control is checked FIRST and is not decoration: a benchmark over
+  two identical schedules reports the fastest number the route can produce and says nothing about the
+  case it exists for. The harness also records that **`tsx` cannot boot this application** — the SWC
+  plugin owns the decorator metadata Nest's DI reads, and the resulting error points at an
+  `import type` mistake that does not exist.
+  **The journey found the M2 defect that no unit suite could**, which is why ADR-0081 puts it at the
+  first user-facing milestone: the axe scan used a Playwright `:text-is()` selector, which is a
+  selector-engine extension and not valid CSS — axe-core **threw** rather than scanning nothing,
+  which is the right way round, and is how `data-revision-compare-panel` came to exist. Its claim 6
+  discharges CQ-3's owed half: that measurement recorded in its own words that it proved **boxes and
+  not reachability**, and ADR-0114 M1 shipped a control that was painted and pointer-unreachable
+  while every height assertion passed. **The CPM engine is not imported and no migration runs** in
+  M1–M4; the two schema changes shipped ahead of them, one release apart, so their halves could fail
+  separately.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

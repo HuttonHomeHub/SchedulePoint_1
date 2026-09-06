@@ -148,3 +148,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0122](0122-a-picture-a-screen-reader-cannot-reach-is-not-described-by-saying-it-is.md) | A picture a screen reader cannot reach is not described by saying it is | Accepted           |
 | [0123](0123-a-search-param-is-a-string-and-the-shape-is-decided-at-the-router.md)       | A search param is a string, and the shape is decided at the router      | Accepted           |
 | [0124](0124-a-register-parser-finds-by-structure-and-refuses-by-declaration.md)         | A register parser finds by structure and refuses by declaration         | Accepted           |
+| [0125](0125-a-delta-is-not-a-cause.md)                                                  | A delta is not a cause, and the snapshot already exists                 | Accepted           |

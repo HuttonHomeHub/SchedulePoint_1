@@ -355,13 +355,20 @@ capability exists (ADR-0081 §1).
 - **Complexity:** S
 - **Dependencies:** none
 - **Risks:** an N+1 or a per-row query → one indexed read per side, using the existing
-  `@@index([baselineId, sourceActivityId])` (`schema.prisma:1889`). No new index; confirmed by
-  M0-T2 F3 rather than assumed.
+  `@@index([baselineId, sourceActivityId])` (`schema.prisma:1988` — the citation read `:1889` until
+  2026-09-05; M0-T5's own field block moved it). No new index; confirmed by M0-T2 F3 rather than
+  assumed.
 - **Testing:** repository-level e2e against a real Postgres asserting both projections' shapes and
   the org+plan scoping.
 - **Development steps:**
-  1. Add the projections beside the existing variance ones; do **not** widen the variance projection
-     (spec §4.9 — three existing readers depend on its contract).
+  1. Add the projections beside the existing variance ones; do **not** widen the variance projection.
+     **The reason given here was FALSE and is corrected rather than dropped**: it read "spec §4.9 —
+     three existing readers depend on its contract", and measured on 2026-09-05 there is **one**
+     caller of `loadSnapshotRowsForVariance` (`baselines.service.ts:393`) and **one** consumer of
+     `VarianceBaselineRow` (`variance.ts:68`, the function it was declared for). The decision stands
+     on the argument that actually holds: the delta needs `isCritical` and `type`, which variance
+     genuinely does not, so a shared projection would load two columns the variance path never reads
+     on every variance call — and `type` is what excludes summaries from `entered`/`left`.
   2. Soft-delete filter on both, via the repository's existing `active()` helper.
 
 ##### Task M1-T4 — Service method, DTO and route

@@ -4,12 +4,14 @@
  * and the way that fails is that five get written, one pair is missed, two docks open together, and
  * the diagram is crushed on exactly the narrow screen the invariant exists to protect. So the rule
  * is one derivation over the member list: opening any dock closes every other member, and adding a
- * fourth dock means adding one name here — the closures cannot be five-sixths written.
+ * dock means adding one name here — the closures cannot be five-sixths written. (The set was
+ * three when that was written; the revision comparison made it four without touching this
+ * function, which is the argument working rather than a sentence needing a footnote.)
  *
  * The workspace (which lays the docks out) maps each name to its closer once; neither feature
  * knows about a column it does not render.
  */
-export const RIGHT_DOCKS = ['notes', 'floatPaths', 'health'] as const;
+export const RIGHT_DOCKS = ['notes', 'floatPaths', 'health', 'revisions'] as const;
 
 export type RightDock = (typeof RIGHT_DOCKS)[number];
 

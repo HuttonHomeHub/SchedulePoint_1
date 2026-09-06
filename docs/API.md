@@ -1009,6 +1009,30 @@ problem, and saying so discloses nothing about the organisation's contents.
   (`docs/specs/schedule-health-check/m6-measurement.md`), never copied from
   the float-paths budget.
 
+- `GET …/schedule/revision-compare?from=<uuid>&to=<uuid|live>` reports **what
+  entered and left the critical path** between two computed schedules of one
+  plan, and how far the completion moved (revision M1, ADR-0125). Asserts
+  **both `schedule:read` and `baseline:read`** — the same grant today, so no
+  capability changes, and narrowing either later cannot silently leave the route
+  open on the strength of the other. `from` is a baseline of this plan; `to` is
+  a baseline or the literal `live`, defaulting to `live`. **The CPM engine is
+  not invoked** — both sides are already computed and persisted, so the
+  ADR-0034 parity gate is untouched by construction; no lock, no pen, no
+  transaction, nothing written, no audit event. **It reports what moved and
+  never what caused it**: the payload carries no attribution, ranking or
+  contribution field at any depth, because per-change attribution was measured
+  order-dependent while the total is order-free. Two honesty properties a client
+  must carry to its own surface: `completion.carrier` is **not exact** under a
+  same-day tie (both sides persist a date; the engine's own carrier rule
+  compares minutes), so the carrier is named and the tie-break stated; and
+  `settingsVerdict` is **three-valued**, where `UNKNOWN` means one side never
+  recorded the criticality rule its numbers came from and **must never render as
+  a match**. `from` = `to` is 422 with `details.reason` `SAME_REVISION`; a
+  revision of another plan or org is **404, never 403**. `entered`/`left` are
+  capped at 200 with the cap and the true totals in the payload. Shares the
+  global 100/60 s budget — measured, not assumed: p95 58.7 ms at 2,000
+  activities (`docs/specs/revision-compare-delta/m1-f3-measurement.md`).
+
 ## Authentication
 
 - Cookie-based sessions via Better Auth (secure, http-only, same-site); ADR-0003.
