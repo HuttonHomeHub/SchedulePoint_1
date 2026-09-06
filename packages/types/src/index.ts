@@ -2800,8 +2800,24 @@ export type RevisionChangeClass = RevisionFreeChangeClass | RevisionPaidChangeCl
 export type RevisionNotAssessableReason = 'NOT_SNAPSHOTTED' | 'SIDE_NOT_SCHEDULED';
 
 export interface RevisionChangeRow {
+  /**
+   * The activity a client may REVEAL when the reader activates this row. For a logic row this is
+   * the **successor**, because a link change decides when the successor can start and that is what
+   * a planner opens the row to look at — the predecessor is named in {@link name}.
+   */
   readonly activityId: string;
-  readonly changeClass: RevisionFreeChangeClass;
+  /**
+   * The identity of what this row is ABOUT, unique within its class — and therefore the key a
+   * client renders it under.
+   *
+   * Equal to {@link activityId} for every activity-subject class, and to the dependency's id for
+   * `RELOGICKED`. It exists because the subject of a change is not always an activity: two changed
+   * links into one successor are two rows with one `activityId`, so keying on that would collide
+   * the moment logic became comparable. Added with the paid classes rather than retrofitted after
+   * a client rendered two rows as one.
+   */
+  readonly subjectId: string;
+  readonly changeClass: RevisionChangeClass;
   readonly code: string | null;
   readonly name: string;
   /** Both sides' values as short display strings. Null on the side where the row did not exist. */
@@ -2809,6 +2825,18 @@ export interface RevisionChangeRow {
   readonly to: string | null;
   /** The instant the row is ordered by. Ordering is by TIME and never by magnitude. */
   readonly orderKey: string | null;
+  /**
+   * Whether {@link activityId} is present in the LIVE plan, and therefore whether a client may
+   * offer to reveal it. Answered by the SERVER, exactly as the delta's rows answer it.
+   *
+   * A client cannot derive this from the delta's own rows, and the paid classes are what made that
+   * unarguable: an activity somebody moved to another lane, re-parented or reported progress
+   * against need not have entered or left the critical path, so it appears in no delta list at all.
+   * Inferring "not in the live plan" from that absence puts a **false sentence** on screen for an
+   * activity that is right there in the diagram — worse than a missing control, because it states
+   * something untrue rather than withholding something true.
+   */
+  readonly existsLive: boolean;
 }
 
 export interface RevisionClassAssessment {

@@ -23,6 +23,16 @@ const row = (o: Partial<RevisionRow> & { activityId: string }): RevisionRow => (
   totalFloatDays: 0,
   earlyStart: '2026-01-01',
   earlyFinish: '2026-01-05',
+  laneIndex: 0,
+  parentId: null,
+  calendarId: null,
+  constraintType: null,
+  constraintDate: null,
+  secondaryConstraintType: null,
+  secondaryConstraintDate: null,
+  percentComplete: 0,
+  actualStart: null,
+  actualFinish: null,
   ...o,
 });
 

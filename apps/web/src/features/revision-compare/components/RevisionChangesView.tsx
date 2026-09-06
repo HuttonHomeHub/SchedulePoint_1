@@ -36,18 +36,14 @@ export interface RevisionChangesViewProps {
   readonly report: RevisionChangeReport;
   /** Select and reveal an activity in whichever view is showing. */
   readonly onActivateActivity: (activityId: string, name?: string) => void;
-  /** Ids present in the LIVE plan — a row for something since deleted must not offer to reveal it. */
-  readonly liveActivityIds: ReadonlySet<string>;
 }
 
 function ClassSection({
   assessment,
   onActivateActivity,
-  liveActivityIds,
 }: {
   assessment: RevisionClassAssessment;
   onActivateActivity: (activityId: string, name?: string) => void;
-  liveActivityIds: ReadonlySet<string>;
 }): React.ReactElement {
   const headingId = useId();
   const count = classCountSentence(assessment);
@@ -76,9 +72,14 @@ function ClassSection({
           {assessment.rows.length > 0 && (
             <ul className="space-y-0.5">
               {assessment.rows.map((row) => {
-                const reachable = liveActivityIds.has(row.activityId);
+                // **The SERVER's answer, not the client's inference.** Deriving this from the
+                // delta's rows shaded any activity the delta never mentioned — which, once the
+                // paid classes landed, is most of the list: moving an activity to another lane or
+                // reporting progress against it changes no criticality. The sentence below would
+                // then have said "not in the live plan" about a bar the reader can see.
+                const reachable = row.existsLive;
                 return (
-                  <li key={`${row.changeClass}:${row.activityId}`}>
+                  <li key={row.subjectId}>
                     <button
                       type="button"
                       // Shaded with a reason rather than omitted (ADR-0082): comparing two
@@ -122,7 +123,6 @@ function ClassSection({
 export function RevisionChangesView({
   report,
   onActivateActivity,
-  liveActivityIds,
 }: RevisionChangesViewProps): React.ReactElement {
   const announce = useAnnounce();
   const footerId = useId();
@@ -152,7 +152,6 @@ export function RevisionChangesView({
           key={assessment.changeClass}
           assessment={assessment}
           onActivateActivity={onActivateActivity}
-          liveActivityIds={liveActivityIds}
         />
       ))}
       <p id={footerId} className="text-muted-foreground border-t pt-2 text-xs">

@@ -78,6 +78,7 @@ describe.skipIf(!hasDatabase)('Calendar scope tiers (e2e)', () => {
     await prisma.planLock.deleteMany();
     await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
+    await prisma.baselineDependency.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.activityStep.deleteMany();
     await prisma.crossPlanDependency.deleteMany();

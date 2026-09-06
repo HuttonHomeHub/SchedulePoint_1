@@ -66,6 +66,7 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await prisma.note.deleteMany();
     await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
+    await prisma.baselineDependency.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.planShare.deleteMany();
     await prisma.activity.deleteMany();

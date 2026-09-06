@@ -146,6 +146,7 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     await prisma.planLock.deleteMany();
     await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
+    await prisma.baselineDependency.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.planShare.deleteMany();
     await prisma.crossPlanDependency.deleteMany();

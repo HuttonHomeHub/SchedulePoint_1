@@ -4063,3 +4063,26 @@ that the recipe has already been got wrong twice in this codebase's record (once
 reason, once by using native `disabled` and losing the reason with the tab stop), and thirteen copies
 is thirteen chances to get it wrong again. The remedy is a `useShadedControl` hook; the trigger is
 the next epic that touches three or more of them.
+
+### 253. Thirteen hand-maintained copies of the baseline-children delete sweep
+
+**Status:** open · **Raised:** 2026-09-06 (revision-compare M5) · **Size:** S · **Owner:** repo
+
+Adding `baseline_dependencies` (ADR-0126) broke **557 of 587** API e2e tests at once, because
+`baseline` has a RESTRICT FK from each of its snapshot children and every place that deletes a
+baseline enumerates those children **by hand**. There are thirteen such places: `test/audit-reset.ts`
+plus twelve e2e specs that roll their own reset, and `common/hierarchy/hierarchy-expiry.runner.ts`
+does the same thing for the retention expiry.
+
+This row is about the **duplication**, not the breakage — the breakage is fixed, and it was the loud
+kind: an FK violation naming the constraint, on the first e2e run, in thirteen files at once. What
+makes it debt is the runner, where the same omission is **quiet**: it catches, logs a permanent
+failure, and retries every hour forever (which is why M4 added a DMMF-derived census for that one).
+A fourteenth child table added by somebody who greps for `baselineAssignment.deleteMany` and finds
+only the file they are editing repeats this, and the specs will tell them loudly while the runner
+will not.
+
+The remedy is one exported `clearBaselineTree(prisma)` the specs and the reset call, derived from
+`Prisma.dmmf` the way `hierarchy-expiry.structural.spec.ts` derives its census. Not done here
+because it is twelve spec files whose resets differ in scope, which is a refactor with no behaviour
+change in the middle of a feature epic. The trigger is the next snapshot child table.

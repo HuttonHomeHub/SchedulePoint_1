@@ -1,6 +1,6 @@
 import type { BaselineSummary, RevisionCompare, RevisionMovedActivity } from '@repo/types';
 import { ArrowDownToLine, ArrowUpFromLine, CirclePlus, CircleMinus } from 'lucide-react';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { LIVE_REVISION } from '../api/use-revision-compare';
 import {
@@ -162,24 +162,6 @@ export function RevisionComparePanel({
     },
     [onActivateActivity, announce, compare],
   );
-
-  /**
-   * Which activities the change list may offer to reveal.
-   *
-   * Derived from the delta's OWN `existsLive` flags rather than fetched separately: the server
-   * already answered this question for the criticality rows, and a second source would eventually
-   * disagree with the first on the same screen. Rows the delta never mentions are absent from the
-   * set, so their controls shade with a reason rather than navigating nowhere (ADR-0082) — the
-   * conservative direction, and the one that cannot mislead.
-   */
-  const liveActivityIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const r of compare?.criticalPath.entered ?? []) if (r.existsLive) ids.add(r.activityId);
-    for (const r of compare?.criticalPath.left ?? []) if (r.existsLive) ids.add(r.activityId);
-    for (const r of compare?.criticalPath.added ?? []) if (r.existsLive) ids.add(r.activityId);
-    for (const r of compare?.criticalPath.removed ?? []) if (r.existsLive) ids.add(r.activityId);
-    return ids;
-  }, [compare]);
 
   const hasBaselines = baselines !== null && baselines.length > 0;
   const caveat = compare === null ? null : settingsCaveat(compare.settingsVerdict);
@@ -422,7 +404,6 @@ export function RevisionComparePanel({
               <RevisionChangesView
                 report={compare.changes}
                 onActivateActivity={announceActivation}
-                liveActivityIds={liveActivityIds}
               />
             ) : (
               <>

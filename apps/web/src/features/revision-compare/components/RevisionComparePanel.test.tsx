@@ -516,12 +516,15 @@ describe('the Changes view', () => {
           rows: [
             {
               activityId: 'a1',
+              subjectId: 'a1',
               changeClass: 'RENAMED',
               code: 'A10',
               name: 'Piling',
               from: 'Piling',
               to: 'Piling rig',
               orderKey: '2026-01-05',
+              // The shaded case by default: this row names something the live plan no longer has.
+              existsLive: false,
             },
           ],
           total: 1,
@@ -532,25 +535,33 @@ describe('the Changes view', () => {
   });
 
   /**
-   * A reachable change-list row whose activity is in `added` — NOT in `entered`/`left`.
+   * A reachable change-list row **that appears in no delta list at all**.
    *
-   * That combination is the whole point, and the first version of this fixture missed it: I put
-   * the row in `entered`, where the panel's fallback lookup finds the name anyway, so the test
-   * passed with the fix removed and my "verified red" note was simply false. Reachability is
-   * derived from FOUR lists (entered, left, added, removed) while the name lookup searches TWO, so
-   * an activity in `added` or `removed` is pressable and unnamed. That is a live case, not a
-   * hypothetical, and it is what this fixture now builds.
+   * This fixture used to place the activity in the delta's `added`, because reachability was
+   * derived client-side from the delta's rows. It is not any more — the server answers it per row
+   * (`existsLive`) — and the reason is exactly what this fixture now depicts: once the paid classes
+   * landed, most change rows name activities that entered and left nothing, so deriving from the
+   * delta shaded them with a sentence saying they are not in the live plan while the reader could
+   * see the bar.
+   *
+   * The NAME half of the original finding survives and is what the test below still pins: the
+   * panel's fallback lookup searches only `entered` and `left`, so a row like this one announces a
+   * bare "Activity selected in the plan" unless it passes its own name.
    */
   const withChangesLive = (): RevisionCompare => {
     const base = withChanges();
+    const [renamed, ...rest] = base.changes?.classes ?? [];
     return {
       ...base,
-      criticalPath: {
-        ...base.criticalPath,
-        added: [
-          { activityId: 'a1', code: 'A10', name: 'Piling', isCritical: false, existsLive: true },
+      changes: {
+        cap: base.changes?.cap ?? 200,
+        classes: [
+          {
+            ...renamed!,
+            rows: (renamed?.rows ?? []).map((r) => ({ ...r, existsLive: true })),
+          },
+          ...rest,
         ],
-        addedTotal: 1,
       },
     };
   };
@@ -589,10 +600,22 @@ describe('the Changes view', () => {
   it('shades a row whose activity is not in the live plan, with a reason', () => {
     renderPanel({ compare: withChanges() });
     fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
-    // `a1` is not among the delta's `existsLive` rows in this fixture, so it cannot be revealed.
+    // The SERVER said so: this row's `existsLive` is false. The client no longer infers it.
     const row = screen.getByRole('button', { name: /A10/ });
     expect(row).toHaveAttribute('aria-disabled', 'true');
     expect(within(row).getByText(/cannot be shown in the diagram/i)).toBeInTheDocument();
+  });
+
+  it('offers to reveal a row that appears in NO delta list', () => {
+    // The M5 defect this exists to prevent. A re-laned, re-parented or progressed activity enters
+    // and leaves nothing, so it is in none of the delta's four lists — and under the old
+    // client-side derivation every such row was shaded with a sentence claiming it is not in the
+    // live plan, about a bar the reader can see. Verified red against that derivation.
+    renderPanel({ compare: withChangesLive() });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    const row = screen.getByRole('button', { name: /A10/ });
+    expect(row).not.toHaveAttribute('aria-disabled', 'true');
+    expect(within(row).queryByText(/cannot be shown in the diagram/i)).not.toBeInTheDocument();
   });
 
   it('NAMES the activity when a change-list row is activated', () => {

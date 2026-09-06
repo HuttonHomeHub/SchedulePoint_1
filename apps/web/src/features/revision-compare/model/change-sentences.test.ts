@@ -14,12 +14,14 @@ const assessed = (total: number, shown = total): RevisionClassAssessment => ({
   notAssessableReason: null,
   rows: Array.from({ length: shown }, (_, i) => ({
     activityId: `a${String(i)}`,
+    subjectId: `a${String(i)}`,
     changeClass: 'RENAMED' as const,
     code: null,
     name: `A${String(i)}`,
     from: 'old',
     to: 'new',
     orderKey: '2026-01-01',
+    existsLive: true,
   })),
   total,
 });

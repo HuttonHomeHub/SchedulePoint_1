@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import type { ActivityType, Prisma } from '@prisma/client';
+import type {
+  ActivityType,
+  ConstraintType,
+  DependencyType,
+  LagCalendarSource,
+  Prisma,
+} from '@prisma/client';
 import type {
   HistogramGranularity,
   PlanEarnedValue,
@@ -9,6 +15,7 @@ import type {
   ProgrammeScheduleResult,
   HealthMetricResult,
   ResourceHistogramSeries,
+  RevisionChangeReport,
   RevisionCompare,
   RevisionMovedActivity,
   RevisionPresenceActivity,
@@ -30,7 +37,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
 import { BaselineRepository } from '../baselines/baseline.repository';
 import { classifyRevisionChanges } from '../baselines/revision-changes';
-import { computeRevisionDelta, type RevisionRow } from '../baselines/revision-delta';
+import {
+  computeRevisionDelta,
+  type RevisionEdge,
+  type RevisionRow,
+} from '../baselines/revision-delta';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -1491,14 +1502,78 @@ export class ScheduleService {
     if (!fromBaseline) throw new NotFoundError('Revision not found.');
     if (to !== LIVE_REVISION && !toBaseline) throw new NotFoundError('Revision not found.');
 
-    const [fromRows, toRows, liveRows, planCalendar] = await Promise.all([
-      this.baselines.loadSnapshotRowsForDelta(fromBaseline.id, organization.id),
-      toBaseline
-        ? this.baselines.loadSnapshotRowsForDelta(toBaseline.id, organization.id)
-        : Promise.resolve(null),
-      this.baselines.loadActiveActivitiesForDelta(organization.id, planId),
-      this.resolveCalendar(organization.id, plan.calendarId),
-    ]);
+    /**
+     * Both sides' edges project to ONE shape, exactly as their activities do — which is what keeps
+     * baseline-vs-baseline free rather than a second implementation. The frozen side names its
+     * columns `source_*` and the live side does not; that is the whole difference.
+     */
+    const frozenEdges = (
+      rows: {
+        sourceDependencyId: string;
+        sourcePredecessorId: string;
+        sourceSuccessorId: string;
+        type: DependencyType;
+        lagMinutes: number;
+        lagCalendar: LagCalendarSource;
+      }[],
+    ): RevisionEdge[] =>
+      rows.map((e) => ({
+        dependencyId: e.sourceDependencyId,
+        predecessorId: e.sourcePredecessorId,
+        successorId: e.sourceSuccessorId,
+        type: e.type,
+        lagMinutes: e.lagMinutes,
+        lagCalendar: e.lagCalendar,
+      }));
+
+    const liveEdges = (
+      rows: {
+        id: string;
+        predecessorId: string;
+        successorId: string;
+        type: DependencyType;
+        lagMinutes: number;
+        lagCalendar: LagCalendarSource;
+      }[],
+    ): RevisionEdge[] =>
+      rows.map((e) => ({
+        dependencyId: e.id,
+        predecessorId: e.predecessorId,
+        successorId: e.successorId,
+        type: e.type,
+        lagMinutes: e.lagMinutes,
+        lagCalendar: e.lagCalendar,
+      }));
+
+    // **The logic and the calendar names are loaded ONLY when the change list is asked for.** The
+    // delta does not read either, so a caller that did not opt in pays nothing for them — the
+    // ADR-0073 C2 projection rule applied to the reads as well as to the payload.
+    const wantsChanges = includes.includes('changes');
+    const [fromRows, toRows, liveRows, planCalendar, fromEdges, toEdges, calendarNames] =
+      await Promise.all([
+        this.baselines.loadSnapshotRowsForDelta(fromBaseline.id, organization.id),
+        toBaseline
+          ? this.baselines.loadSnapshotRowsForDelta(toBaseline.id, organization.id)
+          : Promise.resolve(null),
+        this.baselines.loadActiveActivitiesForDelta(organization.id, planId),
+        this.resolveCalendar(organization.id, plan.calendarId),
+        wantsChanges
+          ? this.baselines
+              .loadSnapshotDependenciesForDelta(fromBaseline.id, organization.id)
+              .then(frozenEdges)
+          : Promise.resolve<RevisionEdge[]>([]),
+        wantsChanges
+          ? toBaseline
+            ? this.baselines
+                .loadSnapshotDependenciesForDelta(toBaseline.id, organization.id)
+                .then(frozenEdges)
+            : // Normalised HERE rather than at the call site below, so the two branches produce one
+              // type and nothing downstream needs a cast to tell them apart — the same reason the
+              // activity projections converge before the pure function sees them.
+              this.baselines.loadActiveDependenciesForDelta(organization.id, planId).then(liveEdges)
+          : Promise.resolve<RevisionEdge[]>([]),
+        wantsChanges ? this.baselines.loadCalendarNames(organization.id) : Promise.resolve([]),
+      ]);
 
     const date = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
 
@@ -1513,6 +1588,16 @@ export class ScheduleService {
         totalFloat: number | null;
         baselineStart: Date | null;
         baselineFinish: Date | null;
+        laneIndex: number | null;
+        parentId: string | null;
+        calendarId: string | null;
+        constraintType: ConstraintType | null;
+        constraintDate: Date | null;
+        secondaryConstraintType: ConstraintType | null;
+        secondaryConstraintDate: Date | null;
+        percentComplete: number | null;
+        actualStart: Date | null;
+        actualFinish: Date | null;
       }[],
     ): RevisionRow[] =>
       rows.map((r) => ({
@@ -1525,6 +1610,19 @@ export class ScheduleService {
         totalFloatDays: r.totalFloat,
         earlyStart: date(r.baselineStart),
         earlyFinish: date(r.baselineFinish),
+        // The frozen shape, carried through unread by the delta (ADR-0126). On a NONE-level
+        // baseline every one of these is NULL, and nothing here interprets that: only
+        // `bothSnapshotted` below is entitled to.
+        laneIndex: r.laneIndex,
+        parentId: r.parentId,
+        calendarId: r.calendarId,
+        constraintType: r.constraintType,
+        constraintDate: date(r.constraintDate),
+        secondaryConstraintType: r.secondaryConstraintType,
+        secondaryConstraintDate: date(r.secondaryConstraintDate),
+        percentComplete: r.percentComplete,
+        actualStart: date(r.actualStart),
+        actualFinish: date(r.actualFinish),
       }));
 
     const liveSide: RevisionRow[] = liveRows.map((r) => ({
@@ -1537,6 +1635,16 @@ export class ScheduleService {
       totalFloatDays: r.totalFloat,
       earlyStart: date(r.earlyStart),
       earlyFinish: date(r.earlyFinish),
+      laneIndex: r.laneIndex,
+      parentId: r.parentId,
+      calendarId: r.calendarId,
+      constraintType: r.constraintType,
+      constraintDate: date(r.constraintDate),
+      secondaryConstraintType: r.secondaryConstraintType,
+      secondaryConstraintDate: date(r.secondaryConstraintDate),
+      percentComplete: r.percentComplete,
+      actualStart: date(r.actualStart),
+      actualFinish: date(r.actualFinish),
     }));
 
     // **The measurement frame, spec D4**: working days on the PLAN calendar, with the OLD side's
@@ -1598,30 +1706,60 @@ export class ScheduleService {
       existsLive: liveIds.has(r.activityId),
     });
 
-    // **The change list, only when asked for.** `bothSnapshotted` is hard-coded false until the
-    // snapshot extension lands: no baseline captured today records logic, constraints, calendar or
-    // WBS parent, so those classes report NOT_SNAPSHOTTED rather than "no change". That is the
-    // whole point — an absence a reader cannot distinguish from a fact is the defect this epic
-    // exists to remove, and it would be trivially easy to default it to `true` and ship a report
-    // that quietly claims the logic did not change.
-    const wantsChanges = includes.includes('changes');
+    /**
+     * **Whether the paid classes mean anything on THIS pair**, and the answer comes from the
+     * capture-level discriminator — never from the row values, every one of which has a legitimate
+     * null on a fully recorded side.
+     *
+     * The LIVE side is always recorded: it IS the plan's shape. So a live comparison turns on the
+     * one frozen side, and a baseline-vs-baseline comparison needs BOTH. A pair where either side
+     * predates the snapshot extension is `false` **permanently** — no backfill is possible, because
+     * writing today's logic into a historic snapshot would state as history a graph that baseline
+     * never saw — and the classifier then reports each paid class as not assessable with a reason,
+     * never as "no change". Defaulting this to `true` would ship a report that quietly claims the
+     * logic did not change, which is the defect this whole epic exists to remove.
+     */
+    const bothSnapshotted =
+      fromBaseline.revisionSnapshotLevel === 'FULL' &&
+      (toBaseline === null || toBaseline.revisionSnapshotLevel === 'FULL');
+
+    const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
+
+    // **The change list, only when asked for.**
     const changes = wantsChanges
       ? // The SAME two projections the delta reads, composed the same way — not a second
         // assembly. Two sources for one pair would drift, and the drift would be invisible: each
         // looks right alone and only a reader comparing the delta against the change list on one
         // plan would ever see them disagree (the ADR-0065 `routeOrthogonal` argument).
         classifyRevisionChanges(
-          frozenSide(fromRows),
-          toRows === null ? liveSide : frozenSide(toRows),
+          { rows: frozenSide(fromRows), edges: fromEdges },
+          { rows: toRows === null ? liveSide : frozenSide(toRows), edges: toEdges },
           {
             fromScheduled: sideScheduled(fromBaseline, plan.scheduleComputedAt),
             toScheduled: sideScheduled(toBaseline, plan.scheduleComputedAt),
-            bothSnapshotted: false,
+            bothSnapshotted,
             includeProgress: includes.includes('progress'),
+            calendarName: (id) => calendarNameById.get(id) ?? null,
             cap: REVISION_ROW_CAP,
           },
         )
       : null;
+
+    /**
+     * The change list's rows gain `existsLive` HERE, from the same `liveIds` the delta's rows use —
+     * one source for one question, on one screen. The classifier cannot answer it: it cannot tell a
+     * baseline from the live plan, which is the property that makes baseline-vs-baseline free.
+     */
+    const changeReport: RevisionChangeReport | null =
+      changes === null
+        ? null
+        : {
+            cap: changes.cap,
+            classes: changes.classes.map((c) => ({
+              ...c,
+              rows: c.rows.map((r) => ({ ...r, existsLive: liveIds.has(r.activityId) })),
+            })),
+          };
 
     const result: RevisionCompare = {
       planId,
@@ -1674,7 +1812,7 @@ export class ScheduleService {
       },
       // Absent (rather than an empty report) when not asked for, so a caller that did not opt in
       // sees byte-identically what it saw before this existed.
-      ...(changes ? { changes } : {}),
+      ...(changeReport ? { changes: changeReport } : {}),
       criticalPath: bothScheduled
         ? {
             entered: delta.entered.map(moved),

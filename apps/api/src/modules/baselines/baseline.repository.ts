@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import { Prisma, type ActivityType, type Baseline } from '@prisma/client';
+import {
+  Prisma,
+  type ActivityType,
+  type Baseline,
+  type ConstraintType,
+  type DependencyType,
+  type LagCalendarSource,
+} from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CriticalityRule } from '../schedule/criticality-rule';
@@ -53,6 +60,47 @@ export interface CaptureActivityRow {
     budgetedCost: number;
     lagMinutes: number;
   }[];
+  /**
+   * **The frozen SHAPE of the activity** — how the plan was built, as distinct from where the work
+   * landed (the revision-snapshot extension, ADR-0126).
+   *
+   * Every one of these is REQUIRED here while the column it lands in is nullable, and that
+   * asymmetry is deliberate. The column is nullable because a baseline captured before the
+   * extension has no value for it and never will; this interface describes a capture happening
+   * NOW, which always has one. Making them optional would let a future capture path omit a field
+   * silently and write a NULL that a reader cannot tell from "never recorded" — the exact absence
+   * this whole epic exists to remove. `laneIndex` and `percentComplete` are `number`, not
+   * `number | null`, for the same reason: the live columns are NOT NULL, so there is nothing to
+   * pass through.
+   */
+  laneIndex: number;
+  parentId: string | null;
+  calendarId: string | null;
+  constraintType: ConstraintType | null;
+  constraintDate: Date | null;
+  secondaryConstraintType: ConstraintType | null;
+  secondaryConstraintDate: Date | null;
+  percentComplete: number;
+  actualStart: Date | null;
+  actualFinish: Date | null;
+}
+
+/**
+ * A live dependency projected to the fields a baseline snapshot freezes (ADR-0126).
+ *
+ * All four value fields are required, matching the four no-default columns on
+ * `baseline_dependencies`: a capture path that forgot `type` would otherwise freeze every edge in
+ * the plan as Finish-to-Start, and a change list reading that snapshot would report a
+ * finish-to-finish link as having been re-typed by somebody. The compiler is the guard.
+ */
+export interface CaptureDependencyRow {
+  id: string;
+  predecessorId: string;
+  successorId: string;
+  type: DependencyType;
+  lagMinutes: number;
+  lagCalendar: LagCalendarSource;
+  isDriving: boolean;
 }
 
 /** The baseline row to insert, plus the already-projected snapshot rows. */
@@ -75,6 +123,14 @@ export interface CaptureInput {
   criticalityRule: CriticalityRule | null;
   actorId: string;
   activities: CaptureActivityRow[];
+  /**
+   * The plan's frozen logic. Written unconditionally — INCLUDING when the plan has no dependencies
+   * at all, which is why the capture sets `revisionSnapshotLevel: 'FULL'` outside this array's
+   * emptiness check. Zero rows on a FULL baseline means "there genuinely were none"; zero rows on
+   * a NONE baseline means "nobody looked". A row count cannot tell those apart, and the
+   * discriminator is the only thing that can (the `costSnapshotLevel` precedent, ADR-0071 M3).
+   */
+  dependencies: CaptureDependencyRow[];
 }
 
 /**
@@ -123,6 +179,11 @@ export class BaselineRepository {
         // becomes indistinguishable from a NULL meaning "we happened not to set it this time".
         // `?? null` here defaults to the SENTINEL, never to a value — `?? 'TOTAL_FLOAT'` / `?? 0`
         // is the forbidden form, because it manufactures a rule nothing ever ran under.
+        // ADR-0126. Written unconditionally, exactly as `costSnapshotLevel` above is: this capture
+        // reads and freezes the shape of every activity and every edge, so it IS full — whether or
+        // not the plan happens to contain any logic to freeze. Making it conditional on
+        // `dependencies.length` is the trap the sibling comment above describes, one column along.
+        revisionSnapshotLevel: 'FULL',
         criticalPathDefinition: input.criticalityRule?.criticalPathDefinition ?? null,
         criticalFloatThresholdMinutes: input.criticalityRule?.criticalFloatThresholdMinutes ?? null,
         totalFloatMode: input.criticalityRule?.totalFloatMode ?? null,
@@ -155,6 +216,18 @@ export class BaselineRepository {
           // The activity-expense component of that total (ADR-0071 M3), so the decomposition is
           // stated rather than recovered by subtracting the assignment rows.
           budgetedExpense: a.budgetedExpense,
+          // The frozen SHAPE (ADR-0126). Copied field for field, no derivation: a snapshot that
+          // computed anything would be recording a rule rather than a fact.
+          laneIndex: a.laneIndex,
+          parentId: a.parentId,
+          calendarId: a.calendarId,
+          constraintType: a.constraintType,
+          constraintDate: a.constraintDate,
+          secondaryConstraintType: a.secondaryConstraintType,
+          secondaryConstraintDate: a.secondaryConstraintDate,
+          percentComplete: a.percentComplete,
+          actualStart: a.actualStart,
+          actualFinish: a.actualFinish,
           createdBy: input.actorId,
           updatedBy: input.actorId,
         })),
@@ -177,6 +250,30 @@ export class BaselineRepository {
         })),
       );
       if (components.length > 0) await db.baselineAssignment.createMany({ data: components });
+    }
+    // **Outside the `activities.length` block on purpose.** An edge set cannot be non-empty when
+    // the activity set is (an edge names two activities), so nesting it would be harmless today
+    // and would silently become a bug the day the guard above changes for an unrelated reason.
+    // The level written above is already unconditional; this is the rows it promises.
+    if (input.dependencies.length > 0) {
+      await db.baselineDependency.createMany({
+        data: input.dependencies.map((d) => ({
+          organizationId: input.organizationId,
+          baselineId: baseline.id,
+          sourceDependencyId: d.id,
+          // The ENDPOINTS in the SOURCE activity id space — the same space
+          // `baseline_activities.source_activity_id` lives in, so the change list joins id to id
+          // with no lookup through this table's own primary keys (ADR-0126).
+          sourcePredecessorId: d.predecessorId,
+          sourceSuccessorId: d.successorId,
+          type: d.type,
+          lagMinutes: d.lagMinutes,
+          lagCalendar: d.lagCalendar,
+          isDriving: d.isDriving,
+          createdBy: input.actorId,
+          updatedBy: input.actorId,
+        })),
+      });
     }
     return baseline;
   }
@@ -209,6 +306,18 @@ export class BaselineRepository {
         // assignment's budget (explicit override or `budgetedUnits × costPerUnit`). Loaded inside
         // the locked capture tx so the frozen budget is consistent with the frozen dates.
         budgetedExpense: true,
+        // The SHAPE inputs (ADR-0126) — how the plan was built, read in the same locked
+        // transaction as the dates so the two describe one moment.
+        laneIndex: true,
+        parentId: true,
+        calendarId: true,
+        constraintType: true,
+        constraintDate: true,
+        secondaryConstraintType: true,
+        secondaryConstraintDate: true,
+        percentComplete: true,
+        actualStart: true,
+        actualFinish: true,
         assignments: {
           where: { deletedAt: null, resource: { deletedAt: null } },
           select: {
@@ -236,6 +345,44 @@ export class BaselineRepository {
         lagMinutes: a.lagMinutes,
       })),
     }));
+  }
+
+  /**
+   * A plan's active dependencies projected to the snapshot fields — the logic half of a capture
+   * (ADR-0126). Scoped by org (anti-IDOR) and plan, and read inside the SAME locked transaction as
+   * {@link loadActiveActivitiesForCapture}, which is what makes the frozen graph and the frozen
+   * dates describe one moment rather than two.
+   *
+   * **Both endpoints are filtered on being live**, not just the edge. A dependency whose endpoint
+   * was soft-deleted is unreachable from the plan the capture is freezing, and storing it would put
+   * an edge in the snapshot naming an activity the snapshot does not contain — which the change
+   * list would then have to render as a link to nothing. The service invariant that every endpoint
+   * equals some `baseline_activities.source_activity_id` of the same baseline is enforced HERE, in
+   * the one query, rather than by a foreign key the ADR-0025 copy-not-reference rule forbids.
+   */
+  loadActiveDependenciesForCapture(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<CaptureDependencyRow[]> {
+    return db.activityDependency.findMany({
+      where: {
+        organizationId,
+        planId,
+        deletedAt: null,
+        predecessor: { deletedAt: null },
+        successor: { deletedAt: null },
+      },
+      select: {
+        id: true,
+        predecessorId: true,
+        successorId: true,
+        type: true,
+        lagMinutes: true,
+        lagCalendar: true,
+        isDriving: true,
+      },
+    });
   }
 
   /** The plan's active comparison baseline, or null when it has none — the variance source. */
@@ -314,6 +461,16 @@ export class BaselineRepository {
       totalFloat: number | null;
       baselineStart: Date | null;
       baselineFinish: Date | null;
+      laneIndex: number | null;
+      parentId: string | null;
+      calendarId: string | null;
+      constraintType: ConstraintType | null;
+      constraintDate: Date | null;
+      secondaryConstraintType: ConstraintType | null;
+      secondaryConstraintDate: Date | null;
+      percentComplete: number | null;
+      actualStart: Date | null;
+      actualFinish: Date | null;
     }[]
   > {
     return db.baselineActivity.findMany({
@@ -328,6 +485,20 @@ export class BaselineRepository {
         totalFloat: true,
         baselineStart: true,
         baselineFinish: true,
+        // The frozen SHAPE (ADR-0126). Selected unconditionally, including from a NONE-level
+        // baseline where every one of them is NULL: the caller decides whether they mean anything
+        // by reading `revision_snapshot_level`, and branching the SELECT on the level would make
+        // this read's own shape depend on the answer it is trying to supply.
+        laneIndex: true,
+        parentId: true,
+        calendarId: true,
+        constraintType: true,
+        constraintDate: true,
+        secondaryConstraintType: true,
+        secondaryConstraintDate: true,
+        percentComplete: true,
+        actualStart: true,
+        actualFinish: true,
       },
     });
   }
@@ -354,6 +525,16 @@ export class BaselineRepository {
       totalFloat: number | null;
       earlyStart: Date | null;
       earlyFinish: Date | null;
+      laneIndex: number;
+      parentId: string | null;
+      calendarId: string | null;
+      constraintType: ConstraintType | null;
+      constraintDate: Date | null;
+      secondaryConstraintType: ConstraintType | null;
+      secondaryConstraintDate: Date | null;
+      percentComplete: number;
+      actualStart: Date | null;
+      actualFinish: Date | null;
     }[]
   > {
     return db.activity.findMany({
@@ -369,7 +550,109 @@ export class BaselineRepository {
         totalFloat: true,
         earlyStart: true,
         earlyFinish: true,
+        // The live plan's shape — the counterpart of the frozen columns above. The live side is
+        // ALWAYS fully recorded: it IS the plan, so `bothSnapshotted` turns only on the frozen
+        // side(s).
+        laneIndex: true,
+        parentId: true,
+        calendarId: true,
+        constraintType: true,
+        constraintDate: true,
+        secondaryConstraintType: true,
+        secondaryConstraintDate: true,
+        percentComplete: true,
+        actualStart: true,
+        actualFinish: true,
       },
+    });
+  }
+
+  /**
+   * A baseline's frozen LOGIC, projected for the change list (ADR-0126).
+   *
+   * Org-scoped in the query, like {@link loadSnapshotRowsForDelta} and for the same reason: a
+   * baseline id belonging to another organisation returns no rows here even if a future call site
+   * forgets to check. One indexed read on `(baseline_id, source_dependency_id)`.
+   *
+   * `is_driving` is frozen in the table and deliberately NOT projected — see {@link RevisionEdge}.
+   */
+  loadSnapshotDependenciesForDelta(
+    baselineId: string,
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<
+    {
+      sourceDependencyId: string;
+      sourcePredecessorId: string;
+      sourceSuccessorId: string;
+      type: DependencyType;
+      lagMinutes: number;
+      lagCalendar: LagCalendarSource;
+    }[]
+  > {
+    return db.baselineDependency.findMany({
+      where: { baselineId, organizationId, deletedAt: null },
+      select: {
+        sourceDependencyId: true,
+        sourcePredecessorId: true,
+        sourceSuccessorId: true,
+        type: true,
+        lagMinutes: true,
+        lagCalendar: true,
+      },
+    });
+  }
+
+  /** The live plan's logic — the live side's counterpart to the loader above. */
+  loadActiveDependenciesForDelta(
+    organizationId: string,
+    planId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<
+    {
+      id: string;
+      predecessorId: string;
+      successorId: string;
+      type: DependencyType;
+      lagMinutes: number;
+      lagCalendar: LagCalendarSource;
+    }[]
+  > {
+    return db.activityDependency.findMany({
+      where: {
+        organizationId,
+        planId,
+        deletedAt: null,
+        predecessor: { deletedAt: null },
+        successor: { deletedAt: null },
+      },
+      select: {
+        id: true,
+        predecessorId: true,
+        successorId: true,
+        type: true,
+        lagMinutes: true,
+        lagCalendar: true,
+      },
+    });
+  }
+
+  /**
+   * The organisation's calendar names, for rendering a "Calendar changed" row.
+   *
+   * Returned as id → name pairs for the whole org rather than resolved per activity: a comparison
+   * names at most a handful of calendars and the library is small, so one read beats N. A calendar
+   * DELETED since capture is simply absent, which is the expected outcome of the snapshot holding
+   * correlation ids and no foreign keys (ADR-0025) — the classifier states it in words rather than
+   * printing a UUID.
+   */
+  loadCalendarNames(
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<{ id: string; name: string }[]> {
+    return db.calendar.findMany({
+      where: { organizationId, deletedAt: null },
+      select: { id: true, name: true },
     });
   }
 

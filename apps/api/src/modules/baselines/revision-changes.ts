@@ -10,13 +10,14 @@ import {
   type RevisionPaidChangeClass,
 } from '@repo/types';
 
-import type { RevisionRow } from './revision-delta';
+import type { RevisionEdge, RevisionRow } from './revision-delta';
 
 /**
  * **The change list** — what was added, removed, renamed, re-coded, re-typed, re-durationed,
- * re-dated, and what happened to float and criticality, between two of a plan's revisions.
+ * re-dated, re-logicked, re-constrained, re-calendared, re-parented, re-laned, progressed, and what
+ * happened to float and criticality, between two of a plan's revisions.
  *
- * One pure function over the same two projections the delta reads. No engine, no I/O.
+ * One pure function over the same projections the delta reads. No engine, no I/O.
  * `computeSchedule` is not imported here and the ADR-0034 recalculation parity gate is untouched by
  * construction — the structural gate over this file's family asserts it rather than trusting this
  * sentence.
@@ -31,13 +32,17 @@ import type { RevisionRow } from './revision-delta';
  * never by magnitude**: a list sorted by "biggest change first" is a ranking, and a ranking of
  * changes beside a slipped date is a causal claim wearing a table's clothes.
  *
- * ## Eight classes here, six deliberately absent
+ * ## Eight classes free, six paid — and the price is a snapshot, not a computation
  *
- * A baseline freezes the engine's **output** and almost none of its **input**. Everything below
- * falls out of columns `BaselineActivity` already holds, so this whole module needs **no migration**
- * — which is why it ships first. Logic, constraints, calendar, WBS parent, lane and progress are
- * *inputs*, are not frozen, and arrive with the snapshot extension. Until then a comparison reports
- * them as **not assessable with a reason**, never as "no change": see {@link RevisionChangeReport}.
+ * A baseline freezes the engine's **output** and, until ADR-0126, almost none of its **input**. The
+ * eight free classes fall out of columns `BaselineActivity` has always held. The six paid ones —
+ * logic, constraints, calendar, WBS parent, lane and progress — need the shape the snapshot
+ * extension freezes, and a pair of revisions captured before it will **never** have it: writing
+ * today's logic into a historic snapshot would state as history a graph that baseline never saw.
+ * So such a pair reports each paid class as **not assessable with a reason**, never as "no change"
+ * — see {@link ClassifyOptions.bothSnapshotted}, which is the ONLY thing entitled to answer that
+ * question. The row fields themselves cannot: every one of them has a legitimate null on a fully
+ * recorded side.
  */
 
 /**
@@ -52,9 +57,42 @@ export type FreeChangeClass = RevisionFreeChangeClass;
 export type PaidChangeClass = RevisionPaidChangeClass;
 export type ChangeClass = RevisionChangeClass;
 export type NotAssessableReason = RevisionNotAssessableReason;
-export type ChangeRow = RevisionChangeRow;
-export type ClassAssessment = RevisionClassAssessment;
+/**
+ * The classifier's own row: everything a pure function over two projections can know.
+ *
+ * `existsLive` is deliberately absent — it is a question about the LIVE plan, and this function
+ * cannot tell a baseline from the live plan by design (that is what makes baseline-vs-baseline
+ * free). The service adds it, exactly as it adds the same flag to the delta's rows
+ * (`RevisionMovedRow` → `RevisionMovedActivity`).
+ */
+export type ChangeRow = Omit<RevisionChangeRow, 'existsLive'>;
+
+export interface ClassAssessment extends Omit<RevisionClassAssessment, 'rows'> {
+  readonly rows: readonly ChangeRow[];
+}
+
+/** What {@link classifyRevisionChanges} returns; {@link RevisionChangeReport} is the DTO. */
+export interface ClassifiedReport extends Omit<RevisionChangeReport, 'classes'> {
+  readonly classes: readonly ClassAssessment[];
+}
 export type { RevisionChangeReport };
+
+/**
+ * The paid classes whose subject is an ACTIVITY, so they are decided in the same per-row loop as
+ * the free ones. `RELOGICKED` is the exception and is diffed over edges instead — its subject is a
+ * link, which is why {@link RevisionChangeRow.subjectId} exists.
+ *
+ * Derived by exclusion rather than listed, so adding a paid class to the vocabulary puts it here
+ * automatically and the compiler then demands a `changed`/`labelOf` branch for it. A hand-written
+ * list would let a new class arrive, be reported, and always say "nothing changed".
+ */
+const PAID_ROW_CHANGE_CLASSES = PAID_CHANGE_CLASSES.filter(
+  (c): c is Exclude<PaidChangeClass, 'RELOGICKED'> => c !== 'RELOGICKED',
+);
+
+/** Every class decided per activity row. ADDED/REMOVED are presence, handled separately. */
+type RowChangeClass =
+  Exclude<FreeChangeClass, 'ADDED' | 'REMOVED'> | (typeof PAID_ROW_CHANGE_CLASSES)[number];
 
 /** Formats a duration for display without asserting a day factor the caller has not supplied. */
 function minutesLabel(minutes: number | null): string | null {
@@ -62,7 +100,45 @@ function minutesLabel(minutes: number | null): string | null {
   return `${String(minutes)} min`;
 }
 
-function labelOf(row: RevisionRow, changeClass: FreeChangeClass): string | null {
+/** What a reader is shown where a plan states no opinion. Never a blank and never a raw null. */
+const NONE = 'None';
+const TOP_LEVEL = 'Top level';
+const PLAN_CALENDAR = 'Plan calendar';
+/**
+ * A calendar or parent named by a snapshot that the live plan no longer has. Stated rather than
+ * rendered as a UUID: the snapshot deliberately holds correlation ids and no foreign keys
+ * (ADR-0025), so this is an expected outcome of the design and not a broken reference.
+ */
+const GONE_CALENDAR = 'A calendar that no longer exists';
+const GONE_PARENT = 'A phase that no longer exists';
+
+function constraintLabel(row: RevisionRow): string {
+  const one = (type: string | null, date: string | null): string | null =>
+    type === null ? null : date === null ? type : `${type} ${date}`;
+  const primary = one(row.constraintType, row.constraintDate);
+  const secondary = one(row.secondaryConstraintType, row.secondaryConstraintDate);
+  if (primary === null && secondary === null) return NONE;
+  return [primary, secondary].filter((p): p is string => p !== null).join(', then ');
+}
+
+function progressLabel(row: RevisionRow): string {
+  const parts = [`${String(row.percentComplete ?? 0)}%`];
+  if (row.actualStart !== null) parts.push(`started ${row.actualStart}`);
+  if (row.actualFinish !== null) parts.push(`finished ${row.actualFinish}`);
+  return parts.join(' · ');
+}
+
+/**
+ * How one side describes a value. Takes the side's OWN row index so a parent resolves to the name
+ * it had on THAT side: renaming a phase and moving an activity into it are two edits, and resolving
+ * both ends against the new side would report the old parent under its new name.
+ */
+function labelOf(
+  row: RevisionRow,
+  changeClass: RowChangeClass | 'ADDED' | 'REMOVED',
+  side: ReadonlyMap<string, RevisionRow>,
+  calendarName: (id: string) => string | null,
+): string | null {
   switch (changeClass) {
     case 'RENAMED':
       return row.name;
@@ -78,13 +154,25 @@ function labelOf(row: RevisionRow, changeClass: FreeChangeClass): string | null 
         : `${row.earlyStart} → ${row.earlyFinish}`;
     case 'CRITICALITY':
       return row.isCritical ? 'critical' : `float ${String(row.totalFloatDays ?? '?')} d`;
+    case 'RECONSTRAINED':
+      return constraintLabel(row);
+    case 'RECALENDARED':
+      return row.calendarId === null
+        ? PLAN_CALENDAR
+        : (calendarName(row.calendarId) ?? GONE_CALENDAR);
+    case 'REPARENTED':
+      return row.parentId === null ? TOP_LEVEL : (side.get(row.parentId)?.name ?? GONE_PARENT);
+    case 'RELANED':
+      return `Lane ${String(row.laneIndex ?? 0)}`;
+    case 'PROGRESSED':
+      return progressLabel(row);
     case 'ADDED':
     case 'REMOVED':
       return row.name;
   }
 }
 
-function changed(from: RevisionRow, to: RevisionRow, changeClass: FreeChangeClass): boolean {
+function changed(from: RevisionRow, to: RevisionRow, changeClass: RowChangeClass): boolean {
   switch (changeClass) {
     case 'RENAMED':
       return from.name !== to.name;
@@ -101,10 +189,54 @@ function changed(from: RevisionRow, to: RevisionRow, changeClass: FreeChangeClas
       return from.earlyStart !== to.earlyStart || from.earlyFinish !== to.earlyFinish;
     case 'CRITICALITY':
       return from.isCritical !== to.isCritical || from.totalFloatDays !== to.totalFloatDays;
-    case 'ADDED':
-    case 'REMOVED':
-      return false;
+    case 'RECONSTRAINED':
+      // All four together — a secondary constraint is a constraint, and reporting a change to it
+      // under a different heading would put two halves of one edit in two places.
+      return (
+        from.constraintType !== to.constraintType ||
+        from.constraintDate !== to.constraintDate ||
+        from.secondaryConstraintType !== to.secondaryConstraintType ||
+        from.secondaryConstraintDate !== to.secondaryConstraintDate
+      );
+    case 'RECALENDARED':
+      return from.calendarId !== to.calendarId;
+    case 'REPARENTED':
+      return from.parentId !== to.parentId;
+    case 'RELANED':
+      return from.laneIndex !== to.laneIndex;
+    case 'PROGRESSED':
+      return (
+        from.percentComplete !== to.percentComplete ||
+        from.actualStart !== to.actualStart ||
+        from.actualFinish !== to.actualFinish
+      );
   }
+}
+
+/** How an edge reads on one side. `FS +480 min`, `SS −120 min (24-hour)`, `FF`. */
+function edgeLabel(edge: RevisionEdge): string {
+  const lag =
+    edge.lagMinutes === 0
+      ? ''
+      : ` ${edge.lagMinutes > 0 ? '+' : '−'}${String(Math.abs(edge.lagMinutes))} min`;
+  // The lag CALENDAR is named only when the lag is non-zero, because it decides what the number
+  // means (ADR-0036 §6) and means nothing beside a zero. Naming it anyway would put a difference on
+  // screen for an edit — switching the lag calendar of a zero-lag link — that changes no date.
+  const on = edge.lagMinutes === 0 ? '' : ` (${edge.lagCalendar})`;
+  return `${edge.type}${lag}${on}`;
+}
+
+/** True when the two sides of one edge differ in anything a planner authored. */
+function edgeChanged(from: RevisionEdge, to: RevisionEdge): boolean {
+  return (
+    from.type !== to.type ||
+    from.lagMinutes !== to.lagMinutes ||
+    // The lag calendar counts only ALONGSIDE a lag, exactly as `edgeLabel` renders it. Otherwise a
+    // zero-lag link whose calendar was switched produces a row whose two labels are identical,
+    // which reads as a defect in the list rather than as a fact about the plan — and it changes no
+    // date, because there is no lag for the calendar to measure.
+    (to.lagMinutes !== 0 && from.lagCalendar !== to.lagCalendar)
+  );
 }
 
 function orderKeyOf(from: RevisionRow | null, to: RevisionRow | null): string | null {
@@ -122,7 +254,13 @@ function byTime(a: ChangeRow, b: ChangeRow): number {
     if (b.orderKey === null) return -1;
     return a.orderKey < b.orderKey ? -1 : 1;
   }
-  return a.activityId < b.activityId ? -1 : a.activityId > b.activityId ? 1 : 0;
+  return a.subjectId < b.subjectId ? -1 : a.subjectId > b.subjectId ? 1 : 0;
+}
+
+/** One revision's activities and its logic. Both sides project to this same shape. */
+export interface RevisionSideInput {
+  readonly rows: readonly RevisionRow[];
+  readonly edges: readonly RevisionEdge[];
 }
 
 export interface ClassifyOptions {
@@ -130,100 +268,199 @@ export interface ClassifyOptions {
   readonly fromScheduled: boolean;
   readonly toScheduled: boolean;
   /**
-   * Whether both sides recorded the paid classes. False for any baseline captured before the
-   * snapshot extension — which is permanent for those rows, because writing today's logic into a
-   * historic snapshot would state as history a graph that baseline never saw.
+   * Whether both sides recorded the paid classes — `baselines.revision_snapshot_level === 'FULL'`
+   * on every frozen side (the live side always has its own shape). False for any baseline captured
+   * before the snapshot extension, and **permanently** so for those rows: a backfill would state as
+   * history a graph that baseline never saw.
+   *
+   * This is the ONLY thing entitled to decide whether the shape fields mean anything. Do not
+   * replace it with a test of the fields themselves — every one of them has a legitimate null on a
+   * fully recorded side, so such a test reads "no constraint" as "never recorded" and back again.
    */
   readonly bothSnapshotted: boolean;
   /** Whether the caller asked for the progress class (opt-in — it changes on nearly every row). */
   readonly includeProgress: boolean;
+  /**
+   * Resolves a calendar id to its name, or null when the live plan no longer has it. Injected
+   * rather than looked up: this function is pure, and the snapshot holds correlation ids precisely
+   * so a calendar may be deleted without rotting the baseline (ADR-0025).
+   */
+  readonly calendarName: (id: string) => string | null;
   readonly cap: number;
 }
 
 /**
  * Classify the differences between two revisions of one plan.
  *
- * `from` and `to` are the same projection the delta uses, so this cannot tell which side came from
+ * Both sides are the same projection the delta uses, so this cannot tell which came from
  * `baseline_activities` and which from `activities` — which is what makes baseline-vs-baseline free.
  */
 export function classifyRevisionChanges(
-  fromRows: readonly RevisionRow[],
-  toRows: readonly RevisionRow[],
+  from: RevisionSideInput,
+  to: RevisionSideInput,
   options: ClassifyOptions,
-): RevisionChangeReport {
-  const { fromScheduled, toScheduled, bothSnapshotted, includeProgress, cap } = options;
-  const fromById = new Map(fromRows.map((r) => [r.activityId, r]));
-  const toById = new Map(toRows.map((r) => [r.activityId, r]));
+): ClassifiedReport {
+  const { fromScheduled, toScheduled, bothSnapshotted, includeProgress, calendarName, cap } =
+    options;
+  const fromById = new Map(from.rows.map((r) => [r.activityId, r]));
+  const toById = new Map(to.rows.map((r) => [r.activityId, r]));
 
-  const bucket = new Map<FreeChangeClass, ChangeRow[]>();
-  for (const c of FREE_CHANGE_CLASSES) bucket.set(c, []);
+  /**
+   * The row-subject classes actually decided on this comparison.
+   *
+   * Skipping the paid ones when the shape was not recorded is a **saving, not the guarantee** — and
+   * that distinction was established by removing each in turn and running the suite, not by reading
+   * the code. `assess` below is what refuses to report them (six cases go red without it); this
+   * filter only avoids comparing NULL against NULL for every activity, five times, on a pair whose
+   * answer is already fixed. Do not read it as the safety net: if it is ever the only thing left,
+   * the report is one `if` away from confidently claiming the logic did not change.
+   */
+  const rowClasses: RowChangeClass[] = [
+    ...FREE_CHANGE_CLASSES.filter(
+      (c): c is Exclude<FreeChangeClass, 'ADDED' | 'REMOVED'> => c !== 'ADDED' && c !== 'REMOVED',
+    ),
+    ...(bothSnapshotted
+      ? PAID_ROW_CHANGE_CLASSES.filter((c) => c !== 'PROGRESSED' || includeProgress)
+      : []),
+  ];
 
-  for (const to of toRows) {
-    const from = fromById.get(to.activityId);
-    if (!from) {
+  const bucket = new Map<ChangeClass, ChangeRow[]>();
+  for (const c of [...FREE_CHANGE_CLASSES, ...PAID_CHANGE_CLASSES]) bucket.set(c, []);
+
+  for (const toRow of to.rows) {
+    const fromRow = fromById.get(toRow.activityId);
+    if (!fromRow) {
       bucket.get('ADDED')?.push({
-        activityId: to.activityId,
+        activityId: toRow.activityId,
+        subjectId: toRow.activityId,
         changeClass: 'ADDED',
-        code: to.code,
-        name: to.name,
+        code: toRow.code,
+        name: toRow.name,
         from: null,
-        to: labelOf(to, 'ADDED'),
-        orderKey: orderKeyOf(null, to),
+        to: labelOf(toRow, 'ADDED', toById, calendarName),
+        orderKey: orderKeyOf(null, toRow),
       });
       continue;
     }
-    for (const c of FREE_CHANGE_CLASSES) {
-      if (c === 'ADDED' || c === 'REMOVED') continue;
-      if (!changed(from, to, c)) continue;
+    for (const c of rowClasses) {
+      if (!changed(fromRow, toRow, c)) continue;
       bucket.get(c)?.push({
-        activityId: to.activityId,
+        activityId: toRow.activityId,
+        subjectId: toRow.activityId,
         changeClass: c,
-        code: to.code,
-        name: to.name,
-        from: labelOf(from, c),
-        to: labelOf(to, c),
-        orderKey: orderKeyOf(from, to),
+        code: toRow.code,
+        name: toRow.name,
+        from: labelOf(fromRow, c, fromById, calendarName),
+        to: labelOf(toRow, c, toById, calendarName),
+        orderKey: orderKeyOf(fromRow, toRow),
       });
     }
   }
 
-  for (const from of fromRows) {
-    if (toById.has(from.activityId)) continue;
+  for (const fromRow of from.rows) {
+    if (toById.has(fromRow.activityId)) continue;
     bucket.get('REMOVED')?.push({
-      activityId: from.activityId,
+      activityId: fromRow.activityId,
+      subjectId: fromRow.activityId,
       changeClass: 'REMOVED',
-      code: from.code,
-      name: from.name,
-      from: labelOf(from, 'REMOVED'),
+      code: fromRow.code,
+      name: fromRow.name,
+      from: labelOf(fromRow, 'REMOVED', fromById, calendarName),
       to: null,
-      orderKey: orderKeyOf(from, null),
+      orderKey: orderKeyOf(fromRow, null),
     });
+  }
+
+  if (bothSnapshotted) {
+    collectLogicChanges(from, to, fromById, toById, bucket);
   }
 
   // **A date-bearing class is not assessable when either side has no computed schedule.** Reporting
   // it as "nothing changed" would be a lie whose shape a reader cannot detect: an unscheduled side
   // has NO dates, so every row would look unmoved.
   const datesUnavailable = !fromScheduled || !toScheduled;
-  const dateBearing = new Set<FreeChangeClass>(['REDATED', 'CRITICALITY']);
+  const dateBearing = new Set<ChangeClass>(['REDATED', 'CRITICALITY']);
 
-  const classes: ClassAssessment[] = FREE_CHANGE_CLASSES.map((changeClass) => {
+  const assess = (changeClass: ChangeClass): ClassAssessment => {
     if (datesUnavailable && dateBearing.has(changeClass)) {
       return { changeClass, notAssessableReason: 'SIDE_NOT_SCHEDULED', rows: [], total: 0 };
     }
+    if (!bothSnapshotted && PAID_CHANGE_CLASSES.includes(changeClass as PaidChangeClass)) {
+      // Reported, never omitted, and never as zero. `bothSnapshotted` false is permanent for the
+      // rows involved, which is what the reader is told.
+      return { changeClass, notAssessableReason: 'NOT_SNAPSHOTTED', rows: [], total: 0 };
+    }
     const rows = (bucket.get(changeClass) ?? []).sort(byTime);
     return { changeClass, notAssessableReason: null, rows: rows.slice(0, cap), total: rows.length };
-  });
+  };
 
-  for (const changeClass of PAID_CHANGE_CLASSES) {
-    if (changeClass === 'PROGRESSED' && !includeProgress) continue;
-    classes.push({
-      changeClass,
-      // Reported, never omitted. `bothSnapshotted` false is permanent for the rows involved.
-      notAssessableReason: bothSnapshotted ? null : 'NOT_SNAPSHOTTED',
-      rows: [],
-      total: 0,
-    });
-  }
+  const classes: ClassAssessment[] = [
+    ...FREE_CHANGE_CLASSES.map(assess),
+    ...PAID_CHANGE_CLASSES.filter((c) => c !== 'PROGRESSED' || includeProgress).map(assess),
+  ];
 
   return { classes, cap };
+}
+
+/**
+ * Diff the two graphs, ONE row per edge.
+ *
+ * Keyed on the dependency id, which is what keeps an edge whose endpoints were both deleted to a
+ * single "removed" row rather than one per endpoint — and keeps an edge that was re-typed AND
+ * re-lagged to one row naming both sides, rather than two rows a reader would count as two edits.
+ *
+ * The row's `activityId` is the SUCCESSOR (what a planner opens the row to look at); its
+ * `subjectId` is the edge, because two changed links into one successor are two rows and keying
+ * them by activity would collide.
+ */
+function collectLogicChanges(
+  from: RevisionSideInput,
+  to: RevisionSideInput,
+  fromById: ReadonlyMap<string, RevisionRow>,
+  toById: ReadonlyMap<string, RevisionRow>,
+  bucket: Map<ChangeClass, ChangeRow[]>,
+): void {
+  const fromEdges = new Map(from.edges.map((e) => [e.dependencyId, e]));
+  const toEdges = new Map(to.edges.map((e) => [e.dependencyId, e]));
+  const rows = bucket.get('RELOGICKED');
+  if (!rows) return;
+
+  /**
+   * An endpoint's name, preferring the side the edge is being described from and falling back to
+   * the other. The fallback is what lets a REMOVED edge name a successor that no longer exists —
+   * the snapshot holds both endpoint ids precisely so an edge can describe itself without a join
+   * (ADR-0126).
+   */
+  const nameOf = (id: string, prefer: ReadonlyMap<string, RevisionRow>): string =>
+    prefer.get(id)?.name ?? fromById.get(id)?.name ?? toById.get(id)?.name ?? GONE_PARENT;
+
+  const rowFor = (
+    edge: RevisionEdge,
+    prefer: ReadonlyMap<string, RevisionRow>,
+  ): Omit<ChangeRow, 'from' | 'to'> => {
+    const successor = prefer.get(edge.successorId) ?? toById.get(edge.successorId) ?? null;
+    return {
+      // Reveal targets the successor: a link change decides when the successor can start.
+      activityId: edge.successorId,
+      subjectId: edge.dependencyId,
+      changeClass: 'RELOGICKED',
+      code: null,
+      name: `${nameOf(edge.predecessorId, prefer)} → ${nameOf(edge.successorId, prefer)}`,
+      orderKey: orderKeyOf(null, successor),
+    };
+  };
+
+  for (const [id, toEdge] of toEdges) {
+    const fromEdge = fromEdges.get(id);
+    if (!fromEdge) {
+      rows.push({ ...rowFor(toEdge, toById), from: null, to: edgeLabel(toEdge) });
+      continue;
+    }
+    if (!edgeChanged(fromEdge, toEdge)) continue;
+    rows.push({ ...rowFor(toEdge, toById), from: edgeLabel(fromEdge), to: edgeLabel(toEdge) });
+  }
+  for (const [id, fromEdge] of fromEdges) {
+    if (toEdges.has(id)) continue;
+    rows.push({ ...rowFor(fromEdge, fromById), from: edgeLabel(fromEdge), to: null });
+  }
 }

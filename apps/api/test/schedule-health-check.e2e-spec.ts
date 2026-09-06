@@ -49,6 +49,7 @@ describe.skipIf(!hasDatabase)('Schedule health check API (e2e)', () => {
   async function resetDatabase(): Promise<void> {
     await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
+    await prisma.baselineDependency.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.deleteMany();

@@ -1,4 +1,9 @@
-import type { ActivityType } from '@prisma/client';
+import type {
+  ActivityType,
+  ConstraintType,
+  DependencyType,
+  LagCalendarSource,
+} from '@prisma/client';
 
 /**
  * **The revision delta** — what entered and left the critical path between two computed schedules,
@@ -41,6 +46,47 @@ export interface RevisionRow {
   readonly totalFloatDays: number | null;
   readonly earlyStart: string | null;
   readonly earlyFinish: string | null;
+
+  /**
+   * **The frozen SHAPE** — how the plan was built (ADR-0126). Added by the changes epic like
+   * `durationMinutes` above; the delta itself does not read any of them.
+   *
+   * Every one is nullable, and a null is NOT a sentinel a reader may interpret. Each has a
+   * legitimate null on a fully-recorded side (no constraint, no parent, the plan's own calendar,
+   * and — because a NONE-level baseline stores NULLs throughout — on a side nobody recorded. The
+   * two are indistinguishable HERE by design: the answer lives one level up, in the classifier's
+   * `bothSnapshotted`, which is derived from `baselines.revision_snapshot_level` and is the only
+   * thing entitled to say whether these fields mean anything. Do not test them for absence.
+   */
+  readonly laneIndex: number | null;
+  readonly parentId: string | null;
+  readonly calendarId: string | null;
+  readonly constraintType: ConstraintType | null;
+  readonly constraintDate: string | null;
+  readonly secondaryConstraintType: ConstraintType | null;
+  readonly secondaryConstraintDate: string | null;
+  readonly percentComplete: number | null;
+  readonly actualStart: string | null;
+  readonly actualFinish: string | null;
+}
+
+/**
+ * One frozen (or live) dependency, projected for the change list (ADR-0126).
+ *
+ * **`is_driving` is deliberately absent**, though the snapshot freezes it. It is the ENGINE's
+ * output, not a planner's edit: a link becomes driving because dates moved, which the delta
+ * already reports. Comparing it here would make "Logic changed" fire on every recalculation of an
+ * untouched graph — the noise that made progress an opt-in class, arriving in the one class a
+ * planner most needs to trust. Omitted from the projection rather than merely left uncompared, so
+ * a later contributor has nothing to reach for.
+ */
+export interface RevisionEdge {
+  readonly dependencyId: string;
+  readonly predecessorId: string;
+  readonly successorId: string;
+  readonly type: DependencyType;
+  readonly lagMinutes: number;
+  readonly lagCalendar: LagCalendarSource;
 }
 
 /** A row that changed criticality, with both sides' numbers so the reader need not ask again. */

@@ -290,7 +290,7 @@ function ChangeClassSection({
               </thead>
               <tbody>
                 {assessment.rows.map((row) => (
-                  <tr key={`${row.changeClass}:${row.activityId}`}>
+                  <tr key={row.subjectId}>
                     <td>{row.code ?? '—'}</td>
                     <td>{row.name}</td>
                     <td>{row.from ?? '—'}</td>

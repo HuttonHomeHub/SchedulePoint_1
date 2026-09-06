@@ -115,6 +115,20 @@ function activityRow(overrides: Partial<CaptureActivityRow> = {}): CaptureActivi
     // an activity with no assignments — and is a COMPLETE snapshot, not a missing one.
     budgetedExpense: 0,
     assignments: [],
+    // The frozen SHAPE (ADR-0126). Every one is a REAL value, not a placeholder: lane 0 is a real
+    // lane, 0 % is a real progress figure, and no constraint / no parent / the plan's calendar is
+    // the commonest activity there is. That is exactly why none of these columns could take a
+    // constant DEFAULT — see the model docblock.
+    laneIndex: 0,
+    parentId: null,
+    calendarId: null,
+    constraintType: null,
+    constraintDate: null,
+    secondaryConstraintType: null,
+    secondaryConstraintDate: null,
+    percentComplete: 0,
+    actualStart: null,
+    actualFinish: null,
     ...overrides,
   };
 }
@@ -141,6 +155,7 @@ describe('BaselinesService', () => {
   let baselines: {
     createWithSnapshot: ReturnType<typeof vi.fn>;
     loadActiveActivitiesForCapture: ReturnType<typeof vi.fn>;
+    loadActiveDependenciesForCapture: ReturnType<typeof vi.fn>;
     countActiveByPlan: ReturnType<typeof vi.fn>;
     findActiveByIdInPlan: ReturnType<typeof vi.fn>;
     findActiveDetailByIdInPlan: ReturnType<typeof vi.fn>;
@@ -165,6 +180,7 @@ describe('BaselinesService', () => {
     baselines = {
       createWithSnapshot: vi.fn().mockResolvedValue(baseline()),
       loadActiveActivitiesForCapture: vi.fn().mockResolvedValue([activityRow()]),
+      loadActiveDependenciesForCapture: vi.fn().mockResolvedValue([]),
       countActiveByPlan: vi.fn().mockResolvedValue(0),
       findActiveByIdInPlan: vi.fn().mockResolvedValue(baseline()),
       findActiveDetailByIdInPlan: vi.fn(),
@@ -265,6 +281,71 @@ describe('BaselinesService', () => {
         service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' }),
       ).rejects.toThrow(NotFoundError);
       expect(baselines.createWithSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('freezes the plan’s LOGIC alongside its activities (ADR-0126)', async () => {
+      baselines.loadActiveDependenciesForCapture.mockResolvedValue([
+        {
+          id: 'dep-1',
+          predecessorId: 'act-1',
+          successorId: 'act-2',
+          type: 'FS',
+          lagMinutes: 480,
+          lagCalendar: 'PROJECT_DEFAULT',
+          isDriving: true,
+        },
+      ]);
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+      // Read under the SAME lock as the activities, so the frozen graph and the frozen dates
+      // describe one moment rather than two.
+      expect(baselines.loadActiveDependenciesForCapture).toHaveBeenCalledWith(
+        ORG_ID,
+        PLAN_ID,
+        expect.anything(),
+      );
+      expect(baselines.createWithSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({
+          dependencies: [expect.objectContaining({ id: 'dep-1', type: 'FS', lagMinutes: 480 })],
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('passes an EMPTY logic set through rather than skipping the read (ADR-0126)', async () => {
+      // The load-bearing half of the discriminator. A plan with no logic is a complete snapshot of
+      // a plan with no logic — zero rows on a FULL baseline means "there genuinely were none".
+      // Skipping the read for an unlinked plan would be indistinguishable at the repository from a
+      // plan whose logic nobody looked at, which is the absence this whole epic exists to remove.
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+      expect(baselines.loadActiveDependenciesForCapture).toHaveBeenCalledTimes(1);
+      expect(baselines.createWithSnapshot).toHaveBeenCalledWith(
+        expect.objectContaining({ dependencies: [] }),
+        expect.anything(),
+      );
+    });
+
+    it('freezes the SHAPE of every activity, not just where the work landed (ADR-0126)', async () => {
+      baselines.loadActiveActivitiesForCapture.mockResolvedValue([
+        activityRow({
+          laneIndex: 4,
+          parentId: 'phase-1',
+          constraintType: 'SNET',
+          percentComplete: 30,
+        }),
+      ]);
+      await service.capture(principalWith(ALL), 'acme', PLAN_ID, { name: 'Contract Baseline' });
+      const [input] = baselines.createWithSnapshot.mock.calls[0] as [
+        { activities: { laneIndex: number; parentId: string | null; percentComplete: number }[] },
+      ];
+      expect(input.activities[0]).toMatchObject({
+        laneIndex: 4,
+        parentId: 'phase-1',
+        constraintType: 'SNET',
+        // Written on EVERY capture even though the read model returns the class only on request
+        // (CQ-3): opt-in is a read-model default, and a column added later is a column no existing
+        // baseline has.
+        percentComplete: 30,
+      });
     });
 
     it('captures a baseline, freezing identity + computed dates', async () => {

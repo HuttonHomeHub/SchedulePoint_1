@@ -54,6 +54,7 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
   async function resetDatabase(): Promise<void> {
     await prisma.baselineAssignment.deleteMany();
     await prisma.baselineActivity.deleteMany();
+    await prisma.baselineDependency.deleteMany();
     await prisma.baseline.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.deleteMany();
@@ -449,5 +450,157 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
     expect(res.body.data.settingsVerdict).toBe('UNKNOWN');
     // And the delta is still reported: an unknown rule is a caveat, not a refusal.
     expect(res.body.data.criticalPath.remainedCriticalCount).toBeGreaterThan(0);
+  });
+
+  describe('the paid change classes (ADR-0126)', () => {
+    /** Every class in the report, by name — the report is total over the union. */
+    const classesOf = (body: unknown) =>
+      new Map(
+        (
+          (body as { data: { changes: { classes: { changeClass: string }[] } } }).data.changes
+            .classes as {
+            changeClass: string;
+            notAssessableReason: string | null;
+            rows: { subjectId: string; from: string | null; to: string | null; name: string }[];
+            total: number;
+          }[]
+        ).map((c) => [c.changeClass, c]),
+      );
+
+    it('freezes the shape and the logic, and reports a real edit in every paid class', async () => {
+      const admin = await adminWithOrg();
+      const planId = await makePlan(admin);
+      const phaseOne = await makeActivity(admin, planId, 'Enabling works', 0, {
+        type: 'WBS_SUMMARY',
+      });
+      const phaseTwo = await makeActivity(admin, planId, 'Superstructure', 0, {
+        type: 'WBS_SUMMARY',
+      });
+      const a = await makeActivity(admin, planId, 'Groundworks', 10, { parentId: phaseOne });
+      const b = await makeActivity(admin, planId, 'Frame', 10);
+      await link(admin, planId, a, b);
+      await recalculate(admin, planId);
+      const from = await capture(admin, planId, 'Rev A');
+
+      // The capture is FULL by construction — asserted against the database, because the whole
+      // three-valued design turns on this column and nothing in the response names it.
+      const captured = await prisma.baseline.findUniqueOrThrow({
+        where: { id: from },
+        select: { revisionSnapshotLevel: true },
+      });
+      expect(captured.revisionSnapshotLevel).toBe('FULL');
+      // The logic is frozen with it. Zero rows here would be indistinguishable from a plan with no
+      // links, which is why the level above is the discriminator and this is corroboration.
+      expect(await prisma.baselineDependency.count({ where: { baselineId: from } })).toBe(1);
+
+      // Now edit ONE thing per paid class, through the public API.
+      const dep = await prisma.activityDependency.findFirstOrThrow({ where: { planId } });
+      await admin.agent
+        .patch(`/api/v1/organizations/acme/dependencies/${dep.id}`)
+        .send({ type: 'SS', version: dep.version })
+        .expect(200);
+      const live = await prisma.activity.findUniqueOrThrow({ where: { id: a } });
+      await admin.agent
+        .patch(`/api/v1/organizations/acme/activities/${a}`)
+        .send({
+          parentId: phaseTwo,
+          laneIndex: 4,
+          constraintType: 'SNET',
+          constraintDate: '2026-02-01',
+          version: live.version,
+        })
+        .expect(200);
+      await recalculate(admin, planId);
+
+      const res = await admin.agent.get(`${compareUrl(planId, from)}&include=changes`).expect(200);
+      const classes = classesOf(res.body);
+
+      for (const name of ['RELOGICKED', 'RECONSTRAINED', 'REPARENTED', 'RELANED']) {
+        const found = classes.get(name);
+        // Assessed — not "not snapshotted". Both sides recorded the shape.
+        expect(found?.notAssessableReason).toBeNull();
+        expect(found?.total).toBe(1);
+      }
+      // The logic row names BOTH ends and both sides of the edit.
+      expect(classes.get('RELOGICKED')?.rows[0]?.name).toBe('Groundworks → Frame');
+      expect(classes.get('RELOGICKED')?.rows[0]?.from).toBe('FS');
+      expect(classes.get('RELOGICKED')?.rows[0]?.to).toBe('SS');
+      // The parent resolves to a NAME on each side, not a UUID.
+      expect(classes.get('REPARENTED')?.rows[0]?.from).toBe('Enabling works');
+      expect(classes.get('REPARENTED')?.rows[0]?.to).toBe('Superstructure');
+      expect(classes.get('RELANED')?.rows[0]?.to).toBe('Lane 4');
+      // …and `b` was not touched, so it appears in none of them.
+      expect(classes.get('RELANED')?.rows.every((r) => r.subjectId !== b)).toBe(true);
+    });
+
+    it('says NOT_SNAPSHOTTED — never "no change" — when a side predates the extension', async () => {
+      const admin = await adminWithOrg();
+      const { planId } = await chainPlan(admin);
+      const from = await capture(admin, planId, 'Rev A');
+
+      // Written directly BECAUSE the public API structurally cannot produce it any more: every
+      // capture is FULL. This is the permanent legacy state of every baseline taken before the
+      // extension, and it is the whole reason the discriminator exists. Same exception, and same
+      // justification, as the criticality-rule case above.
+      await prisma.baseline.update({
+        where: { id: from },
+        data: { revisionSnapshotLevel: 'NONE' },
+      });
+      // Its frozen shape goes with it — a NONE baseline stores NULLs. Comparing those NULLs
+      // against a live plan finds REAL differences (lane 0 vs lane 0 is equal, but a null parent
+      // and a null percent are not what the live row holds), so this is the case where a naive
+      // implementation reports a confident, fabricated list of changes.
+      await prisma.baselineActivity.updateMany({
+        where: { baselineId: from },
+        data: { laneIndex: null, percentComplete: null },
+      });
+      await prisma.baselineDependency.deleteMany({ where: { baselineId: from } });
+
+      const res = await admin.agent
+        .get(`${compareUrl(planId, from)}&include=changes&include=progress`)
+        .expect(200);
+      const classes = classesOf(res.body);
+      for (const name of [
+        'RELOGICKED',
+        'RECONSTRAINED',
+        'RECALENDARED',
+        'REPARENTED',
+        'RELANED',
+        'PROGRESSED',
+      ]) {
+        expect(classes.get(name)?.notAssessableReason).toBe('NOT_SNAPSHOTTED');
+        expect(classes.get(name)?.rows).toEqual([]);
+        expect(classes.get(name)?.total).toBe(0);
+      }
+      // The FREE classes are unaffected — the snapshot's absence is about the shape, not the plan.
+      expect(classes.get('RENAMED')?.notAssessableReason).toBeNull();
+    });
+
+    it('answers `existsLive` per row, for an activity in no delta list at all', async () => {
+      // The client cannot infer this. A re-laned activity enters and leaves nothing, so it appears
+      // in none of the delta's four lists — and inferring "not in the live plan" from that puts a
+      // false sentence on screen about a bar the reader can see.
+      const admin = await adminWithOrg();
+      const { planId, a } = await chainPlan(admin);
+      const from = await capture(admin, planId, 'Rev A');
+      const live = await prisma.activity.findUniqueOrThrow({ where: { id: a } });
+      await admin.agent
+        .patch(`/api/v1/organizations/acme/activities/${a}`)
+        .send({ laneIndex: 6, version: live.version })
+        .expect(200);
+
+      const res = await admin.agent.get(`${compareUrl(planId, from)}&include=changes`).expect(200);
+      const relaned = classesOf(res.body).get('RELANED');
+      expect(relaned?.rows).toHaveLength(1);
+      expect((relaned?.rows[0] as unknown as { existsLive: boolean }).existsLive).toBe(true);
+      // …and the delta never mentions it, which is exactly what makes the flag load-bearing.
+      const delta = res.body.data.criticalPath as {
+        entered: unknown[];
+        left: unknown[];
+        added: unknown[];
+        removed: unknown[];
+      };
+      expect([...delta.entered, ...delta.left, ...delta.added, ...delta.removed]).toHaveLength(0);
+    });
   });
 });
