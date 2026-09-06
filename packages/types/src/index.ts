@@ -2763,6 +2763,70 @@ export interface RevisionCriticalPathDelta {
 }
 
 /** The whole comparison. */
+/**
+ * The change classes decidable from what a baseline already freezes — no migration needed.
+ * A baseline freezes the engine's OUTPUT and almost none of its INPUT, which is exactly why these
+ * eight are free and the six below are not.
+ */
+export const REVISION_FREE_CHANGE_CLASSES = [
+  'ADDED',
+  'REMOVED',
+  'RENAMED',
+  'RECODED',
+  'RETYPED',
+  'REDURATIONED',
+  'REDATED',
+  'CRITICALITY',
+] as const;
+export type RevisionFreeChangeClass = (typeof REVISION_FREE_CHANGE_CLASSES)[number];
+
+/**
+ * The classes that need the snapshot extension. Named here rather than merely omitted: an absent
+ * class and an unchanged one are different facts, and a reader who cannot tell them apart concludes
+ * the plan's logic did not change when nobody ever looked.
+ */
+export const REVISION_PAID_CHANGE_CLASSES = [
+  'RELOGICKED',
+  'RECONSTRAINED',
+  'RECALENDARED',
+  'REPARENTED',
+  'RELANED',
+  'PROGRESSED',
+] as const;
+export type RevisionPaidChangeClass = (typeof REVISION_PAID_CHANGE_CLASSES)[number];
+export type RevisionChangeClass = RevisionFreeChangeClass | RevisionPaidChangeClass;
+
+/** Why a class could not be assessed. NEVER coalesced into "no change". */
+export type RevisionNotAssessableReason = 'NOT_SNAPSHOTTED' | 'SIDE_NOT_SCHEDULED';
+
+export interface RevisionChangeRow {
+  readonly activityId: string;
+  readonly changeClass: RevisionFreeChangeClass;
+  readonly code: string | null;
+  readonly name: string;
+  /** Both sides' values as short display strings. Null on the side where the row did not exist. */
+  readonly from: string | null;
+  readonly to: string | null;
+  /** The instant the row is ordered by. Ordering is by TIME and never by magnitude. */
+  readonly orderKey: string | null;
+}
+
+export interface RevisionClassAssessment {
+  readonly changeClass: RevisionChangeClass;
+  /** `null` when assessed; a reason when it could not be. */
+  readonly notAssessableReason: RevisionNotAssessableReason | null;
+  /** Always empty when `notAssessableReason` is set — absence is not evidence. */
+  readonly rows: readonly RevisionChangeRow[];
+  /** Rows found BEFORE the cap. "Showing N of M" is never the client's own arithmetic. */
+  readonly total: number;
+}
+
+export interface RevisionChangeReport {
+  /** Every class, assessed or not — total over the union, so a class is never simply missing. */
+  readonly classes: readonly RevisionClassAssessment[];
+  readonly cap: number;
+}
+
 export interface RevisionCompare {
   planId: string;
   planName: string;
@@ -2782,4 +2846,14 @@ export interface RevisionCompare {
   settingsVerdict: RevisionSettingsVerdict;
   completion: RevisionCompletion;
   criticalPath: RevisionCriticalPathDelta;
+  /**
+   * The change list — present ONLY when the caller opted in with `?include=changes`.
+   *
+   * Absent rather than empty when not asked for, so a caller that did not opt in receives
+   * byte-identically what it received before this existed (the ADR-0073 C2 projection pattern).
+   * Each class carries its own assessability: a class that could not be judged says so with a
+   * reason and carries no rows, because an empty list and an un-looked-at list are the same thing
+   * to a reader and telling them apart is the point.
+   */
+  readonly changes?: RevisionChangeReport;
 }

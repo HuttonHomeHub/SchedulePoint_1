@@ -29,6 +29,7 @@ import { formatCalendarDate } from '../../common/validation/calendar-date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
 import { BaselineRepository } from '../baselines/baseline.repository';
+import { classifyRevisionChanges } from '../baselines/revision-changes';
 import { computeRevisionDelta, type RevisionRow } from '../baselines/revision-delta';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
@@ -50,6 +51,7 @@ import {
   type OutgoingCrossPlanEdge,
 } from './cross-plan-derivation';
 import { MINUTES_PER_DAY } from './day-compat-calendar';
+import { type RevisionInclude } from './dto/revision-compare-query.dto';
 import {
   allMinutesWorkCalendar,
   computeEarnedValue,
@@ -1438,6 +1440,12 @@ export class ScheduleService {
     planId: string,
     fromId: string,
     to: string,
+    /**
+     * Opt-in projections. Absent (the default) ⇒ the response is **byte-identical** to what it was
+     * before the change list existed — the ADR-0073 C2 `?include=` pattern, which is what lets a
+     * new surface land without a flag on the server and without touching the shipped one.
+     */
+    includes: readonly RevisionInclude[] = [],
   ): Promise<RevisionCompare> {
     const startedAt = Date.now();
     const { organization } = await this.organizations.resolveScope(principal, orgSlug);
@@ -1590,6 +1598,31 @@ export class ScheduleService {
       existsLive: liveIds.has(r.activityId),
     });
 
+    // **The change list, only when asked for.** `bothSnapshotted` is hard-coded false until the
+    // snapshot extension lands: no baseline captured today records logic, constraints, calendar or
+    // WBS parent, so those classes report NOT_SNAPSHOTTED rather than "no change". That is the
+    // whole point — an absence a reader cannot distinguish from a fact is the defect this epic
+    // exists to remove, and it would be trivially easy to default it to `true` and ship a report
+    // that quietly claims the logic did not change.
+    const wantsChanges = includes.includes('changes');
+    const changes = wantsChanges
+      ? // The SAME two projections the delta reads, composed the same way — not a second
+        // assembly. Two sources for one pair would drift, and the drift would be invisible: each
+        // looks right alone and only a reader comparing the delta against the change list on one
+        // plan would ever see them disagree (the ADR-0065 `routeOrthogonal` argument).
+        classifyRevisionChanges(
+          frozenSide(fromRows),
+          toRows === null ? liveSide : frozenSide(toRows),
+          {
+            fromScheduled: sideScheduled(fromBaseline, plan.scheduleComputedAt),
+            toScheduled: sideScheduled(toBaseline, plan.scheduleComputedAt),
+            bothSnapshotted: false,
+            includeProgress: includes.includes('progress'),
+            cap: REVISION_ROW_CAP,
+          },
+        )
+      : null;
+
     const result: RevisionCompare = {
       planId,
       planName: plan.name,
@@ -1639,6 +1672,9 @@ export class ScheduleService {
         newSideCarrierActivityId: delta.completion.newSideCarrierActivityId ?? null,
         newSideCarrierName: delta.completion.newSideCarrierName ?? null,
       },
+      // Absent (rather than an empty report) when not asked for, so a caller that did not opt in
+      // sees byte-identically what it saw before this existed.
+      ...(changes ? { changes } : {}),
       criticalPath: bothScheduled
         ? {
             entered: delta.entered.map(moved),

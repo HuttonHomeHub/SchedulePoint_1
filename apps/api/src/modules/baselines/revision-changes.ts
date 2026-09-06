@@ -1,3 +1,15 @@
+import {
+  REVISION_FREE_CHANGE_CLASSES,
+  REVISION_PAID_CHANGE_CLASSES,
+  type RevisionChangeClass,
+  type RevisionChangeReport,
+  type RevisionChangeRow,
+  type RevisionClassAssessment,
+  type RevisionFreeChangeClass,
+  type RevisionNotAssessableReason,
+  type RevisionPaidChangeClass,
+} from '@repo/types';
+
 import type { RevisionRow } from './revision-delta';
 
 /**
@@ -28,77 +40,21 @@ import type { RevisionRow } from './revision-delta';
  * them as **not assessable with a reason**, never as "no change": see {@link RevisionChangeReport}.
  */
 
-/** The change classes this module can decide from what a baseline already freezes. */
-export const FREE_CHANGE_CLASSES = [
-  'ADDED',
-  'REMOVED',
-  'RENAMED',
-  'RECODED',
-  'RETYPED',
-  'REDURATIONED',
-  'REDATED',
-  'CRITICALITY',
-] as const;
-
-export type FreeChangeClass = (typeof FREE_CHANGE_CLASSES)[number];
-
 /**
- * The classes that need the snapshot extension. Listed here — not merely omitted — because an
- * absent class and an unchanged one are different facts, and a reader who cannot tell them apart
- * concludes the plan's logic did not change when nobody ever looked.
+ * **The vocabulary lives in `@repo/types`, not here.** These are re-exported under the names this
+ * module and its tests already use, so there is ONE definition of what a change class is — a
+ * second copy beside the DTO would drift, and the drift would surface as a class the API can
+ * return and the client cannot name.
  */
-export const PAID_CHANGE_CLASSES = [
-  'RELOGICKED',
-  'RECONSTRAINED',
-  'RECALENDARED',
-  'REPARENTED',
-  'RELANED',
-  'PROGRESSED',
-] as const;
-
-export type PaidChangeClass = (typeof PAID_CHANGE_CLASSES)[number];
-export type ChangeClass = FreeChangeClass | PaidChangeClass;
-
-/**
- * Why a class could not be assessed. Never coalesced into "no change" — ADR-0125's three-valued
- * settings verdict, applied per class.
- */
-export type NotAssessableReason =
-  /** One or both sides predate the snapshot that records this class. Permanent for those rows. */
-  | 'NOT_SNAPSHOTTED'
-  /** A side has no computed schedule, so the dates it would be compared on do not exist. */
-  | 'SIDE_NOT_SCHEDULED';
-
-export interface ChangeRow {
-  readonly activityId: string;
-  readonly changeClass: FreeChangeClass;
-  readonly code: string | null;
-  readonly name: string;
-  /** Both sides' values, as short display strings. Null on the side where the row did not exist. */
-  readonly from: string | null;
-  readonly to: string | null;
-  /**
-   * The instant this row is ordered by — the EARLIER of the two sides' starts, so a list reads in
-   * programme order. **Ordering is by time and never by magnitude** (see the module docblock).
-   */
-  readonly orderKey: string | null;
-}
-
-export interface ClassAssessment {
-  readonly changeClass: ChangeClass;
-  /** `null` when the class was assessed; a reason when it could not be. */
-  readonly notAssessableReason: NotAssessableReason | null;
-  /** Rows found. Always empty when `notAssessableReason` is set — absence is not evidence. */
-  readonly rows: readonly ChangeRow[];
-  /** Rows found before the cap. Equal to `rows.length` unless truncated. */
-  readonly total: number;
-}
-
-export interface RevisionChangeReport {
-  /** Every class, assessed or not. **Total over the union** — a class is never simply missing. */
-  readonly classes: readonly ClassAssessment[];
-  readonly cap: number;
-}
+export const FREE_CHANGE_CLASSES = REVISION_FREE_CHANGE_CLASSES;
+export const PAID_CHANGE_CLASSES = REVISION_PAID_CHANGE_CLASSES;
+export type FreeChangeClass = RevisionFreeChangeClass;
+export type PaidChangeClass = RevisionPaidChangeClass;
+export type ChangeClass = RevisionChangeClass;
+export type NotAssessableReason = RevisionNotAssessableReason;
+export type ChangeRow = RevisionChangeRow;
+export type ClassAssessment = RevisionClassAssessment;
+export type { RevisionChangeReport };
 
 /** Formats a duration for display without asserting a day factor the caller has not supplied. */
 function minutesLabel(minutes: number | null): string | null {
