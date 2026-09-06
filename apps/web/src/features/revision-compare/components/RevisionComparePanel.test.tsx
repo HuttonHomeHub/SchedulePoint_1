@@ -84,7 +84,10 @@ function comparison(over: Partial<RevisionCompare> = {}): RevisionCompare {
       remainedNonCriticalCount: 8,
       added: [],
       removed: [],
+      addedTotal: 0,
+      removedTotal: 0,
       noCriticalPath: false,
+      notAssessableReason: null,
     },
     ...over,
   };
@@ -103,6 +106,7 @@ function renderPanel(over: Partial<RevisionComparePanelProps> = {}) {
     onFromChange: vi.fn(),
     onToChange: vi.fn(),
     onClose: vi.fn(),
+    onActivateActivity: vi.fn(),
     ...over,
   };
   return { ...render(<RevisionComparePanel {...props} />), props };
@@ -220,7 +224,10 @@ describe('RevisionComparePanel', () => {
         },
       }),
     });
-    expect(screen.getByText(/not in the live plan/i)).toBeInTheDocument();
+    // TWO occurrences, deliberately and not by accident: the visible marker on the row, and the
+    // `sr-only` reason linked by `aria-describedby`. A single-element query would have to pick one,
+    // and the point is that both channels carry it.
+    expect(screen.getAllByText(/not in the live plan/i)).toHaveLength(2);
   });
 
   /** The cap and the true total both come from the payload — never a constant held here. */
@@ -317,16 +324,147 @@ describe('RevisionComparePanel', () => {
     expect(document.getElementById(reasonId!)!.textContent).toMatch(/not in the live plan/i);
   });
 
-  /** With no host activation the rows are plain text: no shaded control claiming a missing action. */
-  it('renders plain rows when the host offers no activation', () => {
+  /**
+   * Activation is REQUIRED, matching both sibling panels — so every row is a control, and the
+   * "plain text when the host offers none" branch is gone with the optional prop that scaffolded a
+   * standalone host nobody asked for (the M4 component review).
+   */
+  it('renders every row as an activatable control', () => {
     renderPanel({
       from: 'b1',
       compare: comparison({
         criticalPath: { ...comparison().criticalPath, entered: [moved()], enteredTotal: 1 },
       }),
     });
-    expect(screen.queryByRole('button', { name: /Roof covering/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Roof covering')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Roof covering/ })).toBeInTheDocument();
+  });
+
+  /**
+   * **Activating a row is ANNOUNCED** — the line this panel's docblocks said it had "reused rather
+   * than re-derived" from the health panel and had not. Focus stays on the row and the canvas is
+   * `aria-hidden`, so nothing else tells a screen-reader user the press did anything.
+   */
+  it('announces the activation, because nothing else does', () => {
+    announce.mockClear();
+    renderPanel({
+      from: 'b1',
+      compare: comparison({
+        criticalPath: { ...comparison().criticalPath, entered: [moved()], enteredTotal: 1 },
+      }),
+    });
+    announce.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /Roof covering/ }));
+    expect(announce).toHaveBeenCalledWith('Roof covering selected in the plan.');
+  });
+
+  /**
+   * **B6, the sharpest finding of the gate pass.** `isCritical` defaults false, so a plan that was
+   * never calculated has no critical activity — and the delta reported every activity critical in
+   * the baseline as having LEFT the critical path. Each row true, the picture false. The server now
+   * withholds the sets; this asserts the panel states the reason instead of rendering empties that
+   * read as "nothing moved".
+   */
+  it('says a revision was never calculated rather than showing a fabricated delta', () => {
+    renderPanel({
+      from: 'b1',
+      compare: comparison({
+        criticalPath: {
+          ...comparison().criticalPath,
+          notAssessableReason: 'SIDE_NOT_SCHEDULED',
+        },
+      }),
+    });
+    expect(screen.getByText(/never calculated/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('region', { name: /entered the critical path/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/nothing entered the critical path/i)).not.toBeInTheDocument();
+  });
+
+  /** Neither side has a critical path — a fact to state, and a DIFFERENT one from the above. */
+  it('states that neither revision has a critical path', () => {
+    renderPanel({
+      from: 'b1',
+      compare: comparison({
+        criticalPath: { ...comparison().criticalPath, noCriticalPath: true },
+      }),
+    });
+    expect(screen.getByText(/neither revision has a critical path/i)).toBeInTheDocument();
+    expect(screen.queryByText(/never calculated/i)).not.toBeInTheDocument();
+  });
+
+  /** The denominator, without which "7 entered" could be 7 of 10 or 7 of 400. */
+  it('gives the counts a denominator', () => {
+    renderPanel({ from: 'b1', compare: comparison() });
+    expect(
+      screen.getByText(/3 of 11 activities on both revisions were critical in both/i),
+    ).toBeInTheDocument();
+  });
+
+  /** A changed carrier is rendered, not merely computed. */
+  it('renders the changed-carrier note', () => {
+    renderPanel({
+      from: 'b1',
+      compare: comparison({
+        completion: {
+          ...comparison().completion,
+          carrierChanged: true,
+          newSideCarrierActivityId: 'a7',
+          newSideCarrierName: 'Commissioning B',
+        },
+      }),
+    });
+    expect(screen.getByText(/a different activity finishes last now/i)).toBeInTheDocument();
+  });
+
+  it('shows a comparing state once a pair is chosen', () => {
+    renderPanel({ from: 'b1', isPending: true });
+    expect(screen.getByText(/comparing…/i)).toBeInTheDocument();
+  });
+
+  /**
+   * **The same revision on both sides is unreachable at the picker**, rather than a state to
+   * recover from — it used to be one click away with a single baseline captured, and produced a
+   * permanent "Comparing…" spinner because a disabled TanStack query stays pending forever.
+   */
+  it('never offers the other side’s current choice', () => {
+    renderPanel({ from: 'b1', to: 'live' });
+    const earlier = screen.getByLabelText(/earlier revision/i);
+    expect(within(earlier).getByRole('option', { name: 'Contract Baseline' })).toBeInTheDocument();
+    const later = screen.getByLabelText(/compared with/i);
+    expect(
+      within(later).queryByRole('option', { name: 'Contract Baseline' }),
+    ).not.toBeInTheDocument();
+  });
+
+  /**
+   * **The empty state has an exit** — the spec names "Capture a baseline…" as the SOLE accepted
+   * mitigation for "the feature is useless to anyone who never captured one", and it shipped as
+   * plain text with no action on the state a planner meets first.
+   */
+  it('offers a way out of the no-revisions state, and explains its absence to a Viewer', () => {
+    const onOpenBaselines = vi.fn();
+    const { unmount } = renderPanel({ baselines: [], onOpenBaselines });
+    expect(screen.getByRole('button', { name: /capture a baseline/i })).toBeInTheDocument();
+    unmount();
+
+    renderPanel({ baselines: [] });
+    expect(screen.queryByRole('button', { name: /capture a baseline/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/needs a Planner or Org Admin/i)).toBeInTheDocument();
+  });
+
+  /**
+   * The honesty footer is linked to a NAMED LANDMARK, not a bare div. The first version wired the
+   * description correctly to an element no landmark command can reach, and the first version of
+   * THIS test could not tell the difference — it asserted that some element carried
+   * `aria-describedby` and never that the element was a region with a name.
+   */
+  it('links the honesty footer to a named region a landmark command reaches', () => {
+    renderPanel({ from: 'b1', compare: comparison() });
+    const results = screen.getByRole('region', { name: 'Comparison result' });
+    const footerId = results.getAttribute('aria-describedby');
+    expect(footerId).not.toBeNull();
+    expect(document.getElementById(footerId!)!.textContent).toMatch(/does not say what caused/i);
   });
 
   /** M3-T2's entry point. Withheld before a comparison exists — there is nothing to print. */

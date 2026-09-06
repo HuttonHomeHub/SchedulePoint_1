@@ -108,6 +108,34 @@ export function settingsCaveat(verdict: RevisionSettingsVerdict): string | null 
 }
 
 /**
+ * Why the criticality delta cannot be stated at all.
+ *
+ * The server withholds the four row sets when either revision was never calculated, because
+ * `isCritical` defaults false there and comparing against it would report every activity that WAS
+ * critical as having left the critical path — each row technically true, the picture false. This
+ * is the sentence that goes in their place.
+ */
+export function criticalPathUnavailable(reason: 'SIDE_NOT_SCHEDULED' | null): string | null {
+  return reason === null
+    ? null
+    : 'One of these revisions was never calculated, so there is no critical path to compare ' +
+        'against. Recalculate the plan and capture a baseline from it.';
+}
+
+/**
+ * The membership context — the denominator without which "7 entered the critical path" could be
+ * 7 of 10 or 7 of 400.
+ *
+ * These two counts were computed, transmitted and named in the spec's own user-flow diagram, and
+ * rendered by nothing until the M4 ux review asked where they were: the ADR-0081 shape at field
+ * granularity.
+ */
+export function membershipSentence(critical: number, nonCritical: number): string {
+  const total = critical + nonCritical;
+  return `${critical} of ${total} activities on both revisions were critical in both, ${nonCritical} in neither.`;
+}
+
+/**
  * The honesty footer. Its first clause is the one the whole epic exists to be honest about, and it
  * is deliberately not softened: the product measured itself unable to attribute a movement to a
  * change, so it says what it shows and what it does not.
@@ -152,17 +180,37 @@ export const LEVELLING_CAVEAT_PRINT =
  * because the live region is the only channel a screen-reader user has and collapsing them there
  * undoes the distinction the visible copy makes.
  */
-export function comparisonAnnouncement(compare: RevisionCompare): string {
-  const { enteredTotal, leftTotal, added, removed } = compare.criticalPath;
+export function comparisonAnnouncement(compare: RevisionCompare, levelResources = false): string {
+  const unavailable = criticalPathUnavailable(compare.criticalPath.notAssessableReason);
+  if (unavailable !== null) return unavailable;
+  const { enteredTotal, leftTotal, addedTotal, removedTotal } = compare.criticalPath;
   const parts: string[] = [];
+  // **Every count is the server's TRUE total, never a returned array's length.** All four row sets
+  // are capped, so `added.length` would under-report on exactly the plan this feature is for — and
+  // in the live region, which is the only channel a screen-reader user has, so the undercount would
+  // be both silent and unaccompanied by the "showing N of M" a sighted reader gets.
   if (enteredTotal > 0) parts.push(`${enteredTotal} entered the critical path`);
   if (leftTotal > 0) parts.push(`${leftTotal} left it`);
-  if (added.length > 0) parts.push(`${added.length} added`);
-  if (removed.length > 0) parts.push(`${removed.length} removed`);
+  if (addedTotal > 0) parts.push(`${addedTotal} added`);
+  if (removedTotal > 0) parts.push(`${removedTotal} removed`);
   const subject = `${sideTitle(compare.from)} compared with ${sideTitle(compare.to)}`;
-  return parts.length === 0
-    ? `${subject}: no activity entered or left the critical path.`
-    : `${subject}: ${parts.join(', ')}.`;
+  const headline =
+    parts.length === 0
+      ? `${subject}: no activity entered or left the critical path.`
+      : `${subject}: ${parts.join(', ')}.`;
+
+  // **The caveats that can invalidate these very numbers are spoken WITH them.** A sighted reader
+  // meets the settings warning as a strip immediately above the counts; the announcement is the
+  // only automatic channel a screen-reader user has, and speaking the numbers alone told them the
+  // confident half and withheld the qualifying half — on a feature whose whole premise is saying
+  // what it does and does not know (the M4 accessibility review's finding).
+  const caveats = [
+    settingsCaveat(compare.settingsVerdict),
+    levelResources ? LEVELLING_CAVEAT : null,
+  ]
+    .filter((c): c is string => c !== null)
+    .join(' ');
+  return caveats === '' ? headline : `${headline} ${caveats}`;
 }
 
 /** "Showing 200 of 412" — the cap and the true total both from the payload, never a local constant. */

@@ -4012,3 +4012,53 @@ does, so **no count for a real phase exists anywhere in the product**. There is 
 with. The shared composer therefore takes a count it is _given_, and the two call sites pass
 different derivations of different subjects; its docblock has to say so, or the next reader will
 "fix" one to match the other.
+
+### 249. Four hand-copied dock-geometry blocks in the plan workspace
+
+**Status:** open · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
+
+`plan-workspace-toolbar.tsx` now carries **four** near-identical dock-resize blocks — notes,
+floatPaths, health and revisions — each about fifteen lines of `Prefs` / `EffectiveMax` / `Width` /
+`PointerToSize` / `onResize` wiring, copied by hand. The revision comparison's block is a faithful
+copy of the pattern rather than a new defect, and the M4 component review flagged the count rather
+than the copy.
+
+Four is the point at which `right-docks.ts`'s own lesson starts applying to this geometry too: that
+file exists because _"the way [pair statements] fail is that five get written"_, and it replaced them
+with one derivation over the member list. The dock SET is derived; the dock GEOMETRY is not.
+
+Remedy: a `useRightDockGeometry(prefs, minWidth)` helper, taken the next time this file is touched
+for another reason — not as a standalone refactor of a file three epics have moved through.
+
+### 250. `FloatPathsPanel` shades a missing activity with no reason at all
+
+**Status:** open · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** S · **Owner:** repo
+
+`FloatPathsPanel.tsx:375-409` renders a row for an activity that is no longer in the plan with
+`aria-disabled` plus `pointer-events-none opacity-60` and **no reason** — so a reader meets a shaded
+control that never says why it is shut, which is the ADR-0082 defect that decision exists to close.
+
+Found while reviewing its sibling: `RevisionComparePanel`'s equivalent row carries an `sr-only`
+reason linked by `aria-describedby`, and the comparison is what surfaced the gap. Out of scope for
+the epic that found it — this is another feature's file and another feature's contract — but it is a
+one-line fix following the pattern now standing two directories away.
+
+### 251. The `aria-disabled` shading recipe is hand-rolled in thirteen places
+
+**Status:** unverified · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
+
+The M4 component review counted **thirteen** independent implementations of one recipe —
+`aria-disabled` + a click guard + an `sr-only` reason linked by `aria-describedby` — across
+`window-list-editor`, `field-gate`, `scope-save-bar`, `Deck`, `ToolbarSplitButton`, `ToolbarPopover`,
+`menu`, `plan-facts`, `GanttCell`, `BulkSelectionBar`, `CreateActivityPopover`, `tsld-toolbar-items`
+and now `RevisionComparePanel`, with no shared hook.
+
+The count is **the reviewer's and has not been re-derived here**, which is why this row is
+`unverified` rather than `open` — a count nobody re-ran is exactly the claim ADR-0076 Class 1 is
+about, and filing it as established would be committing that inside the row recording it.
+
+It is pre-existing debt this epic adds one unit to rather than causes. What makes it worth a row is
+that the recipe has already been got wrong twice in this codebase's record (once by omitting the
+reason, once by using native `disabled` and losing the reason with the tab stop), and thirteen copies
+is thirteen chances to get it wrong again. The remedy is a `useShadedControl` hook; the trigger is
+the next epic that touches three or more of them.

@@ -616,6 +616,19 @@ discriminators. Each becomes a spec/plan before build:
   the panel says so in a planner's words). Metric 12's real what-if test follows as its own slice
   (M6), measurement first.
 
+- **Revision comparison** — **shipped** (ADR-0125, 2026-09-05). What entered and left the critical
+  path between two of a plan's computed schedules, and how far the completion moved:
+  `GET …/schedule/revision-compare` reads two already-persisted snapshots — **the engine is not
+  imported at all**, because a baseline already freezes the exact five quantities the delta needs —
+  and a fourth docked panel off `Analysis ▾ → Compare revisions…` shows it beside the plan, with a
+  printed comparison for the people who ask the question and do not use the tool. It answers the
+  half of "what changed and why is the job three weeks later?" that is answerable: **it says what
+  moved and deliberately never says what caused it**, because attribution was measured to depend on
+  an ordering nobody supplied (the same change scored 30, 18, 2 or 0 working days by position
+  alone) while the total is order-free. A baseline now also freezes the four criticality settings
+  its numbers were computed under, so a comparison across a changed rule is reported as such rather
+  than as work that moved — and a side that never recorded them says "unknown", never "they match".
+
 ## Guiding constraints
 
 - Keep `main` releasable; ship thin vertical slices.

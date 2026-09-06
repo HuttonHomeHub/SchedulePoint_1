@@ -226,7 +226,10 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     // `type`, which are exactly the two the delta turns on — criticality is what "entered" and
     // "left" mean, and `type` is what excludes a summary from those sets and from carrier
     // selection. Asserting both fields present is what makes the separate projection non-vacuous.
-    const frozen = await baselineRepo.loadSnapshotRowsForDelta(created.body.data.id as string);
+    const frozen = await baselineRepo.loadSnapshotRowsForDelta(
+      created.body.data.id as string,
+      orgId,
+    );
     expect(frozen).toHaveLength(1);
     expect(frozen[0]).toMatchObject({
       sourceActivityId: activityId,
@@ -241,6 +244,13 @@ describe.skipIf(!hasDatabase)('Baselines API (e2e)', () => {
     const live = await baselineRepo.loadActiveActivitiesForDelta(orgId, planId);
     expect(live).toHaveLength(1);
     expect(live[0]).toMatchObject({ id: activityId, name: 'A', type: 'TASK', isCritical: true });
+
+    // The FROZEN side is org-scoped in the query too (the M4 security finding): a baseline id from
+    // another organisation returns nothing here even though the id itself is real and the row
+    // exists — so the uniform 404 upstream does not depend on the caller having checked first.
+    expect(
+      await baselineRepo.loadSnapshotRowsForDelta(created.body.data.id as string, randomUUID()),
+    ).toEqual([]);
 
     // Org-scoped: a different organisation's id must return nothing rather than another org's rows.
     // The uniform-404 story upstream depends on this read being scoped, not on the caller being

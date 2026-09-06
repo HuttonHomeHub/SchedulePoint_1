@@ -545,7 +545,12 @@ describe('weight is a governed axis', () => {
   // panel's first draft placed FOUR weights and two were removed rather than absorbed: a
   // `font-normal` that existed only to undo its own heading, and a name already distinguished from
   // its subtitle by size AND colour, where a weight is a third channel saying what two already say.
-  const SCREEN_WEIGHT_CEILING = 166;
+  // ...and 166 -> 167 (revision M4): the comparison's completion statement, which IS the answer to
+  // the question the feature exists for ("why is the job three weeks later?") and read as one more
+  // line of body copy below two heavier section headings — the M4 ux review's hierarchy finding. A
+  // screen emphasising its own headline is what this ceiling governs rather than forbids; a
+  // decision leaking out of a primitive is what it stops.
+  const SCREEN_WEIGHT_CEILING = 167;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

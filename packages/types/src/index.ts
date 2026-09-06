@@ -2593,6 +2593,15 @@ export interface ScheduleHealthReport {
  * names so the next contributor's helpful addition fails rather than ships.
  */
 
+/**
+ * The literal a caller sends for `to` to mean **the plan as it stands now**.
+ *
+ * It lives here rather than in the service because it is wire vocabulary that the query DTO, the
+ * service and the web client all need — and the query DTO importing it from the service was a
+ * layering inversion no other DTO in that directory makes (the M4 api-review finding).
+ */
+export const LIVE_REVISION = 'live';
+
 /** Which side of the comparison a revision is. `LIVE` is the plan as it stands now. */
 export const REVISION_SIDE_KINDS = ['BASELINE', 'LIVE'] as const;
 
@@ -2723,10 +2732,34 @@ export interface RevisionCriticalPathDelta {
   cap: number;
   remainedCriticalCount: number;
   remainedNonCriticalCount: number;
+  /**
+   * Present on only one side. **Capped by the same `cap`, with their own true totals** — they
+   * shipped unbounded for one review cycle and the gate caught it: a baseline predating a WBS
+   * reorganisation or a re-import, which is exactly what this feature is for, can put most of a
+   * plan in both sets at once. One rule for all four row sets, so a client learning the convention
+   * on `entered` does not meet a second one here.
+   */
   added: RevisionPresenceActivity[];
   removed: RevisionPresenceActivity[];
+  addedTotal: number;
+  removedTotal: number;
   /** True when NEITHER side has a critical non-summary activity — a fact to state, not a crash. */
   noCriticalPath: boolean;
+  /**
+   * **Why the criticality delta cannot be stated, or null when it can.**
+   *
+   * `SIDE_NOT_SCHEDULED` is the one that matters and it was a live defect for one review cycle:
+   * `is_critical` defaults `false`, so a plan that has never been calculated has no critical
+   * activity — and comparing a real baseline against it reported **every activity that was critical
+   * then as having LEFT the critical path.** Each row was technically true and the picture was
+   * false: nothing left anything, the plan was never computed. An alarming, confident-looking answer
+   * in exactly the meeting-prep moment this feature exists for.
+   *
+   * When this is set the four row sets are EMPTY and their totals are zero — the delta is withheld
+   * at the server rather than patched over by one client, so a second consumer cannot inherit the
+   * fabricated version.
+   */
+  notAssessableReason: 'SIDE_NOT_SCHEDULED' | null;
 }
 
 /** The whole comparison. */

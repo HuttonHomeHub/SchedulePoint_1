@@ -100,6 +100,9 @@ test('a planner compares a revision against live and reads what entered the crit
   await expect(panel).toBeVisible();
 
   await page.setViewportSize({ width: 1024, height: 900 });
+  // Proven to still bite after the scroll-into-view change: a full-viewport overlay injected here
+  // makes the sweep name all seven controls (Print, Close, both pickers and three rows). Recorded
+  // because widening a gate's tolerance is exactly when it quietly stops catching anything.
   const unreachable = await page.evaluate(() => {
     // Located by its STRUCTURAL attribute, never by copy — the rule every layout epic here has
     // broken. A panel that cannot be found must FAIL rather than sweep nothing and report clean.
@@ -109,6 +112,14 @@ test('a planner compares a revision against live and reads what entered the crit
     if (controls.length === 0) return ['NO CONTROLS FOUND — the sweep would pass vacuously'];
     return controls
       .filter((el) => {
+        // **Scrolled into view FIRST, then hit-tested.** A control below its own scroller's fold is
+        // reachable — a planner scrolls to it — and testing it where it currently sits reports the
+        // scroller, not a defect. ADR-0114's discriminator is exactly this: whether there is
+        // anything scrollable to move. This suite's first version omitted it and went red on a
+        // legitimately-below-the-fold row the moment the rows grew a line, which is the same
+        // instrument defect the ADR-0118 gate records hitting; recorded rather than worked around
+        // by shortening the rows.
+        el.scrollIntoView({ block: 'center' });
         const r = el.getBoundingClientRect();
         // A zero-size box has no point to hit and is a different defect; report it as one rather
         // than letting it pass the hit test the way ADR-0090 M5's gate once did.

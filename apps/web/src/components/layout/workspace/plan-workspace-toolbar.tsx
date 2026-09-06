@@ -1388,6 +1388,7 @@ export function ToolbarPlanWorkspace({
       onToChange={setRevisionTo}
       onClose={closeRevisionsAndFocus}
       levelResources={plan.levelResources}
+      {...(model.canWrite ? { onOpenBaselines: () => setDialog('baselines') } : {})}
       onActivateActivity={(activityId) => {
         canvasUi.requestSelectActivity(activityId);
         model.onSelectionChange(activityId);

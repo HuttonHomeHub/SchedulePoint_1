@@ -5,7 +5,9 @@ import './RevisionComparePrintDocument.css';
 import {
   carrierChangedSentence,
   completionSentence,
+  criticalPathUnavailable,
   HONESTY_FOOTER,
+  membershipSentence,
   LEVELLING_CAVEAT_PRINT,
   settingsCaveat,
   sideTitle,
@@ -78,7 +80,11 @@ export function RevisionComparePrintDocument({
       )}
 
       {caveat === null ? null : <p className="revision-print-caveat">{caveat}</p>}
-      {compare.criticalPath.noCriticalPath ? (
+      {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
+        <p className="revision-print-statement">
+          {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
+        </p>
+      ) : compare.criticalPath.noCriticalPath ? (
         <p className="revision-print-statement">
           Neither revision has a critical path, so nothing can have entered or left it.
         </p>
@@ -98,16 +104,26 @@ export function RevisionComparePrintDocument({
             cap={compare.criticalPath.cap}
             emptyMessage="Nothing left the critical path."
           />
+          {/* The denominator, on paper as on screen — the two surfaces state the same facts, which
+              is the whole point of the D9 rule this epic kept tripping over. */}
+          <p className="revision-print-meta">
+            {membershipSentence(
+              compare.criticalPath.remainedCriticalCount,
+              compare.criticalPath.remainedNonCriticalCount,
+            )}
+          </p>
         </>
       )}
 
-      {compare.criticalPath.added.length > 0 || compare.criticalPath.removed.length > 0 ? (
+      {compare.criticalPath.addedTotal > 0 || compare.criticalPath.removedTotal > 0 ? (
         <>
           <h2>Added and removed</h2>
+          {/* The TRUE totals — the arrays are capped like their siblings, and paper has no
+              "load more" to reveal what a client-computed length would have hidden. */}
           <p className="revision-print-statement">
-            {compare.criticalPath.added.length} added · {compare.criticalPath.removed.length}{' '}
-            removed. An activity present in only one revision is listed as added or removed — it did
-            not enter or leave a path it was never on.
+            {compare.criticalPath.addedTotal} added · {compare.criticalPath.removedTotal} removed.
+            An activity present in only one revision is listed as added or removed — it did not
+            enter or leave a path it was never on.
           </p>
         </>
       ) : null}

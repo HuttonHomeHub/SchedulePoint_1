@@ -15,7 +15,7 @@ import type {
   RevisionSide,
   ScheduleHealthReport,
 } from '@repo/types';
-import { DEFAULT_HOURS_PER_DAY_MINUTES } from '@repo/types';
+import { DEFAULT_HOURS_PER_DAY_MINUTES, LIVE_REVISION } from '@repo/types';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 
 import type { Permission, Principal } from '../../common/auth/principal';
@@ -191,14 +191,6 @@ type ActivePlan = NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdI
  * recalculation is invisible to optimistic locking and cannot masquerade as a
  * user edit.
  */
-/**
- * The literal a caller sends for `to` to mean **the plan as it stands now**. A word rather than an
- * omission, because `?to=` absent and `?to=live` must not be two spellings a reader has to know are
- * the same — the default fills it in, and the value that reaches the service is always one of a
- * UUID or this.
- */
-export const LIVE_REVISION = 'live';
-
 /**
  * The cap on each of `entered` / `left`. The TRUE totals travel beside the rows, so a client never
  * computes "showing 50 of 412" from a number it holds itself (ADR-0116 D4).
@@ -1460,7 +1452,12 @@ export class ScheduleService {
 
     // A revision compared with itself has nothing to report, and answering 200 with an empty delta
     // would read as "nothing changed" rather than "you asked the wrong question".
-    if (fromId === to) {
+    //
+    // Compared case-INSENSITIVELY, which the first version was not (the M4 api-review finding):
+    // Postgres resolves a UUID without regard to case, so the same baseline written two ways would
+    // have slipped past this guard, resolved to one row twice, and produced exactly the empty delta
+    // this 422 exists to prevent — the failure mode reading as a reassuring answer.
+    if (fromId.toLowerCase() === to.toLowerCase()) {
       // The code rides `details.reason`, matching every other specific 422 in this service
       // (`PLAN_START_REQUIRED`, the calendar states): `ValidationError.code` is the fixed
       // envelope code `VALIDATION_FAILED`, and a second convention for the same fact is how a
@@ -1474,18 +1471,23 @@ export class ScheduleService {
     // miss is 404, never 403. A 403 would confirm the id names a real baseline somewhere, which is
     // an existence oracle; the uniform 404 is what the rest of this codebase answers and it is not
     // re-decided here.
-    const fromBaseline = await this.baselines.findActiveByIdInPlan(fromId, organization.id, planId);
-    if (!fromBaseline) throw new NotFoundError('Revision not found.');
-
-    const toBaseline =
+    // Both lookups in ONE round trip: they are independent, and the second does not become
+    // interesting only if the first succeeds — either miss is the same 404, so resolving them
+    // together leaks nothing and saves a sequential hop (the M4 backend-performance suggestion).
+    const [fromBaseline, toBaseline] = await Promise.all([
+      this.baselines.findActiveByIdInPlan(fromId, organization.id, planId),
       to === LIVE_REVISION
-        ? null
-        : await this.baselines.findActiveByIdInPlan(to, organization.id, planId);
+        ? Promise.resolve(null)
+        : this.baselines.findActiveByIdInPlan(to, organization.id, planId),
+    ]);
+    if (!fromBaseline) throw new NotFoundError('Revision not found.');
     if (to !== LIVE_REVISION && !toBaseline) throw new NotFoundError('Revision not found.');
 
     const [fromRows, toRows, liveRows, planCalendar] = await Promise.all([
-      this.baselines.loadSnapshotRowsForDelta(fromBaseline.id),
-      toBaseline ? this.baselines.loadSnapshotRowsForDelta(toBaseline.id) : Promise.resolve(null),
+      this.baselines.loadSnapshotRowsForDelta(fromBaseline.id, organization.id),
+      toBaseline
+        ? this.baselines.loadSnapshotRowsForDelta(toBaseline.id, organization.id)
+        : Promise.resolve(null),
       this.baselines.loadActiveActivitiesForDelta(organization.id, planId),
       this.resolveCalendar(organization.id, plan.calendarId),
     ]);
@@ -1543,6 +1545,33 @@ export class ScheduleService {
       REVISION_ROW_CAP,
       movementDaysBetween,
     );
+
+    /**
+     * **Whether the criticality delta means anything at all**, and the answer is no when either
+     * side was never calculated (the M4 ux review's sharpest finding, and a real defect).
+     *
+     * `activities.is_critical` DEFAULTS to `false`, so an uncalculated plan has no critical
+     * activity — and comparing a real baseline against it reported **every activity that was
+     * critical then as having LEFT the critical path**. Each row was technically true and the
+     * picture was a lie: nothing left anything, the plan was never computed. That is worse than a
+     * blank answer, because it is confident and alarming in exactly the meeting-prep moment this
+     * feature exists for.
+     *
+     * Withheld HERE rather than in the panel, so a second consumer of this route cannot inherit the
+     * fabricated version — and the completion half already reports its own non-assessability, so
+     * this is the same honesty applied to the half that did not have it.
+     *
+     * A baseline's `capturedProjectFinish` is the frozen side's evidence: a capture from an
+     * uncalculated plan has none.
+     */
+    const sideScheduled = (
+      side: { capturedProjectFinish: Date | null } | null,
+      livePlanComputedAt: Date | null,
+    ): boolean =>
+      side === null ? livePlanComputedAt !== null : side.capturedProjectFinish !== null;
+    const bothScheduled =
+      sideScheduled(fromBaseline, plan.scheduleComputedAt) &&
+      sideScheduled(toBaseline, plan.scheduleComputedAt);
 
     // `existsLive` is what decides whether a client may offer to reveal a row. It is a question
     // about the LIVE plan and never about the comparison's `to` side: comparing two baselines can
@@ -1607,18 +1636,39 @@ export class ScheduleService {
         newSideCarrierActivityId: delta.completion.newSideCarrierActivityId ?? null,
         newSideCarrierName: delta.completion.newSideCarrierName ?? null,
       },
-      criticalPath: {
-        entered: delta.entered.map(moved),
-        left: delta.left.map(moved),
-        enteredTotal: delta.enteredTotal,
-        leftTotal: delta.leftTotal,
-        cap: REVISION_ROW_CAP,
-        remainedCriticalCount: delta.remainedCriticalCount,
-        remainedNonCriticalCount: delta.remainedNonCriticalCount,
-        added: delta.added.map(present),
-        removed: delta.removed.map(present),
-        noCriticalPath: delta.noCriticalPath,
-      },
+      criticalPath: bothScheduled
+        ? {
+            entered: delta.entered.map(moved),
+            left: delta.left.map(moved),
+            enteredTotal: delta.enteredTotal,
+            leftTotal: delta.leftTotal,
+            cap: REVISION_ROW_CAP,
+            remainedCriticalCount: delta.remainedCriticalCount,
+            remainedNonCriticalCount: delta.remainedNonCriticalCount,
+            added: delta.added.map(present),
+            removed: delta.removed.map(present),
+            addedTotal: delta.addedTotal,
+            removedTotal: delta.removedTotal,
+            noCriticalPath: delta.noCriticalPath,
+            notAssessableReason: null,
+          }
+        : {
+            // Empty and zeroed, not partial: a half-reported delta over a side that was never
+            // computed is the same lie in a smaller font.
+            entered: [],
+            left: [],
+            enteredTotal: 0,
+            leftTotal: 0,
+            cap: REVISION_ROW_CAP,
+            remainedCriticalCount: 0,
+            remainedNonCriticalCount: 0,
+            added: [],
+            removed: [],
+            addedTotal: 0,
+            removedTotal: 0,
+            noCriticalPath: false,
+            notAssessableReason: 'SIDE_NOT_SCHEDULED',
+          },
     };
 
     this.logger.info(

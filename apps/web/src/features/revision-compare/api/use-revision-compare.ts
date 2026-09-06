@@ -26,7 +26,19 @@ export function revisionCompareQueryOptions(
     // `from` is REQUIRED by the route, so a null one is not a request to make — it is the state
     // before the planner has chosen. Gating here rather than rendering an error keeps "you have
     // not picked yet" and "the server refused" as two different facts on screen.
-    enabled: enabled && from !== null && from !== to,
+    //
+    // **`from === to` is NOT gated here, and that is the fix rather than an omission.** It used to
+    // be, and a disabled query in TanStack Query v5 stays `status: 'pending'` FOREVER — so picking
+    // one baseline on both sides (trivial with one baseline captured) rendered "Comparing…" with a
+    // spinner, permanently, with no error and no way out. Worse than a blank panel, because it
+    // signals that a request is in flight when none will ever be made. The API already has the
+    // honest answer — a 422 saying "Pick two different revisions to compare", written precisely
+    // because a 200 with an empty delta "would read as nothing changed rather than you asked the
+    // wrong question" — and the client's own guard was making that message unreachable. The panel
+    // now prevents the state at the picker AND the request is allowed through if it happens
+    // anyway, so the server's sentence is the backstop rather than dead code. Found independently
+    // by the M4 ux and accessibility reviews.
+    enabled: enabled && from !== null,
     staleTime: 30_000,
   });
 }

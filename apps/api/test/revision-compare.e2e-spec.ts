@@ -390,6 +390,13 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
     expect(same.body.error.details).toMatchObject({ reason: 'SAME_REVISION' });
     expect(same.body.error.message).toMatch(/two different revisions/i);
 
+    // The SAME baseline written in a different case is still the same baseline: Postgres resolves a
+    // UUID without regard to case, so a case-SENSITIVE guard would let this through, resolve one row
+    // twice and answer 200 with an empty delta — which reads as "nothing changed" and is the exact
+    // failure the 422 exists to prevent. Verified red against `fromId === to`.
+    const upper = await admin.agent.get(compareUrl(planId, from, from.toUpperCase())).expect(422);
+    expect(upper.body.error.details).toMatchObject({ reason: 'SAME_REVISION' });
+
     // `to` is a UUID or the literal `live` — anything else is a field-level 422, never a 500 and
     // never silently treated as live.
     await admin.agent.get(compareUrl(planId, from, 'latest')).expect(422);

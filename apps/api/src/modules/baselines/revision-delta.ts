@@ -87,8 +87,18 @@ export interface RevisionDelta {
   readonly leftTotal: number;
   readonly remainedCriticalCount: number;
   readonly remainedNonCriticalCount: number;
+  /**
+   * **Capped by the same `cap`, with the same true totals beside them.** They shipped UNBOUNDED for
+   * one review cycle, which the M4 backend-performance gate caught: a plan whose baseline predates a
+   * WBS reorganisation or a re-import — exactly the case this feature exists for — can have most of
+   * its activities appear as added AND removed together, so the one field in the payload with no
+   * bound was the one most likely to be large. ADR-0116 D4's rule applied to a field and not its
+   * neighbour, two lines apart, which is this register's most-repeated shape.
+   */
   readonly added: readonly RevisionPresenceRow[];
   readonly removed: readonly RevisionPresenceRow[];
+  readonly addedTotal: number;
+  readonly removedTotal: number;
   readonly completion: RevisionCompletion;
   /** Reused from ADR-0116 M6 rather than reinvented: neither side has a critical activity. */
   readonly noCriticalPath: boolean;
@@ -125,13 +135,26 @@ export function daysBetweenIso(from: string, to: string): number {
  * "reconcile" the two by pretending a date carries minutes.
  */
 export function selectCarrierFromRows(rows: readonly RevisionRow[]): RevisionRow | undefined {
-  return rows
-    .filter((r) => !isSummary(r) && r.earlyFinish !== null)
-    .sort(
-      (x, y) =>
-        (x.earlyFinish! < y.earlyFinish! ? 1 : x.earlyFinish! > y.earlyFinish! ? -1 : 0) ||
-        x.activityId.localeCompare(y.activityId),
-    )[0];
+  // A linear max-scan, not a sort. The first version sorted the whole filtered set to take element
+  // zero — an O(n log n) answer to an O(n) question, and the only part of this "pure O(n) delta"
+  // that was not (the M4 backend-performance gate's finding). Trivial at today's scale and fixed
+  // anyway, because the alternative is a docblock claiming a complexity the code does not have.
+  let best: RevisionRow | undefined;
+  for (const row of rows) {
+    if (isSummary(row) || row.earlyFinish === null) continue;
+    if (best === undefined) {
+      best = row;
+      continue;
+    }
+    // Latest finish wins; a tie goes to the lower id — the same total order the sort expressed.
+    if (
+      row.earlyFinish > best.earlyFinish! ||
+      (row.earlyFinish === best.earlyFinish && row.activityId.localeCompare(best.activityId) < 0)
+    ) {
+      best = row;
+    }
+  }
+  return best;
 }
 
 /** `to - from`, or null when either side is unknown. Absence and zero are different facts. */
@@ -279,8 +302,10 @@ export function computeRevisionDelta(
     leftTotal: left.length,
     remainedCriticalCount,
     remainedNonCriticalCount,
-    added,
-    removed,
+    added: added.slice(0, cap),
+    removed: removed.slice(0, cap),
+    addedTotal: added.length,
+    removedTotal: removed.length,
     completion,
     noCriticalPath:
       !fromRows.some((r) => r.isCritical && !isSummary(r)) &&

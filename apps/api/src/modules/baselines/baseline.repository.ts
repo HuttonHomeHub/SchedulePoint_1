@@ -290,9 +290,18 @@ export class BaselineRepository {
    * on every variance call, to spare one duplicated `select`.
    *
    * One indexed read, on the existing `@@index([baselineId, sourceActivityId])`.
+   *
+   * **Org-scoped in the QUERY, not by the caller's discipline** — the M4 security review's finding,
+   * folded. Its sibling `loadSnapshotRowsForVariance` takes a bare `baselineId` and is safe only
+   * because its one call site resolved that id through `findActiveByIdInPlan` first; nothing
+   * compiles or fails if a later caller does not. That sibling is deliberately left alone (its
+   * contract is not this epic's to change), but the NEW loader does not inherit the weakness: a
+   * baseline id belonging to another organisation returns no rows here even if a future call site
+   * forgets to check, so the uniform 404 upstream stops depending on somebody remembering.
    */
   loadSnapshotRowsForDelta(
     baselineId: string,
+    organizationId: string,
     db: Prisma.TransactionClient = this.prisma,
   ): Promise<
     {
@@ -307,7 +316,7 @@ export class BaselineRepository {
     }[]
   > {
     return db.baselineActivity.findMany({
-      where: { baselineId, deletedAt: null },
+      where: { baselineId, organizationId, deletedAt: null },
       select: {
         sourceActivityId: true,
         code: true,

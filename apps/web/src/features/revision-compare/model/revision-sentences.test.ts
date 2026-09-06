@@ -56,7 +56,10 @@ const compare = (over: Partial<RevisionCompare> = {}): RevisionCompare => ({
     remainedNonCriticalCount: 8,
     added: [],
     removed: [],
+    addedTotal: 0,
+    removedTotal: 0,
     noCriticalPath: false,
+    notAssessableReason: null,
   },
   ...over,
 });

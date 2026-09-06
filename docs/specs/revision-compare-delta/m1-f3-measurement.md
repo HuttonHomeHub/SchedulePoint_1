@@ -32,6 +32,28 @@ the two numbers are comparable. The route's own figure is **about 2.3×** the tw
 the socket. That ratio is the useful part: it says the read model is not hiding a second query
 pattern behind the loads M0 already measured.
 
+## Re-derived at M4-T2 against the shipped code
+
+M4-T2's rule is **re-derive, do not cite** — this repository records a measurement being quoted
+forward from a tree that had since changed, inside a review. So the harness was re-run against the
+final code after M2 and M3 landed:
+
+```
+  p50 53.7 ms   p95 65.8 ms   min 47.9 ms   max 65.8 ms
+  bar 250 ms p95 -> PASS
+  non-vacuity: entered 180, left 260
+```
+
+**The p95 moved 58.7 → 65.8 ms (+7.1 ms, +12 %), and the verdict is unchanged.** It is recorded
+rather than smoothed, because a second run that agrees to the decimal is more suspicious than one
+that does not. Two things say this is run-to-run variance on a shared machine and not a regression:
+the delta is **identical** (180 entered, 260 left, so the same work was done), and nothing between
+the two runs touched `apps/api` at all — M2 and M3 are `apps/web` only, confirmed by
+`git diff --stat 986a9dd5..HEAD -- apps/api` returning nothing.
+
+Both numbers are two orders of magnitude inside the bar, so neither changes any decision. **Cite
+this section rather than the one above it**: it is the figure taken against the code that ships.
+
 ## The non-vacuity control, checked first
 
 `entered 180, left 260`. **A benchmark over two identical schedules reports the fastest number this

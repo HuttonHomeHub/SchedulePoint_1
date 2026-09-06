@@ -199,10 +199,33 @@ export class RevisionCriticalPathDeltaDto implements RevisionCriticalPathDelta {
 
   @ApiProperty({
     description:
+      'The TRUE total, which may exceed the rows returned — the same `cap` bounds these as bounds ' +
+      '`entered`/`left`. They shipped unbounded for one review cycle: a baseline predating a WBS ' +
+      'reorganisation or a re-import can put most of a plan in both sets at once.',
+  })
+  addedTotal!: number;
+
+  @ApiProperty() removedTotal!: number;
+
+  @ApiProperty({
+    description:
       'True when NEITHER side has a critical non-summary activity — a scheduled plan can ' +
       'legitimately have none, and that is a fact to state rather than an error.',
   })
   noCriticalPath!: boolean;
+
+  @ApiProperty({
+    enum: ['SIDE_NOT_SCHEDULED'],
+    nullable: true,
+    description:
+      'Why the criticality delta cannot be stated, or null when it can. `SIDE_NOT_SCHEDULED` means ' +
+      'one of the two revisions was never calculated — `is_critical` defaults false, so comparing ' +
+      'against it would report every activity that WAS critical as having left the critical path, ' +
+      'each row technically true and the picture false. When this is set the four row sets are ' +
+      'empty and every total is zero: the delta is withheld here rather than patched over by one ' +
+      'client, so a second consumer cannot inherit the fabricated version.',
+  })
+  notAssessableReason!: 'SIDE_NOT_SCHEDULED' | null;
 }
 
 export class RevisionCompareDto implements RevisionCompare {
@@ -237,11 +260,20 @@ export class RevisionCompareDto implements RevisionCompare {
   criticalPath!: RevisionCriticalPathDeltaDto;
 
   /**
-   * The service already returns exactly this shape — every field, every nullability — so this is a
-   * NAMING boundary rather than a mapping one, and the `implements` clauses above are what make it
-   * safe: a `RevisionCompare` that stops satisfying the DTO fails to compile here rather than
-   * shipping an undeclared field. Deliberately not a hand-written field copy, which is a second
-   * place to forget one.
+   * A naming boundary rather than a mapping one: the service already returns exactly this shape.
+   *
+   * **What is actually load-bearing is the SERVICE's typed object literal, not the `implements`
+   * clauses** — corrected here after the M4 api review pointed out that `implements` constrains the
+   * floor (the class cannot be missing or mistype a member) and says nothing about the ceiling (it
+   * does not stop a wider value carrying an undeclared field). The guarantee comes from
+   * `revisionCompare` building `const result: RevisionCompare = { … }`, where TypeScript's
+   * excess-property check on an object literal rejects anything extra at that one site.
+   *
+   * That is a service-discipline guarantee standing in for a DTO-boundary one, and it is the only
+   * `.from` in this directory that works that way — the siblings copy fields explicitly. It is kept
+   * because a hand-written copy of a 30-field nested shape is a second place to forget a field, and
+   * because there is no cost-shaped field here to withhold; the trade is written down rather than
+   * left for a reader to infer from the absence of a mapping.
    */
   static from(model: RevisionCompare): RevisionCompareDto {
     return model;

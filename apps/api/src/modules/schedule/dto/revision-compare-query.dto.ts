@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { LIVE_REVISION } from '@repo/types';
 import { IsUUID, Matches } from 'class-validator';
 
-import { LIVE_REVISION } from '../schedule.service';
+import { UUID_REGEX } from '../../../common/validation/uuid';
 
 /**
  * Query params for the revision comparison (revision M1).
@@ -12,7 +13,16 @@ import { LIVE_REVISION } from '../schedule.service';
  * makes "both supplied" and "neither supplied" two more states the service has to answer for, to
  * spare one regular expression.
  */
-const UUID_V4 = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+/**
+ * The UUID half is the CANONICAL `UUID_REGEX`, unwrapped of its anchors rather than rewritten.
+ *
+ * The first version hand-rolled its own character-class pattern and named it `UUID_V4`, which was
+ * wrong twice: it checked no version or variant nibble at all, and this application's ids are
+ * **v7**. Worse, it made `to` looser than `from` on the same DTO for the same underlying type,
+ * since `from`'s `@IsUUID()` does enforce version and variant. Reusing the shared matcher is also
+ * the existing precedent for a "UUID or literal" field (`list-resources-query.dto.ts`).
+ */
+const UUID_PATTERN = UUID_REGEX.source.replace(/^\^/, '').replace(/\$$/, '');
 
 export class RevisionCompareQueryDto {
   @ApiProperty({
@@ -31,7 +41,7 @@ export class RevisionCompareQueryDto {
       'The NEW side: a baseline of this plan, or the literal `live` for the plan as it stands ' +
       'now. Defaults to `live`, which is the question a planner actually asks.',
   })
-  @Matches(new RegExp(`^(${LIVE_REVISION}|${UUID_V4})$`), {
+  @Matches(new RegExp(`^(${LIVE_REVISION}|${UUID_PATTERN})$`, 'i'), {
     message: 'to must be a baseline id or the literal "live".',
   })
   to: string = LIVE_REVISION;

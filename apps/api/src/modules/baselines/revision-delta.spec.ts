@@ -226,4 +226,26 @@ describe('daysBetweenIso', () => {
     // Zero movement is a real answer and must not read as "not assessable".
     expect(daysBetweenIso('2026-01-05', '2026-01-05')).toBe(0);
   });
+
+  /**
+   * **All FOUR row sets are capped, not two.** `added`/`removed` shipped unbounded for one review
+   * cycle while `entered`/`left` two lines away were capped with their totals — ADR-0116 D4's rule
+   * applied to a field and not its neighbour. It matters most in exactly the case this feature
+   * exists for: a baseline predating a WBS reorganisation or a re-import puts most of a plan into
+   * both sets at once, so the one unbounded field was the one most likely to be large.
+   *
+   * Verified RED against the unbounded version, which returned all 250 rows in each set.
+   */
+  it('caps added and removed by the same cap, carrying their own true totals', () => {
+    const only = (side: 'from' | 'to') =>
+      Array.from({ length: 250 }, (_, i) =>
+        row({ activityId: `${side}-${i}`, name: `${side} ${i}`, isCritical: false }),
+      );
+    const delta = computeRevisionDelta(only('from'), only('to'), 10);
+    expect(delta.added).toHaveLength(10);
+    expect(delta.removed).toHaveLength(10);
+    // The TRUE totals travel beside them, so "showing 10 of 250" is never a client's own number.
+    expect(delta.addedTotal).toBe(250);
+    expect(delta.removedTotal).toBe(250);
+  });
 });
