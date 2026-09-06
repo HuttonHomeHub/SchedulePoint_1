@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 30 Prisma models across 61 migrations, 1152 web
 > source files with 42 Playwright suites beside the base journey, and
-> 125 ADRs.
+> 126 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -3913,6 +3913,56 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   while every height assertion passed. **The CPM engine is not imported and no migration runs** in
   M1–M4; the two schema changes shipped ahead of them, one release apart, so their halves could fail
   separately.
+
+- **ADR-0126** _(Accepted; M4–M5 landed 2026-09-06)_ — A baseline freezes the plan's shape, or a
+  comparison invents it. ADR-0125's change list could report eight classes and not six, for one
+  reason: **a baseline freezes the engine's OUTPUT and almost none of its INPUT**. Identity, type,
+  duration, dates, float and criticality were all there; logic, constraints, calendar, WBS parent,
+  lane and progress were not — so the tool that exists to show logic could not tell a planner the
+  logic had changed. Ten nullable columns on `baseline_activities` plus a `baseline_dependencies`
+  table close it, and **no backfill is possible, ever**: writing today's graph into a historic
+  snapshot would state as history something that baseline never saw. Put to the product owner as an
+  extension whose value is entirely prospective; they shipped it, because the alternative is that it
+  is still not recorded a year from now.
+  **The load-bearing decision is that the discriminator is a capture-level column and is the only
+  answer.** `revision_snapshot_level` is written `FULL` **unconditionally**, including for a plan
+  with no logic at all — zero edge rows on a FULL baseline means "there genuinely were none", zero
+  on a NONE baseline means nobody looked, a row count cannot tell those apart, and this column is
+  the only thing that can (the `costSnapshotLevel` rule, ADR-0071 M3, one column along). **Not one
+  of the ten columns carries a DEFAULT**, and `lane_index` is why: the live column is
+  `NOT NULL DEFAULT 0`, and **lane 0 is a real lane** exactly as 0 % is a real progress figure — so
+  mirroring it would tell every pre-migration baseline that all its activities sat in the top row
+  and none had started, a confident fabricated picture a ghost layer would paint. That is
+  `budgetedExpense`'s "0 is a claim" arriving where the temptation to mirror is strongest; the
+  `hours_per_day_minutes DEFAULT 1440` precedent licenses nothing, since 1440 was **true of every
+  pre-existing row** and none of these values is knowable for any. Per-row sentinels are refused for
+  the same reason and this is where ADR-0125's criticality precedent **stops applying**: those four
+  columns have no legitimate null and these ten all do. A pair either side of the line therefore
+  reports each paid class as **not assessable with a reason**, never as "no change" and never as a
+  zero.
+  **Three things were established by running rather than reading.** A comment called the
+  paid-class filter the guarantee; removing each candidate in turn showed `assess` is (six cases
+  red) and the filter is a saving, and the comment now says which — ADR-0076 Class 3 caught inside
+  the epic that quotes it. `is_driving` is frozen and **omitted from the projection** rather than
+  merely left uncompared, because it is the engine's output and comparing it would fire "Logic
+  changed" on every recalculation of an untouched graph; a lag calendar likewise counts only
+  alongside a lag, since switching it on a zero-lag link changes no date and renders two identical
+  labels. And `existsLive` moved to the **server, per row**: the client derived it from the delta's
+  own rows, which was conservative while only the free classes existed and becomes **false** with
+  the paid ones — an activity moved to another lane enters and leaves nothing, so it is in no delta
+  list, and the row would have been shaded with a sentence saying it is not in the live plan about a
+  bar the reader can see. Worse than a missing control, because it states something untrue.
+  `RevisionChangeRow` gains `subjectId` because a logic row's subject is an **edge**: two changed
+  links into one successor are two rows with one `activityId`, and keying on the activity would
+  render them as one; keying the diff on the dependency id is also what keeps an edge whose
+  endpoints were both deleted to a single row rather than one per endpoint.
+  **A fourth child table now hangs off `baseline`, and adding it broke 557 of 587 API e2e tests at
+  once** on a RESTRICT foreign key. That is the loud failure mode; the quiet one is the ADR-0096
+  retention runner, which catches, logs a permanent failure and retries every hour forever — which
+  is why M4 gave that path a DMMF-derived census. Thirteen hand-maintained copies of the delete
+  sweep are `docs/TECH_DEBT.md` #253. **The CPM engine is not imported and the ADR-0034
+  recalculation parity gate is untouched by construction** — the capture reads columns and writes
+  columns, and `computeSchedule` has never seen any of them.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

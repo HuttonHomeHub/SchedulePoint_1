@@ -2855,6 +2855,31 @@ export interface RevisionChangeReport {
   readonly cap: number;
 }
 
+/**
+ * One activity's OLD geometry — where a bar was on the `from` side — for a canvas that draws the
+ * difference behind the live scene.
+ *
+ * **Only activities that CHANGED appear here.** The product owner's call (CQ-2, 2026-09-06) was that
+ * the overlay paints the difference and not the whole old scene: a ghost behind every unchanged bar
+ * is a picture of the plan, not of what happened to it.
+ *
+ * `laneIndex` is the **frozen** lane (ADR-0126), never the live one and never a guess. That is what
+ * lets REMOVED work be drawn at all: it has no live activity to sit behind, and a guessed position
+ * would be a false statement about where the work was. On a baseline that never recorded the lane
+ * the activity is **listed and not drawn** — see `RevisionCompare.ghostsUndrawable`.
+ */
+export interface RevisionGhostBar {
+  readonly activityId: string;
+  readonly name: string;
+  /** `YYYY-MM-DD`, both non-null: a row with no old dates contributes no ghost. */
+  readonly fromStart: string;
+  readonly fromFinish: string;
+  readonly laneIndex: number;
+  readonly isMilestone: boolean;
+  /** In the old revision and not in the new. Drawn in a distinct treatment, never as a live bar. */
+  readonly removed: boolean;
+}
+
 export interface RevisionCompare {
   planId: string;
   planName: string;
@@ -2884,4 +2909,19 @@ export interface RevisionCompare {
    * to a reader and telling them apart is the point.
    */
   readonly changes?: RevisionChangeReport;
+  /**
+   * The old side's geometry for the changed activities — present ONLY when the caller opted in with
+   * `?include=ghosts`, so a caller that did not ask receives byte-identically what it received
+   * before this existed (the ADR-0073 C2 projection pattern).
+   */
+  readonly ghosts?: readonly RevisionGhostBar[];
+  /**
+   * How many changed activities the overlay CANNOT draw, because the old side never recorded where
+   * they were (a baseline captured before ADR-0126). Present alongside `ghosts`.
+   *
+   * A count rather than silence, and never folded into the array's length: a picture missing rows
+   * nobody is told about is the absence this epic exists to remove, arriving in the one place a
+   * reader cannot check it — a diagram has no "showing N of M".
+   */
+  readonly ghostsUndrawable?: number;
 }

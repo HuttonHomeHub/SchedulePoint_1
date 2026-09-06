@@ -27,7 +27,7 @@ import { UUID_REGEX } from '../../../common/validation/uuid';
 const UUID_PATTERN = UUID_REGEX.source.replace(/^\^/, '').replace(/\$$/, '');
 
 /** The opt-in projections this route understands. */
-export const REVISION_INCLUDES = ['changes', 'progress'] as const;
+export const REVISION_INCLUDES = ['changes', 'progress', 'ghosts'] as const;
 export type RevisionInclude = (typeof REVISION_INCLUDES)[number];
 
 export class RevisionCompareQueryDto {
@@ -69,7 +69,8 @@ export class RevisionCompareQueryDto {
     description:
       'Opt-in projections. Absent ⇒ byte-identical to the delta-only response. `changes` adds ' +
       'the change list; `progress` additionally assesses the progress class, which is off by ' +
-      'default because it moves on nearly every activity every week.',
+      'default because it moves on nearly every activity every week; `ghosts` adds the old ' +
+      "side's geometry for the activities that CHANGED, which only a canvas needs.",
   })
   @IsOptional()
   // **`?include=changes` arrives as a STRING, not a one-element array.** Without this the single

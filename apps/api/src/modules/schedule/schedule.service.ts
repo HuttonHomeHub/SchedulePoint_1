@@ -37,6 +37,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
 import { BaselineRepository } from '../baselines/baseline.repository';
 import { classifyRevisionChanges } from '../baselines/revision-changes';
+import { buildRevisionGhosts } from '../baselines/revision-ghosts';
 import {
   computeRevisionDelta,
   type RevisionEdge,
@@ -1761,6 +1762,15 @@ export class ScheduleService {
             })),
           };
 
+    /**
+     * The change picture's geometry, only when a canvas asked for it. Derived from the SAME two
+     * projections the delta and the change list read — a second assembly would drift, and the drift
+     * would show as a ghost in a place the change list does not mention.
+     */
+    const ghostResult = includes.includes('ghosts')
+      ? buildRevisionGhosts(frozenSide(fromRows), toRows === null ? liveSide : frozenSide(toRows))
+      : null;
+
     const result: RevisionCompare = {
       planId,
       planName: plan.name,
@@ -1813,6 +1823,9 @@ export class ScheduleService {
       // Absent (rather than an empty report) when not asked for, so a caller that did not opt in
       // sees byte-identically what it saw before this existed.
       ...(changeReport ? { changes: changeReport } : {}),
+      ...(ghostResult
+        ? { ghosts: ghostResult.ghosts, ghostsUndrawable: ghostResult.undrawable }
+        : {}),
       criticalPath: bothScheduled
         ? {
             entered: delta.entered.map(moved),

@@ -628,6 +628,17 @@ discriminators. Each becomes a spec/plan before build:
   alone) while the total is order-free. A baseline now also freezes the four criticality settings
   its numbers were computed under, so a comparison across a changed rule is reported as such rather
   than as work that moved — and a side that never recorded them says "unknown", never "they match".
+- **The change list** — **shipping** (ADR-0126). The comparison now also says what was _edited_, not
+  only what moved: added, removed, renamed, re-coded, re-typed, re-durationed, re-dated and
+  criticality fall out of what a baseline already froze, and **logic, constraints, calendar, WBS
+  parent, lane and progress needed the snapshot extended**, because a baseline froze the engine's
+  output and almost none of its input. Two things are worth knowing before reading a comparison.
+  The six new classes are **permanently unavailable on any baseline captured before 2026-09-06** —
+  no backfill is possible, because writing today's logic into a historic snapshot would state as
+  history a graph that baseline never saw — and the product says so in words rather than reporting
+  "no change". And the list is ordered by **time, never by size**: a list sorted biggest-first,
+  beside a completion that slipped, is a ranking of blame, which is the causal claim ADR-0125
+  withdrew on measurement.
 
 ## Guiding constraints
 
