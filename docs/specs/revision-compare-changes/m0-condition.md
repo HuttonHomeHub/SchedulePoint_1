@@ -231,3 +231,54 @@ approve because it edits a committed condition.
 
 The instrument works, it refuses to judge what it cannot see, and the ghost half of the treatment is
 real shipped code rather than a prototype. **Condition A is NOT yet answered.**
+
+---
+
+## Second run — 2026-09-06, after the floor was made proportional
+
+The non-vacuity floor was re-expressed as a **fraction of what is on screen** (>= 10 %, with a >= 5
+absolute guard underneath, because 10 % of two links is not a measurement either). The floor was
+**not lowered to make a run succeed**: it was re-shaped so it asks the same question at both scene
+sizes, and the control cell became runnable for the first time.
+
+| Cell                            | Non-vacuity               | Baseline dropped       | Treatment | Delta         | Verdict |
+| ------------------------------- | ------------------------- | ---------------------- | --------- | ------------- | ------- |
+| `scale` / Week / 1646           | 34/220 bars, 43/303 links | 1.85 pp (spread 1.67)  | 10.93 pp  | **+9.07 pp**  | P1 FAIL |
+| `scale` / Week / 1920           | 37/266 bars, 51/374 links | 10.00 pp (spread 6.67) | 20.19 pp  | **+10.19 pp** | P1 FAIL |
+| `fixture` control / Week / 1646 | 19/147 bars, 24/188 links | 0.19 pp (spread 0.56)  | 0.00 pp   | **-0.19 pp**  | P1 PASS |
+
+### The finding is that this environment cannot answer Condition A at all
+
+Compare the two runs **of identical code**:
+
+| Cell                  | Baseline, run 1 | Baseline, run 2 | Delta, run 1 | Delta, run 2  |
+| --------------------- | --------------- | --------------- | ------------ | ------------- |
+| `scale` / Week / 1646 | 0.56 pp         | **1.85 pp**     | +0.74 pp     | **+9.07 pp**  |
+| `scale` / Week / 1920 | 0.93 pp         | **10.00 pp**    | +2.22 pp     | **+10.19 pp** |
+
+**The baseline is the shipped painter with no treatment whatsoever, and it moved by more than 10x
+between two runs an hour apart.** Nothing in its code path changed. So the variation is the
+container — shared CPU, no GPU, a software rasteriser — and not the feature. A delta measured
+against a control that unstable is not a measurement of anything; picking whichever run suited the
+answer would be the precise failure this file was written to prevent.
+
+**Condition A therefore stands UNANSWERED, and this environment is disqualified from answering it.**
+That is a stronger statement than "the numbers are not quotable": it means no number of repetitions
+here will help.
+
+The control cell is the one informative cell, and only weakly: on a 147-activity plan the treatment
+is indistinguishable from the baseline (-0.19 pp, inside a 0.56 pp spread) at a solid 60 fps. That
+is consistent with the cost being small on a small plan and says nothing about 2,160 activities.
+
+### What this changes, and what it does not
+
+The product owner's decision on 2026-09-06 — **build tier 2, default OFF, behind a `View` menu
+toggle, and let a headed run on real hardware decide whether it ever becomes default-on** — was
+taken before this second run and is **strengthened** by it, not undermined. A default-off overlay
+costs nothing to anybody who does not ask for it, so shipping it does not require an answer to a
+question this machine cannot answer. What it does require is that the toggle stays off until
+somebody measures on hardware a planner actually uses.
+
+**P1's bar is unchanged at 2.0 pp.** ADR-0121's precedent holds: its two conditions failed and both
+remedies were applied rather than either criterion softened. Nothing here justifies moving a bar;
+the instrument's environment is what is wrong.

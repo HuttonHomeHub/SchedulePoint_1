@@ -67,6 +67,18 @@ export interface DiffCounts {
   visibleChangedBars: number;
   /** Changed links with at least one endpoint inside the viewport on the first measured frame. */
   visibleChangedLinks: number;
+  /**
+   * The DENOMINATORS — every bar and link on screen, changed or not.
+   *
+   * Added when the committed non-vacuity floors turned out to be the wrong shape: they were
+   * absolute (>= 25 bars, >= 40 links), written with the 2,160-activity scene in mind, and the
+   * 147-activity control has 188 links in total — so 12 % of them can NEVER reach 40 and the
+   * control cell was unrunnable by construction. A proportional floor asks the question the
+   * absolute one was trying to ask ("is there enough changed on screen to be worth measuring?")
+   * in a form that means the same thing at both scene sizes.
+   */
+  visibleBars: number;
+  visibleLinks: number;
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -168,6 +180,7 @@ function paintChangedLinks(
 function countVisible(
   ghosts: readonly GhostBar[],
   changedEdges: readonly RenderEdge[],
+  allEdges: readonly RenderEdge[],
   activities: readonly RenderActivity[],
   view: Viewport,
   size: { width: number; height: number },
@@ -188,15 +201,27 @@ function countVisible(
   }
 
   const byId = new Map(activities.map((a) => [a.id, a]));
-  let visibleChangedLinks = 0;
-  for (const e of changedEdges) {
+  const edgeOnScreen = (e: RenderEdge): boolean => {
     const p = byId.get(e.predecessorId);
-    const s = byId.get(e.successorId);
-    if (!p || !s) continue;
-    if (p.earlyFinish === null || s.earlyStart === null) continue;
-    if (onScreenX(p.earlyFinish) || onScreenX(s.earlyStart)) visibleChangedLinks += 1;
+    const q = byId.get(e.successorId);
+    if (!p || !q) return false;
+    if (p.earlyFinish === null || q.earlyStart === null) return false;
+    return onScreenX(p.earlyFinish) || onScreenX(q.earlyStart);
+  };
+
+  let visibleChangedLinks = 0;
+  for (const e of changedEdges) if (edgeOnScreen(e)) visibleChangedLinks += 1;
+
+  // The denominators, over the WHOLE scene rather than the changed subset.
+  let visibleBars = 0;
+  for (const a of activities) {
+    if (a.earlyStart === null || a.earlyFinish === null) continue;
+    if (onScreenX(a.earlyStart) || onScreenX(a.earlyFinish)) visibleBars += 1;
   }
-  return { visibleChangedBars, visibleChangedLinks };
+  let visibleLinks = 0;
+  for (const e of allEdges) if (edgeOnScreen(e)) visibleLinks += 1;
+
+  return { visibleChangedBars, visibleChangedLinks, visibleBars, visibleLinks };
 }
 
 /**
@@ -355,6 +380,7 @@ window.__benchRevisionDiff = async (opts: BenchOptions): Promise<BenchOutcome> =
   const counts = countVisible(
     ghosts,
     changedEdges,
+    source.edges,
     source.activities,
     { pxPerDay, originX: 0, originY: 0 },
     size,

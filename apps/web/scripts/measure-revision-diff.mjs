@@ -57,13 +57,21 @@ if (preset !== 'week' && preset !== 'fit') {
 }
 
 /**
- * The non-vacuity floors, from the condition file. Counted INSIDE the viewport, because a changed
+ * The non-vacuity floor, from the condition file. Counted INSIDE the viewport, because a changed
  * set that is all off-screen costs the painter nothing and would pass every gate while proving
  * nothing — the ADR-0093 shape (a green result that cannot tell "it is cheap" from "there was
  * nothing there").
+ *
+ * **PROPORTIONAL, and it was absolute until it met the control cell.** The committed condition said
+ * >= 25 bars and >= 40 links, written with the 2,160-activity scene in mind. The 147-activity
+ * control has 188 links in total, so 12 % of them can never reach 40 — the control was unrunnable
+ * by construction, and the harness discovered that by THROWING rather than by reporting a pass,
+ * which is the one behaviour the condition file demanded of it. The floor was not lowered to make
+ * the run succeed: it was re-expressed so it asks the same question at both scene sizes. A tiny
+ * absolute guard survives underneath, because 10 % of two links is not a measurement either.
  */
-const MIN_CHANGED_LINKS = 40;
-const MIN_CHANGED_BARS = 25;
+const MIN_CHANGED_FRACTION = 0.1;
+const MIN_CHANGED_ABSOLUTE = 5;
 
 /** P1 — the difference gate. ADR-0100's bar, taken because it is the only one in this repository
  * that has been used and passed, rather than invented for this epic. */
@@ -85,16 +93,6 @@ execFileSync(
     '--bundle',
     '--format=iife',
     '--target=chrome120',
-    // **`@repo/seed`'s barrel re-exports the fixture tier, which imports `@repo/engine-conformance`,
-    // which imports `node:fs`/`node:url`** (`packages/seed/dist/index.js:14`). That is a Node-only
-    // module reached from a browser bundle, and it broke `measure:draw` on 2026-09-05 — see
-    // `docs/TECH_DEBT.md` #252. Externalising the built-ins is the WORKAROUND, not the fix: the
-    // bench never calls `loadFixture`, so the code is bundled and never entered. If this ever starts
-    // throwing at load, the IIFE has begun evaluating that module eagerly and the real fix (a
-    // subpath export, so a barrel cannot force a Node-only module on browser consumers) is due.
-    '--external:node:fs',
-    '--external:node:url',
-    '--external:node:path',
     `--outfile=${bundle}`,
     '--log-level=warning',
   ],
@@ -153,20 +151,27 @@ try {
   console.log('');
 
   // ── Non-vacuity FIRST. A treatment that drew nothing passes every pacing gate. ──────────────
-  const { visibleChangedBars, visibleChangedLinks } = result.counts;
+  const { visibleChangedBars, visibleChangedLinks, visibleBars, visibleLinks } = result.counts;
+  const share = (n, d) => (d === 0 ? 0 : (n / d) * 100);
+  const barShare = share(visibleChangedBars, visibleBars);
+  const linkShare = share(visibleChangedLinks, visibleLinks);
   console.log(
-    `  changed on screen: ${String(visibleChangedBars)} bars, ${String(visibleChangedLinks)} links`,
+    `  changed on screen: ${String(visibleChangedBars)}/${String(visibleBars)} bars ` +
+      `(${barShare.toFixed(1)}%), ${String(visibleChangedLinks)}/${String(visibleLinks)} links ` +
+      `(${linkShare.toFixed(1)}%)`,
   );
-  if (
-    !Number.isFinite(visibleChangedBars) ||
-    !Number.isFinite(visibleChangedLinks) ||
-    visibleChangedBars < MIN_CHANGED_BARS ||
-    visibleChangedLinks < MIN_CHANGED_LINKS
-  ) {
+  const enough = (n, d) =>
+    Number.isFinite(n) &&
+    Number.isFinite(d) &&
+    n >= MIN_CHANGED_ABSOLUTE &&
+    share(n, d) >= MIN_CHANGED_FRACTION * 100;
+  if (!enough(visibleChangedBars, visibleBars) || !enough(visibleChangedLinks, visibleLinks)) {
     throw new Error(
       `NON-VACUITY FAILED — the treatment does not draw enough to judge.\n` +
-        `  bars  ${String(visibleChangedBars)} (need >= ${String(MIN_CHANGED_BARS)})\n` +
-        `  links ${String(visibleChangedLinks)} (need >= ${String(MIN_CHANGED_LINKS)})\n` +
+        `  bars  ${String(visibleChangedBars)}/${String(visibleBars)} = ${barShare.toFixed(1)}% ` +
+        `(need >= ${String(MIN_CHANGED_FRACTION * 100)}% and >= ${String(MIN_CHANGED_ABSOLUTE)})\n` +
+        `  links ${String(visibleChangedLinks)}/${String(visibleLinks)} = ${linkShare.toFixed(1)}% ` +
+        `(need >= ${String(MIN_CHANGED_FRACTION * 100)}% and >= ${String(MIN_CHANGED_ABSOLUTE)})\n` +
         `This is NOT a pass. A verdict computed from this run would be meaningless.`,
     );
   }
