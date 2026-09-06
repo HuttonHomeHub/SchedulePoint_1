@@ -639,6 +639,17 @@ discriminators. Each becomes a spec/plan before build:
   "no change". And the list is ordered by **time, never by size**: a list sorted biggest-first,
   beside a completion that slipped, is a ranking of blame, which is the causal claim ADR-0125
   withdrew on measurement.
+- **The change picture** — **shipping** (ADR-0127), behind `View ▾ ▸ Compare on diagram`, off by
+  default. The comparison on the diagram rather than in a list, because a re-sequenced programme
+  reads as a re-sequence on a picture and as thirty rows in a table. It paints the **difference**
+  and not the old plan — a ghost behind every unchanged bar is a picture of the plan rather than of
+  what happened to it — so it shows where the changed bars were, what was **removed** (drawn in its
+  frozen lane, which is the only reason removed work can be drawn at all), and which links changed.
+  Two things it says out loud: what it **could not draw**, because a diagram has no "showing N of
+  M"; and that a screen-reader user gets the logic changes from the change list in words, because a
+  link is not a selectable object here and claiming otherwise would be the failure ADR-0122 records.
+  Its paint cost is **not yet known** — the measurement environment was disqualified by its own
+  control moving tenfold between two runs with no code change — which is why it ships off.
 
 ## Guiding constraints
 
