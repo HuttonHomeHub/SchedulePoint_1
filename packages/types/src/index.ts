@@ -2894,6 +2894,23 @@ export interface RevisionGhostBar {
   readonly removed: boolean;
 }
 
+/**
+ * One link the comparison found changed — the differentiating half of the change picture
+ * (ADR-0127). A re-sequence is only visible as a re-sequence if the logic is drawn.
+ *
+ * `state` is what happened to the EDGE, not to its endpoints: `ADDED` exists only in the new
+ * revision, `REMOVED` only in the old, `CHANGED` in both with a different type or lag.
+ *
+ * The endpoints are carried because a `REMOVED` edge is in no live edge list — the client cannot
+ * look it up, exactly as it cannot look up a removed activity's bar.
+ */
+export interface RevisionLinkChange {
+  readonly dependencyId: string;
+  readonly predecessorId: string;
+  readonly successorId: string;
+  readonly state: 'ADDED' | 'REMOVED' | 'CHANGED';
+}
+
 export interface RevisionCompare {
   planId: string;
   planName: string;
@@ -2938,4 +2955,12 @@ export interface RevisionCompare {
    * reader cannot check it — a diagram has no "showing N of M".
    */
   readonly ghostsUndrawable?: number;
+  /** The changed logic, alongside `ghosts` and under the same `?include=ghosts`. */
+  readonly links?: readonly RevisionLinkChange[];
+  /**
+   * Changed links the overlay cannot draw, because an endpoint is not in the live plan and a link
+   * has no geometry of its own — it is anchored to two bars. Stated for the same reason
+   * {@link ghostsUndrawable} is: a diagram has no "showing N of M".
+   */
+  readonly linksUndrawable?: number;
 }

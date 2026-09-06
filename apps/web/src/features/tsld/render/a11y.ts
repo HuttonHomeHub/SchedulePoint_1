@@ -181,8 +181,17 @@ export function baselineGhostClause(
 export function compareOverlaySummary(
   ghosts: readonly { name: string; removed: boolean }[],
   undrawable: number,
+  /**
+   * The changed-link counts. Stated as a NUMBER and never as a list of links, because a link is not
+   * a selectable object in this product and there is no listbox of edges — inventing one would
+   * invent an interaction no other surface offers (spec §4.8, ADR-0122). The sentence points at the
+   * change list, which carries every logic change in words.
+   */
+  links: { readonly drawn: number; readonly undrawable: number } = { drawn: 0, undrawable: 0 },
 ): { readonly heading: string; readonly removed: readonly string[] } | null {
-  if (ghosts.length === 0 && undrawable === 0) return null;
+  if (ghosts.length === 0 && undrawable === 0 && links.drawn === 0 && links.undrawable === 0) {
+    return null;
+  }
   const removed = ghosts.filter((g) => g.removed).map((g) => g.name);
   const moved = ghosts.length - removed.length;
   const parts: string[] = [];
@@ -196,8 +205,21 @@ export function compareOverlaySummary(
       `${String(undrawable)} not shown because the old revision did not record where they were`,
     );
   }
+  if (links.drawn > 0) {
+    parts.push(`${String(links.drawn)} changed ${links.drawn === 1 ? 'link' : 'links'}`);
+  }
+  if (links.undrawable > 0) {
+    parts.push(
+      `${String(links.undrawable)} changed ${links.undrawable === 1 ? 'link' : 'links'} not shown ` +
+        `because an activity they joined is no longer in the plan`,
+    );
+  }
+  const logic =
+    links.drawn > 0 || links.undrawable > 0
+      ? ' Logic changes are listed in words under Changes.'
+      : '';
   return {
-    heading: `Comparison overlay: ${parts.join(', ')}.`,
+    heading: `Comparison overlay: ${parts.join(', ')}.${logic}`,
     removed,
   };
 }

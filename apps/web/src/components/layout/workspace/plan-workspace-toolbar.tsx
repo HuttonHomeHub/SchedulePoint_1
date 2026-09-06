@@ -673,7 +673,9 @@ export function ToolbarPlanWorkspace({
     REVISION_COMPARE_INCLUDES,
   );
   const compareGhosts = revisionCompare.data?.ghosts;
+  const compareLinks = revisionCompare.data?.links;
   const compareGhostsUndrawable = revisionCompare.data?.ghostsUndrawable ?? 0;
+  const compareLinksUndrawable = revisionCompare.data?.linksUndrawable ?? 0;
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -868,7 +870,9 @@ export function ToolbarPlanWorkspace({
       activities={model.activities.data ?? []}
       dependencies={model.dependencies.data ?? []}
       compareGhosts={compareGhosts}
+      compareLinks={compareLinks}
       compareGhostsUndrawable={compareGhostsUndrawable}
+      compareLinksUndrawable={compareLinksUndrawable}
       hasRevisionPair={hasRevisionPair}
       dataDate={plan.plannedStart}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.

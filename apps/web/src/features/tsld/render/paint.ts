@@ -288,6 +288,9 @@ export interface TsldScene {
    * another), can be on at the same time, and treat removed work differently. Absent ⇒ the overlay
    * is off / no pair selected ⇒ no layer at all (parity). */
   compareGhosts?: readonly CompareGhost[] | undefined;
+  /** The revision comparison's CHANGED LOGIC (ADR-0127) — the differentiating half: a re-sequence
+   * is only visible as a re-sequence if the links are drawn. Absent ⇒ no pass (parity). */
+  compareLinks?: readonly CompareLink[] | undefined;
   // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
   /** Ids of activities the engine flagged as over-allocated (`levelingWindowExceeded ||
    * selfOverAllocated`, ADR-0041), marked on the canvas with a distinct **mini-histogram badge** — a
@@ -435,6 +438,21 @@ export interface CompareGhost {
   readonly laneIndex: number;
   readonly isMilestone: boolean;
   readonly removed: boolean;
+}
+
+/**
+ * One link the comparison found changed (ADR-0127).
+ *
+ * `REMOVED` is the one with no live counterpart, which is why the endpoints are carried: the
+ * painter cannot look the edge up in `scene.edges` because it is not there. Both endpoints ARE in
+ * the live plan — the server refuses to emit a link it cannot anchor, and counts it instead, since
+ * a link has no geometry of its own.
+ */
+export interface CompareLink {
+  readonly dependencyId: string;
+  readonly predecessorId: string;
+  readonly successorId: string;
+  readonly state: 'ADDED' | 'REMOVED' | 'CHANGED';
 }
 
 /**
@@ -1203,6 +1221,85 @@ export function paintScene(
       ctx.setLineDash([]);
       ctx.lineWidth = 3;
       drawEdges(true, true); // highlighted driving: heaviest, solid
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = palette.edge;
+    }
+
+    /*
+     * **Layer 2.4: the comparison's changed logic** (ADR-0127) — the differentiating half, because
+     * a re-sequence is only visible as a re-sequence if the links are drawn.
+     *
+     * **ONE router, and the treatment is a stroke style** (spec §4.4 D7). ADR-0065 made obstacle
+     * awareness an optional PARAMETER of `routeOrthogonal` precisely so a second
+     * `routeOrthogonalAvoiding` could not drift invisibly; a ghost router would be that mistake one
+     * epic along. So an ADDED or CHANGED link REUSES the line already computed for this frame —
+     * bundled, obstacle-aware, arrowheaded, identical to the one underneath it — and a REMOVED link
+     * is routed through the SAME `lineOf` closure with a synthetic edge.
+     *
+     * That reuse is what makes the pass cheap: no second routing for the common case, and the
+     * bundling decision above has already been taken over all the lines together.
+     *
+     * REMOVED is drawn dashed and ADDED/CHANGED solid-and-heavier, on top of the base passes, in
+     * the selection colour — a WEIGHT and DASH change alongside the colour, so neither cue is
+     * colour-only (WCAG 1.4.1), matching the incident-highlight passes immediately above.
+     *
+     * **No accessible claim is made for a link, and that is a decision** (spec §4.8): a link is not
+     * a selectable object in this product and there is no listbox of edges, so tier 1 — the change
+     * list, in text — is the route for logic changes. The toggle's own description says so rather
+     * than implying a parity that does not exist (ADR-0122).
+     */
+    if (scene.compareLinks && scene.compareLinks.length > 0) {
+      const byDependencyId = new Map<string, Point[]>();
+      for (const [edge, line] of lines) {
+        if (edge.id !== undefined) byDependencyId.set(edge.id, line);
+      }
+      const removed: Point[][] = [];
+      const present: Point[][] = [];
+      for (const link of scene.compareLinks) {
+        if (link.state === 'REMOVED') {
+          // Not in `scene.edges`, so it has no computed line — routed here through the same
+          // closure the live edges used. `FS` because a removed link's type is not carried: the
+          // picture's claim is "these two were linked", and the change list carries the type.
+          const pred = byId.get(link.predecessorId);
+          const succ = byId.get(link.successorId);
+          if (!pred || !succ) continue;
+          if (!visibleIds.has(link.predecessorId) && !visibleIds.has(link.successorId)) continue;
+          const line = lineOf(
+            {
+              predecessorId: link.predecessorId,
+              successorId: link.successorId,
+              type: 'FS',
+              // Not driving, and no lag: the picture's claim is "these two WERE linked". The
+              // change list carries the type and the lag in text, which is where a reader gets
+              // them (spec §4.8). Inventing a lag here would draw a time-true anchor for a
+              // quantity nobody supplied.
+              isDriving: false,
+            },
+            pred,
+            succ,
+          );
+          if (line) removed.push(line);
+          continue;
+        }
+        const line = byDependencyId.get(link.dependencyId);
+        if (line) present.push(line);
+      }
+      ctx.strokeStyle = palette.selection;
+      if (present.length > 0) {
+        ctx.lineWidth = 3;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        for (const line of present) drawPolyline(ctx, line);
+        ctx.stroke();
+      }
+      if (removed.length > 0) {
+        ctx.lineWidth = 2;
+        ctx.setLineDash(GHOST_DASH as number[]);
+        ctx.beginPath();
+        for (const line of removed) drawPolyline(ctx, line);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
       ctx.lineWidth = 1;
       ctx.strokeStyle = palette.edge;
     }

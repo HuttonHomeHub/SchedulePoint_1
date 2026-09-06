@@ -153,6 +153,19 @@ test('a planner compares a revision against live and reads what entered the crit
   // The overlay's own summary states what it drew, in the same place.
   await expect(page.getByText(/Comparison overlay: .*removed/i)).toBeVisible();
 
+  /*
+   * **M7: the changed LINK is counted, and the summary points at where it is readable.**
+   *
+   * The seed re-types one dependency after the capture. A link is not a selectable object in this
+   * product and there is no listbox of edges, so tier 2 adds nothing for a screen-reader user —
+   * spec §4.8 rules that tier 1 is their route, and the product says so rather than implying a
+   * parity that does not exist (ADR-0122). This asserts the honest sentence, which is the only
+   * assertion about links that can be made against the accessibility tree at all. The lit line
+   * itself is pinned by the painter's counting-stub gate, where a line IS observable.
+   */
+  await expect(page.getByText(/1 changed link\b/i)).toBeVisible();
+  await expect(page.getByText(/listed in words under Changes/i)).toBeVisible();
+
   // Turning it off removes the list — a lens that leaves its description behind is describing a
   // picture nobody is looking at.
   await page.getByRole('button', { name: 'View', exact: true }).click();

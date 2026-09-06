@@ -576,6 +576,54 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
       expect(classes.get('RENAMED')?.notAssessableReason).toBeNull();
     });
 
+    it('emits the change picture only when asked, and never a link it cannot anchor', async () => {
+      const admin = await adminWithOrg();
+      const planId = await makePlan(admin);
+      const a = await makeActivity(admin, planId, 'Groundworks', 10);
+      const b = await makeActivity(admin, planId, 'Frame', 10);
+      const doomed = await makeActivity(admin, planId, 'Site hoarding', 5);
+      await link(admin, planId, a, b);
+      // A link INTO the activity that is about to be deleted. Its endpoint disappears, so the
+      // overlay has nowhere to anchor it — the case that must be counted rather than guessed.
+      await link(admin, planId, a, doomed);
+      await recalculate(admin, planId);
+      const from = await capture(admin, planId, 'Rev A');
+
+      const dep = await prisma.activityDependency.findFirstOrThrow({
+        where: { planId, successorId: b },
+      });
+      await admin.agent
+        .patch(`/api/v1/organizations/acme/dependencies/${dep.id}`)
+        .send({ type: 'SS', version: dep.version })
+        .expect(200);
+      await admin.agent.delete(`/api/v1/organizations/acme/activities/${doomed}`).expect((res) => {
+        if (res.status !== 200 && res.status !== 204) throw new Error(String(res.status));
+      });
+      await recalculate(admin, planId);
+
+      // WITHOUT the include: byte-identically the delta-only response (the ADR-0073 C2 pattern).
+      const bare = await admin.agent.get(compareUrl(planId, from)).expect(200);
+      expect(bare.body.data.ghosts).toBeUndefined();
+      expect(bare.body.data.links).toBeUndefined();
+
+      const res = await admin.agent.get(`${compareUrl(planId, from)}&include=ghosts`).expect(200);
+      const data = res.body.data as {
+        ghosts: { activityId: string; removed: boolean; laneIndex: number }[];
+        ghostsUndrawable: number;
+        links: { dependencyId: string; state: string }[];
+        linksUndrawable: number;
+      };
+
+      // The deleted activity is drawable — its lane was FROZEN (ADR-0126 / CQ-2b), so it is not a
+      // guess. This is the one thing tier 2 can show that nothing else can.
+      expect(data.ghosts.some((g) => g.activityId === doomed && g.removed)).toBe(true);
+      expect(data.ghostsUndrawable).toBe(0);
+
+      // The re-typed link is lit; the link into the deleted activity is COUNTED, not emitted.
+      expect(data.links.map((l) => l.state).sort()).toEqual(['CHANGED']);
+      expect(data.linksUndrawable).toBe(1);
+    });
+
     it('answers `existsLive` per row, for an activity in no delta list at all', async () => {
       // The client cannot infer this. A re-laned activity enters and leaves nothing, so it appears
       // in none of the delta's four lists — and inferring "not in the live plan" from that puts a

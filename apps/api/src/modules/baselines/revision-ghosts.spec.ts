@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { RevisionRow } from './revision-delta';
-import { buildRevisionGhosts } from './revision-ghosts';
+import type { RevisionEdge, RevisionRow } from './revision-delta';
+import { buildRevisionGhosts, buildRevisionLinkChanges } from './revision-ghosts';
 
 /**
  * The builder is a pure function over two arrays, so every branch is reachable from a literal.
@@ -102,5 +102,67 @@ describe('the revision ghost builder', () => {
       expect(ghosts[0]?.isMilestone).toBe(true);
     }
     expect(buildRevisionGhosts([row({ activityId: 't' })], []).ghosts[0]?.isMilestone).toBe(false);
+  });
+});
+
+describe('the revision link-change builder', () => {
+  const edge = (o: Partial<RevisionEdge> & { dependencyId: string }): RevisionEdge => ({
+    predecessorId: 'a',
+    successorId: 'b',
+    type: 'FS',
+    lagMinutes: 0,
+    lagCalendar: 'PROJECT_DEFAULT',
+    ...o,
+  });
+  const live = new Set(['a', 'b', 'c']);
+
+  it('classifies added, removed and changed, one row per edge', () => {
+    const { links } = buildRevisionLinkChanges(
+      [edge({ dependencyId: 'gone' }), edge({ dependencyId: 'kept' })],
+      [edge({ dependencyId: 'kept', type: 'SS' }), edge({ dependencyId: 'new' })],
+      live,
+    );
+    expect(new Map(links.map((l) => [l.dependencyId, l.state]))).toEqual(
+      new Map([
+        ['new', 'ADDED'],
+        ['kept', 'CHANGED'],
+        ['gone', 'REMOVED'],
+      ]),
+    );
+  });
+
+  it('does not light an unchanged link', () => {
+    const same = [edge({ dependencyId: 'd' })];
+    expect(buildRevisionLinkChanges(same, [edge({ dependencyId: 'd' })], live).links).toEqual([]);
+  });
+
+  it('ignores a lag-calendar switch on a ZERO-lag link, and honours it alongside a lag', () => {
+    // The classifier's rule, mirrored: switching the calendar of a zero-lag link changes no date,
+    // so lighting it would point a planner at an edit with no consequence.
+    const zero = buildRevisionLinkChanges(
+      [edge({ dependencyId: 'd', lagCalendar: 'PROJECT_DEFAULT' })],
+      [edge({ dependencyId: 'd', lagCalendar: 'TWENTY_FOUR_HOUR' })],
+      live,
+    );
+    expect(zero.links).toEqual([]);
+    const lagged = buildRevisionLinkChanges(
+      [edge({ dependencyId: 'd', lagMinutes: 480, lagCalendar: 'PROJECT_DEFAULT' })],
+      [edge({ dependencyId: 'd', lagMinutes: 480, lagCalendar: 'TWENTY_FOUR_HOUR' })],
+      live,
+    );
+    expect(lagged.links).toHaveLength(1);
+  });
+
+  it('COUNTS a link it cannot anchor rather than emitting it', () => {
+    // A link has no geometry of its own — it is anchored to two bars. A removed link whose endpoint
+    // is gone has nowhere to start, and a guessed anchor is a false statement about where the logic
+    // was. The count is what stops a diagram quietly missing rows nobody is told about.
+    const result = buildRevisionLinkChanges(
+      [edge({ dependencyId: 'd', predecessorId: 'a', successorId: 'deleted' })],
+      [],
+      live,
+    );
+    expect(result.links).toEqual([]);
+    expect(result.undrawable).toBe(1);
   });
 });

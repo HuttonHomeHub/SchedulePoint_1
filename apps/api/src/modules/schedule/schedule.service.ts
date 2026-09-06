@@ -42,7 +42,7 @@ import {
   type RevisionEdge,
   type RevisionRow,
 } from '../baselines/revision-delta';
-import { buildRevisionGhosts } from '../baselines/revision-ghosts';
+import { buildRevisionGhosts, buildRevisionLinkChanges } from '../baselines/revision-ghosts';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -1550,6 +1550,18 @@ export class ScheduleService {
     // delta does not read either, so a caller that did not opt in pays nothing for them — the
     // ADR-0073 C2 projection rule applied to the reads as well as to the payload.
     const wantsChanges = includes.includes('changes');
+    /**
+     * **The edges are loaded for EITHER projection, and that is a fix rather than a widening.**
+     *
+     * They were gated on `changes` alone, because the change list was the only reader when they
+     * were added. `?include=ghosts` on its own then received two EMPTY edge sets and reported no
+     * changed links at all — a lit overlay drawing nothing, which is the ADR-0081 shape: the
+     * capability wired to a condition that is not its own. Caught by the API e2e case for exactly
+     * this projection, on its first run; nothing else could see it, because the journey requests
+     * both includes together and every unit test hands the classifier its edges directly.
+     */
+    const wantsGeometry = includes.includes('ghosts');
+    const wantsEdges = wantsChanges || wantsGeometry;
     const [fromRows, toRows, liveRows, planCalendar, fromEdges, toEdges, calendarNames] =
       await Promise.all([
         this.baselines.loadSnapshotRowsForDelta(fromBaseline.id, organization.id),
@@ -1558,12 +1570,12 @@ export class ScheduleService {
           : Promise.resolve(null),
         this.baselines.loadActiveActivitiesForDelta(organization.id, planId),
         this.resolveCalendar(organization.id, plan.calendarId),
-        wantsChanges
+        wantsEdges
           ? this.baselines
               .loadSnapshotDependenciesForDelta(fromBaseline.id, organization.id)
               .then(frozenEdges)
           : Promise.resolve<RevisionEdge[]>([]),
-        wantsChanges
+        wantsEdges
           ? toBaseline
             ? this.baselines
                 .loadSnapshotDependenciesForDelta(toBaseline.id, organization.id)
@@ -1767,9 +1779,13 @@ export class ScheduleService {
      * projections the delta and the change list read — a second assembly would drift, and the drift
      * would show as a ghost in a place the change list does not mention.
      */
-    const ghostResult = includes.includes('ghosts')
+    const ghostResult = wantsGeometry
       ? buildRevisionGhosts(frozenSide(fromRows), toRows === null ? liveSide : frozenSide(toRows))
       : null;
+    // The logic half, from the same two edge sets the change list's RELOGICKED class reads — so the
+    // picture and the list cannot disagree about what one changed link is. `liveIds` decides what
+    // is anchorable: a link has no geometry of its own.
+    const linkResult = wantsGeometry ? buildRevisionLinkChanges(fromEdges, toEdges, liveIds) : null;
 
     const result: RevisionCompare = {
       planId,
@@ -1826,6 +1842,7 @@ export class ScheduleService {
       ...(ghostResult
         ? { ghosts: ghostResult.ghosts, ghostsUndrawable: ghostResult.undrawable }
         : {}),
+      ...(linkResult ? { links: linkResult.links, linksUndrawable: linkResult.undrawable } : {}),
       criticalPath: bothScheduled
         ? {
             entered: delta.entered.map(moved),

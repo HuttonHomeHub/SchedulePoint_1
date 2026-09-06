@@ -191,6 +191,7 @@ export function useDiagramImage(args: {
         // the planner's picture rather than a second derivation (#167's argument, applied the way
         // that row wants rather than deferred with it).
         compareGhosts: lenses.compareGhosts,
+        compareLinks: lenses.compareLinks,
         flaggedIds: lenses.flaggedIds,
       };
       const { viewport, size, dpr, scaledToFit } = buildExportViewport(renderActivities, dataDate, {

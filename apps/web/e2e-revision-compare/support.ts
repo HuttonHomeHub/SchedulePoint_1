@@ -115,6 +115,21 @@ export async function seedRevision(
         predecessorId: a.id,
         successorId: b.id,
       });
+      /*
+       * A second link, RE-TYPED after the capture — the change tier 2b exists to draw.
+       *
+       * On its OWN two-day pair, deliberately. The first attempt re-typed a link into `Cladding`
+       * and changed the seeded delta: `Cladding` stopped entering the critical path and three
+       * assertions above went red. This chain totals two days against a forty-day critical
+       * `Cladding`, so it can never carry the path and the delta this file's docblock specifies is
+       * unaffected — verified by the journey passing unchanged around it.
+       */
+      const survey = await act('Survey', 1);
+      const settingOut = await act('Setting out', 1);
+      const relinked = (await call(`/plans/${planId}/dependencies`, 'POST', {
+        predecessorId: survey.id,
+        successorId: settingOut.id,
+      })) as { id: string; version: number };
       await call(`/plans/${planId}/schedule/recalculate`, 'POST');
       await call(`/plans/${planId}/baselines`, 'POST', { name: 'Contract Baseline' });
       // AFTER the capture — the baseline froze it, the plan no longer has it.
@@ -127,6 +142,10 @@ export async function seedRevision(
       await call(`/activities/${cladding.id}`, 'PATCH', {
         durationDays: 40,
         version: current.data.version,
+      });
+      await call(`/dependencies/${relinked.id}`, 'PATCH', {
+        type: 'SS',
+        version: relinked.version,
       });
       await call(`/plans/${planId}/schedule/recalculate`, 'POST');
     },

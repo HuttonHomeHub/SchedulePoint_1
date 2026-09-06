@@ -59,7 +59,7 @@ import {
 } from '../render/lenses';
 import { linkIllegalMessage, linkLegality } from '../render/link-legality';
 import { computeLogicPath, isolateDimmedIds } from '../render/logic-path';
-import type { CompareGhost } from '../render/paint';
+import type { CompareGhost, CompareLink } from '../render/paint';
 import { resolveLensPalette } from '../render/palette';
 import {
   addCalendarDays,
@@ -253,8 +253,12 @@ export interface TsldPanelProps {
    * refusal this epic removed one file along.
    */
   compareGhosts?: readonly CompareGhost[] | undefined;
+  /** The comparison's changed logic (ADR-0127) — drawn with the ghosts, under the same toggle. */
+  compareLinks?: readonly CompareLink[] | undefined;
   /** Changed activities the old side never recorded a position for. Stated, never folded into zero. */
   compareGhostsUndrawable?: number | undefined;
+  /** Changed links with an endpoint no longer in the plan. Same rule: counted, never guessed. */
+  compareLinksUndrawable?: number | undefined;
   hasRevisionPair?: boolean;
   /** The plan's start (`plannedStart`) — the diagram's day-zero origin. Null → not schedulable. */
   dataDate: string | null;
@@ -528,7 +532,9 @@ interface PendingCreate {
 export function TsldPanel({
   activities,
   compareGhosts,
+  compareLinks,
   compareGhostsUndrawable = 0,
+  compareLinksUndrawable = 0,
   hasRevisionPair = false,
   dependencies,
   dataDate: dataDateProp,
@@ -1201,6 +1207,14 @@ export function TsldPanel({
     return compareGhosts;
   }, [compareOverlay, hasRevisionPair, compareGhosts]);
 
+  /** The logic half, on the SAME gate — one toggle, one picture. */
+  const compareLinkLines = useMemo(() => {
+    if (!compareOverlay || !hasRevisionPair || !compareLinks || compareLinks.length === 0) {
+      return undefined;
+    }
+    return compareLinks;
+  }, [compareOverlay, hasRevisionPair, compareLinks]);
+
   /**
    * The spoken twin of the comparison overlay. Built by walking `compareGhostBars` — what is
    * DRAWN — rather than the raw prop, so the picture and its description can never disagree about
@@ -1208,8 +1222,15 @@ export function TsldPanel({
    */
   const compareSummary = useMemo(
     () =>
-      compareOverlaySummary(compareGhostBars ?? [], compareGhostBars ? compareGhostsUndrawable : 0),
-    [compareGhostBars, compareGhostsUndrawable],
+      compareOverlaySummary(
+        compareGhostBars ?? [],
+        compareGhostBars ? compareGhostsUndrawable : 0,
+        {
+          drawn: compareLinkLines?.length ?? 0,
+          undrawable: compareLinkLines ? compareLinksUndrawable : 0,
+        },
+      ),
+    [compareGhostBars, compareGhostsUndrawable, compareLinkLines, compareLinksUndrawable],
   );
 
   // The spoken twin of the ghost layer above (WCAG 1.4.1). Built by walking `baselineGhosts` itself
@@ -2856,6 +2877,7 @@ export function TsldPanel({
               barInk={barInk}
               baselineGhosts={baselineGhosts}
               compareGhosts={compareGhostBars}
+              compareLinks={compareLinkLines}
               flaggedIds={flaggedIds}
               resourceStripActive={resourceStripActive}
               resourceStrip={resourceStrip}

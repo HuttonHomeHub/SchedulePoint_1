@@ -276,7 +276,13 @@ const LENS_TOGGLES: readonly LensToggle[] = [
     id: 'compare-overlay',
     group: 'insight',
     label: 'Compare on diagram',
-    note: 'Shows where the changed bars were on the old side of the comparison, and what was removed.',
+    // **The description states what the picture does NOT carry** (spec §4.8, ADR-0122). A link is
+    // not a selectable object in this product and there is no listbox of edges, so a screen-reader
+    // user gets nothing from the lit arrows — the change list is their route, and saying so beats
+    // implying a parity that does not exist.
+    note:
+      'Shows where the changed bars were, what was removed, and which links changed. ' +
+      'Logic changes are listed in words under Changes.',
     // **Deliberately NOT promoted onto the deck.** The sibling above records the measurement:
     // one promoted toggle keeps the deck at two lines at 1920 and 1646, three take it to three at
     // 1646 as well as 1440. A second is not free, and this control is only useful while the

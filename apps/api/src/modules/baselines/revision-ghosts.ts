@@ -1,6 +1,6 @@
-import type { RevisionGhostBar } from '@repo/types';
+import type { RevisionGhostBar, RevisionLinkChange } from '@repo/types';
 
-import type { RevisionRow } from './revision-delta';
+import type { RevisionEdge, RevisionRow } from './revision-delta';
 
 /**
  * **The change picture's geometry** — where the changed bars WERE, for a canvas that draws the
@@ -96,4 +96,75 @@ export function buildRevisionGhosts(
   }
 
   return { ghosts, undrawable };
+}
+
+/**
+ * **The changed logic** — the differentiating half of the change picture (ADR-0127). A re-sequence
+ * is only visible as a re-sequence if the links are drawn.
+ *
+ * Keyed on the dependency id, exactly as the change list's `RELOGICKED` rows are, so the picture
+ * and the list agree about what "one changed link" means. It reuses `edgeChanged`'s rule by
+ * comparing the same fields — deliberately NOT by importing the classifier, because that would
+ * couple a geometry projection to a display module; the shared rule is small and the divergence
+ * that matters (the lag calendar counting only alongside a lag) is asserted in both suites.
+ *
+ * ## What it refuses to draw, and why it is a COUNT
+ *
+ * A link has no geometry of its own: it is anchored to two bars. A removed link whose endpoint is
+ * no longer in the plan therefore has nowhere to start or end — the endpoint's ghost knows its
+ * frozen lane but is not a `RenderActivity`, so the shared router cannot anchor to it. Such links
+ * are counted, never drawn at a guessed position and never silently dropped.
+ *
+ * An ADDED or CHANGED link is always drawable: it exists in the new revision, so both its endpoints
+ * do too.
+ */
+export interface RevisionLinkResult {
+  readonly links: RevisionLinkChange[];
+  readonly undrawable: number;
+}
+
+/** The planner-authored fields. Mirrors the classifier's `edgeChanged`, including its lag rule. */
+function edgeAuthoredDiffers(from: RevisionEdge, to: RevisionEdge): boolean {
+  return (
+    from.type !== to.type ||
+    from.lagMinutes !== to.lagMinutes ||
+    // Only alongside a lag: switching the lag calendar of a zero-lag link changes no date, so
+    // lighting the link would point a planner at an edit with no consequence.
+    (to.lagMinutes !== 0 && from.lagCalendar !== to.lagCalendar)
+  );
+}
+
+export function buildRevisionLinkChanges(
+  fromEdges: readonly RevisionEdge[],
+  toEdges: readonly RevisionEdge[],
+  /** Ids present in the LIVE plan — the only place a link can be anchored. */
+  liveActivityIds: ReadonlySet<string>,
+): RevisionLinkResult {
+  const fromById = new Map(fromEdges.map((e) => [e.dependencyId, e]));
+  const toById = new Map(toEdges.map((e) => [e.dependencyId, e]));
+  const links: RevisionLinkChange[] = [];
+  let undrawable = 0;
+
+  const push = (edge: RevisionEdge, state: RevisionLinkChange['state']): void => {
+    if (!liveActivityIds.has(edge.predecessorId) || !liveActivityIds.has(edge.successorId)) {
+      undrawable += 1;
+      return;
+    }
+    links.push({
+      dependencyId: edge.dependencyId,
+      predecessorId: edge.predecessorId,
+      successorId: edge.successorId,
+      state,
+    });
+  };
+
+  for (const to of toEdges) {
+    const from = fromById.get(to.dependencyId);
+    if (!from) push(to, 'ADDED');
+    else if (edgeAuthoredDiffers(from, to)) push(to, 'CHANGED');
+  }
+  for (const from of fromEdges) {
+    if (!toById.has(from.dependencyId)) push(from, 'REMOVED');
+  }
+  return { links, undrawable };
 }

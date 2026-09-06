@@ -32,6 +32,7 @@ import {
   paintScene,
   paintWbsBand,
   type CompareGhost,
+  type CompareLink,
   type GhostDetail,
   type InteractionOverlay,
   type LagOverlay,
@@ -166,7 +167,13 @@ export interface TsldCanvasHandle {
    */
   getSceneLenses: () => Pick<
     TsldScene,
-    'barFill' | 'barInk' | 'flaggedIds' | 'baselineGhosts' | 'compareGhosts' | 'dimmedIds'
+    | 'barFill'
+    | 'barInk'
+    | 'flaggedIds'
+    | 'baselineGhosts'
+    | 'compareGhosts'
+    | 'compareLinks'
+    | 'dimmedIds'
   >;
 }
 
@@ -361,6 +368,8 @@ export interface TsldCanvasProps {
    * of the selected pair, including work no longer in the plan. Absent ⇒ the overlay is off / no
    * pair selected ⇒ no layer (parity). */
   compareGhosts?: readonly CompareGhost[] | undefined;
+  /** The comparison's changed logic (ADR-0127) — drawn with the bars, under the same toggle. */
+  compareLinks?: readonly CompareLink[] | undefined;
   // ── Over-allocation highlight (Stage E M2, spec `docs/specs/canvas-resource-view/`) ─────────
   /** Ids of engine-flagged over-allocated activities (`levelingWindowExceeded || selfOverAllocated`,
    * ADR-0041), marked on the canvas with a distinct mini-histogram badge (never colour-only). Absent ⇒
@@ -796,6 +805,7 @@ export function TsldCanvas({
   barInk,
   baselineGhosts,
   compareGhosts,
+  compareLinks,
   flaggedIds,
   resourceStripActive = false,
   minimapActive = false,
@@ -994,6 +1004,7 @@ export function TsldCanvas({
     barInk,
     baselineGhosts,
     compareGhosts,
+    compareLinks,
     flaggedIds,
     // Time-true link anchoring + arrowheads (ADR-0052 M1). A build-time constant, so it never
     // re-triggers the scene effect; flag-off the painter keeps today's routing byte-for-byte.
@@ -1117,6 +1128,7 @@ export function TsldCanvas({
       barInk,
       baselineGhosts,
       compareGhosts,
+      compareLinks,
       flaggedIds,
       timeTrueLinks,
       visualRefresh,
@@ -1162,6 +1174,7 @@ export function TsldCanvas({
     barInk,
     baselineGhosts,
     compareGhosts,
+    compareLinks,
     flaggedIds,
   ]);
 
@@ -1334,9 +1347,24 @@ export function TsldCanvas({
       // Returns copies so a caller can't mutate the rAF-owned refs; never repaints the live canvas.
       getViewport: () => ({ view: { ...viewRef.current }, size: { ...sizeRef.current } }),
       getSceneLenses: () => {
-        const { barFill, barInk, flaggedIds, baselineGhosts, compareGhosts, dimmedIds } =
-          sceneRef.current;
-        return { barFill, barInk, flaggedIds, baselineGhosts, compareGhosts, dimmedIds };
+        const {
+          barFill,
+          barInk,
+          flaggedIds,
+          baselineGhosts,
+          compareGhosts,
+          compareLinks,
+          dimmedIds,
+        } = sceneRef.current;
+        return {
+          barFill,
+          barInk,
+          flaggedIds,
+          baselineGhosts,
+          compareGhosts,
+          compareLinks,
+          dimmedIds,
+        };
       },
     }),
     // Stable — reads live state through refs (the two minimap commits are `[]` callbacks).

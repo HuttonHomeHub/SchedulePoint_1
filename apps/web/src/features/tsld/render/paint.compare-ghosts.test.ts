@@ -1,6 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { paintScene, type CompareGhost, type TsldPalette, type TsldScene } from './paint';
+import {
+  paintScene,
+  type CompareGhost,
+  type CompareLink,
+  type TsldPalette,
+  type TsldScene,
+} from './paint';
 import type { RenderActivity, Viewport } from './render-model';
 
 /**
@@ -134,14 +140,21 @@ function ghost(o: Partial<CompareGhost> & { activityId: string }): CompareGhost 
   };
 }
 
-function paint(compareGhosts?: readonly CompareGhost[]) {
+/** Two real edges, so the base passes have something to draw and a CHANGED link has a line. */
+const EDGES = [
+  { id: 'd0', predecessorId: 'a0', successorId: 'a1', type: 'FS' as const, isDriving: true },
+  { id: 'd1', predecessorId: 'a1', successorId: 'a2', type: 'FS' as const, isDriving: false },
+];
+
+function paint(compareGhosts?: readonly CompareGhost[], compareLinks?: readonly CompareLink[]) {
   const ctx = countingCtx();
   const scene: TsldScene = {
     activities: ACTIVITIES,
-    edges: [],
+    edges: EDGES,
     dataDate: DATA_DATE,
     view: TOGGLES,
     ...(compareGhosts ? { compareGhosts } : {}),
+    ...(compareLinks ? { compareLinks } : {}),
   };
   paintScene(ctx, scene, VIEW, SIZE, PALETTE, 1);
   return ctx.calls;
@@ -184,6 +197,40 @@ describe('the compare-overlay draw budget', () => {
     expect(removed.strokeRect - base.strokeRect).toBe(1);
     // …and it is struck through — a SHAPE cue, so criticality is not carried by colour alone.
     expect(removed.stroke).toBeGreaterThan(base.stroke);
+  });
+
+  it('reuses the frame’s EXISTING line for a changed link, rather than routing a second one', () => {
+    // Spec §4.4 D7 / ADR-0065: one router, the treatment is a stroke style. A second routing pass
+    // would be the `routeOrthogonalAvoiding` mistake one epic along, and it would drift invisibly.
+    // Two extra `stroke()` calls at most — one batched path per treatment — never per link.
+    const base = paint(undefined);
+    const lit = paint(undefined, [
+      { dependencyId: 'd0', predecessorId: 'a0', successorId: 'a1', state: 'CHANGED' },
+      { dependencyId: 'd1', predecessorId: 'a1', successorId: 'a2', state: 'ADDED' },
+    ]);
+    expect(lit.stroke - base.stroke).toBe(1);
+    expect(lit.fillText).toBe(base.fillText);
+  });
+
+  it('routes a REMOVED link, which has no line in the frame at all', () => {
+    // It is not in `scene.edges` — that is what "removed" means — so nothing computed a line for
+    // it. Verified red by dropping the synthetic-edge branch: this goes to +0.
+    const base = paint(undefined);
+    const gone = paint(undefined, [
+      { dependencyId: 'never-existed', predecessorId: 'a0', successorId: 'a3', state: 'REMOVED' },
+    ]);
+    expect(gone.stroke - base.stroke).toBe(1);
+  });
+
+  it('draws nothing for a link whose endpoint is not in the plan', () => {
+    // A link has no geometry of its own; it is anchored to two bars. The SERVER refuses to emit
+    // such a link and counts it instead, and this is the painter's matching refusal — belt and
+    // braces, because a guessed anchor is a false statement about where the logic was.
+    const base = paint(undefined);
+    const orphan = paint(undefined, [
+      { dependencyId: 'x', predecessorId: 'a0', successorId: 'gone-entirely', state: 'REMOVED' },
+    ]);
+    expect(orphan.stroke).toBe(base.stroke);
   });
 
   it('draws a milestone ghost as a diamond rather than a rectangle', () => {
