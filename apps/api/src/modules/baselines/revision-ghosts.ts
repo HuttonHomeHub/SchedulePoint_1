@@ -21,6 +21,16 @@ import type { RevisionEdge, RevisionRow } from './revision-delta';
  * bar is in exactly the same place, so a ghost for it would be an outline drawn under its own live
  * bar: invisible, and paid for on every frame.
  *
+ * ## Capped, with the true total beside it
+ *
+ * `cap` is the same `REVISION_ROW_CAP` every other array in this response carries, and `total` is
+ * the pre-cap count — ADR-0116 D3's rule, that "showing N of M" is never a client's own arithmetic.
+ *
+ * It shipped UNCAPPED for one review cycle and two independent reviews caught it, which is exactly
+ * how `RevisionDelta`'s `added`/`removed` shipped uncapped one epic earlier: the field with no
+ * bound is the one most likely to be large, because a baseline predating a WBS reorganisation or a
+ * re-import — the case this feature exists for — can move most of a plan at once.
+ *
  * ## The lane is recorded, never guessed
  *
  * `laneIndex` comes from the FROZEN side (ADR-0126's `baseline_activities.lane_index`), which is
@@ -33,6 +43,8 @@ import type { RevisionEdge, RevisionRow } from './revision-delta';
  */
 export interface RevisionGhostResult {
   readonly ghosts: RevisionGhostBar[];
+  /** Found BEFORE the cap. Never the client's own arithmetic (ADR-0116 D3). */
+  readonly total: number;
   /** Changed activities whose OLD position was never recorded. Reported, never folded into zero. */
   readonly undrawable: number;
 }
@@ -55,6 +67,7 @@ function isSummary(row: RevisionRow): boolean {
 export function buildRevisionGhosts(
   fromRows: readonly RevisionRow[],
   toRows: readonly RevisionRow[],
+  cap: number,
 ): RevisionGhostResult {
   const toById = new Map(toRows.map((r) => [r.activityId, r]));
   const ghosts: RevisionGhostBar[] = [];
@@ -95,7 +108,7 @@ export function buildRevisionGhosts(
     });
   }
 
-  return { ghosts, undrawable };
+  return { ghosts: ghosts.slice(0, cap), total: ghosts.length, undrawable };
 }
 
 /**
@@ -120,6 +133,8 @@ export function buildRevisionGhosts(
  */
 export interface RevisionLinkResult {
   readonly links: RevisionLinkChange[];
+  /** Found BEFORE the cap. Never the client's own arithmetic (ADR-0116 D3). */
+  readonly total: number;
   readonly undrawable: number;
 }
 
@@ -139,6 +154,7 @@ export function buildRevisionLinkChanges(
   toEdges: readonly RevisionEdge[],
   /** Ids present in the LIVE plan — the only place a link can be anchored. */
   liveActivityIds: ReadonlySet<string>,
+  cap: number,
 ): RevisionLinkResult {
   const fromById = new Map(fromEdges.map((e) => [e.dependencyId, e]));
   const toById = new Map(toEdges.map((e) => [e.dependencyId, e]));
@@ -166,5 +182,5 @@ export function buildRevisionLinkChanges(
   for (const from of fromEdges) {
     if (!toById.has(from.dependencyId)) push(from, 'REMOVED');
   }
-  return { links, undrawable };
+  return { links: links.slice(0, cap), total: links.length, undrawable };
 }

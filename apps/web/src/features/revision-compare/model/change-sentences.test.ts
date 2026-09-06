@@ -1,4 +1,8 @@
-import type { RevisionClassAssessment } from '@repo/types';
+import {
+  REVISION_FREE_CHANGE_CLASSES,
+  REVISION_PAID_CHANGE_CLASSES,
+  type RevisionClassAssessment,
+} from '@repo/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -86,5 +90,26 @@ describe('the change list’s sentences', () => {
   it('titles every class in a planner’s words rather than the enum’s', () => {
     expect(classTitle('REDURATIONED')).toBe('Duration changed');
     expect(classTitle('REPARENTED')).toBe('Moved in the breakdown');
+  });
+
+  it('reads as ENGLISH for every class, not just the one the first test used', () => {
+    // The sentence composed a nominal HEADING into a grammatical subject slot, so `REPARENTED`
+    // read "so moved in the breakdown cannot be compared" and four siblings were nearly as bad.
+    // Only `RELOGICKED` was ever composed in a test, and it happens to read least badly — which is
+    // how it shipped. Every class now goes through, and the assertions are the two things that
+    // were actually broken: the sentence must not embed a heading verbatim, and it must read as a
+    // clause rather than as a label.
+    for (const c of [...REVISION_FREE_CHANGE_CLASSES, ...REVISION_PAID_CHANGE_CLASSES]) {
+      const sentence = notAssessableSentence('NOT_SNAPSHOTTED', c);
+      expect(sentence).toContain('cannot be compared');
+      // The defect was the HEADING used verbatim as the subject — "so moved in the breakdown
+      // cannot be compared". Asserted as that exact shape rather than as "the sentence does not
+      // contain the heading's words", which my first version said and which fails on
+      // "which activities were added" for containing "added" — a legitimate phrase, not the bug.
+      expect(sentence).not.toContain(`so ${classTitle(c).toLowerCase()} cannot`);
+    }
+    expect(notAssessableSentence('NOT_SNAPSHOTTED', 'REPARENTED')).toContain(
+      'how activities were re-parented cannot be compared',
+    );
   });
 });

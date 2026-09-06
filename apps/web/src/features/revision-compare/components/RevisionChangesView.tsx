@@ -72,6 +72,7 @@ function ClassSection({
           {assessment.rows.length > 0 && (
             <ul className="space-y-0.5">
               {assessment.rows.map((row) => {
+                const reasonId = `revision-change-reason-${row.subjectId}`;
                 // **The SERVER's answer, not the client's inference.** Deriving this from the
                 // delta's rows shaded any activity the delta never mentioned — which, once the
                 // paid classes landed, is most of the list: moving an activity to another lane or
@@ -86,6 +87,14 @@ function ClassSection({
                       // baselines can name an activity that has since been deleted, and a control
                       // that navigates nowhere is worse than one that says why.
                       aria-disabled={!reachable}
+                      // **The reason is a DESCRIPTION, never part of the name.** It was a child of
+                      // this button, so it concatenated into the accessible name and a reader
+                      // browsing the list heard the whole sentence as the row's label. `MovedRow`
+                      // in the sibling panel has said so in a docblock since it shipped, and
+                      // ADR-0109 records this codebase paying to fix the same thing once already.
+                      // Two independent reviews found it here; the unit case could not, because a
+                      // `{ name: /A10/ }` regex matches a polluted name just as well.
+                      {...(reachable ? {} : { 'aria-describedby': reasonId })}
                       onClick={() => {
                         // The name travels WITH the id: this row knows it, and the panel's
                         // lookup covers only the delta's rows (see `announceActivation`).
@@ -103,12 +112,12 @@ function ClassSection({
                       <span className="text-muted-foreground truncate">
                         {row.from ?? '—'} → {row.to ?? '—'}
                       </span>
-                      {!reachable && (
-                        <span className="sr-only">
-                          Not in the live plan, so it cannot be shown in the diagram.
-                        </span>
-                      )}
                     </button>
+                    {!reachable && (
+                      <span id={reasonId} className="sr-only">
+                        This activity is not in the live plan, so it cannot be shown on the diagram.
+                      </span>
+                    )}
                   </li>
                 );
               })}
@@ -147,6 +156,18 @@ export function RevisionChangesView({
       role="group"
       className="space-y-3"
     >
+      {/*
+        **The summary, on screen and not only announced.** It was computed for the live region and
+        thrown away for everybody else, so a sighted planner met fourteen equally-weighted sections
+        — most of them saying "No changes in this revision." — with nothing at the top telling them
+        how many changes there are or how many categories could not be compared. The M8 ux review
+        found it; the sentence already existed.
+      */}
+      {/* No weight: the border and the position at the head of the list carry the emphasis, and
+          the weight ratchet exists to stop a second channel doing the first one's job. */}
+      <p className="text-muted-foreground border-b pb-2 text-xs">
+        {changesAnnouncement(report.classes)}
+      </p>
       {report.classes.map((assessment) => (
         <ClassSection
           key={assessment.changeClass}

@@ -1671,12 +1671,20 @@ export class ScheduleService {
     const movementDaysBetween = (from: string, toDate: string): number =>
       Math.round(planCalendar.workingTimeBetween(from, toDate) / dayFactorMinutes);
 
-    const delta = computeRevisionDelta(
-      frozenSide(fromRows),
-      toRows === null ? liveSide : frozenSide(toRows),
-      REVISION_ROW_CAP,
-      movementDaysBetween,
-    );
+    /**
+     * **Both sides, projected ONCE.** `frozenSide` was called three times over the same array —
+     * for the delta, the change list and the ghosts — so a caller asking for both includes (which
+     * the shipped client always does) re-mapped every row through the same 19-field projection six
+     * times instead of twice. Negligible in absolute terms at 2,000 rows and free to remove;
+     * measured and reported by the M8 backend-performance review.
+     *
+     * It also makes the "one projection, three readers" claim in this method's docblocks true by
+     * construction rather than by three identical calls happening to agree.
+     */
+    const fromSide = frozenSide(fromRows);
+    const toSide = toRows === null ? liveSide : frozenSide(toRows);
+
+    const delta = computeRevisionDelta(fromSide, toSide, REVISION_ROW_CAP, movementDaysBetween);
 
     /**
      * **Whether the criticality delta means anything at all**, and the answer is no when either
@@ -1745,8 +1753,8 @@ export class ScheduleService {
         // looks right alone and only a reader comparing the delta against the change list on one
         // plan would ever see them disagree (the ADR-0065 `routeOrthogonal` argument).
         classifyRevisionChanges(
-          { rows: frozenSide(fromRows), edges: fromEdges },
-          { rows: toRows === null ? liveSide : frozenSide(toRows), edges: toEdges },
+          { rows: fromSide, edges: fromEdges },
+          { rows: toSide, edges: toEdges },
           {
             fromScheduled: sideScheduled(fromBaseline, plan.scheduleComputedAt),
             toScheduled: sideScheduled(toBaseline, plan.scheduleComputedAt),
@@ -1780,12 +1788,14 @@ export class ScheduleService {
      * would show as a ghost in a place the change list does not mention.
      */
     const ghostResult = wantsGeometry
-      ? buildRevisionGhosts(frozenSide(fromRows), toRows === null ? liveSide : frozenSide(toRows))
+      ? buildRevisionGhosts(fromSide, toSide, REVISION_ROW_CAP)
       : null;
     // The logic half, from the same two edge sets the change list's RELOGICKED class reads — so the
     // picture and the list cannot disagree about what one changed link is. `liveIds` decides what
     // is anchorable: a link has no geometry of its own.
-    const linkResult = wantsGeometry ? buildRevisionLinkChanges(fromEdges, toEdges, liveIds) : null;
+    const linkResult = wantsGeometry
+      ? buildRevisionLinkChanges(fromEdges, toEdges, liveIds, REVISION_ROW_CAP)
+      : null;
 
     const result: RevisionCompare = {
       planId,
@@ -1840,9 +1850,19 @@ export class ScheduleService {
       // sees byte-identically what it saw before this existed.
       ...(changeReport ? { changes: changeReport } : {}),
       ...(ghostResult
-        ? { ghosts: ghostResult.ghosts, ghostsUndrawable: ghostResult.undrawable }
+        ? {
+            ghosts: ghostResult.ghosts,
+            ghostsTotal: ghostResult.total,
+            ghostsUndrawable: ghostResult.undrawable,
+          }
         : {}),
-      ...(linkResult ? { links: linkResult.links, linksUndrawable: linkResult.undrawable } : {}),
+      ...(linkResult
+        ? {
+            links: linkResult.links,
+            linksTotal: linkResult.total,
+            linksUndrawable: linkResult.undrawable,
+          }
+        : {}),
       criticalPath: bothScheduled
         ? {
             entered: delta.entered.map(moved),

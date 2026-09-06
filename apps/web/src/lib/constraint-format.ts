@@ -1,4 +1,5 @@
 import {
+  CONSTRAINT_TYPE_LABELS,
   isParkedConstraintType,
   type ActivitySummary,
   type ConstraintType,
@@ -13,17 +14,12 @@ import { formatCalendarDate } from '@/lib/format-date';
  * constraint reads identically everywhere. Pure — no React/DOM — and unit-tested.
  */
 
-/** Human labels for every constraint kind (with the planning-tool shorthand as the key). */
-export const CONSTRAINT_TYPE_LABELS: Record<ConstraintType, string> = {
-  SNET: 'Start no earlier than',
-  SNLT: 'Start no later than',
-  FNET: 'Finish no earlier than',
-  FNLT: 'Finish no later than',
-  MSO: 'Must start on',
-  MFO: 'Must finish on',
-  MANDATORY_START: 'Mandatory start',
-  MANDATORY_FINISH: 'Mandatory finish',
-};
+/**
+ * Human labels for every constraint kind. **Re-exported from `@repo/types`, not redeclared** — the
+ * API's change list builds display strings server-side and was printing the bare shorthand until
+ * the M8 ux review caught it, and two lists of labels drift.
+ */
+export { CONSTRAINT_TYPE_LABELS };
 
 /**
  * Honest labels for the two **parked** kinds, spelling out how the engine actually

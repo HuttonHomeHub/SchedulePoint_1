@@ -1,10 +1,17 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type {
+  RevisionChangeClass,
+  RevisionChangeReport,
+  RevisionChangeRow,
+  RevisionClassAssessment,
   RevisionCompare,
   RevisionCompletion,
   RevisionCompletionReason,
   RevisionCriticalPathDelta,
+  RevisionGhostBar,
+  RevisionLinkChange,
   RevisionMovedActivity,
+  RevisionNotAssessableReason,
   RevisionPresenceActivity,
   RevisionSettingsVerdict,
   RevisionSide,
@@ -12,6 +19,8 @@ import type {
 } from '@repo/types';
 import {
   REVISION_COMPLETION_REASONS,
+  REVISION_FREE_CHANGE_CLASSES,
+  REVISION_PAID_CHANGE_CLASSES,
   REVISION_SETTINGS_VERDICTS,
   REVISION_SIDE_KINDS,
 } from '@repo/types';
@@ -228,6 +237,112 @@ export class RevisionCriticalPathDeltaDto implements RevisionCriticalPathDelta {
   notAssessableReason!: 'SIDE_NOT_SCHEDULED' | null;
 }
 
+/**
+ * One row of the change list. **Declared, not inferred** — the M8 api review found the five tier-1
+ * and tier-2 fields shipping on the wire and absent from the generated schema, because
+ * `RevisionCompareDto.from` is a pass-through and `implements` constrains the floor rather than the
+ * ceiling (the docblock on that method says so, and this is that trap sprung one epic later).
+ */
+class RevisionChangeRowDto implements RevisionChangeRow {
+  @ApiProperty({ description: 'The activity a client may reveal. For a logic row, the SUCCESSOR.' })
+  activityId!: string;
+
+  @ApiProperty({
+    description:
+      'What the row is ABOUT, unique within its class — and therefore the key to render it under. ' +
+      'Equal to `activityId` for an activity-subject class, and to the dependency id for ' +
+      '`RELOGICKED`, because two changed links into one successor are two rows with one activity.',
+  })
+  subjectId!: string;
+
+  @ApiProperty({ enum: [...REVISION_FREE_CHANGE_CLASSES, ...REVISION_PAID_CHANGE_CLASSES] })
+  changeClass!: RevisionChangeClass;
+
+  @ApiProperty({ nullable: true, type: String }) code!: string | null;
+  @ApiProperty() name!: string;
+  @ApiProperty({ nullable: true, type: String }) from!: string | null;
+  @ApiProperty({ nullable: true, type: String }) to!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    description: 'The instant the row is ordered by. Ordering is by TIME and never by magnitude.',
+  })
+  orderKey!: string | null;
+
+  @ApiProperty({
+    description:
+      'Whether the activity is in the LIVE plan, and therefore whether a client may offer to ' +
+      'reveal it. Answered by the SERVER: an activity moved to another lane or progressed enters ' +
+      'and leaves nothing, so it is in no delta list, and inferring absence from that would put a ' +
+      'false sentence on screen about a bar the reader can see.',
+  })
+  existsLive!: boolean;
+}
+
+class RevisionClassAssessmentDto implements RevisionClassAssessment {
+  @ApiProperty({ enum: [...REVISION_FREE_CHANGE_CLASSES, ...REVISION_PAID_CHANGE_CLASSES] })
+  changeClass!: RevisionChangeClass;
+
+  @ApiProperty({
+    nullable: true,
+    enum: ['NOT_SNAPSHOTTED', 'SIDE_NOT_SCHEDULED'],
+    description:
+      'Null when assessed; a reason when it could not be. **NEVER read a reason as "no ' +
+      'changes"** — `rows` is empty and `total` is zero in both states, and only this field ' +
+      'separates them. `NOT_SNAPSHOTTED` is PERMANENT for the two revisions involved: a baseline ' +
+      'captured before the snapshot extension recorded no logic, constraints, calendar, WBS ' +
+      'parent, lane or progress, and no backfill is possible.',
+  })
+  notAssessableReason!: RevisionNotAssessableReason | null;
+
+  @ApiProperty({ type: [RevisionChangeRowDto] }) rows!: readonly RevisionChangeRowDto[];
+
+  @ApiProperty({
+    description: 'Rows found BEFORE the cap. "Showing N of M" is never the client’s arithmetic.',
+  })
+  total!: number;
+}
+
+class RevisionChangeReportDto implements RevisionChangeReport {
+  @ApiProperty({
+    type: [RevisionClassAssessmentDto],
+    description:
+      'EVERY class, assessed or not — total over the vocabulary, so a class is never simply ' +
+      'missing. A reader who cannot find a class concludes nothing changed in it.',
+  })
+  classes!: readonly RevisionClassAssessmentDto[];
+
+  @ApiProperty() cap!: number;
+}
+
+class RevisionGhostBarDto implements RevisionGhostBar {
+  @ApiProperty() activityId!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ description: '`YYYY-MM-DD`. Both non-null: no old dates ⇒ no ghost.' })
+  fromStart!: string;
+  @ApiProperty() fromFinish!: string;
+
+  @ApiProperty({
+    description:
+      'The FROZEN lane, never the live one and never a guess — which is what makes removed work ' +
+      'drawable at all, since it has no live bar to sit behind.',
+  })
+  laneIndex!: number;
+
+  @ApiProperty() isMilestone!: boolean;
+  @ApiProperty({ description: 'In the old revision and not in the new.' }) removed!: boolean;
+}
+
+class RevisionLinkChangeDto implements RevisionLinkChange {
+  @ApiProperty() dependencyId!: string;
+  @ApiProperty({ description: 'Carried because a REMOVED edge is in no live edge list.' })
+  predecessorId!: string;
+  @ApiProperty() successorId!: string;
+  @ApiProperty({ enum: ['ADDED', 'REMOVED', 'CHANGED'] })
+  state!: RevisionLinkChange['state'];
+}
+
 export class RevisionCompareDto implements RevisionCompare {
   @ApiProperty() planId!: string;
   @ApiProperty() planName!: string;
@@ -275,6 +390,47 @@ export class RevisionCompareDto implements RevisionCompare {
    * because there is no cost-shaped field here to withhold; the trade is written down rather than
    * left for a reader to infer from the absence of a mapping.
    */
+  @ApiPropertyOptional({
+    type: RevisionChangeReportDto,
+    description:
+      'The change list — present ONLY with `?include=changes`. Absent rather than empty when not ' +
+      'asked for, so a caller that did not opt in receives byte-identically the prior response.',
+  })
+  changes?: RevisionChangeReportDto | undefined;
+
+  @ApiPropertyOptional({
+    type: [RevisionGhostBarDto],
+    description:
+      'The change picture’s geometry — where the CHANGED bars were — present ONLY with ' +
+      '`?include=ghosts`, which also returns `links`. Capped like every other array here, with ' +
+      '`ghostsTotal` beside it.',
+  })
+  ghosts?: readonly RevisionGhostBarDto[] | undefined;
+
+  @ApiPropertyOptional({ description: 'Changed bars found BEFORE the cap.' })
+  ghostsTotal?: number | undefined;
+
+  @ApiPropertyOptional({
+    description:
+      'Changed activities the overlay CANNOT draw, because the old side never recorded where they ' +
+      'were. A fact a client must render: a diagram has no "showing N of M", so a picture ' +
+      'quietly missing rows is unnoticeable.',
+  })
+  ghostsUndrawable?: number | undefined;
+
+  @ApiPropertyOptional({ type: [RevisionLinkChangeDto], description: 'The changed logic.' })
+  links?: readonly RevisionLinkChangeDto[] | undefined;
+
+  @ApiPropertyOptional({ description: 'Changed links found BEFORE the cap.' })
+  linksTotal?: number | undefined;
+
+  @ApiPropertyOptional({
+    description:
+      'Changed links the overlay cannot draw, because an endpoint is not in the live plan and a ' +
+      'link has no geometry of its own — it is anchored to two bars.',
+  })
+  linksUndrawable?: number | undefined;
+
   static from(model: RevisionCompare): RevisionCompareDto {
     return model;
   }

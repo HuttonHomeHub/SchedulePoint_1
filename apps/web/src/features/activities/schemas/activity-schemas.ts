@@ -1,5 +1,6 @@
 import {
   ACCRUAL_TYPES,
+  ACTIVITY_TYPE_LABELS,
   DURATION_TYPES,
   PARKED_CONSTRAINT_TYPES,
   PERCENT_COMPLETE_TYPES,
@@ -23,18 +24,11 @@ import { moneyMajorAmount } from '@/lib/money-schema';
 export { CONSTRAINT_TYPE_LABELS } from '@/lib/constraint-format';
 
 /**
- * Human labels for the activity type. Exhaustive `Record<ActivityType, …>` so a
- * new type fails to compile until a label is added.
+ * Human labels for the activity type. **Re-exported from `@repo/types`, not redeclared** — the API
+ * needs them too (the change list builds display strings server-side and was printing the raw enum
+ * until the M8 ux review caught it), and two lists of labels drift.
  */
-export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
-  TASK: 'Task',
-  START_MILESTONE: 'Start milestone',
-  FINISH_MILESTONE: 'Finish milestone',
-  HAMMOCK: 'Hammock',
-  LEVEL_OF_EFFORT: 'Level of effort',
-  WBS_SUMMARY: 'WBS summary',
-  RESOURCE_DEPENDENT: 'Resource-dependent',
-};
+export { ACTIVITY_TYPE_LABELS };
 
 export const ACTIVITY_TYPES = Object.keys(ACTIVITY_TYPE_LABELS) as [
   ActivityType,

@@ -528,7 +528,10 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
       // The parent resolves to a NAME on each side, not a UUID.
       expect(classes.get('REPARENTED')?.rows[0]?.from).toBe('Enabling works');
       expect(classes.get('REPARENTED')?.rows[0]?.to).toBe('Superstructure');
-      expect(classes.get('RELANED')?.rows[0]?.to).toBe('Lane 4');
+      // "Row 5", not "Lane 4": rows are one-based everywhere a planner looks, and `laneIndex` is
+      // a zero-based internal layout index that appears in no other copy in the product (the M8 ux
+      // review's finding).
+      expect(classes.get('RELANED')?.rows[0]?.to).toBe('Row 5');
       // …and `b` was not touched, so it appears in none of them.
       expect(classes.get('RELANED')?.rows.every((r) => r.subjectId !== b)).toBe(true);
     });

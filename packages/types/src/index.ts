@@ -333,6 +333,39 @@ export const SELECTABLE_CONSTRAINT_TYPES = ['SNET', 'SNLT', 'FNET', 'FNLT', 'MSO
 export const PARKED_CONSTRAINT_TYPES = ['MANDATORY_START', 'MANDATORY_FINISH'] as const;
 
 /** True for a constraint kind the engine parks (applies as `MSO`/`MFO`, not as labelled). */
+/**
+ * **Human labels for the activity type and the constraint kind, defined ONCE.**
+ *
+ * They lived in `apps/web` alone, so the API's change list — which builds its own display strings
+ * — printed the raw enum: a planner reading "TASK → WBS_SUMMARY" or a bare "SNET 2026-02-01". The
+ * M8 ux review caught it and named the maps it should have been using. Moving them here rather
+ * than copying them is the `REVISION_INCLUDES` argument one type along: two lists of labels drift,
+ * and the drift surfaces as one surface calling a thing by a name no other surface uses.
+ *
+ * Exhaustive `Record<…>` in both cases, so a new enum member fails to compile until it is named.
+ * The web re-exports them from their old locations, so no call site changed.
+ */
+export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
+  TASK: 'Task',
+  START_MILESTONE: 'Start milestone',
+  FINISH_MILESTONE: 'Finish milestone',
+  HAMMOCK: 'Hammock',
+  LEVEL_OF_EFFORT: 'Level of effort',
+  WBS_SUMMARY: 'WBS summary',
+  RESOURCE_DEPENDENT: 'Resource-dependent',
+};
+
+export const CONSTRAINT_TYPE_LABELS: Record<ConstraintType, string> = {
+  SNET: 'Start no earlier than',
+  SNLT: 'Start no later than',
+  FNET: 'Finish no earlier than',
+  FNLT: 'Finish no later than',
+  MSO: 'Must start on',
+  MFO: 'Must finish on',
+  MANDATORY_START: 'Mandatory start',
+  MANDATORY_FINISH: 'Mandatory finish',
+};
+
 export function isParkedConstraintType(
   type: ConstraintType,
 ): type is (typeof PARKED_CONSTRAINT_TYPES)[number] {
@@ -2939,13 +2972,13 @@ export interface RevisionCompare {
    * reason and carries no rows, because an empty list and an un-looked-at list are the same thing
    * to a reader and telling them apart is the point.
    */
-  readonly changes?: RevisionChangeReport;
+  readonly changes?: RevisionChangeReport | undefined;
   /**
    * The old side's geometry for the changed activities — present ONLY when the caller opted in with
    * `?include=ghosts`, so a caller that did not ask receives byte-identically what it received
    * before this existed (the ADR-0073 C2 projection pattern).
    */
-  readonly ghosts?: readonly RevisionGhostBar[];
+  readonly ghosts?: readonly RevisionGhostBar[] | undefined;
   /**
    * How many changed activities the overlay CANNOT draw, because the old side never recorded where
    * they were (a baseline captured before ADR-0126). Present alongside `ghosts`.
@@ -2954,13 +2987,20 @@ export interface RevisionCompare {
    * nobody is told about is the absence this epic exists to remove, arriving in the one place a
    * reader cannot check it — a diagram has no "showing N of M".
    */
-  readonly ghostsUndrawable?: number;
+  readonly ghostsUndrawable?: number | undefined;
+  /**
+   * How many changed bars there were BEFORE the cap, so a client can say "showing N of M" rather
+   * than compute it (ADR-0116 D3). Present alongside `ghosts`.
+   */
+  readonly ghostsTotal?: number | undefined;
   /** The changed logic, alongside `ghosts` and under the same `?include=ghosts`. */
-  readonly links?: readonly RevisionLinkChange[];
+  readonly links?: readonly RevisionLinkChange[] | undefined;
+  /** The pre-cap count of changed links. Same rule as {@link ghostsTotal}. */
+  readonly linksTotal?: number | undefined;
   /**
    * Changed links the overlay cannot draw, because an endpoint is not in the live plan and a link
    * has no geometry of its own — it is anchored to two bars. Stated for the same reason
    * {@link ghostsUndrawable} is: a diagram has no "showing N of M".
    */
-  readonly linksUndrawable?: number;
+  readonly linksUndrawable?: number | undefined;
 }

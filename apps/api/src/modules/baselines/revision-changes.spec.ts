@@ -240,7 +240,10 @@ describe('the revision change classifier', () => {
       );
       const found = classOf(report, 'RECONSTRAINED');
       expect(found?.rows[0]?.from).toBe('None');
-      expect(found?.rows[0]?.to).toBe('FNLT 2026-03-01');
+      // Spelled out, not the planning-tool shorthand — `FNLT 2026-03-01` was the only text on
+      // screen, where every other surface shows the shorthand WITH a spelled-out fallback beside
+      // it (the M8 ux review's finding). The label comes from `@repo/types` so there is one list.
+      expect(found?.rows[0]?.to).toBe('Finish no later than 2026-03-01');
     });
 
     it('names a calendar, and states a deleted one in words rather than as a UUID', () => {

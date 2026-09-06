@@ -2988,6 +2988,18 @@ export function TsldPanel({
                   : ''}
               </p>
             ) : null}
+            {compareSummary !== null && compareSummary.undrawn > 0 ? (
+              /*
+                **What the overlay could NOT draw, VISIBLY.** The count was in the `sr-only`
+                summary alone, so the epic's own rule — a diagram has no "showing N of M", so a
+                picture missing rows is unnoticeable — was honoured for screen-reader users and
+                broken for everybody else. The M8 ux review found the inversion. It renders only
+                when there is something to say, so a complete picture carries no chrome at all.
+              */
+              <p className="text-muted-foreground pointer-events-none absolute top-1 right-2 z-10 text-xs">
+                {compareSummary.undrawnLabel}
+              </p>
+            ) : null}
             {compareSummary !== null ? (
               /*
                 The spoken twin of the comparison overlay (ADR-0127, WCAG 1.4.1). INSIDE the

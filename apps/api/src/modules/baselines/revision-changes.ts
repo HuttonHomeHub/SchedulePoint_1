@@ -1,4 +1,6 @@
 import {
+  ACTIVITY_TYPE_LABELS,
+  CONSTRAINT_TYPE_LABELS,
   REVISION_FREE_CHANGE_CLASSES,
   REVISION_PAID_CHANGE_CLASSES,
   type RevisionChangeClass,
@@ -7,6 +9,7 @@ import {
   type RevisionClassAssessment,
   type RevisionFreeChangeClass,
   type RevisionNotAssessableReason,
+  type ConstraintType,
   type RevisionPaidChangeClass,
 } from '@repo/types';
 
@@ -94,10 +97,22 @@ const PAID_ROW_CHANGE_CLASSES = PAID_CHANGE_CLASSES.filter(
 type RowChangeClass =
   Exclude<FreeChangeClass, 'ADDED' | 'REMOVED'> | (typeof PAID_ROW_CHANGE_CLASSES)[number];
 
-/** Formats a duration for display without asserting a day factor the caller has not supplied. */
+/**
+ * A duration for display.
+ *
+ * **Days are refused and hours are not**, and the difference is the point. `hours_per_day_minutes`
+ * is frozen per capture (ADR-0068), so two baselines of one plan can carry different day factors
+ * and a days figure would be a claim the comparison cannot make. Minutes→hours is exact and
+ * calendar-independent, so withholding it bought nothing and cost the reader arithmetic on the
+ * field they care about most — the M8 ux review's finding, and the reason this reads
+ * `2880 min (48 h)` rather than `2880 min`.
+ */
 function minutesLabel(minutes: number | null): string | null {
   if (minutes === null) return null;
-  return `${String(minutes)} min`;
+  const hours = minutes / 60;
+  if (!Number.isFinite(hours) || minutes === 0) return `${String(minutes)} min`;
+  const rounded = Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
+  return `${String(minutes)} min (${rounded} h)`;
 }
 
 /** What a reader is shown where a plan states no opinion. Never a blank and never a raw null. */
@@ -113,8 +128,14 @@ const GONE_CALENDAR = 'A calendar that no longer exists';
 const GONE_PARENT = 'A phase that no longer exists';
 
 function constraintLabel(row: RevisionRow): string {
-  const one = (type: string | null, date: string | null): string | null =>
-    type === null ? null : date === null ? type : `${type} ${date}`;
+  // Spelled out, not the planning-tool shorthand. `SNET 2026-02-01` is the form the product only
+  // ever shows WITH a spelled-out fallback beside it; here it would have been the only text.
+  const one = (type: ConstraintType | null, date: string | null): string | null =>
+    type === null
+      ? null
+      : date === null
+        ? CONSTRAINT_TYPE_LABELS[type]
+        : `${CONSTRAINT_TYPE_LABELS[type]} ${date}`;
   const primary = one(row.constraintType, row.constraintDate);
   const secondary = one(row.secondaryConstraintType, row.secondaryConstraintDate);
   if (primary === null && secondary === null) return NONE;
@@ -145,7 +166,10 @@ function labelOf(
     case 'RECODED':
       return row.code;
     case 'RETYPED':
-      return row.type;
+      // The planner's word, from the SAME map every other surface in the product uses. It printed
+      // the raw enum (`TASK → WBS_SUMMARY`) until the M8 ux review named the map it should have
+      // been reading; it now lives in `@repo/types` so there is one list rather than two.
+      return ACTIVITY_TYPE_LABELS[row.type];
     case 'REDURATIONED':
       return minutesLabel(row.durationMinutes);
     case 'REDATED':
@@ -163,7 +187,9 @@ function labelOf(
     case 'REPARENTED':
       return row.parentId === null ? TOP_LEVEL : (side.get(row.parentId)?.name ?? GONE_PARENT);
     case 'RELANED':
-      return `Lane ${String(row.laneIndex ?? 0)}`;
+      // Rows are one-based on every surface a planner sees; `laneIndex` is a zero-based internal
+      // layout index and appears nowhere else in the product's copy.
+      return `Row ${String((row.laneIndex ?? 0) + 1)}`;
     case 'PROGRESSED':
       return progressLabel(row);
     case 'ADDED':

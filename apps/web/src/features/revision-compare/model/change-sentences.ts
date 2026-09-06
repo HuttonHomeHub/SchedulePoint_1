@@ -46,11 +46,36 @@ export function classTitle(changeClass: RevisionChangeClass): string {
  * writing today's logic into a historic snapshot would state as history a graph that baseline
  * never saw.
  */
+/**
+ * The class as the SUBJECT of a sentence, which is a different word from its heading.
+ *
+ * Reusing the heading produced "so **moved in the breakdown** cannot be compared" — not merely
+ * stilted but ungrammatical, and "so lane changed cannot be compared" and "so calendar changed
+ * cannot be compared" beside it. The M8 ux review caught it; no test composed the sentence for any
+ * class but `RELOGICKED`, which happens to read least badly, which is how it shipped.
+ */
+const CLASS_SUBJECTS: Record<RevisionChangeClass, string> = {
+  ADDED: 'which activities were added',
+  REMOVED: 'which activities were removed',
+  RENAMED: 'which activities were renamed',
+  RECODED: 'which activity codes changed',
+  RETYPED: 'which activity types changed',
+  REDURATIONED: 'which durations changed',
+  REDATED: 'how the dates moved',
+  CRITICALITY: 'how criticality changed',
+  RELOGICKED: "the plan's logic",
+  RECONSTRAINED: 'the constraints',
+  RECALENDARED: 'which calendars activities were on',
+  REPARENTED: 'how activities were re-parented',
+  RELANED: 'which row activities sat in',
+  PROGRESSED: 'the progress reported',
+};
+
 export function notAssessableSentence(
   reason: RevisionNotAssessableReason,
   changeClass: RevisionChangeClass,
 ): string {
-  const subject = classTitle(changeClass).toLowerCase();
+  const subject = CLASS_SUBJECTS[changeClass];
   switch (reason) {
     case 'NOT_SNAPSHOTTED':
       return (

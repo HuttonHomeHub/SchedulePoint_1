@@ -188,7 +188,14 @@ export function compareOverlaySummary(
    * change list, which carries every logic change in words.
    */
   links: { readonly drawn: number; readonly undrawable: number } = { drawn: 0, undrawable: 0 },
-): { readonly heading: string; readonly removed: readonly string[] } | null {
+): {
+  readonly heading: string;
+  readonly removed: readonly string[];
+  /** How many changed things the picture could not draw — bars plus links. */
+  readonly undrawn: number;
+  /** The VISIBLE sentence for that count. Empty when there is nothing withheld. */
+  readonly undrawnLabel: string;
+} | null {
   if (ghosts.length === 0 && undrawable === 0 && links.drawn === 0 && links.undrawable === 0) {
     return null;
   }
@@ -218,9 +225,19 @@ export function compareOverlaySummary(
     links.drawn > 0 || links.undrawable > 0
       ? ' Logic changes are listed in words under Changes.'
       : '';
+  const undrawn = undrawable + links.undrawable;
   return {
     heading: `Comparison overlay: ${parts.join(', ')}.${logic}`,
     removed,
+    undrawn,
+    // One sentence for both kinds, because the reader's question is "is this picture complete?"
+    // and the answer is no for the same reason in both cases: the old side did not record enough
+    // to place the thing. Never rendered as "0 not shown" — see the caller's guard.
+    undrawnLabel:
+      undrawn === 0
+        ? ''
+        : `${String(undrawn)} ${undrawn === 1 ? 'change is' : 'changes are'} not shown — the ` +
+          `earlier revision did not record where they were.`,
   };
 }
 

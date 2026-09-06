@@ -416,6 +416,18 @@ const DATE_PLATE_H = 12;
 const GHOST_DASH: readonly number[] = [2, 2];
 
 /**
+ * The comparison overlay's dash — **deliberately different from {@link GHOST_DASH}**.
+ *
+ * Both overlays draw a dashed outline in `palette.edge`, and they can be on at the same time, so a
+ * merely-moved compare ghost was pixel-identical to a baseline-drift ghost: a planner comparing two
+ * named revisions could be looking at baseline drift and believe it was the comparison, or the
+ * reverse. That undermines the one promise the overlay makes — *this picture is about these two
+ * revisions* — and the M8 ux review found it. A longer dash with a wider gap is a shape channel and
+ * needs no new token (the ADR-0100 M4 trap).
+ */
+const COMPARE_DASH: readonly number[] = [6, 3];
+
+/**
  * One frozen bar of the revision-comparison change picture (ADR-0127) — where a CHANGED activity
  * was on the old side of the selected pair.
  *
@@ -469,7 +481,8 @@ function strikeThrough(ctx: Ctx2D, x: number, midY: number, width: number): void
   ctx.moveTo(x, midY + 0.5);
   ctx.lineTo(x + width, midY + 0.5);
   ctx.stroke();
-  ctx.setLineDash(GHOST_DASH as number[]);
+  // Restores the COMPARE dash, which is the only layer that calls this.
+  ctx.setLineDash(COMPARE_DASH as number[]);
 }
 
 /**
@@ -1294,7 +1307,7 @@ export function paintScene(
       }
       if (removed.length > 0) {
         ctx.lineWidth = 2;
-        ctx.setLineDash(GHOST_DASH as number[]);
+        ctx.setLineDash(COMPARE_DASH as number[]);
         ctx.beginPath();
         for (const line of removed) drawPolyline(ctx, line);
         ctx.stroke();
@@ -1378,7 +1391,7 @@ export function paintScene(
     const viewport: Rect = { x: 0, y: 0, w: size.width, h: size.height };
     ctx.strokeStyle = palette.edge;
     ctx.lineWidth = 1;
-    ctx.setLineDash(GHOST_DASH as number[]);
+    ctx.setLineDash(COMPARE_DASH as number[]);
     for (const ghost of scene.compareGhosts) {
       const startDay = daysBetween(scene.dataDate, ghost.fromStart);
       const finishDay = daysBetween(scene.dataDate, ghost.fromFinish);

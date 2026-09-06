@@ -603,7 +603,38 @@ describe('the Changes view', () => {
     // The SERVER said so: this row's `existsLive` is false. The client no longer infers it.
     const row = screen.getByRole('button', { name: /A10/ });
     expect(row).toHaveAttribute('aria-disabled', 'true');
-    expect(within(row).getByText(/cannot be shown in the diagram/i)).toBeInTheDocument();
+    // **The reason is the DESCRIPTION, and the name is the row.** Asserted on the accessible name
+    // itself rather than on "the sentence is somewhere inside the button", which is what the first
+    // version did and what let the sentence sit in the name for a whole milestone: a
+    // `{ name: /A10/ }` regex matches a polluted name just as happily. ADR-0109 records this exact
+    // shape shipping once before, for the same reason.
+    // Asserted as an ABSENCE from the name plus a presence in the description, rather than as an
+    // exact name string: jsdom's name computation concatenates the two spans without a separator
+    // ("A10Piling → Piling rig"), which is a property of the accumulator and not of the markup, and
+    // pinning it would make this case fail on a whitespace change that no reader would notice.
+    expect(row).not.toHaveAccessibleName(/not in the live plan/i);
+    expect(row).toHaveAccessibleDescription(/not in the live plan/i);
+    expect(within(row).queryByText(/cannot be shown on the diagram/i)).not.toBeInTheDocument();
+  });
+
+  it('announces the settled change list ONCE, and not again on a re-render', () => {
+    // The `spokenRef` guard, pinned. Its docblock cites the ADR-0079 stale-debounce lesson by
+    // name — a re-render must not re-arm the message, or a later one overwrites it — and nothing
+    // asserted it, while the panel's own sibling settle effect two components away IS pinned.
+    // Found by the component review, not by anything failing.
+    // **Cleared HERE, because `announce` is one module-level `vi.fn()` with no `beforeEach` in
+    // this file** — so a count taken without clearing measures every test that ran before it. The
+    // first version of this case asserted 1 and got 4, which was the suite's history and not a
+    // defect in the component.
+    announce.mockClear();
+    const compare = withChanges();
+    const { rerender, props } = renderPanel({ compare });
+    fireEvent.click(screen.getByRole('button', { name: 'Changes' }));
+    const spoken = announce.mock.calls.filter((c) => String(c[0]).includes('categories'));
+    expect(spoken).toHaveLength(1);
+    // Same report object, new render: the guard is identity-keyed, so nothing re-announces.
+    rerender(<RevisionComparePanel {...props} />);
+    expect(announce.mock.calls.filter((c) => String(c[0]).includes('categories'))).toHaveLength(1);
   });
 
   it('offers to reveal a row that appears in NO delta list', () => {
