@@ -4,12 +4,13 @@ import type { LimbOutcome, ProbeOutcome } from '../runner/run-probe';
 /**
  * Turn a finished run into the POST body — **or refuse to**.
  *
- * `null` for a refused run, and that refusal is why this is a pure function rather than an `if` in
- * the panel. A refusal means **nothing was measured**: there are no samples, the numbers that do
- * exist are placeholders, and storing a row would put a reading in the installation's history that
- * no machine ever produced. The panel's test asserts it with a spy on the client rather than by
- * reading the code, because "we do not call it" is exactly the kind of claim that stays true right
- * up until somebody moves the call.
+ * `null` for a run that was refused or cancelled, and that refusal is why this is a pure function
+ * rather than an `if` in the panel. A refusal means **nothing was measured**: there are no samples,
+ * the numbers that do exist are placeholders, and storing a row would put a reading in the
+ * installation's history that no machine ever produced. A cancellation means only part of it was
+ * measured, which is the same problem wearing different clothes. The panel's test asserts both with
+ * a spy on the client rather than by reading the code, because "we do not call it" is exactly the
+ * kind of claim that stays true right up until somebody moves the call.
  *
  * **An unjudgeable limb IS stored, and that is a different case.** The judge declining to produce a
  * verdict is a statement about the verdict; the numbers behind it are real measurements, and the
@@ -24,7 +25,10 @@ export function toProbeBody(
   /** The operator's own note. `null` means not typed — distinct from an empty string. */
   machineLabel: string | null,
 ): ProbeResultBody | null {
-  if (outcome.kind === 'refused') return null;
+  // Anything that is not a completed measurement stores nothing — a refusal because nothing
+  // was measured, a cancellation because only part of it was. Written as "not measured" rather than
+  // as a list of the other kinds, so a fifth outcome cannot default into being stored.
+  if (outcome.kind !== 'measured') return null;
 
   const { context } = outcome;
   const device = context.device;

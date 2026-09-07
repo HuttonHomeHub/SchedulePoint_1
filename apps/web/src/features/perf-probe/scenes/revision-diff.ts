@@ -308,6 +308,24 @@ export interface BenchOptions {
   preset: 'week' | 'fit';
   frames: number;
   pairs: number;
+  /**
+   * The display's own frame interval, **measured by the caller**.
+   *
+   * Optional so the CLI driver keeps behaving exactly as it did (it measures its own and passes
+   * nothing), and supplied by the panel because the panel has already measured one — and validated
+   * it. Without this the run reports one interval on the row and scores its dropped frames against
+   * a different one measured a second later, so a hiccup between the two would produce figures
+   * whose denominator nothing had checked. Found by the M5 component review.
+   */
+  idleInterval?: number;
+  /**
+   * Asked between pairs. Returning true stops the run where it stands.
+   *
+   * A pair is the smallest unit that means anything here — baseline and treatment are run back to
+   * back so they share the machine's mood — so this is checked at the pair boundary and never
+   * inside one.
+   */
+  shouldStop?: () => boolean;
 }
 
 export interface BenchOutcome {
@@ -402,7 +420,7 @@ export async function runRevisionDiff(
     linkRouting: true,
   };
 
-  const idleInterval = await measureIdleInterval(60);
+  const idleInterval = opts.idleInterval ?? (await measureIdleInterval(60));
   const counts = countVisible(
     ghosts,
     changedEdges,
@@ -414,6 +432,7 @@ export async function runRevisionDiff(
 
   const pairs: { baseline: PacingResult; treatment: PacingResult }[] = [];
   for (let p = 0; p < opts.pairs; p += 1) {
+    if (opts.shouldStop?.()) break;
     // Alternating, same session, baseline first. A container's absolute timings are noise; only a
     // paired difference is quotable (ADR-0100 M0's design, the one that passed).
     const baseline = await panRun(

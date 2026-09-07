@@ -1,5 +1,3 @@
-import type { PhaseTiming } from './judge';
-
 /**
  * Frame pacing under `requestAnimationFrame` — the quantity ADR-0026 §9 actually gates on.
  *
@@ -40,43 +38,19 @@ export async function measureIdleInterval(frames = 60): Promise<number> {
 }
 
 /**
- * Run one sustained pan and report how the frames landed.
+ * There was a `panPhase` here, and it was dead.
  *
- * `draw(frameIndex)` is called once per animation frame; the caller decides what a frame paints, so
- * the same loop serves a baseline, a treatment and any future scenario. Timing is taken from the rAF
- * timestamps rather than from around `draw`, because the gap between frames is what a planner feels.
+ * It was written as the one shared pan loop "so the panel and the CLI pace runs identically" — and
+ * it had **zero callers**. Both scenes reimplemented the same gap/percentile/dropped-frame
+ * arithmetic instead, which is the exact drift ADR-0128 D2 exists to prevent, with the module meant
+ * to be canonical sitting unused beside them. Found by the M5 component review.
+ *
+ * Deleted rather than kept, because dead code that LOOKS like the shared home is worse than none:
+ * the next person to fix an off-by-one in the dropped-frame threshold fixes it here, and neither
+ * scene changes. Unifying the two real implementations is a refactor with its own risk and is filed
+ * as `docs/TECH_DEBT.md` #258 rather than done inside a gate pass. `measureIdleInterval` below IS
+ * shared and stays.
  */
-export async function panPhase(
-  draw: (frameIndex: number) => void,
-  frames: number,
-  idleInterval: number,
-): Promise<PhaseTiming> {
-  const stamps: number[] = [];
-  await new Promise<void>((resolve) => {
-    let i = 0;
-    const tick = (t: number): void => {
-      stamps.push(t);
-      draw(i);
-      i += 1;
-      if (i > frames) resolve();
-      else requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  });
-
-  const gaps = stamps.slice(1).map((t, i) => t - (stamps[i] ?? t));
-  // A frame is "dropped" when its interval exceeds 1.5x the display's own — at least one whole vsync
-  // missed. Measured against the display, never against a constant, for the reason above.
-  const dropped = gaps.filter((g) => g > idleInterval * 1.5).length;
-  const sorted = [...gaps].sort((a, b) => a - b);
-  const mean = gaps.reduce((s, g) => s + g, 0) / Math.max(1, gaps.length);
-  return {
-    droppedPct: (dropped / Math.max(1, gaps.length)) * 100,
-    intervalP50: percentile(sorted, 0.5),
-    intervalP95: percentile(sorted, 0.95),
-    fps: 1000 / mean,
-  };
-}
 
 /**
  * Why a run was refused, in the operator's terms.

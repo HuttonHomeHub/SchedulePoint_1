@@ -318,8 +318,19 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // would make this suite depend on the runner's frame clock, which is the thing being measured.
   const resultText = (await result.textContent()) ?? '';
   expect(resultText).toMatch(
-    /(The run was refused|This run cannot be judged|PASS|FAIL|INDETERMINATE|REPORTED_ONLY)/,
+    /(The run was refused|You stopped this run|This run cannot be judged|PASS|FAIL|INDETERMINATE|REPORTED, NOT GRADED)/,
   );
+
+  // **No verdict prints bare.** `REPORTED, NOT GRADED` is the commonest outcome here — a quick
+  // check runs once, so there is no run-to-run spread to grade against — and it used to render as
+  // the raw enum `REPORTED_ONLY` with nothing beside it, which a first-time reader cannot tell from
+  // a failure code. This assertion caught the old wording on its first run after the M5 fix, which
+  // is the sense in which it is verified: the journey went red against the pre-fix panel.
+  if (resultText.includes('REPORTED, NOT GRADED')) {
+    expect(resultText, 'an ungraded verdict carries its reason').toMatch(
+      /no run-to-run spread|never graded/,
+    );
+  }
 
   // And a refusal is never dressed as a verdict. This is the assertion the fourth verdict value
   // exists for, checked against the whole panel rather than the alert alone — the defect would be a
@@ -357,7 +368,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
 
   // The overlay must be gone: it is `position: fixed; inset: 0`, so a leaked one would cover the
   // console and every later assertion — including the axe sweep below — would be about a canvas.
-  await expect(staff.getByRole('button', { name: /^Cancel/ })).toHaveCount(0);
+  await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
 
   // The console is a real screen and gets the same accessibility bar as every other one.
   const results = await new AxeBuilder({ page: staff })

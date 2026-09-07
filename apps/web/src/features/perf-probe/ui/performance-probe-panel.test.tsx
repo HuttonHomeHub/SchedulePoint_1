@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProbeOutcome } from '../runner/run-probe';
@@ -13,7 +13,7 @@ import { PerformanceProbePanel } from './performance-probe-panel';
  * failure this whole epic is about. What these cases DO cover is the seam a real run cannot: that
  * every outcome the runner can return reaches the screen as the right kind of statement.
  */
-const runProbe = vi.fn<() => Promise<ProbeOutcome>>();
+const runProbe = vi.fn<(input?: unknown) => Promise<ProbeOutcome>>();
 
 /**
  * The recording client, mocked so the POST can be **observed rather than reasoned about**.
@@ -24,10 +24,59 @@ const runProbe = vi.fn<() => Promise<ProbeOutcome>>();
  */
 const recordMutate = vi.fn();
 const recordState = { isPending: false, isError: false, isSuccess: false };
+const historyRows: unknown[] = [];
 vi.mock('../api/probe-results', () => ({
   useRecordProbeResult: () => ({ mutate: recordMutate, ...recordState }),
-  useProbeResults: () => ({ isPending: false, isError: false, data: [], refetch: () => undefined }),
+  useProbeResults: () => ({
+    isPending: false,
+    isError: false,
+    data: historyRows,
+    refetch: () => undefined,
+  }),
 }));
+
+/**
+ * A stored row, as the API hands it back.
+ *
+ * Deliberately carries real `samples`/`counts`/`thresholds`, because the history's verdict is
+ * **derived on read** by the shared judge (ADR-0128 D5) — a fixture with placeholder numbers would
+ * render "not readable" and prove nothing about the column that exists to be read.
+ */
+const storedRow = (over: Record<string, unknown> = {}) => ({
+  id: 'r1',
+  runId: 'run1',
+  recordedAt: '2026-09-07T12:00:00.000Z',
+  recordedByLabel: 'ops@schedulepoint.test',
+  scenarioId: 'canvas-draw',
+  scenarioVersion: 1,
+  limbId: 'scale-2000',
+  limbKind: 'absolute',
+  preset: 'week',
+  pxPerDay: 12,
+  activityCount: 2000,
+  edgeCount: 3200,
+  sceneSummary: '2160 bars, 3200 links',
+  samples: [
+    { droppedPct: 0.4, intervalP50: 16.6, intervalP95: 17.2, fps: 59.8 },
+    { droppedPct: 0.5, intervalP50: 16.7, intervalP95: 17.4, fps: 59.5 },
+  ],
+  counts: { visibleBars: 222 },
+  thresholds: { minFps: 30, gated: true, source: 'ADR-0026 §9', minVisibleBars: 50 },
+  viewportWidth: 1646,
+  viewportHeight: 900,
+  devicePixelRatio: 1.75,
+  idleIntervalMs: 16.67,
+  hardwareConcurrency: 8,
+  deviceMemoryGb: 16,
+  gpuRenderer: 'ANGLE (NVIDIA GeForce RTX 4070)',
+  userAgent: 'test',
+  reducedMotion: false,
+  lostFocusDuringRun: false,
+  machineLabel: null,
+  appVersion: '0.121.0',
+  apiVersion: '0.55.0',
+  ...over,
+});
 vi.mock('../runner/run-probe', () => ({
   runProbe: (...args: unknown[]) => runProbe(...(args as [])),
   RUN_SIZES: {
@@ -160,6 +209,7 @@ beforeEach(() => {
   recordState.isPending = false;
   recordState.isError = false;
   recordState.isSuccess = false;
+  historyRows.length = 0;
 });
 
 describe('PerformanceProbePanel', () => {
@@ -218,7 +268,7 @@ describe('PerformanceProbePanel', () => {
     );
     render(<PerformanceProbePanel />);
     runOnce();
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Cancel/ })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Stop/ })).toHaveFocus());
 
     release(measured('PASS'));
     await waitFor(() =>
@@ -284,7 +334,7 @@ describe('PerformanceProbePanel', () => {
     );
     render(<PerformanceProbePanel />);
     runOnce();
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Cancel/ })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Stop/ })).toHaveFocus());
     release(measured('PASS'));
   });
 
@@ -342,7 +392,9 @@ describe('PerformanceProbePanel', () => {
     runOnce();
 
     const retry = await screen.findByRole('button', { name: 'Retry recording' });
-    expect(screen.getByText(/NOT recorded/)).toBeInTheDocument();
+    // Two matches now, and that is the fix: the alert says it and so does the panel's live
+    // region, which was silent about the record state until the M5 accessibility review.
+    expect(screen.getAllByText(/NOT recorded/).length).toBeGreaterThan(0);
     // The figures are still on screen — the measurement is not thrown away by a failed store.
     expect(screen.getByText('PASS')).toBeInTheDocument();
 
@@ -366,6 +418,153 @@ describe('PerformanceProbePanel', () => {
     // matched" — the distinction ADR-0073 C1 found collapsed in a live region.
     render(<PerformanceProbePanel />);
     expect(await screen.findByText(/No readings recorded yet/)).toBeInTheDocument();
+  });
+
+  it('renders a CANCELLED run as its own state, and records nothing', async () => {
+    // A stopped run used to return to the pristine "no measurement has been taken" wording, so a
+    // reader could not tell it from never having pressed Run — and nothing said the press had
+    // registered. Found by the M5 ux review.
+    runProbe.mockResolvedValue({ kind: 'cancelled', context: CONTEXT });
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    await screen.findByText(/You stopped this run before it finished/);
+    expect(recordMutate).not.toHaveBeenCalled();
+    expect(screen.queryByText('PASS')).not.toBeInTheDocument();
+    expect(screen.queryByText('FAIL')).not.toBeInTheDocument();
+  });
+
+  it('asks the runner to stop, rather than discarding a finished run', async () => {
+    // The label said "stops after the current run" and the signal was read ONCE, after the whole
+    // scenario had finished drawing — so nothing stopped and a completed measurement was thrown
+    // away. WCAG 2.2.2, and the confirmation offers cancellation as the reason full-screen motion
+    // is not stilled for a reduced-motion reader.
+    let resolveRun: (o: ProbeOutcome) => void = () => undefined;
+    let shouldStop: () => boolean = () => false;
+    runProbe.mockImplementation((input: unknown) => {
+      shouldStop = (input as { shouldStop: () => boolean }).shouldStop;
+      return new Promise<ProbeOutcome>((resolve) => {
+        resolveRun = resolve;
+      });
+    });
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    const stop = await screen.findByRole('button', { name: /^Stop/ });
+    expect(shouldStop(), 'nothing is asked for before the operator asks').toBe(false);
+    fireEvent.click(stop);
+    expect(shouldStop(), 'the runner is told at its next boundary').toBe(true);
+
+    resolveRun({ kind: 'cancelled', context: CONTEXT });
+    await screen.findByText(/You stopped this run before it finished/);
+  });
+
+  it('says a reading is being recorded while the write is in flight', async () => {
+    recordState.isPending = true;
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    expect(await screen.findByText('Recording this reading…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry recording' })).not.toBeInTheDocument();
+  });
+
+  it('returns focus to Run when Retry unmounts itself', async () => {
+    // Pressing Retry flips the mutation to pending, which replaces the branch holding the focused
+    // button with a paragraph — focus to `<body>`, WCAG 2.4.3. Found by the M5 accessibility review.
+    recordState.isError = true;
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    const retry = await screen.findByRole('button', { name: 'Retry recording' });
+    // **Focused first, and that is what makes this test mean anything.** `fireEvent.click` does not
+    // move focus in jsdom, and the run's own completion effect has already put focus on Run — so
+    // without this line the assertion passes against a panel that drops focus, which is exactly
+    // what it did when verified red. A test that cannot fail for its own defect is worse than none.
+    retry.focus();
+    expect(document.activeElement).toBe(retry);
+
+    fireEvent.click(retry);
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Run measurement' }));
+  });
+
+  it('announces a SUCCESSFUL recording, not only a failed one', async () => {
+    // The asymmetry was the defect: failure was an `Alert` with an implicit live-region role and
+    // success was a plain paragraph, so a screen-reader user heard the bad news and never the good.
+    recordState.isSuccess = true;
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    await screen.findByText(/Recorded\./);
+    const live = document.querySelector('[aria-live="polite"].sr-only');
+    expect(live?.textContent).toMatch(/Recorded in this installation’s history/);
+  });
+
+  it('makes the controls behind the overlay unreachable while it runs', async () => {
+    // WCAG 2.2 §2.4.11: the overlay is opaque and traps nothing, so Shift+Tab from Stop used to
+    // land on a select completely hidden behind the canvas.
+    let resolveRun: (o: ProbeOutcome) => void = () => undefined;
+    runProbe.mockImplementation(
+      () =>
+        new Promise<ProbeOutcome>((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    await screen.findByRole('button', { name: /^Stop/ });
+    const shielded = screen.getByRole('button', { name: 'Run measurement' }).closest('[inert]');
+    expect(
+      shielded,
+      'the controls sit inside an inert subtree while the overlay covers them',
+    ).not.toBeNull();
+
+    resolveRun(measured('PASS'));
+    await screen.findByText('PASS');
+  });
+
+  it('glosses REPORTED_ONLY instead of printing a bare enum', async () => {
+    // The commonest outcome on this surface, and it rendered as `REPORTED_ONLY` with nothing beside
+    // it — indistinguishable, to a first-time reader, from a failure code.
+    runProbe.mockResolvedValue(measured('REPORTED_ONLY'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    expect(await screen.findByText('REPORTED, NOT GRADED')).toBeInTheDocument();
+    expect(screen.getByText(/never graded|no run-to-run spread/)).toBeInTheDocument();
+  });
+
+  it('shows a stored reading with its derived verdict, labels and both versions', async () => {
+    // The history had no verdict at all: the server stores samples and thresholds and does not
+    // judge, and nothing called the judge on read. The approved spec names the verdict first.
+    historyRows.push(storedRow());
+    render(<PerformanceProbePanel />);
+
+    // Scoped to the table: the scenario's label is also an `<option>` in the picker above, and a
+    // document-scoped assertion would pass on the picker alone — the ADR-0073 C2.5 finding.
+    const history = within(
+      await screen.findByRole('table', { name: /Readings recorded on this installation/ }),
+    );
+    expect(history.getByText('PASS')).toBeInTheDocument();
+    expect(history.getByText('Canvas draw budget')).toBeInTheDocument();
+    expect(history.getByText('2000 activities')).toBeInTheDocument();
+    expect(history.getByText('web 0.121.0 · api 0.55.0')).toBeInTheDocument();
+    // Both halves of the cull, so a reading taken on an almost-empty canvas cannot look good.
+    expect(history.getByText('222 of 2000')).toBeInTheDocument();
+  });
+
+  it('says a stored row is unreadable rather than dressing it as a failure', async () => {
+    // Reachable: a newer web release can store a scenario shape an older one does not know, which
+    // is the same skew that keeps `scenario_id` shape-checked rather than value-checked.
+    historyRows.push(storedRow({ thresholds: {}, samples: [] }));
+    render(<PerformanceProbePanel />);
+
+    expect(await screen.findByText('Not readable by this version')).toBeInTheDocument();
+    expect(screen.queryByText('FAIL')).not.toBeInTheDocument();
   });
 
   it('does not use the native disabled attribute on the Run control', () => {

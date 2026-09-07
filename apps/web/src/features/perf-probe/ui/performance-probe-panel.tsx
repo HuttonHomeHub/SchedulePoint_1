@@ -2,9 +2,17 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { useProbeResults, useRecordProbeResult } from '../api/probe-results';
-import { SCENARIOS, scenarioById, type ScenarioId, type ScenarioPreset } from '../model/scenarios';
+import type { Verdict } from '../model/judge';
+import {
+  SCENARIOS,
+  isGated,
+  scenarioById,
+  type ScenarioId,
+  type ScenarioPreset,
+} from '../model/scenarios';
 import { toProbeBody } from '../model/to-probe-body';
-import type { ProbeOutcome, RunSize } from '../runner/run-probe';
+import { verdictLabel, verdictNote } from '../model/verdict-copy';
+import type { LimbOutcome, ProbeOutcome, RunSize } from '../runner/run-probe';
 
 import { ProbeHistory } from './probe-history';
 import { formatProbeReport } from './probe-report';
@@ -148,8 +156,12 @@ export function PerformanceProbePanel(): React.ReactElement {
         canvas,
         surfaceRoot: surface,
         onProgress: setProgress,
+        // **Asked at every boundary, not read once at the end.** The previous version set this ref
+        // on click and consulted it only after the whole scenario had finished drawing, so
+        // "Cancel (stops after the current run)" stopped nothing and silently discarded a finished
+        // measurement. A run now ends where the operator said, and says that it did.
+        shouldStop: () => cancelledRef.current,
       });
-      if (cancelledRef.current) return;
       setOutcome(result);
       store(result);
     } catch (error) {
@@ -174,12 +186,32 @@ export function PerformanceProbePanel(): React.ReactElement {
     );
   }, [outcome]);
 
+  /**
+   * What the panel says, in the one channel a screen-reader user has.
+   *
+   * **The recording state is part of it**, and it was not: "recorded" rendered as a plain `<p>` with
+   * no role, so a successful store — a row now exists in the installation's history — was completely
+   * silent to assistive technology, while its failure was announced loudly by an `Alert`. WCAG 4.1.3,
+   * found by the M5 accessibility review. The asymmetry is the defect: a reader heard the bad news
+   * and never the good, on a screen whose whole purpose is saying what the state is now.
+   */
+  const recordingStatus =
+    !outcome || outcome.kind !== 'measured'
+      ? ''
+      : record.isPending
+        ? ' Recording it now.'
+        : record.isError
+          ? ' It was NOT recorded — the figures are still on screen.'
+          : record.isSuccess
+            ? ' Recorded in this installation’s history.'
+            : '';
+
   const status = running
     ? progress
     : failure !== null
       ? failure
       : outcome
-        ? summarise(outcome)
+        ? `${summarise(outcome)}${recordingStatus}`
         : 'No measurement has been taken in this browser.';
 
   return (
@@ -191,100 +223,122 @@ export function PerformanceProbePanel(): React.ReactElement {
         hour apart. A number from there would look authoritative and mean nothing.
       </p>
 
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={scenarioSelectId}>Measurement</Label>
-          <Select
-            id={scenarioSelectId}
-            value={scenarioId}
-            onChange={(e) => setScenarioId(e.target.value as ScenarioId)}
-          >
-            {SCENARIOS.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={presetSelectId}>Framing</Label>
-          <Select
-            id={presetSelectId}
-            value={preset}
-            onChange={(e) => setPreset(e.target.value as ScenarioPreset)}
-          >
-            <option value="week">Week — a working zoom</option>
-            <option value="fit">Fit — the whole plan</option>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={sizeSelectId}>Length</Label>
-          <Select
-            id={sizeSelectId}
-            value={size}
-            onChange={(e) => setSize(e.target.value as RunSize)}
-          >
-            <option value="full">Full measurement (about 25 seconds)</option>
-            <option value="quick">Quick check (about 5 seconds)</option>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={machineLabelId}>Machine (optional)</Label>
-          {/* Insert-time only in v1, and the panel says so rather than offering an edit that does
+      {/*
+        **`inert` while the overlay covers the screen** — WCAG 2.2 §2.4.11 Focus Not Obscured.
+        The overlay is `fixed inset-0` over an OPAQUE `Surface tone="canvas"`, and it is
+        deliberately not a modal `<dialog>` (it announces nothing and traps nothing), so it does not
+        get the inert backdrop `showModal()` would give it for free. Without this, Shift+Tab from
+        Cancel walks backwards into the selects and the Run button — every one of them completely
+        hidden behind the canvas, so a keyboard user can change the framing they cannot see, with
+        no focus ring anywhere on screen. Found by the M5 accessibility review.
+
+        `inert` rather than `disabled` on each control: it removes the whole subtree from the focus
+        order AND from the accessibility tree in one place, and it cannot be forgotten on the next
+        control somebody adds here.
+      */}
+      <div inert={running} className="contents">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={scenarioSelectId}>Measurement</Label>
+            <Select
+              id={scenarioSelectId}
+              value={scenarioId}
+              onChange={(e) => setScenarioId(e.target.value as ScenarioId)}
+            >
+              {SCENARIOS.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={presetSelectId}>Framing</Label>
+            <Select
+              id={presetSelectId}
+              value={preset}
+              onChange={(e) => setPreset(e.target.value as ScenarioPreset)}
+            >
+              <option value="week">Week — a working zoom</option>
+              <option value="fit">Fit — the whole plan</option>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={sizeSelectId}>Length</Label>
+            <Select
+              id={sizeSelectId}
+              value={size}
+              onChange={(e) => setSize(e.target.value as RunSize)}
+            >
+              <option value="full">Full measurement (about 25 seconds)</option>
+              <option value="quick">Quick check (about 5 seconds)</option>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor={machineLabelId}>Machine (optional)</Label>
+            {/* Insert-time only in v1, and the panel says so rather than offering an edit that does
               not exist: an editable note needs `updated_at` and a version column, which is a
               migration and a decision. */}
-          <Input
-            id={machineLabelId}
-            value={machineLabel}
-            onChange={(e) => setMachineLabel(e.target.value)}
-            placeholder="the Dell, docked, on mains"
-            maxLength={200}
-          />
+            <Input
+              id={machineLabelId}
+              value={machineLabel}
+              onChange={(e) => setMachineLabel(e.target.value)}
+              placeholder="the Dell, docked, on mains"
+              maxLength={200}
+            />
+          </div>
+          <Button
+            ref={runButtonRef}
+            onClick={() => {
+              if (!running) setConfirming(true);
+            }}
+            // `aria-disabled`, never the native attribute: a natively-disabled button is blurred to
+            // `<body>` the instant it flips, and this one flips twice per run (ADR-0083, and the
+            // ScopeSaveBar lesson re-learnt in ADR-0063 M6).
+            aria-disabled={running}
+            aria-busy={running}
+            className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          >
+            Run measurement
+          </Button>
         </div>
-        <Button
-          ref={runButtonRef}
-          onClick={() => {
-            if (!running) setConfirming(true);
-          }}
-          // `aria-disabled`, never the native attribute: a natively-disabled button is blurred to
-          // `<body>` the instant it flips, and this one flips twice per run (ADR-0083, and the
-          // ScopeSaveBar lesson re-learnt in ADR-0063 M6).
-          aria-disabled={running}
-          aria-busy={running}
-          className="aria-disabled:pointer-events-none aria-disabled:opacity-50"
-        >
-          Run measurement
-        </Button>
-      </div>
 
-      <p className="text-muted-foreground text-sm">{scenario.question}</p>
+        <p className="text-muted-foreground text-sm">{scenario.question}</p>
 
-      {/* No bold lead-in on any Alert here. `Alert` already carries a tone colour, a coloured left
+        {/* No bold lead-in on any Alert here. `Alert` already carries a tone colour, a coloured left
           accent bar, a leading icon and an assertive-or-polite role — a bold sentence inside it is
           a fourth channel saying what four things already say, which is what the ADR-0097 weight
           ratchet exists to remove rather than to count. */}
-      {failure !== null && <Alert tone="error">The measurement did not run. {failure}</Alert>}
+        {failure !== null && <Alert tone="error">The measurement did not run. {failure}</Alert>}
 
-      {outcome !== null && <ProbeResult outcome={outcome} onCopy={copy} copied={copied} />}
+        {outcome !== null && <ProbeResult outcome={outcome} onCopy={copy} copied={copied} />}
 
-      {/*
+        {/*
         Whether the reading was STORED — a fact about the database, kept visibly separate from
         whether the run was refused, which is a fact about the machine. Collapsing them is the
         failure `m4-schema-record.md` names as the thing every CHECK constraint on that table
         depends on not happening: a swallowed 422 turns a visible refusal into silent evidence loss.
       */}
-      {outcome !== null && outcome.kind === 'measured' && (
-        <RecordingState
-          pending={record.isPending}
-          failed={record.isError}
-          recorded={record.isSuccess}
-          onRetry={() => {
-            store(outcome);
-          }}
-        />
-      )}
+        {outcome !== null && outcome.kind === 'measured' && (
+          <RecordingState
+            pending={record.isPending}
+            failed={record.isError}
+            recorded={record.isSuccess}
+            onRetry={() => {
+              store(outcome);
+              // **Focus moves BEFORE the button disappears.** Pressing Retry flips the mutation to
+              // pending, which replaces this branch with a plain paragraph and takes the focused
+              // element with it — focus lands on `<body>`, this repository's most-repeated defect
+              // (WCAG 2.4.3). Asked for in the handler rather than in an effect, and that is safe
+              // here precisely because the Run button is NOT the element unmounting: it is on
+              // screen before the press and after it. Found by the M5 accessibility review.
+              focusRun();
+            }}
+          />
+        )}
 
-      <ProbeHistory query={history} />
+        <ProbeHistory query={history} />
+      </div>
 
       {/*
         The measurement surface. Mounted only while running, sized to the real viewport, and
@@ -321,7 +375,7 @@ export function PerformanceProbePanel(): React.ReactElement {
                 cancelledRef.current = true;
               }}
             >
-              Cancel (stops after the current run)
+              Stop (ends at the next repeat)
             </Button>
           </div>
         </div>
@@ -335,10 +389,18 @@ export function PerformanceProbePanel(): React.ReactElement {
         }}
         onConfirm={() => void start()}
         title="Run the measurement now?"
+        // **Warned whenever the run will not be graded, not only when it is short.** The previous
+        // wording tied the caveat to `size === 'quick'`, so a FULL measurement at the whole-plan
+        // framing — equally ungraded by design — got twenty-five seconds of full-screen motion and
+        // then a verdict word the reader had never been warned about. Found by the M5 ux review.
         description={
           size === 'quick'
-            ? 'A quick check takes about five seconds. It is too short to produce a verdict — it reports its figures and nothing more.'
-            : 'A full measurement takes about twenty-five seconds. It covers the screen with a moving diagram — that movement IS the measurement, so it is not reduced or stilled for a reduced-motion setting; the run can be cancelled at any time. Keep this tab in front and leave the machine alone: a backgrounded tab is throttled by the browser, and the run will say so rather than reporting a number.'
+            ? 'A quick check takes about five seconds. It runs once, so there is no run-to-run spread to grade against — it reports its figures and stops.'
+            : `A full measurement takes about twenty-five seconds. It covers the screen with a moving diagram — that movement IS the measurement, so it is not reduced or stilled for a reduced-motion setting; Stop ends it at the next repeat. Keep this tab in front and leave the machine alone: a backgrounded tab is throttled by the browser, and the run will say so rather than reporting a number.${
+                isGated(scenario, preset)
+                  ? ''
+                  : ' This framing is measured but never graded — the diagram is already known to drop frames at the whole-plan zoom, so it will report its figures without a pass or a fail.'
+              }`
         }
         confirmLabel="Run measurement"
         cancelLabel="Not now"
@@ -356,6 +418,9 @@ export function PerformanceProbePanel(): React.ReactElement {
  * flattened them would undo it in the one channel a screen-reader user has.
  */
 function summarise(outcome: ProbeOutcome): string {
+  if (outcome.kind === 'cancelled') {
+    return 'You stopped the run, so it was not completed and nothing was recorded.';
+  }
   if (outcome.kind === 'refused') {
     return `The run was refused and nothing was measured. ${outcome.refusal.sentence}`;
   }
@@ -376,7 +441,14 @@ function ProbeResult({
 }): React.ReactElement {
   return (
     <div className="space-y-4" data-perf-probe-result>
-      {outcome.kind === 'refused' ? (
+      {outcome.kind === 'cancelled' ? (
+        // A stopped run is its own state, and it says so. Returning to the pristine "no measurement
+        // has been taken" wording would leave a reader unable to tell a cancellation from never
+        // having pressed Run at all.
+        <Alert tone="info">
+          You stopped this run before it finished, so nothing was measured and nothing was recorded.
+        </Alert>
+      ) : outcome.kind === 'refused' ? (
         // Deliberately carries NO pass/fail wording anywhere. A refusal rendered as a verdict is
         // the defect this whole vocabulary exists to prevent, and there is a test for it.
         <Alert tone="info">
@@ -396,16 +468,7 @@ function ProbeResult({
                 This run cannot be judged. {limb.result.message.split('\n')[0]}
               </Alert>
             ) : (
-              <>
-                <p className="mt-2 text-lg font-semibold tabular-nums">
-                  {limb.result.judged.verdict}
-                </p>
-                {limb.result.judged.indeterminateReason !== undefined && (
-                  <p className="text-muted-foreground text-sm">
-                    Because {limb.result.judged.indeterminateReason}
-                  </p>
-                )}
-              </>
+              <LimbVerdict limb={limb} judged={limb.result.judged} />
             )}
           </div>
         ))
@@ -421,6 +484,35 @@ function ProbeResult({
         </span>
       </div>
     </div>
+  );
+}
+
+/**
+ * A limb's verdict, and the sentence that goes with it.
+ *
+ * **No verdict prints bare.** `REPORTED_ONLY` used to render as exactly that — underscore and all,
+ * with nothing beside it — which a first-time reader cannot tell from a failure code, on the two
+ * paths (a quick check, the whole-plan framing) that produce it by design. The sentence comes from
+ * the same pure module the paste-ready report uses, so the screen and the block somebody pastes
+ * into a document cannot disagree about the same run.
+ */
+function LimbVerdict({
+  limb,
+  judged,
+}: {
+  limb: LimbOutcome;
+  judged: { verdict: Verdict; indeterminateReason?: string };
+}): React.ReactElement {
+  const note = verdictNote(judged.verdict, {
+    gated: limb.recording.thresholds.gated === true,
+    repeats: (limb.recording.pairs ?? limb.recording.runs ?? []).length,
+    indeterminateReason: judged.indeterminateReason,
+  });
+  return (
+    <>
+      <p className="mt-2 text-lg font-semibold tabular-nums">{verdictLabel(judged.verdict)}</p>
+      {note !== null && <p className="text-muted-foreground text-sm">Because {note}</p>}
+    </>
   );
 }
 

@@ -4173,3 +4173,78 @@ Each was judged real and not worth holding the release for.
 
 Findings 4 and 5 are the two worth doing first: both are about a picture that is honest in its
 words and ambiguous on screen, which is the failure mode this epic spent its whole gate pass on.
+
+### 258. The pacing arithmetic is written three times, and the shared copy was the dead one
+
+**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** M · **Owner:** repo
+
+`model/pacing.ts` exported a `panPhase` built, in its own words, "so the panel and the CLI pace runs
+identically", and it had **zero callers**. Both scenes reimplemented the same gap / percentile /
+dropped-frame / fps arithmetic from scratch instead: `scenes/canvas-draw.ts`'s `runDrawPhase` and
+`scenes/revision-diff.ts`'s `panRun`, the latter also carrying its own `percentile` and its own
+`measureIdleInterval`. Three copies, and the one that looked like the shared home was the one
+nothing used.
+
+That is the exact drift ADR-0128 D2 exists to prevent, stated in this epic's own docblocks: two
+implementations drift and the drift is invisible, because each looks right alone. The concrete
+failure is cheap to describe — someone fixes an off-by-one in the "dropped frame" threshold or the
+percentile interpolation in one copy and `canvas-draw` and `revision-diff` stop being comparable to
+each other, which is the one property the whole table exists to preserve.
+
+`panPhase` was **deleted** in M5 rather than left, because dead code that looks like the canonical
+home is worse than none: the next person to fix that off-by-one fixes it there and neither scene
+changes. `measureIdleInterval` genuinely is shared and stays.
+
+The remedy is to give both scenes one pacing loop, and it is filed rather than done because it is a
+refactor of the two modules that actually produce the numbers, in the middle of a gate pass, with no
+behavioural change to show for it — the shape this repository has repeatedly recorded going wrong
+when hurried. The trigger is the third scenario, or the first bug found in either copy.
+
+### 259. Twelve non-blocking findings from the staff performance-probe gate pass
+
+**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** S · **Owner:** repo
+
+Six specialists over the combined diff. Security and backend-performance passed with nothing
+blocking, both having re-derived the epic's own measurements from the shipped code rather than
+trusting them — the read is a sub-millisecond backward index scan at 60,000 rows, the sweep reuses
+the already-safe `ctid` batch rather than an unchunked `IN` list, and the DTO's bounds are a strict
+subset of the database's CHECK constraints, so no DTO-valid payload can reach a 500 where a 422 was
+promised. What follows was judged real and not worth holding the release for.
+
+1. **`recordedByLabel` is declared `@ApiPropertyOptional`** though it is always present and merely
+   nullable — unlike its five siblings in the same DTO, which correctly use
+   `@ApiProperty({ nullable: true })`. A generated client types it as possibly absent.
+2. **`counts` and `thresholds` are typed as opaque objects on the response** while the request DTO
+   fully names their fields one file over. `samples` is legitimately opaque (its shape varies by
+   `limbKind`); these two are not.
+3. **`GET /staff/probe-results` does not declare its 422**, which `limit=0` reaches. Pre-existing
+   pattern on this controller (`GET /staff/accounts` has the same gap), so a sweep rather than a
+   fix here.
+4. **No `hasMore` signal on the history read.** The "no cursor" decision is argued and right for a
+   table only a human can write to, but a caller asking for 50 against 200 rows can only infer
+   there is more by comparing lengths.
+5. **`GET /staff/probe-results` shares every staff member's machine fingerprint with every other
+   staff member.** Intended, and appropriate for a small allowlisted population; worth revisiting
+   if `STAFF_EMAILS` ever grows.
+6. **The erasure affordance is structural only.** `recorded_by_label` and `gpu_renderer` are
+   nullable so a reading can be scrubbed; no scrub path exists anywhere in the product yet, which
+   matches ADR-0085's "decision only, nothing built" status rather than being a gap this epic added.
+7. **`scenes/revision-diff.ts`'s pure helpers (`changedSet`, `countVisible`) have no unit test**,
+   unlike the parallel canvas-draw module, whose equivalents do. They need no canvas, so the gap
+   looks like inconsistency rather than necessity.
+8. **`RecordingState` takes three booleans for one mutation status.** TanStack Query already
+   exposes it as a single `status`, and the three-boolean signature admits combinations the call
+   site happens never to produce.
+9. **The spec's "visible caption naming it a test picture"** on the measuring canvas was never
+   built. Not a WCAG failure — the canvas is `aria-hidden` and the progress sentence is the
+   accessible channel — but a documented sighted-user affordance that does not exist.
+10. **Several `Alert`s mount in the same commit as the panel's own live region.** `Alert` carries an
+    implicit live-region role, so the "one accessible channel" claim in the panel's docblock stops
+    holding at the moment a run ends. The content is redundant rather than contradictory.
+11. **`revision-diff` narrates progress once for a whole multi-pair run** where `canvas-draw`
+    narrates per repeat, so a screen-reader user hears nothing for up to twenty-five seconds.
+12. **The on-screen "cannot be judged" alert prints only the first line** of the judge's message,
+    dropping the closing "This is NOT a pass" sentence that the paste-ready report does carry.
+
+Numbers 1, 2 and 8 are the cheapest; 10 and 11 are the two a real screen-reader user would notice
+first.

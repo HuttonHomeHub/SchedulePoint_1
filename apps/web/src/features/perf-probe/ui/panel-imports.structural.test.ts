@@ -37,10 +37,21 @@ describe('the panel’s imports', () => {
   });
 
   it('still catches a VALUE import of the runner', () => {
-    // Verified red against exactly this line, which is what an editor's auto-import writes.
+    // Verified red against what an editor's auto-import writes: the existing `import type` line
+    // turned into a value import.
+    //
+    // **Derived from the file rather than restated.** This case used to hard-code the exact import
+    // line, and adding one type to it broke the mutation — loudly, because the assertion is written
+    // so a no-op replace fails rather than passes. That is the right way round, and deriving it is
+    // better still: the gate keeps testing the thing it names when the import list changes.
+    const typeImport = /^import type \{[^}]*\} from '\.\.\/runner\/run-probe';$/m.exec(PANEL);
+    expect(
+      typeImport,
+      'the panel must import the runner’s types, or there is nothing to mutate',
+    ).not.toBeNull();
     const withValueImport = PANEL.replace(
-      "import type { ProbeOutcome, RunSize } from '../runner/run-probe';",
-      "import { runProbe, type ProbeOutcome, type RunSize } from '../runner/run-probe';",
+      typeImport?.[0] ?? '',
+      "import { runProbe } from '../runner/run-probe';",
     );
     const specs = [...withValueImport.matchAll(/^import (?!type )[^\n]*?from\s+'([^']+)';/gm)].map(
       (m) => m[1],

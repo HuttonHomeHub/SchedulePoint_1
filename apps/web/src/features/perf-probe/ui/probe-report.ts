@@ -1,3 +1,5 @@
+import type { Verdict } from '../model/judge';
+import { verdictLabel, verdictNote } from '../model/verdict-copy';
 import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe';
 
 /**
@@ -14,6 +16,16 @@ import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe'
  * every line below be asserted from a literal.
  */
 export function formatProbeReport(outcome: ProbeOutcome): string {
+  if (outcome.kind === 'cancelled') {
+    return [
+      'SchedulePoint performance probe — RUN CANCELLED',
+      '',
+      'You stopped this run, so it was not completed and nothing was recorded.',
+      'This is NOT a pass and NOT a failure.',
+      ...(outcome.context ? ['', ...contextLines(outcome.context)] : []),
+    ].join('\n');
+  }
+
   if (outcome.kind === 'refused') {
     return [
       'SchedulePoint performance probe — RUN REFUSED',
@@ -61,6 +73,21 @@ function contextLines(context: RunContext): string[] {
   ];
 }
 
+/** Repeats behind a limb's figures — a difference limb counts pairs, an absolute one counts runs. */
+function repeatsOf(limb: LimbOutcome): number {
+  return (limb.recording.pairs ?? limb.recording.runs ?? []).length;
+}
+
+/** The verdict line and its sentence, so no verdict ever prints bare. */
+function verdictLines(limb: LimbOutcome, verdict: Verdict, indeterminateReason?: string): string[] {
+  const note = verdictNote(verdict, {
+    gated: limb.recording.thresholds.gated === true,
+    repeats: repeatsOf(limb),
+    indeterminateReason,
+  });
+  return [`  VERDICT: ${verdictLabel(verdict)}`, ...(note === null ? [] : [`  because ${note}`])];
+}
+
 function limbLines(limb: LimbOutcome): string[] {
   const head = [
     `  ── ${limb.limbLabel} ──`,
@@ -85,8 +112,7 @@ function limbLines(limb: LimbOutcome): string[] {
       ...head,
       `  fps        mean ${r.meanFps.toFixed(1)} (slowest ${r.slowestRunFps.toFixed(1)}, fastest ${r.fastestRunFps.toFixed(1)})`,
       `  dropped    ${r.meanDroppedPct.toFixed(2)} pp   worst p95 ${r.worstIntervalP95.toFixed(2)} ms`,
-      `  VERDICT: ${r.verdict}`,
-      ...(r.indeterminateReason ? [`  because ${r.indeterminateReason}`] : []),
+      ...verdictLines(limb, r.verdict, r.indeterminateReason),
     ];
   }
 
@@ -96,7 +122,6 @@ function limbLines(limb: LimbOutcome): string[] {
     `  baseline   ${r.baselineMeanPp.toFixed(2)} pp   (run-to-run spread ${r.baselineSpreadPp.toFixed(2)} pp)`,
     `  treatment  ${r.treatmentMeanPp.toFixed(2)} pp   ${r.treatmentFps.toFixed(1)} fps`,
     `  delta      ${r.deltaPp >= 0 ? '+' : ''}${r.deltaPp.toFixed(2)} pp`,
-    `  VERDICT: ${r.verdict}`,
-    ...(r.indeterminateReason ? [`  because ${r.indeterminateReason}`] : []),
+    ...verdictLines(limb, r.verdict, r.indeterminateReason),
   ];
 }

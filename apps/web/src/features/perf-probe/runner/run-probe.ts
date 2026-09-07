@@ -133,6 +133,17 @@ export interface LimbOutcome {
 export type ProbeOutcome =
   /** The run itself was invalid, so nothing was measured. See {@link refuseRun}. */
   | { readonly kind: 'refused'; readonly refusal: Refusal; readonly context: RunContext | null }
+  /**
+   * The operator stopped it. **A distinct outcome, not a silent discard.**
+   *
+   * The panel used to drop a cancelled run on the floor and return to "No measurement has been
+   * taken in this browser" — indistinguishable from never having pressed Run. Worse, the control
+   * said "stops after the current run" and stopped nothing: the signal was read once, AFTER the
+   * whole scenario had finished drawing. Both halves were found by the M5 ux and accessibility
+   * reviews, independently, and the second is a WCAG 2.2.2 failure, because the confirmation offers
+   * cancellation as the reason full-screen motion is not stilled for `prefers-reduced-motion`.
+   */
+  | { readonly kind: 'cancelled'; readonly context: RunContext | null }
   | { readonly kind: 'measured'; readonly context: RunContext; readonly limbs: LimbOutcome[] };
 
 export interface ProbeRunInput {
@@ -150,6 +161,15 @@ export interface ProbeRunInput {
    */
   readonly surfaceRoot: Element;
   readonly onProgress: (message: string) => void;
+  /**
+   * Asked between repeats and between limbs. Returning true stops the run where it stands.
+   *
+   * A **callback rather than an `AbortSignal`**: there is nothing to abort — no fetch, no worker,
+   * no timer that can be torn down. A rAF pacing loop can only be stopped by not scheduling the
+   * next phase, so the honest primitive is "may I start the next one?" asked at the boundary
+   * between two things that each mean something on their own.
+   */
+  readonly shouldStop: () => boolean;
 }
 
 /**
@@ -161,7 +181,7 @@ export interface ProbeRunInput {
  * is the least useful thing this panel could say.
  */
 export async function runProbe(input: ProbeRunInput): Promise<ProbeOutcome> {
-  const { scenario, preset, size, canvas, surfaceRoot, onProgress } = input;
+  const { scenario, preset, size, canvas, surfaceRoot, onProgress, shouldStop } = input;
   const { frames, repeats } = RUN_SIZES[size];
 
   const ctx = canvas.getContext('2d');
@@ -244,11 +264,18 @@ export async function runProbe(input: ProbeRunInput): Promise<ProbeOutcome> {
       idleInterval,
       gated,
       onProgress,
+      shouldStop,
     };
     const limbs =
       scenario.id === 'revision-diff'
         ? await runDifferenceLimbs(phase)
         : await runAbsoluteLimbs(phase);
+
+    // Asked AFTER the limbs return, because a limb runner that stopped early returns a partial
+    // result and there is no honest way to judge one. The cancellation wins over everything below:
+    // a partial run is neither a measurement nor a refusal.
+    const settledContext: RunContext = { ...context, lostFocusDuringRun: lostFocus };
+    if (shouldStop()) return { kind: 'cancelled', context: settledContext };
 
     const recorded = frames * repeats;
     const refusal = refuseRun({
@@ -257,10 +284,9 @@ export async function runProbe(input: ProbeRunInput): Promise<ProbeOutcome> {
       frameCount: recorded,
       hasContext: true,
     });
-    const settled: RunContext = { ...context, lostFocusDuringRun: lostFocus };
-    if (refusal) return { kind: 'refused', refusal, context: settled };
+    if (refusal) return { kind: 'refused', refusal, context: settledContext };
 
-    return { kind: 'measured', context: settled, limbs };
+    return { kind: 'measured', context: settledContext, limbs };
   } finally {
     document.removeEventListener('visibilitychange', onVisibility);
     window.removeEventListener('blur', onBlur);
@@ -289,11 +315,12 @@ interface PhaseInput {
   readonly idleInterval: number;
   readonly gated: boolean;
   readonly onProgress: (message: string) => void;
+  readonly shouldStop: () => boolean;
 }
 
 /** `revision-diff` — a paired question, so each repeat is a baseline and a treatment back to back. */
 async function runDifferenceLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
-  const { ctx, viewport, palette, scenario, preset, frames, gated, onProgress } = phase;
+  const { ctx, viewport, palette, scenario, preset, frames, gated, onProgress, shouldStop } = phase;
   const pairs = phase.repeats;
   const limb = scenario.limbs[0];
   if (!limb) return [];
@@ -304,6 +331,12 @@ async function runDifferenceLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
     preset,
     frames,
     pairs,
+    // **The interval this run is judged against is the one that was validated.** Without this the
+    // scene measured a second one of its own, so the row reported one denominator and scored its
+    // dropped frames against another — and `refuseRun` only ever saw the first. Found by the M5
+    // component review.
+    idleInterval: phase.idleInterval,
+    shouldStop,
   });
 
   return [
@@ -355,15 +388,18 @@ async function runAbsoluteLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
     idleInterval,
     gated,
     onProgress,
+    shouldStop,
   } = phase;
   const limbs: LimbOutcome[] = [];
 
   for (const limb of scenario.limbs) {
+    if (shouldStop()) break;
     const scene = buildDrawScene(limb.activities);
     const framing: DrawFraming = framingFor(scene, preset, viewport);
     const runs: PhaseTiming[] = [];
 
     for (let i = 0; i < repeats; i += 1) {
+      if (shouldStop()) break;
       onProgress(
         `Drawing ${String(limb.activities)} activities — run ${String(i + 1)} of ${String(repeats)}…`,
       );

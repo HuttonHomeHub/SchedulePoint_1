@@ -147,6 +147,70 @@ deliberate no-op whose own comment says so), and that the probe's actor is an or
 `STAFF`; the single `USER` exception is the denial, which is `USER` precisely because that caller is
 not staff). Both were read off a filename rather than a file.
 
+## The gate pass, and what it found
+
+Six specialists over the combined diff. **Security and backend-performance passed with nothing
+blocking**, both having re-derived this epic's own measurements from the shipped code rather than
+trusting them. The other four blocked, and the first finding did not come from a reviewer at all.
+
+**CodeQL, on the pull request, one high-severity alert in a line written the same day.**
+`appVersion`'s pattern was `(?:[-+][0-9A-Za-z.-]+)*` — each repetition opens on `[-+]` while the
+inner class also contains `-`, so a run of dashes divides between the two in exponentially many ways.
+Measured: 2.7 ms at 26 dashes, 2,260 ms at 40, **281,307 ms at 50**, on a field a client posts
+directly. `@MaxLength(64)` is not a mitigation, and that is the part worth carrying: class-validator
+evaluates every constraint on a property rather than stopping at the first failure. The regression
+test was verified red in the strongest way available — against the old pattern the suite did not
+fail, it hung, and was killed at two minutes.
+
+**"Cancel" did not cancel, and two reviewers found it independently** (ux and accessibility). The
+signal was set on click and read **once**, after the whole scenario had finished drawing, so the
+control labelled "stops after the current run" stopped nothing and silently discarded a completed
+measurement. It is a WCAG 2.2.2 failure and not a cosmetic one: the confirmation offers cancellation
+as the reason full-screen motion is **not** stilled for a reduced-motion reader, so the one
+compensating control the design leans on did not work. A stopped run is now its own outcome —
+neither a measurement nor a refusal — asked for at every repeat and every limb boundary.
+
+**Three findings are the same shape as each other: a state that existed and was not reachable, or a
+word printed with nothing beside it.**
+
+- `REPORTED_ONLY` rendered as exactly that, underscore and all, with no sentence — on the two paths
+  that produce it **by design** (a quick check, the whole-plan framing), and the confirmation warned
+  about it only for the short one. A full measurement at Fit got twenty-five seconds of motion and
+  then a word the reader had never been told to expect.
+- **The history had no verdict at all.** D5 above says the server stores samples and thresholds and
+  does not judge, so that the verdict can be derived on read against the bar the reading was taken
+  under — and nothing called the judge on a stored row. The approved spec names the verdict as the
+  first thing a history row must carry. The table's own docblock argued against a strawman while it
+  was missing: calling the shared judge on read is not a second copy of the rule, it **is** the rule,
+  applied where the row is read.
+- A **successful** recording was silent to assistive technology while its failure was announced
+  loudly, because one was a plain paragraph and the other an `Alert` (WCAG 4.1.3). The asymmetry is
+  the defect — a reader heard the bad news and never the good.
+
+**Two more were focus.** Pressing **Retry recording** unmounted the button under the pointer with
+nothing moving focus, so it landed on `<body>` (WCAG 2.4.3, this repository's most-repeated defect).
+And the overlay is opaque, `fixed inset-0`, and deliberately not a modal `<dialog>` — so it traps
+nothing, and Shift+Tab from Stop walked backwards into selects hidden completely behind the canvas
+(WCAG 2.4.11). The controls are `inert` while it covers them.
+
+**One finding was about this epic's own central claim.** `model/pacing.ts` exported the shared pan
+loop written "so the panel and the CLI pace runs identically", and it had **zero callers** — both
+scenes reimplemented the arithmetic instead. That is D2's drift, with the module meant to be
+canonical sitting unused beside the two real copies. The dead export is deleted (dead code that
+looks like the shared home is worse than none); unifying the two survivors is `docs/TECH_DEBT.md`
+#258 rather than a refactor rushed inside a gate pass. A sibling finding was a genuine correctness
+bug: the difference scene measured its **own** idle interval, so a reading reported one denominator
+and scored its dropped frames against another, and the guard that refuses an implausible clock only
+ever saw the first.
+
+**And one regression test passed for the wrong reason**, caught only by verifying it red. The
+focus-return case asserted that focus was on Run after pressing Retry — and `fireEvent.click` does
+not move focus in jsdom, while the run's own completion effect had already put focus there. It
+passed against a panel that dropped focus. It now focuses the Retry button first and asserts that it
+did, which is what makes the following assertion mean anything.
+
+Twelve non-blocking findings are `docs/TECH_DEBT.md` #259, with reasons.
+
 ## Consequences
 
 - **The numbers are client-reported.** A compromised staff session can post a fabricated reading.

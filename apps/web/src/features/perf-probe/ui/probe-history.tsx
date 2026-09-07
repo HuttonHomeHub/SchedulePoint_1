@@ -1,8 +1,11 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 
 import type { ProbeResultRow } from '../api/probe-results';
+import { judgeStoredRow } from '../model/judge-stored';
+import { SCENARIOS } from '../model/scenarios';
 
 import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { DataTable, type Column } from '@/components/ui/data-table';
 
 /**
@@ -49,21 +52,28 @@ export function ProbeHistory({
 }
 
 /**
- * What a reader needs to tell two readings apart, and nothing they would have to interpret.
+ * What a reader needs to tell two readings apart, and what each one said.
  *
- * No verdict column: the server stores samples and thresholds and does not judge, so a verdict here
- * would be this component deriving one — a second copy of a rule that already has one home. The
- * columns are the facts that make two rows comparable or not: WHEN, on WHAT, at what SCALE, and by
- * which app version.
+ * **The verdict is derived here, on read, by the shared judge** — see `judgeStoredRow`. It is not
+ * stored, and that is ADR-0128 D5 working rather than a gap: a row keeps the thresholds it was
+ * measured against, so it stays readable against the bar it was actually taken under rather than
+ * whatever the bar became. This column was missing until the M5 ux review; without it a reader
+ * comparing two releases had to paste raw JSON into a spreadsheet and re-derive the rule by hand,
+ * which defeats the reason for persisting anything.
+ *
+ * Ids are shown as the labels the picker uses. `scenarioId` and `limbId` are internal slugs, and an
+ * id this bundle does not recognise falls back to the raw value — which is the honest rendering of
+ * a reading taken by a newer web release than the one reading it.
  */
 const COLUMNS: Column<ProbeResultRow>[] = [
   {
     header: 'Taken',
     cell: (row) => new Date(row.recordedAt).toLocaleString(),
   },
-  { header: 'Measurement', cell: (row) => row.scenarioId },
-  { header: 'Scale', cell: (row) => row.limbId },
-  { header: 'Framing', cell: (row) => row.preset },
+  { header: 'Measurement', cell: (row) => scenarioLabel(row.scenarioId) },
+  { header: 'Scale', cell: (row) => limbLabel(row.scenarioId, row.limbId) },
+  { header: 'Framing', cell: (row) => (row.preset === 'fit' ? 'Whole plan' : 'Week') },
+  { header: 'Verdict', cell: (row) => <VerdictCell row={row} /> },
   {
     header: 'On screen',
     // Both halves, always: a numerator alone cannot distinguish "few bars drawn" from "few bars to
@@ -72,14 +82,49 @@ const COLUMNS: Column<ProbeResultRow>[] = [
   },
   {
     header: 'Machine',
-    // The operator's own note first, then the adapter, then nothing — and "(not recorded)" rather
-    // than a blank, because an absent GPU string is a fact (masked or unavailable) and a blank cell
-    // reads as an oversight.
-    cell: (row) => row.machineLabel ?? row.gpuRenderer ?? '(not recorded)',
+    // The operator's own note first, then the adapter. "(masked)" and "(not recorded)" are kept
+    // apart, because a browser withholding the renderer string is a different fact from nobody
+    // typing a note — the D6 distinction the live report already makes.
+    cell: (row) => row.machineLabel ?? row.gpuRenderer ?? '(masked or not recorded)',
   },
-  { header: 'App', cell: (row) => row.appVersion },
+  {
+    header: 'Versions',
+    // Both, because comparability is a claim about the pair. The web bundle drew the frames; the
+    // API release stored them, and a reading taken across a deploy is one a reader should be able
+    // to spot.
+    cell: (row) => `web ${row.appVersion} · api ${row.apiVersion}`,
+  },
   { header: 'By', cell: (row) => row.recordedByLabel ?? '(scrubbed)' },
 ];
+
+/** The verdict, glossed where a bare word would mislead. */
+function VerdictCell({ row }: { row: ProbeResultRow }): React.ReactElement {
+  const judged = judgeStoredRow(row);
+  if (judged === null) {
+    return <span className="text-muted-foreground">Not readable by this version</span>;
+  }
+  // A `Badge`, not a hand-weighted span: a verdict is a status, the primitive already carries the
+  // weight, and the ADR-0097 ratchet counts weights placed OUTSIDE the primitives for exactly this
+  // reason. `critical` only for a genuine FAIL — an INDETERMINATE or an ungraded reading is not bad
+  // news, and colouring it as though it were would be the confident wrong answer this epic refuses.
+  return (
+    <span>
+      <Badge variant={judged.verdict === 'FAIL' ? 'critical' : 'neutral'}>{judged.label}</Badge>
+      {judged.note !== null && (
+        <span className="text-muted-foreground mt-1 block text-xs">{judged.note}</span>
+      )}
+    </span>
+  );
+}
+
+function scenarioLabel(scenarioId: string): string {
+  return SCENARIOS.find((s) => s.id === scenarioId)?.label ?? scenarioId;
+}
+
+function limbLabel(scenarioId: string, limbId: string): string {
+  const limb = SCENARIOS.find((s) => s.id === scenarioId)?.limbs.find((l) => l.id === limbId);
+  return limb === undefined ? limbId : `${String(limb.activities)} activities`;
+}
 
 /** The painter's own answer, from `counts`. Unknown is stated, never rendered as zero. */
 function visibleBars(row: ProbeResultRow): number | string {
