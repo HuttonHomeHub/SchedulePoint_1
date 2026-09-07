@@ -103,37 +103,42 @@ a product idea that has not yet earned a roadmap line:
   so nothing can set it yet), and a **coarse-pointer** pass —
   `docs/TECH_DEBT.md` #133. `PROJECT_BRIEF.md` §8's "edit supported" is
   **substantially** met and deliberately not claimed closed.
-- `M` **Revision Compare — the two tiers that did NOT ship, and the one that was refused.**
-  **Tier 3's `how much` half shipped 2026-09-05 (ADR-0125)**, and this entry is rewritten to be
-  about what is left, per this file's own convention — it read "Parked by the product owner on
-  2026-08-27" for a day after the epic merged, which is the failure the entry above it records
-  four times.
-  **Delivered:** `GET …/schedule/revision-compare` and a fourth docked panel off
-  `Analysis ▾ → Compare revisions…` — what entered and left the critical path between two of a
-  plan's computed schedules, how far the completion moved, and which activity carries it, with a
-  printed comparison. **The engine is not imported at all**, because a baseline already freezes the
-  five quantities the delta needs; a baseline now also freezes the four criticality settings its
-  numbers were computed under, so a comparison across a changed rule says so rather than reporting
-  it as work that moved.
-  **Tier 3's `which change` half is REFUSED, not deferred, and that is a measurement rather than an
-  opinion.** Replayed in six orders on the seed catalogue's fixture, the same change scored 30, 18,
-  2 or 0 working days by position alone — 12.9 pp spread against a 10 pp bar, unstable top-three —
-  while the sum was order-free and stable at 139 d in every permutation. The ADR-0100-pattern gate
-  this entry itself demanded was applied and it **failed**, so the product says how much moved and
-  deliberately never says what caused it. Do not re-open it as a scoping decision; re-open it only
+- `M` **Revision Compare — comparing two IMPORTED revisions, which is the half that is left.**
+  **All three tiers now ship, and this entry went stale within hours of the last two — for the
+  second time in two days.** The version before this one said the change list and the change
+  picture were unbuilt and named their blocker as `grep -c 'model BaselineDependency'` returning
+  **0**, "re-verified 2026-09-06". It returns **1**: that grep is what ADR-0126 M5 shipped, the
+  same day, and the entry was re-verified hours before the thing it verified stopped being true.
+  That is this file's own recurring failure — the entry above records four instances of it — so
+  the shipped halves are removed per the convention at the top and only what is genuinely owed is
+  kept.
+  **Shipped:** tier 3's `how much` (ADR-0125), the change list (ADR-0126) and the change picture
+  (ADR-0127, `View ▾ ▸ Compare on diagram`, **off by default**), released `api-v0.59.0` /
+  `web-v0.122.0`.
+  **REFUSED, not deferred — do not re-open it as a scoping decision.** Tier 3's `which change` half
+  attributes the slip to individual edits, and the ADR-0100-pattern gate this entry itself demanded
+  was applied and **failed**: replayed in six orders on the seed catalogue's fixture the same change
+  scored 30, 18, 2 or 0 working days by position alone (12.9 pp spread against a 10 pp bar, unstable
+  top three), while the sum was order-free and stable at 139 d in every permutation. Re-open it only
   with a design that supplies the ordering the measurement showed is missing.
-  **Still unbuilt — the change list and the change picture.** The table P6's Claim Digger gives you
-  (added/removed/re-dated/re-durationed/re-logicked/re-constrained), and the TSLD painted twice with
-  the old revision ghosted under the new and changed arrows lit — which is possible here and not in
-  a Gantt-shaped competitor, because the primary surface is a logic diagram. Interchange (ADR-0050)
-  extends both to _their_ files — Rev B vs Rev C, both exported from P6 — which is the version
-  somebody pays for.
-  **Their blocker still holds, re-verified 2026-09-06 rather than carried:** `grep -c 'model
-BaselineDependency' apps/api/prisma/schema.prisma` still returns **0**. A baseline answers
-  _variance_ (is this activity late against plan) and ADR-0125 rode that exactly; a change list
-  needs _what did you change_ — logic, constraints, calendar, WBS parent — which is a fuller
-  **revision snapshot**, so a real schema change, mandatory database-architect (§19.3) and an ADR
-  before any code. Sized `M` rather than `L` now the verdict tier is closed.
+  **What is left is the interchange comparison — Rev B against Rev C, both exported from P6.** That
+  is the version somebody pays for, and it is the one thing the three shipped tiers cannot do.
+  **Its blocker is NOT the one the previous text named, and is worth stating precisely because the
+  stale version would send somebody to the schema:** `GET …/schedule/revision-compare` is
+  **plan-nested**, and `RevisionCompareQueryDto` types both `from` and `to` as a baseline **of that
+  plan** (`to` additionally accepting the literal `live`). Two files imported separately land as
+  **two plans** (ADR-0050: "import target is always a new plan"), and nothing in the model lets a
+  comparison span them. So this needs a cross-plan comparison — which is a real design question
+  about identity, since matching an activity across two independent imports cannot use the id and
+  has to use the source `activity_code`, with its own reject/repair/report contract (ADR-0035) for
+  a code that is absent, duplicated or reused. Verified 2026-09-06 by reading the controller and
+  the DTO, not the schema.
+  **And one measurement is owed before any of it:** the compare overlay ships default-OFF because
+  its paint cost is **unanswered**, not because it was judged acceptable. The M0 harness works and
+  refused to produce a verdict — the container's own baseline moved 0.56→1.85 pp at 1646 and
+  0.93→10.00 pp at 1920 between two runs an hour apart with no code change, against a 2.00 pp bar.
+  It needs a **headed run on the product owner's hardware**; the environment here is recorded as
+  disqualified.
 
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so

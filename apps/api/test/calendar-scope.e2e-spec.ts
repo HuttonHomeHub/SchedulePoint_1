@@ -9,6 +9,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
  * End-to-end tests for the CALENDAR SCOPE TIER (M1 of the library-scoping epic, ADR-0053),
@@ -76,10 +77,7 @@ describe.skipIf(!hasDatabase)('Calendar scope tiers (e2e)', () => {
     await prisma.note.deleteMany();
     await prisma.planShare.deleteMany();
     await prisma.planLock.deleteMany();
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baselineDependency.deleteMany();
-    await prisma.baseline.deleteMany();
+    await clearBaselineTree(prisma);
     await prisma.activityStep.deleteMany();
     await prisma.crossPlanDependency.deleteMany();
     await prisma.activityDependency.deleteMany();
