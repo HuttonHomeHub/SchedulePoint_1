@@ -12,6 +12,7 @@ import { isGated, type ScenarioDefinition, type ScenarioPreset } from '../model/
 import { buildDrawScene, framingFor, runDrawPhase, type DrawFraming } from '../scenes/canvas-draw';
 import { runRevisionDiff } from '../scenes/revision-diff';
 
+import { APP_VERSION } from '@/config/env';
 import { resolveTsldPalette } from '@/features/tsld/render/palette';
 
 /**
@@ -65,6 +66,22 @@ export interface RunContext {
   readonly idleInterval: number;
   readonly device: DeviceFacts;
   readonly startedAt: string;
+  /** The bundle's own version, baked in at build time — see `config/env.ts`. */
+  readonly appVersion: string;
+  /**
+   * The window lost keyboard focus at some point during the run, without being hidden.
+   *
+   * **Recorded, not refused, and the distinction is the point.** `document.hidden` is about
+   * VISIBILITY and is a refusal, because a backgrounded tab is throttled to roughly 1 Hz and
+   * measures the throttle. A blur is about FOCUS: the window is still painting at full rate, but
+   * something else took the keyboard — and possibly some of the GPU. Refusing on that would reject
+   * a run because the operator alt-tabbed to read a message, which is most runs; ignoring it would
+   * throw away the one fact that explains an otherwise inexplicable outlier.
+   *
+   * So it goes on the row, and a reader comparing two figures can see which of them was taken with
+   * the operator's full attention.
+   */
+  readonly lostFocusDuringRun: boolean;
 }
 
 /** One limb's outcome — a scenario may report more than one (ADR-0026 §9 gates two scales). */
@@ -147,6 +164,14 @@ export async function runProbe(input: ProbeRunInput): Promise<ProbeOutcome> {
   };
   document.addEventListener('visibilitychange', onVisibility);
 
+  // Focus is a SEPARATE fact from visibility — see `RunContext.lostFocusDuringRun`. This one is
+  // recorded and never refused.
+  let lostFocus = false;
+  const onBlur = (): void => {
+    lostFocus = true;
+  };
+  window.addEventListener('blur', onBlur);
+
   try {
     onProgress('Measuring this display’s frame rate…');
     const idleInterval = await measureIdleInterval(60);
@@ -162,6 +187,10 @@ export async function runProbe(input: ProbeRunInput): Promise<ProbeOutcome> {
       idleInterval,
       device: readDeviceFacts(),
       startedAt: new Date().toISOString(),
+      appVersion: APP_VERSION,
+      // Read after the run, below — this is the value at the moment the context is built and is
+      // replaced when the phases finish.
+      lostFocusDuringRun: false,
     };
 
     // A quick run is reported, never gated — one repeat has no spread, so the INDETERMINATE rule
@@ -197,11 +226,13 @@ export async function runProbe(input: ProbeRunInput): Promise<ProbeOutcome> {
       frameCount: recorded,
       hasContext: true,
     });
-    if (refusal) return { kind: 'refused', refusal, context };
+    const settled: RunContext = { ...context, lostFocusDuringRun: lostFocus };
+    if (refusal) return { kind: 'refused', refusal, context: settled };
 
-    return { kind: 'measured', context, limbs };
+    return { kind: 'measured', context: settled, limbs };
   } finally {
     document.removeEventListener('visibilitychange', onVisibility);
+    window.removeEventListener('blur', onBlur);
   }
 }
 

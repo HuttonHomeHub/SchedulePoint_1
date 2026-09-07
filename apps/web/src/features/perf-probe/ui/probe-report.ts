@@ -49,8 +49,15 @@ function contextLines(context: RunContext): string[] {
     // field a reader trusts to explain an outlier (the product owner's Q1, answered 2026-09-07).
     `  gpu        ${d.gpu ?? (d.gpuMasked ? '(withheld by the browser)' : '(not available)')}`,
     `  threads    ${d.hardwareConcurrency === null ? '(not reported)' : String(d.hardwareConcurrency)}`,
+    `  memory     ${d.deviceMemoryGb === null ? '(not reported)' : `~${String(d.deviceMemoryGb)} GiB`}`,
+    // Both recorded rather than acted on, and both explain an outlier nothing else would. A blur
+    // is NOT a refusal — the window kept painting, something else took the keyboard — so it has to
+    // be visible here or the fact is captured and never read.
+    `  attention  ${context.lostFocusDuringRun ? 'the window lost focus during the run' : 'held throughout'}`,
+    `  motion     ${d.prefersReducedMotion ? 'reader prefers reduced motion' : 'no preference'}`,
     `  agent      ${d.userAgent}`,
     `  at         ${context.startedAt}`,
+    `  web        ${context.appVersion}`,
   ];
 }
 

@@ -32,6 +32,21 @@ export interface DeviceFacts {
   readonly userAgent: string;
   /** How many CPU threads the browser admits to, or null. Cheap, and it explains a noisy machine. */
   readonly hardwareConcurrency: number | null;
+  /**
+   * Approximate RAM in GiB, or null.
+   *
+   * Chromium-only and deliberately coarse (the API buckets it), which is why it is recorded rather
+   * than reasoned from: a low figure explains a slow reading that nothing else would.
+   */
+  readonly deviceMemoryGb: number | null;
+  /**
+   * Whether the reader has asked for reduced motion.
+   *
+   * Recorded and **not acted on**: the moving diagram IS the measurement, so there is nothing to
+   * still. It is on the row because a reader who sets it may also be on a machine or an OS
+   * configuration that behaves differently, and a fact you did not capture cannot be checked later.
+   */
+  readonly prefersReducedMotion: boolean;
 }
 
 /**
@@ -53,6 +68,12 @@ export function readDeviceFacts(win: Window = window): DeviceFacts {
       typeof win.navigator.hardwareConcurrency === 'number'
         ? win.navigator.hardwareConcurrency
         : null,
+    deviceMemoryGb: readDeviceMemory(win),
+    // `matchMedia` is absent in some test environments; a missing answer is `false` rather than a
+    // throw, because this field explains a reading and never gates one.
+    prefersReducedMotion:
+      typeof win.matchMedia === 'function' &&
+      win.matchMedia('(prefers-reduced-motion: reduce)').matches,
   };
 }
 
@@ -85,4 +106,16 @@ function readGpu(win: Window): { value: string | null; masked: boolean } {
     // Canvas 2D and does not need WebGL for anything but this description.
     return { value: null, masked: false };
   }
+}
+
+/**
+ * `navigator.deviceMemory`, where the browser has it.
+ *
+ * Not in the DOM lib's `Navigator` type because it is a Device Memory API extension implemented by
+ * Chromium and not by Firefox or Safari — so it is read through a narrowed `unknown` rather than an
+ * `any` cast, and a browser without it records `null` rather than a guess.
+ */
+function readDeviceMemory(win: Window): number | null {
+  const value = (win.navigator as unknown as { deviceMemory?: unknown }).deviceMemory;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

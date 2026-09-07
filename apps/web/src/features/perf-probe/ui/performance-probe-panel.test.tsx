@@ -39,8 +39,12 @@ const CONTEXT = {
     gpuMasked: true,
     userAgent: 'test',
     hardwareConcurrency: 8,
+    deviceMemoryGb: 8,
+    prefersReducedMotion: false,
   },
   startedAt: '2026-09-07T12:00:00.000Z',
+  appVersion: '0.121.0',
+  lostFocusDuringRun: false,
 };
 
 const measured = (verdict: 'PASS' | 'FAIL' | 'INDETERMINATE' | 'REPORTED_ONLY'): ProbeOutcome => ({

@@ -21,6 +21,8 @@ const DEVICE: DeviceFacts = {
   gpuMasked: false,
   userAgent: 'Mozilla/5.0 Test',
   hardwareConcurrency: 8,
+  deviceMemoryGb: 8,
+  prefersReducedMotion: false,
 };
 
 const CONTEXT: RunContext = {
@@ -34,6 +36,8 @@ const CONTEXT: RunContext = {
   idleInterval: 8.33,
   device: DEVICE,
   startedAt: '2026-09-07T12:00:00.000Z',
+  appVersion: '0.121.0',
+  lostFocusDuringRun: false,
 };
 
 const judged = (over: Partial<AbsoluteJudgeResult> = {}): AbsoluteJudgeResult => ({
@@ -151,6 +155,40 @@ describe('formatProbeReport', () => {
     });
     expect(out).toContain('RESULT: CANNOT BE JUDGED');
     expect(out).not.toContain('VERDICT:');
+  });
+
+  it('reports a lost window focus, because it is recorded and never refused', () => {
+    // A blur is a different fact from a hidden tab. Hidden is a REFUSAL — the browser throttles rAF
+    // to about 1 Hz and the run measures the throttle. A blur means the window kept painting while
+    // something else took the keyboard, and possibly some of the GPU. Refusing on that would reject
+    // most real runs; dropping it would throw away the one fact explaining an outlier. So it is on
+    // the row, and it has to be PRINTED or it is captured and never read.
+    const out = formatProbeReport({
+      kind: 'measured',
+      context: { ...CONTEXT, lostFocusDuringRun: true },
+      limbs: [limb({ kind: 'absolute', judged: judged() })],
+    });
+    expect(out).toContain('the window lost focus during the run');
+
+    const held = formatProbeReport({
+      kind: 'measured',
+      context: CONTEXT,
+      limbs: [limb({ kind: 'absolute', judged: judged() })],
+    });
+    expect(held).toContain('held throughout');
+  });
+
+  it('names the bundle that produced the numbers', () => {
+    // Comparability across releases is the whole reason to store anything. `APP_VERSION` is a
+    // compile-time constant (`vite.config.ts:28`), so it cannot drift from the published package —
+    // and the granularity is a RELEASE, not a commit: nothing carries a SHA into the bundle
+    // (ADR-0088 D1 — `docker-publish.yml` passes no build args).
+    const out = formatProbeReport({
+      kind: 'measured',
+      context: CONTEXT,
+      limbs: [limb({ kind: 'absolute', judged: judged() })],
+    });
+    expect(out).toContain('web        0.121.0');
   });
 
   it('says which run length produced the numbers', () => {
