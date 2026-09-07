@@ -278,8 +278,10 @@ export class CreateProbeResultDto {
       'The scenario’s registry id. **Shape-checked and deliberately NOT value-checked**: ' +
       '`apps/web` and `apps/api` release as separate images (ADR-0027) pulled independently ' +
       '(ADR-0047), so an enum here would 422 a measurement taken by a newer web bundle for the ' +
-      'whole skew window — losing the reading on the one machine that can produce one. Closedness ' +
-      'is bought in `@repo/types` for the READER instead, exactly as `audit_events.action` does it.',
+      'whole skew window — losing the reading on the one machine that can produce one. The closed ' +
+      'vocabulary lives in the web bundle that authors it (`features/perf-probe/model/scenarios.ts`), ' +
+      'and an id this server does not recognise still stores and still reads back: the row carries ' +
+      'its own thresholds, so it is judgeable without the registry.',
     maxLength: 64,
   })
   @IsString()
@@ -415,7 +417,20 @@ export class CreateProbeResultDto {
   })
   @IsString()
   @MaxLength(64)
-  @Matches(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)*$/)
+  // **One optional group, one bounded quantifier, and no nesting — because the obvious semver
+  // shape is a ReDoS.** The first version of this was
+  // `(?:[-+][0-9A-Za-z.-]+)*`, where the group opens on `[-+]` and the inner class also contains
+  // `-`, so a run of dashes can be split between the two in exponentially many ways. Measured on
+  // this machine against `1.0.0-` + N dashes + `!`: 2.7 ms at 26, 2,260 ms at 40, and **281,307 ms
+  // at 50**. CodeQL flagged it high on the pull request; `@MaxLength(64)` is no protection, because
+  // class-validator evaluates every constraint rather than short-circuiting on the first failure —
+  // and a compromised staff session posts this field directly.
+  //
+  // The replacement admits the same versions (`1.2.3`, `1.2.3-rc.1`, `1.2.3+build.5`,
+  // `1.2.3-rc.1+build.5`) and refuses the same non-versions (`main`, `1.2`), at 0.003–0.007 ms for
+  // every input length up to the column bound. It is deliberately NOT the official semver regex:
+  // this field's job is to refuse a commit SHA or a branch name, not to adjudicate semver.
+  @Matches(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.+-]{0,56})?$/)
   appVersion!: string;
 
   @ApiProperty({
