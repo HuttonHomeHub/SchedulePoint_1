@@ -27,6 +27,7 @@ const DEVICE: DeviceFacts = {
 
 const CONTEXT: RunContext = {
   scenarioId: 'canvas-draw',
+  scenarioVersion: 1,
   scenarioLabel: 'Canvas draw budget',
   preset: 'week',
   size: 'full',
@@ -59,6 +60,14 @@ const limb = (result: LimbOutcome['result']): LimbOutcome => ({
   pxPerDay: 12,
   visibleBars: 222,
   minFps: 30,
+  recording: {
+    limbKind: 'absolute',
+    activityCount: 2000,
+    edgeCount: 3200,
+    counts: { visibleBars: 222 },
+    thresholds: { minFps: 30, gated: true, source: 'ADR-0026 §9' },
+    runs: [],
+  },
   source: 'ADR-0026 §9 — ≥ 30 fps at the 2,000-activity ceiling.',
   result,
 });

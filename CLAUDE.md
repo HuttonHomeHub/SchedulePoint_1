@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 62 migrations, 1175 web
+> (`apps/api/src/modules/`), 31 Prisma models across 62 migrations, 1179 web
 > source files with 42 Playwright suites beside the base journey, and
-> 127 ADRs.
+> 128 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4011,6 +4011,48 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   the API e2e on its first run); and the journey's own seed, re-typing a link to create one, changed
   the seeded topology and took `Cladding` off the critical path. **The CPM engine is not imported
   and the ADR-0034 parity gate is untouched by construction.**
+
+- **ADR-0128** _(Accepted; M0–M4 landed 2026-09-07, M5's readings owed by the product owner)_ — A
+  measurement belongs on the machine that can take it. `docs/TECH_DEBT.md` #75 is the register's
+  longest-running open question about the primary surface and it rests on **one reading**, taken
+  2026-08-03, with five canvas epics since and its **500-activity limb never measured at all**.
+  Nobody re-derived it for a reason that is not negligence: the instrument was a Node script needing
+  a checkout and a command line, and the one person with the hardware the number is about does not
+  run terminal commands. So the measurement existed, was correct, and was unreachable by the only
+  person who could take it. **The obvious fix — run it on the server — is what the ADR exists to
+  refuse**: the API runs headless in a container where Canvas 2D can come from a software
+  rasteriser, and that container's own **no-change baseline moved 0.56 → 1.85 pp at 1646 and
+  0.93 → 10.00 pp at 1920 between two runs an hour apart** against a 2.00 pp bar. A number from
+  there would carry a timestamp, a scenario and a verdict and mean nothing, which is worse than
+  none because somebody acts on it. So: a control on the staff console, the run in the **operator's
+  own browser**, and no CI gate here ever — that follows from the decision rather than being a gap
+  in it.
+  The judge is **extracted, never forked** (the CLI became an adapter and its own output was the
+  before/after oracle), the scene is synthetic **by construction** because a `StaffPrincipal` cannot
+  reach a plan, and **INDETERMINATE is a first-class fourth verdict** — an instrument whose baseline
+  moves by more than its own bar cannot answer, and a rule with only PASS and FAIL must report one
+  of them. The judge additionally **throws rather than judging** when it has nothing to judge, which
+  is ADR-0097 Landing C's `PROCEED` from an `undefined` and ADR-0066's 4.6 ms p95 that was about the
+  cull, answered once. **The server stores samples and the thresholds they were measured against and
+  does not judge** — no `verdict` column, so changing a bar cannot reinterpret history and the rule
+  keeps one home.
+  It is also **the staff console's first write**, and ADR-0086 D6's claim that one already exists is
+  **false** — the shape landed and the route never did. The compile-error property is preserved by
+  the service taking a `StaffPrincipal`, and the table has no `organization_id` and no FK to any
+  customer model, so there is no scope to get wrong rather than one that is guarded. It is
+  **audited despite failing both of ADR-0073's tests**, because ADR-0086 D5's inversion derives a
+  positive assertion from the path — verified in both directions rather than assumed. Its
+  allow-list is **empty**: the device fingerprint is what makes a reading comparable and also what
+  identifies a staff member's machine, so it stays in an ordinary 365-day table that can be
+  scrubbed and expired, never in the one that refuses `DELETE`. The GPU renderer string is recorded
+  on the product owner's decision, and **masked is recorded as masked** — "unknown GPU" would put a
+  fiction in the one field a reader trusts to explain an outlier.
+  Two of the epic's own recorded claims were wrong and are corrected in place: a new audit action
+  costs **zero** migrations rather than one (the action CHECK is a format regex; the precedent
+  migration is a deliberate no-op whose own comment says so), and the probe's actor is `STAFF` and
+  not `USER`. Both were read off a filename rather than a file. **The epic's deliverable is a
+  NUMBER, not a panel** — #75 stays open until the readings are taken, and the unattributed ~8 ms at
+  the whole-plan framing is a separate question this changes nothing about.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -14,6 +14,20 @@ import { PerformanceProbePanel } from './performance-probe-panel';
  * every outcome the runner can return reaches the screen as the right kind of statement.
  */
 const runProbe = vi.fn<() => Promise<ProbeOutcome>>();
+
+/**
+ * The recording client, mocked so the POST can be **observed rather than reasoned about**.
+ *
+ * "The panel does not post a refused run" is exactly the kind of claim that stays true until
+ * somebody moves the call, and reading the code proves it about the code as it is today. A spy
+ * proves it about the code that runs.
+ */
+const recordMutate = vi.fn();
+const recordState = { isPending: false, isError: false, isSuccess: false };
+vi.mock('../api/probe-results', () => ({
+  useRecordProbeResult: () => ({ mutate: recordMutate, ...recordState }),
+  useProbeResults: () => ({ isPending: false, isError: false, data: [], refetch: () => undefined }),
+}));
 vi.mock('../runner/run-probe', () => ({
   runProbe: (...args: unknown[]) => runProbe(...(args as [])),
   RUN_SIZES: {
@@ -24,6 +38,7 @@ vi.mock('../runner/run-probe', () => ({
 
 const CONTEXT = {
   scenarioId: 'canvas-draw',
+  scenarioVersion: 1,
   scenarioLabel: 'Canvas draw budget',
   preset: 'week' as const,
   size: 'full' as const,
@@ -59,6 +74,14 @@ const measured = (verdict: 'PASS' | 'FAIL' | 'INDETERMINATE' | 'REPORTED_ONLY'):
       visibleBars: 222,
       minFps: 30,
       source: 'ADR-0026 §9',
+      recording: {
+        limbKind: 'absolute',
+        activityCount: 2000,
+        edgeCount: 3200,
+        counts: { visibleBars: 222 },
+        thresholds: { minFps: 30, gated: true, source: 'ADR-0026 §9', minVisibleBars: 50 },
+        runs: [{ droppedPct: 0.4, intervalP50: 16.7, intervalP95: 18, fps: 58 }],
+      },
       result: {
         kind: 'absolute',
         judged: {
@@ -79,6 +102,41 @@ const measured = (verdict: 'PASS' | 'FAIL' | 'INDETERMINATE' | 'REPORTED_ONLY'):
   ],
 });
 
+/** A run the machine refused. Nothing was measured, so there is nothing to record. */
+const refused = (): ProbeOutcome => ({
+  kind: 'refused',
+  refusal: {
+    reason: 'TAB_HIDDEN',
+    sentence: 'The tab was hidden part-way through, so the browser throttled the frame loop.',
+  },
+  context: CONTEXT,
+});
+
+/**
+ * A run the JUDGE refused — which is not the same thing.
+ *
+ * The numbers are real measurements; only the verdict is withheld. The server does not judge, so
+ * the row is worth storing and is read back against the thresholds beside it.
+ */
+const unjudgeable = (): ProbeOutcome => {
+  const base = measured('PASS');
+  if (base.kind !== 'measured') throw new Error('unreachable');
+  const limb = base.limbs[0];
+  if (!limb) throw new Error('the fixture has no limb');
+  return {
+    ...base,
+    limbs: [
+      {
+        ...limb,
+        result: {
+          kind: 'unjudgeable',
+          message: 'NON-VACUITY FAILED — the painter did not draw enough.',
+        },
+      },
+    ],
+  };
+};
+
 /**
  * Press Run, then confirm.
  *
@@ -98,6 +156,10 @@ function runOnce(): void {
 
 beforeEach(() => {
   runProbe.mockReset();
+  recordMutate.mockReset();
+  recordState.isPending = false;
+  recordState.isError = false;
+  recordState.isSuccess = false;
 });
 
 describe('PerformanceProbePanel', () => {
@@ -224,6 +286,86 @@ describe('PerformanceProbePanel', () => {
     runOnce();
     await waitFor(() => expect(screen.getByRole('button', { name: /^Cancel/ })).toHaveFocus());
     release(measured('PASS'));
+  });
+
+  it('records a measured run, carrying the machine note and the scenario version', async () => {
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Machine (optional)' }), {
+      target: { value: '  the Dell, docked  ' },
+    });
+    runOnce();
+
+    await waitFor(() => expect(recordMutate).toHaveBeenCalledTimes(1));
+    const body = recordMutate.mock.calls[0]?.[0] as Record<string, unknown>;
+    // Trimmed, and a blank note becomes `null` rather than an empty string — the column keeps
+    // "not typed" and "typed nothing" apart.
+    expect(body.machineLabel).toBe('the Dell, docked');
+    expect(body.scenarioVersion).toBe(1);
+    expect(body.appVersion).toBe('0.121.0');
+    // Server-set fields are absent from the body entirely, not sent as null.
+    expect(body).not.toHaveProperty('runId');
+    expect(body).not.toHaveProperty('recordedAt');
+    expect(body).not.toHaveProperty('apiVersion');
+  });
+
+  it('records NOTHING for a refused run', async () => {
+    // The assertion this mock exists for. A refusal means nothing was measured, so a stored row
+    // would put a reading in the installation's history that no machine ever produced.
+    runProbe.mockResolvedValue(refused());
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // Two matches by design — the alert and the panel's own live region both say it, which is what
+    // `summarise` is for. `findAllByText` rather than narrowing: asserting which element says it
+    // would be asserting about layout, and this test is about the POST.
+    await screen.findAllByText(/The run was refused/);
+    expect(recordMutate).not.toHaveBeenCalled();
+  });
+
+  it('sends an unjudgeable limb, because the numbers are real even when the verdict is not', async () => {
+    runProbe.mockResolvedValue(unjudgeable());
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    await waitFor(() => expect(recordMutate).toHaveBeenCalledTimes(1));
+    const body = recordMutate.mock.calls[0]?.[0] as { limbs: { runs?: unknown[] }[] };
+    expect(body.limbs[0]?.runs).toHaveLength(1);
+  });
+
+  it('says a reading was measured and NOT recorded, and offers to try again', async () => {
+    // Two different facts kept apart: the run was fine, the store was not. Collapsing them is what
+    // turns a visible refusal into silent evidence loss.
+    recordState.isError = true;
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    const retry = await screen.findByRole('button', { name: 'Retry recording' });
+    expect(screen.getByText(/NOT recorded/)).toBeInTheDocument();
+    // The figures are still on screen — the measurement is not thrown away by a failed store.
+    expect(screen.getByText('PASS')).toBeInTheDocument();
+
+    recordMutate.mockClear();
+    fireEvent.click(retry);
+    expect(recordMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers no retry and no failure wording when the reading was recorded', async () => {
+    recordState.isSuccess = true;
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    await screen.findByText(/Recorded\./);
+    expect(screen.queryByRole('button', { name: 'Retry recording' })).not.toBeInTheDocument();
+  });
+
+  it('shows one empty state for the history, and it is about having none rather than matching none', async () => {
+    // There are no filters here, so "nothing recorded yet" cannot be confused with "nothing
+    // matched" — the distinction ADR-0073 C1 found collapsed in a live region.
+    render(<PerformanceProbePanel />);
+    expect(await screen.findByText(/No readings recorded yet/)).toBeInTheDocument();
   });
 
   it('does not use the native disabled attribute on the Run control', () => {

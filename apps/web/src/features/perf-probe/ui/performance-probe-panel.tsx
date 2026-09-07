@@ -1,14 +1,18 @@
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
+import { useProbeResults, useRecordProbeResult } from '../api/probe-results';
 import { SCENARIOS, scenarioById, type ScenarioId, type ScenarioPreset } from '../model/scenarios';
+import { toProbeBody } from '../model/to-probe-body';
 import type { ProbeOutcome, RunSize } from '../runner/run-probe';
 
+import { ProbeHistory } from './probe-history';
 import { formatProbeReport } from './probe-report';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
@@ -34,6 +38,7 @@ export function PerformanceProbePanel(): React.ReactElement {
   const scenarioSelectId = useId();
   const presetSelectId = useId();
   const sizeSelectId = useId();
+  const machineLabelId = useId();
 
   const [scenarioId, setScenarioId] = useState<ScenarioId>('canvas-draw');
   const [preset, setPreset] = useState<ScenarioPreset>('week');
@@ -45,6 +50,10 @@ export function PerformanceProbePanel(): React.ReactElement {
   const [outcome, setOutcome] = useState<ProbeOutcome | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [machineLabel, setMachineLabel] = useState('');
+
+  const record = useRecordProbeResult();
+  const history = useProbeResults();
 
   const runButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -87,6 +96,27 @@ export function PerformanceProbePanel(): React.ReactElement {
     wasRunning.current = running;
   }, [running]);
 
+  /**
+   * Record the reading — **and record nothing at all for a refused run**.
+   *
+   * The decision is `toProbeBody`'s, not this function's: it returns `null` for a refusal, because
+   * nothing was measured and a stored row would put a reading in the installation's history that no
+   * machine ever produced. Asserted with a spy on the client rather than by reading this code.
+   *
+   * A failure here is deliberately NOT swallowed and deliberately NOT retried automatically. The
+   * verdict is still on screen, so the honest state is "measured, not recorded" with a control that
+   * tries again — a silent retry either stores the same press twice or spends the operator's
+   * attention while looking like nothing happened.
+   */
+  const store = useCallback(
+    (result: ProbeOutcome) => {
+      const body = toProbeBody(result, machineLabel.trim() === '' ? null : machineLabel.trim());
+      if (body === null) return;
+      record.mutate(body);
+    },
+    [machineLabel, record],
+  );
+
   const start = useCallback(async () => {
     setConfirming(false);
     setOutcome(null);
@@ -121,6 +151,7 @@ export function PerformanceProbePanel(): React.ReactElement {
       });
       if (cancelledRef.current) return;
       setOutcome(result);
+      store(result);
     } catch (error) {
       // The panel must survive its own dependency being absent — a chunk that fails to load is a
       // network fact, not a measurement, and it must not read as a failing painter.
@@ -133,7 +164,7 @@ export function PerformanceProbePanel(): React.ReactElement {
       setRunning(false);
       setProgress('');
     }
-  }, [preset, scenario, size]);
+  }, [preset, scenario, size, store]);
 
   const copy = useCallback(() => {
     if (!outcome) return;
@@ -197,6 +228,19 @@ export function PerformanceProbePanel(): React.ReactElement {
             <option value="quick">Quick check (about 5 seconds)</option>
           </Select>
         </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={machineLabelId}>Machine (optional)</Label>
+          {/* Insert-time only in v1, and the panel says so rather than offering an edit that does
+              not exist: an editable note needs `updated_at` and a version column, which is a
+              migration and a decision. */}
+          <Input
+            id={machineLabelId}
+            value={machineLabel}
+            onChange={(e) => setMachineLabel(e.target.value)}
+            placeholder="the Dell, docked, on mains"
+            maxLength={200}
+          />
+        </div>
         <Button
           ref={runButtonRef}
           onClick={() => {
@@ -222,6 +266,25 @@ export function PerformanceProbePanel(): React.ReactElement {
       {failure !== null && <Alert tone="error">The measurement did not run. {failure}</Alert>}
 
       {outcome !== null && <ProbeResult outcome={outcome} onCopy={copy} copied={copied} />}
+
+      {/*
+        Whether the reading was STORED — a fact about the database, kept visibly separate from
+        whether the run was refused, which is a fact about the machine. Collapsing them is the
+        failure `m4-schema-record.md` names as the thing every CHECK constraint on that table
+        depends on not happening: a swallowed 422 turns a visible refusal into silent evidence loss.
+      */}
+      {outcome !== null && outcome.kind === 'measured' && (
+        <RecordingState
+          pending={record.isPending}
+          failed={record.isError}
+          recorded={record.isSuccess}
+          onRetry={() => {
+            store(outcome);
+          }}
+        />
+      )}
+
+      <ProbeHistory query={history} />
 
       {/*
         The measurement surface. Mounted only while running, sized to the real viewport, and
@@ -359,4 +422,52 @@ function ProbeResult({
       </div>
     </div>
   );
+}
+
+/**
+ * Recorded, recording, or measured-but-not-recorded.
+ *
+ * **Three states and not two**, because "not recorded" is the one that matters: the numbers are on
+ * screen and the operator can still keep them — the Copy button is right there — so the panel says
+ * what failed and offers the one action that can fix it rather than discarding a measurement that
+ * took twenty-five seconds of somebody's attention.
+ *
+ * A refused run reaches none of these: nothing was measured, so there is nothing to record and no
+ * failure to report.
+ */
+function RecordingState({
+  pending,
+  failed,
+  recorded,
+  onRetry,
+}: {
+  pending: boolean;
+  failed: boolean;
+  recorded: boolean;
+  onRetry: () => void;
+}): React.ReactElement | null {
+  if (pending) {
+    return <p className="text-muted-foreground text-sm">Recording this reading…</p>;
+  }
+  if (failed) {
+    return (
+      <Alert tone="error">
+        <span>
+          The reading was measured but NOT recorded — it is not in this installation’s history. The
+          figures above are still good; copy them, or try again.
+        </span>
+        <div className="mt-2">
+          <Button variant="outline" onClick={onRetry}>
+            Retry recording
+          </Button>
+        </div>
+      </Alert>
+    );
+  }
+  if (recorded) {
+    return (
+      <p className="text-muted-foreground text-sm">Recorded. It appears in the history below.</p>
+    );
+  }
+  return null;
 }

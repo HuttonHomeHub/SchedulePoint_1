@@ -6,6 +6,7 @@ import {
   type AbsoluteJudgeResult,
   type JudgeResult,
   type PhaseTiming,
+  type RunPair,
 } from '../model/judge';
 import { measureIdleInterval, refuseRun, type Refusal } from '../model/pacing';
 import { isGated, type ScenarioDefinition, type ScenarioPreset } from '../model/scenarios';
@@ -58,6 +59,8 @@ export const RUN_SIZES: Record<RunSize, { frames: number; repeats: number; label
 export interface RunContext {
   readonly scenarioId: string;
   readonly scenarioLabel: string;
+  /** The registry's version at run time — what makes two stored readings comparable. */
+  readonly scenarioVersion: number;
   readonly preset: ScenarioPreset;
   readonly size: RunSize;
   readonly frames: number;
@@ -84,6 +87,31 @@ export interface RunContext {
   readonly lostFocusDuringRun: boolean;
 }
 
+/**
+ * Everything the server stores for one limb, carried beside the judged result rather than derived
+ * from it.
+ *
+ * **The judged result is the wrong source and that is the reason this exists.** `JudgeResult`
+ * holds means and deltas; the numbers they were computed from are gone by then, and a limb the
+ * judge REFUSED has no judged result at all while still having perfectly good numbers worth
+ * keeping. The server does not judge (spec D5), so what it needs is the input, not the answer.
+ *
+ * `limbKind` is carried rather than read off `result.kind` for that second reason: an unjudgeable
+ * limb's result kind is `unjudgeable`, which says nothing about how its samples are shaped.
+ */
+export interface LimbRecording {
+  readonly limbKind: 'difference' | 'absolute';
+  /** What the scene CONTAINED. Pair with `counts` and a cull becomes legible (ADR-0066). */
+  readonly activityCount: number;
+  readonly edgeCount: number;
+  /** Non-vacuity numerators AND denominators, counted inside the viewport. */
+  readonly counts: Record<string, number>;
+  /** The bars this limb was judged against — stored so changing a bar cannot reinterpret history. */
+  readonly thresholds: Record<string, number | boolean | string>;
+  readonly pairs?: readonly RunPair[];
+  readonly runs?: readonly PhaseTiming[];
+}
+
 /** One limb's outcome — a scenario may report more than one (ADR-0026 §9 gates two scales). */
 export interface LimbOutcome {
   readonly limbId: string;
@@ -93,6 +121,8 @@ export interface LimbOutcome {
   readonly visibleBars: number;
   readonly minFps: number;
   readonly source: string;
+  /** What a recording POSTs. Absent from the report, which is prose for a person. */
+  readonly recording: LimbRecording;
   readonly result:
     | { readonly kind: 'difference'; readonly judged: JudgeResult }
     | { readonly kind: 'absolute'; readonly judged: AbsoluteJudgeResult }
@@ -179,6 +209,7 @@ export async function runProbe(input: ProbeRunInput): Promise<ProbeOutcome> {
     const context: RunContext = {
       scenarioId: scenario.id,
       scenarioLabel: scenario.label,
+      scenarioVersion: scenario.version,
       preset,
       size,
       frames,
@@ -284,6 +315,19 @@ async function runDifferenceLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
       visibleBars: outcome.counts.visibleBars,
       minFps: limb.minFps,
       source: limb.source,
+      recording: {
+        limbKind: 'difference',
+        activityCount: outcome.activities,
+        edgeCount: outcome.edges,
+        counts: { ...outcome.counts },
+        thresholds: {
+          minFps: limb.minFps,
+          gated,
+          source: limb.source,
+          barPp: scenario.barPp,
+        },
+        pairs: outcome.pairs,
+      },
       result: judgeOrExplain(() => ({
         kind: 'difference' as const,
         judged: judgeRun({
@@ -334,6 +378,19 @@ async function runAbsoluteLimbs(phase: PhaseInput): Promise<LimbOutcome[]> {
       visibleBars: framing.visibleBars,
       minFps: limb.minFps,
       source: limb.source,
+      recording: {
+        limbKind: 'absolute',
+        activityCount: scene.totalActivities,
+        edgeCount: scene.totalEdges,
+        counts: { visibleBars: framing.visibleBars },
+        thresholds: {
+          minFps: limb.minFps,
+          gated,
+          source: limb.source,
+          minVisibleBars: framing.minVisibleBars,
+        },
+        runs,
+      },
       result: judgeOrExplain(() => ({
         kind: 'absolute' as const,
         judged: judgeAbsolute({

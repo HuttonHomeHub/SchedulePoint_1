@@ -50,6 +50,18 @@ export interface ScenarioDefinition {
   readonly label: string;
   /** One sentence: what this measurement answers, in the terms the decision is made in. */
   readonly question: string;
+  /**
+   * Bumped when the **scene or the protocol** changes, so a reader knows two stored rows measured
+   * the same thing.
+   *
+   * The rule is written here because a version nobody owns bumping is decoration: a scene that
+   * changed without a bump makes two incomparable readings look comparable, which is the single
+   * failure `perf_probe_results` exists to prevent. Changing a THRESHOLD is not a bump — thresholds
+   * are stored on the row beside the numbers, so a reading stays judgeable against the bar it was
+   * actually taken under. Changing what is drawn, how many frames are measured, or how a phase is
+   * paced IS one.
+   */
+  readonly version: number;
   /** P1 — the largest dropped-frame difference that still counts as no cost, in percentage points. */
   readonly barPp: number;
   /**
@@ -87,6 +99,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     id: 'revision-diff',
     label: 'Revision compare overlay',
     question: 'Does drawing the difference between two revisions cost the diagram its smoothness?',
+    version: 1,
     barPp: MAX_DROPPED_DELTA_PP,
     // One limb: this scenario asks a DIFFERENCE question (does the overlay cost anything?), and the
     // difference is measured at one scale. The absolute floor is the 2,000-activity one because that
@@ -108,6 +121,7 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     id: 'canvas-draw',
     label: 'Canvas draw budget',
     question: 'Does the shipped painter hold its frame rate under sustained pan?',
+    version: 1,
     barPp: MAX_DROPPED_DELTA_PP,
     /**
      * **Both limbs of ADR-0026 §9's gate, and the 500 one has never been measured.**
