@@ -4248,3 +4248,24 @@ promised. What follows was judged real and not worth holding the release for.
 
 Numbers 1, 2 and 8 are the cheapest; 10 and 11 are the two a real screen-reader user would notice
 first.
+
+**And one thing the reviews did not find, because it is only visible in a log.** The API e2e run
+prints, twice per run and reproducibly, `a retention sweep failed; the next run will retry it` for
+`perf_probe_results` — the alarming half of exactly the quiet-failure shape #253 warns about. It is
+**not** a defect in the sweep's new arm, and that was established rather than assumed: the statement
+runs clean against a real database standalone, a two-file e2e run sweeps the table in 2 ms, and the
+line immediately preceding every failure in the full run is `Database connection closed`. The suite
+boots and closes fifty applications, the sweep runs at boot, and `perf_probe_results` is last in
+`RETENTION_TABLES` — so it is the one still in flight when the client disconnects, which is why it
+is deterministic rather than flaky and why it is always that table.
+
+No guard was added, deliberately: suppressing a sweep failure during shutdown would also suppress a
+real one, and the remedy — not starting a sweep the process cannot finish — is a lifecycle change to
+`RetentionSweepService`, not a `catch`. The cost today is a scary line in a test log. The trigger to
+do it is a fourth table, or anyone mistaking this for a production failure.
+
+Reading that same log **did** find a real one, which is fixed rather than filed: the
+`retention.configured` boot line named two tables and not the third, so the one place an operator is
+told the effective periods was silently short by one — for a number ADR-0087 records as
+irreversible. Its existing test used `objectContaining`, which cannot catch an omission; the
+replacement counts `*Days` keys against `RETENTION_TABLES.length` and was verified red.

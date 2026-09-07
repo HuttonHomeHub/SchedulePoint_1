@@ -91,6 +91,11 @@ export class RetentionSweepService implements OnApplicationBootstrap, OnApplicat
         event: 'retention.configured',
         cspReportsDays: this.config.retentionCspReportsDays,
         mailEventsDays: this.config.retentionMailEventsDays,
+        // The third table joined `RETENTION_TABLES` in M4-T5 and this line was not extended with
+        // it, so the one place an operator is told the effective periods was silently one short.
+        // Found by reading an e2e log rather than by anything failing — which is the shape the
+        // comment above warns about: an irreversible number left to be inferred.
+        perfProbeDays: this.config.retentionPerfProbeDays,
         intervalMinutes: this.config.retentionSweepIntervalMinutes,
       },
       'retention sweep armed',
