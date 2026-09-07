@@ -228,8 +228,25 @@ jobs:
       # checkout hides an omission, because a `dist/` built by an earlier run is
       # still lying there; CI starts clean and fails at `nest build` instead
       # (`@repo/layout` was missed exactly this way — ADR-0019 build contract).
+      #
+      # `@repo/seed` was missed exactly the same way, and this comment predicted
+      # it word for word. The staff performance probe moved the scale scene into
+      # `apps/web/src`, so the web app imports `@repo/seed/scale` — and only the
+      # CSP suite noticed, because it is the one config that serves a PRODUCTION
+      # build. Every other suite runs the dev server, where the package's
+      # `development` export condition resolves to `src/` and no `dist/` is
+      # needed. Locally the omission is invisible for the reason above: a
+      # `dist/` from an earlier `pnpm build` is still lying there.
+      #
+      # `@repo/engine-conformance` comes with it, and the ADR-0019 gate is what
+      # said so: promoting `@repo/seed` to a real dependency made its own
+      # dependency transitively an app's, and `check:build-contract` refused the
+      # push until this line named it. That gate could not have caught the
+      # original omission, because the promotion M1-T5 specified had been
+      # skipped — so as far as the contract was concerned `apps/web` depended on
+      # neither. Ordered before `@repo/seed`, which imports it.
       - name: Build shared packages
-        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build && pnpm --filter @repo/layout build
+        run: pnpm --filter @repo/types build && pnpm --filter @repo/interchange build && pnpm --filter @repo/layout build && pnpm --filter @repo/engine-conformance build && pnpm --filter @repo/seed build
 
       - name: Generate Prisma client
         run: pnpm --filter @repo/api prisma:generate
