@@ -24,6 +24,26 @@ export type ScenarioId = 'revision-diff' | 'canvas-draw';
 /** Which framing the scene is measured at. Named rather than a number, because the two ask different questions. */
 export type ScenarioPreset = 'week' | 'fit';
 
+/**
+ * One measured scale within a scenario, with the floor that applies AT that scale.
+ *
+ * **A scenario needs more than one floor, and M1's single `minFps` could not express that.** ADR-0026
+ * §9's gate is not one number: Canvas 2D passes if it sustains **≥ 45 fps at 500 activities and
+ * ≥ 30 fps at 2,000** under sustained pan/zoom/drag. Writing one `minFps: 30` per scenario silently
+ * judged the 500-activity case against the 2,000-activity floor — a third easier than the gate
+ * actually is, which would have reported a pass the ADR does not grant. Found by reading §9 rather
+ * than by anything failing.
+ */
+export interface ScenarioLimb {
+  readonly id: string;
+  /** How many activities the scene is built at. */
+  readonly activities: number;
+  /** P2 at THIS scale. */
+  readonly minFps: number;
+  /** Where the floor comes from, so a reader can check it rather than trust it. */
+  readonly source: string;
+}
+
 export interface ScenarioDefinition {
   readonly id: ScenarioId;
   /** What an operator sees in the picker. */
@@ -32,8 +52,14 @@ export interface ScenarioDefinition {
   readonly question: string;
   /** P1 — the largest dropped-frame difference that still counts as no cost, in percentage points. */
   readonly barPp: number;
-  /** P2 — the absolute floor the treatment must hold. */
-  readonly minFps: number;
+  /**
+   * The scales this scenario is measured at, each with its own floor.
+   *
+   * One limb is normal; two is what ADR-0026 §9 requires of the draw budget. Ordered smallest
+   * first, and **the first limb is what a single-limb caller gets** — which is how the existing CLI
+   * keeps behaving exactly as it did.
+   */
+  readonly limbs: readonly ScenarioLimb[];
   /**
    * Whether a verdict is produced at all.
    *
@@ -62,7 +88,17 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     label: 'Revision compare overlay',
     question: 'Does drawing the difference between two revisions cost the diagram its smoothness?',
     barPp: MAX_DROPPED_DELTA_PP,
-    minFps: MIN_FPS,
+    // One limb: this scenario asks a DIFFERENCE question (does the overlay cost anything?), and the
+    // difference is measured at one scale. The absolute floor is the 2,000-activity one because that
+    // is the ceiling ADR-0026 states, and it is the floor the existing CLI has always applied.
+    limbs: [
+      {
+        id: 'scale-2000',
+        activities: 2000,
+        minFps: MIN_FPS,
+        source: 'ADR-0026 §9 — ≥ 30 fps at the 2,000-activity ceiling.',
+      },
+    ],
     gated: true,
     decision:
       'Whether `View ▾ ▸ Compare on diagram` can be default-on. It ships off because this is ' +
@@ -73,8 +109,28 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     label: 'Canvas draw budget',
     question: 'Does the shipped painter hold its frame rate under sustained pan?',
     barPp: MAX_DROPPED_DELTA_PP,
-    minFps: MIN_FPS,
-    // Reported, not gated, at the whole-plan framing — see the type's docblock and #75.
+    /**
+     * **Both limbs of ADR-0026 §9's gate, and the 500 one has never been measured.**
+     *
+     * `docs/TECH_DEBT.md` #75's own closing sentence names it: "the genuinely open residue is the
+     * 500-activity limb and the unattributed ~8 ms at Fit". Every reading that row carries is at
+     * 2,000, so the easier half of the gate — the one a planner's ordinary plan actually sits at —
+     * has been asserted and never checked.
+     */
+    limbs: [
+      {
+        id: 'scale-500',
+        activities: 500,
+        minFps: 45,
+        source: 'ADR-0026 §9 — ≥ 45 fps at 500 activities. NEVER MEASURED (see #75).',
+      },
+      {
+        id: 'scale-2000',
+        activities: 2000,
+        minFps: MIN_FPS,
+        source: 'ADR-0026 §9 — ≥ 30 fps at the 2,000-activity ceiling.',
+      },
+    ],
     gated: true,
     decision:
       'ADR-0026 §9, and `docs/TECH_DEBT.md` #75, whose single real-hardware reading is from ' +

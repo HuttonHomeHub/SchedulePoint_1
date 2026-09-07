@@ -186,7 +186,7 @@ try {
       pairs: result.pairs,
       counts: result.counts,
       barPp: SCENARIO.barPp,
-      minFps: SCENARIO.minFps,
+      minFps: SCENARIO.limbs[0].minFps,
       gated: isGated(SCENARIO, preset),
     });
   } catch (error) {
@@ -233,7 +233,7 @@ try {
         `${pct(SCENARIO.barPp)}   ${judged.p1 ? 'PASS' : 'FAIL'}`,
     );
     console.log(
-      `  P2 absolute    ${judged.treatmentFps.toFixed(1)} fps vs >= ${String(SCENARIO.minFps)} fps   ` +
+      `  P2 absolute    ${judged.treatmentFps.toFixed(1)} fps vs >= ${String(SCENARIO.limbs[0].minFps)} fps   ` +
         `${judged.p2 ? 'PASS' : 'FAIL'}`,
     );
     console.log('');
