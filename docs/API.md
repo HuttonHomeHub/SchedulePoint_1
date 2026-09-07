@@ -811,6 +811,54 @@ order is the browser's own recency and the server has no basis to improve on it.
 more than five is a **422**: a client sending a non-UUID has a bug rather than a permission
 problem, and saying so discloses nothing about the organisation's contents.
 
+### The staff console (ADR-0086), and its one write
+
+`/api/v1/staff/*` is **not part of the customer API**, and the difference is enforced rather than
+documented: the routes are guarded by `StaffGuard`, the handler receives a `StaffPrincipal`, and
+that type is not assignable to `Principal` in either direction — so a staff route reaching customer
+data is a compile error. Three properties follow, and they are unlike the rest of this file:
+
+- **Every non-staff caller gets a uniform `404`, never `403`.** An authenticated member, an Org
+  Admin and an allowlisted address that has not verified all get the same answer an unmapped route
+  gives. A 403 would tell a prober their guess was interesting.
+- **Every route is audited, including the reads.** The ordinary rule (a read earns no row) is
+  deliberately inverted here, because on this surface the read _is_ the privileged act. A route
+  census assertion derives this from the path, so a staff route added later is covered the day it
+  is written.
+- **Tighter throttling than the global limit** — 30 requests a minute, declared once on the
+  controller.
+
+`POST /api/v1/staff/probe-results` is the surface's **first write** (ADR-0086 D6 claims one already
+existed; it did not). It records a canvas performance reading taken **in the operator's own
+browser**, and its shape is decided by two rules worth stating here:
+
+- **One row per limb, one `runId` per press.** A scenario may be measured at more than one scale,
+  and each scale is its own row. `201` returns the stored rows in limb order — an array, not a
+  single row.
+- **`runId`, `recordedAt` and `apiVersion` are server-set and are refused from the body** (`422`,
+  via `forbidNonWhitelisted`). A client-minted grouping id lets one machine's numbers be filed under
+  another's; a browser clock is neither trustworthy nor monotonic against the database's, and it is
+  the retention predicate; and the API's version is a claim about a process the browser cannot
+  observe.
+
+**The server stores the samples and the thresholds they were measured against, and does not judge.**
+There is no `verdict` field and adding one would be a behavioural change rather than a convenience:
+the verdict is derived on read by the one shared judge the CLI also uses, so a row stays readable
+against the bar it was actually taken under rather than the bar in force when somebody reads it.
+
+`scenarioId`, `limbId` and `preset` are **shape-checked and deliberately not value-checked**.
+`apps/web` and `apps/api` release as separate images (ADR-0027), pulled independently (ADR-0047), so
+an enum on the server would `422` a measurement taken by a newer web bundle for the whole skew
+window — losing the reading on the one machine that can produce one. `limbKind` is the exception and
+carries a value list, because it is a **structure discriminator** a reader dispatches on to
+interpret the samples.
+
+`GET /api/v1/staff/probe-results?limit=` (1–100, default 50) reads the history newest first. **No
+cursor**, and that is a bound rather than an omission: the table has no automated producer, so a
+page is more history than the panel can usefully show. A per-limb history outgrowing one page is the
+trigger to add both a cursor and a second index, with `EXPLAIN (ANALYZE, BUFFERS)` numbers in the
+migration that adds it.
+
 ## Pagination, filtering, sorting
 
 - **Cursor-based** pagination for lists: `?limit=20&cursor=<opaque>`; responses

@@ -66,6 +66,11 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
 
   beforeEach(async () => {
     await prisma.mailEvent.deleteMany();
+    // `perf_probe_results` has no foreign key at all — deliberately, so a reading outlives the
+    // account that took it — so it blocks nothing and `clearDomainData` does not sweep it. It is
+    // cleared here for the reason `mail_events` is: the history read is installation-wide with
+    // nothing to scope it, so a row left by an earlier test is a row this one would read.
+    await prisma.perfProbeResult.deleteMany();
     // **The shared sweep, not a hand-rolled one — which is what this was, and it broke.**
     //
     // This block used to delete org members, audit events, organisations, verifications and users,
@@ -231,9 +236,16 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     const response = await agent.get('/api/v1/staff/health').set('Origin', ORIGIN).expect(200);
     const retention = response.body.data.retention;
 
+    // `perf_probe_results` joined this list in M4-T5 and **this assertion was not updated with
+    // it**, so the slice that added the third table shipped with the e2e that reads the panel
+    // failing. The structural set-equality spec beside `RETENTION_TABLES` was updated; this one
+    // reads the same fact through the real route and the real envelope, and nothing connected the
+    // two. Kept as an exact list rather than a `toContain`: the whole point of the pair is that a
+    // fourth table forces a decision here rather than sliding in.
     expect(retention.tables.map((t: { table: string }) => t.table)).toEqual([
       'csp_reports',
       'mail_events',
+      'perf_probe_results',
     ]);
     expect(typeof retention.intervalMinutes).toBe('number');
     expect(typeof retention.processStartedAt).toBe('string');
@@ -308,6 +320,260 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     for (const row of response.body.data) {
       expect(String(row.action).startsWith('staff.')).toBe(true);
     }
+  });
+
+  /**
+   * A valid press. Two limbs, because the ONE audit row per press is only checkable when a press
+   * writes more than one row — ADR-0073 C3.1's rule is "one row per user action, never per swept
+   * row", and a single-limb payload would satisfy both readings.
+   */
+  const probeBody = (overrides: Record<string, unknown> = {}) => ({
+    scenarioId: 'canvas-draw',
+    scenarioVersion: 1,
+    preset: 'week',
+    viewportWidth: 1646,
+    viewportHeight: 900,
+    devicePixelRatio: 1.75,
+    idleIntervalMs: 16.67,
+    hardwareConcurrency: 8,
+    deviceMemoryGb: 16,
+    gpuRenderer: 'ANGLE (NVIDIA GeForce RTX 4070)',
+    userAgent: 'Mozilla/5.0 (probe)',
+    reducedMotion: false,
+    lostFocusDuringRun: false,
+    machineLabel: 'the Dell, docked, on mains',
+    appVersion: '0.109.0',
+    limbs: [
+      {
+        limbId: 'scale-500',
+        limbKind: 'absolute',
+        pxPerDay: 4.2,
+        activityCount: 500,
+        edgeCount: 800,
+        sceneSummary: '500 activities, 800 links',
+        counts: { visibleBars: 312 },
+        thresholds: { minFps: 45, gated: true, source: 'ADR-0026 §9 at 500', minVisibleBars: 50 },
+        runs: [
+          { droppedPct: 0.4, intervalP50: 16.6, intervalP95: 17.2, fps: 59.8 },
+          { droppedPct: 0.6, intervalP50: 16.7, intervalP95: 17.4, fps: 59.6 },
+        ],
+      },
+      {
+        limbId: 'scale-2000',
+        limbKind: 'absolute',
+        pxPerDay: 1.1,
+        activityCount: 2000,
+        edgeCount: 3200,
+        sceneSummary: '2000 activities, 3200 links',
+        counts: { visibleBars: 255 },
+        thresholds: { minFps: 30, gated: true, source: 'ADR-0026 §9 at 2,000', minVisibleBars: 50 },
+        runs: [{ droppedPct: 10.2, intervalP50: 16.7, intervalP95: 33.4, fps: 41.1 }],
+      },
+    ],
+    ...overrides,
+  });
+
+  it('stores one row per limb, grouped by a server-minted run id', async () => {
+    const agent = await signedInStaff();
+
+    const response = await agent
+      .post('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .send(probeBody())
+      .expect(201);
+
+    // Bare DTOs from the controller: `TransformInterceptor` wraps, and this is the only place the
+    // real interceptor runs, so a double wrap shows up here and nowhere else.
+    const rows = response.body.data;
+    expect(rows).toHaveLength(2);
+    expect(rows[0].runId).toBe(rows[1].runId);
+    expect(rows.map((r: { limbId: string }) => r.limbId)).toEqual(['scale-500', 'scale-2000']);
+
+    // Server-set, never posted. `apiVersion` in particular is a claim about a process the browser
+    // cannot observe, and the body above does not carry it at all.
+    expect(rows[0].apiVersion).toEqual(expect.any(String));
+    expect(rows[0].apiVersion.length).toBeGreaterThan(0);
+    expect(rows[0].recordedAt).toEqual(expect.any(String));
+    expect(rows[0].recordedByLabel).toBe(STAFF_EMAIL);
+
+    // The samples come back as stored, because the server does not judge: the verdict is derived on
+    // read by the one shared judge, from these numbers and the thresholds beside them.
+    expect(rows[1].samples).toEqual([
+      { droppedPct: 10.2, intervalP50: 16.7, intervalP95: 33.4, fps: 41.1 },
+    ]);
+    expect(rows[1].thresholds).toMatchObject({ minFps: 30, gated: true });
+  });
+
+  it('writes ONE audit row per press, naming the scenario and no device data', async () => {
+    const agent = await signedInStaff();
+    const before = await prisma.auditEvent.count({ where: { action: 'staff.probe_recorded' } });
+
+    await agent
+      .post('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .send(probeBody())
+      .expect(201);
+
+    // Two rows stored, ONE audit row — never one per limb (ADR-0073 C3.1).
+    expect(await prisma.auditEvent.count({ where: { action: 'staff.probe_recorded' } })).toBe(
+      before + 1,
+    );
+
+    const row = await prisma.auditEvent.findFirst({
+      where: { action: 'staff.probe_recorded' },
+      orderBy: { occurredAt: 'desc' },
+    });
+    expect(row?.actorType).toBe('STAFF');
+    expect(row?.actorLabel).toBe(STAFF_EMAIL);
+    expect(row?.organizationId).toBeNull();
+    expect(row?.subjectLabel).toBe('canvas-draw');
+    // The allow-list is EMPTY, so the GPU string and the user agent — which name a staff member's
+    // own machine — never reach the one table that refuses DELETE. Asserted on the stored row
+    // rather than on the redactor, because that is where it would leak.
+    expect(row?.changes).toBeNull();
+    expect(JSON.stringify(row)).not.toContain('RTX 4070');
+  });
+
+  it('reads the history newest first, and records reading it as a panel read', async () => {
+    const agent = await signedInStaff();
+    await agent
+      .post('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .send(probeBody())
+      .expect(201);
+    await agent
+      .post('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .send(probeBody({ appVersion: '0.110.0' }))
+      .expect(201);
+    const before = await prisma.auditEvent.count({ where: { action: 'staff.panel_read' } });
+
+    const response = await agent
+      .get('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .expect(200);
+
+    expect(response.body.data).toHaveLength(4);
+    expect(response.body.data[0].appVersion).toBe('0.110.0');
+    expect(await prisma.auditEvent.count({ where: { action: 'staff.panel_read' } })).toBe(
+      before + 1,
+    );
+  });
+
+  it('honours the limit, and refuses one outside its bounds', async () => {
+    const agent = await signedInStaff();
+    await agent
+      .post('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .send(probeBody())
+      .expect(201);
+
+    const limited = await agent
+      .get('/api/v1/staff/probe-results?limit=1')
+      .set('Origin', ORIGIN)
+      .expect(200);
+    expect(limited.body.data).toHaveLength(1);
+
+    await agent.get('/api/v1/staff/probe-results?limit=0').set('Origin', ORIGIN).expect(422);
+    await agent.get('/api/v1/staff/probe-results?limit=101').set('Origin', ORIGIN).expect(422);
+  });
+
+  it('refuses a server-set field supplied in the body', async () => {
+    // `whitelist` + `forbidNonWhitelisted` (`app.module.ts:142-147`) makes this a 422 rather than a
+    // silent drop, which is what turns the three service-layer obligations into an enforced rule.
+    const agent = await signedInStaff();
+
+    for (const field of ['runId', 'recordedAt', 'apiVersion', 'recordedByUserId']) {
+      await agent
+        .post('/api/v1/staff/probe-results')
+        .set('Origin', ORIGIN)
+        .send(probeBody({ [field]: 'anything' }))
+        .expect(422);
+    }
+  });
+
+  it('refuses every bound the DTO declares', async () => {
+    const agent = await signedInStaff();
+
+    const bad: Record<string, unknown>[] = [
+      { scenarioVersion: 0 },
+      { scenarioVersion: 10_000 },
+      { viewportWidth: 199 },
+      { viewportHeight: 10_001 },
+      { devicePixelRatio: 0 },
+      { devicePixelRatio: 9 },
+      { idleIntervalMs: 0 },
+      { idleIntervalMs: 201 },
+      { hardwareConcurrency: 0 },
+      { deviceMemoryGb: -1 },
+      { gpuRenderer: 'x'.repeat(257) },
+      { userAgent: 'x'.repeat(513) },
+      { machineLabel: 'x'.repeat(201) },
+      // Release granularity, and semver-shaped: a commit SHA never reaches either artefact
+      // (ADR-0088 D1), so a value that is not a version is a producer bug rather than a skew.
+      { appVersion: 'main' },
+      // A LABEL, so the shape is checked and the value is not — but the shape still is.
+      { scenarioId: 'Canvas Draw' },
+      { preset: 'Week' },
+      { limbs: [] },
+    ];
+
+    for (const overrides of bad) {
+      await agent
+        .post('/api/v1/staff/probe-results')
+        .set('Origin', ORIGIN)
+        .send(probeBody(overrides))
+        .expect(422);
+    }
+  });
+
+  it('refuses a samples array that does not match the limb kind', async () => {
+    // The rule `@ValidateIf` cannot express: it SKIPS a property rather than refusing it, so a
+    // `runs` array on a `difference` limb would validate and then be dropped on the floor, and the
+    // database's own non-empty CHECK would turn that into a 500 rather than the 422 it is.
+    const agent = await signedInStaff();
+    const limb = probeBody().limbs[0];
+
+    await agent
+      .post('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .send(probeBody({ limbs: [{ ...limb, limbKind: 'difference' }] }))
+      .expect(422);
+
+    await agent
+      .post('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .send(
+        probeBody({
+          limbs: [
+            {
+              ...limb,
+              pairs: [
+                {
+                  baseline: { droppedPct: 1, intervalP50: 16, intervalP95: 17, fps: 60 },
+                  treatment: { droppedPct: 2, intervalP50: 16, intervalP95: 18, fps: 59 },
+                },
+              ],
+            },
+          ],
+        }),
+      )
+      .expect(422);
+  });
+
+  it('refuses both probe routes to a non-staff member, and stores nothing', async () => {
+    const agent = request.agent(server());
+    await signUp(agent, MEMBER_EMAIL).expect(200);
+    await prisma.user.updateMany({ where: { email: MEMBER_EMAIL }, data: { emailVerified: true } });
+
+    await agent
+      .post('/api/v1/staff/probe-results')
+      .set('Origin', ORIGIN)
+      .send(probeBody())
+      .expect(404);
+    await agent.get('/api/v1/staff/probe-results').set('Origin', ORIGIN).expect(404);
+
+    expect(await prisma.perfProbeResult.count()).toBe(0);
   });
 
   it('refuses every M5 panel to a non-staff member', async () => {

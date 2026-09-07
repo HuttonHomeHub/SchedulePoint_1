@@ -4,6 +4,7 @@ import { VersionService } from '../../version/version.service';
 
 import { StaffBootstrapService } from './staff-bootstrap.service';
 import { StaffHealthService } from './staff-health.service';
+import { StaffProbeService } from './staff-probe.service';
 import { StaffController } from './staff.controller';
 import { StaffGuard } from './staff.guard';
 
@@ -29,6 +30,12 @@ import { StaffGuard } from './staff.guard';
  */
 @Module({
   controllers: [StaffController],
-  providers: [StaffGuard, StaffHealthService, StaffBootstrapService, VersionService],
+  providers: [
+    StaffGuard,
+    StaffHealthService,
+    StaffProbeService,
+    StaffBootstrapService,
+    VersionService,
+  ],
 })
 export class StaffModule {}
