@@ -210,3 +210,123 @@ export function judgeRun(input: JudgeInput): JudgeResult {
 
   return { ...common, verdict: p1 && p2 ? 'PASS' : 'FAIL' };
 }
+
+/**
+ * What an absolute run measured, and whether it cleared ADR-0026 §9's floor.
+ *
+ * Separate from {@link JudgeResult} because it answers a **different question**, not because the
+ * judge was forked. `revision-diff` asks "does this feature cost anything?", which needs a pair;
+ * `canvas-draw` asks "does the shipped painter hold its frame rate?", which has no treatment to
+ * compare against and no delta to bar. Collapsing the two into one function with an optional
+ * `treatment` would produce exactly the ADR-0093 defect: a green result that cannot distinguish
+ * "the feature is free" from "there was no feature in the run".
+ *
+ * They share this file, the {@link Verdict} vocabulary, {@link NothingToJudgeError} and the
+ * INDETERMINATE philosophy — which is the part that would drift if it were written twice.
+ */
+export interface AbsoluteJudgeInput {
+  /** One entry per repeat of the same phase. Repeats are what make the spread meaningful. */
+  readonly runs: readonly PhaseTiming[];
+  /** Bars the painter actually drew, from `cull` — the painter's own answer, not a second opinion. */
+  readonly visibleBars: number;
+  /** The floor below which the number is about the cull rather than the painter. */
+  readonly minVisibleBars: number;
+  /** ADR-0026 §9's floor AT THIS SCALE — 45 fps at 500 activities, 30 at 2,000. */
+  readonly minFps: number;
+  /** False at the Fit framing, where the shipped painter is already known to judder. */
+  readonly gated: boolean;
+}
+
+export interface AbsoluteJudgeResult {
+  readonly verdict: Verdict;
+  readonly meanFps: number;
+  readonly slowestRunFps: number;
+  readonly fastestRunFps: number;
+  readonly meanDroppedPct: number;
+  readonly worstIntervalP95: number;
+  readonly visibleBars: number;
+  readonly p2: boolean;
+  readonly indeterminateReason?: string;
+}
+
+/**
+ * Judge an absolute run, or refuse to.
+ *
+ * Same shape and same ordering as {@link judgeRun}, for the same reasons: non-vacuity first (a
+ * canvas that drew almost nothing paces beautifully), then the instrument's fitness, then the
+ * verdict.
+ *
+ * ## The non-vacuity floor is the one that matters here
+ *
+ * ADR-0066 recorded the exact failure this guards. A generated plan laid nose-to-tail spanned
+ * twenty-eight years; the whole-plan zoom then culled roughly nine bars in ten, and the resulting
+ * 4.6 ms p95 "looked like the budget being met" (`docs/TECH_DEBT.md` #75). Nothing about that number
+ * was wrong — it was simply about the cull. An almost-empty canvas produces the best-looking result
+ * this instrument can emit, which is why the check runs before anything else and **throws** rather
+ * than returning a low-confidence pass.
+ *
+ * ## INDETERMINATE, expressed in this scenario's own quantity
+ *
+ * {@link judgeRun} calls a run indeterminate when the baseline's run-to-run spread is at least as
+ * large as the bar. There is no bar here, so the analogue is stated directly: **if the repeats
+ * disagree about the answer — some clear the floor and some do not — the machine cannot resolve the
+ * question.** No tolerance, no tuning parameter, and no rule that could report a FAIL from an
+ * instrument that also reported a PASS on the same code minutes earlier. That is precisely the
+ * situation `m0-condition.md` recorded (0.93 pp and then 10.00 pp for identical code) and concluded
+ * disqualified the environment rather than proving a regression.
+ *
+ * Runs that **all** fall below the floor are a consistent FAIL, and runs that all clear it are a
+ * consistent PASS. Only disagreement is refused.
+ */
+export function judgeAbsolute(input: AbsoluteJudgeInput): AbsoluteJudgeResult {
+  const { runs, visibleBars, minVisibleBars, minFps, gated } = input;
+
+  // ── Non-vacuity FIRST. An almost-empty canvas paces perfectly. ────────────────────────────────
+  if (!Number.isFinite(visibleBars) || visibleBars < minVisibleBars) {
+    throw new NothingToJudgeError(
+      `NON-VACUITY FAILED — the painter did not draw enough for this run to be about the painter.\n` +
+        `  visible bars ${String(visibleBars)} (need >= ${String(minVisibleBars)})\n` +
+        `This is NOT a pass. A number measured on an almost-empty canvas is a number about the ` +
+        `cull, which is how a 4.6 ms p95 once looked like the draw budget being met (ADR-0066).`,
+    );
+  }
+
+  const fpsValues = runs.map((r) => r.fps);
+  if (runs.length === 0 || fpsValues.some((x) => !Number.isFinite(x))) {
+    throw new NothingToJudgeError(
+      'NOTHING TO JUDGE — no finite run results. Refusing to produce a verdict.',
+    );
+  }
+
+  const meanFps = mean(fpsValues);
+  const slowestRunFps = Math.min(...fpsValues);
+  const fastestRunFps = Math.max(...fpsValues);
+  const p2 = meanFps >= minFps;
+
+  const common = {
+    meanFps,
+    slowestRunFps,
+    fastestRunFps,
+    meanDroppedPct: mean(runs.map((r) => r.droppedPct)),
+    worstIntervalP95: Math.max(...runs.map((r) => r.intervalP95)),
+    visibleBars,
+    p2,
+  };
+
+  // Reported, never gated — the Fit framing, where a gate would fail on day one (ADR-0058).
+  if (!gated) return { ...common, verdict: 'REPORTED_ONLY' };
+
+  if (slowestRunFps < minFps && fastestRunFps >= minFps) {
+    return {
+      ...common,
+      verdict: 'INDETERMINATE',
+      indeterminateReason:
+        `the repeats disagree about the answer — the slowest ran at ${slowestRunFps.toFixed(1)} fps ` +
+        `and the fastest at ${fastestRunFps.toFixed(1)} fps, either side of the ` +
+        `${String(minFps)} fps floor. This machine cannot resolve the question, so neither a pass ` +
+        `nor a fail from this run means anything. The remedy is a quieter machine, not a lower floor.`,
+    };
+  }
+
+  return { ...common, verdict: p2 ? 'PASS' : 'FAIL' };
+}
