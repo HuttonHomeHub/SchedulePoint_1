@@ -4094,6 +4094,37 @@ between cases, so a single `clearAll` would change what they test; and a cycle i
 an answer rather than a crash. Worth doing when a sixth table joins the pattern, or sooner if
 another unexplained cross-spec FK failure appears.
 
+### 257. ADR-0086 D6 records a staff write that was never built
+
+**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M0-T4) · **Size:** S · **Owner:** repo
+
+`docs/adr/0086-staff-principal.md:143-145` states, in an **Accepted** ADR:
+
+> One write exists in v1: "send a test message", addressed only to the requesting staff member's own
+> verified address. The recipient is **not a parameter**, so it cannot be used as a relay — a
+> structural property rather than a validation rule.
+
+There is no `@Post`, `@Put`, `@Patch` or `@Delete` anywhere in `apps/api/src/modules/staff/`. The
+controller has six `@Get` routes and nothing else. Verified by grep, 2026-09-07.
+
+**The shape landed and the route never did.** `mail_events.kind`'s CHECK permits `test`, and
+`staff-health.dto.ts:12` enumerates it — so the design is half-present, which is what made the claim
+easy to write and hard to notice. The reasoning quoted above is sound; it simply describes something
+that does not exist.
+
+**Why this is worth a row rather than a quiet correction.** ADRs are never rewritten (CLAUDE.md §6),
+so the sentence stands as written and a reader has no way to tell it from the true ones around it.
+More concretely, it costs the next author real work: the staff-performance-probe epic set out
+believing it was adding the **second** write to that surface and could inherit a precedent for what a
+staff write may do. It is adding the **first**, so every property a write must not break has to be
+argued from scratch — which that epic's spec §4.10 now does.
+
+**Remediation:** either build the test-send route the ADR describes (a real capability: an operator
+with `MAIL_SMTP_URL` set has no way to confirm delivery works without waiting for a real event), or
+supersede the claim in a later ADR. **Do not do it opportunistically inside another epic** — it is a
+different capability with its own security argument, and bundling it is how a surface acquires a
+write nobody reviewed on its own terms.
+
 ### 254. The revision-compare benchmark never exercises the projections it is quoted for
 
 **Status:** open · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo

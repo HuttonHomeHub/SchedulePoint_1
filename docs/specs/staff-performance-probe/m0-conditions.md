@@ -65,10 +65,24 @@ at measured floors for exactly that reason (ADR-0058).
 
 ### Baseline — measured before any change
 
-_Recorded at M0-T2. Commit SHA and per-chunk gzip sizes below._
+**Measured at `ca103349`** (the conditions commit, docs-only), clean tree, `pnpm --filter @repo/web build`.
 
-<!-- M0-T2 fills this in. Deliberately left empty in the conditions commit: a baseline written
-     from memory is not a baseline. -->
+| Chunk (gzip)             | Bytes       |
+| ------------------------ | ----------- |
+| `index-*.js` — **entry** | **397,471** |
+| `jspdf.es.min-*.js`      | 127,391     |
+| `index.es-*.js`          | 48,414      |
+| `html2canvas-*.js`       | 45,754      |
+| `purify.es-*.js`         | 10,493      |
+| `staff-*.js`             | 4,619       |
+| `rolldown-runtime-*.js`  | 397         |
+| `share-*.js`             | 319         |
+
+**F2's number is the entry chunk: 397,471 B gzip.** It must be unchanged after the epic.
+
+**The staff route already code-splits, at 4,619 B.** That is the chunk the panel belongs in, and it
+is the reason F2 is a realistic condition rather than a hopeful one — the splitting mechanism is
+already working on this exact route.
 
 **If F2 fails:** the named fallback is to keep the scale scene out of `src/` entirely and have the
 panel derive a smaller scene locally, accepting that the probe's scene is then not the same one the
@@ -114,3 +128,45 @@ invented fixture proves the judge agrees with whoever wrote the fixture.
   a FAIL is **information**, reported plainly. M5 files rather than opens work, and the panel's
   wording must not imply an obligation.
 - **The lazy chunk's absolute size** — see F2.
+
+---
+
+## M0-T3 — three preconditions, checked by running rather than inferred
+
+### 1. `@repo/seed/scale` is browser-safe — CONFIRMED, and it costs 68.6 kB
+
+Bundled alone for a browser target (`esbuild --platform=browser --target=chrome120`): it builds, and
+the output contains **zero** occurrences of `node:`. So the claim in `scripts/scale-scene.ts` holds.
+
+**But the size is the finding, and it was not in the brief.** Minified **337,440 B**, gzip
+**68,641 B** — against a staff chunk that is currently **4,619 B**. Importing the scale scene from
+`src/` therefore multiplies that chunk by roughly **sixteen**.
+
+That is survivable **only** if it lands in a lazily-loaded chunk, and it is exactly why F2 gates the
+entry chunk rather than the total. If the split does not hold, the fallback named in F2 is not a
+nicety — 68.6 kB in the entry bundle would be paid by every planner on every cold load, for a panel
+only a staff member can open. Recorded here so M1 designs the import boundary knowing the number
+rather than discovering it at M4.
+
+### 2. The retention list is table-driven, and the forced edit is deliberate — 2 places, not 3
+
+- `RETENTION_TABLES` is a `const` array asserted by **set equality** in
+  `retention-boundary.structural.spec.ts:44`. Adding an entry **breaks that test on purpose**: its
+  own docblock says the set is closed "so adding a third forces a decision rather than an edit".
+  That is the intended decision point, not friction to route around.
+- The staff panel's rows are **derived** from the API's list, and `tableLabel()` falls back to the
+  raw table name, with the reason stated: "a table added without a label here should read as
+  unpolished, never as nameless."
+
+**So a fourth table appears in the panel automatically**; the only edits are `RETENTION_TABLES` (plus
+its deliberate structural assertion) and one label. **M4-T5 is smaller than the plan allowed for.**
+
+### 3. `audit_events.action` is TEXT + CHECK — ONE migration, not two
+
+`action` is a Prisma `String` with a database CHECK; there is **no `enum AuditAction`**. There _is_ an
+`enum AuditActorType`, which is precisely why ADR-0086 D5 had to pay two migrations — Postgres
+forbids using a new enum label in the transaction that added it.
+
+**Adding `staff.probe_recorded` therefore costs one migration.** The new actor type that made
+ADR-0086 expensive is not needed here: the probe's actor is an ordinary `USER`, and the staff
+namespace is what the census keys on (`staff.%`), not the actor type.
