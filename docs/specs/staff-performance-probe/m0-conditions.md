@@ -45,6 +45,24 @@ barrel-preserving argument — and its assertions do not change.
 **If F1 fails:** the extraction changed what is measured. Fix the extraction. Do not re-baseline
 the CLI.
 
+### Result — PASS, 2026-09-07
+
+Run before the extraction and after it, on `--scene fixture --preset week`. Output identical once
+timings are normalised: the same lines in the same order, non-vacuity counted from the same
+population, the same verdict vocabulary, and the throw preserved.
+
+**The comparison method needed one correction, and it is worth recording because it is the same
+class of error the conditions exist to catch.** The first normaliser replaced `[0-9]+\.[0-9]+` and
+left the sign, so a run where the treatment came out marginally FASTER than the baseline
+(`delta -0.56 pp`) read as a difference against one where it came out marginally slower
+(`delta +0.19 pp`). Both PASS; both are the same shape. **The sign of a delta is a measurement, not
+structure**, and treating it as structure would have failed F1 for exactly the reason F1 says it
+must not — absolute timings do not reproduce here. Normalising `[-+]?[0-9]+\.[0-9]+` gives an
+identical diff.
+
+It also survived the second half of M1: the CLI now reads its bars and its gating from the scenario
+registry rather than deciding again, and the output is still identical.
+
 ---
 
 ## F2 — the initial bundle does not move

@@ -95,7 +95,7 @@ execFileSync(
   [
     'exec',
     'esbuild',
-    'src/features/perf-probe/model/judge.ts',
+    'src/features/perf-probe/model/probe-cli-exports.ts',
     '--bundle',
     '--format=esm',
     '--platform=node',
@@ -105,9 +105,15 @@ execFileSync(
   { stdio: 'inherit' },
 );
 
-const { judgeRun, NothingToJudgeError, MAX_DROPPED_DELTA_PP, MIN_FPS } = await import(
+const { judgeRun, NothingToJudgeError, scenarioById, isGated } = await import(
   pathToFileURL(judgeBundle).href
 );
+
+// The scenario says whether this run is gated and against which bars, rather than this file
+// deciding again. That rule used to live here as `preset !== 'fit'` with the two constants
+// inline — and two callers agreeing on HOW to judge while disagreeing about WHICH question
+// they asked is the subtler half of the drift M1 exists to remove.
+const SCENARIO = scenarioById('revision-diff');
 
 const chromiumPath =
   process.env.PLAYWRIGHT_CHROMIUM_PATH ??
@@ -179,9 +185,9 @@ try {
     judged = judgeRun({
       pairs: result.pairs,
       counts: result.counts,
-      barPp: MAX_DROPPED_DELTA_PP,
-      minFps: MIN_FPS,
-      gated: preset !== 'fit',
+      barPp: SCENARIO.barPp,
+      minFps: SCENARIO.minFps,
+      gated: isGated(SCENARIO, preset),
     });
   } catch (error) {
     // Preserved deliberately: a run that cannot be judged EXITS NON-ZERO with the reason, and does
@@ -224,10 +230,10 @@ try {
   } else {
     console.log(
       `  P1 difference  delta ${judged.deltaPp >= 0 ? '+' : ''}${pct(judged.deltaPp)} vs <= ` +
-        `${pct(MAX_DROPPED_DELTA_PP)}   ${judged.p1 ? 'PASS' : 'FAIL'}`,
+        `${pct(SCENARIO.barPp)}   ${judged.p1 ? 'PASS' : 'FAIL'}`,
     );
     console.log(
-      `  P2 absolute    ${judged.treatmentFps.toFixed(1)} fps vs >= ${String(MIN_FPS)} fps   ` +
+      `  P2 absolute    ${judged.treatmentFps.toFixed(1)} fps vs >= ${String(SCENARIO.minFps)} fps   ` +
         `${judged.p2 ? 'PASS' : 'FAIL'}`,
     );
     console.log('');

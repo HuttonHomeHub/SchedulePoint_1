@@ -1,3 +1,4 @@
+import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
 import type { GhostBar } from '../src/features/tsld/render/lenses';
 import { dependencyPolyline } from '../src/features/tsld/render/link-routing';
 import { paintScene, type TsldScene } from '../src/features/tsld/render/paint';
@@ -8,7 +9,6 @@ import type {
 } from '../src/features/tsld/render/render-model';
 
 import { PALETTE } from './link-routing-bench';
-import { scaleScene } from './scale-scene';
 
 /**
  * M0 Condition A — does drawing the **difference between two revisions** cost the diagram its
