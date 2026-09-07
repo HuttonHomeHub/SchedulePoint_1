@@ -274,6 +274,52 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // panel working correctly and the test reading it wrongly.
   await expect(activity.getByText('access denied', { exact: true }).first()).toBeVisible();
 
+  // 6. **The performance probe runs, in a real browser, and reaches a terminal state.**
+  //
+  // This is `docs/specs/staff-performance-probe/` M3's journey, and it is here rather than in a
+  // sibling file because the account, the verified address and the signed-in `/staff` page already
+  // exist by this point — re-deriving all three to press one button would be the slower and less
+  // honest test.
+  //
+  // **It proves the PATH and says nothing about performance, deliberately.** A CI container cannot
+  // produce a quotable number — that is the epic's entire premise, and `m0-conditions.md` records
+  // this container's own no-change baseline moving more than tenfold between two runs an hour
+  // apart. So the assertion is that the machinery works: the chunk downloads, the canvas paints,
+  // the judge is consulted, and whatever comes back is stated as the right KIND of thing.
+  //
+  // The Quick length is chosen for the runtime AND because a quick run is ungated by construction
+  // (one repeat has no run-to-run spread, so the INDETERMINATE rule cannot fire) — which means this
+  // journey can never accidentally assert a verdict a container has no business producing.
+  const probePanel = staff.getByRole('heading', { name: 'Performance' });
+  await expect(probePanel).toBeVisible();
+  await staff.getByRole('combobox', { name: 'Length' }).selectOption('quick');
+  await staff.getByRole('button', { name: 'Run measurement' }).click();
+  // The confirmation's action button shares the opener's name on purpose, so scope to the dialog
+  // rather than to the copy (ADR-0091's recorded lesson about locating by text).
+  await staff.getByRole('alertdialog').getByRole('button', { name: 'Run measurement' }).click();
+
+  const result = staff.locator('[data-perf-probe-result]');
+  await expect(result).toBeVisible({ timeout: 60_000 });
+
+  // **Either a reading or a refusal — both are correct outcomes here**, and asserting only one
+  // would make this suite depend on the runner's frame clock, which is the thing being measured.
+  const resultText = (await result.textContent()) ?? '';
+  expect(resultText).toMatch(
+    /(The run was refused|This run cannot be judged|PASS|FAIL|INDETERMINATE|REPORTED_ONLY)/,
+  );
+
+  // And a refusal is never dressed as a verdict. This is the assertion the fourth verdict value
+  // exists for, checked against the whole panel rather than the alert alone — the defect would be a
+  // pass/fail word left somewhere else on the surface beside a correctly-worded refusal.
+  if (resultText.includes('The run was refused')) {
+    expect(resultText).not.toMatch(/\bPASS\b/);
+    expect(resultText).not.toMatch(/\bFAIL\b/);
+  }
+
+  // The overlay must be gone: it is `position: fixed; inset: 0`, so a leaked one would cover the
+  // console and every later assertion — including the axe sweep below — would be about a canvas.
+  await expect(staff.getByRole('button', { name: /^Cancel/ })).toHaveCount(0);
+
   // The console is a real screen and gets the same accessibility bar as every other one.
   const results = await new AxeBuilder({ page: staff })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])

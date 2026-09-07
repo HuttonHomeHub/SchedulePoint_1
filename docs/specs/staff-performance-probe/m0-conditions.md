@@ -110,6 +110,47 @@ owner gets the number, and no user pays for a bundle they cannot use.
 
 ---
 
+### Result — 2026-09-07, after M3: **the split worked; the number moved by 63 bytes**
+
+Measured with the same method as the baseline (`gzip -c dist/assets/index-*.js | wc -c`) — and the
+baseline was **re-derived from `ca103349` first**, giving **397,471 B exactly**, which is why the
+figures below can be compared at all.
+
+| Chunk (gzip)             | Baseline `ca103349` | After M3    | Δ       |
+| ------------------------ | ------------------- | ----------- | ------- |
+| `index-*.js` — **entry** | 397,471             | **397,534** | **+63** |
+| `staff-*.js`             | 4,619               | 8,979       | +4,360  |
+| `run-probe-*.js`         | —                   | **7,858**   | new     |
+
+**The split is proven, and the +63 B is not probe code.** Three independent checks:
+
+1. **Grep.** The entry chunk contains none of `Run measurement`, `perf-probe`, `NON-VACUITY`,
+   `INDETERMINATE`, `scaleSpec` or `canvas-draw`. The staff chunk contains all of them.
+2. **The chunk graph.** `@repo/seed/scale`, both scenes and the runner are in `run-probe-*.js`,
+   7,858 B gzip, referenced only from the staff chunk and fetched only when somebody presses Run.
+3. **A byte-level diff of the two entry chunks.** The _entire_ difference is content hashes plus one
+   statement: the entry's own `export{…}` list grows from 20 names to 32. The probe reuses modules
+   the entry chunk **already contained** — `paintScene`, `cull`, `resolveTsldPalette`, `Surface`,
+   `ConfirmDialog`, `Select` — and a child chunk consuming them requires them to be named. That is
+   +119 raw bytes of linkage, 63 after gzip, and it is the honest price of the painter being _the
+   shipped painter_ rather than a copy.
+
+**So F2's number moved and F2's inference did not hold.** Its stated rule is "any movement in the
+entry chunk means the dynamic import did not split, and the epic STOPS until it does" — and the
+split demonstrably worked. The condition was written with one mechanism in mind (scene code leaking
+into the entry) and cannot, as written, distinguish that from linkage growing by twelve export
+names. **A byte-exact bundle condition cannot tell code from plumbing**; a condition that could
+would have to be expressed over the chunk graph, which is what the three checks above do by hand.
+
+Recorded as a **qualified pass**: the thing F2 exists to prevent did not happen, and the number it
+names did move. Neither half is dropped. The 0.016 % is not renegotiated into "unchanged" — that
+rewriting is the failure this whole document is built to refuse.
+
+**`@repo/seed` is still a `devDependency` of `@repo/web`**, and did not need promoting: Vite inlines
+it into `run-probe-*.js` at build time, so nothing resolves it at runtime and no production install
+needs it. The cost F2 anticipated — "a real cost paid by every user of the application" — was not
+paid, because the 7,858 B lands in a chunk only a staff member ever fetches.
+
 ## F3 — the panel and the CLI agree, and the 1920 cell comes back INDETERMINATE
 
 Feed both the browser judge and the CLI the **stored fixture of a real recorded run** — the 1920
@@ -134,6 +175,31 @@ it a first-class verdict is the correction this epic exists to make automatic.
 invented fixture proves the judge agrees with whoever wrote the fixture.
 
 **If F3's expected value is wrong, the judge is wrong and not the fixture.**
+
+### Result — PASS, 2026-09-07
+
+`apps/web/src/features/perf-probe/model/f3-recorded-run.test.ts`. Three pairs reproducing the
+recorded quantities exactly — baseline mean **10.00 pp**, spread **6.67 pp**, treatment mean
+**20.19 pp**, bar **2.00 pp** — asserted to reproduce before anything is concluded from them.
+
+**Verdict: `INDETERMINATE`.** And the counterfactual was run rather than reasoned about: with the
+`baselineSpreadPp >= barPp` branch removed, the same fixture reports **`FAIL`** —
+
+```
+AssertionError: expected 'FAIL' to be 'INDETERMINATE'
+```
+
+— which is the whole epic in one line. A 10.19 pp delta against a 2.00 pp bar is a large,
+real-looking effect, and on that run it was produced by a machine whose own baseline had moved
+tenfold with nothing in the code path changed. The pre-correction judge would have handed somebody
+a confident reason to withdraw a working feature.
+
+**"Both must report the same thing" is structural rather than a coincidence.** The CLI driver
+bundles and calls the _same_ `judgeRun` (`measure-revision-diff.mjs:108`, importing from the shared
+module M1 extracted); the test asserts that by reading the driver, and additionally that it contains
+no verdict arithmetic of its own — because a comment claiming it would be exactly the unexecuted
+decision-bearing claim ADR-0076 Class 3 names. The bar is read from `MAX_DROPPED_DELTA_PP` rather
+than retyped here, so the fixture cannot drift from the constant it is judged against.
 
 ---
 

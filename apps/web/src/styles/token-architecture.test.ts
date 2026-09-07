@@ -556,7 +556,17 @@ describe('weight is a governed axis', () => {
   // code span was written with a weight too and it came OUT rather than the ceiling going up by
   // two: the values beside it are already `text-muted-foreground`, so the weight was a second
   // channel doing the first one's job, which is what this ratchet is for.
-  const SCREEN_WEIGHT_CEILING = 168;
+  // ...and 168 -> 170 (staff performance probe M3): TWO weights on the new Performance panel, and
+  // the number is 170 rather than 173 because three came out rather than being absorbed. The three
+  // removed were bold lead-in sentences inside `Alert`s — and `Alert` already carries a tone
+  // colour, a coloured left accent bar, a leading icon and an assertive-or-polite role, so the
+  // weight was a fourth channel saying what four things already said. The two that stayed are both
+  // categories this ceiling governs rather than forbids: an `h3` matching the weight of the `h2`
+  // its own panel renders (the ADR-0100 M4 finding inverted — a caption-weight title beside a
+  // full-weight sibling is the one-off, not the match), and the VERDICT, which is the single thing
+  // the whole feature exists to produce and would otherwise read as one more line of body copy
+  // under a heading (the revision-compare 166 -> 167 precedent, verbatim).
+  const SCREEN_WEIGHT_CEILING = 170;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));
