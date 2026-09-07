@@ -26,6 +26,7 @@ function build(
     enabled?: boolean;
     oldestCsp?: Date | null;
     oldestMail?: Date | null;
+    oldestProbe?: Date | null;
   } = {},
 ) {
   const prisma = {
@@ -53,6 +54,15 @@ function build(
         ),
       ),
     },
+    perfProbeResult: {
+      findFirst: vi.fn(() =>
+        Promise.resolve(
+          options.oldestProbe === undefined || options.oldestProbe === null
+            ? null
+            : { recordedAt: options.oldestProbe },
+        ),
+      ),
+    },
   } as unknown as PrismaService;
 
   const config = {
@@ -62,6 +72,7 @@ function build(
     retentionSweepEnabled: options.enabled ?? true,
     retentionCspReportsDays: 30,
     retentionMailEventsDays: 365,
+    retentionPerfProbeDays: 365,
     retentionSweepIntervalMinutes: 60,
   } as unknown as AppConfigService;
 
@@ -81,9 +92,40 @@ describe('StaffHealthService retention', () => {
 
     const { retention } = await service.read();
 
-    expect(retention.tables.map((t) => t.table)).toEqual(['csp_reports', 'mail_events']);
+    expect(retention.tables.map((t) => t.table)).toEqual([
+      'csp_reports',
+      'mail_events',
+      'perf_probe_results',
+    ]);
     expect(retention.enabled).toBe(true);
     expect(retention.intervalMinutes).toBe(60);
+  });
+
+  it('reads each table’s OWN oldest row, and not a sibling’s', async () => {
+    // **The assertion that would have caught the third table's arrival, and did not exist.** This
+    // service dispatched the lookup with a binary ternary, so a third policy fell to the `else` and
+    // reported `mail_events`' oldest row as the new table's age — on the panel whose whole design
+    // principle is that the answer is derived from the data rather than from the sweep's own
+    // bookkeeping. Both branches typechecked and nothing failed.
+    //
+    // Three distinct dates, so a swapped or defaulted branch cannot coincide with the right answer.
+    // Verified red against the ternary: `perf_probe_results` came back with the mail date.
+    const oldestCsp = new Date('2026-01-01T00:00:00.000Z');
+    const oldestMail = new Date('2026-02-02T00:00:00.000Z');
+    const oldestProbe = new Date('2026-03-03T00:00:00.000Z');
+    const { service } = build({ oldestCsp, oldestMail, oldestProbe });
+
+    const { retention } = await service.read();
+
+    expect(retention.tables.find((t) => t.table === 'csp_reports')?.oldestAt).toBe(
+      oldestCsp.toISOString(),
+    );
+    expect(retention.tables.find((t) => t.table === 'mail_events')?.oldestAt).toBe(
+      oldestMail.toISOString(),
+    );
+    expect(retention.tables.find((t) => t.table === 'perf_probe_results')?.oldestAt).toBe(
+      oldestProbe.toISOString(),
+    );
   });
 
   it('distinguishes an EMPTY table from a table whose oldest row is new', async () => {

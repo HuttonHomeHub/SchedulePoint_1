@@ -40,8 +40,21 @@ function operationalSources(): string[] {
 }
 
 describe('the retention sweep cannot reach what it must not', () => {
-  it('names exactly two tables — by equality, so a third forces a decision', () => {
-    expect(new Set(RETENTION_TABLES)).toEqual(new Set(['csp_reports', 'mail_events']));
+  it('names exactly three tables — by equality, so a fourth forces a decision', () => {
+    // **Editing this line IS the decision**, which is what the assertion is for. It went from two to
+    // three for `perf_probe_results` (staff-performance-probe M4), and that addition is recorded in
+    // `docs/specs/staff-performance-probe/m4-schema-record.md` and in the migration rather than
+    // passing through the diff as a fix — the table holds a staff member's machine fingerprint and
+    // their address, so whether the sweep may reach it is exactly the question this gate exists to
+    // put in front of somebody.
+    //
+    // What forced the decision to be a good one rather than a shrug: the same addition exposed a
+    // binary ternary in `StaffHealthService.retention()` that would have reported `mail_events`'
+    // oldest row as the new table's age. A gate that makes you look is worth more than the line it
+    // costs.
+    expect(new Set(RETENTION_TABLES)).toEqual(
+      new Set(['csp_reports', 'mail_events', 'perf_probe_results']),
+    );
   });
 
   it('never references the append-only audit log, or any customer entity', () => {

@@ -2,8 +2,8 @@
 
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
-> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 30
-> models across 61 committed migrations — is the single source of truth for the data model.
+> [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 31
+> models across 62 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -1388,12 +1388,12 @@ oversight — which is why it is documented here at length rather than listed.
 
 ## Operational telemetry (installation-wide, not organisation-scoped)
 
-Two tables. Neither is part of the `Organization → Client → … → Activity` hierarchy above,
-neither carries an `organization_id`, and both are read by a staff member about the
-installation rather than by a member about their own data. Both are **ordinary** tables —
-updatable, deletable, expirable — and both migrations say so at length, because the reflex in
+Three tables. None is part of the `Organization → Client → … → Activity` hierarchy above,
+none carries an `organization_id`, and all three are read by a staff member about the
+installation rather than by a member about their own data. All three are **ordinary** tables —
+updatable, deletable, expirable — and all three migrations say so at length, because the reflex in
 this repository after ADR-0072 is to model a new "things that happened" table on
-`audit_events` and in both cases that would be a defect rather than a style choice.
+`audit_events` and in all three cases that would be a defect rather than a style choice.
 
 ### MailEvent: failed and abandoned sends (staff console M1)
 
@@ -1719,6 +1719,83 @@ IMMUTABLE`). pgcrypto's `digest()` is not installed, the `app` role is not super
   types return **204 with zero rows recorded**; only `application/json` — which no browser sends,
   and which is what the e2e suite sends — records anything. The table cannot currently receive a
   report from a browser at all.
+
+### PerfProbeResult: canvas performance readings (staff performance probe M4)
+
+The `perf_probe_results` table holds what a staff member's **own browser** measured when they
+pressed **Run measurement** on `/staff` (`docs/TECH_DEBT.md` #75). One row per **limb** of one run,
+grouped by a `run_id` correlation column — ADR-0026 §9 gates two scales (≥ 45 fps at 500 activities,
+≥ 30 fps at 2,000), so one press produces two or more judged limbs. **Non-scheduling** — the CPM
+engine never reads it — so the migration is a single additive table create.
+
+**It is an ordinary table for a variant of `mail_events`' reason, and the variant matters.** There
+the unerasable column was a customer's address; here it is a **staff member's machine**:
+`gpu_renderer`, `user_agent`, `hardware_concurrency` and `device_memory_gb` together are a hardware
+fingerprint, and `recorded_by_label` is an address. The audit shape would put that in a table that
+refuses `UPDATE` and `DELETE` in the database, so ADR-0085 D1's anonymisation tombstone could never
+reach it. Updatable, deletable, expirable. **Do not add a trigger to it.**
+
+- **Retention: 365 days**, `RETENTION_PERF_PROBE_DAYS`, enforced by the ADR-0087 sweep from the day
+  the table exists — unlike `mail_events`, whose period was a ceiling for four months before it
+  became a promise.
+- **One row per limb, not per run**, and no parent table. Seven fields — `scenario_id`, `preset`,
+  `activity_count`, `edge_count`, `scene_summary`, `counts`, `thresholds` — differ between a
+  500-activity limb and a 2,000-activity one, so a per-run row would push them into `jsonb`, where
+  the series this feature exists to produce (_this limb, across releases_) cannot be ordered or
+  filtered. A `perf_probe_runs` parent was rejected rather than overlooked: it gives the retention
+  sweep a two-table **ordered** delete, the class `docs/TECH_DEBT.md` #253 records thirteen
+  hand-maintained copies of, and the ADR-0126 shape where a fourth child table broke 557 API e2e
+  tests at once on a RESTRICT foreign key. `run_id` is a plain correlation UUID (ADR-0073 C3.3),
+  minted server-side so a client cannot make one machine's numbers read as another's.
+- **No verdict column.** The verdict is derived on read from `samples` + `thresholds` by the same
+  pure judge the panel used, so a stored verdict can never disagree with the numbers beside it —
+  and re-judging historic rows under a corrected rule is possible. Changing the judge's _algorithm_
+  re-interprets history; changing a _bar_ does not, because each row carries the bar it was taken
+  against. It is also what lets a limb that drew too little to judge be **stored and read back as
+  unjudgeable**, with no `refusal_reason` column, from its own counts.
+- **`limb_kind` is the one value-list CHECK**, and the discriminator is written into the migration
+  so the next column does not copy it by analogy: _a structure discriminator the reader dispatches
+  on gets a value list; a label does not._ `scenario_id`, `limb_id` and `preset` get a **shape**
+  check and no value list — the `audit_events.action` position, not the
+  `csp_reports.effective_directive` mistake, and the two are distinguished rather than assumed. Here
+  a refusal is a 422 an operator is looking at, so a backstop is safe; a **value list** would still
+  be wrong, because `apps/web` and `apps/api` release as separate images on separate versions
+  (ADR-0027) and are pulled independently (ADR-0047), so it would make the database the authority on
+  a vocabulary authored in the web bundle and 422 a new scenario for the whole skew window.
+- **`recorded_by_user_id` carries no foreign key**, the `audit_events.actor_user_id` precedent:
+  Better Auth hard-deletes users and `User` has no `deleted_at`, so RESTRICT would break a library's
+  own delete path, CASCADE would destroy the installation's performance history because an account
+  left, and SET NULL would force nullability to buy nothing `recorded_by_label` does not already
+  give. A deleted recorder leaves an id pointing at nothing and a label that still reads.
+- **The nullable columns are erasure affordances or genuine absences, and never defaults.**
+  `recorded_by_label` and `gpu_renderer` are the two ADR-0085 D1 scrub targets — with both cleared
+  the row is a machine reading attached to nobody. `hardware_concurrency`, `device_memory_gb` and
+  `gpu_renderer` are null when **not captured**: `deviceMemory` is Chromium-only and
+  `WEBGL_debug_renderer_info` is withheld by default in Firefox. No `DEFAULT` on any of them, the
+  ADR-0126 rule — a default would invent a fact about a machine nobody measured.
+- **`idle_interval_ms` has a sign check and no plausibility range**, deliberately. The 4–40 ms
+  plausible-display-clock window is the _client's_ guard; restating it as a CHECK means the day the
+  product widens it the database silently refuses rows the product decided to accept, and a
+  migration becomes the cost of changing a guard. `> 0` is a fact about a duration; a range is a
+  policy.
+- **The JSONB caps are measured, and the first draft's figure was wrong by four.** At the shipped
+  three-repeat run size, `pg_column_size` gives `samples` 842 B for a difference limb and 362 B for
+  an absolute one (whole rows 1,537 B and 706 B). The 8,192 B cap therefore has 9.7× headroom, not
+  the "order of magnitude" asserted before anything was inserted, and it first bites at roughly 28
+  pairs. What it refuses is raw per-frame intervals — ~2,400 per pair at 60 fps for 40 s, ~20 kB —
+  which are a different decision and belong in a profiler this feature explicitly is not.
+- **One index, `(recorded_at, id)`**, serving the newest-first read and the sweep's ranged delete on
+  its leftmost prefix; ASC-declared and read backwards, the `mail_events` argument verbatim. **No
+  second index**, and that is a bound rather than a measurement, said as such: this table has no
+  automated producer — a row exists only because a person pressed a button — so ten runs a day at
+  four limbs under a 365-day sweep is ~14,600 narrow rows, three orders of magnitude below the 1M at
+  which ADR-0073 C1 measured a zero-match filter at 681–954 ms.
+- **What the database cannot enforce**, recorded because no constraint holds it: `run_id`,
+  `recorded_at` and `api_version` are server-set and the DTO must not carry them; the panel must
+  distinguish a **failed store** from a **refused run**, which is what makes every CHECK above safe
+  rather than a silent evidence loss; and **the POST body is never logged** — a Pino line carrying
+  it would put a named staff member's GPU string and user-agent outside this table's 365-day bound,
+  which is the argument `RetentionSweepService` already makes about `mail_events`.
 
 ## Testing & performance
 

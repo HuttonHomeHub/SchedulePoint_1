@@ -3555,3 +3555,208 @@ model CspReport {
   @@index([lastSeenAt, id])
   @@map("csp_reports")
 }
+
+/// One **limb** of one performance-probe run, taken in a staff member's own browser
+/// (staff-performance-probe M4; `docs/TECH_DEBT.md` #75). The **third** table in the operational
+/// telemetry class — `docs/DATABASE.md`'s section header said "Two tables" and was corrected in the
+/// same commit rather than left to go stale.
+///
+/// **This is not the audit shape, and that is a requirement rather than a style choice** —
+/// `docs/DATABASE.md:1406-1414` names the reflex it exists to resist. `audit_events` refuses
+/// `UPDATE` and `DELETE` in the database (`BEFORE UPDATE OR DELETE` / `BEFORE TRUNCATE`,
+/// `ENABLE ALWAYS`), and this row names a **person's machine**: `gpu_renderer`, `user_agent`,
+/// `hardware_concurrency` and `device_memory_gb` together are a hardware fingerprint of a named
+/// staff member, and `recorded_by_label` is their address. The audit shape would put that in a
+/// permanently unerasable table — the ADR-0085 D3 collision, repeated for every press. So this table
+/// is **ordinary**: updatable (ADR-0085 D1's tombstone can scrub `recorded_by_label` in place),
+/// deletable and expirable. **Do not add a trigger to it.**
+///
+/// **No customer data, by construction.** No `organization_id`, no plan, activity, client or project
+/// column, and nothing that could hold one. There is nothing to scope, so there is no scope to get
+/// wrong and no IDOR surface exists (ADR-0086 D7).
+///
+/// **No verdict column.** The verdict is derived on read from `samples` + `thresholds` by the same
+/// pure judge the panel used, so a stored verdict can never disagree with the numbers beside it.
+/// Changing the judge's *algorithm* re-interprets historic rows; changing a *bar* does not, because
+/// each row carries the bar it was taken against.
+///
+/// **One row per LIMB, grouped by `run_id`** (`docs/specs/staff-performance-probe/m4-schema-record.md`
+/// D-a). A run is one press; a limb is one thing judged — ADR-0026 §9 gates two scales, so one press
+/// produces two or more verdicts. `scenario_id`, `preset`, `activity_count`, `edge_count`,
+/// `scene_summary`, `counts` and `thresholds` all differ between a 500-activity limb and a
+/// 2,000-activity one, so a per-run row would push them into JSON and take the comparison this
+/// feature exists for — *this limb, across releases* — out of SQL. The cost is stated rather than
+/// discovered: the machine and provenance columns repeat across a run's two to four limbs, which on
+/// a table minted by a person pressing a button is nothing.
+///
+/// **No `created_at`/`updated_at`/`version`/`deleted_at`** — the `mail_events` reasoning verbatim.
+/// The producer writes once, so `created_at` would equal `recorded_at` on every row; nothing edits a
+/// row concurrently; and a soft delete that leaves the machine description in place defeats the one
+/// property that makes this table ordinary. `machine_label` is therefore **insert-time only in v1**:
+/// an edit route needs `updated_at` and `version`, which is a migration and a decision.
+///
+/// **Non-scheduling.** The CPM engine never reads it, so this is a single additive table create and
+/// the ADR-0034 recalculation parity gate is structurally unaffected.
+model PerfProbeResult {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Groups the limbs of ONE press. A plain correlation UUID with **no FK and no parent table** —
+  /// the ADR-0073 C3.3 `correlation_id` pattern, and the `baseline_activities.source_activity_id`
+  /// precedent for a non-FK identity column. A `perf_probe_runs` parent was rejected: it gives the
+  /// ADR-0087 sweep a two-table **ordered** delete, the class `docs/TECH_DEBT.md` #253 records
+  /// thirteen copies of, and the ADR-0126 M4 shape where a fourth child table broke 557 API e2e
+  /// tests on a RESTRICT FK. Minted **server-side**, so a client cannot forge grouping — two runs
+  /// claiming one id would make one machine's numbers read as another's. Deliberately unindexed.
+  runId String @map("run_id") @db.Uuid
+
+  /// The instant the run settled. **Server-stamped, never client-supplied**: it is the retention
+  /// predicate and the read's leading key, and a browser clock is neither trustworthy nor monotonic
+  /// against this database's.
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+
+  /// The Better Auth user id of the staff member who pressed the button (TEXT, not UUID —
+  /// `User.id` is `String @id`).
+  ///
+  /// **No foreign key**, the `audit_events.actor_user_id` precedent for its stated reason: the
+  /// record must survive its subject's deletion. Better Auth **hard-deletes** users and `User`
+  /// carries no `deleted_at` at all, so every `ON DELETE` action is wrong — RESTRICT makes a
+  /// library's own delete path fail against a table it knows nothing about, CASCADE destroys the
+  /// installation's performance history because an account left, and SET NULL forces nullability to
+  /// buy nothing `recorded_by_label` does not already give.
+  recordedByUserId String @map("recorded_by_user_id")
+
+  /// The staff member's address **as it was** — denormalised on purpose (the
+  /// `audit_events.actor_label` argument): the account may not exist when anyone reads this, and a
+  /// rename must not rewrite a measurement's provenance. **Nullable as the erasure affordance**, not
+  /// because a producer omits it — with no unique index to preserve, NULL is the honest ADR-0085 D1
+  /// scrub. Deliberately unindexed: an index on a plaintext address is a second copy of it.
+  recordedByLabel String? @map("recorded_by_label")
+
+  /// The scenario's registry id. TEXT with a **shape** CHECK and deliberately **no value list** —
+  /// see the migration, which records why this is the `audit_events.action` position and not the
+  /// `csp_reports.effective_directive` mistake.
+  scenarioId String @map("scenario_id")
+
+  /// Bumped when the scenario's **scene or protocol** changes, so a reader knows two rows measured
+  /// the same thing. The registry owns the rule; a scene that changed without a bump makes two
+  /// incomparable rows look comparable, which is the single failure this table exists to prevent.
+  scenarioVersion Int @map("scenario_version")
+
+  /// Which limb of that scenario (`scale-500`, `scale-2000`). The stable grouping key for "this
+  /// limb, across releases" — an explicit id rather than the tuple `(preset, activity_count)`,
+  /// because a tuple silently re-keys the series the day a scene size is tuned.
+  limbId String @map("limb_id")
+
+  /// `difference` (baseline/treatment pairs) or `absolute` (repeated single runs). **The one column
+  /// on this table with a value-list CHECK**, and the discriminator is principled: this is a
+  /// STRUCTURE discriminator the reader dispatches on to interpret `samples`, so a value the reader
+  /// does not know is unreadable whatever the database says. `scenario_id`, `limb_id` and `preset`
+  /// are LABELS, and a label the reader does not know still prints.
+  limbKind String @map("limb_kind")
+
+  /// The zoom preset the pan ran at (`week`, `fit`). A label — shape CHECK only.
+  preset String
+
+  /// The px/day the preset **resolved to**. Recorded because at Fit it is derived from the plan's
+  /// own span at the operator's own viewport, so two machines can both run "Fit" and frame different
+  /// pictures. M2-T1 names that as a risk and names recording this as the mitigation.
+  pxPerDay Float @map("px_per_day")
+
+  /// The scene's size. The ADR-0066 lesson as columns: a plan laid nose to tail culled nine bars in
+  /// ten and reported 4.6 ms p95 — "it looked like the budget being met". `counts` carries what was
+  /// actually **visible**; these carry what existed, and the pair is what makes a cull legible.
+  activityCount Int @map("activity_count")
+  edgeCount     Int @map("edge_count")
+
+  /// A one-liner for the history table. A label for a reader, never parsed.
+  sceneSummary String @map("scene_summary")
+
+  /// The limb's numbers: a JSON **array**, one entry per pair (difference) or per run (absolute).
+  /// Named `samples` and not `pairs` because an absolute limb has no pairs, and a difference-shaped
+  /// name is how a reader concludes the other shape is not stored.
+  ///
+  /// **Aggregates, never raw per-frame intervals.** A 40-second run at 60 fps is ~2,400 intervals
+  /// per pair; storing those is ~20 kB, breaches the size CHECK, and is a different decision — an
+  /// unqueryable blob whose only consumer is a profiler this feature explicitly is not.
+  samples Json @db.JsonB
+
+  /// The non-vacuity numerators **and denominators**, counted inside the viewport. Both halves,
+  /// because a numerator alone cannot distinguish "few bars drawn" from "few bars to draw" — the
+  /// ADR-0066 cull defect stated as a column.
+  counts Json @db.JsonB
+
+  /// The bars this limb was judged against, recorded **with** the measurement. This is what makes
+  /// changing a bar not re-interpret history.
+  thresholds Json @db.JsonB
+
+  /// The operator's actual viewport, not a forced width: on real hardware the real width is the
+  /// truth.
+  viewportWidth    Int   @map("viewport_width")
+  viewportHeight   Int   @map("viewport_height")
+  devicePixelRatio Float @map("device_pixel_ratio")
+
+  /// The **measured** idle frame interval — what dropped frames were scored against. Recorded
+  /// because a run judged against an unstated clock is unattributable. The plausible-clock window is
+  /// the client's rule and is deliberately not restated as a CHECK: encoding a guard in the schema
+  /// means the day the product widens it, the database silently refuses rows the product decided to
+  /// accept.
+  idleIntervalMs Float @map("idle_interval_ms")
+
+  /// NULL = **not captured**, never a default and never guessed (the ADR-0126 rule — a DEFAULT
+  /// invents a fact). Both are absent on some engines; `deviceMemory` is Chromium-only.
+  hardwareConcurrency Int?   @map("hardware_concurrency")
+  deviceMemoryGb      Float? @map("device_memory_gb")
+
+  /// `WEBGL_debug_renderer_info`'s unmasked renderer — recorded on the product owner's decision
+  /// (2026-09-07). It is the single most decision-relevant fact in `docs/TECH_DEBT.md` #75's
+  /// existing reading, which is legible only because somebody wrote down that the browser had chosen
+  /// the **integrated** adapter on a machine that also has a discrete one.
+  ///
+  /// **NULL means masked or unavailable, and is never a guess.** It is also the second erasure
+  /// affordance: with `recorded_by_label` scrubbed and this NULL, the row is a machine reading
+  /// attached to nobody.
+  gpuRenderer String? @map("gpu_renderer")
+
+  userAgent String @map("user_agent")
+
+  /// `prefers-reduced-motion` at run time, and whether the window lost focus during the run. The
+  /// second is **a flag, not a refusal**: a visible-but-unfocused window still composites, and
+  /// refusing on it would make the instrument unusable on a two-monitor desk.
+  reducedMotion      Boolean @map("reduced_motion")
+  lostFocusDuringRun Boolean @map("lost_focus_during_run")
+
+  /// The operator's own note ("the Dell, docked, on mains"). NULL = not typed — distinct from an
+  /// empty string, which would claim they typed nothing.
+  machineLabel String? @map("machine_label")
+
+  /// The web bundle's version (`__APP_VERSION__`) — **posted**, because only the client knows which
+  /// bundle drew the frames.
+  appVersion String @map("app_version")
+
+  /// The API's version, **stamped by the server and never accepted from the DTO**: a
+  /// client-supplied value is a claim about a process the client cannot observe, and the web app
+  /// reads it through a query cached once per session, so after a deploy the tab has not reloaded
+  /// through it would report the previous release.
+  ///
+  /// Both are **release** granularity, not commit: ADR-0088 D1 established that
+  /// `docker-publish.yml` passes no build args, so no SHA reaches either artefact.
+  apiVersion String @map("api_version")
+
+  // ONE index, Prisma-expressible: every row is in the read set — no soft delete, no org scope, no
+  // nullable leading column — so none of the `audit_events` partial-index reasoning applies.
+  //
+  // `(recorded_at, id)` serves the panel's newest-first read AND the ADR-0087 sweep's ranged DELETE
+  // on its leftmost prefix. Declared ASC and read **backwards**: both keys descend together, so
+  // `ORDER BY recorded_at DESC, id DESC` is a plain backward scan of this one — the `mail_events`
+  // argument verbatim, which measured 0.32 ms for the first page there.
+  //
+  // **No second index**, and this is a bound rather than a measurement, said as such. The table has
+  // no automated producer: a row exists only because a person pressed a button and the run was not
+  // refused. Ten runs a day at four limbs, under a 365-day sweep, is ~14,600 narrow rows — three
+  // orders of magnitude below the 1M at which ADR-0073 C1 measured a zero-match filter at
+  // 681-954 ms. `run_id`, `scenario_id` and `limb_id` are therefore unindexed. What would change the
+  // answer: a per-limb history longer than one page, or any producer that is not a person. Add one
+  // then, with `EXPLAIN (ANALYZE, BUFFERS)` numbers in that migration.
+  @@index([recordedAt, id])
+  @@map("perf_probe_results")
+}

@@ -82,6 +82,10 @@ export class AppConfigService {
     return this.config.get('RETENTION_MAIL_EVENTS_DAYS', { infer: true });
   }
 
+  get retentionPerfProbeDays(): number {
+    return this.config.get('RETENTION_PERF_PROBE_DAYS', { infer: true });
+  }
+
   /**
    * Days a soft-deleted client/project/plan is kept (ADR-0096 D2).
    *

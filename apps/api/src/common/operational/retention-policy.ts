@@ -22,7 +22,7 @@
  * consequence is that ADR-0085 D3's own period stays unenforced, which `docs/TECH_DEBT.md` #118
  * records rather than hides.
  */
-export const RETENTION_TABLES = ['csp_reports', 'mail_events'] as const;
+export const RETENTION_TABLES = ['csp_reports', 'mail_events', 'perf_probe_results'] as const;
 
 export type RetentionTable = (typeof RETENTION_TABLES)[number];
 
@@ -76,6 +76,22 @@ export const RETENTION_POLICIES: readonly RetentionPolicy[] = [
     table: 'mail_events',
     /** The only timestamp the table has; a mail event is a point in time, never updated. */
     column: 'occurred_at',
+    days: 365,
+  },
+  {
+    table: 'perf_probe_results',
+    /**
+     * The only timestamp the table has, and **server-stamped** — a browser clock would make the
+     * retention predicate a thing the client could set, so a row could expire early or never.
+     */
+    column: 'recorded_at',
+    /**
+     * **365 days, the `mail_events` number and deliberately not a third one.** Two periods for one
+     * class of data is a question nobody can answer later, and the class here is the same: a
+     * personal-data row a staff member's own action created. A year is also what makes the table
+     * useful — the whole point is comparing a machine's reading against the same machine's reading
+     * across releases, and this product ships more than a dozen releases a month.
+     */
     days: 365,
   },
 ];
