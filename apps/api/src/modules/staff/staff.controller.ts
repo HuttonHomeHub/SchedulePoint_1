@@ -1,12 +1,23 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiCookieAuth,
+  ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiTooManyRequestsResponse,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
@@ -15,6 +26,8 @@ import { CurrentStaff } from '../../common/decorators/current-staff.decorator';
 import { RequestContext } from '../../common/decorators/request-context.decorator';
 import { AuditService } from '../audit/audit.service';
 
+import { CreateProbeResultDto } from './dto/create-probe-result.dto';
+import { ProbeResultRowDto, ProbeResultsQueryDto } from './dto/probe-result.dto';
 import { StaffAccountsQueryDto } from './dto/staff-accounts-query.dto';
 import { CspReportRowDto } from './dto/staff-csp-reports.dto';
 import { StaffHealthDto } from './dto/staff-health.dto';
@@ -26,6 +39,7 @@ import {
 } from './dto/staff-installation.dto';
 import { IdentityProbe } from './identity-probe.decorator';
 import { StaffHealthService } from './staff-health.service';
+import { StaffProbeService } from './staff-probe.service';
 import { StaffGuard } from './staff.guard';
 
 /**
@@ -69,6 +83,7 @@ export class StaffController {
   constructor(
     private readonly audit: AuditService,
     private readonly health: StaffHealthService,
+    private readonly probe: StaffProbeService,
   ) {}
 
   @Get('me')
@@ -226,6 +241,56 @@ export class StaffController {
   ): Promise<StaffActivityRowDto[]> {
     await this.recordPanelRead(staff, context, 'activity');
     return await this.health.activity();
+  }
+
+  @Post('probe-results')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Record a performance reading taken in this browser',
+    description:
+      'The staff console’s FIRST write. Stores one row per limb of one press, grouped by a ' +
+      'server-minted `runId`; `recordedAt` and `apiVersion` are server-set too and are refused ' +
+      'from the body. **The server does not judge** — it stores the samples and the thresholds they ' +
+      'were measured against, and the verdict is derived on read by the one shared judge, so a row ' +
+      'stays readable against the bar it was actually taken under.',
+  })
+  @ApiCreatedResponse({
+    type: [ProbeResultRowDto],
+    description:
+      'The stored rows, in limb order. An array rather than one row because a scenario may be ' +
+      'measured at more than one scale and each scale is its own row.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'A bound was breached. The panel keeps the verdict on screen and offers **Retry recording** ' +
+      'rather than discarding it — a swallowed 422 turns a visible refusal into silent evidence ' +
+      'loss.',
+  })
+  async recordProbeResult(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+    @Body() dto: CreateProbeResultDto,
+  ): Promise<ProbeResultRowDto[]> {
+    // No `recordPanelRead` here: this is not a panel read, and the write records itself inside its
+    // own transaction so the rows and the audit row share a fate.
+    return await this.probe.record(staff, dto, context);
+  }
+
+  @Get('probe-results')
+  @ApiOperation({
+    summary: 'Readings taken on this installation',
+    description:
+      'Newest first. A panel read like the other four, so it takes `staff.panel_read` rather ' +
+      'than an action of its own.',
+  })
+  @ApiOkResponse({ type: [ProbeResultRowDto] })
+  async probeResults(
+    @CurrentStaff() staff: StaffPrincipal,
+    @RequestContext() context: RequestContext,
+    @Query() query: ProbeResultsQueryDto,
+  ): Promise<ProbeResultRowDto[]> {
+    await this.recordPanelRead(staff, context, 'performance');
+    return await this.probe.list(query.limit);
   }
 
   /**

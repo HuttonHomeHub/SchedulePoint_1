@@ -10,6 +10,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
  * End-to-end tests for the revision comparison (revision M1-T4):
@@ -52,10 +53,7 @@ describe.skipIf(!hasDatabase)('Revision compare API (e2e)', () => {
 
   // Children before parents so the FK restrictions never bite (the schedule.e2e order).
   async function resetDatabase(): Promise<void> {
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baselineDependency.deleteMany();
-    await prisma.baseline.deleteMany();
+    await clearBaselineTree(prisma);
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.deleteMany();
     await prisma.crossPlanDependency.deleteMany();

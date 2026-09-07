@@ -5,7 +5,7 @@
 import { scaleSpec } from '@repo/seed/scale';
 import { type SeedActivity, type SeedSpec } from '@repo/seed/spec';
 
-import type { RenderActivity, RenderEdge } from '../src/features/tsld/render/render-model';
+import type { RenderActivity, RenderEdge } from '@/features/tsld/render/render-model';
 
 /**
  * A **realistic** scene for the hand-run draw benchmark, built from the ADR-0066 scale generator.

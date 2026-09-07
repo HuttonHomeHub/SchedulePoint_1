@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink';
 
@@ -235,10 +235,20 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   const retention = staff.getByRole('region', { name: /retention by table/i });
   await expect(retention.getByText('Policy violation reports')).toBeVisible();
   await expect(retention.getByText('Mail events')).toBeVisible();
-  // Both configured periods, as the API reports them. Not `/\d+ days/` — a regex would pass on
-  // whatever number arrived, including a default the server is not actually using.
-  await expect(retention.getByText('30 days')).toBeVisible();
-  await expect(retention.getByText('365 days')).toBeVisible();
+  // The third table, which the staff performance probe added. It appears here without any edit to
+  // the panel — the rows are derived from the API's list — and the label falls back to the raw
+  // table name if nobody supplies one, which is why the name is asserted rather than assumed.
+  await expect(retention.getByText('perf_probe_results')).toBeVisible();
+  // Each configured period as the API reports it, and scoped to ITS OWN ROW. Not `/\d+ days/` — a
+  // regex would pass on whatever number arrived, including a default the server is not using.
+  //
+  // The row scope is not fastidiousness: two tables now share a 365-day period, so a
+  // section-scoped `getByText('365 days')` matches twice and fails on strict mode. That is exactly
+  // how this assertion broke when the third table landed — the slice that added it never ran this
+  // journey, and the failure names a number rather than the table it belongs to.
+  await expect(rowFor(retention, 'Policy violation reports').getByText('30 days')).toBeVisible();
+  await expect(rowFor(retention, 'Mail events').getByText('365 days')).toBeVisible();
+  await expect(rowFor(retention, 'perf_probe_results').getByText('365 days')).toBeVisible();
   // The sweep runs at boot (`onApplicationBootstrap`), so by the time a browser has signed up,
   // verified an address and signed in twice, this process HAS swept — which makes the "not swept
   // yet" wording the wrong assertion here and the presence of a real last-run line the right one.
@@ -274,6 +284,92 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // panel working correctly and the test reading it wrongly.
   await expect(activity.getByText('access denied', { exact: true }).first()).toBeVisible();
 
+  // 6. **The performance probe runs, in a real browser, and reaches a terminal state.**
+  //
+  // This is `docs/specs/staff-performance-probe/` M3's journey, and it is here rather than in a
+  // sibling file because the account, the verified address and the signed-in `/staff` page already
+  // exist by this point — re-deriving all three to press one button would be the slower and less
+  // honest test.
+  //
+  // **It proves the PATH and says nothing about performance, deliberately.** A CI container cannot
+  // produce a quotable number — that is the epic's entire premise, and `m0-conditions.md` records
+  // this container's own no-change baseline moving more than tenfold between two runs an hour
+  // apart. So the assertion is that the machinery works: the chunk downloads, the canvas paints,
+  // the judge is consulted, and whatever comes back is stated as the right KIND of thing.
+  //
+  // The Quick length is chosen for the runtime AND because a quick run is ungated by construction
+  // (one repeat has no run-to-run spread, so the INDETERMINATE rule cannot fire) — which means this
+  // journey can never accidentally assert a verdict a container has no business producing.
+  const probePanel = staff.getByRole('heading', { name: 'Performance' });
+  await expect(probePanel).toBeVisible();
+  await staff.getByRole('combobox', { name: 'Length' }).selectOption('quick');
+  // Typed BEFORE the run: the note travels with the reading rather than being editable afterwards
+  // (insert-time only in v1 — an edit route needs `updated_at` and a version column).
+  await staff.getByRole('textbox', { name: 'Machine (optional)' }).fill('CI container');
+  await staff.getByRole('button', { name: 'Run measurement' }).click();
+  // The confirmation's action button shares the opener's name on purpose, so scope to the dialog
+  // rather than to the copy (ADR-0091's recorded lesson about locating by text).
+  await staff.getByRole('alertdialog').getByRole('button', { name: 'Run measurement' }).click();
+
+  const result = staff.locator('[data-perf-probe-result]');
+  await expect(result).toBeVisible({ timeout: 60_000 });
+
+  // **Either a reading or a refusal — both are correct outcomes here**, and asserting only one
+  // would make this suite depend on the runner's frame clock, which is the thing being measured.
+  const resultText = (await result.textContent()) ?? '';
+  expect(resultText).toMatch(
+    /(The run was refused|You stopped this run|This run cannot be judged|PASS|FAIL|INDETERMINATE|REPORTED, NOT GRADED)/,
+  );
+
+  // **No verdict prints bare.** `REPORTED, NOT GRADED` is the commonest outcome here — a quick
+  // check runs once, so there is no run-to-run spread to grade against — and it used to render as
+  // the raw enum `REPORTED_ONLY` with nothing beside it, which a first-time reader cannot tell from
+  // a failure code. This assertion caught the old wording on its first run after the M5 fix, which
+  // is the sense in which it is verified: the journey went red against the pre-fix panel.
+  if (resultText.includes('REPORTED, NOT GRADED')) {
+    expect(resultText, 'an ungraded verdict carries its reason').toMatch(
+      /no run-to-run spread|never graded/,
+    );
+  }
+
+  // And a refusal is never dressed as a verdict. This is the assertion the fourth verdict value
+  // exists for, checked against the whole panel rather than the alert alone — the defect would be a
+  // pass/fail word left somewhere else on the surface beside a correctly-worded refusal.
+  if (resultText.includes('The run was refused')) {
+    expect(resultText).not.toMatch(/\bPASS\b/);
+    expect(resultText).not.toMatch(/\bFAIL\b/);
+  }
+
+  // **What was RECORDED, which is a different question from what was measured** (M4-T6).
+  //
+  // Branching on the outcome rather than forcing one: a container can legitimately refuse a run,
+  // and the two branches assert opposite things. A refusal must store NOTHING — a stored row would
+  // put a reading in the installation's history that no machine ever produced — while a measurement
+  // must reach the history with the machine note and the app version that drew the frames.
+  //
+  // This is the only place the POST is driven against a real API with the real guard, the real
+  // validation pipe and the real audit producer. A component test sees whatever its mock returns,
+  // which is exactly why the DTO's bounds and the transaction cannot be proven there.
+  if (resultText.includes('The run was refused')) {
+    await expect(staff.getByText('No readings recorded yet.')).toBeVisible();
+    await expect(staff.getByRole('button', { name: 'Retry recording' })).toHaveCount(0);
+  } else {
+    await expect(staff.getByText('Recorded. It appears in the history below.')).toBeVisible({
+      timeout: 15_000,
+    });
+    const history = staff.getByRole('table', {
+      name: /Readings recorded on this installation/,
+    });
+    await expect(history.getByRole('cell', { name: 'CI container' }).first()).toBeVisible();
+    // More than the header row, asserted as a shape rather than as a count: a scenario may be
+    // measured at more than one scale, and each scale is its own row.
+    await expect(history.getByRole('row')).not.toHaveCount(1);
+  }
+
+  // The overlay must be gone: it is `position: fixed; inset: 0`, so a leaked one would cover the
+  // console and every later assertion — including the axe sweep below — would be about a canvas.
+  await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
+
   // The console is a real screen and gets the same accessibility bar as every other one.
   const results = await new AxeBuilder({ page: staff })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
@@ -282,3 +378,13 @@ test('a staff member reaches the console; a member cannot tell it exists', async
 
   await staffContext.close();
 });
+
+/**
+ * One row of the retention table, located by the table it names.
+ *
+ * Exists because two tables now share a period: an assertion scoped to the section matches every
+ * row carrying that number, and the failure it produces names the number rather than the row.
+ */
+function rowFor(region: Locator, table: string): Locator {
+  return region.getByRole('row').filter({ hasText: table });
+}

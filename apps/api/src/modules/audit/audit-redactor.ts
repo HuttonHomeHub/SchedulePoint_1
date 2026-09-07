@@ -180,6 +180,12 @@ const ALLOWED_FIELDS: Record<AuditAction, readonly string[]> = {
   //   The actor, the action and the instant are the evidence; the contents are not.
   'staff.session_started': [],
   'staff.panel_read': [],
+  //   Empty for a second reason on the write. A reading's device fingerprint — the GPU renderer
+  //   string, the screen, the user agent — is what makes one number comparable with another,
+  //   and it identifies a staff member's own machine. It belongs in `perf_probe_results`, an
+  //   ordinary table that can be corrected and expired (M4-T2), and nowhere near the one table
+  //   that cannot. The scenario rides in `subjectLabel`, which is not a redacted field.
+  'staff.probe_recorded': [],
   //   A denial records the actor, the instant and the request evidence — never WHICH of the three
   //   conditions failed. "Not on the allowlist" and "allowlisted but unverified" are different
   //   facts, and a table a member can cause rows in is the wrong place to keep the difference: it

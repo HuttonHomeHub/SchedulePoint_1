@@ -787,9 +787,10 @@ is how an installation ends up with no alerting at all and no one aware of it.
 
 ## Retention — what gets deleted, and when
 
-ADR-0087. Two tables document a period, and until this shipped **nothing enforced either**:
+ADR-0087. Two tables documented a period, and until this shipped **nothing enforced either**:
 `csp_reports` (30 days) and `mail_events` (12 months). The API now sweeps them on a timer inside its
-own process — no Redis, no queue, nothing to install.
+own process — no Redis, no queue, nothing to install. `perf_probe_results` (365 days) joined them
+when the staff console gained its performance readings.
 
 ```yaml
 api:
@@ -797,8 +798,14 @@ api:
     RETENTION_SWEEP_ENABLED: 'true' # the default
     RETENTION_CSP_REPORTS_DAYS: 30
     RETENTION_MAIL_EVENTS_DAYS: 365
+    RETENTION_PERF_PROBE_DAYS: 365
     RETENTION_SWEEP_INTERVAL_MINUTES: 60
 ```
+
+**A reading holds a staff member's own machine fingerprint** — the GPU renderer string, the screen,
+the user agent — alongside their address. That is why it lives in an ordinary table that can be
+corrected, scrubbed and expired, rather than in `audit_events`, which refuses `DELETE`. The audit
+row beside it says only that a reading was taken, and names the scenario.
 
 **It is on by default, unlike the two alerting URLs above**, and the difference is deliberate: those
 need a receiver you have to create, so shipping them armed would point at nothing. A sweep needs

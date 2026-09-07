@@ -8,6 +8,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
  * **The retention expiry against a real Postgres** (ADR-0096 D2/D5/D7).
@@ -64,10 +65,7 @@ describe.skipIf(!hasDatabase)('Hierarchy expiry (e2e)', () => {
     await prisma.resourceAssignment.deleteMany();
     await prisma.activityStep.deleteMany();
     await prisma.note.deleteMany();
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baselineDependency.deleteMany();
-    await prisma.baseline.deleteMany();
+    await clearBaselineTree(prisma);
     await prisma.planShare.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();

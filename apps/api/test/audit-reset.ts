@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { clearBaselineTree } from './clear-baseline-tree';
+
 /**
  * Clear `audit_events` between e2e specs.
  *
@@ -64,15 +66,7 @@ export async function clearDomainData(prisma: PrismaClient): Promise<void> {
   await prisma.activity.deleteMany();
   // Baselines hold an FK to their plan, and the snapshot rows to the baseline — so both go before
   // `plan`, deepest first.
-  await prisma.baselineAssignment.deleteMany();
-  await prisma.baselineActivity.deleteMany();
-  // The FOURTH snapshot child, added by the revision extension (ADR-0126) — it holds the same
-  // RESTRICT FK to `baseline` its three siblings do. It is listed here for the same reason the
-  // retention runner sweeps it: nothing in the schema tells a reader a new child table exists, so
-  // both places that delete a baseline have to be told. Omitting it failed 557 e2e tests at once
-  // with `baseline_dependencies_baseline_id_fkey`, which is the loud way round.
-  await prisma.baselineDependency.deleteMany();
-  await prisma.baseline.deleteMany();
+  await clearBaselineTree(prisma);
   await prisma.planLock.deleteMany();
   // Share links hold a RESTRICT FK to their plan.
   await prisma.planShare.deleteMany();

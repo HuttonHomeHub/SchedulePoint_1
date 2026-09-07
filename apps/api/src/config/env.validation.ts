@@ -180,6 +180,21 @@ export const envSchema = z
      */
     RETENTION_MAIL_EVENTS_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
     /**
+     * How long a canvas performance-probe reading is kept — **365 days, the `mail_events` number
+     * and deliberately not a third one**. Two periods for one class of data is a question nobody
+     * can answer later, and the class is the same: a personal-data row a staff member's own action
+     * created (their machine's fingerprint, and their address in `recorded_by_label`).
+     *
+     * A year is also what makes the table useful. The whole point is comparing a machine's reading
+     * against the same machine's reading across releases, and this product ships more than a dozen
+     * releases a month — a shorter period would delete the comparison before anybody made it.
+     *
+     * `z.coerce.number()`, not `z.coerce.boolean()`. Nothing boolean is added here, and that is on
+     * purpose: `z.coerce.boolean()` is `Boolean(value)`, so `'false'` parses to **`true`** —
+     * ADR-0096's arming switch shipped inverted that way and `.env.example` carried the exact line.
+     */
+    RETENTION_PERF_PROBE_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
+    /**
      * Days a soft-deleted client/project/plan is kept before the sweep permanently deletes it
      * (ADR-0096 D2). **The operator's override, and the reason the client is never allowed a
      * hardcoded copy**: a host running 365 here would otherwise be told "expires in 87 days" by

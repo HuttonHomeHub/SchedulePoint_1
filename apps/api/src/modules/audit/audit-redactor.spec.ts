@@ -23,6 +23,30 @@ describe('redactChanges — the allow-list', () => {
     expect(redactChanges('auth.signed_in', { email: 'a@b.c' }, {})).toBeNull();
   });
 
+  it('records NOTHING for a staff performance reading, device fingerprint included', () => {
+    // The console's one write (ADR-0086 D6). What makes a reading comparable — the GPU renderer
+    // string, the screen, the user agent, the numbers themselves — is exactly what identifies a
+    // staff member's own machine, and `audit_events` refuses DELETE, so it is kept in
+    // `perf_probe_results` where it can be corrected and expired. The audit row says a reading
+    // was taken and names the scenario in `subjectLabel`, which is a column and not a payload.
+    //
+    // The exhaustiveness gate below proves every action DECIDED; it cannot prove this one
+    // decided EMPTY. Verified red by giving the action a one-field allow-list, which returned
+    // the renderer string.
+    expect(
+      redactChanges(
+        'staff.probe_recorded',
+        {},
+        {
+          gpuRenderer: 'ANGLE (NVIDIA GeForce RTX 4070)',
+          userAgent: 'Mozilla/5.0',
+          droppedFramePct: 10.2,
+          scenario: 'canvas-draw',
+        },
+      ),
+    ).toBeNull();
+  });
+
   it('refuses a forbidden field even if an allow-list were edited to name it', () => {
     // The belt-and-braces layer. Simulated by asking for an action whose list contains `email`
     // and confirming the substring ban still governs: `passwordHash` never survives normalisation

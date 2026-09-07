@@ -3873,6 +3873,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                         | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | --- | --------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 253 | Thirteen hand-maintained copies of the baseline-children delete sweep                               | 2026-09-06 | One `clearBaselineTree(prisma)` in `apps/api/test/`, called by `audit-reset.ts` and all twelve e2e specs, with the children **asked of `Prisma.dmmf` rather than listed** — listing them in one place instead of thirteen would still have to be remembered, and remembering is what failed when ADR-0126 added `baseline_dependencies` and broke **557 of 587** tests in thirteen files at once. Three things checked rather than assumed: the count is fourteen files (the row's thirteen plus the runner, as it said); the DMMF reports exactly three children, all RESTRICT, and **none holds a foreign key into another**, which the runner's comment asserted and nothing had verified — the helper re-derives that and **throws** rather than guessing if it ever stops holding; and the four lines were byte-identical in all thirteen, so this is a replacement rather than a merge of thirteen dialects. The **retention runner is deliberately unchanged**: its ordering is already gated by `hierarchy-expiry.structural.spec.ts` and its rule genuinely differs — it must not name an `onDelete: Cascade` child, where a test reset may. Two consumers, two correct rules, stated in both docblocks rather than merged behind a flag. `clear-baseline-tree.e2e-spec.ts` pins it, **verified red first** against the one regression the thirteen callers structurally cannot catch: a hard-coded list replacing the DMMF walk, which passes every one of them and then misses the fourteenth table.                                                                                                           |
 | 252 | `pnpm measure:draw` could not bundle: the seed barrel forced a Node-only module on a browser        | 2026-09-06 | `docs/specs/seed-browser-safe/`. `5a5f00da` moved the fixture tier into `packages/seed` and re-exported it from the barrel; that tier imports `@repo/engine-conformance`, which imports `node:fs`, so importing `scaleSpec` dragged a filesystem reader into a browser bundle and the benchmark this repository quotes for every canvas claim stopped bundling for a day. **No user was ever affected** — nothing under `apps/web/src` imports that package — which is exactly why nothing went red. Fixed additively with subpath exports (`./spec`, `./scale`, `./pairwise`, `./negative`, `./fixture`); the root export is untouched. The `--external:node:*` workaround was **removed**, not left, and the bundle verified to build without it. New gate `pnpm check:browser-safe` bundles every browser-side entry point for a browser and was verified red against the real defect — **and its own first run was wrong**, running esbuild from the repo root where it is unresolvable (a transitive Vite dependency) and reading only `stderr` where pnpm writes to `stdout`, so it failed all four entries while printing a blank, confident diagnosis about a widened barrel. A gate that always fails for a reason it misreports trains a reader to ignore it.                                                                                                                                                                                                                                                                                                                                                   |
 | 231 | `sections()` ended a row at the next SAME-level heading, so a `###` row read its neighbour's fields | 2026-09-02 | ADR-0124 and `docs/specs/gate-conventions/`. A section now ends at the next heading of the same level **or shallower**. The falsification condition predicted at most two moved boundaries and named one; **three** move, and the two it missed by reading are the large ones — `docs/RECONCILE.md`'s "Record the pass" (31 → 5 lines) and a `docs/DECISIONS.md` entry silently swallowing **1,160**. Its second half held exactly, so the repair-then-arm branch did not fire: a moved boundary only matters where a body carried a field belonging to another row, and only this document has a field reader. The fixtures then caught an **off-by-one in the fix itself** — every body kept the heading that terminated it, and both consumer gates still reported byte-identical output, because a heading line is not a column-0 field declaration. The row also named `check:doc-links` as a consumer (it imports only node built-ins) and missed `check:reconcile-due` (which does).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 227 | Nothing asserted the register's heading form, so it drifted silently                                | 2026-09-02 | ADR-0124. A10, in **two limbs**: the first refuses a misshapen row heading, the second refuses a `###` that is not a row at all — which the first structurally cannot see, since its predicate only fires on lines already shaped like a row. That second case is not cosmetic: after the depth fix, any `###` inside the detailed region **terminates the row it sits in**. Nine repaired, of two kinds — eight rows in an `### #<n> —` form and one sub-heading demoted to `####`. Both limbs verified red. A10 deliberately does **not** narrow what the parser reads: ADR-0120 Finding 0 says a row in the wrong form is still a row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -4064,28 +4065,65 @@ reason, once by using native `disabled` and losing the reason with the tab stop)
 is thirteen chances to get it wrong again. The remedy is a `useShadedControl` hook; the trigger is
 the next epic that touches three or more of them.
 
-### 253. Thirteen hand-maintained copies of the baseline-children delete sweep
+### 256. Every e2e reset hand-orders the whole schema, and five had it wrong
 
-**Status:** open · **Raised:** 2026-09-06 (revision-compare M5) · **Size:** S · **Owner:** repo
+**Status:** open · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
 
-Adding `baseline_dependencies` (ADR-0126) broke **557 of 587** API e2e tests at once, because
-`baseline` has a RESTRICT FK from each of its snapshot children and every place that deletes a
-baseline enumerates those children **by hand**. There are thirteen such places: `test/audit-reset.ts`
-plus twelve e2e specs that roll their own reset, and `common/hierarchy/hierarchy-expiry.runner.ts`
-does the same thing for the retention expiry.
+#253 removed the duplication for **one** parent (`baseline`) by asking `Prisma.dmmf` for its
+children. The rest of each reset is still a hand-written topological sort of the whole schema, one
+copy per spec, and closing #253 found five of them wrong about a different table:
+`cross_plan_dependencies` holds RESTRICT foreign keys to **both** endpoint activities (ADR-0045),
+and two specs deleted `activity` before it while three never deleted it at all.
 
-This row is about the **duplication**, not the breakage — the breakage is fixed, and it was the loud
-kind: an FK violation naming the constraint, on the first e2e run, in thirteen files at once. What
-makes it debt is the runner, where the same omission is **quiet**: it catches, logs a permanent
-failure, and retries every hour forever (which is why M4 added a DMMF-derived census for that one).
-A fourteenth child table added by somebody who greps for `baselineAssignment.deleteMany` and finds
-only the file they are editing repeats this, and the specs will tell them loudly while the runner
-will not.
+**Reproduced once, with a log, and it did not reproduce on the next two runs** — because whether a
+cross-plan row survives into a given reset depends on what ran before it in the shared database.
+That is the `#119a` shape and it is why this went unnoticed: the failure names a constraint in a
+spec that has never heard of programme scheduling, and a re-run sweeps it clean.
 
-The remedy is one exported `clearBaselineTree(prisma)` the specs and the reset call, derived from
-`Prisma.dmmf` the way `hierarchy-expiry.structural.spec.ts` derives its census. Not done here
-because it is twelve spec files whose resets differ in scope, which is a refactor with no behaviour
-change in the middle of a feature epic. The trigger is the next snapshot child table.
+The five orderings are fixed. What is **not** fixed is the class: there is no reason to think
+`cross_plan_dependencies` is the last table this happens to, and the next one will be found the same
+way — by an unrelated spec failing on a constraint it does not recognise, on the runs where the
+contamination happens to line up.
+
+**Remedy — and it is a design question rather than a helper, which is why it is filed rather than
+done here.** A `clearAll(prisma)` that deletes every table in an order **derived** from the DMMF's
+foreign-key graph (a topological sort, with `onDelete: Cascade` edges skipped and self-references
+handled the way ADR-0096 D7 records) would make all of this structural. The parts needing thought:
+the specs' resets are not all whole-schema — several deliberately keep organisations or calendars
+between cases, so a single `clearAll` would change what they test; and a cycle in the FK graph needs
+an answer rather than a crash. Worth doing when a sixth table joins the pattern, or sooner if
+another unexplained cross-spec FK failure appears.
+
+### 257. ADR-0086 D6 records a staff write that was never built
+
+**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M0-T4) · **Size:** S · **Owner:** repo
+
+`docs/adr/0086-staff-principal.md:143-145` states, in an **Accepted** ADR:
+
+> One write exists in v1: "send a test message", addressed only to the requesting staff member's own
+> verified address. The recipient is **not a parameter**, so it cannot be used as a relay — a
+> structural property rather than a validation rule.
+
+There is no `@Post`, `@Put`, `@Patch` or `@Delete` anywhere in `apps/api/src/modules/staff/`. The
+controller has six `@Get` routes and nothing else. Verified by grep, 2026-09-07.
+
+**The shape landed and the route never did.** `mail_events.kind`'s CHECK permits `test`, and
+`staff-health.dto.ts:12` enumerates it — so the design is half-present, which is what made the claim
+easy to write and hard to notice. The reasoning quoted above is sound; it simply describes something
+that does not exist.
+
+**Why this is worth a row rather than a quiet correction.** ADRs are never rewritten (CLAUDE.md §6),
+so the sentence stands as written and a reader has no way to tell it from the true ones around it.
+More concretely, it costs the next author real work: the staff-performance-probe epic set out
+believing it was adding the **second** write to that surface and could inherit a precedent for what a
+staff write may do. It is adding the **first**, so every property a write must not break has to be
+argued from scratch — which that epic's spec §4.10 now does.
+
+**Remediation:** either build the test-send route the ADR describes (a real capability: an operator
+with `MAIL_SMTP_URL` set has no way to confirm delivery works without waiting for a real event), or
+supersede the claim in a later ADR. **Do not do it opportunistically inside another epic** — it is a
+different capability with its own security argument, and bundling it is how a surface acquires a
+write nobody reviewed on its own terms.
 
 ### 254. The revision-compare benchmark never exercises the projections it is quoted for
 
@@ -4135,3 +4173,99 @@ Each was judged real and not worth holding the release for.
 
 Findings 4 and 5 are the two worth doing first: both are about a picture that is honest in its
 words and ambiguous on screen, which is the failure mode this epic spent its whole gate pass on.
+
+### 258. The pacing arithmetic is written three times, and the shared copy was the dead one
+
+**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** M · **Owner:** repo
+
+`model/pacing.ts` exported a `panPhase` built, in its own words, "so the panel and the CLI pace runs
+identically", and it had **zero callers**. Both scenes reimplemented the same gap / percentile /
+dropped-frame / fps arithmetic from scratch instead: `scenes/canvas-draw.ts`'s `runDrawPhase` and
+`scenes/revision-diff.ts`'s `panRun`, the latter also carrying its own `percentile` and its own
+`measureIdleInterval`. Three copies, and the one that looked like the shared home was the one
+nothing used.
+
+That is the exact drift ADR-0128 D2 exists to prevent, stated in this epic's own docblocks: two
+implementations drift and the drift is invisible, because each looks right alone. The concrete
+failure is cheap to describe — someone fixes an off-by-one in the "dropped frame" threshold or the
+percentile interpolation in one copy and `canvas-draw` and `revision-diff` stop being comparable to
+each other, which is the one property the whole table exists to preserve.
+
+`panPhase` was **deleted** in M5 rather than left, because dead code that looks like the canonical
+home is worse than none: the next person to fix that off-by-one fixes it there and neither scene
+changes. `measureIdleInterval` genuinely is shared and stays.
+
+The remedy is to give both scenes one pacing loop, and it is filed rather than done because it is a
+refactor of the two modules that actually produce the numbers, in the middle of a gate pass, with no
+behavioural change to show for it — the shape this repository has repeatedly recorded going wrong
+when hurried. The trigger is the third scenario, or the first bug found in either copy.
+
+### 259. Twelve non-blocking findings from the staff performance-probe gate pass
+
+**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** S · **Owner:** repo
+
+Six specialists over the combined diff. Security and backend-performance passed with nothing
+blocking, both having re-derived the epic's own measurements from the shipped code rather than
+trusting them — the read is a sub-millisecond backward index scan at 60,000 rows, the sweep reuses
+the already-safe `ctid` batch rather than an unchunked `IN` list, and the DTO's bounds are a strict
+subset of the database's CHECK constraints, so no DTO-valid payload can reach a 500 where a 422 was
+promised. What follows was judged real and not worth holding the release for.
+
+1. **`recordedByLabel` is declared `@ApiPropertyOptional`** though it is always present and merely
+   nullable — unlike its five siblings in the same DTO, which correctly use
+   `@ApiProperty({ nullable: true })`. A generated client types it as possibly absent.
+2. **`counts` and `thresholds` are typed as opaque objects on the response** while the request DTO
+   fully names their fields one file over. `samples` is legitimately opaque (its shape varies by
+   `limbKind`); these two are not.
+3. **`GET /staff/probe-results` does not declare its 422**, which `limit=0` reaches. Pre-existing
+   pattern on this controller (`GET /staff/accounts` has the same gap), so a sweep rather than a
+   fix here.
+4. **No `hasMore` signal on the history read.** The "no cursor" decision is argued and right for a
+   table only a human can write to, but a caller asking for 50 against 200 rows can only infer
+   there is more by comparing lengths.
+5. **`GET /staff/probe-results` shares every staff member's machine fingerprint with every other
+   staff member.** Intended, and appropriate for a small allowlisted population; worth revisiting
+   if `STAFF_EMAILS` ever grows.
+6. **The erasure affordance is structural only.** `recorded_by_label` and `gpu_renderer` are
+   nullable so a reading can be scrubbed; no scrub path exists anywhere in the product yet, which
+   matches ADR-0085's "decision only, nothing built" status rather than being a gap this epic added.
+7. **`scenes/revision-diff.ts`'s pure helpers (`changedSet`, `countVisible`) have no unit test**,
+   unlike the parallel canvas-draw module, whose equivalents do. They need no canvas, so the gap
+   looks like inconsistency rather than necessity.
+8. **`RecordingState` takes three booleans for one mutation status.** TanStack Query already
+   exposes it as a single `status`, and the three-boolean signature admits combinations the call
+   site happens never to produce.
+9. **The spec's "visible caption naming it a test picture"** on the measuring canvas was never
+   built. Not a WCAG failure — the canvas is `aria-hidden` and the progress sentence is the
+   accessible channel — but a documented sighted-user affordance that does not exist.
+10. **Several `Alert`s mount in the same commit as the panel's own live region.** `Alert` carries an
+    implicit live-region role, so the "one accessible channel" claim in the panel's docblock stops
+    holding at the moment a run ends. The content is redundant rather than contradictory.
+11. **`revision-diff` narrates progress once for a whole multi-pair run** where `canvas-draw`
+    narrates per repeat, so a screen-reader user hears nothing for up to twenty-five seconds.
+12. **The on-screen "cannot be judged" alert prints only the first line** of the judge's message,
+    dropping the closing "This is NOT a pass" sentence that the paste-ready report does carry.
+
+Numbers 1, 2 and 8 are the cheapest; 10 and 11 are the two a real screen-reader user would notice
+first.
+
+**And one thing the reviews did not find, because it is only visible in a log.** The API e2e run
+prints, twice per run and reproducibly, `a retention sweep failed; the next run will retry it` for
+`perf_probe_results` — the alarming half of exactly the quiet-failure shape #253 warns about. It is
+**not** a defect in the sweep's new arm, and that was established rather than assumed: the statement
+runs clean against a real database standalone, a two-file e2e run sweeps the table in 2 ms, and the
+line immediately preceding every failure in the full run is `Database connection closed`. The suite
+boots and closes fifty applications, the sweep runs at boot, and `perf_probe_results` is last in
+`RETENTION_TABLES` — so it is the one still in flight when the client disconnects, which is why it
+is deterministic rather than flaky and why it is always that table.
+
+No guard was added, deliberately: suppressing a sweep failure during shutdown would also suppress a
+real one, and the remedy — not starting a sweep the process cannot finish — is a lifecycle change to
+`RetentionSweepService`, not a `catch`. The cost today is a scary line in a test log. The trigger to
+do it is a fourth table, or anyone mistaking this for a production failure.
+
+Reading that same log **did** find a real one, which is fixed rather than filed: the
+`retention.configured` boot line named two tables and not the third, so the one place an operator is
+told the effective periods was silently short by one — for a number ADR-0087 records as
+irreversible. Its existing test used `objectContaining`, which cannot catch an omission; the
+replacement counts `*Days` keys against `RETENTION_TABLES.length` and was verified red.

@@ -60,6 +60,14 @@ const AUDITED_ROUTES: Record<string, readonly AuditAction[]> = {
   'GET /api/v1/staff/installation': ['staff.panel_read'],
   'GET /api/v1/staff/accounts': ['staff.panel_read'],
   'GET /api/v1/staff/activity': ['staff.panel_read'],
+  'GET /api/v1/staff/probe-results': ['staff.panel_read'],
+  // The console's one WRITE, and by ADR-0073's two tests it earns nothing: the row it creates
+  // already carries `recorded_by_user_id` and `recorded_at` (durably attributed), and it changes
+  // nobody's rights and nobody's work (no blast radius). It is audited anyway because the seventh
+  // assertion below derives from the path — the ADR-0086 D5 inversion, which exists precisely so
+  // the first staff act that WRITES is covered the day it is written rather than when somebody
+  // remembers this file.
+  'POST /api/v1/staff/probe-results': ['staff.probe_recorded'],
   'DELETE /api/v1/organizations/:orgSlug/clients/:clientId': ['client.deleted'],
   'DELETE /api/v1/organizations/:orgSlug/invitations/:invitationId': ['invitation.revoked'],
   'DELETE /api/v1/organizations/:orgSlug/members/:memberId': ['member.removed'],

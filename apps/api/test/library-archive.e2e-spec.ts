@@ -11,6 +11,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
+import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
  * End-to-end tests for the ARCHIVE LIFECYCLE (M4 of the library-scoping epic, ADR-0053 §4,
@@ -86,10 +87,7 @@ describe.skipIf(!hasDatabase)('Library archive lifecycle (e2e)', () => {
     // Diagnosed the same day only because `scripts/e2e-local.sh` tees the whole log to a file — the
     // observer piped the command through `tail` exactly as that row warns them not to, and the
     // mechanism caught what the habit lost. That is ADR-0058 working as advertised.
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baselineDependency.deleteMany();
-    await prisma.baseline.deleteMany();
+    await clearBaselineTree(prisma);
     await prisma.activityStep.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.updateMany({ data: { parentId: null } });

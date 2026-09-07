@@ -650,6 +650,17 @@ discriminators. Each becomes a spec/plan before build:
   link is not a selectable object here and claiming otherwise would be the failure ADR-0122 records.
   Its paint cost is **not yet known** — the measurement environment was disqualified by its own
   control moving tenfold between two runs with no code change — which is why it ships off.
+- **A performance reading taken on real hardware** — **shipping** (ADR-0128). The canvas draw
+  budget (`docs/TECH_DEBT.md` #75) has exactly one real-hardware reading, from 2026-08-03, and five
+  canvas epics have changed the painter since; its 500-activity limb has never been measured at all.
+  Nobody re-derived it because the instrument was a terminal command and the person with the
+  hardware does not run one. The staff console now takes the same measurement **in the operator's
+  own browser** and records it with the machine, the framing and the adapter beside the numbers. A
+  server-side job is refused rather than deferred: the API runs headless in a container whose own
+  no-change baseline moved more than tenfold between two runs an hour apart, and an
+  authoritative-looking number from the wrong machine is worse than none. Two consequences are
+  stated rather than discovered — the numbers are **client-reported**, and there is **no CI gate
+  here and never will be**, because the question is about a real display.
 
 ## Guiding constraints
 

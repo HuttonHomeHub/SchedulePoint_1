@@ -8,6 +8,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
  * End-to-end tests for the session-less External-Guest READ surface
@@ -89,13 +90,17 @@ describe.skipIf(!hasDatabase)('External-Guest share read API (e2e)', () => {
     // Diagnosed the same day only because `scripts/e2e-local.sh` tees the whole log to a file — the
     // observer piped the command through `tail` exactly as that row warns them not to, and the
     // mechanism caught what the habit lost. That is ADR-0058 working as advertised.
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baselineDependency.deleteMany();
-    await prisma.baseline.deleteMany();
+    await clearBaselineTree(prisma);
     await prisma.activityStep.deleteMany();
     await prisma.resourceAssignment.deleteMany();
     await prisma.resource.deleteMany();
+    // `cross_plan_dependencies` holds RESTRICT foreign keys to BOTH endpoint activities
+    // (ADR-0045), so it has to go before them. Found while closing `docs/TECH_DEBT.md` #253:
+    // a full API run failed here on `cross_plan_dependencies_successor_id_fkey`, and did not
+    // reproduce on the next two runs — because whether any cross-plan row survives into this
+    // reset depends on what ran before it in the shared database, which is the #119a shape.
+    // Ordering it correctly costs nothing on the runs where the table is empty.
+    await prisma.crossPlanDependency.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarException.deleteMany();

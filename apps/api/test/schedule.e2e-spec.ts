@@ -10,6 +10,7 @@ import { configureHttpApp } from '../src/app-setup';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
  * End-to-end tests for the CPM recalculation endpoint (M6, ADR-0022):
@@ -54,10 +55,7 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     // Baselines first: this file's Earned-Value lag case captures one, and the shared e2e database
     // means a suite that leaves baselines behind fails a LATER file's `plan.deleteMany()` — with the
     // failure appearing in a spec that has nothing to do with baselines (see the afterAll note).
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baselineDependency.deleteMany();
-    await prisma.baseline.deleteMany();
+    await clearBaselineTree(prisma);
     // Weighted steps hold `activity_id` (ADR-0044 §33), and they are the THIRD table to fail this
     // way — after `plan_shares` and `resource_assignments` (`docs/TECH_DEBT.md` #119a). Found the
     // same way and recorded here rather than in one file: a full API run on 2026-08-31 failed 282
@@ -73,6 +71,13 @@ describe.skipIf(!hasDatabase)('Schedule API (e2e)', () => {
     // behind, so without this the failure lands in a spec that has never heard of notes — the
     // same way `plan_shares` did, one table along.
     await prisma.note.deleteMany();
+    // `cross_plan_dependencies` holds RESTRICT foreign keys to BOTH endpoint activities
+    // (ADR-0045), so it has to go before them. Found while closing `docs/TECH_DEBT.md` #253:
+    // a full API run failed here on `cross_plan_dependencies_successor_id_fkey`, and did not
+    // reproduce on the next two runs — because whether any cross-plan row survives into this
+    // reset depends on what ran before it in the shared database, which is the #119a shape.
+    // Ordering it correctly costs nothing on the runs where the table is empty.
+    await prisma.crossPlanDependency.deleteMany();
     await prisma.activity.deleteMany();
     // Share links, for exactly the reason the baseline note above gives — and it bit the same way.
     // `plan_shares.plan_id` is ON DELETE RESTRICT, the e2e database is shared with the Playwright

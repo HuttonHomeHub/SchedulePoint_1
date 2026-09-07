@@ -11,14 +11,13 @@
  * twice — routing off, routing on — against the same canvas, and reports the per-frame distribution
  * of each.
  */
+import { scaleScene } from '../src/features/perf-probe/scenes/scale-scene';
 import { paintScene, type TsldPalette, type TsldScene } from '../src/features/tsld/render/paint';
 import type {
   RenderActivity,
   RenderEdge,
   Viewport,
 } from '../src/features/tsld/render/render-model';
-
-import { scaleScene } from './scale-scene';
 
 /**
  * Exported so `revision-diff-bench.ts` measures against the SAME palette rather than a copy of it.

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AppConfigService } from '../../config/app-config.service';
 
+import { RETENTION_TABLES } from './retention-policy';
 import { RetentionStatusStore } from './retention-status.store';
 import type { RetentionSweepResult, RetentionSweepRunner } from './retention-sweep.runner';
 import { RetentionSweepService } from './retention-sweep.service';
@@ -279,5 +280,28 @@ describe('RetentionSweepService', () => {
       }),
       expect.any(String),
     );
+  });
+
+  it('logs a period for EVERY swept table, counted rather than listed', () => {
+    // **`objectContaining` cannot catch an omission**, and that is not hypothetical: the case above
+    // named two tables and kept passing when a third joined `RETENTION_TABLES` in M4-T5, so the one
+    // line telling an operator the effective periods was silently short by one. Found by reading an
+    // e2e log, not by anything failing.
+    //
+    // Counted rather than name-mapped: the log keys are not a mechanical transform of the table
+    // names (`perf_probe_results` is `perfProbeDays`), so a derived list of names would be a second
+    // hand-maintained copy. A count is derived from the real vocabulary and cannot drift.
+    const { service } = build();
+
+    service.onApplicationBootstrap();
+
+    const logged = vi
+      .mocked(logger.info)
+      .mock.calls.find(
+        ([fields]) => (fields as { event?: string }).event === 'retention.configured',
+      )?.[0] as Record<string, unknown>;
+    const periodKeys = Object.keys(logged).filter((key) => key.endsWith('Days'));
+
+    expect(periodKeys, `logged ${periodKeys.join(', ')}`).toHaveLength(RETENTION_TABLES.length);
   });
 });

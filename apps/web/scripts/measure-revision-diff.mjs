@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { chromium } from '@playwright/test';
 
@@ -56,31 +57,13 @@ if (preset !== 'week' && preset !== 'fit') {
   process.exit(1);
 }
 
-/**
- * The non-vacuity floor, from the condition file. Counted INSIDE the viewport, because a changed
- * set that is all off-screen costs the painter nothing and would pass every gate while proving
- * nothing — the ADR-0093 shape (a green result that cannot tell "it is cheap" from "there was
- * nothing there").
- *
- * **PROPORTIONAL, and it was absolute until it met the control cell.** The committed condition said
- * >= 25 bars and >= 40 links, written with the 2,160-activity scene in mind. The 147-activity
- * control has 188 links in total, so 12 % of them can never reach 40 — the control was unrunnable
- * by construction, and the harness discovered that by THROWING rather than by reporting a pass,
- * which is the one behaviour the condition file demanded of it. The floor was not lowered to make
- * the run succeed: it was re-expressed so it asks the same question at both scene sizes. A tiny
- * absolute guard survives underneath, because 10 % of two links is not a measurement either.
- */
-const MIN_CHANGED_FRACTION = 0.1;
-const MIN_CHANGED_ABSOLUTE = 5;
-
-/** P1 — the difference gate. ADR-0100's bar, taken because it is the only one in this repository
- * that has been used and passed, rather than invented for this epic. */
-const MAX_DROPPED_DELTA_PP = 2.0;
-/** P2 — the absolute gate. ADR-0026 §9's floor at the 2,000-activity ceiling. */
-const MIN_FPS = 30;
+// The non-vacuity floors and both gate constants now live in
+// `src/features/perf-probe/model/judge.ts` and are imported below with the judge itself. They were
+// duplicated here until M1; the linter is what noticed, once the arithmetic that used them moved.
 
 const out = mkdtempSync(join(tmpdir(), 'sp-revdiff-'));
 const bundle = join(out, 'bench.js');
+const judgeBundle = join(out, 'judge.mjs');
 
 // The esbuild CLI rather than its JS API, for the reason `measure-link-routing.mjs` records:
 // esbuild is a transitive dependency of Vite here, not a direct one, so this file cannot import it.
@@ -98,6 +81,39 @@ execFileSync(
   ],
   { stdio: 'inherit' },
 );
+
+// **The judge is bundled too, and that is the point of M1** — this driver used to hold its own
+// copy of the verdict arithmetic (lines 153-243, before the extraction). Two copies of a judgement
+// drift invisibly: each looks right alone, and only somebody comparing two published numbers months
+// apart would ever notice (ADR-0065's `routeOrthogonal`, ADR-0121's `stackSeries`). So the logic
+// lives in `src/features/perf-probe/model/judge.ts`, the browser panel imports it directly, and this
+// file compiles the same module for Node rather than reimplementing it.
+//
+// ESM rather than the bench's IIFE: this one is `import()`ed here, not injected into a page.
+execFileSync(
+  'pnpm',
+  [
+    'exec',
+    'esbuild',
+    'src/features/perf-probe/model/probe-cli-exports.ts',
+    '--bundle',
+    '--format=esm',
+    '--platform=node',
+    `--outfile=${judgeBundle}`,
+    '--log-level=warning',
+  ],
+  { stdio: 'inherit' },
+);
+
+const { judgeRun, NothingToJudgeError, scenarioById, isGated } = await import(
+  pathToFileURL(judgeBundle).href
+);
+
+// The scenario says whether this run is gated and against which bars, rather than this file
+// deciding again. That rule used to live here as `preset !== 'fit'` with the two constants
+// inline — and two callers agreeing on HOW to judge while disagreeing about WHICH question
+// they asked is the subtler half of the drift M1 exists to remove.
+const SCENARIO = scenarioById('revision-diff');
 
 const chromiumPath =
   process.env.PLAYWRIGHT_CHROMIUM_PATH ??
@@ -150,38 +166,35 @@ try {
   console.log(`  display    idle frame interval ${ms(result.idleInterval)}`);
   console.log('');
 
-  // ── Non-vacuity FIRST. A treatment that drew nothing passes every pacing gate. ──────────────
+  // ── Non-vacuity, the pair table, and the verdict all come from the SHARED judge now. ────────
+  //
+  // What is left here is presentation. `judgeRun` owns every decision — the non-vacuity floor, the
+  // refusal to judge an empty run, and the verdict itself — and it throws `NothingToJudgeError`
+  // rather than returning something a caller might print. This file's job is to say it out loud.
   const { visibleChangedBars, visibleChangedLinks, visibleBars, visibleLinks } = result.counts;
   const share = (n, d) => (d === 0 ? 0 : (n / d) * 100);
-  const barShare = share(visibleChangedBars, visibleBars);
-  const linkShare = share(visibleChangedLinks, visibleLinks);
   console.log(
     `  changed on screen: ${String(visibleChangedBars)}/${String(visibleBars)} bars ` +
-      `(${barShare.toFixed(1)}%), ${String(visibleChangedLinks)}/${String(visibleLinks)} links ` +
-      `(${linkShare.toFixed(1)}%)`,
+      `(${share(visibleChangedBars, visibleBars).toFixed(1)}%), ` +
+      `${String(visibleChangedLinks)}/${String(visibleLinks)} links ` +
+      `(${share(visibleChangedLinks, visibleLinks).toFixed(1)}%)`,
   );
-  const enough = (n, d) =>
-    Number.isFinite(n) &&
-    Number.isFinite(d) &&
-    n >= MIN_CHANGED_ABSOLUTE &&
-    share(n, d) >= MIN_CHANGED_FRACTION * 100;
-  if (!enough(visibleChangedBars, visibleBars) || !enough(visibleChangedLinks, visibleLinks)) {
-    throw new Error(
-      `NON-VACUITY FAILED — the treatment does not draw enough to judge.\n` +
-        `  bars  ${String(visibleChangedBars)}/${String(visibleBars)} = ${barShare.toFixed(1)}% ` +
-        `(need >= ${String(MIN_CHANGED_FRACTION * 100)}% and >= ${String(MIN_CHANGED_ABSOLUTE)})\n` +
-        `  links ${String(visibleChangedLinks)}/${String(visibleLinks)} = ${linkShare.toFixed(1)}% ` +
-        `(need >= ${String(MIN_CHANGED_FRACTION * 100)}% and >= ${String(MIN_CHANGED_ABSOLUTE)})\n` +
-        `This is NOT a pass. A verdict computed from this run would be meaningless.`,
-    );
-  }
 
-  const baselineDropped = result.pairs.map((p) => p.baseline.droppedPct);
-  const treatmentDropped = result.pairs.map((p) => p.treatment.droppedPct);
-  const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
-
-  if (result.pairs.length === 0 || baselineDropped.some((x) => !Number.isFinite(x))) {
-    throw new Error('NOTHING TO JUDGE — no finite pair results. Refusing to print a verdict.');
+  let judged;
+  try {
+    judged = judgeRun({
+      pairs: result.pairs,
+      counts: result.counts,
+      barPp: SCENARIO.barPp,
+      minFps: SCENARIO.limbs[0].minFps,
+      gated: isGated(SCENARIO, preset),
+    });
+  } catch (error) {
+    // Preserved deliberately: a run that cannot be judged EXITS NON-ZERO with the reason, and does
+    // not print a verdict. The condition file demanded exactly this of the harness, and the control
+    // cell exercised it on the first run.
+    if (error instanceof NothingToJudgeError) throw error;
+    throw error;
   }
 
   console.log('');
@@ -198,21 +211,16 @@ try {
     );
   }
 
-  const baseMean = mean(baselineDropped);
-  const treatMean = mean(treatmentDropped);
-  const delta = treatMean - baseMean;
-  // **The baseline's own spread is printed**, so a reader can see whether the difference sits
-  // inside it — ADR-0100 M0's design, which is the one that passed.
-  const baseSpread = Math.max(...baselineDropped) - Math.min(...baselineDropped);
-  const treatFps = mean(result.pairs.map((p) => p.treatment.fps));
-
   console.log('');
-  console.log(`  baseline  mean dropped ${pct(baseMean)}   (run-to-run spread ${pct(baseSpread)})`);
-  console.log(`  treatment mean dropped ${pct(treatMean)}`);
-  console.log(`  delta     ${delta >= 0 ? '+' : ''}${pct(delta)}`);
+  console.log(
+    `  baseline  mean dropped ${pct(judged.baselineMeanPp)}   ` +
+      `(run-to-run spread ${pct(judged.baselineSpreadPp)})`,
+  );
+  console.log(`  treatment mean dropped ${pct(judged.treatmentMeanPp)}`);
+  console.log(`  delta     ${judged.deltaPp >= 0 ? '+' : ''}${pct(judged.deltaPp)}`);
   console.log('');
 
-  if (preset === 'fit') {
+  if (judged.verdict === 'REPORTED_ONLY') {
     // Measured and REPORTED, never gated: the baseline already drops 10.2 % here (#75), and a gate
     // that fails on day one gets deleted rather than fixed (ADR-0058).
     console.log(
@@ -220,26 +228,32 @@ try {
     );
     console.log('');
   } else {
-    const p1 = delta <= MAX_DROPPED_DELTA_PP;
-    const p2 = treatFps >= MIN_FPS;
     console.log(
-      `  P1 difference  delta ${delta >= 0 ? '+' : ''}${pct(delta)} vs <= ${pct(MAX_DROPPED_DELTA_PP)}   ${p1 ? 'PASS' : 'FAIL'}`,
+      `  P1 difference  delta ${judged.deltaPp >= 0 ? '+' : ''}${pct(judged.deltaPp)} vs <= ` +
+        `${pct(SCENARIO.barPp)}   ${judged.p1 ? 'PASS' : 'FAIL'}`,
     );
     console.log(
-      `  P2 absolute    ${treatFps.toFixed(1)} fps vs >= ${String(MIN_FPS)} fps   ${p2 ? 'PASS' : 'FAIL'}`,
+      `  P2 absolute    ${judged.treatmentFps.toFixed(1)} fps vs >= ${String(SCENARIO.limbs[0].minFps)} fps   ` +
+        `${judged.p2 ? 'PASS' : 'FAIL'}`,
     );
     console.log('');
-    console.log(`  VERDICT: ${p1 && p2 ? 'PROCEED' : 'WITHDRAW OR REDESIGN tier 2b'}`);
-    console.log('');
-    if (delta > 0 && delta <= baseSpread) {
+    if (judged.verdict === 'INDETERMINATE') {
+      // **The correction this epic exists to make automatic.** This used to print as a NOTE after a
+      // verdict, which reads as a result somebody should act on; a human had to spot it by hand and
+      // write the finding into `m0-condition.md`. It is a verdict now, and it outranks P1/P2 — an
+      // unfit instrument's PASS and its FAIL are equally meaningless.
+      console.log('  VERDICT: INDETERMINATE — this machine cannot answer the question.');
+      console.log('');
+      console.log(`  Because ${judged.indeterminateReason}`);
+      console.log('');
+    } else {
       console.log(
-        "  NOTE: the difference sits INSIDE the baseline's own run-to-run spread, so it is not\n" +
-          '  distinguishable from noise on this machine. Treat it as "no measurable cost", not as\n' +
-          '  a measured small cost.',
+        `  VERDICT: ${judged.verdict === 'PASS' ? 'PROCEED' : 'WITHDRAW OR REDESIGN tier 2b'}`,
       );
       console.log('');
     }
-    if (!p1 || !p2) process.exitCode = 1;
+    // An INDETERMINATE run is not a pass. It exits non-zero so a script cannot read silence as one.
+    if (judged.verdict !== 'PASS') process.exitCode = 1;
   }
 } finally {
   await browser.close();

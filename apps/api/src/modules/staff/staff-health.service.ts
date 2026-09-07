@@ -117,11 +117,47 @@ export class StaffHealthService {
    * Read on a **separate connection concurrently with the mail counts** by the caller's
    * `Promise.all`; both are bounded single-row or single-page reads on this staff-only route.
    */
+  /**
+   * The oldest surviving row's timestamp for one table, or `null` when the table is empty.
+   *
+   * Exhaustive over {@link RetentionTable} with **no `default`** — see the call site for why that
+   * matters more than it looks. Each arm names its own column because the three tables timestamp
+   * different things: a CSP report's `last_seen_at` moves on every repeat (deliberately — a
+   * violation still being reported never ages out), a mail event and a probe reading are points in
+   * time.
+   */
+  private async oldestSurviving(table: RetentionTable): Promise<Date | null> {
+    switch (table) {
+      case 'csp_reports': {
+        const row = await this.prisma.cspReport.findFirst({
+          orderBy: [{ lastSeenAt: 'asc' }, { id: 'asc' }],
+          select: { lastSeenAt: true },
+        });
+        return row?.lastSeenAt ?? null;
+      }
+      case 'mail_events': {
+        const row = await this.prisma.mailEvent.findFirst({
+          orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+          select: { occurredAt: true },
+        });
+        return row?.occurredAt ?? null;
+      }
+      case 'perf_probe_results': {
+        const row = await this.prisma.perfProbeResult.findFirst({
+          orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+          select: { recordedAt: true },
+        });
+        return row?.recordedAt ?? null;
+      }
+    }
+  }
+
   private async retention(now: Date): Promise<RetentionDto> {
     const status = this.retentionStatus.snapshot();
     const days: Record<RetentionTable, number> = {
       csp_reports: this.config.retentionCspReportsDays,
       mail_events: this.config.retentionMailEventsDays,
+      perf_probe_results: this.config.retentionPerfProbeDays,
     };
     const intervalMinutes = this.config.retentionSweepIntervalMinutes;
 
@@ -129,19 +165,23 @@ export class StaffHealthService {
       RETENTION_POLICIES.map(async (policy) => {
         // One `findFirst` per policy, dispatched by table because Prisma's delegates are distinct
         // types — the same reason `RetentionSweepRunner` uses a `switch` rather than interpolating a
-        // table name into SQL. Two tables is not a scaling problem; a dynamic accessor would be.
-        const row =
-          policy.table === 'csp_reports'
-            ? await this.prisma.cspReport.findFirst({
-                orderBy: [{ lastSeenAt: 'asc' }, { id: 'asc' }],
-                select: { lastSeenAt: true },
-              })
-            : await this.prisma.mailEvent.findFirst({
-                orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
-                select: { occurredAt: true },
-              });
-
-        const at = row === null ? null : 'lastSeenAt' in row ? row.lastSeenAt : row.occurredAt;
+        // table name into SQL.
+        //
+        // **A `switch` with no `default`, and that is a correction rather than a style preference.**
+        // This was a binary ternary under a comment reading "two tables is not a scaling problem",
+        // and it was right until there were three: a third policy fell to the `else` and the panel
+        // reported `mail_events`' oldest row as the new table's age. Both branches typechecked and
+        // nothing failed — on the one screen whose entire design principle is that the answer is
+        // derived from the data rather than from the sweep's own bookkeeping.
+        //
+        // Worse, the compiler DOES fire when a table is added — on the `days` record ten lines up —
+        // so whoever adds the fourth is told something is missing and pointed at the wrong line. A
+        // partial compile error is more dangerous than none, because it satisfies the person fixing
+        // it. Exhaustive over `RetentionTable` with no `default` and an explicit return type, this
+        // arm cannot be forgotten: the next table is a TS2366 here as well as there.
+        //
+        // Found by the `database-architect` engagement for the third table, before it shipped.
+        const at = await this.oldestSurviving(policy.table);
         return { table: policy.table, at };
       }),
     );

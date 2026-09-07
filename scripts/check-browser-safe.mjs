@@ -45,7 +45,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ENTRIES = [
   'apps/web/scripts/revision-diff-bench.ts',
   'apps/web/scripts/link-routing-bench.ts',
-  'apps/web/scripts/scale-scene.ts',
+  'apps/web/src/features/perf-probe/scenes/scale-scene.ts',
   'apps/web/scripts/strip-stack-bench.ts',
 ];
 

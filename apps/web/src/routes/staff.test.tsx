@@ -40,7 +40,16 @@ function notFound(): ApiFetchError {
  * landed, which is what this is for.
  */
 function otherPanels(path: string): Promise<unknown> {
-  if (path === '/staff/csp-reports' || path === '/staff/activity') return Promise.resolve([]);
+  // `/staff/probe-results` joins the two list routes here. Named rather than left to the fallback:
+  // the fallback returns the installation OBJECT, and a `DataTable` handed an object throws
+  // `rows.map is not a function` — a failure that names neither the panel nor the route.
+  if (
+    path === '/staff/csp-reports' ||
+    path === '/staff/activity' ||
+    path === '/staff/probe-results'
+  ) {
+    return Promise.resolve([]);
+  }
   if (path === '/staff/accounts') {
     return Promise.resolve({
       unverifiedTotal: 0,

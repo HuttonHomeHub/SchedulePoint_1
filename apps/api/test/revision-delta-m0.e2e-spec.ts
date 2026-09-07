@@ -18,6 +18,7 @@ import { computeSchedule } from '../src/modules/schedule/engine/compute';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearAuditEvents } from './audit-reset';
+import { clearBaselineTree } from './clear-baseline-tree';
 
 /**
  * The run's numbers have to survive vitest's per-task console buffering — the setup run's counts
@@ -142,14 +143,17 @@ describe.skipIf(!hasDatabase)('Revision delta — M0 (e2e)', () => {
     await prisma.resource.deleteMany();
     await prisma.activityDependency.deleteMany();
     await prisma.note.deleteMany();
+    // `cross_plan_dependencies` holds RESTRICT foreign keys to BOTH endpoint activities
+    // (ADR-0045), so it has to go before them. Found while closing `docs/TECH_DEBT.md` #253:
+    // a full API run failed here on `cross_plan_dependencies_successor_id_fkey`, and did not
+    // reproduce on the next two runs — because whether any cross-plan row survives into this
+    // reset depends on what ran before it in the shared database, which is the #119a shape.
+    // Ordering it correctly costs nothing on the runs where the table is empty.
+    await prisma.crossPlanDependency.deleteMany();
     await prisma.activity.deleteMany();
     await prisma.planLock.deleteMany();
-    await prisma.baselineAssignment.deleteMany();
-    await prisma.baselineActivity.deleteMany();
-    await prisma.baselineDependency.deleteMany();
-    await prisma.baseline.deleteMany();
+    await clearBaselineTree(prisma);
     await prisma.planShare.deleteMany();
-    await prisma.crossPlanDependency.deleteMany();
     await prisma.plan.deleteMany();
     await prisma.calendarExceptionWindow.deleteMany();
     await prisma.calendarException.deleteMany();
