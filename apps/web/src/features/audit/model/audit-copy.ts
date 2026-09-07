@@ -91,6 +91,10 @@ const TITLES: Record<AuditAction, string> = {
   // not imply there is.
   'staff.session_started': 'Staff console opened',
   'staff.panel_read': 'Staff console panel read',
+  // The console's one write. "Reading" rather than "probe" or "benchmark": what was stored is a
+  // measurement of this installation on one machine, and the row is the record that it was taken
+  // — the numbers themselves live in `perf_probe_results`, where they can be corrected.
+  'staff.probe_recorded': 'Staff performance reading recorded',
   // Not "access denied to the staff console" — the reader of an organisation log should not learn
   // from a label that a staff console exists. "Refused" is what happened; the surface is the
   // subject, and the subject is not spelt out here.
@@ -268,8 +272,12 @@ function detailFor(action: AuditAction, changes: AuditChanges | null): string | 
     // `staff.access_denied` is empty for a second reason: WHICH of the three conditions failed is
     // exactly what the uniform 404 withholds, so a detail line here would be the oracle the guard
     // spends its whole design avoiding.
+    //
+    // `staff.probe_recorded` is empty for a third: a reading's device fingerprint identifies a
+    // staff member's machine, so it is stored in an ordinary table rather than an unerasable one.
     case 'staff.session_started':
     case 'staff.panel_read':
+    case 'staff.probe_recorded':
     case 'staff.access_denied':
       return null;
     case 'interchange.imported': {

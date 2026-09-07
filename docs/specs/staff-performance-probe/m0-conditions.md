@@ -245,12 +245,31 @@ rather than discovering it at M4.
 **So a fourth table appears in the panel automatically**; the only edits are `RETENTION_TABLES` (plus
 its deliberate structural assertion) and one label. **M4-T5 is smaller than the plan allowed for.**
 
-### 3. `audit_events.action` is TEXT + CHECK — ONE migration, not two
+### 3. `audit_events.action` is TEXT + CHECK — ZERO migrations, not one
 
 `action` is a Prisma `String` with a database CHECK; there is **no `enum AuditAction`**. There _is_ an
 `enum AuditActorType`, which is precisely why ADR-0086 D5 had to pay two migrations — Postgres
 forbids using a new enum label in the transaction that added it.
 
-**Adding `staff.probe_recorded` therefore costs one migration.** The new actor type that made
-ADR-0086 expensive is not needed here: the probe's actor is an ordinary `USER`, and the staff
-namespace is what the census keys on (`staff.%`), not the actor type.
+**Adding `staff.probe_recorded` costs no migration at all**, and this heading said "ONE migration,
+not two" until M4-T3 went to write it. Two claims in the paragraph below were wrong, and both were
+asserted rather than read — ADR-0076 Class 3, inside the file whose job is to record what was
+verified:
+
+1. **The migration count.** `ck_audit_events_action_format` is a **format** check —
+   `"action" ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$' AND length("action") <= 64`
+   (`apps/api/prisma/migrations/20260803170000_audit_events/migration.sql:76-78`) — not an
+   enumeration, so a new label is accepted the day it is written. The precedent that suggested
+   otherwise says so itself: `20260809140100_staff_audit_actions/migration.sql` is a **deliberate
+   no-op** (`SELECT 1;`) whose own comment reads _"a new action vocabulary costs no migration at
+   all"_; it exists only to make the actor-type enum's split transaction visible in the history.
+   Reading the precedent as a cost was reading its filename rather than its contents.
+2. **The actor.** The probe's actor is `STAFF`, not `USER`. Every staff row uses it
+   (`staff.controller.ts:98`, and three more); the single `USER` exception is `staff.access_denied`, and it is the
+   exception precisely because that caller is **not** staff. Recording a staff member's own write as
+   `USER` would put it in their organisation-facing history rather than the console's.
+
+The paragraph's conclusion — that no new actor type is needed — survives both corrections, for a
+different reason than it gave: `STAFF` was added by ADR-0086 D5 and is already in the enum. The
+staff namespace is what the console's own feed keys on (`staff.%`), not the actor type, which is
+why `staff.access_denied` can be `USER` without disappearing from it.

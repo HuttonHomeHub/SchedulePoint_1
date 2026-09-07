@@ -2144,6 +2144,12 @@ export const AUDIT_ACTIONS = [
   //   so this narrows the unaudited surface rather than widening the audited one.
   'staff.session_started',
   'staff.panel_read',
+  //   And the console's first WRITE (ADR-0086 D6 recorded a write it never shipped). A staff
+  //   member runs the canvas measurement on their own machine and records the reading; the row
+  //   names the scenario in `subjectLabel` and carries no device data at all, because the
+  //   fingerprint that makes a reading comparable is exactly what `audit_events`' refusal to
+  //   DELETE would make permanent.
+  'staff.probe_recorded',
   //   And the refusals. This one is not a read at all: it is an authenticated caller who is NOT
   //   staff reaching a staff route, and it is the only row in the vocabulary whose actor is
   //   deliberately `USER` rather than `STAFF` — recording a prober as staff would be a lie, and it
@@ -2259,6 +2265,11 @@ export const AUDIT_ACTION_CATEGORY: Record<AuditAction, AuditCategory> = {
   // wrong question. A tier move is the same class of fact: who may use this, from now on.
   'staff.session_started': 'access',
   'staff.panel_read': 'access',
+  // `access` by elimination, and stated as such rather than dressed up: a recorded measurement
+  // is not a setting, a deletion, a plan's structure or a sign-in. It also keeps the staff
+  // family together, which costs a reader nothing here — the console filters its own feed on
+  // the `staff.` namespace (ADR-0086 D8), never on this category.
+  'staff.probe_recorded': 'access',
   'staff.access_denied': 'access',
   'calendar.archived': 'settings',
   'calendar.unarchived': 'settings',
