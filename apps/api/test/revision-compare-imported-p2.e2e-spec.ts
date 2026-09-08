@@ -17,6 +17,7 @@ import {
   type RevisionEdge,
   type RevisionRow,
 } from '../src/modules/baselines/revision-delta';
+import { liveRevisionSide } from '../src/modules/baselines/revision-projections';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
 import { clearDomainData } from './audit-reset';
@@ -55,19 +56,19 @@ const REPO_ROOT = join(__dirname, '..', '..', '..');
  */
 const ITERATIONS = 25;
 
+/**
+ * The end-to-end pass runs fewer iterations than the harness, deliberately.
+ *
+ * Twenty-five HTTP round trips over a 2,000-row payload is minutes of wall clock on top of an
+ * already-long probe, and the estimator's own trap is what decides the floor: with 7 samples
+ * `sorted[floor(0.95 n)]` IS the maximum, which is the defect this file records once already. With
+ * 15 it is `sorted[14]` — still the last element — so the count is raised to 21, where the p95
+ * index is 19 and one cold sample cannot become the verdict.
+ */
+const ROUTE_ITERATIONS = 21;
+
 /** The bar, inherited from ADR-0125 rather than invented for this epic. */
 const P2_BAR_MS = 250;
-
-/**
- * What `loadActiveActivitiesForDelta` selects. Deliberately NOT re-declared field by field: the
- * repository's own return type is the contract, and a hand-copied mirror is exactly the second
- * opinion that drifts (ADR-0065's `routeOrthogonal` argument).
- */
-type LoadedActivity = Awaited<
-  ReturnType<BaselineRepository['loadActiveActivitiesForDelta']>
->[number];
-
-const day = (d: Date | null): string | null => (d === null ? null : d.toISOString().slice(0, 10));
 
 describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', () => {
   let app: INestApplication;
@@ -157,30 +158,16 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
       await import('../src/modules/baselines/baseline.repository');
     const baselines = app.get<BaselineRepository>(RepoToken);
 
-    // The live-side projection, copied from `schedule.service.ts:1641-1655` — the one the shipped
-    // route already builds. M1 moves this into the correlation module rather than leaving two.
-    const project_ = (rows: readonly LoadedActivity[]): RevisionRow[] =>
-      rows.map((r) => ({
-        activityId: r.id,
-        code: r.code,
-        name: r.name,
-        type: r.type,
-        durationMinutes: r.durationMinutes,
-        isCritical: r.isCritical,
-        totalFloatDays: r.totalFloat,
-        earlyStart: day(r.earlyStart),
-        earlyFinish: day(r.earlyFinish),
-        laneIndex: r.laneIndex,
-        parentId: r.parentId,
-        calendarId: r.calendarId,
-        constraintType: r.constraintType,
-        constraintDate: day(r.constraintDate),
-        secondaryConstraintType: r.secondaryConstraintType,
-        secondaryConstraintDate: day(r.secondaryConstraintDate),
-        percentComplete: r.percentComplete === null ? null : Number(r.percentComplete),
-        actualStart: day(r.actualStart),
-        actualFinish: day(r.actualFinish),
-      }));
+    /**
+     * **The live-side projection, IMPORTED rather than copied.**
+     *
+     * It was a verbatim copy of the service's closure, under a comment saying M1 would move it —
+     * and M1 did, into `revision-projections.ts`. The copy survived that move anyway, because
+     * nothing was looking: the structural gate pinning one definition scanned `apps/api/src` and
+     * not `apps/api/test`. Widening it turned the comment into a failing test, which is what a
+     * gate is for and an intention is not.
+     */
+    const project_ = liveRevisionSide;
 
     /**
      * The correlation M1 will ship, written here so P2 measures its shape rather than omitting it.
@@ -301,6 +288,39 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
      *
      * A file needs no flag, so the probe can run alone. `P2_REPORT` overrides the location.
      */
+    /**
+     * **The same question asked end to end** — M1-T5 step 5.
+     *
+     * The harness above measures the loaders and the pure functions with a stand-in correlation,
+     * because it was written before M1 shipped one. This drives the **real route** over the same
+     * two plans, with both projections asked for, so the recorded figure includes everything the
+     * harness excludes: the guard, DTO validation, the service seam, the shipped correlation and
+     * serialising a 2,000-row payload. Both numbers go in the report and neither replaces the
+     * other.
+     */
+    const routeUrl =
+      `/api/v1/organizations/acme/cross-plan-revision-compare` +
+      `?fromPlanId=${planB}&toPlanId=${planC}&include=changes&include=ghosts`;
+    const routeSamples: number[] = [];
+    let routeMatched = 0;
+    for (let i = 0; i < ROUTE_ITERATIONS; i += 1) {
+      const t0 = performance.now();
+      const res = await agent.get(routeUrl).expect(200);
+      routeSamples.push(performance.now() - t0);
+      routeMatched = res.body.data.correlation.matched as number;
+    }
+    // Non-vacuity, checked BEFORE the verdict: a benchmark over two plans that share nothing
+    // reports the fastest number the route can produce and says nothing about the case it exists
+    // for. Same rule as the harness above, asserted separately because one passing does not imply
+    // the other — they measure different code.
+    expect(routeMatched, 'the route must actually have matched both sides').toBeGreaterThan(1_000);
+    const routeSorted = [...routeSamples].sort((a, b) => a - b);
+    const routeP50 = routeSorted[Math.floor(routeSorted.length * 0.5)] ?? 0;
+    const routeP95 =
+      routeSorted[Math.min(routeSorted.length - 1, Math.floor(routeSorted.length * 0.95))] ?? 0;
+    const routeWorst = routeSorted[routeSorted.length - 1] ?? 0;
+    const routeFirst = routeSamples[0] ?? 0;
+
     const report = [
       '',
       'M0 PROBE P2 — the cross-plan compare path',
@@ -311,13 +331,34 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
       `  worst      ${worst.toFixed(1)} ms   (first sample ${firstSample.toFixed(1)} ms — cold)`,
       `  all        ${samples.map((s) => s.toFixed(0)).join(', ')} ms`,
       '',
-      '  Measures the real loaders (twice, once per plan) and the real pure functions.',
-      "  The correlation is the probe's own — M1 has not shipped one yet. M1-T4 re-derives",
-      '  this end-to-end against the shipped route and states any divergence.',
+      '  Measures the real loaders (twice, once per plan) and the real pure functions,',
+      "  with the SHARED live projection. The correlation is the probe's own — it predates",
+      '  M1 — which is why the end-to-end figure below is taken as well as this one.',
+      '',
+      'END-TO-END, through the shipped route (M1-T5 step 5)',
+      `  iterations ${String(ROUTE_ITERATIONS)}`,
+      `  p50        ${routeP50.toFixed(1)} ms`,
+      `  p95        ${routeP95.toFixed(1)} ms   vs  <= ${String(P2_BAR_MS)} ms`,
+      `  worst      ${routeWorst.toFixed(1)} ms   (first sample ${routeFirst.toFixed(1)} ms — cold)`,
+      `  matched    ${String(routeMatched)}`,
+      '',
+      '  GET /organizations/:orgSlug/cross-plan-revision-compare?include=changes&include=ghosts',
+      "  — the whole HTTP path: guard, DTO validation, service, both plans' loads, the real",
+      '  correlation, the delta, the classifier, the ghosts, and serialisation.',
       '',
     ].join('\n');
     writeFileSync(process.env.P2_REPORT ?? join(tmpdir(), 'm0-p2-result.txt'), report, 'utf8');
 
     expect(p95).toBeLessThanOrEqual(P2_BAR_MS);
-  }, 600_000);
+    /**
+     * **The end-to-end figure is judged against the SAME bar**, not a looser one.
+     *
+     * The committed rule turns on p95 at 2,000 activities per side, and the number that decides a
+     * rate budget has to be the one a caller actually experiences — everything the harness above
+     * excludes is real cost a client pays. Both are recorded and any divergence is stated rather
+     * than smoothed, which is ADR-0125's F3 lesson: a second run agreeing to the decimal would be
+     * more suspicious than one that does not.
+     */
+    expect(routeP95).toBeLessThanOrEqual(P2_BAR_MS);
+  }, 900_000);
 });

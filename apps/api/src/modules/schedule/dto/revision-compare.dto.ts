@@ -243,7 +243,7 @@ export class RevisionCriticalPathDeltaDto implements RevisionCriticalPathDelta {
  * `RevisionCompareDto.from` is a pass-through and `implements` constrains the floor rather than the
  * ceiling (the docblock on that method says so, and this is that trap sprung one epic later).
  */
-class RevisionChangeRowDto implements RevisionChangeRow {
+export class RevisionChangeRowDto implements RevisionChangeRow {
   @ApiProperty({ description: 'The activity a client may reveal. For a logic row, the SUCCESSOR.' })
   activityId!: string;
 
@@ -280,7 +280,7 @@ class RevisionChangeRowDto implements RevisionChangeRow {
   existsLive!: boolean;
 }
 
-class RevisionClassAssessmentDto implements RevisionClassAssessment {
+export class RevisionClassAssessmentDto implements RevisionClassAssessment {
   @ApiProperty({ enum: [...REVISION_FREE_CHANGE_CLASSES, ...REVISION_PAID_CHANGE_CLASSES] })
   changeClass!: RevisionChangeClass;
 
@@ -304,7 +304,7 @@ class RevisionClassAssessmentDto implements RevisionClassAssessment {
   total!: number;
 }
 
-class RevisionChangeReportDto implements RevisionChangeReport {
+export class RevisionChangeReportDto implements RevisionChangeReport {
   @ApiProperty({
     type: [RevisionClassAssessmentDto],
     description:
@@ -316,7 +316,7 @@ class RevisionChangeReportDto implements RevisionChangeReport {
   @ApiProperty() cap!: number;
 }
 
-class RevisionGhostBarDto implements RevisionGhostBar {
+export class RevisionGhostBarDto implements RevisionGhostBar {
   @ApiProperty() activityId!: string;
   @ApiProperty() name!: string;
   @ApiProperty({ description: '`YYYY-MM-DD`. Both non-null: no old dates ⇒ no ghost.' })
@@ -334,7 +334,7 @@ class RevisionGhostBarDto implements RevisionGhostBar {
   @ApiProperty({ description: 'In the old revision and not in the new.' }) removed!: boolean;
 }
 
-class RevisionLinkChangeDto implements RevisionLinkChange {
+export class RevisionLinkChangeDto implements RevisionLinkChange {
   @ApiProperty() dependencyId!: string;
   @ApiProperty({ description: 'Carried because a REMOVED edge is in no live edge list.' })
   predecessorId!: string;

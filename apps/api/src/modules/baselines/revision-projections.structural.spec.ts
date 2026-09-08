@@ -27,6 +27,15 @@ import { describe, expect, it } from 'vitest';
  * copying the block is.
  */
 const API_SRC = join(__dirname, '..', '..');
+/**
+ * **`apps/api/test` is scanned too**, and that was not the first version.
+ *
+ * Scoping this to `src` alone left the API e2e directory outside it — where the M0 P2 probe had
+ * copied the live projection verbatim, under a comment saying M1 would move it. Widening the scan
+ * turned that comment into a failing test, which is the difference between an intention and a
+ * gate: the copy was going to be found by whoever next changed a column, or not at all.
+ */
+const API_TEST = join(__dirname, '..', '..', '..', 'test');
 /** The one file entitled to define them. */
 const OWNER = join('modules', 'baselines', 'revision-projections.ts');
 
@@ -50,7 +59,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('the revision projections are defined once', () => {
-  const files = sourceFiles(API_SRC);
+  const files = [...sourceFiles(API_SRC), ...sourceFiles(API_TEST)];
 
   it('scanned a non-zero number of API sources, and found the owning module among them', () => {
     // The pinned positive case. "No file re-defines them" passes perfectly against a scan that read

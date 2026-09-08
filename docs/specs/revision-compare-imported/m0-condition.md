@@ -262,6 +262,36 @@ runs alone — which is why reading 4 can be trusted and the first three cannot.
 **The bar was never moved.** Reading 1's failure stands in the record; what changed is the estimator
 and then the isolation, both of which are defects in the instrument rather than concessions to it.
 
-**Still owed at M1-T4:** the end-to-end re-derivation against the shipped route, with any divergence
-from 211.1 ms stated rather than smoothed — ADR-0125's F3 lesson being that a second run agreeing to
-the decimal would be more suspicious than one that does not.
+### The end-to-end re-derivation — PASS, 2026-09-08 (M1-T5 step 5)
+
+Taken once the route existed, against the **same two 2,000-activity plans**, asking for both
+projections. The harness pass was re-run in the same invocation, so the two figures are comparable.
+
+```
+  harness (loaders + pure functions)     p50 158.0 ms   p95 208.2 ms
+  end-to-end (the shipped HTTP route)    p50 188.0 ms   p95 215.2 ms   matched 2016
+```
+
+**Both PASS the 250 ms bar, and both divergences are stated rather than smoothed.**
+
+- The harness re-read **208.2 ms** against the **211.1 ms** recorded above — **2.9 ms, 1.4 %**. That
+  is run-to-run variance on the same code: nothing in `apps/api` changed between the two runs except
+  the projection this probe had copied, which is now imported. A second run agreeing to the decimal
+  would be the suspicious outcome (ADR-0125 F3).
+- End-to-end is **7.0 ms above** the harness (3.4 %). That gap is everything the harness excludes
+  and a caller pays: the guard, DTO validation, the service seam, the **real** correlation the
+  harness stood in for, and serialising a 2,000-row payload. It is small because the cost is
+  dominated by the two plans' reads, which both passes make identically.
+
+**What this decides, by a rule committed before either number existed:** `m0-condition.md` said
+≤ 250 ms ⇒ **the global rate budget stands, no dedicated throttle**; above it ⇒ derive one by
+`clamp(floor(12_000 / p95), 3, 20)`. 215.2 ms is inside the bar, so the route carries **no
+`@Throttle`** and shares the global 100/60 s budget with the health check and the schedule summary.
+Recorded so the absence reads as a decision rather than an omission — and note that the fallback
+formula would have yielded **20** here (`floor(12_000 / 215.2) = 55`, clamped), which is _looser_
+than the global budget it would have replaced: a second reason the threshold rule is the right one
+and the formula alone would have been the wrong instrument.
+
+The end-to-end pass runs **21 iterations, not 25**, and the count is chosen against this file's own
+recorded trap: with 15 the p95 index is the last element, i.e. the maximum again. At 21 it is index
+19, so one cold sample cannot become the verdict.

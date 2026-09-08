@@ -3,6 +3,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { allKeys, scanForCostKeys, stripComments } from '../../../common/contracts/cost-key-scan';
+
 /**
  * **G4 — the no-cost-egress gate (spec §3.2, security review S1).**
  *
@@ -22,20 +24,22 @@ import { describe, expect, it } from 'vitest';
  * and watched it stay green; both are pinned as fixtures below, and the fixed scanner was
  * verified RED against each before the mutation was reverted (ADR-0110 D5).
  *
+ * **A THIRD bypass was found later, and this gate was green against it by luck.** A key preceded by
+ * a decorator on the same line (`@ApiProperty() budgetVariance!: number;`) is at neither line start
+ * nor after a `{`/`,`, so neither pattern could see it — and `plan-health-check.dto.ts` simply
+ * happens not to use that form, while its sibling `revision-compare.dto.ts` uses it twenty times.
+ * A one-line Prettier reflow of a two-line property here would have hidden a cost field from the
+ * gate written to catch it, with nothing going red. It was found by giving the scanner a SECOND
+ * consumer rather than by anything failing, which is the argument for having extracted it: the fix
+ * lands once. The scanner and its fixture live in `common/contracts/cost-key-scan.ts` and
+ * `cross-plan-revision-compare.g4.structural.spec.ts`.
+ *
  * Blind spots, stated: a nested type imported from OUTSIDE these files (e.g. a future
  * `offenders: ActivitySummary[]`) is invisible to a source scan of this directory, and a value
  * smuggled through a variable whose NAME is innocent (`const x = plan.costTotal` in a file not
  * scanned) is invisible to any name check. The M5 security pass reads the response shape end to
  * end; this pins the local temptation.
  */
-
-const BANNED = /cost|budget|rate|expense/i;
-
-/** Comments carry prose, and prose about a defect quotes the defect — the register's recurring
- * scan-matching-prose failure (ADR-0106 M4 is the fourth instance). Scan code only. */
-function stripComments(text: string): string {
-  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-}
 
 /**
  * One method's body, for the two files that legitimately carry cost keys elsewhere:
@@ -49,40 +53,6 @@ function sliceMethod(text: string, marker: string): string {
   const rest = text.slice(start);
   const end = rest.slice(marker.length).search(/\n {2}[@a-zA-Z]/);
   return end === -1 ? rest : rest.slice(0, marker.length + end);
-}
-
-/** Keys declared at line start — class properties, multi-line object literals. */
-const DECLARATION_KEY = /^\s+(?:public\s+|private\s+|readonly\s+)*([A-Za-z_$][\w$]*)[!?]?\s*:/gm;
-/** Keys after `{` or `,` ANYWHERE — single-line object literals, the first bypass. */
-const INLINE_KEY = /[{,]\s*([A-Za-z_$][\w$]*)[!?]?\s*:/g;
-/** Banned-named SHORTHAND properties (`{ narrowing, budgetImpact }`) — the second bypass: no `:`
- * exists, so a key pattern structurally cannot see them. Only banned names, to avoid flagging
- * every destructuring in the file. */
-const SHORTHAND = /[{,]\s*((?:cost|budget|rate|expense)[\w$]*)\s*[,}]/gi;
-
-function scanForCostKeys(text: string): string[] {
-  const found: string[] = [];
-  for (const pattern of [DECLARATION_KEY, INLINE_KEY]) {
-    for (const match of text.matchAll(pattern)) {
-      const key = match[1];
-      if (key !== undefined && BANNED.test(key)) found.push(key);
-    }
-  }
-  for (const match of text.matchAll(SHORTHAND)) {
-    const key = match[1];
-    if (key !== undefined) found.push(key);
-  }
-  return found;
-}
-
-function allKeys(text: string): string[] {
-  const keys: string[] = [];
-  for (const pattern of [DECLARATION_KEY, INLINE_KEY]) {
-    for (const match of text.matchAll(pattern)) {
-      if (match[1] !== undefined) keys.push(match[1]);
-    }
-  }
-  return keys;
 }
 
 describe('G4 — no cost-shaped field in the health report', () => {
