@@ -8,7 +8,7 @@
 - **Related ADR(s):** extends ADR-0125 (the delta), ADR-0126 (the change list), ADR-0127 (the
   overlay); builds on ADR-0050 (interchange), ADR-0045 (the cross-plan route precedent), ADR-0012 /
   ADR-0016 (RBAC + org scoping), ADR-0035 (reject / repair / report). **A new ADR is required** —
-  drafted in §4.9, to be filed as **ADR-0129 or the next free number, verified at filing** (ADR-0071:
+  drafted in §4.10, to be filed as **ADR-0129 or the next free number, verified at filing** (ADR-0071:
   a number can be taken between the plan and the milestone).
 
 ---
@@ -79,8 +79,8 @@ machine's own spread (0.56 pp) inside the 2.00 pp bar, which is what makes the v
 
 Two limits carry forward rather than being discarded: it is **one framing on one machine**, and the
 **Fit** framing remains ungraded (`docs/TECH_DEBT.md` #260 — at a baseline of 98.33 pp the difference
-metric is arithmetically incapable of failing). This epic inherits both, and §4.8 does not treat the
-Week PASS as licence for an unmeasured overlay of its own.
+metric is arithmetically incapable of failing). This epic inherits both, and **§4.8.5 does not treat
+the Week PASS as licence** — the cross-plan overlay carries its own committed condition.
 
 **Action:** the backlog entry's final paragraph is amended in the same PR that opens this epic.
 
@@ -169,15 +169,17 @@ listed as unmatchable, per side, and are **never** reported as added or removed.
 | --- | --------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | S1  | A planner reaches a cross-plan comparison in ≤ 3 controls from the open plan            | The M2 journey counts the presses                   |
 | S2  | The correlation coverage is stated **before** any delta, on screen and on paper         | Unit + journey assertion; print snapshot            |
-| S3  | Route p95 ≤ 250 ms at 2,000 activities **per side**                                     | M0-T2, against a condition committed first (§4.10)  |
+| S3  | Route p95 ≤ 250 ms at 2,000 activities **per side**                                     | M0-T3, against a condition committed first (§4.11)  |
 | S4  | `computeSchedule` is not reachable from the feature's module graph                      | The existing derived structural gate (§4.6)         |
 | S5  | The response carries no cost, rate or budget field at any depth — one URL, one document | The ADR-0116 G4-style scan, extended to the new DTO |
 | S6  | Zero new models, columns, indexes, constraints or migrations                            | `pnpm prisma:check-drift` + the diff                |
 
 ### Open questions
 
-**Three are CRITICAL** (they change design or scope) and are listed in §6. Everything else has a
-stated default and is not blocking.
+**None remain.** Three were raised as CRITICAL; all three were decided by the product owner on
+**2026-09-08** and are recorded in §6 — CQ-1 and CQ-2 as proposed, **CQ-3 against** the proposal,
+which is why §4.8 answers the overlay's lane problem rather than deferring it. Everything else
+carries a stated default.
 
 ---
 
@@ -246,6 +248,24 @@ stated default and is not blocking.
 >   **no** activation control, and a sentence names the plan it belongs to — omitted rather than
 >   shaded, because the action does not apply to the object (ADR-0082's omit clause).
 
+> **US-6** — As a **Planner**, I want the difference drawn on the diagram for a cross-plan pair, so
+> that a re-sequenced programme reads as a re-sequence rather than as thirty rows in a table.
+>
+> **Acceptance criteria**
+>
+> - **Given** a cross-plan pair and `View ▾ → Compare on diagram` on (its default since ADR-0127
+>   D8b), **when** the comparison settles, **then** every **matched** activity whose start or finish
+>   moved is ghosted at its **own live bar's** lane, showing where it used to sit in time.
+> - **Given** an activity present only in the older revision, **when** the overlay draws, **then** it
+>   is **not drawn at a guessed position** and is **counted** in the stated "not shown" figure, with
+>   a sentence that says why — and one that is **true of this pair**, not the same-plan sentence
+>   about a snapshot that recorded nothing (§4.8 D-Ghost-4).
+> - **Given** two revisions whose activities merely sit in different lanes, **when** the overlay
+>   draws, **then** it draws **nothing for them** — a lane index is not comparable across two
+>   independently packed plans, so it is not a change (§4.8 D-Ghost-2).
+> - **Given** the toggle, **when** a cross-plan pair is chosen, **then** it **never refuses** — there
+>   is no state in which it is present and declines (the product owner's CQ-3 requirement).
+
 ### 2.2 Workflows
 
 **W1 — Choose the other plan.** The dock's header gains a **Compare with** `Select` above the two
@@ -278,7 +298,7 @@ pure functions (§4.2).
 | **One** side has no coded activities at all                | Same as above — it cannot produce a common code.                                                                                                                                                                |
 | Activities with **no code**                                | Unmatchable; counted and listed per side; never added/removed.                                                                                                                                                  |
 | A code duplicated **within** one side                      | **Unreachable** for the rows this route reads (§0.1). Pinned by a test that asserts the index exists, not by repair code.                                                                                       |
-| A code **re-used for different work** across the two files | Undetectable by construction, and **said so in the copy**. This is the accepted residual of choosing `code` as identity (§4.9 risk R1).                                                                         |
+| A code **re-used for different work** across the two files | Undetectable by construction, and **said so in the copy**. This is the accepted residual of choosing `code` as identity (§4.10; the plan's risk R1).                                                            |
 | Two plans with **very different sizes**                    | Fine. Coverage makes it visible.                                                                                                                                                                                |
 | `from` = another plan's **baseline**                       | Supported: each side is `{ planId, revision }` where revision defaults to `live` (§4.4).                                                                                                                        |
 | Either side is a **pre-2026-09-06 baseline**               | The six paid classes report `NOT_SNAPSHOTTED` (ADR-0126 D4), unchanged.                                                                                                                                         |
@@ -415,7 +435,7 @@ to a new reason.
 | Database       | **NONE**       | See below — stated explicitly, not left ambiguous.                                                                                                                                                     |
 | API            | **medium**     | One new route; one new query DTO; the response DTO gains a `correlation` block and both plans' identity. The shipped route's response is **byte-identical**.                                           |
 | Security       | **medium**     | Two org-scoped resource resolutions; uniform 404; no new permission; no write; no audit event.                                                                                                         |
-| Performance    | **low–medium** | Two plans' reads instead of one, plus an O(n) correlation pass. Measured before building (§4.10), against a condition committed first.                                                                 |
+| Performance    | **low–medium** | Two plans' reads instead of one, plus an O(n) correlation pass; plus the overlay's paint cost. Both measured before building (§4.11), against conditions committed first.                              |
 | Infrastructure | **none**       | No service, env var, container or CI service. One new CI step **only if** a new Playwright config is added (§ plan M2 — it is not; the existing `revision-compare` suite is extended).                 |
 | Observability  | **low**        | The shipped route's structured timing line, extended with both plan ids and the matched count. No new metric.                                                                                          |
 | Testing        | **high**       | Unit (the pure correlation), API e2e (authz, uniform 404, the refusal, the includes), journey (the entry point, ADR-0081), print snapshot, three structural gates.                                     |
@@ -596,13 +616,13 @@ because it carries **two** plan ids"_.
 
 **Query DTO** — `CrossPlanRevisionCompareQueryDto`:
 
-| Param        | Type                                  | Default        | Notes                                                     |
-| ------------ | ------------------------------------- | -------------- | --------------------------------------------------------- |
-| `fromPlanId` | UUID                                  | — **required** | The OLD side's plan                                       |
-| `toPlanId`   | UUID                                  | — **required** | The NEW side's plan; **the anchor** (§4.5)                |
-| `from`       | UUID \| `live`                        | `live`         | A baseline of `fromPlanId`, or its live schedule          |
-| `to`         | UUID \| `live`                        | `live`         | A baseline of `toPlanId`, or its live schedule            |
-| `include`    | `changes` \| `progress` \| `ghosts`[] | —              | The shipped vocabulary; `ghosts` **refused** in M1 (§4.8) |
+| Param        | Type                                  | Default        | Notes                                                                                                    |
+| ------------ | ------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------- |
+| `fromPlanId` | UUID                                  | — **required** | The OLD side's plan                                                                                      |
+| `toPlanId`   | UUID                                  | — **required** | The NEW side's plan; **the anchor** (§4.5)                                                               |
+| `from`       | UUID \| `live`                        | `live`         | A baseline of `fromPlanId`, or its live schedule                                                         |
+| `to`         | UUID \| `live`                        | `live`         | A baseline of `toPlanId`, or its live schedule                                                           |
+| `include`    | `changes` \| `progress` \| `ghosts`[] | —              | The shipped vocabulary, all three supported. `ghosts` returns the **cross-plan** ghost projection (§4.8) |
 
 **Response** — `CrossPlanRevisionCompareDto`: the shipped `RevisionCompareDto` shape plus
 
@@ -644,15 +664,17 @@ written down before the number exists, which is the point.
 `Analysis ▾ → Compare revisions…` (`tsld-toolbar-items.tsx:1397-1400`), which toggles the existing
 `revisions` dock (`right-docks.ts:14`).
 
-| Component                          | Change                                                                                                                                                                                           |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RevisionComparePanel`             | A **Compare with** `Select` above the two revision pickers; the coverage block; both plans named in the side titles; the omission rule for other-plan rows.                                      |
-| `RevisionCorrelationSummary` (new) | The coverage block. Renders counts, the unmatched/uncoded disclosures, and the `NO_COMMON_CODES` state. Design-system primitives only (`NoticeStrip`, `Label`, disclosure) — no one-off styling. |
-| `use-revision-compare.ts`          | One branch: another plan chosen ⇒ the new route.                                                                                                                                                 |
-| `RevisionComparePrintDocument`     | Both plans, the coverage, the frame, the honesty footer.                                                                                                                                         |
-| `revision-sentences.ts`            | New sentences: coverage, `NO_COMMON_CODES`, the re-code caveat, the frame. **One module, as today** — the panel and the print document share it, which is what stops the two disagreeing.        |
+| Component                                                         | Change                                                                                                                                                                                                            |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RevisionComparePanel`                                            | A **Compare with** `Select` above the two revision pickers; the coverage block; both plans named in the side titles; the omission rule for other-plan rows.                                                       |
+| `RevisionCorrelationSummary` (new)                                | The coverage block. Renders counts, the unmatched/uncoded disclosures, and the `NO_COMMON_CODES` state. Design-system primitives only (`NoticeStrip`, `Label`, disclosure) — no one-off styling.                  |
+| `use-revision-compare.ts`                                         | One branch: another plan chosen ⇒ the new route.                                                                                                                                                                  |
+| `RevisionComparePrintDocument`                                    | Both plans, the coverage, the frame, the honesty footer.                                                                                                                                                          |
+| `revision-sentences.ts`                                           | New sentences: coverage, `NO_COMMON_CODES`, the re-code caveat, the frame. **One module, as today** — the panel and the print document share it, which is what stops the two disagreeing.                         |
+| `compareOverlaySummary` (`render/a11y.ts:181`)                    | Gains a **reason discriminator** for the undrawable count. Its current sentence — _"the old revision did not record where they were"_ — is **false cross-plan** and must not be reused verbatim (§4.8 D-Ghost-4). |
+| `buildRevisionGhosts` (`modules/baselines/revision-ghosts.ts:67`) | The cross-plan lane rule: anchor-side placement, and no lane clause in the `moved` test. The same-plan path stays **byte-identical**, asserted by its existing suite passing unchanged.                           |
 
-**The anchor decision (CQ-1's default).** The comparison is **anchored in the open plan**, which is
+**The anchor decision (CQ-1, accepted 2026-09-08).** The comparison is **anchored in the open plan**, which is
 always the `to` side, and the planner picks the **other** plan for the `from` side. Three reasons,
 each checkable:
 
@@ -664,8 +686,10 @@ each checkable:
   that row does not fit; one anchored picker above them does.
 - **It matches the question.** "Compare this against that older import" is what a planner asks.
 
-The rejected alternative — both sides free — is named rather than omitted, and CQ-1 puts it to the
-product owner.
+The alternative — both sides free — was put to the product owner and **not taken** (CQ-1,
+2026-09-08). A fourth reason emerged only after CQ-3 forced the overlay into this epic, and is
+recorded because nobody was pricing it at the time: **a fixed anchor is what makes the overlay's link
+half work unchanged** (§4.8 D-Ghost-5).
 
 **States.** Loading (existing `Spinner` idiom), error + retry (existing), empty ("no other plans in
 this project" — its own sentence, distinct from "no changes", which is ADR-0125's recorded
@@ -724,7 +748,136 @@ directions are asserted here by a test that walks one shared source of sentences
 The cross-plan document additionally names: both plans and their projects; the correlation coverage;
 the measurement frame; and the re-code caveat.
 
-### 4.8 What is NOT in scope
+### 4.8 The overlay across two plans — time is shared, lane is not
+
+**The product owner rejected deferring this (CQ-3, 2026-09-08): the overlay ships with the panel, so
+there is no window in which the toggle is present and refuses.** That does not remove the design
+problem the deferral existed for — it forces it now. Here it is, precisely, and answered.
+
+#### 4.8.1 The problem, stated exactly
+
+ADR-0127 D2 places a ghost at the **frozen** side's `laneIndex`, and that is honest **because a
+baseline is a snapshot of the same plan** — the lane space on both sides is one lane space.
+
+Across two independent imports it is not, and this is verified rather than reasoned:
+
+- an imported activity is first given `laneIndex` = **its 0-based position in the source file**
+  (`interchange.service.ts:387`);
+- **phase 3 then repacks by time** with `packLanes` (`:342-347`, ADR-0069) — and it packs by
+  _computed dates_, which two revisions do not share;
+- **phase 3 is best-effort** (`:348-351` — _"a layout failure means the plan is correct but arranged
+  badly"_), so one plan may be time-packed and the other still in source order.
+
+So lane 5 of plan B is not lane 5 of plan A, and the two lane spaces are not merely different
+packings of one algorithm — they may be differently _derived_. Drawing B's activity at B's lane index
+inside A's diagram places it somewhere **arbitrary**, and the reader cannot tell. That is worse than
+not drawing it, and it is exactly what D2 forbids.
+
+**The type refuses the guess, which is worth noticing:** `RevisionGhostBar.laneIndex` is a required
+`number` (`packages/types/src/index.ts:2935`). A ghost with no honest lane cannot be constructed. So
+the only alternative to a guess is a count, and the machinery for a count already exists.
+
+#### 4.8.2 The decision: draw what has an honest lane, count what does not
+
+**D-Ghost-1 — the placement lane is the ANCHOR side's, never the frozen side's.** For a **matched**
+activity the anchor row exists, and its `laneIndex` is honest **by construction**: it is literally
+where that bar is, in the diagram being drawn on. The ghost sits with its own live bar and says _this
+work used to span these dates_.
+
+This works because **time is a shared coordinate across plans and lane is not.** `fromStart` /
+`fromFinish` are absolute calendar dates, comparable between any two plans; the lane is an index into
+a layout each plan derived alone. The overlay's meaning lives almost entirely in the dates, which is
+why the answer is far cheaper than the problem sounds — but only for the matched case.
+
+**D-Ghost-2 — the lane clause is dropped from the `moved` test cross-plan, and this is the finding
+that matters most.** `buildRevisionGhosts` currently treats `from.laneIndex !== to.laneIndex` as a
+move (`revision-ghosts.ts:81-85`). Cross-plan those indices are incomparable, so that clause would
+fire on **nearly every activity** — the two plans were packed independently, and one may not have
+been packed at all.
+
+The result would not be a slightly noisy overlay. It would be **the entire old plan drawn on top of
+the new one**, which is precisely the design the product owner **rejected at CQ-2 on 2026-09-06** and
+which ADR-0127's opening paragraph exists to prevent. It would also look busy and plausible while
+doing it — nothing would fail, and the rejected design would ship through the door marked "reuse".
+
+So cross-plan, "moved" means **a different start or finish**, and a pure lane re-arrangement is not a
+change at all. It is **not** counted as undrawable either: undrawable means _a change we could not
+draw_, and a lane index that is not comparable is not a change. Inflating that count with
+non-changes would make the honesty number dishonest.
+
+**D-Ghost-3 — removed work is COUNTED, not drawn, and the fact survives even though the position does
+not.** An activity in the `from` plan and not in the anchor has no anchor row, therefore no honest
+lane. It goes to `ghostsUndrawable`, which the panel states in words — ADR-0127 D3's rule reused
+verbatim rather than re-derived, through the channel that already exists
+(`compareOverlaySummary(ghosts, undrawable, links)`, `a11y.ts:181-214`, whose docblock at `:178-179`
+gives the reason: _"a diagram has no 'showing N of M', so a picture quietly missing rows is
+unnoticeable"_).
+
+**What is lost is the _position_, not the _fact_.** Removed work is still named — in the delta's
+`removed` set, in the change list's `REMOVED` class, and in the `sr-only` list inside the diagram
+region — with its name, its dates and its plan. The reader is not left with an absence.
+
+**D-Ghost-4 — the reason sentence must change, and shipping the existing one would state something
+false.** `a11y.ts:212` currently reads _"N not shown because the old revision did not record where
+they were"_. Cross-plan that is **untrue**: the other plan recorded the lane precisely; the position
+is not _comparable_. So `compareOverlaySummary` gains a reason discriminator and the cross-plan
+sentence says what is actually the case — that the work is in the other revision only, and the two
+revisions lay their bars out independently — pointing at the change list, which has it in words.
+
+This clause exists because "reuse the existing mechanism" is exactly how a correct mechanism ships a
+false sentence, and the register records that shape repeatedly.
+
+**D-Ghost-5 — the link half is unaffected, and CQ-1 is the reason.** `buildRevisionLinkChanges` gates
+on the ids present in the plan being drawn on (`revision-ghosts.ts:155-168`). With the anchor fixed as
+the `to` side (CQ-1, accepted), an ADDED or CHANGED link exists in the anchor plan and so do both its
+endpoints — which is that function's own recorded reasoning (`:131-132`), holding unchanged
+cross-plan. A REMOVED link with a missing endpoint is counted, as today. **Accepting CQ-1 is what
+bought this**, and had both plan pickers been free the link half would have needed its own answer.
+
+#### 4.8.3 Alternatives, evaluated rather than listed
+
+| Option                                               | Verdict                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Draw removed work at its frozen lane**             | **Rejected — this is the problem.** An arbitrary position the reader will read as _the_ position; ADR-0127 D2 forbids exactly this.                                                                                                                                                                                                                                                                  |
+| **A reserved band below the scene for removed work** | **Rejected.** ADR-0127 explicitly disposed of it once already (_"obsoleted by CQ-2b freezing the lane"_), and reviving it costs canvas **height** — the quantity ADR-0092, ADR-0099, ADR-0112 and ADR-0113 spent four epics recovering 45 px at a time — plus its own a11y story and its own paint budget. Paying that for the one class the change list already covers in words is the wrong trade. |
+| **Borrow a matched neighbour's lane**                | **Rejected, and it cannot work by definition**: a removed activity has no matched counterpart — that is what "removed" means. Borrowing a _logic_ neighbour's lane (its successor's) is a guess wearing evidence's clothes, and the successor may itself be removed.                                                                                                                                 |
+| **Draw the whole old plan behind the new one**       | **Already rejected** by the product owner at ADR-0127 CQ-2, and D-Ghost-2 shows the naive cross-plan reuse re-introduces it silently.                                                                                                                                                                                                                                                                |
+| **Refuse the overlay cross-plan**                    | **Rejected by the product owner at CQ-3** — no window where the toggle refuses.                                                                                                                                                                                                                                                                                                                      |
+
+#### 4.8.4 What this costs, stated plainly
+
+- A planner cannot see **where** removed work sat, on the diagram. They see that it existed, its
+  name, its dates and a count on the picture. Same-plan pre-2026-09-06 baselines already have exactly
+  this limitation, with exactly this mechanism.
+- A **pure lane re-arrangement** between two revisions is invisible. That is correct rather than lost:
+  it is a fact about two layout runs, not about the programme.
+- **The overlay is default-on** (ADR-0127 D8b, 2026-09-08), so choosing a cross-plan pair shows the
+  difference **immediately and unrequested**. Its correctness is therefore on the default path from
+  day one, which is why M2's journey drives it rather than leaving it to the gate pass.
+- **The exported picture inherits it.** ADR-0127 D7 composes the overlay into the export through the
+  same `getSceneLenses` handle and a derived scene-parity gate. The cross-plan overlay uses the
+  **same lens key and the same scene fields**, so composition is inherited rather than new — but the
+  exported picture then depicts a comparison of two plans, and whether its title band names the plan
+  is checked in M2 rather than assumed here.
+
+#### 4.8.5 The overlay keeps its own falsification condition
+
+Merging it into M2 does **not** merge away its measurement (a re-plan constraint, and the right one).
+`m0-condition.md` carries a third condition, committed before any harness runs: the overlay's paint
+cost on a **cross-plan** pair at 2,000 activities per side, at **Week**, against ADR-0127's 2.00 pp
+bar, with the machine's own baseline spread reported and **INDETERMINATE** available as a verdict
+(ADR-0128 — an instrument whose baseline moves by more than its bar cannot answer).
+
+ADR-0127 D8a's two limits are inherited explicitly and are not treated as licence: **one framing, one
+machine**, and **Fit ungraded** — `docs/TECH_DEBT.md` #260 records that at a 98.33 pp baseline the
+difference metric is arithmetically incapable of failing.
+
+One prediction is worth committing so it can be falsified: because D-Ghost-2 **narrows** what is
+drawn relative to a naive port, the cross-plan overlay should cost **no more** than the same-plan one
+at equal activity counts. If it costs materially more, the lane clause has leaked back in — and the
+measurement, not a reviewer, is what would catch it.
+
+### 4.9 What is NOT in scope
 
 **The `which change` half stays REFUSED, not deferred.** ADR-0125's measurement is the reason and it
 is not re-opened here: replayed in six orders the same change scored 30, 18, 2 or 0 working days by
@@ -734,28 +887,11 @@ and stable at 139 d in every permutation
 `contribution`, `rank` or `interaction` field at any depth, and the existing no-cause structural gate
 covers the new module automatically (§4.6). Re-opening it needs new evidence, not new enthusiasm.
 
-**The diagram overlay is deferred to M4, with a stated refusal rather than a silent gap.**
-`?include=ghosts` is **refused** on this route in M1 and the `View ▾ → Compare on diagram` toggle
-gains a third honest reason — _"The diagram overlay compares revisions of this plan"_ — beside its
-two existing ones (`tsld-toolbar-items.tsx:300-305`). A lit-but-inert toggle is the dead end this
-register records four times; a stated refusal is not.
-
-The reason it is not free is a real design question, named so M4 has to answer it rather than
-discover it: **ADR-0127 D2 says the ghost's lane is the _frozen_ lane, never guessed** — and
-cross-plan the frozen lane belongs to _another plan's_ layout, so drawing it on this canvas would be
-exactly the false statement about where the work was that D2 exists to prevent. The candidate answer
-(draw a matched ghost in the **anchor's** lane, since the ghost is about dates; count unmatched work
-as `ghostsUndrawable` per D3) is plausible and is **not** decided here.
-
-M4 also inherits ADR-0127 D8a's two stated limits — one framing, one machine, Fit ungraded
-(`docs/TECH_DEBT.md` #260) — so it carries **its own** committed falsification condition and does not
-treat the Week PASS as licence.
-
 **Also out of scope, named rather than left ambiguous:** cost / earned-value comparison; resource
 comparison; comparing more than two revisions; cross-**organisation** comparison; a persisted
 comparison entity; guest access; and any change to the interchange import itself.
 
-### 4.9 Implementation approach, alternatives, and the ADR
+### 4.10 Implementation approach, alternatives, and the ADR
 
 **Chosen:** a correlation layer above two unchanged pure functions, reached by a new org-scoped route,
 with `code` as the identity and the match reported before anything derived from it.
@@ -796,18 +932,27 @@ with `code` as the identity and the match reported before anything derived from 
 > - **D6** — `computeSchedule` is not called, not imported and not reachable (ADR-0125 D1's strong
 >   form, **not** ADR-0116 D7's), enforced by a derived gate that covers the new module by naming
 >   convention.
-> - **D7** — The overlay is deferred with a **stated refusal**, because ADR-0127 D2's frozen-lane
->   rule does not transfer across plans and inventing a lane is the defect that rule prevents.
+> - **D7 — The overlay draws what has an honest lane and counts what does not** (§4.8), because
+>   **time is a shared coordinate across two plans and lane is not**. A matched activity is placed at
+>   the **anchor's** lane; removed work is counted through ADR-0127 D3's existing channel; and the
+>   `moved` test **drops its lane clause**, without which the overlay silently becomes the
+>   whole-old-plan design rejected at ADR-0127 CQ-2. A reserved band, a borrowed neighbour's lane and
+>   a frozen-lane placement are each rejected with a reason. ADR-0127 D2 is **not overturned** — it is
+>   applied: the lane is still recorded and never guessed; cross-plan there simply is no recorded lane
+>   for one-sided work, so it is not drawn.
 > - **D8** — No schema change; `database-architect` is not engaged, and that is a statement.
 > - **Consequences.** A re-code is indistinguishable from a removal plus an addition, permanently and
 >   by construction; the product says so rather than implying a fidelity it does not have. MSPDI
->   imports whose code falls back to `<WBS>` correlate poorly across revisions (§ risk R2).
+>   imports whose code falls back to `<WBS>` correlate poorly across revisions (§ risk R2). The
+>   diagram cannot say **where** removed work sat, only that it existed — the same limitation a
+>   pre-2026-09-06 baseline already carries, through the same mechanism and a different sentence.
 
-### 4.10 Measurement, with the condition committed first
+### 4.11 Measurement, with the conditions committed first
 
-Two things are measured, and **both conditions are committed in their own commit before the harness
-runs** (ADR-0100 / ADR-0125's pattern, and ADR-0097 Landing C's lesson that a harness which cannot
-judge must throw rather than return a verdict from an `undefined`).
+**Three** things are measured, and **every condition is committed in its own commit before any
+harness runs** (ADR-0100 / ADR-0125's pattern, and ADR-0097 Landing C's lesson that a harness which
+cannot judge must throw rather than return a verdict from an `undefined`). Merging the overlay into
+the panel's milestone did **not** merge away its condition.
 
 `docs/specs/revision-compare-imported/m0-condition.md`, then `m0-measurement.md`.
 
@@ -825,7 +970,21 @@ _Condition:_ ≤ 250 ms — the bar ADR-0125 committed and met at 65.8 ms for on
 _Verdict rule:_ inside the bar ⇒ the global rate budget stands; materially above ⇒ derive a dedicated
 budget by ADR-0116 M6's formula. **The harness throws rather than judging if either side is empty.**
 
-Both are taken **before** M1 builds anything, so a failure changes the design rather than the copy.
+**P3 — The cross-plan overlay is affordable** (§4.8.5). Dropped frames on a cross-plan pair at 2,000
+activities per side, at the **Week** framing, on the ADR-0128 staff probe.
+_Condition:_ ≤ **2.00 pp** over the no-treatment baseline — ADR-0127's own bar, not a new one.
+_Verdict rule:_ **INDETERMINATE is a first-class outcome** (ADR-0128). If the machine's own baseline
+spread exceeds the bar, the run cannot answer and is recorded as disqualified rather than averaged —
+which is exactly what ADR-0127 D8 did, and why its refusal was credible.
+_Inherited limits, restated so they are not quietly dropped:_ **one framing, one machine**, and
+**Fit ungraded** (`docs/TECH_DEBT.md` #260).
+_A committed prediction, so it can be falsified:_ because D-Ghost-2 **narrows** what is drawn
+relative to a naive port, the cross-plan overlay should cost **no more** than the same-plan one at
+equal activity counts. Materially more means the lane clause has leaked back in.
+
+P1 and P2 are taken **before** M1 builds anything, so a failure changes the design rather than the
+copy. P3's condition is committed with them; the run itself needs the shipped painter, so it is taken
+inside M2 and **before** the milestone is called done.
 
 ---
 
@@ -838,27 +997,52 @@ Both are taken **before** M1 builds anything, so a failure changes the design ra
 - Docs updated by this change: `docs/API.md` (a new sub-section beside "Cross-plan dependencies"),
   `docs/BACKLOG.md` (§0.3 and the entry's scope), `CLAUDE.md` §16 (the new ADR), `docs/adr/README.md`
 
-## 6. Critical questions
+## 6. Critical questions — all three answered
 
-Three. Everything else has a stated default above and is not blocking.
+**Decided by the product owner, 2026-09-08.** Two went to the proposed default; one did not, and the
+one that did not is the reason §4.8 exists in its current form.
 
-> **CQ-1 — The anchor model.** Default: the comparison is **anchored in the open plan** (always the
-> `to` side) and the planner picks only the **other** plan, for the reveal, dock-width and
-> question-shape reasons in §4.5. The alternative is two free plan pickers, which needs a different
-> reveal rule and does not fit the 380 px dock. **Changes:** the picker layout, the reveal contract,
-> and whether M2 needs a dock-width change.
+> **CQ-1 — The anchor model. ACCEPTED as proposed** (product owner, 2026-09-08). The comparison is
+> **anchored in the open plan**, which is always the `to` side; the planner picks only the **other**
+> plan. The reasons stand as written in §4.5 — reveal has one meaning, the 380 px dock's min is
+> derived from a two-select row (`use-revision-compare-panel-prefs.ts:14-18`), and it matches the
+> question a planner asks.
+>
+> **A consequence surfaced later and is worth recording here rather than only in §4.8:** accepting
+> this is what makes the overlay's **link** half work unchanged. `buildRevisionLinkChanges` gates on
+> the ids present in the plan being drawn on, and a fixed anchor guarantees an ADDED or CHANGED
+> link's endpoints are in it. Had both pickers been free, the link half would have needed its own
+> answer. The decision paid for something nobody was pricing at the time.
 
-> **CQ-2 — Should the match ever fall back to `name`?** Default: **no** — code only. P6 makes the
-> code unique and not the name, and this repository measured a real file with 1,911 duplicate names
-> and 0 duplicate codes (`validate.ts:69-74`), so a name match cannot be verified by the reader. But
-> the ADR-0053 CQ-4 resource precedent matches on **name**, and a planner whose revisions routinely
-> re-code would get far better coverage from a two-tier match. **Changes:** a second correlation key,
-> per-row match provenance, and an extra honesty surface — roughly one milestone. Answer it before
-> M1, or after M0-P1 measures the real coverage, which is the better sequencing.
+> **CQ-2 — A `name` fallback. ACCEPTED as proposed** (product owner, 2026-09-08). **`code` only,
+> matched exactly.** No second correlation key, no per-row match provenance. Activities that cannot
+> be correlated are **counted and listed, never inferred** into `added` or `removed` (§2.4 D1b).
+>
+> The reasoning stands: P6 makes the code unique and not the name, and this repository measured a
+> real file carrying **1,911 duplicate names and 0 duplicate codes** (`validate.ts:69-74`), so a name
+> match cannot be verified by the reader. M0-P1 still measures real coverage — if it comes in below
+> 95 %, that is new evidence and the question may be reopened on it, which is different from
+> reopening it on preference.
 
-> **CQ-3 — Is deferring the diagram overlay acceptable?** Default: **yes**, with a stated refusal
-> (§4.8), because ADR-0127 D2's frozen-lane rule does not transfer across plans and M4 owes a real
-> decision plus its own measurement. The cost is a visible inconsistency: the overlay shipped
-> **default-on** two days ago (ADR-0127 D8b), so a planner who chooses another plan will find the
-> toggle refusing where it worked a moment earlier. **Changes:** whether M4 is inside this epic's
-> approval or a follow-on.
+> **CQ-3 — Deferring the diagram overlay. REJECTED** (product owner, 2026-09-08). **The overlay ships
+> in the same milestone as the panel.** There is to be no window in which the toggle is present and
+> refuses.
+>
+> **This does not remove the design problem the deferral existed for; it forces it now**, and §4.8 is
+> the answer rather than a promise to find one. In short: **time is a shared coordinate across plans
+> and lane is not** (verified — `interchange.service.ts:387` assigns lane by source position and
+> phase 3 repacks by computed dates, best-effort). So a **matched** activity is drawn at the
+> **anchor's** lane, which is honest by construction; **removed** work has no honest lane and is
+> **counted** through the mechanism ADR-0127 D3 already built; and the `moved` test **drops its lane
+> clause**, without which the overlay would silently become the whole-old-plan design the product
+> owner rejected at ADR-0127 CQ-2.
+>
+> **What the decision costs, so it is not discovered later:** a planner cannot see _where_ removed
+> work sat on the diagram — only that it existed, with its name and dates, in the change list and in
+> the count on the picture. That is the same limitation a pre-2026-09-06 baseline already carries.
+> The full accounting is §4.8.4.
+
+### Nothing is blocking
+
+No question remains open. Every other decision in this document carries a stated default, and the
+plan is ready for approval.

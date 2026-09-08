@@ -12,9 +12,8 @@ flowchart LR
   E --> M1["M1 — Correlation + route<br/>(dark)"]
   E --> M2["M2 — The panel<br/>(FIRST user-facing · journey)"]
   E --> M3["M3 — The handover artefact"]
-  E --> M4["M4 — The diagram overlay<br/>(own decision + own condition)"]
-  E --> M5["M5 — The gate pass"]
-  M0 --> M1 --> M2 --> M3 --> M4 --> M5
+  E --> M4["M4 — The gate pass"]
+  M0 --> M1 --> M2 --> M3 --> M4
 ```
 
 ### Epic
@@ -74,9 +73,9 @@ capability.`
 
 ##### Task M0-T1 — Commit the conditions, in their own commit
 
-- **Description:** write `m0-condition.md` with P1 (coverage ≥ 95 %) and P2 (p95 ≤ 250 ms at 2,000
-  activities per side), each with its verdict rule and its non-vacuity control, and commit it
-  **before** any harness exists.
+- **Description:** write `m0-condition.md` with **all three** conditions — P1 (coverage ≥ 95 %),
+  P2 (p95 ≤ 250 ms at 2,000 activities per side) and **P3 (the cross-plan overlay's paint cost)** —
+  each with its verdict rule and its non-vacuity control, and commit it **before** any harness exists.
 - **Complexity:** S
 - **Dependencies:** —
 - **Risks:** conditions written after seeing the numbers are not conditions → separate commit, and
@@ -84,13 +83,27 @@ capability.`
 - **Testing:** n/a (a document).
 - **Development steps:**
   1. State P1: on a pair differing only in dates, logic and added/removed work, ≥ 95 % of the smaller
-     side's **coded** activities correlate. Below ⇒ the identity model is wrong and CQ-2 reopens.
+     side's **coded** activities correlate. Below ⇒ the identity model is wrong and CQ-2 reopens **on
+     that evidence** — which is different from reopening it on preference, since the product owner
+     settled it on 2026-09-08.
   2. State P2: p95 ≤ 250 ms end-to-end, the bar ADR-0125 committed and met at 65.8 ms for one side.
      Verdict rule: inside ⇒ the global rate budget stands; materially above ⇒ derive a dedicated
      budget by ADR-0116 M6's `clamp(floor(12_000 / p95), 3, 20)`.
-  3. State both non-vacuity controls: the two sides must genuinely differ (P1) and be non-empty (P2);
-     the harness **throws** otherwise.
-  4. Record the environment and what would disqualify it.
+  3. **State P3, which the CQ-3 merge must not swallow** (spec §4.8.5): dropped frames on a
+     cross-plan pair at 2,000 activities per side, **Week** framing, on the ADR-0128 staff probe,
+     against ADR-0127's **2.00 pp** bar — its bar, not a new one. **INDETERMINATE is a first-class
+     verdict** (ADR-0128): if the machine's own baseline spread exceeds the bar the run cannot answer
+     and is recorded as disqualified rather than averaged, which is exactly what ADR-0127 D8 did.
+     Restate the inherited limits — **one framing, one machine, Fit ungraded**
+     (`docs/TECH_DEBT.md` #260).
+  4. **State P3's committed prediction, so it can be falsified:** because the cross-plan rule
+     **narrows** what is drawn (no lane clause — spec §4.8 D-Ghost-2), the cross-plan overlay should
+     cost **no more** than the same-plan one at equal activity counts. Materially more means the lane
+     clause leaked back in, and the measurement is what would catch it — not a reviewer.
+  5. State all three non-vacuity controls: the two sides must genuinely differ (P1), be non-empty
+     (P2), and produce at least one drawn ghost (P3 — an overlay measured on a pair with nothing to
+     draw reports the painter's idle cost and says nothing). The harness **throws** otherwise.
+  6. Record the environment and what would disqualify it.
 
 ##### Task M0-T2 — Probe P1: does the code key actually match?
 
@@ -147,25 +160,31 @@ capability.`
 
 ---
 
-## Milestone M1 — The correlation model and the cross-plan route (ships dark)
+## Milestone M1 — The correlation model, the cross-plan route, and the overlay's server half (ships dark)
 
 **Outcome:** `GET …/organizations/:orgSlug/cross-plan-revision-compare` answers correctly, with
-uniform 404s, the same-plan refusal and the `NO_COMMON_CODES` reason.
+uniform 404s, the same-plan refusal, the `NO_COMMON_CODES` reason, and **all three `include`
+projections — `changes`, `progress` and `ghosts`.**
 **Ships dark:** `No UI reaches this route. The client is unchanged and the shipped plan-nested route
-is byte-identical. M2 adds the Compare with picker that calls it.`
+is byte-identical. M2 adds the Compare with picker that calls it, and lights the overlay.`
 **Journey:** none — declared dark. The journey lands in M2, which is the **first user-facing**
 milestone (ADR-0081 §2).
 
-#### Feature: `revision-correlate.ts` and the org-scoped route
+> **Grew by one task after CQ-3 was rejected.** The ghost projection (M1-T4) was M4 in the previous
+> plan. Landing it here, dark, is what lets the overlay ship **with** the panel — the product owner's
+> requirement — without making M2 a milestone and a half.
 
-> **Description:** a pure correlation module + a controller + a service method, reusing the three
-> pure functions **unmodified**.
+#### Feature: `revision-correlate.ts`, the org-scoped route, and the cross-plan ghost projection
+
+> **Description:** a pure correlation module + the cross-plan ghost rule + a controller + a service
+> method, reusing the delta and the classifier **unmodified**.
 > **Complexity:** L
 > **Dependencies:** M0 (P1 must pass, or the identity model changes)
-> **Risks:** see per-task.
-> **Testing requirements:** unit (the pure module), API e2e (authz, 404 uniformity, both refusals,
-> every `include`), three structural gates, and the existing pure suites passing **unchanged** as the
-> before/after oracle.
+> **Risks:** see per-task. The sharpest is M1-T4's lane clause (rollup R8).
+> **Testing requirements:** unit (the pure module and the ghost rule), API e2e (authz, 404
+> uniformity, both refusals, every `include` **including `ghosts` alone**), three structural gates,
+> and the existing pure suites — `revision-delta.spec.ts`, `revision-changes.spec.ts`,
+> `revision-ghosts.spec.ts` — passing **unchanged** as the before/after oracle.
 
 ##### Task M1-T1 — The pure correlation module
 
@@ -241,19 +260,66 @@ found.')`. Resolve both in one round trip, as the shipped method does for its tw
   4. Resolve each side's revision (`live`, or `findActiveByIdInPlan` **against its own plan**) ⇒
      uniform 404.
   5. Load both sides; correlate; if `matched === 0` return the typed reason with **no** delta.
-  6. Otherwise call the three pure functions unchanged; map `activityId` back to the anchor plan's
-     UUIDs; assemble `correlation`, `fromPlan`, `toPlan` and `frame`.
+  6. Otherwise call the delta and the classifier unchanged (the ghost half is M1-T4); map
+     `activityId` back to the anchor plan's UUIDs; assemble `correlation`, `fromPlan`, `toPlan` and
+     `frame`.
   7. The measurement frame is the **`from` side's** calendar and factor (ADR-0125 D4), and it is
      **named in the payload** because two plans may differ.
   8. Docblock the parity sentence in ADR-0125 D1's strong form, and say explicitly that ADR-0116 D7's
      weaker sibling does **not** apply here.
 
-##### Task M1-T4 — The controller, the DTOs and the API e2e
+##### Task M1-T4 — The cross-plan ghost and link projection (the overlay's server half, dark)
+
+> **This task exists because CQ-3 was rejected** (product owner, 2026-09-08): the overlay ships with
+> the panel. Landing its **server** half here, dark, is what keeps M2 a single surface milestone
+> rather than a milestone-and-a-half. Nothing reaches it until M2.
+
+- **Description:** the cross-plan branch of `buildRevisionGhosts`, per spec §4.8 D-Ghost-1/2/3.
+  `buildRevisionLinkChanges` is expected to need **no change**.
+- **Complexity:** M
+- **Dependencies:** M1-T1
+- **Risks:**
+  - **_The lane clause is left in the `moved` test._ This is the epic's single most dangerous
+    defect** and it fails silently. `revision-ghosts.ts:81-85` treats `from.laneIndex !== to.laneIndex`
+    as a move; cross-plan those indices are incomparable (`interchange.service.ts:387` assigns lane
+    by source position, phase 3 repacks by computed dates at `:342-347`, and phase 3 is
+    **best-effort** at `:348-351`), so the clause would fire on nearly every activity and the overlay
+    would become **the whole old plan drawn on top of the new one** — the design the product owner
+    rejected at ADR-0127 CQ-2. Nothing would go red and it would look busy and plausible.
+    → A unit case on a pair that is **identical except for lane packing** asserts **zero** ghosts,
+    **verified red** against the un-narrowed test.
+  - _Removed work is drawn at the frozen lane_ → `RevisionGhostBar.laneIndex` is a required `number`
+    (`packages/types/src/index.ts:2935`), so the type refuses the guess; a case asserts removed work
+    lands in `undrawable` and in no ghost.
+  - _A lane-only difference inflates `undrawable`_ → it must not: undrawable means _a change we could
+    not draw_, and an incomparable index is not a change. Asserted separately from the case above,
+    because one passing does not imply the other.
+  - _The same-plan path regresses_ → `revision-ghosts.spec.ts` must pass **unchanged**; the cross-plan
+    rule is a parameter, not a rewrite.
+  - **_The cross-plan path is BLIND to ADR-0127 D5's defect, and must not be cited as evidence it is
+    safe._** D5 forbids the compare layer culling by `visibleIds`, because removed work is not in
+    `scene.activities`. Cross-plan, **every drawn ghost is matched and therefore has a live bar**, so
+    reintroducing that cull would be harmless here and still wrong same-plan — a contributor who
+    tried it would see the cross-plan cases pass. Noted so the rule survives the widening; the
+    same-plan case that D5 records verifying red stays the one that guards it.
+- **Testing:** `revision-ghosts.spec.ts` additions (the same-plan cases untouched); the API e2e in
+  M1-T5 exercising `?include=ghosts` **alone**.
+- **Development steps:**
+  1. Add the cross-plan mode to `buildRevisionGhosts`: placement lane from the **anchor** row;
+     `moved` = a different start **or** finish only.
+  2. Confirm — do not assume — that `buildRevisionLinkChanges` needs no change: its gate is the ids
+     present in the plan being drawn on (`:155-168`) and the anchor is fixed as the `to` side, which
+     is its own recorded reasoning at `:131-132`. **If that turns out false, it is a finding, not a
+     silent fix.**
+  3. Write the three cases above, each verified red against the specific defect it names.
+  4. Assert `revision-ghosts.spec.ts` passes unchanged.
+
+##### Task M1-T5 — The controller, the DTOs and the API e2e
 
 - **Description:** `CrossPlanRevisionCompareController` + query/response DTOs + OpenAPI + the e2e
   suite.
 - **Complexity:** L
-- **Dependencies:** M1-T3
+- **Dependencies:** M1-T3, M1-T4
 - **Risks:**
   - _`?include=changes` arrives as a string, not an array_ → the shipped `@Transform(toArray)` idiom
     is reused verbatim (`revision-compare-query.dto.ts:87`). That defect shipped for one commit and
@@ -282,30 +348,47 @@ found.')`. Resolve both in one round trip, as the shipped method does for its tw
 
 ---
 
-## Milestone M2 — The panel picks another plan (FIRST user-facing milestone)
+## Milestone M2 — The panel picks another plan, AND the diagram draws it (FIRST user-facing milestone)
 
-**Outcome:** a planner compares the open plan against another plan in the same project, and sees the
-match coverage before the delta.
+> **Re-planned after CQ-3 was rejected** (product owner, 2026-09-08). The panel and the overlay land
+> **together**, so there is never a release in which the `Compare on diagram` toggle is present and
+> refuses. The alternative — two user-facing milestones — was considered and **would create exactly
+> that gap**, which is the requirement rather than a preference.
+>
+> **What keeps this one milestone rather than one and a half:** the overlay's server half is already
+> dark in M1-T4, and the client painter is **shape-driven** — ADR-0127 records that with the two
+> scene fields absent the paint is byte-for-byte identical, so the painter consumes
+> `RevisionGhostBar[]` / `RevisionLinkChange[]` and does not know where they came from. The
+> cross-plan response produces the **same shapes**. So the client work is the picker, the coverage
+> block, one **sentence**, and the journey. **That claim is verified in M2-T4, not assumed** — it is
+> read from ADR-0127's assertion rather than from the painter.
+
+**Outcome:** a planner compares the open plan against another plan in the same project, sees the
+match coverage before the delta, and sees the difference drawn on the diagram.
 **Entry point:** the existing **`Analysis ▾ → Compare revisions…`** (`tsld-toolbar-items.tsx:1397-1400`,
 accessible name _"Compare revisions…"_), then the new **`Compare with`** `Select` at the top of the
-dock. **No new dock, no new menu item, no new router route** — `right-docks.ts:14` already holds
-`revisions`.
+dock; the overlay is reached by the existing **`View ▾ → Compare on diagram`**
+(`tsld-toolbar-items.tsx:276-305`), **on by default** since ADR-0127 D8b. **No new dock, no new menu
+item, no new router route, no new toggle** — `right-docks.ts:14` already holds `revisions`.
 **Journey:** extend `apps/web/e2e-revision-compare/revision-compare.spec.ts` (existing config
 `playwright.revision-compare.config.ts`, existing CI step, **no new config**) with a spec that seeds
 two plans in one project through the API, opens the dock, chooses the other plan under **Compare
-with**, and asserts the coverage line and a known non-vacuous delta.
+with**, asserts the coverage line and a known non-vacuous delta, **and asserts the overlay draws** —
+which matters more here than usual, because the overlay is on the default path and a planner meets it
+without asking.
 
-#### Feature: the Compare with picker and the coverage block
+#### Feature: the Compare with picker, the coverage block and the cross-plan overlay
 
-> **Description:** one `Select`, one query branch, one new coverage component, and the omission rule
-> for other-plan rows.
+> **Description:** one `Select`, one query branch, one new coverage component, the omission rule for
+> other-plan rows, and the overlay's client half — which is one honest sentence plus a verification.
 > **Complexity:** L
-> **Dependencies:** M1
+> **Dependencies:** M1 (including M1-T4's dark ghost projection)
 > **Risks:** see per-task.
-> **Testing requirements:** unit (panel + coverage component + sentences), journey (the entry point
-> and a real API), axe scan scoped by `[data-revision-compare-panel]` — the attribute that exists
-> because a Playwright `:text-is()` selector is not valid CSS and axe **throws** on it
-> (`RevisionComparePanel.tsx:176-181`).
+> **Testing requirements:** unit (panel + coverage component + sentences + the a11y summary), journey
+> (the entry point, the overlay, and a real API), axe scan scoped by `[data-revision-compare-panel]` —
+> the attribute that exists because a Playwright `:text-is()` selector is not valid CSS and axe
+> **throws** on it (`RevisionComparePanel.tsx:176-181`) — and the **P3 measurement** before the
+> milestone is called done.
 
 ##### Task M2-T1 — The `Compare with` picker
 
@@ -368,12 +451,64 @@ with**, and asserts the coverage line and a known non-vacuous delta.
   2. Keep the existing announce-on-activation path (`RevisionComparePanel.tsx:144-164`), whose own
      docblock records the announcement being the one line not copied from its sibling.
 
-##### Task M2-T4 — The journey (ADR-0081 §2)
+##### Task M2-T4 — Wire the overlay, and verify the painter needs nothing
+
+- **Description:** feed the cross-plan ghosts and links into the scene, and **verify** the claim that
+  the painter requires no change rather than assuming it.
+- **Complexity:** M
+- **Dependencies:** M2-T1, M1-T4
+- **Risks:**
+  - **_The claim "the painter is shape-driven" is inherited and unverified._** It comes from
+    ADR-0127's assertion that with the two scene fields absent the paint is byte-for-byte identical —
+    which implies the painter reads shapes, not provenance. That is a **decision-bearing claim about
+    behaviour**, so it is established by reading `paint`'s compare layer and by a test, not by
+    quoting the ADR (ADR-0076; `docs/PROCESS.md`'s evidence rule). **If the painter does branch on
+    something plan-specific, that is a finding and this task grows** — recorded, not absorbed.
+  - _The overlay lights with no pair_ → it already refuses with a stated reason when there is no pair
+    (`tsld-toolbar-items.tsx:300-305`); the cross-plan pair must satisfy `hasRevisionPair`, asserted.
+  - _A third refusal reason gets added out of habit_ → **there must be none.** The whole point of
+    CQ-3's rejection is that the toggle never declines for a cross-plan pair. A case asserts the
+    reason is `undefined` in that state.
+- **Testing:** unit on the scene-feeding branch; the journey in M2-T6; the counting-stub budget gate
+  ADR-0127 D4 already uses.
+- **Development steps:**
+  1. Feed the cross-plan `ghosts` / `links` into the same scene fields the same-plan pair uses.
+  2. Read the painter's compare layer and confirm it branches on shape only; record what was read.
+  3. Assert the toggle offers **no** refusal reason for a cross-plan pair with a chosen pair.
+  4. Confirm the derived scene-parity gate (ADR-0127 D7) stays green — the lens key and scene fields
+     are unchanged, so export composition is **inherited**; if the gate fires, that is the signal that
+     it is not.
+  5. **Check whether the exported picture's title band names the plan** (ADR-0103). If it does, it
+     must name **both** — an exported comparison of two plans that names one is a false statement to
+     exactly the reader the export exists for. Checked here rather than assumed in the spec.
+
+##### Task M2-T5 — The undrawable sentence, which must not be reused verbatim
+
+- **Description:** give `compareOverlaySummary` a reason discriminator so the cross-plan sentence is
+  **true**.
+- **Complexity:** S
+- **Dependencies:** M2-T4
+- **Risks:**
+  - **_The existing sentence ships unchanged and states something false._** `a11y.ts:212` reads
+    _"N not shown because the old revision did not record where they were"_. Cross-plan the other
+    plan **did** record it; the position is not _comparable_. This is the highest-likelihood defect
+    in the milestone precisely because the mechanism is correct and reusing it feels like reuse.
+    → A unit case asserts the cross-plan sentence and asserts the same-plan sentence is **unchanged**.
+  - _The two sentences drift_ → both live in one function with one discriminator, not two call sites.
+- **Testing:** unit cases for both reasons, the same-plan one verified unchanged.
+- **Development steps:**
+  1. Add the reason parameter; keep the same-plan wording byte-identical.
+  2. Write the cross-plan wording: the work is in the other revision only, and the two revisions lay
+     their bars out independently — pointing at the change list, which carries it in words.
+  3. Assert the `sr-only` list inside the diagram region still names removed work (ADR-0122 D2), so
+     the _fact_ survives even though the position does not.
+
+##### Task M2-T6 — The journey (ADR-0081 §2) and the P3 measurement
 
 - **Description:** a spec in the **existing** `e2e-revision-compare` suite that drives the whole
-  capability against a real API.
+  capability — panel **and** overlay — against a real API; then take P3.
 - **Complexity:** M
-- **Dependencies:** M2-T3
+- **Dependencies:** M2-T5
 - **Risks:**
   - _The comparison is non-vacuous by accident_ → the seed gives a **known answer**, following
     `e2e-revision-compare/support.ts:67-85`'s existing rule that a comparison of two identical
@@ -383,6 +518,8 @@ with**, and asserts the coverage line and a known non-vacuous delta.
     an undocumented side effect ADR-0109 D3 removed (`docs/TECH_DEBT.md` #208).
   - _A control is located by its copy_ → locate by role + accessible name, or by
     `[data-revision-compare-panel]`; **never** by copy (every layout epic here has broken one).
+  - _P3 is skipped because the overlay "obviously" costs nothing_ → it is a **task step**, and the
+    condition was committed in M0-T1 precisely so this could not be argued away at the end.
 - **Testing:** the journey is the test. Run it locally — `scripts/e2e-local.sh web:revision-compare`
   — before pushing, per `docs/PROCESS.md`'s completion criteria.
 - **Development steps:**
@@ -390,7 +527,11 @@ with**, and asserts the coverage line and a known non-vacuous delta.
   2. Open the dock via `Analysis ▾ → Compare revisions…`; choose the other plan.
   3. Assert the coverage line, the known entered/left rows, and one activation + announcement.
   4. Assert an other-plan-only row renders **no** activation control.
-  5. Axe scan scoped to `[data-revision-compare-panel]`.
+  5. **Assert the overlay draws** for the cross-plan pair, and that the toggle shows no refusal.
+  6. **Assert the "not shown" sentence is the cross-plan one**, not the same-plan wording.
+  7. Axe scan scoped to `[data-revision-compare-panel]`.
+  8. **Take P3** against the M0-T1 condition; record the result, the environment and the verdict —
+     including **INDETERMINATE** if the machine cannot answer.
 
 ---
 
@@ -429,69 +570,7 @@ renders both plan names. (The suite exists; no new config, no new CI step.)
 
 ---
 
-## Milestone M4 — The diagram overlay for a cross-plan pair
-
-**Outcome:** the compare overlay draws a cross-plan comparison, or the milestone concludes it should
-not and the refusal stands permanently with its reason recorded.
-**Entry point:** the existing **`View ▾ → Compare on diagram`** toggle
-(`tsld-toolbar-items.tsx:276-305`).
-**Journey:** the M2 suite gains an overlay step; the toggle's refusal is asserted **before** this
-milestone (in M2-T1) and its acceptance after.
-
-> **This milestone is separable and may be approved separately (CQ-3).** M1–M3 ship a complete,
-> honest capability without it.
-
-#### Feature: cross-plan ghost geometry
-
-> **Description:** decide the lane rule, then build it — or record the refusal.
-> **Complexity:** L
-> **Dependencies:** M3
-> **Risks:** the decision below is the milestone's whole content.
-> **Testing requirements:** unit (the ghost builder's new branch), a committed falsification
-> condition, a browser measurement, the journey step.
-
-##### Task M4-T0 — Decide the lane rule, and commit a condition first
-
-- **Description:** ADR-0127 **D2** says the ghost's lane is the **frozen** lane, never guessed —
-  and cross-plan the frozen lane belongs to another plan's layout, so drawing it here is exactly the
-  false statement about where the work was that D2 prevents.
-- **Complexity:** M
-- **Dependencies:** M3
-- **Risks:** _the milestone builds before deciding_ → T0 produces a written decision and a committed
-  condition, and nothing else.
-- **Testing:** n/a (a decision).
-- **Development steps:**
-  1. Evaluate the candidate: a **matched** ghost draws in the **anchor's** lane (the ghost is about
-     dates, and the lane is only load-bearing for removed work); **unmatched** work has no anchor
-     lane and is counted as `ghostsUndrawable` (ADR-0127 D3 — what cannot be drawn is counted beside
-     the array, never folded into a length).
-  2. Write the condition **before** measuring: the overlay's cost on a cross-plan pair at 2,000
-     activities per side, at **Week**, against the same 2.00 pp bar, with the machine's own baseline
-     spread reported and an **INDETERMINATE** verdict available (ADR-0128).
-  3. Inherit ADR-0127 D8a's two stated limits explicitly: one framing, one machine, and **Fit
-     ungraded** (`docs/TECH_DEBT.md` #260 — at a 98.33 pp baseline the difference metric cannot fail).
-     The Week PASS is **not** licence for an unmeasured overlay.
-  4. If the candidate is rejected, the M2 refusal becomes permanent and the reason is written into
-     the ADR rather than left in a plan.
-
-##### Task M4-T1 — Build it, if T0 says so
-
-- **Description:** the ghost builder's cross-plan branch, behind the same `?include=ghosts`.
-- **Complexity:** L
-- **Dependencies:** M4-T0
-- **Risks:** _the layer culls by `visibleIds`_ → it must **not**, for ADR-0127 D5's exact reason:
-  `visibleIds` derives from `scene.activities`, removed work is by definition not there, and
-  following the instinct produces an overlay that looks correct on every plan where nothing was
-  deleted. **Verified red against precisely that cull**, as D5 records doing.
-- **Testing:** unit; the measurement; the journey step; the derived scene-parity gate (ADR-0127 D7).
-- **Development steps:**
-  1. Extend `buildRevisionGhosts` with the decided lane rule; count what cannot be drawn.
-  2. Take the measurement; judge; record.
-  3. Remove the M2 refusal reason and assert the toggle's new behaviour in the journey.
-
----
-
-## Milestone M5 — The gate pass
+## Milestone M4 — The gate pass
 
 **Outcome:** the epic's combined diff has been through the specialist reviewers and every blocking
 finding is folded with a regression test verified red first.
@@ -502,18 +581,18 @@ finding is folded with a regression test verified red first.
 
 > **Description:** six reviewers over the combined diff.
 > **Complexity:** M
-> **Dependencies:** M4 (or M3, if CQ-3 defers M4 out of the epic)
+> **Dependencies:** M3
 > **Risks:** _a pass with no findings_ → that is a reason to check the reviews ran, not a result.
 > Nine consecutive epics here found defects that had passed a human read.
 > **Testing requirements:** each folded finding carries a regression test **verified red against the
 > specific defect it names**.
 
-##### Task M5-T1 — Run them, fold the blockers
+##### Task M4-T1 — Run them, fold the blockers
 
 - **Description:** `security-reviewer`, `api-reviewer`, `backend-performance-reviewer`,
   `component-reviewer`, `accessibility-reviewer`, `ux-reviewer`.
 - **Complexity:** M
-- **Dependencies:** M4
+- **Dependencies:** M3
 - **Risks:** _a finding is recorded and rushed_ → non-blocking findings become a numbered
   `docs/TECH_DEBT.md` row with a real status, per ADR-0120's vocabulary; the register's heading
   convention (`### <n>. <title>`) is followed, per ADR-0124.
@@ -534,24 +613,30 @@ finding is folded with a regression test verified red first.
 
 ## Sequencing & slices
 
-| Slice  | Ships                              | Releasable alone?                     | Reversible by |
-| ------ | ---------------------------------- | ------------------------------------- | ------------- |
-| **M0** | Two measurements + a doc fix       | Yes — no product change               | n/a           |
-| **M1** | A dark route                       | Yes — nothing reaches it              | Commit revert |
-| **M2** | The capability                     | Yes — **the first user-facing slice** | Commit revert |
-| **M3** | The handover artefact              | Yes                                   | Commit revert |
-| **M4** | The overlay, or a recorded refusal | Yes                                   | Commit revert |
-| **M5** | The gate pass                      | Yes                                   | n/a           |
+| Slice  | Ships                                           | Releasable alone?                     | Reversible by |
+| ------ | ----------------------------------------------- | ------------------------------------- | ------------- |
+| **M0** | Two measurements + three conditions + a doc fix | Yes — no product change               | n/a           |
+| **M1** | A dark route **and a dark ghost projection**    | Yes — nothing reaches either          | Commit revert |
+| **M2** | The capability **and the overlay, together**    | Yes — **the first user-facing slice** | Commit revert |
+| **M3** | The handover artefact                           | Yes                                   | Commit revert |
+| **M4** | The gate pass                                   | Yes                                   | n/a           |
+
+**Why the overlay is not its own slice.** The product owner's requirement (CQ-3, 2026-09-08) is that
+there is **no release in which the toggle is present and refuses**. Splitting the surface in two —
+panel, then overlay — creates precisely that release, so it is not available however tidy it looks.
+The split that _is_ available is **plumbing from surface**, which is what M1/M2 already are: the
+ghost projection lands dark in M1-T4, leaving M2's overlay work to a wiring task, one sentence and a
+journey step.
 
 **No feature flag** (standing rule 2). The rollback contract is the commit boundary, and each
 milestone is one revertible commit — which is why M2 keeps a unit case asserting that **This plan**
 still calls the shipped route with the shipped params.
 
 **`main` stays releasable at every point**: M0 and M1 are dark by construction, and M2 onwards
-changes only the revision dock, whose flag-free surface is reached from one menu item.
+changes only the revision dock and one canvas layer, both reached from existing controls.
 
 **Version impact:** `api` **minor** (a new route), `web` **minor** (a new capability). Pre-1.0, so a
-breaking change would also be minor — none is intended, and M1-T4 asserts the shipped route is
+breaking change would also be minor — none is intended, and M1-T5 asserts the shipped route is
 byte-identical.
 
 ## Definition of Done (per task)
@@ -568,15 +653,19 @@ plan, of which two are worth restating because they are the ones most often skip
 
 ## Risks & assumptions (rollup)
 
-| #   | Risk / assumption                                                                                                                                                                                                                                                                                                          | Likelihood | Impact | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                             |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | **A code re-used for different work** across two revisions correlates two unrelated activities, silently                                                                                                                                                                                                                   | low        | high   | Undetectable by construction. Stated in the copy and in the ADR's consequences; the coverage block gives the reader the one lever they have. Not mitigated further, and the plan says so rather than implying a fidelity the design does not have.                                                                                                                                                                     |
-| R2  | **MSPDI codes are positional.** `mspdi-adapter.ts:453` falls back to `<WBS>`, an outline number like `1.2.3`, which renumbers when a task is inserted — so two MSPDI revisions may correlate badly. **This is reasoned from the MSPDI schema, not observed in a real file in this repository** (ADR-0083's labelling rule) | med        | med    | M0-T2 records the code provenance split. If MSPDI correlates poorly, the panel states it per source rather than the epic pretending format-independence.                                                                                                                                                                                                                                                               |
-| R3  | The XER **`task_id` fallback** (`xer-adapter.ts:541-551`) is file-local; two exports from different P6 databases would not share it                                                                                                                                                                                        | low        | med    | M0-T2 counts fallback-derived codes. A high count is a finding, not a silent degradation.                                                                                                                                                                                                                                                                                                                              |
-| R4  | **M0-P1 fails** (< 95 % coverage)                                                                                                                                                                                                                                                                                          | low        | high   | CQ-2 reopens; the name-fallback design is costed and put to the product owner. M1 has not started.                                                                                                                                                                                                                                                                                                                     |
-| R5  | **M0-P2 fails** (> 250 ms)                                                                                                                                                                                                                                                                                                 | low        | med    | A dedicated rate budget is derived by ADR-0116 M6's committed formula. The rule exists before the number.                                                                                                                                                                                                                                                                                                              |
-| R6  | A **second projection assembly** drifts from the shipped one                                                                                                                                                                                                                                                               | med        | med    | Extract and share; a structural test asserts one definition (M1-T3).                                                                                                                                                                                                                                                                                                                                                   |
-| R7  | The **shipped route changes** by accident                                                                                                                                                                                                                                                                                  | low        | high   | Its existing e2e cases must pass unchanged; a diff on its DTO or method is a review-blocking finding (M1-T4).                                                                                                                                                                                                                                                                                                          |
-| R8  | The overlay's **absence reads as a bug** to a planner who used it two days earlier                                                                                                                                                                                                                                         | med        | low    | A stated refusal on the toggle, not silence (M2-T1); CQ-3 puts the deferral to the product owner explicitly.                                                                                                                                                                                                                                                                                                           |
-| R9  | A **`docs/TEST_PLAYBOOK.md`** row is owed if any seeded plan is added to the catalogue                                                                                                                                                                                                                                     | low        | low    | `pnpm check:playbook` gates it in both directions. **No row is owed by this plan, and that was checked rather than assumed:** `scripts/check-playbook.mjs:38-42` builds its inventory from `seed --list-plans` (`@repo/seed-cli` over `packages/seed`'s `SeedSpec`s), so M0-T2's test-local XER fixtures under `apps/api/test/` are invisible to it. If any milestone adds a `SeedSpec`, the row lands in the same PR. |
-| R10 | **Assumption:** two revisions of one programme are imported into the **same project**                                                                                                                                                                                                                                      | med        | low    | True of the interchange workflow (import is nested under `:projectId` — `interchange.controller.ts:58`). If a planner splits them across projects, the route still works (same-org is the boundary); only the **picker** would not offer it. Named as a picker limitation, not a rule, and revisited from use.                                                                                                         |
+| #   | Risk / assumption                                                                                                                                                                                                                                                                                                          | Likelihood | Impact   | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | **A code re-used for different work** across two revisions correlates two unrelated activities, silently                                                                                                                                                                                                                   | low        | high     | Undetectable by construction. Stated in the copy and in the ADR's consequences; the coverage block gives the reader the one lever they have. Not mitigated further, and the plan says so rather than implying a fidelity the design does not have.                                                                                                                                                                     |
+| R2  | **MSPDI codes are positional.** `mspdi-adapter.ts:453` falls back to `<WBS>`, an outline number like `1.2.3`, which renumbers when a task is inserted — so two MSPDI revisions may correlate badly. **This is reasoned from the MSPDI schema, not observed in a real file in this repository** (ADR-0083's labelling rule) | med        | med      | M0-T2 records the code provenance split. If MSPDI correlates poorly, the panel states it per source rather than the epic pretending format-independence.                                                                                                                                                                                                                                                               |
+| R3  | The XER **`task_id` fallback** (`xer-adapter.ts:541-551`) is file-local; two exports from different P6 databases would not share it                                                                                                                                                                                        | low        | med      | M0-T2 counts fallback-derived codes. A high count is a finding, not a silent degradation.                                                                                                                                                                                                                                                                                                                              |
+| R4  | **M0-P1 fails** (< 95 % coverage)                                                                                                                                                                                                                                                                                          | low        | high     | CQ-2 reopens; the name-fallback design is costed and put to the product owner. M1 has not started.                                                                                                                                                                                                                                                                                                                     |
+| R5  | **M0-P2 fails** (> 250 ms)                                                                                                                                                                                                                                                                                                 | low        | med      | A dedicated rate budget is derived by ADR-0116 M6's committed formula. The rule exists before the number.                                                                                                                                                                                                                                                                                                              |
+| R5a | **P3 returns INDETERMINATE** — the machine's baseline spread exceeds the 2.00 pp bar, exactly as ADR-0127 D8's container did                                                                                                                                                                                               | med        | low      | Recorded as disqualified rather than averaged, and the environment named. It is not a blocker: the same-plan overlay already ships default-on on this evidence base, and the cross-plan rule draws **strictly less**. Escalates only if a headed run also cannot answer.                                                                                                                                               |
+| R6  | A **second projection assembly** drifts from the shipped one                                                                                                                                                                                                                                                               | med        | med      | Extract and share; a structural test asserts one definition (M1-T3).                                                                                                                                                                                                                                                                                                                                                   |
+| R7  | The **shipped route changes** by accident                                                                                                                                                                                                                                                                                  | low        | high     | Its existing e2e cases must pass unchanged; a diff on its DTO or method is a review-blocking finding (M1-T5).                                                                                                                                                                                                                                                                                                          |
+| R8  | **The lane clause survives into the cross-plan `moved` test**, so the overlay silently becomes the whole-old-plan design rejected at ADR-0127 CQ-2 — busy, plausible, and failing nothing                                                                                                                                  | **med**    | **high** | **The epic's most dangerous defect.** A unit case on a pair identical except for lane packing asserts **zero** ghosts, verified red (M1-T4). P3 carries a committed prediction that the cross-plan overlay costs **no more** than the same-plan one — materially more means the clause leaked back (M0-T1 step 4).                                                                                                     |
+| R8a | The **existing undrawable sentence is reused verbatim** and states something false — the other plan _did_ record the lane; the position is not comparable                                                                                                                                                                  | **high**   | med      | Highest-likelihood defect in M2 precisely because the mechanism is correct and reusing it feels like reuse. M2-T5 adds a reason discriminator, with a case for each wording and the same-plan one asserted unchanged.                                                                                                                                                                                                  |
+| R8b | The claim **"the painter needs no change"** is inherited from ADR-0127's assertion rather than read from the painter                                                                                                                                                                                                       | med        | med      | M2-T4 verifies it by reading the compare layer and by a test, and records what was read. If the painter branches on anything plan-specific, that is a **finding** and M2 grows — recorded, not absorbed (ADR-0076).                                                                                                                                                                                                    |
+| R8c | **The overlay is default-on** (ADR-0127 D8b), so a cross-plan pair draws **immediately and unrequested** — its correctness is on the default path from day one                                                                                                                                                             | med        | med      | This is what the product owner asked for at CQ-3, with its cost. The journey drives the overlay rather than leaving it to the gate pass (M2-T6), and P3 is a task step rather than a closing formality.                                                                                                                                                                                                                |
+| R9  | A **`docs/TEST_PLAYBOOK.md`** row is owed if any seeded plan is added to the catalogue                                                                                                                                                                                                                                     | low        | low      | `pnpm check:playbook` gates it in both directions. **No row is owed by this plan, and that was checked rather than assumed:** `scripts/check-playbook.mjs:38-42` builds its inventory from `seed --list-plans` (`@repo/seed-cli` over `packages/seed`'s `SeedSpec`s), so M0-T2's test-local XER fixtures under `apps/api/test/` are invisible to it. If any milestone adds a `SeedSpec`, the row lands in the same PR. |
+| R10 | **Assumption:** two revisions of one programme are imported into the **same project**                                                                                                                                                                                                                                      | med        | low      | True of the interchange workflow (import is nested under `:projectId` — `interchange.controller.ts:58`). If a planner splits them across projects, the route still works (same-org is the boundary); only the **picker** would not offer it. Named as a picker limitation, not a rule, and revisited from use.                                                                                                         |
