@@ -114,8 +114,10 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     ],
     gated: true,
     decision:
-      'Whether `View ▾ ▸ Compare on diagram` can be default-on. It ships off because this is ' +
-      'unanswered, not because it was judged too expensive.',
+      'Whether `View ▾ ▸ Compare on diagram` can be default-on. ANSWERED 2026-09-08 on the product ' +
+      "owner's own machine — delta -0.19 pp against a 2.00 pp bar at 60.0 fps, so the overlay costs " +
+      'nothing detectable at the working zoom, and they turned it on (ADR-0127 D8b). The scenario ' +
+      'stays: it is now the regression guard for that default rather than the question behind it.',
   },
   {
     id: 'canvas-draw',
@@ -126,17 +128,22 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     /**
      * **Both limbs of ADR-0026 §9's gate, and the 500 one has never been measured.**
      *
-     * `docs/TECH_DEBT.md` #75's own closing sentence names it: "the genuinely open residue is the
-     * 500-activity limb and the unattributed ~8 ms at Fit". Every reading that row carries is at
+     * `docs/TECH_DEBT.md` #75's own closing sentence named it: "the genuinely open residue is the
+     * 500-activity limb and the unattributed ~8 ms at Fit". Every reading that row carried was at
      * 2,000, so the easier half of the gate — the one a planner's ordinary plan actually sits at —
-     * has been asserted and never checked.
+     * had been asserted and never checked.
+     *
+     * **Measured 2026-09-08, on the first run of this panel that asked**: 59.8 fps at Week and
+     * 57.2 at Fit, both against the 45 fps floor. The limb stays, because a floor nothing checks is
+     * how it went unmeasured for a year in the first place — but its `source` no longer claims it
+     * never has been. #75 item 5 carries the numbers.
      */
     limbs: [
       {
         id: 'scale-500',
         activities: 500,
         minFps: 45,
-        source: 'ADR-0026 §9 — ≥ 45 fps at 500 activities. NEVER MEASURED (see #75).',
+        source: 'ADR-0026 §9 — ≥ 45 fps at 500 activities.',
       },
       {
         id: 'scale-2000',

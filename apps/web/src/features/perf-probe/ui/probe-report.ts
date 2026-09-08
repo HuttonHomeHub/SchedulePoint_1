@@ -119,9 +119,43 @@ function limbLines(limb: LimbOutcome): string[] {
   const r = limb.result.judged;
   return [
     ...head,
+    // The non-vacuity evidence, printed on a PASS and not only on a refusal. `judgeRun` throws
+    // before it judges, so a verdict here already implies the floors were met — but the block is
+    // the deliverable, and a reader a month later should not have to know that to audit it. The
+    // CLI has always printed this line (`measure-revision-diff.mjs:177-180`) and `m0-condition.md`'s
+    // N condition requires it; only this rendering dropped it.
+    ...changedOnScreenLine(limb),
     `  baseline   ${r.baselineMeanPp.toFixed(2)} pp   (run-to-run spread ${r.baselineSpreadPp.toFixed(2)} pp)`,
     `  treatment  ${r.treatmentMeanPp.toFixed(2)} pp   ${r.treatmentFps.toFixed(1)} fps`,
     `  delta      ${r.deltaPp >= 0 ? '+' : ''}${r.deltaPp.toFixed(2)} pp`,
     ...verdictLines(limb, r.verdict, r.indeterminateReason),
+  ];
+}
+
+/**
+ * `N/M bars (x%), N/M links (y%)` — the numerators the non-vacuity floors are actually about.
+ *
+ * Returns no line at all when the counts are absent rather than printing zeros: a zero here is a
+ * claim that nothing changed on screen, and an absent count is a claim about the recording. The
+ * head line's `visibleBars` answers a different question (ADR-0066's cull), which is why both are
+ * printed and neither substitutes for the other.
+ */
+function changedOnScreenLine(limb: LimbOutcome): readonly string[] {
+  const c = limb.recording.counts;
+  const { visibleChangedBars, visibleBars, visibleChangedLinks, visibleLinks } = c;
+  if (
+    visibleChangedBars === undefined ||
+    visibleBars === undefined ||
+    visibleChangedLinks === undefined ||
+    visibleLinks === undefined
+  ) {
+    return [];
+  }
+  const pct = (n: number, d: number): string => (d === 0 ? '0.0' : ((n / d) * 100).toFixed(1));
+  return [
+    `  changed    ${String(visibleChangedBars)}/${String(visibleBars)} bars ` +
+      `(${pct(visibleChangedBars, visibleBars)}%), ` +
+      `${String(visibleChangedLinks)}/${String(visibleLinks)} links ` +
+      `(${pct(visibleChangedLinks, visibleLinks)}%)`,
   ];
 }

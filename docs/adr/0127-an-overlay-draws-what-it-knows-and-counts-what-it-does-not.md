@@ -124,7 +124,7 @@ planner's picture rather than a second derivation.
 
 The derived scene-parity gate is what forced the decision rather than letting it be deferred.
 
-### D8 — Default off, no `VITE_` flag, and the measurement is UNANSWERED
+### D8 — Default off, no `VITE_` flag, and the measurement is UNANSWERED (answered at Week by D8a)
 
 A `View ▾` toggle, off by default. Not a flag: ADR-0088 D1 established that a `VITE_` constant is
 inlined at build time and has never been an operator rollback, so the rollback contract is the
@@ -140,6 +140,56 @@ The product owner's decision, taken with those numbers in front of them, was to 
 let a headed run on real hardware decide default-on later.
 
 That run is **owed and outside this epic.** It is named here rather than left as a good intention.
+
+### D8a — the owed run was taken, 2026-09-08, and the overlay costs nothing detectable
+
+Amends D8's measurement, not its default. The product owner ran the ADR-0128 staff panel on their own
+machine (Intel Arc Pro via ANGLE D3D11, 1912×1068 at dpr 1, idle interval 16.60 ms) at the **Week**
+framing on the 2,000-activity scene: baseline **0.19 pp** dropped, treatment **0.00 pp** at
+**60.0 fps**, delta **−0.19 pp**. **PASS on both limbs** — P1 against the 2.00 pp bar, P2 against
+ADR-0026 §9's 30 fps floor, which it clears by a factor of two. Recorded in full at
+`docs/specs/staff-performance-probe/m0-conditions.md`.
+
+**The instrument was fit this time, which is the part that makes the verdict mean anything.** D8's
+refusal was not pessimism about the feature: the container's baseline spread exceeded the bar, so
+neither a pass nor a fail from it could be believed. This machine's spread is **0.56 pp against a
+2.00 pp bar**, inside it, so `judgeRun` resolved rather than returning INDETERMINATE.
+
+**Two limits, stated because a single PASS invites over-reading.** It is one framing on one machine.
+The **Fit** framing is separately measured and says nothing: P3 leaves it ungraded, and
+`docs/TECH_DEBT.md` #260 records that at a baseline of 98.33 pp the difference metric is
+arithmetically incapable of failing, so its −0.19 pp delta is uninterpretable rather than reassuring.
+
+**This does not itself flip the default.** What blocked default-on was that the cost was unknown; it
+is now known at the working zoom and remains unknown at the whole-plan zoom, and whether that is
+enough is the product owner's call, not a conclusion this measurement licenses. They made it — D8b.
+
+### D8b — default ON, 2026-09-08, on the product owner's decision
+
+Supersedes D8's default; D8's _reasoning_ is untouched, because that reasoning was never that the
+overlay is expensive. It was that the cost was **unmeasured**, and it said so in those words.
+
+`DEFAULT_LENS_STATE.compareOverlay` is `true`. The decision was put to the product owner with both
+halves — free at Week (D8a), and **unknown at Fit**, where P3 leaves the framing ungraded and
+`docs/TECH_DEBT.md` #260 shows the difference metric arithmetically unable to fail — and they turned
+it on.
+
+**What the default actually decides is narrower than "on".** The overlay draws nothing until a
+revision pair is chosen (`TsldPanel.tsx:1205`, `hasRevisionPair`), and the toggle already refuses
+with a stated reason when there is no pair or when the Gantt is showing. So a planner who never opens
+a comparison sees no difference of any kind, and pays nothing: the default decides only whether
+**choosing a pair shows the difference, or shows the plan and waits to be asked a second time.** That
+is the sense in which the Fit unknown is affordable — the expensive framing is reached only by
+somebody who has already asked for a comparison and then zoomed out to the whole plan.
+
+**One phrase is retired rather than left to rot.** `DEFAULT_LENS_STATE`'s docblock called itself "the
+no lens active identity", and that is no longer true — `compareOverlay` is the one member not inert
+at its default. The comment says so instead of continuing to describe the previous world.
+
+**The scenario stays in the probe and changes role.** `revision-diff` was built to answer whether
+this default could be taken; it is now the regression guard for the default that was. Its `decision`
+field says which, because a scenario whose stated question has been answered reads as dead weight to
+the next person and gets deleted.
 
 ## Consequences
 

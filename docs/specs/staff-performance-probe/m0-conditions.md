@@ -273,3 +273,137 @@ The paragraph's conclusion — that no new actor type is needed — survives bot
 different reason than it gave: `STAFF` was added by ADR-0086 D5 and is already in the enum. The
 staff namespace is what the console's own feed keys on (`staff.%`), not the actor type, which is
 why `staff.access_denied` can be `USER` without disappearing from it.
+
+---
+
+## Readings — the deliverable
+
+The panel is the instrument; these are the numbers it exists to produce. Recorded verbatim as
+pasted, with the interpretation kept separate from the data.
+
+### 2026-09-08 — `revision-diff` / Fit / 2,000 activities
+
+Product owner's machine. Intel Arc Pro Graphics via ANGLE D3D11, 22 threads, ~32 GiB, Edge 152,
+1912×1068 css px at dpr 1, measured idle frame interval **16.70 ms**, attention held throughout.
+`web` 0.123.0. Scene: 2,160 bars (2,000 activities, 160 WBS summaries, 76 milestones), 3,200 links
+across 50 lanes, all 2,160 on screen at 1.66 px/day. Full run — 180 frames × 3.
+
+| quantity  | value                                |
+| --------- | ------------------------------------ |
+| baseline  | 98.33 pp (run-to-run spread 1.11 pp) |
+| treatment | 98.15 pp — 23.8 fps                  |
+| delta     | −0.19 pp                             |
+| verdict   | REPORTED, NOT GRADED (P3)            |
+
+**What this reading does say.** The two headline figures are the same fact stated twice, and that is
+worth writing down because they look contradictory: `droppedPct` counts intervals exceeding 1.5× the
+idle interval (25.05 ms here), and 23.8 fps is a mean interval of 42.0 ms, which trips that threshold
+on essentially every frame. 98.33 pp is not "98 % of frames never painted"; it is "essentially every
+frame ran long". A first read of this table flagged the pair as irreconcilable, wrongly.
+
+**What it does not say — and this is the load-bearing part.** The delta is **uninterpretable**, not
+merely ungraded. With the baseline at 98.33 pp the arithmetic ceiling leaves 1.67 pp of headroom
+against a 2.00 pp bar, so no treatment cost could have produced a failing delta. `−0.19 pp` must not
+be read as evidence that the overlay is cheap. Filed as `docs/TECH_DEBT.md` #260, together with the
+observation that this already happened once in `docs/specs/revision-compare-changes/m0-condition.md:199`
+and went unremarked.
+
+**What it is evidence for.** 23.8 fps at the whole-plan framing on real hardware, against ADR-0026
+§9's 30 fps floor at the 2,000-activity ceiling. P3 means no verdict is issued at Fit, and that rule
+is unchanged — but the number is a level rather than a difference, so saturation does not touch it.
+It is the first real-hardware figure at this framing since 2026-08-03.
+
+**Attribution — do not put this in #75.** This is the `revision-diff` scene, whose baseline is the
+painter plus the comparison harness. `docs/TECH_DEBT.md` #75 asks about `canvas-draw`, which is a
+different code path and a different question. The two readings that row is waiting for have not been
+taken.
+
+### 2026-09-08 — `revision-diff` / Week / 2,000 activities — **the one that answers ADR-0127**
+
+Same machine, 18 minutes later. Idle frame interval **16.60 ms**. Same 2,160-bar scene; at the Week
+framing the cull leaves **264 bars on screen at 12.00 px/day**. Full run — 180 frames × 3.
+
+| quantity  | value                               |
+| --------- | ----------------------------------- |
+| baseline  | 0.19 pp (run-to-run spread 0.56 pp) |
+| treatment | 0.00 pp — 60.0 fps                  |
+| delta     | −0.19 pp                            |
+| verdict   | **PASS** (P1 and P2)                |
+
+**ADR-0127's paint cost is answered: the overlay costs nothing detectable.** That entry closed with
+the cost UNANSWERED and a headed run on real hardware owed, because the container's own no-change
+baseline moved 0.56 → 1.85 pp and 0.93 → 10.00 pp between runs an hour apart — wider than the 2.00 pp
+bar, so the environment was disqualified from answering. This machine is not: its baseline spread is
+**0.56 pp against a 2.00 pp bar**, comfortably inside, which is what makes the verdict mean something
+rather than merely exist.
+
+**Both limbs, and neither is doing the other's work.** P1, the difference: −0.19 pp against ≤ +2.00.
+P2, the level: 60.0 fps against ADR-0026 §9's 30 fps floor at the 2,000-activity ceiling — double it.
+The treatment measuring marginally _faster_ than the baseline is noise well inside the 0.56 pp spread,
+not a claim that the overlay makes the diagram quicker.
+
+**Saturation does not apply here, and that was checked rather than assumed.** #260's trap needs the
+baseline near the ceiling; at 0.19 pp the headroom is 99.81 pp against a 2.00 pp bar, so a costly
+treatment had every opportunity to fail this gate and did not. That is what the Fit run could not
+say.
+
+**What it does not settle.** One framing, one machine, one afternoon. Fit remains ungraded by P3 and
+uninterpretable by #260, so nothing here describes the whole-plan zoom. And a PASS is a statement
+about cost, not a decision about the default — see below.
+
+### 2026-09-08 — `canvas-draw` / Week and Fit — **`#75`'s two owed readings**
+
+Same machine, idle interval 16.70 ms, 1912×1068 at dpr 1, full runs. Recorded in full in
+`docs/TECH_DEBT.md` #75 item 5, including the comparison against that row's 2026-08-03 set and the
+three confounds that stop it being read as a regression.
+
+| framing | plan  | bars drawn | mean fps | dropped  | interval p95 | §9 floor | verdict              |
+| ------- | ----- | ---------- | -------- | -------- | ------------ | -------- | -------------------- |
+| Week    | 500   | 243        | 59.8     | 0.19 pp  | 16.80 ms     | 45 fps   | PASS                 |
+| Week    | 2,000 | 267        | 60.0     | 0.00 pp  | 16.80 ms     | 30 fps   | PASS                 |
+| Fit     | 500   | 540        | 57.2     | 4.63 pp  | 33.40 ms     | 45 fps   | REPORTED, NOT GRADED |
+| Fit     | 2,000 | 1,792      | 23.3     | 97.22 pp | 66.70 ms     | 30 fps   | REPORTED, NOT GRADED |
+
+**The 500-activity limb existed as a stated floor and had never been measured by anything.** It
+passes at both framings, including whole-plan, where the cull has nothing left to remove.
+
+**Cost tracks bars drawn, not plan size** — the property #75 step 3 asked two limbs in order to
+establish. Week/500 draws 243 bars at 59.8 fps and Week/2000 draws 267 at 60.0: four times the plan,
+24 more bars, 0.2 fps. Fit/500 draws 540 at 57.2; Fit/2000 draws 1,792 at 23.3.
+
+**The p95 intervals are quantised to the refresh period** — 16.80, 33.40 and 66.70 ms are one, two
+and four vsyncs at 16.70 ms. They report how many frames were missed at the 95th percentile, not a
+smear, and two runs sharing a p95 share a frame count rather than a measurement.
+
+### 2026-09-08 — `canvas-draw` / Fit at 1016×636 — the viewport discriminator
+
+Same machine and session, window shrunk to approximately the 2026-08-03 canvas (~1036×600) to test
+whether that set's much better Fit figure was viewport area rather than a change in the painter.
+
+| plan  | bars drawn | px/day | mean fps | dropped  | interval p95 |
+| ----- | ---------- | ------ | -------- | -------- | ------------ |
+| 500   | 410        | 2.81   | 60.0     | 0.00 pp  | 16.80 ms     |
+| 2,000 | 1,218      | 0.88   | 39.5     | 47.78 pp | 49.90 ms     |
+
+**Answer: mostly area, not entirely.** Fit/2,000 goes 23.3 → 39.5 fps, recovering 17.6 ms of the
+24.1 ms gap against 2026-08-03's ~53 fps — **73 %**, with **6.5 ms residual**. The remaining
+candidates are the scene and bars drawn, and the second was never recorded for the old run. Full
+working in `docs/TECH_DEBT.md` #75 item 5(e)–(g).
+
+**Two things this run produced that were not asked for.** A two-term fit over the three uncensored
+Fit points gives ~20.3 µs per bar drawn and **~4.26 ms per megapixel of viewport** — 8.7 ms at the
+full-screen window, against #75's long-unattributed ~8 ms, whose stated hypothesis is area-
+proportional raster/upload. Three points against three parameters is exactly determined and cannot
+be falsified by its own data, so it is a shape and not an attribution; a fourth run at ~1450×850
+would give it a degree of freedom. And ADR-0026 §9's gate **names no canvas size**, which these two
+runs show decides its verdict — filed as #261.
+
+### Still owed
+
+| run                  | answers                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| `canvas-draw` / Week | #75's 500-activity limb, which ADR-0026 §9 states and nothing has ever measured, and its 2,000 limb |
+| `canvas-draw` / Fit  | #75's unattributed ~8 ms at the whole-plan framing                                                  |
+
+Both are `canvas-draw`, which is a different painter path from the `revision-diff` scene above.
+`docs/TECH_DEBT.md` #75 is waiting on exactly these two and on nothing that has been run so far.

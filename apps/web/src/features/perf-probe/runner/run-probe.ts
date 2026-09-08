@@ -121,7 +121,13 @@ export interface LimbOutcome {
   readonly visibleBars: number;
   readonly minFps: number;
   readonly source: string;
-  /** What a recording POSTs. Absent from the report, which is prose for a person. */
+  /**
+   * What a recording POSTs — and the source of the report's non-vacuity line.
+   *
+   * This said "absent from the report, which is prose for a person" until the counts were found
+   * missing from a PASS. The prose block is the deliverable; the numerators that decide whether a
+   * PASS means anything belong in it.
+   */
   readonly recording: LimbRecording;
   readonly result:
     | { readonly kind: 'difference'; readonly judged: JudgeResult }

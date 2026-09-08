@@ -132,8 +132,14 @@ export interface LensState {
   filterAttrs: ReadonlySet<FilterAttr>;
   colourMode: ColourMode;
   baselineOverlay: boolean;
-  /** The revision-comparison change picture (ADR-0127). Session-local like its siblings — an
-   * overlay describing a pair the planner chose in this tab is not a preference to persist. */
+  /**
+   * The revision-comparison change picture (ADR-0127). Session-local like its siblings — an
+   * overlay describing a pair the planner chose in this tab is not a preference to persist.
+   *
+   * **Defaults ON since 2026-09-08** (ADR-0127 D8b). It draws nothing until a revision pair is
+   * chosen, so the default decides only one thing: whether choosing a pair shows the difference, or
+   * shows the plan and waits to be asked again.
+   */
   compareOverlay: boolean;
   /**
    * The last search match the planner jumped to (`VITE_CANVAS_SEARCH_NAV`), or null before the first
@@ -144,13 +150,20 @@ export interface LensState {
   searchCursorId: string | null;
 }
 
-/** The lens defaults — the "no lens active" identity (dims nothing, today's fills, overlay off). */
+/**
+ * The lens defaults — dims nothing, today's fills, no baseline.
+ *
+ * This was "the no lens active identity" until `compareOverlay` went default-on, and the phrase is
+ * dropped rather than left to read as still true. The overlay is the one member that is not inert
+ * at its default — though it is inert in effect until a revision pair exists, which is what makes
+ * the exception affordable.
+ */
 const DEFAULT_LENS_STATE: LensState = {
   filterQuery: '',
   filterAttrs: new Set<FilterAttr>(),
   colourMode: 'criticality',
   baselineOverlay: false,
-  compareOverlay: false,
+  compareOverlay: true,
   searchCursorId: null,
 };
 

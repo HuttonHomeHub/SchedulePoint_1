@@ -589,6 +589,109 @@ would not exercise the code being budgeted.
    rather than scheduling work against an unattributed 8 ms — step 3's DevTools attribution comes
    first if it is ever picked up. Dirty-region repainting stays a reserved escalation, not a task.
 
+5. **Second real-hardware reading set, 2026-09-08 — taken on the ADR-0128 staff panel, and it
+   settles this row's own named residue while unsettling its verdict.** Same machine as the
+   2026-08-03 set as far as the report can tell (`ANGLE (Intel, Intel(R) Arc(TM) Pro Graphics
+(0x00007D55) Direct3D11)`, 22 threads), Edge 152, 60 Hz, DPR 1 — but at a **1912×1068** viewport
+   against that set's ~1036×600 canvas. `scale-scene`, full run, 180 frames × 3.
+
+   | framing | plan  | bars drawn | mean fps (slowest–fastest) | dropped  | interval p95 | §9 floor | against it |
+   | ------- | ----- | ---------- | -------------------------- | -------- | ------------ | -------- | ---------- |
+   | Week    | 500   | 243        | 59.8 (59.4–60.0)           | 0.19 pp  | 16.80 ms     | 45 fps   | **PASS**   |
+   | Week    | 2,000 | 267        | 60.0 (60.0–60.0)           | 0.00 pp  | 16.80 ms     | 30 fps   | **PASS**   |
+   | Fit     | 500   | 540        | 57.2 (54.0–59.7)           | 4.63 pp  | 33.40 ms     | 45 fps   | clears it  |
+   | Fit     | 2,000 | 1,792      | 23.3 (22.6–24.2)           | 97.22 pp | 66.70 ms     | 30 fps   | **short**  |
+
+   The two Fit rows are ungraded by P3 (`docs/specs/revision-compare-changes/m0-condition.md:87-90`),
+   so "clears it" and "short" are arithmetic against §9's floor, not verdicts the panel issued.
+
+   **(a) The 500-activity limb is measured, and it passes at both framings.** This row's own closing
+   sentence names it as "the genuinely open residue"; ADR-0026 §9 has stated a 45 fps floor for it
+   since 2026 and nothing had ever checked it. 59.8 fps at the working zoom and **57.2 fps even at
+   whole-plan** — where the cull has nothing left to remove and all 540 bars are drawn. At the scale
+   a planner's ordinary plan actually sits, the painter is not close to trouble anywhere.
+
+   **(b) Step 3's question is answered, and the answer is the design property it hoped for: the cost
+   is in the bars drawn, not in the plan.** That step asked for 500 as well as 2,000 precisely
+   because "two points tell you whether the cost scales with the plan or with the viewport, and only
+   the second is a design property worth having". The control is as clean as this instrument can
+   produce — **Week/500 draws 243 bars at 59.8 fps and Week/2000 draws 267 at 60.0 fps**: four times
+   the plan, 24 more bars, two tenths of a frame per second. Then Fit/500 draws 540 at 57.2 and
+   Fit/2000 draws 1,792 at 23.3. Plan size does not appear anywhere in that; bars drawn explains all
+   four. **So the remedy space is drawing cost — decimation at low px/day, dirty regions — and not
+   anything about plan size.** ADR-0026's reserved escalation is still reserved, but the question it
+   would answer is now the right one.
+
+   **(c) The foot verdict above no longer holds unconditionally, and is amended rather than
+   rewritten.** It reads "PASS at both zooms, at the 2,000 ceiling, on real hardware", from a Fit
+   row of ~53 fps and 10.2 % dropped. This run puts Fit/2,000 at **23.3 fps against a 30 fps floor**
+   — 6.7 fps short — and at 97.22 pp dropped. On the numbers in hand §9's gate is **met at Week at
+   both scales, met at Fit at 500, and missed at Fit at 2,000**.
+
+   **(d) That is NOT established as a regression, and must not be recorded as one.** The comparable
+   quantity moved 10.2 % → 97.22 %, and three differences are live between the two runs, none
+   eliminated:
+   - **Canvas area.** ~1036×600 then against a 1912×1068 viewport now — roughly **2.3× the pixels**.
+     This row's own leading hypothesis for the unattributed ~8 ms is "full-canvas raster/upload each
+     frame on an integrated GPU", and that cost is area-proportional, so the confound sits exactly on
+     the mechanism.
+   - **Scene.** Then, a 2,016-activity XER imported through the product's own importer. Now,
+     `scale-scene`'s 2,160 bars / 3,200 links / 50 lanes. This row already records that **the scene
+     dominates the number**.
+   - **Bars drawn.** Today's Fit/2,000 draws **1,792**. The 2026-08-03 set does not record bars drawn
+     at all — which is why the panel prints `on screen` on every limb — so the single quantity (b)
+     shows to explain everything is unknown for the run being compared against.
+
+   Week is consistent across both dates (0/600 dropped then, 0.00 pp now), which is what makes the
+   Fit gap worth explaining rather than dismissing: whatever changed did not change the working zoom.
+
+   **(e) The discriminating run was taken the same day, at 1016×636 — and it answers "mostly, but
+   not entirely".** Fit/2,000 at the matched canvas: **39.5 fps, 47.78 pp dropped, 1,218 bars drawn**,
+   against 23.3 fps / 97.22 pp / 1,792 bars at 1912×1068. Shrinking the window recovers **17.6 ms of
+   the 24.1 ms gap (73 %)** against the 2026-08-03 figure of ~53 fps. **6.5 ms remains unexplained.**
+
+   So viewport area is the largest single term and it does **not** close the gap, and the residual is
+   not attributable from what exists: the remaining differences are the scene (a 2,016-activity XER
+   imported through the product against `scale-scene`'s 2,160 bars / 3,200 links / 50 lanes) and
+   bars drawn, **which the 2026-08-03 set does not record**. This row already establishes that the
+   scene dominates the number. The verdict therefore stays where (d) put it — **not established as a
+   regression, and no longer fully explained either** — and the honest close is that the one
+   statistic that would settle it was never captured for the run being compared against. That is why
+   the panel prints `on screen` on every limb.
+
+   **Note the experiment does not isolate area cleanly, and was not expected to**: shrinking the
+   window also drops bars drawn (1,792 → 1,218), because a shorter canvas frames fewer lanes. Both
+   terms moved together, which is what the model below exists to separate.
+
+   **(f) A two-term model fits all three uncensored Fit points, and its area term is the size of the
+   unattributed time.** Fitting `frame = a + b·bars + c·area` to (540 bars, 2.04 Mpx, 17.48 ms),
+   (1,792, 2.04, 42.92) and (1,218, 0.65, 25.32):
+
+   - **~20.3 µs per bar drawn**
+   - **~4.26 ms per megapixel of viewport** — 8.7 ms at 1912×1068, 2.8 ms at 1016×636
+   - intercept −2.2 ms, which is unphysical and says the model is approximate
+
+   The area term at the full-screen window is **8.7 ms**, and this row's long-standing unattributed
+   figure is **~8 ms**, whose stated leading hypothesis is "full-canvas raster/upload each frame on
+   an integrated GPU" — a cost that is area-proportional by nature. That is a striking agreement and
+   it is **not evidence**: three points against three free parameters is exactly determined, has zero
+   degrees of freedom, and cannot be falsified by the data that produced it. The one further point
+   available (Fit/500 at the small window) is censored at the 60 fps cap and merely fails to
+   contradict it. **A fourth Fit/2,000 run at an intermediate window — roughly 1450×850 — would give
+   the model its first degree of freedom**, and until then it is a hypothesis with an arithmetic
+   shape, not an attribution. Step 3's DevTools recording is still what would attribute it.
+
+   **(g) §9's gate does not name a canvas size, and these two runs show that decides it.** ADR-0026
+   §9 fixes the hardware — "a mid-tier laptop **and** an iPad-class tablet (Safari)" — and says
+   nothing about the viewport. The same plan, same machine, same painter, minutes apart, measures
+   **23.3 fps at 1912×1068 and 39.5 fps at 1016×636**: fail and pass against the same 30 fps floor.
+   A gate whose verdict turns on an unstated parameter is underspecified, and that is a defect in the
+   gate rather than in the painter. Filed as **#261**.
+
+   **What is still unattributed is unchanged.** This panel reports frame pacing, not where the time
+   goes inside a frame; the ~8 ms between "JS finished" and "frame presented" needs a DevTools
+   Performance recording, exactly as step 3 says, and must still not be guessed.
+
 Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
 itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
 
@@ -4269,3 +4372,66 @@ Reading that same log **did** find a real one, which is fixed rather than filed:
 told the effective periods was silently short by one — for a number ADR-0087 records as
 irreversible. Its existing test used `objectContaining`, which cannot catch an omission; the
 replacement counts `*Days` keys against `RETENTION_TABLES.length` and was verified red.
+
+### 260. A saturated dropped-frame baseline makes the difference gate arithmetically unfailable
+
+**Status:** open · **Raised:** 2026-09-08 (first real-hardware probe reading) · **Size:** S · **Owner:** repo
+
+`droppedPct` is a share of frames, so it is bounded at 100. P1 asks whether the treatment's dropped
+percentage exceeds the baseline's by more than `barPp` (2.00). When the baseline is already near the
+ceiling the remaining headroom is smaller than the bar, and **P1 cannot fail no matter what the
+treatment costs** — a treatment that dropped every frame in the run would still score inside it.
+
+The product owner's first real-hardware reading is the case: `revision-diff` / Fit / 2,160 bars,
+baseline **98.33 pp**, so the largest possible delta is **1.67 pp** against a **2.00 pp** bar. The
+report prints `delta -0.19 pp`, which reads as "the overlay is free" and cannot mean that.
+
+**It has already happened once and nobody noticed.** `docs/specs/revision-compare-changes/m0-condition.md:199`
+records `scale` / Fit / 1646 as baseline 99.07 pp, treatment 100.00 pp, delta **+0.93 pp** — and
+`100.00 − 99.07 = 0.93` exactly. The treatment saturated the ceiling and the recorded delta is the
+saturation value, not a measurement. It sits in that table beside genuine deltas with nothing
+distinguishing it.
+
+**This is not the P3 rule, and P3 does not cover it.** `m0-condition.md:87-90` makes Fit report-only
+on the ADR-0058 grounds that gating a new feature on an already-failing state is the gate-deleted-on-
+day-one trap. That argument is about **P2, the absolute level**. Saturation is about **P1, the
+difference**, it is arithmetic rather than policy, and it is not confined to Fit: any machine whose
+Week baseline ran hot enough would reach the same dead zone with the gate still armed and still
+reporting PASS.
+
+**The shape of the fix is the guard the judge already has, one quantity along.** `judgeRun` refuses
+when `baselineSpreadPp >= barPp` — the instrument's noise exceeds the question's precision. The
+missing sibling refuses when `100 - baselineMeanPp < barPp` — the metric's remaining range is
+smaller than the question's precision. Both make a verdict meaningless; only one is implemented.
+`INDETERMINATE` already exists and already outranks PASS/FAIL, so this is a branch and a message
+rather than a new vocabulary.
+
+**Not built here.** `judge.ts` is shared by the panel and the CLI driver, so this is a shared-gate
+change and ADR-0105 makes the full spec mandatory rather than optional. The reading that exposed it
+is recorded in the same commit; the fix is not smuggled in beside it.
+
+### 261. ADR-0026 §9's frame-rate gate does not say at what canvas size it applies
+
+**Status:** open · **Raised:** 2026-09-08 (#75's viewport discriminator) · **Size:** S · **Owner:** repo
+
+§9 states the gate as **≥ 45 fps @ 500 and ≥ 30 fps @ 2,000** under sustained pan, and fixes the
+hardware it applies to — "a mid-tier laptop **and** an iPad-class tablet (Safari), light and dark".
+It names **no canvas or viewport size**, and #75 item 5 shows that omission decides the verdict: the
+same 2,000-activity plan, on the same machine, in the same browser, minutes apart, measures
+**23.3 fps at a 1912×1068 viewport and 39.5 fps at 1016×636** — a fail and a pass against the same
+floor. The measured cost is ~4.26 ms per megapixel, so the parameter is not a rounding term.
+
+Every reading this repository holds was taken at an unstated and varying size: the 2026-08-03 set at
+a ~1036×600 canvas, the 2026-09-08 set at two different viewports, and the headless harness at
+whatever its container defaults to. None of them is wrong; none of them is comparable to another
+without a figure nobody was recording.
+
+**What would close it** is a decision, not a measurement: name the canvas size the gate is judged at,
+in ADR-0026, and state it in the same breath as the fps figures so a reading cannot be taken without
+it. The obvious candidate is a full-screen window on the §16 envelope, because that is what a planner
+has — which would mean §9's floor is currently **missed** at the 2,000 ceiling, and that consequence
+should be faced deliberately rather than arrived at by whoever next resizes a window.
+
+**Not decided here.** It changes the meaning of an accepted gate and belongs to whoever picks up the
+Fit-zoom work, alongside #75's unattributed time. Recording it is the point: the parameter has been
+absent since 2026 and was invisible until two runs disagreed.

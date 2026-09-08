@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DeviceFacts } from '../model/device';
-import type { AbsoluteJudgeResult } from '../model/judge';
+import type { AbsoluteJudgeResult, JudgeResult } from '../model/judge';
 import type { LimbOutcome, RunContext } from '../runner/run-probe';
 
 import { formatProbeReport } from './probe-report';
@@ -70,6 +70,36 @@ const limb = (result: LimbOutcome['result']): LimbOutcome => ({
   },
   source: 'ADR-0026 §9 — ≥ 30 fps at the 2,000-activity ceiling.',
   result,
+});
+
+const judgedDifference = (over: Partial<JudgeResult> = {}): JudgeResult => ({
+  verdict: 'PASS',
+  baselineMeanPp: 0.19,
+  treatmentMeanPp: 0.0,
+  deltaPp: -0.19,
+  baselineSpreadPp: 0.56,
+  treatmentFps: 60.0,
+  p1: true,
+  p2: true,
+  ...over,
+});
+
+const differenceLimb = (result: LimbOutcome['result']): LimbOutcome => ({
+  ...limb(result),
+  visibleBars: 264,
+  recording: {
+    limbKind: 'difference',
+    activityCount: 2000,
+    edgeCount: 3200,
+    counts: {
+      visibleBars: 264,
+      visibleLinks: 400,
+      visibleChangedBars: 30,
+      visibleChangedLinks: 48,
+    },
+    thresholds: { minFps: 30, gated: true, source: 'ADR-0026 §9', barPp: 2 },
+    pairs: [],
+  },
 });
 
 describe('formatProbeReport', () => {
@@ -209,5 +239,47 @@ describe('formatProbeReport', () => {
       limbs: [limb({ kind: 'absolute', judged: judged({ verdict: 'REPORTED_ONLY' }) })],
     });
     expect(out).toContain('run size   quick — 40 frames x 1');
+  });
+  it('prints the non-vacuity counts on a PASS, not only when the judge refuses', () => {
+    // The product owner's 2026-09-08 Week run came back PASS with no way to audit it from the block.
+    // `judgeRun` throws before it judges, so a verdict already implies the floors were met — but the
+    // pasted block is the deliverable, and a reader should not have to know the judge's control flow
+    // to check that the treatment drew anything. The CLI has printed this since it was written
+    // (`measure-revision-diff.mjs:177-180`) and `m0-condition.md`'s N condition requires it; only
+    // this rendering dropped it. ADR-0093: a green result must distinguish "cheap" from "nothing there".
+    const out = formatProbeReport({
+      kind: 'measured',
+      context: CONTEXT,
+      limbs: [differenceLimb({ kind: 'difference', judged: judgedDifference() })],
+    });
+    expect(out).toContain('changed    30/264 bars (11.4%), 48/400 links (12.0%)');
+  });
+
+  it('omits the counts line rather than printing zeros when the recording lacks them', () => {
+    // A zero is a claim that nothing changed on screen; an absent count is a claim about the
+    // recording. Printing 0/0 would state the first while meaning the second.
+    //
+    // BLIND SPOT, stated rather than left implicit: this case asserts an ABSENCE, so it passes
+    // equally against a build that never prints the line at all. Its discriminator is the sibling
+    // above, which was verified red against exactly that.
+    const out = formatProbeReport({
+      kind: 'measured',
+      context: CONTEXT,
+      limbs: [
+        {
+          ...differenceLimb({ kind: 'difference', judged: judgedDifference() }),
+          recording: {
+            limbKind: 'difference',
+            activityCount: 2000,
+            edgeCount: 3200,
+            counts: { visibleBars: 264 },
+            thresholds: { minFps: 30, gated: true, source: 'ADR-0026 §9', barPp: 2 },
+            pairs: [],
+          },
+        },
+      ],
+    });
+    expect(out).not.toContain('changed    ');
+    expect(out).toContain('baseline   0.19 pp');
   });
 });
