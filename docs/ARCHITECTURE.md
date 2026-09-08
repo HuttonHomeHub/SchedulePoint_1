@@ -306,8 +306,8 @@ are listed here so nobody reads an ADR and assumes the capability exists:
 > **ADR-0009's row said "All work is synchronous" until 2026-08-18, and that has
 > been false since 2026-08-10.** ADR-0087 gave this application its first
 > scheduled work of any kind — `common/operational/retention-sweep.service.ts`,
-> an hourly `setInterval` that deletes expired `csp_reports` and `mail_events`
-> rows — beside `heartbeat.service.ts`'s own timer. ADR-0087 D2 **narrows**
+> an hourly `setInterval` that deletes expired `csp_reports`, `mail_events` and
+> `perf_probe_results` rows — beside `heartbeat.service.ts`'s own timer. ADR-0087 D2 **narrows**
 > ADR-0009 rather than superseding it, and names the trigger to reopen it
 > (durability across a restart, retries, exactly-once, fan-out,
 > enqueue-from-a-request, visible progress). So the accurate claim is the

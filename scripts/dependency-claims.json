@@ -367,14 +367,6 @@
       ]
     },
     {
-      "ref": "router.js:298",
-      "package": "@tanstack/router-core",
-      "path": "dist/esm/router.js",
-      "lines": "298",
-      "anchor": "matched route",
-      "citedBy": ["docs/TECH_DEBT.md"]
-    },
-    {
       "ref": "router.js:634-635",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",

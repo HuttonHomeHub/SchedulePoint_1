@@ -4146,16 +4146,22 @@ A lighter-weight running log of smaller decisions is in
   that has not opted in, **nothing has ever been permanently deleted** and
   Recently deleted's countdown is a preview rather than a promise. Do not read
   "shipped" as "deleting" here.
-- **Retention is enforced on two tables and not on the third, and the difference is a decision.**
-  `csp_reports` (30 days) and `mail_events` (12 months) are swept hourly since 2026-08-10
-  (ADR-0087) — this application's **first** scheduled work of any kind. `audit_events` is **not**,
+- **Retention is enforced on three tables and not on `audit_events`, and the difference is a
+  decision.** `csp_reports` (30 days), `mail_events` (12 months) and `perf_probe_results`
+  (365 days) are swept hourly since 2026-08-10 (ADR-0087) — this application's **first** scheduled
+  work of any kind. This bullet said "two tables and not the third" until the 2026-09-08 pass;
+  `perf_probe_results` joined `RETENTION_TABLES` at ADR-0128 and the prose was not swept, which is
+  the same omission that epic had already found and fixed **in the code** — the `retention.configured`
+  boot line named two tables when there were three. One layer out, unnoticed, for a day.
+  `audit_events` is **not** swept,
   and may never be: it refuses `UPDATE` and `DELETE` in the database by `ENABLE ALWAYS` triggers, so
   ADR-0085 D3's own 12-month `auth.*` period stays unenforced rather than being bought with the
   structural guarantee ADR-0085 D1 refused to trade (`docs/TECH_DEBT.md` **#118a**). Two more things
   do not follow from "retention is enforced": the CSP period bounds **staleness, not data age**,
   because a violation still being reported never ages out (**#118b**), and nothing is deleted on the
-  deployed host for a while yet — both tables were created on 2026-08-09, so the sweep correctly
-  reports `deleted: 0` until the periods elapse.
+  deployed host for a while yet — `csp_reports` and `mail_events` were created on 2026-08-09 and
+  `perf_probe_results` on 2026-09-07, so the sweep correctly reports `deleted: 0` until the periods
+  elapse.
 - **Four accepted ADRs have no implementation** — background jobs + Redis
   (0009), caching (0010), object storage (0011), and OpenTelemetry metrics and
   tracing (0013, of which only Pino is wired). Nothing in the running system

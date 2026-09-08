@@ -31,8 +31,13 @@ review; you do not edit code. Assume an adversarial user.
   Treat any code that widens `GuestPrincipal` toward `Principal`, or that accepts
   a plan/org id from a **request param** rather than from the token, as blocking:
   the guest scope comes from the token alone. Share resolution is uniform-404.
-- **`@Public()` is a short list.** Auth routes and `/api/v1/share/*`. A new
-  `@Public()` endpoint needs an explicit justification in review.
+- **`@Public()` is a short list, and this is the whole of it** (re-derived 2026-09-08):
+  auth routes, invitation-accept, `/api/v1/share/*` (ADR-0051 F-M3), the CSP report
+  sink (`modules/csp/csp-report.controller.ts`), `/version` and the two `/health`
+  routes. A new `@Public()` endpoint needs an explicit justification in review. Note
+  the CSP sink is an unauthenticated **write** — the only one — so it is rate-limited
+  and retention-swept rather than trusted; its path is stored and its query string
+  stripped.
 - **The pen is a third concurrency layer (ADR-0028).** Structural plan writes call
   `assertHoldsPen` and 423 without it — distinct from the optimistic-lock 409. A
   new structural write that skips it is blocking; a non-structural write (progress,
@@ -40,10 +45,31 @@ review; you do not edit code. Assume an adversarial user.
 - **Money and rates have ceilings.** Integer-minor-unit money fields carry
   `@Max(MONEY_MINOR_UNITS_MAX)` and `Decimal(18,4)` fields `@Max(DECIMAL_18_4_MAX)`,
   because an overflow surfaces as an opaque 500 rather than a clean 422.
+- **The staff boundary is structural too, and for the same reason (ADR-0086 D1).**
+  `StaffPrincipal` has no `memberships`, no `can()`, no `organizationId` and no
+  `role`, so — exactly as with `GuestPrincipal` — **staff reaching customer data is
+  a compile error, not a runtime check.** `AuthContextService` is unmodified, there
+  is no `STAFF` in `OrganizationRole` and no staff branch in `permissionsForRole`.
+  Treat any widening of `StaffPrincipal` toward `Principal`, or any staff route that
+  takes an org/plan id and resolves member scope, as blocking. Staff **reads** are
+  audited, inverting the usual rule (ADR-0086 D5): on that surface the read is the
+  privileged act, and a positive census assertion derived from the route path
+  enforces it.
+- **There IS an append-only audit log — check that privileged routes reach it.**
+  `audit_events` has existed since 2026-08-03 (ADR-0072), append-only **in the
+  database** via `BEFORE UPDATE OR DELETE` / `BEFORE TRUNCATE` triggers declared
+  `ENABLE ALWAYS`, so the application role cannot bypass them; ADR-0073 widened
+  coverage to seven families under a **route census** that fails when a route
+  changing who-can-do-what stops being audited. Payloads pass an allow-list per
+  action, with a `NEVER_RECORD` substring ban catching `token`/`hash`. This bullet
+  told you the opposite until 2026-09-08 — it read "there is no append-only audit
+  log yet (#14)", which is not merely stale prose: it would stop you checking that
+  a new privileged route is audited at all. `#14`'s remaining halves are (b) the
+  in-process rate-limit store and (c) unencrypted OAuth token columns.
 - **Known and accepted, so don't re-report as new:** the throttler store is
   in-process memory, per-replica (TECH_DEBT #49); the keyset cursor is resolved
   before the scope filter, which is a cosmetic anchor issue and leaks no rows
-  (#20); there is no append-only audit log yet (#14).
+  (#20).
 
 ## Review checklist
 
