@@ -375,6 +375,29 @@ establish. Week/500 draws 243 bars at 59.8 fps and Week/2000 draws 267 at 60.0: 
 and four vsyncs at 16.70 ms. They report how many frames were missed at the 95th percentile, not a
 smear, and two runs sharing a p95 share a frame count rather than a measurement.
 
+### 2026-09-08 — `canvas-draw` / Fit at 1016×636 — the viewport discriminator
+
+Same machine and session, window shrunk to approximately the 2026-08-03 canvas (~1036×600) to test
+whether that set's much better Fit figure was viewport area rather than a change in the painter.
+
+| plan  | bars drawn | px/day | mean fps | dropped  | interval p95 |
+| ----- | ---------- | ------ | -------- | -------- | ------------ |
+| 500   | 410        | 2.81   | 60.0     | 0.00 pp  | 16.80 ms     |
+| 2,000 | 1,218      | 0.88   | 39.5     | 47.78 pp | 49.90 ms     |
+
+**Answer: mostly area, not entirely.** Fit/2,000 goes 23.3 → 39.5 fps, recovering 17.6 ms of the
+24.1 ms gap against 2026-08-03's ~53 fps — **73 %**, with **6.5 ms residual**. The remaining
+candidates are the scene and bars drawn, and the second was never recorded for the old run. Full
+working in `docs/TECH_DEBT.md` #75 item 5(e)–(g).
+
+**Two things this run produced that were not asked for.** A two-term fit over the three uncensored
+Fit points gives ~20.3 µs per bar drawn and **~4.26 ms per megapixel of viewport** — 8.7 ms at the
+full-screen window, against #75's long-unattributed ~8 ms, whose stated hypothesis is area-
+proportional raster/upload. Three points against three parameters is exactly determined and cannot
+be falsified by its own data, so it is a shape and not an attribution; a fourth run at ~1450×850
+would give it a degree of freedom. And ADR-0026 §9's gate **names no canvas size**, which these two
+runs show decides its verdict — filed as #261.
+
 ### Still owed
 
 | run                  | answers                                                                                             |
