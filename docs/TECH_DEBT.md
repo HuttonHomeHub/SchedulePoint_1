@@ -4435,3 +4435,38 @@ should be faced deliberately rather than arrived at by whoever next resizes a wi
 **Not decided here.** It changes the meaning of an accepted gate and belongs to whoever picks up the
 Fit-zoom work, alongside #75's unattributed time. Recording it is the point: the parameter has been
 absent since 2026 and was invisible until two runs disagreed.
+
+### 262. A dependency bump changed documented library behaviour, and only a citation gate noticed
+
+**Status:** open · **Raised:** 2026-09-08 (the cited-package bump) · **Size:** S · **Owner:** repo
+
+`@tanstack/history` 1.162.2 changed `win.history.go(1)` to **`win.history.go(-delta)`** when rolling
+back a blocked Back. The old code always stepped forward one, which is wrong for a multi-step Back;
+the new code reverses the actual delta. It is a **fix**, and it silently falsified nine statements
+across `docs/specs/unsaved-work-guard/` — including verification **V12**, edge case **E7**, a mermaid
+diagram and a coverage table — all of which said a blocked Back is undone with `go(1)`.
+
+**Nothing except `pnpm check:claims` could have caught it.** The product's behaviour is unchanged:
+the reader still lands where they were and the stack length is still unchanged, so E7's _conclusion_
+survives and every test stays green. What changed is a sentence in a spec, and the only reason
+anybody read that sentence is that ADR-0076's gate refused the bump and said "re-READ each cited
+location". The gate proved the line had moved; a person had to see that the words beside it had
+stopped being true.
+
+**Two smaller findings from the same pass, both fixed here.**
+
+1. **`link.js`'s anchor was the bare identifier `ignoreBlocker`**, which occurs three times in that
+   file — a shift computed from the first match landed 229 lines from the cited construct. The
+   citation now covers the whole `router.navigate({ … })` call it is about, which is both a stronger
+   anchor and a better description of what the prose claims.
+2. **`@tanstack/history` needed a `resolveVia`.** The bump puts two copies in the store and it is
+   linked into no workspace, so which copy a claim concerns is not a fact about the tree. It resolves
+   via `@tanstack/react-router`, whose 1.170.33 links 1.162.2 — the `axe-core` precedent exactly.
+
+**What this row is for.** It is not a defect to fix; it is evidence for a question the register has
+not answered: **how many other citations describe behaviour that has since changed, in packages
+nobody has bumped recently?** The gate fires per-package on a version change, so a dependency that
+has not moved since its citations were written is never re-read — and this pass shows that a single
+patch release can falsify nine statements at once. `#181`'s "cite by symbol rather than line" note
+is adjacent but different: symbols would have survived the line shift here and would **not** have
+caught `go(1)` → `go(-delta)`, because the symbol is the same.

@@ -19,7 +19,7 @@
  * repository said "the default `parseSearch` is `parseSearchWith(JSON.parse)`, which JSON-parses
  * every value". Half true. The **decode** step coerces `"true"`, `"false"` and canonical numeric
  * strings (`qss.js:41-46`) **before** the parser is consulted, and `JSON.parse`
- * (`searchParams.js:18-30`) only ever sees values that are still strings. So a "parser that leaves
+ * (`searchParams.js:18-33`) only ever sees values that are still strings. So a "parser that leaves
  * values alone" would not fix `?verified=1` — which is why the epic's remedy replaces the codec
  * rather than the parser, and why this helper is needed in the meantime.
  * Recorded executably in `apps/web/src/app/router-search.characterisation.test.ts`.

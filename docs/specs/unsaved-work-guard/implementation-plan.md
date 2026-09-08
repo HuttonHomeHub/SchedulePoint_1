@@ -58,7 +58,7 @@ that drives the real router.
 ##### Task M0-T1 — Does a `beforeLoad` redirect reach the blocker?
 
 - **Description:** The one open claim in the spec (§0, closing note). The only `ignoreBlocker: true`
-  found in the installed router is `Transitioner.js:44-48`; the redirect path was **not** traced.
+  found in the installed router is `Transitioner.js:36-40`; the redirect path was **not** traced.
   Measure it: register a blocker that logs and always returns `false`, force the `_authed` guard's
   redirect (`app/router.tsx:135-141`) by clearing the session, and record whether `blockerFn` was
   called.
@@ -125,7 +125,7 @@ that drives the real router.
 - **Testing:** `pnpm check:claims` green; **verified red first** by corrupting one anchor.
 - **Development steps:**
   1. Add five entries with anchors chosen for distinctiveness (`enableBeforeUnload`,
-     `shouldHaveBeforeUnload`, `win.history.go(1)`, `addEventListener(beforeUnloadEvent`).
+     `shouldHaveBeforeUnload`, `win.history.go(-delta)`, `addEventListener(beforeUnloadEvent`).
   2. Verify red, then green.
   3. Note #181's blind spot in the entry comments.
 

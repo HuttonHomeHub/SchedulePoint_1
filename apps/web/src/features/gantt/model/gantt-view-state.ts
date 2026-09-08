@@ -24,7 +24,7 @@ import { searchString } from '@/lib/router/search-string';
  * `parseSearchWith(JSON.parse)`, "so `?gsort=1` arrives as the number 1". Half true, and the half it
  * missed is the one that decided the remedy. The **decode** step coerced `"true"`, `"false"` and
  * canonical numeric strings (`qss.js:41-46`) **before** the parser was consulted, and `JSON.parse`
- * (`searchParams.js:18-30`) only ever saw values that were still strings — so replacing the parser
+ * (`searchParams.js:18-33`) only ever saw values that were still strings — so replacing the parser
  * alone would have fixed nothing. ADR-0074 M5 shipped a live defect from exactly this, a
  * `typeof === 'string'` test discarding a verification that had succeeded, invisible to every unit
  * test because those mock `useSearch` and never cross the parser.

@@ -144,7 +144,7 @@ describe('the router search codec — characterisation (records fact, not intent
    * **The merge — finding F5, and the one thing here that needed a real router to establish.**
    *
    * `validateSearch`'s return is assigned OVER the parsed search
-   * (`router.js:685-696`), and `useSearch` hands back `match.search` whatever `strict` is set to
+   * (`router.js:678-689`), and `useSearch` hands back `match.search` whatever `strict` is set to
    * (`useSearch.js:21-23`). Two consequences that nothing in this repository pins, and that every
    * route validator in `router.tsx` is written as though were false:
    *
@@ -153,7 +153,7 @@ describe('the router search codec — characterisation (records fact, not intent
    * 2. A validator's own output is **added to** the raw values, not substituted for them — so a
    *    validator that renames a param leaves the original in place beside the new name.
    *
-   * These are measured, not read: the assertions below were written from `router.js:685-696` and
+   * These are measured, not read: the assertions below were written from `router.js:678-689` and
    * then run against a real `createRouter` over a real memory history, and the second one was
    * **not** what the reading predicted. It says the plan's phrasing ("does not remove that key")
    * understates it.
