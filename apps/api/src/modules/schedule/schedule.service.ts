@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
+import type { CriticalPathDefinition, Prisma, TotalFloatMode } from '@prisma/client';
 import type {
-  ActivityType,
-  ConstraintType,
-  DependencyType,
-  LagCalendarSource,
-  Prisma,
-} from '@prisma/client';
-import type {
+  CrossPlanChangeReport,
+  CrossPlanCorrelation,
+  CrossPlanCorrelationRow,
+  CrossPlanCriticalPathDelta,
+  CrossPlanMovedActivity,
+  CrossPlanPresenceActivity,
+  CrossPlanRevisionCompare,
   HistogramGranularity,
   PlanEarnedValue,
   PlanFloatPaths,
@@ -37,12 +38,20 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { attachDayFactors, resolveDayFactorMinutes } from '../activities/day-factor';
 import { BaselineRepository } from '../baselines/baseline.repository';
 import { classifyRevisionChanges } from '../baselines/revision-changes';
+import { correlateByCode, correlateEdges } from '../baselines/revision-correlate';
 import {
   computeRevisionDelta,
   type RevisionEdge,
   type RevisionRow,
 } from '../baselines/revision-delta';
 import { buildRevisionGhosts, buildRevisionLinkChanges } from '../baselines/revision-ghosts';
+import {
+  frozenRevisionEdges,
+  frozenRevisionSide,
+  liveRevisionEdges,
+  liveRevisionSide,
+  revisionDate,
+} from '../baselines/revision-projections';
 import { CalendarRepository } from '../calendars/calendar.repository';
 import { CrossPlanDependencyRepository } from '../cross-plan-dependencies/cross-plan-dependency.repository';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -53,6 +62,7 @@ import { runCriticalPathTest } from './critical-path-test';
 import {
   compareCriticalityRules,
   type CriticalityRule,
+  type NullableCriticalityColumns,
   readCriticalityRule,
   toCriticalityOptions,
 } from './criticality-rule';
@@ -215,6 +225,82 @@ type ActivePlan = NonNullable<Awaited<ReturnType<PlanRepository['findActiveByIdI
  * from the one this feature solves.
  */
 export const REVISION_ROW_CAP = 200;
+
+/**
+ * A comparison side's identity — a named baseline, or the plan as it stands now.
+ *
+ * Shared by both comparison routes rather than assembled twice: with two plans in play the LIVE
+ * branch has to read its data date and computed-at from the RIGHT plan, and a second copy is the
+ * one that would eventually read the wrong one.
+ */
+function revisionSideOf(
+  baseline: {
+    id: string;
+    name: string;
+    capturedAt: Date;
+    dataDate: Date | null;
+  } | null,
+  plan: { scheduleComputedAt: Date | null; plannedStart: Date | null },
+): RevisionSide {
+  return baseline
+    ? {
+        kind: 'BASELINE',
+        id: baseline.id,
+        name: baseline.name,
+        computedAt: baseline.capturedAt.toISOString(),
+        dataDate: revisionDate(baseline.dataDate),
+      }
+    : {
+        kind: 'LIVE',
+        id: null,
+        name: null,
+        computedAt: plan.scheduleComputedAt ? plan.scheduleComputedAt.toISOString() : null,
+        dataDate: revisionDate(plan.plannedStart),
+      };
+}
+
+/** The criticality rule a side's numbers were computed under — frozen on a baseline, live on a plan. */
+function criticalityRuleOf(
+  baseline: NullableCriticalityColumns | null,
+  plan: {
+    scheduleCriticalPathDefinition: CriticalPathDefinition | null;
+    scheduleCriticalFloatThresholdMinutes: number | null;
+    scheduleTotalFloatMode: TotalFloatMode | null;
+    scheduleMakeOpenEndsCritical: boolean | null;
+  },
+): ReturnType<typeof readCriticalityRule> {
+  return baseline
+    ? readCriticalityRule(baseline)
+    : readCriticalityRule({
+        criticalPathDefinition: plan.scheduleCriticalPathDefinition,
+        criticalFloatThresholdMinutes: plan.scheduleCriticalFloatThresholdMinutes,
+        totalFloatMode: plan.scheduleTotalFloatMode,
+        makeOpenEndsCritical: plan.scheduleMakeOpenEndsCritical,
+      });
+}
+
+/**
+ * An empty criticality delta — **zeroed, never partial**.
+ *
+ * A half-reported delta over a side that was never computed, or over two plans with nothing in
+ * common, is the same lie in a smaller font. `notAssessableReason` is what the caller sets; the rest
+ * is the same in both refusals, so it is written once.
+ */
+const EMPTY_CRITICAL_PATH_DELTA = {
+  entered: [],
+  left: [],
+  enteredTotal: 0,
+  leftTotal: 0,
+  cap: REVISION_ROW_CAP,
+  remainedCriticalCount: 0,
+  remainedNonCriticalCount: 0,
+  added: [],
+  removed: [],
+  addedTotal: 0,
+  removedTotal: 0,
+  noCriticalPath: false,
+  notAssessableReason: null,
+} as const satisfies CrossPlanCriticalPathDelta;
 
 @Injectable()
 export class ScheduleService {
@@ -1503,48 +1589,8 @@ export class ScheduleService {
     if (!fromBaseline) throw new NotFoundError('Revision not found.');
     if (to !== LIVE_REVISION && !toBaseline) throw new NotFoundError('Revision not found.');
 
-    /**
-     * Both sides' edges project to ONE shape, exactly as their activities do — which is what keeps
-     * baseline-vs-baseline free rather than a second implementation. The frozen side names its
-     * columns `source_*` and the live side does not; that is the whole difference.
-     */
-    const frozenEdges = (
-      rows: {
-        sourceDependencyId: string;
-        sourcePredecessorId: string;
-        sourceSuccessorId: string;
-        type: DependencyType;
-        lagMinutes: number;
-        lagCalendar: LagCalendarSource;
-      }[],
-    ): RevisionEdge[] =>
-      rows.map((e) => ({
-        dependencyId: e.sourceDependencyId,
-        predecessorId: e.sourcePredecessorId,
-        successorId: e.sourceSuccessorId,
-        type: e.type,
-        lagMinutes: e.lagMinutes,
-        lagCalendar: e.lagCalendar,
-      }));
-
-    const liveEdges = (
-      rows: {
-        id: string;
-        predecessorId: string;
-        successorId: string;
-        type: DependencyType;
-        lagMinutes: number;
-        lagCalendar: LagCalendarSource;
-      }[],
-    ): RevisionEdge[] =>
-      rows.map((e) => ({
-        dependencyId: e.id,
-        predecessorId: e.predecessorId,
-        successorId: e.successorId,
-        type: e.type,
-        lagMinutes: e.lagMinutes,
-        lagCalendar: e.lagCalendar,
-      }));
+    // Both sides project to ONE shape through the SHARED projections in `revision-projections.ts`
+    // — not through a local pair. See that module for why a copy would drift invisibly.
 
     // **The logic and the calendar names are loaded ONLY when the change list is asked for.** The
     // delta does not read either, so a caller that did not opt in pays nothing for them — the
@@ -1573,92 +1619,25 @@ export class ScheduleService {
         wantsEdges
           ? this.baselines
               .loadSnapshotDependenciesForDelta(fromBaseline.id, organization.id)
-              .then(frozenEdges)
+              .then(frozenRevisionEdges)
           : Promise.resolve<RevisionEdge[]>([]),
         wantsEdges
           ? toBaseline
             ? this.baselines
                 .loadSnapshotDependenciesForDelta(toBaseline.id, organization.id)
-                .then(frozenEdges)
+                .then(frozenRevisionEdges)
             : // Normalised HERE rather than at the call site below, so the two branches produce one
               // type and nothing downstream needs a cast to tell them apart — the same reason the
               // activity projections converge before the pure function sees them.
-              this.baselines.loadActiveDependenciesForDelta(organization.id, planId).then(liveEdges)
+              this.baselines
+                .loadActiveDependenciesForDelta(organization.id, planId)
+                .then(liveRevisionEdges)
           : Promise.resolve<RevisionEdge[]>([]),
         wantsChanges ? this.baselines.loadCalendarNames(organization.id) : Promise.resolve([]),
       ]);
 
-    const date = (value: Date | null): string | null => (value ? formatCalendarDate(value) : null);
-
-    const frozenSide = (
-      rows: {
-        sourceActivityId: string;
-        code: string | null;
-        name: string;
-        type: ActivityType;
-        durationMinutes: number;
-        isCritical: boolean;
-        totalFloat: number | null;
-        baselineStart: Date | null;
-        baselineFinish: Date | null;
-        laneIndex: number | null;
-        parentId: string | null;
-        calendarId: string | null;
-        constraintType: ConstraintType | null;
-        constraintDate: Date | null;
-        secondaryConstraintType: ConstraintType | null;
-        secondaryConstraintDate: Date | null;
-        percentComplete: number | null;
-        actualStart: Date | null;
-        actualFinish: Date | null;
-      }[],
-    ): RevisionRow[] =>
-      rows.map((r) => ({
-        activityId: r.sourceActivityId,
-        code: r.code,
-        name: r.name,
-        type: r.type,
-        durationMinutes: r.durationMinutes,
-        isCritical: r.isCritical,
-        totalFloatDays: r.totalFloat,
-        earlyStart: date(r.baselineStart),
-        earlyFinish: date(r.baselineFinish),
-        // The frozen shape, carried through unread by the delta (ADR-0126). On a NONE-level
-        // baseline every one of these is NULL, and nothing here interprets that: only
-        // `bothSnapshotted` below is entitled to.
-        laneIndex: r.laneIndex,
-        parentId: r.parentId,
-        calendarId: r.calendarId,
-        constraintType: r.constraintType,
-        constraintDate: date(r.constraintDate),
-        secondaryConstraintType: r.secondaryConstraintType,
-        secondaryConstraintDate: date(r.secondaryConstraintDate),
-        percentComplete: r.percentComplete,
-        actualStart: date(r.actualStart),
-        actualFinish: date(r.actualFinish),
-      }));
-
-    const liveSide: RevisionRow[] = liveRows.map((r) => ({
-      activityId: r.id,
-      code: r.code,
-      name: r.name,
-      type: r.type,
-      durationMinutes: r.durationMinutes,
-      isCritical: r.isCritical,
-      totalFloatDays: r.totalFloat,
-      earlyStart: date(r.earlyStart),
-      earlyFinish: date(r.earlyFinish),
-      laneIndex: r.laneIndex,
-      parentId: r.parentId,
-      calendarId: r.calendarId,
-      constraintType: r.constraintType,
-      constraintDate: date(r.constraintDate),
-      secondaryConstraintType: r.secondaryConstraintType,
-      secondaryConstraintDate: date(r.secondaryConstraintDate),
-      percentComplete: r.percentComplete,
-      actualStart: date(r.actualStart),
-      actualFinish: date(r.actualFinish),
-    }));
+    // The SHARED projections. A local copy would look right and drift — `revision-projections.ts`.
+    const liveSide = liveRevisionSide(liveRows);
 
     // **The measurement frame, spec D4**: working days on the PLAN calendar, with the OLD side's
     // FROZEN hours-per-day factor. Not the carrier's own calendar — `BaselineActivity` carries no
@@ -1672,7 +1651,7 @@ export class ScheduleService {
       Math.round(planCalendar.workingTimeBetween(from, toDate) / dayFactorMinutes);
 
     /**
-     * **Both sides, projected ONCE.** `frozenSide` was called three times over the same array —
+     * **Both sides, projected ONCE.** `frozenRevisionSide` was called three times over the same array —
      * for the delta, the change list and the ghosts — so a caller asking for both includes (which
      * the shipped client always does) re-mapped every row through the same 19-field projection six
      * times instead of twice. Negligible in absolute terms at 2,000 rows and free to remove;
@@ -1681,8 +1660,8 @@ export class ScheduleService {
      * It also makes the "one projection, three readers" claim in this method's docblocks true by
      * construction rather than by three identical calls happening to agree.
      */
-    const fromSide = frozenSide(fromRows);
-    const toSide = toRows === null ? liveSide : frozenSide(toRows);
+    const fromSide = frozenRevisionSide(fromRows);
+    const toSide = toRows === null ? liveSide : frozenRevisionSide(toRows);
 
     const delta = computeRevisionDelta(fromSide, toSide, REVISION_ROW_CAP, movementDaysBetween);
 
@@ -1805,7 +1784,7 @@ export class ScheduleService {
         id: fromBaseline.id,
         name: fromBaseline.name,
         computedAt: fromBaseline.capturedAt.toISOString(),
-        dataDate: date(fromBaseline.dataDate),
+        dataDate: revisionDate(fromBaseline.dataDate),
       },
       to: toBaseline
         ? {
@@ -1813,14 +1792,14 @@ export class ScheduleService {
             id: toBaseline.id,
             name: toBaseline.name,
             computedAt: toBaseline.capturedAt.toISOString(),
-            dataDate: date(toBaseline.dataDate),
+            dataDate: revisionDate(toBaseline.dataDate),
           }
         : ({
             kind: 'LIVE',
             id: null,
             name: null,
             computedAt: plan.scheduleComputedAt ? plan.scheduleComputedAt.toISOString() : null,
-            dataDate: date(plan.plannedStart),
+            dataDate: revisionDate(plan.plannedStart),
           } satisfies RevisionSide),
       dayFactorMinutes,
       settingsVerdict: compareCriticalityRules(
@@ -1911,6 +1890,469 @@ export class ScheduleService {
         durationMs: Date.now() - startedAt,
       },
       'revision comparison read',
+    );
+
+    return result;
+  }
+
+  /**
+   * **The cross-plan revision comparison**: a revision of one plan against a revision of ANOTHER,
+   * correlated on activity `code`.
+   *
+   * It exists because ADR-0050 makes an import target **always a new plan**, so a re-issued P6 file
+   * arrives as a sibling plan and not as a baseline of the first — and the shipped comparison, which
+   * correlates on `activityId`, has nothing to say about two plans whose UUIDs name nothing in
+   * common.
+   *
+   * **The CPM engine is not called, not imported, and not reachable from this feature's module
+   * graph. The ADR-0034 recalculation parity gate is untouched by construction** — ADR-0125 D1's
+   * strong form, and it is verifiable rather than asserted: both sides are persisted columns (a
+   * baseline freezes the engine's OUTPUT; a live side is the plan's own computed columns), so there
+   * is no input to hold parity for. **ADR-0116 D7's weaker sibling — "computes read-only, persists
+   * nothing" — does NOT apply here and must never be swapped in for it**: that sentence belongs to
+   * the critical-path test, which genuinely runs the engine twice. Nothing here runs it at all.
+   *
+   * No lock, no pen, no transaction, nothing written. It is a read, and it takes **no audit event**
+   * for the same two reasons the shipped comparison does not (ADR-0073): nothing durable changes,
+   * and it has no blast radius.
+   *
+   * **The anchor is the `to` side** (CQ-1, product owner 2026-09-08). Every id in the response
+   * resolves in that plan, and `existsLive` reads as "present in the plan you are looking at". A row
+   * that exists only in the OTHER plan carries `activityId: null` rather than a fabricated id: a
+   * control that navigates nowhere is worse than one that is absent (ADR-0082).
+   */
+  async crossPlanRevisionCompare(
+    principal: Principal,
+    orgSlug: string,
+    fromPlanId: string,
+    toPlanId: string,
+    from: string,
+    to: string,
+    includes: readonly RevisionInclude[] = [],
+  ): Promise<CrossPlanRevisionCompare> {
+    const startedAt = Date.now();
+    const { organization } = await this.organizations.resolveScope(principal, orgSlug);
+    // BOTH codes, for the reason the shipped comparison gives: they are granted to the same set
+    // today, so asserting both changes nothing now — and narrowing either later cannot silently
+    // leave this route open on the strength of the other.
+    this.assertCan(principal, 'schedule:read', organization.id);
+    this.assertCan(principal, 'baseline:read', organization.id);
+
+    // Both plans in ONE round trip. Either miss is the same uniform 404 — never a 403, which would
+    // confirm the id names a real plan somewhere — so resolving them together leaks nothing and
+    // saves a sequential hop.
+    const plans = await this.plans.findActivePairInOrgWithProject(
+      [fromPlanId, toPlanId],
+      organization.id,
+    );
+    const planById = new Map(plans.map((p) => [p.id, p]));
+    const fromPlan = planById.get(fromPlanId);
+    const toPlan = planById.get(toPlanId);
+    if (!fromPlan || !toPlan) throw new NotFoundError('Plan not found.');
+
+    /**
+     * **The same-plan refusal comes BEFORE the revisions are resolved**, and the ordering is the
+     * decision rather than the check.
+     *
+     * A same-plan pair is the wrong question whatever revisions it names, so resolving them first
+     * would answer a 404 about a revision when the real answer is "use the other route" — a reader
+     * would go looking for a typo in an id that is perfectly correct. It is a 422 rather than a
+     * silent success because the two routes correlate on DIFFERENT keys: a re-coded activity reads
+     * as `RECODED` on the plan-nested route and as removed-plus-added here, so answering a
+     * same-plan question here would give a different and worse answer to something the product
+     * already answers correctly.
+     */
+    if (fromPlanId === toPlanId) {
+      throw new ValidationError(
+        'Use Compare revisions on the plan itself to compare two of its own revisions.',
+        { reason: 'CROSS_PLAN_SAME_PLAN' },
+      );
+    }
+
+    // Each side's revision resolved against ITS OWN plan (anti-IDOR): naming a baseline of the
+    // other plan on the wrong side is a 404, not a quiet comparison of unrelated snapshots.
+    const [fromBaseline, toBaseline] = await Promise.all([
+      from === LIVE_REVISION
+        ? Promise.resolve(null)
+        : this.baselines.findActiveByIdInPlan(from, organization.id, fromPlanId),
+      to === LIVE_REVISION
+        ? Promise.resolve(null)
+        : this.baselines.findActiveByIdInPlan(to, organization.id, toPlanId),
+    ]);
+    if (from !== LIVE_REVISION && !fromBaseline) throw new NotFoundError('Revision not found.');
+    if (to !== LIVE_REVISION && !toBaseline) throw new NotFoundError('Revision not found.');
+
+    const wantsChanges = includes.includes('changes');
+    const wantsGeometry = includes.includes('ghosts');
+    // Loaded for EITHER projection. Gating them on `changes` alone is the defect ADR-0126 records:
+    // `?include=ghosts` on its own received two empty edge sets and lit an overlay drawing nothing.
+    const wantsEdges = wantsChanges || wantsGeometry;
+
+    const [
+      fromRawRows,
+      toRawRows,
+      anchorLiveRows,
+      fromPlanCalendar,
+      fromRawEdges,
+      toRawEdges,
+      calendarNames,
+    ] = await Promise.all([
+      fromBaseline
+        ? this.baselines
+            .loadSnapshotRowsForDelta(fromBaseline.id, organization.id)
+            .then(frozenRevisionSide)
+        : this.baselines
+            .loadActiveActivitiesForDelta(organization.id, fromPlanId)
+            .then(liveRevisionSide),
+      toBaseline
+        ? this.baselines
+            .loadSnapshotRowsForDelta(toBaseline.id, organization.id)
+            .then(frozenRevisionSide)
+        : this.baselines
+            .loadActiveActivitiesForDelta(organization.id, toPlanId)
+            .then(liveRevisionSide),
+      /**
+       * **The anchor plan's LIVE rows, read whether or not the `to` side is live.**
+       *
+       * `existsLive` and the id mapping are questions about the plan the reader has OPEN, never
+       * about the comparison's `to` side: comparing two baselines can name an activity that has
+       * since been deleted from the anchor, and a reveal control that navigates nowhere is worse
+       * than one that is absent (ADR-0126 D9, ADR-0082).
+       */
+      this.baselines.loadActiveActivitiesForDelta(organization.id, toPlanId),
+      this.resolveCalendar(organization.id, fromPlan.calendarId),
+      wantsEdges
+        ? fromBaseline
+          ? this.baselines
+              .loadSnapshotDependenciesForDelta(fromBaseline.id, organization.id)
+              .then(frozenRevisionEdges)
+          : this.baselines
+              .loadActiveDependenciesForDelta(organization.id, fromPlanId)
+              .then(liveRevisionEdges)
+        : Promise.resolve<RevisionEdge[]>([]),
+      wantsEdges
+        ? toBaseline
+          ? this.baselines
+              .loadSnapshotDependenciesForDelta(toBaseline.id, organization.id)
+              .then(frozenRevisionEdges)
+          : this.baselines
+              .loadActiveDependenciesForDelta(organization.id, toPlanId)
+              .then(liveRevisionEdges)
+        : Promise.resolve<RevisionEdge[]>([]),
+      wantsChanges ? this.baselines.loadCalendarNames(organization.id) : Promise.resolve([]),
+    ]);
+
+    /**
+     * **The measurement frame** (ADR-0125 D4, restated because two plans may not share it): working
+     * days on the OLD side's PLAN calendar, with the OLD side's frozen hours-per-day factor. Named
+     * in the payload for exactly that reason — same-plan it needs no saying, and here a number with
+     * no frame beside it is a number the reader cannot check.
+     *
+     * A LIVE old side has no frozen factor, so it takes its plan calendar's CURRENT one. That is the
+     * honest reading of "the old side's factor" when the old side is not frozen at all.
+     */
+    const dayFactorMinutes = fromBaseline
+      ? fromBaseline.hoursPerDayMinutes
+      : fromPlan.calendarId
+        ? ((await this.calendars.findHoursPerDayMinutes([fromPlan.calendarId])).get(
+            fromPlan.calendarId,
+          ) ?? DEFAULT_HOURS_PER_DAY_MINUTES)
+        : DEFAULT_HOURS_PER_DAY_MINUTES;
+    const movementDaysBetween = (a: string, b: string): number =>
+      Math.round(fromPlanCalendar.workingTimeBetween(a, b) / dayFactorMinutes);
+
+    /**
+     * **The correlation, and the two maps that survive it.**
+     *
+     * `correlateByCode` re-keys both sides on the code so the unmodified delta, classifier and ghost
+     * builder can run across two plans. The real per-side UUIDs do not survive that re-keying, so
+     * they are captured HERE — before the pure functions are called — and used to map every row back
+     * to the anchor plan on the way out.
+     */
+    const correlated = correlateByCode(fromRawRows, toRawRows);
+    const anchorIdByCode = new Map(
+      anchorLiveRows.filter((r) => r.code !== null).map((r) => [r.code as string, r.id]),
+    );
+    const anchorCodes = new Set(anchorIdByCode.keys());
+    /** The anchor UUID for a correlated row, or null when the row lives only in the other plan. */
+    const anchorId = (code: string): string | null => anchorIdByCode.get(code) ?? null;
+
+    const planOf = (id: string): { id: string; name: string } =>
+      id === fromPlanId
+        ? { id: fromPlanId, name: fromPlan.name }
+        : { id: toPlanId, name: toPlan.name };
+    const correlationRow = (r: RevisionRow, planId: string): CrossPlanCorrelationRow => {
+      const plan = planOf(planId);
+      return {
+        activityId: r.code === null ? null : anchorId(r.code),
+        code: r.code,
+        name: r.name,
+        planId: plan.id,
+        planName: plan.name,
+      };
+    };
+
+    // Two Sets, not two nested scans: at 2,000 activities a `some()` inside a `filter()` is four
+    // million comparisons for a block the panel renders before anything else.
+    const toKeys = new Set(correlated.to.map((r) => r.activityId));
+    const fromKeys = new Set(correlated.from.map((r) => r.activityId));
+    const correlation: CrossPlanCorrelation = {
+      key: 'CODE',
+      ...correlated.counts,
+      // Each list capped with its own TRUE total beside it — the counts above ARE those totals, so a
+      // client says "showing 20 of 137" without computing either number itself (ADR-0116 D3).
+      fromUnmatchedRows: correlated.from
+        .filter((r) => !toKeys.has(r.activityId))
+        .slice(0, REVISION_ROW_CAP)
+        .map((r) => correlationRow(r, fromPlanId)),
+      toUnmatchedRows: correlated.to
+        .filter((r) => !fromKeys.has(r.activityId))
+        .slice(0, REVISION_ROW_CAP)
+        .map((r) => correlationRow(r, toPlanId)),
+      uncodedRows: [
+        ...fromRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, fromPlanId)),
+        ...toRawRows.filter((r) => r.code === null).map((r) => correlationRow(r, toPlanId)),
+      ].slice(0, REVISION_ROW_CAP),
+      cap: REVISION_ROW_CAP,
+    };
+
+    const identity = {
+      fromPlan: {
+        id: fromPlan.id,
+        name: fromPlan.name,
+        projectId: fromPlan.project.id,
+        projectName: fromPlan.project.name,
+      },
+      toPlan: {
+        id: toPlan.id,
+        name: toPlan.name,
+        projectId: toPlan.project.id,
+        projectName: toPlan.project.name,
+      },
+      from: revisionSideOf(fromBaseline, fromPlan),
+      to: revisionSideOf(toBaseline, toPlan),
+      dayFactorMinutes,
+      frame: {
+        planId: fromPlan.id,
+        planName: fromPlan.name,
+        calendarName: fromPlan.calendarId
+          ? (calendarNames.find((c) => c.id === fromPlan.calendarId)?.name ?? null)
+          : null,
+        hoursPerDayMinutes: dayFactorMinutes,
+      },
+      settingsVerdict: compareCriticalityRules(
+        criticalityRuleOf(fromBaseline, fromPlan),
+        criticalityRuleOf(toBaseline, toPlan),
+      ),
+    } as const;
+
+    /**
+     * **No codes in common is a 200 with a typed reason and NO delta.**
+     *
+     * Running the delta anyway would report every activity in the old plan as removed and every
+     * activity in the new one as added — each row technically true and the picture a lie, which is
+     * the ADR-0125 `SIDE_NOT_SCHEDULED` defect in a new costume. It is not a 422: the question was
+     * well formed, and the answer is a fact about the data.
+     */
+    if (correlated.counts.matched === 0) {
+      return {
+        ...identity,
+        correlation,
+        notAssessableReason: 'NO_COMMON_CODES',
+        completion: {
+          assessable: false,
+          reason: 'NO_COMMON_ACTIVITIES',
+          carrierActivityId: null,
+          carrierName: null,
+          fromFinish: null,
+          toFinish: null,
+          movementDays: null,
+          carrierChanged: false,
+          newSideCarrierActivityId: null,
+          newSideCarrierName: null,
+        },
+        criticalPath: { ...EMPTY_CRITICAL_PATH_DELTA, notAssessableReason: 'NO_COMMON_CODES' },
+      };
+    }
+
+    const delta = computeRevisionDelta(
+      correlated.from,
+      correlated.to,
+      REVISION_ROW_CAP,
+      movementDaysBetween,
+    );
+
+    // Whether the criticality delta means anything at all. `is_critical` DEFAULTS to false, so an
+    // uncalculated side has no critical activity — and comparing a real one against it reports every
+    // activity that was critical as having LEFT the critical path. Alarming, confident and false.
+    const scheduled = (
+      baseline: { capturedProjectFinish: Date | null } | null,
+      plan: { scheduleComputedAt: Date | null },
+    ): boolean =>
+      baseline === null
+        ? plan.scheduleComputedAt !== null
+        : baseline.capturedProjectFinish !== null;
+    const fromScheduled = scheduled(fromBaseline, fromPlan);
+    const toScheduled = scheduled(toBaseline, toPlan);
+    const bothScheduled = fromScheduled && toScheduled;
+
+    const moved = (r: (typeof delta.entered)[number]): CrossPlanMovedActivity => ({
+      ...r,
+      activityId: anchorId(r.activityId),
+      existsLive: anchorCodes.has(r.activityId),
+    });
+    const present = (r: (typeof delta.added)[number]): CrossPlanPresenceActivity => ({
+      ...r,
+      activityId: anchorId(r.activityId),
+      existsLive: anchorCodes.has(r.activityId),
+    });
+
+    /**
+     * Whether the ADR-0126 paid classes mean anything on THIS pair. A LIVE side is always recorded —
+     * it IS the plan's shape — so only a frozen side can be short, and a pair where either predates
+     * the snapshot extension is `false` PERMANENTLY: no backfill is possible, because writing
+     * today's logic into a historic snapshot would state as history a graph that baseline never saw.
+     */
+    const bothSnapshotted =
+      (fromBaseline === null || fromBaseline.revisionSnapshotLevel === 'FULL') &&
+      (toBaseline === null || toBaseline.revisionSnapshotLevel === 'FULL');
+
+    const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
+    // The edges re-keyed onto the SAME natural key the rows were, so the classifier can diff them.
+    const fromEdges = correlateEdges(fromRawEdges, fromRawRows);
+    const toEdges = correlateEdges(toRawEdges, toRawRows);
+
+    const changes = wantsChanges
+      ? classifyRevisionChanges(
+          { rows: correlated.from, edges: fromEdges },
+          { rows: correlated.to, edges: toEdges },
+          {
+            fromScheduled,
+            toScheduled,
+            bothSnapshotted,
+            includeProgress: includes.includes('progress'),
+            calendarName: (id) => calendarNameById.get(id) ?? null,
+            cap: REVISION_ROW_CAP,
+          },
+        )
+      : null;
+
+    const changeReport: CrossPlanChangeReport | null =
+      changes === null
+        ? null
+        : {
+            cap: changes.cap,
+            classes: changes.classes.map((c) => ({
+              ...c,
+              rows: c.rows.map((r) => ({
+                ...r,
+                activityId: anchorId(r.activityId),
+                existsLive: anchorCodes.has(r.activityId),
+              })),
+            })),
+          };
+
+    /**
+     * The overlay's geometry, in **CROSS_PLAN** lane space.
+     *
+     * That parameter is the epic's single most dangerous defect if it is wrong, and it fails
+     * silently: an imported activity's lane is its position in the source file until phase 3 repacks
+     * by computed dates, and phase 3 is best-effort — so lane 5 of one plan is not lane 5 of the
+     * other, and treating a lane difference as a move would ghost nearly every activity. The overlay
+     * would become the whole old plan drawn on top of the new one, which is the design the product
+     * owner rejected, and nothing would go red.
+     */
+    const ghostResult = wantsGeometry
+      ? buildRevisionGhosts(correlated.from, correlated.to, REVISION_ROW_CAP, 'CROSS_PLAN')
+      : null;
+    // The link half needs NO change, and that was confirmed rather than assumed: its gate is the ids
+    // present in the plan being drawn on, and cross-plan those ids are the anchor's CODES.
+    const linkResult = wantsGeometry
+      ? buildRevisionLinkChanges(fromEdges, toEdges, anchorCodes, REVISION_ROW_CAP)
+      : null;
+
+    const result: CrossPlanRevisionCompare = {
+      ...identity,
+      correlation,
+      notAssessableReason: null,
+      completion: {
+        assessable: delta.completion.assessable,
+        reason: delta.completion.reason ?? null,
+        // The carrier is named under the ANCHOR plan's id where it exists there, exactly as every
+        // other row is — a client must never receive two id vocabularies in one payload.
+        carrierActivityId: delta.completion.carrierActivityId
+          ? anchorId(delta.completion.carrierActivityId)
+          : null,
+        carrierName: delta.completion.carrierName ?? null,
+        fromFinish: delta.completion.fromFinish ?? null,
+        toFinish: delta.completion.toFinish ?? null,
+        movementDays: delta.completion.movementDays ?? null,
+        carrierChanged: delta.completion.carrierChanged ?? false,
+        newSideCarrierActivityId: delta.completion.newSideCarrierActivityId
+          ? anchorId(delta.completion.newSideCarrierActivityId)
+          : null,
+        newSideCarrierName: delta.completion.newSideCarrierName ?? null,
+      },
+      ...(changeReport ? { changes: changeReport } : {}),
+      ...(ghostResult
+        ? {
+            // Every DRAWN ghost is matched — an unmatched row has no anchor lane and is counted,
+            // never placed — so the anchor id is present by construction here. The `?? ''` is
+            // unreachable and is written as a fallback rather than a `!` so a future widening of the
+            // ghost rule fails visibly rather than casting a null through the type.
+            ghosts: ghostResult.ghosts.map((g) => ({
+              ...g,
+              activityId: anchorId(g.activityId) ?? g.activityId,
+            })),
+            ghostsTotal: ghostResult.total,
+            ghostsUndrawable: ghostResult.undrawable,
+          }
+        : {}),
+      ...(linkResult
+        ? {
+            links: linkResult.links.map((l) => ({
+              ...l,
+              predecessorId: anchorId(l.predecessorId) ?? l.predecessorId,
+              successorId: anchorId(l.successorId) ?? l.successorId,
+            })),
+            linksTotal: linkResult.total,
+            linksUndrawable: linkResult.undrawable,
+          }
+        : {}),
+      criticalPath: bothScheduled
+        ? {
+            entered: delta.entered.map(moved),
+            left: delta.left.map(moved),
+            enteredTotal: delta.enteredTotal,
+            leftTotal: delta.leftTotal,
+            cap: REVISION_ROW_CAP,
+            remainedCriticalCount: delta.remainedCriticalCount,
+            remainedNonCriticalCount: delta.remainedNonCriticalCount,
+            added: delta.added.map(present),
+            removed: delta.removed.map(present),
+            addedTotal: delta.addedTotal,
+            removedTotal: delta.removedTotal,
+            noCriticalPath: delta.noCriticalPath,
+            notAssessableReason: null,
+          }
+        : { ...EMPTY_CRITICAL_PATH_DELTA, notAssessableReason: 'SIDE_NOT_SCHEDULED' },
+    };
+
+    this.logger.info(
+      {
+        fromPlanId,
+        toPlanId,
+        fromRevisionId: fromBaseline ? fromBaseline.id : LIVE_REVISION,
+        toRevisionId: toBaseline ? toBaseline.id : LIVE_REVISION,
+        matched: correlation.matched,
+        fromUnmatched: correlation.fromUnmatched,
+        toUnmatched: correlation.toUnmatched,
+        enteredTotal: result.criticalPath.enteredTotal,
+        leftTotal: result.criticalPath.leftTotal,
+        settingsVerdict: result.settingsVerdict,
+        durationMs: Date.now() - startedAt,
+      },
+      'cross-plan revision comparison read',
     );
 
     return result;

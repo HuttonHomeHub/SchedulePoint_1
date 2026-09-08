@@ -2659,8 +2659,18 @@ export type RevisionSideKind = (typeof REVISION_SIDE_KINDS)[number];
  * `CARRIER_REMOVED` is the one worth reading twice: the activity that finished last on the OLD
  * side is not on the new side at all, so there is no pair of dates to subtract. The criticality
  * delta is still returned in that case, which is why the two are separate facts in this payload.
+ *
+ * `NO_COMMON_ACTIVITIES` is reachable ONLY on the cross-plan route: two independently-imported
+ * plans that share no activity code have no pair of carriers to compare, so there is nothing to
+ * subtract. It is in this shared tuple rather than a second union because the sentences module is
+ * shared, and two vocabularies for one field is how a code reaches a screen — the plan-nested route
+ * simply never emits it, which its own tests assert by comparing whole payloads.
  */
-export const REVISION_COMPLETION_REASONS = ['PLAN_NOT_SCHEDULED', 'CARRIER_REMOVED'] as const;
+export const REVISION_COMPLETION_REASONS = [
+  'PLAN_NOT_SCHEDULED',
+  'CARRIER_REMOVED',
+  'NO_COMMON_ACTIVITIES',
+] as const;
 
 export type RevisionCompletionReason = (typeof REVISION_COMPLETION_REASONS)[number];
 
@@ -2953,6 +2963,165 @@ export interface RevisionLinkChange {
   readonly predecessorId: string;
   readonly successorId: string;
   readonly state: 'ADDED' | 'REMOVED' | 'CHANGED';
+}
+
+/** The key two independently-imported plans are matched on. One value, so the payload says so. */
+export type CrossPlanCorrelationKey = 'CODE';
+
+/** Either plan, named — with two of them the reader can infer neither. */
+export interface CrossPlanRevisionPlan {
+  readonly id: string;
+  readonly name: string;
+  readonly projectId: string;
+  readonly projectName: string;
+}
+
+/**
+ * The measurement frame, NAMED rather than assumed.
+ *
+ * Movement is working days on the OLD side's plan calendar with the OLD side's frozen
+ * hours-per-day factor (ADR-0125 D4). Same-plan that needs no saying; across two plans the two
+ * calendars may differ, so a number with no frame beside it is a number the reader cannot check.
+ */
+export interface CrossPlanRevisionFrame {
+  readonly planId: string;
+  readonly planName: string;
+  /** Null when the plan has no calendar bound — then every day works, which is a fact to state. */
+  readonly calendarName: string | null;
+  readonly hoursPerDayMinutes: number;
+}
+
+/**
+ * One row the correlation could not place, or placed only on one side.
+ *
+ * Carried so the reader can SEE what was left out rather than being told a number. `planName` says
+ * which side it belongs to, because "12 unmatched" is two different situations depending on where
+ * they are.
+ */
+export interface CrossPlanCorrelationRow {
+  /** The anchor plan's UUID, or null when this row lives only in the other plan. */
+  readonly activityId: string | null;
+  readonly code: string | null;
+  readonly name: string;
+  readonly planId: string;
+  readonly planName: string;
+}
+
+/**
+ * **How well the two plans matched, reported exhaustively and BEFORE any delta.**
+ *
+ * Every count is present including the zeroes: a missing count is indistinguishable from a zero one,
+ * and this is what a reader verifies the comparison with before believing anything derived from it.
+ *
+ * Each list is capped with its own TRUE total beside it — ADR-0116 D3, and ADR-0125's gate pass
+ * found two of four sets shipping uncapped, so this is a repaired defect rather than a precaution.
+ */
+export interface CrossPlanCorrelation {
+  readonly key: CrossPlanCorrelationKey;
+  readonly matched: number;
+  /** Coded rows in the OLD plan with no counterpart. Removed — or re-coded, which is indistinguishable. */
+  readonly fromUnmatched: number;
+  readonly toUnmatched: number;
+  /** Rows with no code at all: NEITHER added nor removed, because the product does not know which. */
+  readonly fromUncoded: number;
+  readonly toUncoded: number;
+  readonly fromUnmatchedRows: readonly CrossPlanCorrelationRow[];
+  readonly toUnmatchedRows: readonly CrossPlanCorrelationRow[];
+  readonly uncodedRows: readonly CrossPlanCorrelationRow[];
+  readonly cap: number;
+}
+
+/**
+ * Why a cross-plan comparison could not be made at all.
+ *
+ * `NO_COMMON_CODES` is a **200**, not a 422: the question was well formed and the answer is that
+ * these two plans share no activity code. A 422 is for a malformed question; this is a fact about
+ * the data, and dressing it as a client error would send a planner looking for a typo.
+ */
+export type CrossPlanNotAssessableReason = 'NO_COMMON_CODES';
+
+/** {@link RevisionMovedActivity} with the anchor-nullable id — see {@link CrossPlanRevisionCompare}. */
+export interface CrossPlanMovedActivity extends Omit<RevisionMovedActivity, 'activityId'> {
+  readonly activityId: string | null;
+}
+
+/** {@link RevisionPresenceActivity} with the anchor-nullable id. */
+export interface CrossPlanPresenceActivity extends Omit<RevisionPresenceActivity, 'activityId'> {
+  readonly activityId: string | null;
+}
+
+/** {@link RevisionChangeRow} with the anchor-nullable id. `subjectId` stays the correlation key. */
+export interface CrossPlanChangeRow extends Omit<RevisionChangeRow, 'activityId'> {
+  readonly activityId: string | null;
+}
+
+export interface CrossPlanClassAssessment extends Omit<RevisionClassAssessment, 'rows'> {
+  readonly rows: readonly CrossPlanChangeRow[];
+}
+
+export interface CrossPlanChangeReport {
+  readonly classes: readonly CrossPlanClassAssessment[];
+  readonly cap: number;
+}
+
+export interface CrossPlanCriticalPathDelta extends Omit<
+  RevisionCriticalPathDelta,
+  'entered' | 'left' | 'added' | 'removed' | 'notAssessableReason'
+> {
+  readonly entered: readonly CrossPlanMovedActivity[];
+  readonly left: readonly CrossPlanMovedActivity[];
+  readonly added: readonly CrossPlanPresenceActivity[];
+  readonly removed: readonly CrossPlanPresenceActivity[];
+  /**
+   * **Carried HERE as well as at the top level, and that is not redundancy.**
+   *
+   * A consumer reading only this block — the panel's delta section, the print document's — would
+   * otherwise see four empty sets and a null reason, which reads as "assessed, and nothing changed"
+   * on a pair that was never assessed at all. That is the ADR-0125 `SIDE_NOT_SCHEDULED` defect in a
+   * new costume: confident, alarming in the opposite direction, and wrong.
+   */
+  readonly notAssessableReason: 'SIDE_NOT_SCHEDULED' | 'NO_COMMON_CODES' | null;
+}
+
+/**
+ * **Comparing a revision of ONE plan against a revision of ANOTHER** — the shape a planner meets
+ * when the two revisions arrived as two separate imports of the same programme (ADR-0050 makes an
+ * import target always a NEW plan, so a re-issued P6 file is a sibling plan and not a baseline).
+ *
+ * It is the shipped {@link RevisionCompare} shape with three additions and **nothing removed**: both
+ * plans named, the correlation coverage stated BEFORE anything derived from it, and the measurement
+ * frame named because two plans may not share a calendar.
+ *
+ * **`activityId` is nullable here, and that is the whole difference in the row types.** The
+ * comparison is anchored in the plan the reader has open — always the `to` side — so a row is
+ * carried under the ANCHOR plan's real UUID wherever it exists there. A row that exists only in the
+ * OTHER plan has no id in the plan being looked at, and inventing one would be a control that
+ * navigates nowhere. It carries `null`, and a client omits its activation control rather than
+ * shading it, because the action does not apply to the object (ADR-0082).
+ */
+export interface CrossPlanRevisionCompare {
+  /** The OLD side's plan. */
+  readonly fromPlan: CrossPlanRevisionPlan;
+  /** The NEW side's plan — **the anchor**: the one the reader has open and the one ids resolve in. */
+  readonly toPlan: CrossPlanRevisionPlan;
+  readonly from: RevisionSide;
+  readonly to: RevisionSide;
+  readonly dayFactorMinutes: number;
+  readonly frame: CrossPlanRevisionFrame;
+  readonly settingsVerdict: RevisionSettingsVerdict;
+  /** Stated first, and rendered first: everything below is worth exactly what this says it is. */
+  readonly correlation: CrossPlanCorrelation;
+  /** Non-null ⇒ every derived block below is empty and means nothing. Never coalesced. */
+  readonly notAssessableReason: CrossPlanNotAssessableReason | null;
+  readonly completion: RevisionCompletion;
+  readonly criticalPath: CrossPlanCriticalPathDelta;
+  readonly changes?: CrossPlanChangeReport | undefined;
+  readonly ghosts?: readonly RevisionGhostBar[] | undefined;
+  readonly ghostsUndrawable?: number | undefined;
+  readonly ghostsTotal?: number | undefined;
+  readonly links?: readonly RevisionLinkChange[] | undefined;
+  readonly linksTotal?: number | undefined;
+  readonly linksUndrawable?: number | undefined;
 }
 
 export interface RevisionCompare {

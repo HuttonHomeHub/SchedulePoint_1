@@ -38,6 +38,13 @@ const COMPLETION_REASONS: Record<RevisionCompletionReason, string> = {
   CARRIER_REMOVED:
     'The activity that finished last in the earlier revision is not in the later one, so there ' +
     'is no pair of dates to measure. What entered and left the critical path is still shown below.',
+  // Reachable only when comparing two SEPARATELY IMPORTED plans, which are matched on activity
+  // code. The sentence names the cause a planner can act on — the codes — rather than the
+  // mechanism, because "no common activities" reads as "these plans are unrelated" when the far
+  // commoner truth is that one of the two files was exported without them.
+  NO_COMMON_ACTIVITIES:
+    'These two plans share no activity codes, so there is no pair of activities to measure ' +
+    'between. Check that both were exported with their activity IDs.',
 };
 
 /**
