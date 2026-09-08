@@ -194,3 +194,75 @@ describe('the revision link-change builder', () => {
     expect(result.total).toBe(250);
   });
 });
+
+/**
+ * **The cross-plan lane space (M1-T4, spec §4.8 D-Ghost-1/2/3).**
+ *
+ * The same-plan cases above are untouched and must stay so: the cross-plan rule is a **parameter**,
+ * not a rewrite, and those cases are the before/after oracle for that claim.
+ */
+describe('buildRevisionGhosts — CROSS_PLAN', () => {
+  it('draws NOTHING for a pair identical except for lane packing, because the indices are incomparable', () => {
+    // **The epic's most dangerous defect, and it fails silently.** An import assigns `laneIndex` by
+    // source-file position and the repack is best-effort, so two independently imported plans need
+    // not agree on lanes at all. Left in, the lane clause fires on nearly every activity and the
+    // overlay becomes THE WHOLE OLD PLAN drawn over the new one — the design rejected at ADR-0127
+    // CQ-2. Nothing goes red; it looks busy and plausible.
+    //
+    // Verified red against the un-narrowed rule: with the lane clause active this returns 2 ghosts.
+    const from = [
+      row({ activityId: 'A10', laneIndex: 0, earlyStart: '2026-01-05', earlyFinish: '2026-01-06' }),
+      row({ activityId: 'A20', laneIndex: 1, earlyStart: '2026-01-07', earlyFinish: '2026-01-08' }),
+    ];
+    const to = [
+      row({ activityId: 'A10', laneIndex: 7, earlyStart: '2026-01-05', earlyFinish: '2026-01-06' }),
+      row({ activityId: 'A20', laneIndex: 3, earlyStart: '2026-01-07', earlyFinish: '2026-01-08' }),
+    ];
+
+    const result = buildRevisionGhosts(from, to, 100, 'CROSS_PLAN');
+
+    expect(result.ghosts).toEqual([]);
+    expect(result.total).toBe(0);
+    // And it must NOT be counted as undrawable either: `undrawable` means "a change we could not
+    // draw", and an incomparable index is not a change. Inflating it with non-changes would make the
+    // one honesty signal the overlay has dishonest. Asserted separately, because the assertion above
+    // passing does not imply this one.
+    expect(result.undrawable).toBe(0);
+  });
+
+  it("draws a matched move at the ANCHOR lane, never the old side's own index", () => {
+    // Honest by construction: it is literally where that bar sits in the plan being drawn on. Time
+    // is a shared coordinate across two plans and lane is not.
+    const from = [
+      row({ activityId: 'A10', laneIndex: 0, earlyStart: '2026-01-05', earlyFinish: '2026-01-06' }),
+    ];
+    const to = [
+      row({ activityId: 'A10', laneIndex: 9, earlyStart: '2026-01-12', earlyFinish: '2026-01-13' }),
+    ];
+
+    const result = buildRevisionGhosts(from, to, 100, 'CROSS_PLAN');
+
+    expect(result.ghosts).toHaveLength(1);
+    expect(result.ghosts[0]?.laneIndex).toBe(9);
+    expect(result.ghosts[0]?.fromStart).toBe('2026-01-05');
+  });
+
+  it('counts removed work as undrawable rather than placing it, because it has no anchor', () => {
+    // `RevisionGhostBar.laneIndex` is a required `number`, so the type itself refuses the guess. The
+    // only alternative to inventing a position is saying how many could not be drawn — ADR-0127 D3's
+    // channel, which exists because a diagram has no "showing N of M".
+    const from = [
+      row({
+        activityId: 'GONE',
+        laneIndex: 2,
+        earlyStart: '2026-01-05',
+        earlyFinish: '2026-01-06',
+      }),
+    ];
+
+    const result = buildRevisionGhosts(from, [], 100, 'CROSS_PLAN');
+
+    expect(result.ghosts).toEqual([]);
+    expect(result.undrawable).toBe(1);
+  });
+});

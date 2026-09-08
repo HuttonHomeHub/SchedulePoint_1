@@ -64,24 +64,49 @@ function isSummary(row: RevisionRow): boolean {
   return row.type === 'WBS_SUMMARY';
 }
 
+/**
+ * Which lane space the two sides share.
+ *
+ * `SAME_PLAN` — the two sides are one plan's own history, so `laneIndex` is comparable and a lane
+ * move is a real change a planner made.
+ *
+ * `CROSS_PLAN` — the sides are two independently imported plans, and **their lane indices are
+ * incomparable**. An import assigns `laneIndex` by the activity's position in the source file
+ * (`interchange.service.ts:387`); phase 3 then repacks by computed dates (`:342-347`), and phase 3
+ * is **best-effort** (`:348-351` — "a layout failure means the plan is correct but arranged
+ * badly"). So the two plans need not even be packed by the same rule, let alone agree.
+ *
+ * **This is the epic's most dangerous defect if it is got wrong, and it fails silently.** Left in,
+ * the lane clause fires on nearly every activity and the overlay becomes the whole old plan drawn
+ * on top of the new one — the design the product owner rejected at ADR-0127 CQ-2. Nothing goes red;
+ * it looks busy and plausible.
+ */
+export type GhostLaneSpace = 'SAME_PLAN' | 'CROSS_PLAN';
+
 export function buildRevisionGhosts(
   fromRows: readonly RevisionRow[],
   toRows: readonly RevisionRow[],
   cap: number,
+  laneSpace: GhostLaneSpace = 'SAME_PLAN',
 ): RevisionGhostResult {
   const toById = new Map(toRows.map((r) => [r.activityId, r]));
   const ghosts: RevisionGhostBar[] = [];
   let undrawable = 0;
+  const crossPlan = laneSpace === 'CROSS_PLAN';
 
   for (const from of fromRows) {
     if (isSummary(from)) continue;
     const to = toById.get(from.activityId);
     const removed = to === undefined;
     if (!removed) {
+      // Cross-plan, "moved" is a different START or FINISH only. A lane-only difference is NOT a
+      // change — and it is deliberately not counted as `undrawable` either, because that number
+      // means "a change we could not draw" and inflating it with non-changes makes the one honesty
+      // signal the overlay has dishonest.
       const moved =
         from.earlyStart !== to.earlyStart ||
         from.earlyFinish !== to.earlyFinish ||
-        from.laneIndex !== to.laneIndex;
+        (!crossPlan && from.laneIndex !== to.laneIndex);
       if (!moved) continue;
     }
 
@@ -97,12 +122,27 @@ export function buildRevisionGhosts(
       continue;
     }
 
+    // **Cross-plan, a MATCHED row draws at the ANCHOR's lane**, which is honest by construction: it
+    // is literally where that bar sits in the plan being drawn on. Time is a shared coordinate
+    // across two plans and lane is not — so the old side's own index is used same-plan, where it
+    // means something, and never cross-plan, where it names a row in a different picture.
+    //
+    // REMOVED work cross-plan has no anchor and therefore no honest lane. It is counted below
+    // rather than placed: `RevisionGhostBar.laneIndex` is a required `number`, so the type itself
+    // refuses the guess, and the only alternative to inventing a position is saying how many could
+    // not be drawn (ADR-0127 D3's channel).
+    const placementLane = crossPlan ? (to?.laneIndex ?? null) : from.laneIndex;
+    if (placementLane === null) {
+      undrawable += 1;
+      continue;
+    }
+
     ghosts.push({
       activityId: from.activityId,
       name: from.name,
       fromStart: from.earlyStart,
       fromFinish: from.earlyFinish,
-      laneIndex: from.laneIndex,
+      laneIndex: placementLane,
       isMilestone: isMilestone(from),
       removed,
     });

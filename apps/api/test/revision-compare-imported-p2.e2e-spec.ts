@@ -289,24 +289,34 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
     // turns on warming rather than on the path.
     const firstSample = samples[0] ?? 0;
 
-    // eslint-disable-next-line no-console -- the probe's output IS its deliverable (M0-T3).
-    console.log(
-      [
-        '',
-        'M0 PROBE P2 — the cross-plan compare path',
-        `  sides      ${String(lastMatched)} correlated rows, ${String(lastChanges)} change rows`,
-        `  iterations ${String(ITERATIONS)}`,
-        `  p50        ${p50.toFixed(1)} ms`,
-        `  p95        ${p95.toFixed(1)} ms   vs  <= ${String(P2_BAR_MS)} ms`,
-        `  worst      ${worst.toFixed(1)} ms   (first sample ${firstSample.toFixed(1)} ms — cold)`,
-        `  all        ${samples.map((s) => s.toFixed(0)).join(', ')} ms`,
-        '',
-        '  Measures the real loaders (twice, once per plan) and the real pure functions.',
-        "  The correlation is the probe's own — M1 has not shipped one yet. M1-T4 re-derives",
-        '  this end-to-end against the shipped route and states any divergence.',
-        '',
-      ].join('\n'),
-    );
+    /**
+     * **Written to a FILE, not to the console, and that is not a preference.**
+     *
+     * Reading it from stdout needs `--disable-console-intercept`, and that flag **breaks vitest's
+     * path filter**: the run collects all 52 e2e files instead of one, so the probe times itself
+     * while ~600 other tests hammer the same database. Measured — the first seven samples came
+     * back at ~7,000 ms and then fell to ~150 ms as the rest of the suite drained, and that same
+     * contention is what made an earlier run's change-row count look bimodal. Every P2 figure
+     * taken through the console was therefore measuring the suite, not the path.
+     *
+     * A file needs no flag, so the probe can run alone. `P2_REPORT` overrides the location.
+     */
+    const report = [
+      '',
+      'M0 PROBE P2 — the cross-plan compare path',
+      `  sides      ${String(lastMatched)} correlated rows, ${String(lastChanges)} change rows`,
+      `  iterations ${String(ITERATIONS)}`,
+      `  p50        ${p50.toFixed(1)} ms`,
+      `  p95        ${p95.toFixed(1)} ms   vs  <= ${String(P2_BAR_MS)} ms`,
+      `  worst      ${worst.toFixed(1)} ms   (first sample ${firstSample.toFixed(1)} ms — cold)`,
+      `  all        ${samples.map((s) => s.toFixed(0)).join(', ')} ms`,
+      '',
+      '  Measures the real loaders (twice, once per plan) and the real pure functions.',
+      "  The correlation is the probe's own — M1 has not shipped one yet. M1-T4 re-derives",
+      '  this end-to-end against the shipped route and states any divergence.',
+      '',
+    ].join('\n');
+    writeFileSync(process.env.P2_REPORT ?? join(tmpdir(), 'm0-p2-result.txt'), report, 'utf8');
 
     expect(p95).toBeLessThanOrEqual(P2_BAR_MS);
   }, 600_000);
