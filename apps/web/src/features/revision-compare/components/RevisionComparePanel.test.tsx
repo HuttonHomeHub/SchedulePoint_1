@@ -107,6 +107,14 @@ function renderPanel(over: Partial<RevisionComparePanelProps> = {}) {
     onToChange: vi.fn(),
     onClose: vi.fn(),
     onActivateActivity: vi.fn(),
+    // The same-plan default: no other plans loaded, so the **Compare with** picker does not render
+    // and every existing case below runs against exactly the surface it always did. That is the
+    // rollback contract for this milestone, since there is no flag — a case asserting the shipped
+    // route is still called with the shipped params sits with the cross-plan cases.
+    otherPlans: null,
+    otherPlansPending: false,
+    comparePlanId: null,
+    onComparePlanChange: vi.fn(),
     ...over,
   };
   return { ...render(<RevisionComparePanel {...props} />), props };

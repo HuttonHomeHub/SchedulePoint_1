@@ -2219,8 +2219,10 @@ export class ScheduleService {
 
     const calendarNameById = new Map(calendarNames.map((c) => [c.id, c.name]));
     // The edges re-keyed onto the SAME natural key the rows were, so the classifier can diff them.
-    const fromEdges = correlateEdges(fromRawEdges, fromRawRows);
-    const toEdges = correlateEdges(toRawEdges, toRawRows);
+    const fromCorrelated = correlateEdges(fromRawEdges, fromRawRows);
+    const toCorrelated = correlateEdges(toRawEdges, toRawRows);
+    const fromEdges = fromCorrelated.edges;
+    const toEdges = toCorrelated.edges;
 
     const changes = wantsChanges
       ? classifyRevisionChanges(
@@ -2310,8 +2312,28 @@ export class ScheduleService {
         : {}),
       ...(linkResult
         ? {
+            /**
+             * **An ADDED or CHANGED link is handed back under the ANCHOR PLAN'S OWN dependency id,
+             * and that is a defect this milestone found by reading the painter rather than by
+             * anything failing.**
+             *
+             * The canvas resolves a present link by looking its `dependencyId` up among the edges
+             * the diagram already draws, which are keyed on the anchor plan's real ids. Handed a
+             * correlation key it matches nothing, draws nothing, and reports nothing — while
+             * `linksTotal` still counts the link and `linksUndrawable` does not. A picture quietly
+             * missing rows nobody is told about is the absence ADR-0127 exists to remove, arriving
+             * in the one place a reader cannot check it, because a diagram has no "showing N of M".
+             *
+             * A REMOVED link keeps the correlation key deliberately: it is in no live edge list by
+             * definition, so there is no id to map to, and the painter routes it from its endpoints
+             * instead — which is why the fallback below is a fallback and not a guess.
+             */
             links: linkResult.links.map((l) => ({
               ...l,
+              dependencyId:
+                l.state === 'REMOVED'
+                  ? l.dependencyId
+                  : (toCorrelated.sourceIdByKey.get(l.dependencyId) ?? l.dependencyId),
               predecessorId: anchorId(l.predecessorId) ?? l.predecessorId,
               successorId: anchorId(l.successorId) ?? l.successorId,
             })),

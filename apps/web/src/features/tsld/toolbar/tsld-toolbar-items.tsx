@@ -238,7 +238,13 @@ interface LensToggle {
   promotion?: { icon: React.ReactNode; order: number };
 }
 
-const LENS_TOGGLES: readonly LensToggle[] = [
+/**
+ * Exported for the compare-overlay refusal gate, which asserts that a cross-plan pair triggers NO
+ * refusal and that there are exactly two refusal states. The registry builder filters these by
+ * `enabled` and by group, so a suite reading the built items cannot see a toggle's own `reason` —
+ * which is the thing under test.
+ */
+export const LENS_TOGGLES: readonly LensToggle[] = [
   {
     id: 'baseline-overlay',
     group: 'insight',

@@ -1,4 +1,5 @@
 import type { ActivitySummary } from '@repo/types';
+import { useQuery } from '@tanstack/react-query';
 import { SquarePen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -80,12 +81,14 @@ import {
 } from '@/features/plan-actions/build-selection-context';
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
 import { CompactPenStatus } from '@/features/plan-lock';
-import { PLAN_STATUS_LABELS } from '@/features/plans';
+import { PLAN_STATUS_LABELS, plansQueryOptions } from '@/features/plans';
 import {
   LIVE_REVISION,
   REVISION_PANEL_MIN_WIDTH,
   RevisionComparePanel,
   REVISION_COMPARE_INCLUDES,
+  isCrossPlanCompare,
+  useCrossPlanRevisionCompare,
   useRevisionCompare,
   useRevisionComparePanelPrefs,
 } from '@/features/revision-compare';
@@ -236,6 +239,14 @@ export function ToolbarPlanWorkspace({
   const [revisionFrom, setRevisionFrom] = useState<string | null>(null);
   const [revisionTo, setRevisionTo] = useState<string>(LIVE_REVISION);
   /**
+   * The OTHER plan to compare against, or `null` for this plan's own revisions — the default and
+   * the shipped behaviour.
+   *
+   * Local state rather than a URL param, matching every other choice inside this dock: the dock's
+   * own open state is already the host's, and a picker inside a panel is not a destination.
+   */
+  const [comparePlanId, setComparePlanId] = useState<string | null>(null);
+  /**
    * Whether a comparison pair is chosen — derived from the PICKERS and never from the payload.
    *
    * A stale query result outliving a cleared pair would otherwise leave the `Compare on diagram`
@@ -244,7 +255,65 @@ export function ToolbarPlanWorkspace({
    * refuse the overlay with a sentence telling the planner to choose two revisions they already
    * chose. `to` always has a value (it defaults to the live plan), so the pair turns on `from`.
    */
-  const hasRevisionPair = revisionFrom !== null;
+  const hasRevisionPair = revisionFrom !== null || comparePlanId !== null;
+
+  /**
+   * **The comparison's two queries, HOISTED above the toolbar context** — because the exported
+   * picture's title has to name both plans, and the toolbar context is built before the dock's
+   * own section of this file. Kept as one block rather than splitting the cross-plan half out: two
+   * halves of one decision, fifty lines apart, is how one comes to be edited and the other not.
+   *
+   * They gate on `revisionsOpen` rather than `revisionsDockActive`, which is defined below and is
+   * that value verbatim.
+   */
+  // Enabled-gated on the dock being open AND on a pair being chosen, so a closed dock costs
+  // nothing and an unanswered picker is not a failed request.
+  const revisionCompare = useRevisionCompare(
+    model.orgSlug,
+    model.planId,
+    revisionFrom,
+    revisionTo,
+    revisionsOpen,
+    // **The change list is requested here or it does not exist.** The panel renders its view
+    // switch only when the payload carries `changes`, so omitting this include would leave the
+    // whole milestone dark behind a control nobody can reach — ADR-0081's shape, which this
+    // register has now recorded five times. Progress is deliberately NOT requested: it moves on
+    // nearly every activity every week and would bury the classes that explain a date move.
+    //
+    // `ghosts` rides along for the same ADR-0081 reason `changes` does: the `Compare on diagram`
+    // toggle is derived from a pair being chosen, so omitting the include would leave a lit control
+    // that draws nothing. It costs one array on a response the dock has already asked for, and
+    // only for CHANGED activities.
+    REVISION_COMPARE_INCLUDES,
+  );
+  /**
+   * **The cross-plan comparison** — the same dock, another plan.
+   *
+   * Two hooks rather than one branching internally, mirroring the two routes: they take different
+   * params and return different shapes, and a single hook would make `enabled` and the cache key
+   * depend on a value the caller also has to reason about. Only one is ever enabled, so the dock
+   * makes exactly one request either way.
+   */
+  const crossPlanCompare = useCrossPlanRevisionCompare(
+    model.orgSlug,
+    model.planId,
+    comparePlanId,
+    LIVE_REVISION,
+    revisionTo,
+    revisionsOpen,
+    REVISION_COMPARE_INCLUDES,
+  );
+  /**
+   * **One view of "the comparison", so every consumer below reads the same thing.**
+   *
+   * The overlay, the reveal channel and the panel all take whichever is live. Deriving each one
+   * separately is how a diagram comes to draw one comparison while the panel names another.
+   */
+  const activeCompare = comparePlanId === null ? revisionCompare : crossPlanCompare;
+  const compareGhosts = activeCompare.data?.ghosts;
+  const compareLinks = activeCompare.data?.links;
+  const compareGhostsUndrawable = activeCompare.data?.ghostsUndrawable ?? 0;
+  const compareLinksUndrawable = activeCompare.data?.linksUndrawable ?? 0;
   // **One closure over the set** (health M2-T2 step 7): each dock's closer, keyed by the member
   // name, and `closeOtherDocks` derives what to close from `docksToClose` — so a fourth dock is one
   // map entry, never six hand-written statements of which five get written. Defined above every
@@ -449,6 +518,16 @@ export function ToolbarPlanWorkspace({
     minimap: { open: minimap.open, toggle: minimap.toggle },
     revealComments,
     hasRevisionPair,
+    /**
+     * **From the PAYLOAD, never from the picker.** The exported title must be true of the PICTURE,
+     * and the picture is a beat behind the request while a switch is in flight — during which the
+     * ghosts are absent entirely, so a picker-derived name would title an overlay that is not
+     * drawn.
+     */
+    comparedWithPlanName:
+      activeCompare.data !== undefined && isCrossPlanCompare(activeCompare.data)
+        ? activeCompare.data.fromPlan.name
+        : undefined,
     toggleFloatPaths,
     toggleHealthCheck,
     toggleRevisionCompare,
@@ -652,30 +731,6 @@ export function ToolbarPlanWorkspace({
   // The on-demand metric-12 what-if (health M6): a mutation, so nothing but the row's button can
   // fire the two engine passes; the result merges over the placeholder inside the panel.
   const criticalPathTest = useCriticalPathTest(model.orgSlug, model.planId);
-  // Enabled-gated on the dock being open AND on a pair being chosen, so a closed dock costs
-  // nothing and an unanswered picker is not a failed request.
-  const revisionCompare = useRevisionCompare(
-    model.orgSlug,
-    model.planId,
-    revisionFrom,
-    revisionTo,
-    revisionsDockActive,
-    // **The change list is requested here or it does not exist.** The panel renders its view
-    // switch only when the payload carries `changes`, so omitting this include would leave the
-    // whole milestone dark behind a control nobody can reach — ADR-0081's shape, which this
-    // register has now recorded five times. Progress is deliberately NOT requested: it moves on
-    // nearly every activity every week and would bury the classes that explain a date move.
-    //
-    // `ghosts` rides along for the same ADR-0081 reason `changes` does: the `Compare on diagram`
-    // toggle is derived from a pair being chosen, so omitting the include would leave a lit control
-    // that draws nothing. It costs one array on a response the dock has already asked for, and
-    // only for CHANGED activities.
-    REVISION_COMPARE_INCLUDES,
-  );
-  const compareGhosts = revisionCompare.data?.ghosts;
-  const compareLinks = revisionCompare.data?.links;
-  const compareGhostsUndrawable = revisionCompare.data?.ghostsUndrawable ?? 0;
-  const compareLinksUndrawable = revisionCompare.data?.linksUndrawable ?? 0;
   // Close the dock AND return focus to the Comments toggle (its stable `data-toolbar-item` node under
   // the workspace root) — otherwise unmounting the panel under the focused Close button / focused dock
   // strands focus on <body> (a11y). Used by the header Close button and the Escape handler. Closing via
@@ -873,6 +928,14 @@ export function ToolbarPlanWorkspace({
       compareLinks={compareLinks}
       compareGhostsUndrawable={compareGhostsUndrawable}
       compareLinksUndrawable={compareLinksUndrawable}
+      // The reason follows the COMPARISON, not the picker: `comparePlanId` is the request and this
+      // is a fact about the payload on screen, which is a beat behind it while a switch is in
+      // flight. Reading the payload keeps the sentence true of the picture it describes.
+      compareUndrawableReason={
+        activeCompare.data !== undefined && isCrossPlanCompare(activeCompare.data)
+          ? 'NOT_COMPARABLE'
+          : 'NOT_RECORDED'
+      }
       hasRevisionPair={hasRevisionPair}
       dataDate={plan.plannedStart}
       // ADR-0033, via the single binding above — the Gantt receives the identical value.
@@ -1406,14 +1469,36 @@ export function ToolbarPlanWorkspace({
   // read; `enabled` is not gated here because the panel needs the list to tell "no revisions yet"
   // from "still loading", which are its two distinct empty states.
   const revisionBaselines = useBaselines(model.orgSlug, model.planId);
+  /**
+   * The project's other plans, for the **Compare with** picker.
+   *
+   * Enabled only while the dock is open, like every other read this dock makes. **The open plan is
+   * excluded HERE, at the host**, because only the host knows which plan it is showing — and
+   * offering it would produce a same-plan pair, which the API refuses with a 422 telling the
+   * reader to use this very panel. A soft-deleted plan is already absent: the endpoint is
+   * org-scoped and active-only, which is also what stops the picker offering something the
+   * comparison route would 404 on.
+   */
+  const projectPlans = useQuery({
+    ...plansQueryOptions(model.orgSlug, plan.projectId),
+    enabled: revisionsDockActive,
+  });
+  const otherPlans = useMemo(
+    () => projectPlans.data?.filter((p) => p.id !== model.planId) ?? null,
+    [projectPlans.data, model.planId],
+  );
   const revisionsDockContent = revisionsDockActive ? (
     <RevisionComparePanel
       baselines={revisionBaselines.data ?? null}
       baselinesPending={revisionBaselines.isPending}
-      compare={revisionCompare.data ?? null}
-      isPending={revisionCompare.isPending && revisionFrom !== null}
-      isError={revisionCompare.isError}
-      onRetry={() => void revisionCompare.refetch()}
+      compare={activeCompare.data ?? null}
+      isPending={activeCompare.isPending && hasRevisionPair}
+      isError={activeCompare.isError}
+      onRetry={() => void activeCompare.refetch()}
+      otherPlans={otherPlans}
+      otherPlansPending={projectPlans.isPending}
+      comparePlanId={comparePlanId}
+      onComparePlanChange={setComparePlanId}
       from={revisionFrom}
       to={revisionTo}
       onFromChange={(id) => setRevisionFrom(id === '' ? null : id)}

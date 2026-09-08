@@ -188,6 +188,23 @@ export function compareOverlaySummary(
    * change list, which carries every logic change in words.
    */
   links: { readonly drawn: number; readonly undrawable: number } = { drawn: 0, undrawable: 0 },
+  /**
+   * **Why a changed bar could not be drawn, and it is NOT the same reason in both comparisons.**
+   *
+   * Same-plan (`'NOT_RECORDED'`, the default) the old side genuinely did not record a position: a
+   * baseline captured before the snapshot extension has no lane, and no backfill is possible.
+   *
+   * Cross-plan (`'NOT_COMPARABLE'`) the other plan **did** record it — the position simply does not
+   * mean anything here, because two independently imported plans derive their lane order
+   * separately (one may be packed by time and the other still in source order), so the index names
+   * a different row in each. Reusing the same-plan sentence would state something FALSE about the
+   * other plan's data, and it is the likeliest defect in this milestone precisely because the
+   * mechanism is correct and reusing it feels like reuse.
+   *
+   * One function with one discriminator, never two call sites: two sentences maintained apart is
+   * how one comes to be edited and the other not.
+   */
+  undrawableReason: 'NOT_RECORDED' | 'NOT_COMPARABLE' = 'NOT_RECORDED',
 ): {
   readonly heading: string;
   readonly removed: readonly string[];
@@ -206,10 +223,14 @@ export function compareOverlaySummary(
   if (removed.length > 0) parts.push(`${String(removed.length)} removed`);
   if (undrawable > 0) {
     // Never "0 undrawable" and never silence: the reader is told the picture is incomplete AND why,
-    // because "the old revision did not record where they were" is a fact about the snapshot and
-    // not a fault they can act on.
+    // because both reasons are facts about the data rather than faults they can act on. The
+    // cross-plan wording points at the change list, which carries the same work in words — where a
+    // lane index is irrelevant and nothing is lost.
     parts.push(
-      `${String(undrawable)} not shown because the old revision did not record where they were`,
+      undrawableReason === 'NOT_COMPARABLE'
+        ? `${String(undrawable)} not shown because the two plans lay their activities out ` +
+            `independently, so there is no matching row to draw them on — they are listed under Changes`
+        : `${String(undrawable)} not shown because the old revision did not record where they were`,
     );
   }
   if (links.drawn > 0) {

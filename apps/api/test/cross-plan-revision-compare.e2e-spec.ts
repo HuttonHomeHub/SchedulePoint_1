@@ -473,6 +473,50 @@ describe.skipIf(!hasDatabase)('Cross-plan revision compare API (e2e)', () => {
       expect(res.body.data.ghosts).toBeDefined();
     });
 
+    it('hands an ADDED link back under the ANCHOR plan’s own dependency id', async () => {
+      /**
+       * **The defect this case exists for was found by reading the painter, not by a failure.**
+       *
+       * The canvas resolves an ADDED or CHANGED link by looking its `dependencyId` up among the
+       * edges the diagram already draws, which carry the anchor plan's real ids. Handed the
+       * correlation key it matches nothing, draws nothing and says nothing — while `linksTotal`
+       * counts it and `linksUndrawable` does not. A picture quietly missing rows nobody is told
+       * about is exactly the absence the overlay exists to remove, in the one place a reader
+       * cannot check it.
+       *
+       * A REMOVED link is asserted to keep the correlation key, because it is in no live edge list
+       * and the painter routes it from its endpoints instead — so the two states are checked
+       * separately rather than one standing in for the other.
+       */
+      const admin = await adminWithOrg();
+      const fromPlanId = await makePlan(admin);
+      await makeActivity(admin, fromPlanId, 'Groundworks', 10, { code: 'A100' });
+      await makeActivity(admin, fromPlanId, 'Frame', 10, { code: 'A200' });
+      await recalculate(admin, fromPlanId);
+      // The same two, WITH a link — so the link is ADDED relative to the old plan.
+      const toPlanId = await makePlan(admin);
+      const ta = await makeActivity(admin, toPlanId, 'Groundworks', 10, { code: 'A100' });
+      const tb = await makeActivity(admin, toPlanId, 'Frame', 10, { code: 'A200' });
+      await link(admin, toPlanId, ta, tb);
+      await recalculate(admin, toPlanId);
+
+      const res = await admin.agent
+        .get(url({ fromPlanId, toPlanId, include: 'ghosts' }))
+        .expect(200);
+      const links = res.body.data.links as { dependencyId: string; state: string }[];
+      expect(links).toHaveLength(1);
+      expect(links[0]!.state).toBe('ADDED');
+
+      const anchorEdges = await prisma.activityDependency.findMany({
+        where: { planId: toPlanId, deletedAt: null },
+        select: { id: true },
+      });
+      expect(anchorEdges).toHaveLength(1);
+      // The id the canvas will look up, not a key it cannot resolve.
+      expect(links[0]!.dependencyId).toBe(anchorEdges[0]!.id);
+      expect(links[0]!.dependencyId).not.toMatch(/^\[/);
+    });
+
     it('places every ghost in the ANCHOR plan’s lane space', async () => {
       // Two independently built plans do not share a lane space. Placing a ghost at the OLD side's
       // index would put it somewhere arbitrary in the diagram being drawn on, and the reader could

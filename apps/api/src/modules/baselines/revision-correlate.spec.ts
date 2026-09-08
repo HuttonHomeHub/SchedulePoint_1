@@ -118,13 +118,17 @@ describe('correlateByCode', () => {
 describe('correlateEdges', () => {
   it('keys on (predecessorCode, successorCode, type) as JSON, so a code containing the separator cannot forge a collision', () => {
     const rows = [row({ activityId: 'f1', code: 'A10' }), row({ activityId: 'f2', code: 'A20' })];
-    const result = correlateEdges(
+    const { edges, sourceIdByKey } = correlateEdges(
       [edge({ dependencyId: 'dep-uuid', predecessorId: 'f1', successorId: 'f2', type: 'FS' })],
       rows,
     );
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
+    expect(edges).toHaveLength(1);
+    // The plan-local id is retained under the key, because the canvas resolves an ADDED or CHANGED
+    // link by looking it up among the edges the diagram already draws — handed a correlation key it
+    // matches nothing and silently draws nothing.
+    expect(sourceIdByKey.get(JSON.stringify(['A10', 'A20', 'FS']))).toBe('dep-uuid');
+    expect(edges[0]).toMatchObject({
       dependencyId: JSON.stringify(['A10', 'A20', 'FS']),
       predecessorId: 'A10',
       successorId: 'A20',
@@ -135,10 +139,13 @@ describe('correlateEdges', () => {
     // An uncoded endpoint cannot be compared against anything on the other side. Keying it anyway
     // would assert a relationship between two activities that may not be the same work.
     const rows = [row({ activityId: 'f1', code: 'A10' }), row({ activityId: 'f2', code: null })];
-    const result = correlateEdges(
+    const { edges, sourceIdByKey } = correlateEdges(
       [edge({ dependencyId: 'dep', predecessorId: 'f1', successorId: 'f2' })],
       rows,
     );
-    expect(result).toEqual([]);
+    expect(edges).toEqual([]);
+    // And it contributes no key either — an edge that cannot be placed must not leave a handle
+    // behind that a consumer could resolve to something.
+    expect(sourceIdByKey.size).toBe(0);
   });
 });

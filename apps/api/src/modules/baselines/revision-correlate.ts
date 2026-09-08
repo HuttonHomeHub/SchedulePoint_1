@@ -122,16 +122,39 @@ export function correlateByCode(
  * cannot be compared against anything, and inventing a key for it would assert a relationship
  * between two activities that may not be the same work.
  */
+export interface CorrelatedEdges {
+  readonly edges: readonly RevisionEdge[];
+  /**
+   * The correlation key back to the edge's **own plan-local dependency id**, retained because the
+   * re-keying destroys it and one consumer needs it back.
+   *
+   * **The consumer is the canvas.** The overlay's painter resolves an ADDED or CHANGED link by
+   * looking its `dependencyId` up among the edges the diagram already draws — so a link handed to
+   * it under a correlation key matches nothing and is silently not drawn, while the total still
+   * counts it. A picture quietly missing rows nobody is told about is the absence ADR-0127 exists
+   * to remove, arriving in the one place a reader cannot check it. A REMOVED link needs no entry
+   * here: it is in no live edge list by definition, and the painter routes it from its endpoints.
+   *
+   * Returned rather than recomputed at the seam, because recomputing means a second copy of the
+   * key rule — and two key rules that agree today are the ADR-0065 drift, invisible until they
+   * disagree about one edge.
+   */
+  readonly sourceIdByKey: ReadonlyMap<string, string>;
+}
+
 export function correlateEdges(
   edges: readonly RevisionEdge[],
   rows: readonly RevisionRow[],
-): RevisionEdge[] {
+): CorrelatedEdges {
   const codeById = new Map(rows.filter((r) => r.code !== null).map((r) => [r.activityId, r.code]));
   const out: RevisionEdge[] = [];
+  const sourceIdByKey = new Map<string, string>();
   for (const e of edges) {
     const pred = codeById.get(e.predecessorId);
     const succ = codeById.get(e.successorId);
     if (pred === undefined || pred === null || succ === undefined || succ === null) continue;
+    const key = JSON.stringify([pred, succ, e.type]);
+    sourceIdByKey.set(key, e.dependencyId);
     out.push({
       ...e,
       // The dependency's own id is as plan-local as the endpoints', so it is replaced by the natural
@@ -141,10 +164,10 @@ export function correlateEdges(
       // even a quote — so every separator that reads nicely is one a code can forge: `A 10` + `B`
       // and `A` + `10 B` would collide under a space. Encoding the triple removes the question
       // rather than choosing a character nobody has tested against real P6 data.
-      dependencyId: JSON.stringify([pred, succ, e.type]),
+      dependencyId: key,
       predecessorId: pred,
       successorId: succ,
     });
   }
-  return out;
+  return { edges: out, sourceIdByKey };
 }

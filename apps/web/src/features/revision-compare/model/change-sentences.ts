@@ -1,4 +1,5 @@
 import type {
+  CrossPlanClassAssessment,
   RevisionChangeClass,
   RevisionClassAssessment,
   RevisionNotAssessableReason,
@@ -91,7 +92,9 @@ export function notAssessableSentence(
 }
 
 /** The count line under a class heading, or null when the class was not assessed. */
-export function classCountSentence(assessment: RevisionClassAssessment): string | null {
+export function classCountSentence(
+  assessment: RevisionClassAssessment | CrossPlanClassAssessment,
+): string | null {
   if (assessment.notAssessableReason !== null) return null;
   if (assessment.total === 0) return 'No changes in this revision.';
   const noun = assessment.total === 1 ? 'activity' : 'activities';
@@ -119,7 +122,9 @@ export const CHANGES_FOOTER =
  * because a summary that mentions only what was found implies the rest was looked at — the exact
  * inference the visible copy is careful to prevent.
  */
-export function changesAnnouncement(classes: readonly RevisionClassAssessment[]): string {
+export function changesAnnouncement(
+  classes: readonly (RevisionClassAssessment | CrossPlanClassAssessment)[],
+): string {
   const assessed = classes.filter((c) => c.notAssessableReason === null);
   const unassessed = classes.length - assessed.length;
   const total = assessed.reduce((sum, c) => sum + c.total, 0);

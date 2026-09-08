@@ -1,4 +1,9 @@
-import type { RevisionChangeReport, RevisionClassAssessment } from '@repo/types';
+import type {
+  CrossPlanChangeReport,
+  CrossPlanClassAssessment,
+  RevisionChangeReport,
+  RevisionClassAssessment,
+} from '@repo/types';
 import * as React from 'react';
 import { useEffect, useId, useRef } from 'react';
 
@@ -33,7 +38,11 @@ import { useAnnounce } from '@/components/ui/announcer';
  * ordering is the server's; this component does not re-sort.
  */
 export interface RevisionChangesViewProps {
-  readonly report: RevisionChangeReport;
+  /**
+   * **One view renders both kinds.** A cross-plan row's `activityId` is nullable, so the union is
+   * what forces the "nothing to reveal" case to be answered rather than remembered.
+   */
+  readonly report: RevisionChangeReport | CrossPlanChangeReport;
   /** Select and reveal an activity in whichever view is showing. */
   readonly onActivateActivity: (activityId: string, name?: string) => void;
 }
@@ -42,7 +51,7 @@ function ClassSection({
   assessment,
   onActivateActivity,
 }: {
-  assessment: RevisionClassAssessment;
+  assessment: RevisionClassAssessment | CrossPlanClassAssessment;
   onActivateActivity: (activityId: string, name?: string) => void;
 }): React.ReactElement {
   const headingId = useId();
@@ -78,7 +87,32 @@ function ClassSection({
                 // paid classes landed, is most of the list: moving an activity to another lane or
                 // reporting progress against it changes no criticality. The sentence below would
                 // then have said "not in the live plan" about a bar the reader can see.
-                const reachable = row.existsLive;
+                /**
+                 * **Two absences, one of which is not a state to explain** — the panel's own
+                 * `MovedRow` rule, applied here so the two views cannot treat one row differently.
+                 *
+                 * A null `activityId` (cross-plan only) means the row lives in the OTHER plan and
+                 * has no bar on this diagram at all, so revealing it does not apply to the object:
+                 * the control is omitted. `existsLive === false` with a real id is the same-plan
+                 * case — deleted since — which IS a state, so it is shaded with a reason. Reusing
+                 * one treatment for both would either promise an action that can never arrive or
+                 * withhold the explanation for one that could.
+                 */
+                const activityId = row.activityId;
+                const reachable = activityId !== null && row.existsLive;
+                if (activityId === null) {
+                  return (
+                    <li
+                      key={row.subjectId}
+                      className="flex w-full items-baseline gap-2 px-1 py-0.5 text-xs"
+                    >
+                      <span>{row.code ?? row.name}</span>
+                      <span className="text-muted-foreground truncate">
+                        {row.from ?? '—'} → {row.to ?? '—'}
+                      </span>
+                    </li>
+                  );
+                }
                 return (
                   <li key={row.subjectId}>
                     <button
@@ -98,7 +132,7 @@ function ClassSection({
                       onClick={() => {
                         // The name travels WITH the id: this row knows it, and the panel's
                         // lookup covers only the delta's rows (see `announceActivation`).
-                        if (reachable) onActivateActivity(row.activityId, row.name);
+                        if (reachable) onActivateActivity(activityId, row.name);
                       }}
                       className="hover:bg-muted/60 flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left text-xs aria-disabled:pointer-events-none aria-disabled:opacity-50"
                     >
@@ -138,7 +172,7 @@ export function RevisionChangesView({
 
   // Once per settled report, never per render — the ADR-0079 stale-debounce lesson: a re-render
   // must not re-arm the message, or a later one overwrites it four jumps in.
-  const spokenRef = useRef<RevisionChangeReport | null>(null);
+  const spokenRef = useRef<RevisionChangeReport | CrossPlanChangeReport | null>(null);
   useEffect(() => {
     if (spokenRef.current === report) return;
     spokenRef.current = report;

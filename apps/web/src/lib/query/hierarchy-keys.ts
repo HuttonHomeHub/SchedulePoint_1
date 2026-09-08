@@ -242,6 +242,33 @@ export const scheduleKeys = {
       to,
       ...includes,
     ] as const,
+  /**
+   * The CROSS-plan comparison — a revision of one plan against a revision of another.
+   *
+   * **Keyed under the ANCHOR plan** (`toPlanId`), and that is the decision rather than the
+   * arrangement: the anchor is the plan the reader has open and the one every id in the response
+   * resolves in, so a recalculation of it must sweep this entry. Keying under the other plan would
+   * leave a stale comparison on screen after the diagram beneath it moved. `fromPlanId` is a
+   * segment of the key rather than its root for the same reason — it is an input, not the subject.
+   */
+  crossPlanRevisionCompare: (
+    orgSlug: string,
+    toPlanId: string,
+    fromPlanId: string,
+    from: string,
+    to: string,
+    includes: readonly string[] = [],
+  ) =>
+    [
+      ...scheduleKeys.all(orgSlug),
+      'plan',
+      toPlanId,
+      'cross-plan-revision-compare',
+      fromPlanId,
+      from,
+      to,
+      ...includes,
+    ] as const,
   // The resource-loading histogram read-model (M7 rung 5, ADR-0044 §3): a pure GET over the live
   // schedule + resource assignments, keyed under the same schedule namespace as the summary so a
   // recalc's schedule invalidation sweeps it too (dates move each assignment's units-over-time).

@@ -556,6 +556,13 @@ describe('weight is a governed axis', () => {
   // code span was written with a weight too and it came OUT rather than the ceiling going up by
   // two: the values beside it are already `text-muted-foreground`, so the weight was a second
   // channel doing the first one's job, which is what this ratchet is for.
+  // ...and 170 -> 171 (cross-plan revision compare M2): ONE weight, the `Match coverage` heading on
+  // `RevisionCorrelationSummary`, which matches `MovedSection`'s own `h3` in the same panel — a
+  // lighter heading there would make one section's heading lighter than its neighbours' for no
+  // reason. It was TWO until the ratchet fired: the both-plans identity line was drafted at
+  // headline weight directly above the completion sentence, which already carries this panel's one
+  // headline, and two heavy lines in a row is exactly the duplication this gate catches. Made
+  // muted rather than absorbed into the ceiling.
   // ...and 168 -> 170 (staff performance probe M3): TWO weights on the new Performance panel, and
   // the number is 170 rather than 173 because three came out rather than being absorbed. The three
   // removed were bold lead-in sentences inside `Alert`s — and `Alert` already carries a tone
@@ -566,7 +573,7 @@ describe('weight is a governed axis', () => {
   // full-weight sibling is the one-off, not the match), and the VERDICT, which is the single thing
   // the whole feature exists to produce and would otherwise read as one more line of body copy
   // under a heading (the revision-compare 166 -> 167 precedent, verbatim).
-  const SCREEN_WEIGHT_CEILING = 170;
+  const SCREEN_WEIGHT_CEILING = 171;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));

@@ -1,4 +1,11 @@
-import type { RevisionClassAssessment, RevisionCompare, RevisionMovedActivity } from '@repo/types';
+import type {
+  CrossPlanMovedActivity,
+  CrossPlanRevisionCompare,
+  CrossPlanClassAssessment,
+  RevisionClassAssessment,
+  RevisionCompare,
+  RevisionMovedActivity,
+} from '@repo/types';
 
 import './RevisionComparePrintDocument.css';
 
@@ -15,6 +22,7 @@ import {
   HONESTY_FOOTER,
   membershipSentence,
   LEVELLING_CAVEAT_PRINT,
+  planLabel,
   settingsCaveat,
   sideTitle,
 } from '../model/revision-sentences';
@@ -51,18 +59,27 @@ export function RevisionComparePrintDocument({
   compare,
   printedAt = new Date(),
 }: {
-  compare: RevisionCompare;
+  compare: RevisionCompare | CrossPlanRevisionCompare;
   /** Injectable for the unit suite; callers take the default. */
   printedAt?: Date;
 }): React.ReactElement {
   const caveat = settingsCaveat(compare.settingsVerdict);
+  /**
+   * **A cross-plan comparison names BOTH plans, or the page is a false statement to exactly the
+   * reader it exists for.** `planName` is a same-plan field, so the compiler forces the question
+   * rather than letting one name print over a comparison of two.
+   */
+  const subject =
+    'correlation' in compare
+      ? `${planLabel(compare.fromPlan)} → ${planLabel(compare.toPlan)}`
+      : compare.planName;
   const carrierChanged = carrierChangedSentence(compare.completion);
   return (
     <div className="revision-print">
       <header>
         <h1>Revision comparison</h1>
         <p className="revision-print-meta">
-          {compare.planName} · {sideTitle(compare.from)} → {sideTitle(compare.to)}
+          {subject} · {sideTitle(compare.from)} → {sideTitle(compare.to)}
           {compare.from.computedAt === null
             ? null
             : ` · earlier revision captured ${compare.from.computedAt.slice(0, 10)}`}
@@ -172,7 +189,7 @@ function PrintedMovedTable({
   emptyMessage,
 }: {
   heading: string;
-  rows: readonly RevisionMovedActivity[];
+  rows: readonly (RevisionMovedActivity | CrossPlanMovedActivity)[];
   total: number;
   cap: number;
   emptyMessage: string;
@@ -232,7 +249,10 @@ function floatCell(days: number | null): string {
 }
 
 /** Print the comparison — the panel's header button calls this. */
-export function printRevisionCompare(compare: RevisionCompare, deps: PrintDocumentDeps = {}): void {
+export function printRevisionCompare(
+  compare: RevisionCompare | CrossPlanRevisionCompare,
+  deps: PrintDocumentDeps = {},
+): void {
   mountPrintDocument(<RevisionComparePrintDocument compare={compare} />, deps);
 }
 
@@ -248,7 +268,7 @@ function ChangeClassSection({
   assessment,
   cap,
 }: {
-  assessment: RevisionClassAssessment;
+  assessment: RevisionClassAssessment | CrossPlanClassAssessment;
   cap: number;
 }): React.ReactElement {
   const count = classCountSentence(assessment);
