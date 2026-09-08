@@ -44,6 +44,29 @@ removed; measuring against the larger side would score a correct comparison down
 very changes it exists to report. The denominator is **coded** activities because an uncoded activity
 is a separate, counted, reported class (spec §2.4) and folding it in would measure two things.
 
+> ### Correction to P1, made while writing the probe and BEFORE any number existed
+>
+> **The denominator above is confounded, and the confound makes the condition gameable.** Removed
+> work legitimately does not correlate, so with one activity removed from a fixture of N the score is
+> `(N−1)/N` — **90.9 % at N = 11, 95.0 % at N = 20, 97.5 % at N = 40, 99.0 % at N = 100.** The bar is
+> therefore cleared by choosing a larger fixture, which measures the fixture and not `code`. It also
+> fails in the other direction: a revision that legitimately retires 10 % of the work would report a
+> failing identity model when nothing is wrong with it.
+>
+> **So P1 is judged on a denominator the fixture defines rather than one the sizes imply:** of the
+> activities the fixture asserts are **the same work in both revisions**, what fraction correlate?
+> That is the quantity the condition was always about — does a code survive two independent imports
+> and still name the same activity — and it is not movable by adding rows.
+>
+> - **Judged:** `matched ÷ (activities present in both revisions by construction)`. Target 100 %,
+>   bar **≥ 95 %** so a tolerance remains for the `task_id` fallback and any mangling.
+> - **Also reported, never hidden:** the original smaller-side figure, and every count behind both.
+>
+> **This is a correction, not a relaxation, and the ordering is what makes that checkable**: it is
+> committed before the probe runs, in its own commit, with no measurement in hand. Recorded here
+> rather than quietly swapped, because a condition edited after a number exists is not a condition —
+> and a reader a year from now can verify the sequence in the log.
+
 **Verdict rule.**
 
 - **≥ 95 %** — the identity model stands as specified. Proceed.
