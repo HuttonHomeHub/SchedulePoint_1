@@ -20,9 +20,14 @@ import {
   completionSentence,
   criticalPathUnavailable,
   HONESTY_FOOTER,
+  correlationSentence,
+  frameSentence,
   membershipSentence,
   LEVELLING_CAVEAT_PRINT,
+  noCommonCodesSentence,
   planLabel,
+  RECODE_CAVEAT,
+  uncodedSentence,
   settingsCaveat,
   sideTitle,
 } from '../model/revision-sentences';
@@ -69,10 +74,11 @@ export function RevisionComparePrintDocument({
    * reader it exists for.** `planName` is a same-plan field, so the compiler forces the question
    * rather than letting one name print over a comparison of two.
    */
+  const crossPlan = 'correlation' in compare ? compare : null;
   const subject =
-    'correlation' in compare
-      ? `${planLabel(compare.fromPlan)} → ${planLabel(compare.toPlan)}`
-      : compare.planName;
+    crossPlan === null
+      ? (compare as { planName: string }).planName
+      : `${planLabel(crossPlan.fromPlan)} → ${planLabel(crossPlan.toPlan)}`;
   const carrierChanged = carrierChangedSentence(compare.completion);
   return (
     <div className="revision-print">
@@ -96,80 +102,125 @@ export function RevisionComparePrintDocument({
         </p>
       </header>
 
-      <h2>Completion</h2>
-      <p className="revision-print-statement">{completionSentence(compare.completion)}</p>
-      {carrierChanged === null ? null : (
-        <p className="revision-print-statement">{carrierChanged}</p>
+      {/*
+        **The coverage, first on paper as on screen.** Every number below it is worth exactly what
+        it says they are — the ordering is the same on both surfaces because the reader's need is
+        the same, and putting it after the delta on paper would let somebody read a figure before
+        the sentence that qualifies it.
+
+        The lists print **in full** where the screen caps them: paper has no "load more", so a list
+        that simply stops is indistinguishable from a complete one (ADR-0116's rule). The screen's
+        cap is stated in words there; here there is nothing to state, because nothing is withheld.
+      */}
+      {crossPlan === null ? null : (
+        <>
+          <h2>Match coverage</h2>
+          <p className="revision-print-statement">{correlationSentence(crossPlan.correlation)}</p>
+          {uncodedSentence(crossPlan.correlation) === null ? null : (
+            <p className="revision-print-meta">{uncodedSentence(crossPlan.correlation)}</p>
+          )}
+          <PrintedCorrelationList
+            heading={`Only in ${crossPlan.fromPlan.name}`}
+            rows={crossPlan.correlation.fromUnmatchedRows}
+            total={crossPlan.correlation.fromUnmatched}
+          />
+          <PrintedCorrelationList
+            heading={`Only in ${crossPlan.toPlan.name}`}
+            rows={crossPlan.correlation.toUnmatchedRows}
+            total={crossPlan.correlation.toUnmatched}
+          />
+          <PrintedCorrelationList
+            heading="No activity code"
+            rows={crossPlan.correlation.uncodedRows}
+            total={crossPlan.correlation.fromUncoded + crossPlan.correlation.toUncoded}
+          />
+          <p className="revision-print-caveat">{RECODE_CAVEAT}</p>
+          <p className="revision-print-meta">{frameSentence(crossPlan.frame)}</p>
+        </>
       )}
 
-      {caveat === null ? null : <p className="revision-print-caveat">{caveat}</p>}
-      {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
-        <p className="revision-print-statement">
-          {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
-        </p>
-      ) : compare.criticalPath.noCriticalPath ? (
-        <p className="revision-print-statement">
-          Neither revision has a critical path, so nothing can have entered or left it.
-        </p>
+      {/* No codes in common is a real answer, and on paper it REPLACES the derived sections rather
+          than printing them empty — four empty tables read as "assessed, and nothing changed". */}
+      {crossPlan !== null && crossPlan.notAssessableReason === 'NO_COMMON_CODES' ? (
+        <p className="revision-print-statement">{noCommonCodesSentence(crossPlan)}</p>
       ) : (
         <>
-          <PrintedMovedTable
-            heading="Entered the critical path"
-            rows={compare.criticalPath.entered}
-            total={compare.criticalPath.enteredTotal}
-            cap={compare.criticalPath.cap}
-            emptyMessage="Nothing entered the critical path."
-          />
-          <PrintedMovedTable
-            heading="Left the critical path"
-            rows={compare.criticalPath.left}
-            total={compare.criticalPath.leftTotal}
-            cap={compare.criticalPath.cap}
-            emptyMessage="Nothing left the critical path."
-          />
-          {/* The denominator, on paper as on screen — the two surfaces state the same facts, which
+          <h2>Completion</h2>
+          <p className="revision-print-statement">{completionSentence(compare.completion)}</p>
+          {carrierChanged === null ? null : (
+            <p className="revision-print-statement">{carrierChanged}</p>
+          )}
+
+          {caveat === null ? null : <p className="revision-print-caveat">{caveat}</p>}
+          {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
+            <p className="revision-print-statement">
+              {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
+            </p>
+          ) : compare.criticalPath.noCriticalPath ? (
+            <p className="revision-print-statement">
+              Neither revision has a critical path, so nothing can have entered or left it.
+            </p>
+          ) : (
+            <>
+              <PrintedMovedTable
+                heading="Entered the critical path"
+                rows={compare.criticalPath.entered}
+                total={compare.criticalPath.enteredTotal}
+                cap={compare.criticalPath.cap}
+                emptyMessage="Nothing entered the critical path."
+              />
+              <PrintedMovedTable
+                heading="Left the critical path"
+                rows={compare.criticalPath.left}
+                total={compare.criticalPath.leftTotal}
+                cap={compare.criticalPath.cap}
+                emptyMessage="Nothing left the critical path."
+              />
+              {/* The denominator, on paper as on screen — the two surfaces state the same facts, which
               is the whole point of the D9 rule this epic kept tripping over. */}
-          <p className="revision-print-meta">
-            {membershipSentence(
-              compare.criticalPath.remainedCriticalCount,
-              compare.criticalPath.remainedNonCriticalCount,
-            )}
-          </p>
-        </>
-      )}
+              <p className="revision-print-meta">
+                {membershipSentence(
+                  compare.criticalPath.remainedCriticalCount,
+                  compare.criticalPath.remainedNonCriticalCount,
+                )}
+              </p>
+            </>
+          )}
 
-      {compare.criticalPath.addedTotal > 0 || compare.criticalPath.removedTotal > 0 ? (
-        <>
-          <h2>Added and removed</h2>
-          {/* The TRUE totals — the arrays are capped like their siblings, and paper has no
+          {compare.criticalPath.addedTotal > 0 || compare.criticalPath.removedTotal > 0 ? (
+            <>
+              <h2>Added and removed</h2>
+              {/* The TRUE totals — the arrays are capped like their siblings, and paper has no
               "load more" to reveal what a client-computed length would have hidden. */}
-          <p className="revision-print-statement">
-            {compare.criticalPath.addedTotal} added · {compare.criticalPath.removedTotal} removed.
-            An activity present in only one revision is listed as added or removed — it did not
-            enter or leave a path it was never on.
-          </p>
-        </>
-      ) : null}
+              <p className="revision-print-statement">
+                {compare.criticalPath.addedTotal} added · {compare.criticalPath.removedTotal}{' '}
+                removed. An activity present in only one revision is listed as added or removed — it
+                did not enter or leave a path it was never on.
+              </p>
+            </>
+          ) : null}
 
-      {/* **The change list prints too, and it prints the same honesty the screen shows.**
+          {/* **The change list prints too, and it prints the same honesty the screen shows.**
           ADR-0116 D9 records the inverse as a defect — a printout stating provenance the live
           panel withheld — so the rule here is symmetry rather than "the paper gets more": a class
           the panel says it could not assess says exactly that on paper, and one the panel could
           assess prints its rows. Withheld entirely when the payload carries no change list, so a
           delta-only comparison prints exactly what it always did. */}
-      {compare.changes ? (
-        <>
-          <h2>What changed</h2>
-          {compare.changes.classes.map((assessment) => (
-            <ChangeClassSection
-              key={assessment.changeClass}
-              assessment={assessment}
-              cap={compare.changes?.cap ?? 0}
-            />
-          ))}
-          <p className="revision-print-footer">{CHANGES_FOOTER}</p>
+          {compare.changes ? (
+            <>
+              <h2>What changed</h2>
+              {compare.changes.classes.map((assessment) => (
+                <ChangeClassSection
+                  key={assessment.changeClass}
+                  assessment={assessment}
+                  cap={compare.changes?.cap ?? 0}
+                />
+              ))}
+              <p className="revision-print-footer">{CHANGES_FOOTER}</p>
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
 
       <p className="revision-print-footer">{HONESTY_FOOTER}</p>
       <p className="revision-print-footer">{LEVELLING_CAVEAT_PRINT}</p>
@@ -254,6 +305,46 @@ export function printRevisionCompare(
   deps: PrintDocumentDeps = {},
 ): void {
   mountPrintDocument(<RevisionComparePrintDocument compare={compare} />, deps);
+}
+
+/**
+ * One correlation list on paper — **printed IN FULL, never capped**.
+ *
+ * The screen caps these and states the cap in words; paper has no "load more", so a list that
+ * simply stops is indistinguishable from a complete one (ADR-0116's rule). Where the returned rows
+ * are fewer than the true total the shortfall is stated rather than hidden, because the server's
+ * cap is the server's and this document cannot fetch past it — saying so is the honest half of
+ * "printed in full".
+ */
+function PrintedCorrelationList({
+  heading,
+  rows,
+  total,
+}: {
+  heading: string;
+  rows: readonly { activityId: string | null; code: string | null; name: string }[];
+  total: number;
+}): React.ReactElement | null {
+  if (total === 0) return null;
+  return (
+    <>
+      <h3>
+        {heading} ({total})
+      </h3>
+      <ul className="revision-print-list">
+        {rows.map((row) => (
+          <li key={`${row.code ?? row.name}`}>
+            {row.code === null ? row.name : `${row.code} — ${row.name}`}
+          </li>
+        ))}
+      </ul>
+      {total > rows.length ? (
+        <p className="revision-print-meta">
+          Showing {rows.length} of {total}. The rest are not in this document.
+        </p>
+      ) : null}
+    </>
+  );
 }
 
 /**

@@ -205,6 +205,39 @@ test('a planner compares the open plan against another plan in the same project'
   const summary = page.getByText(/Comparison overlay:/i);
   await expect(summary).not.toContainText('did not record where they were');
 
+  /*
+   * ── 8b · M3: the HANDOVER ARTEFACT names both plans and prints the coverage ────────────────
+   *
+   * The printed document is the version somebody pays for, and its rule runs both ways: it states
+   * no fact the screen withholds and withholds none the screen states. The unit symmetry test
+   * asserts that over the shared sentence module, verified red in both directions; what only this
+   * can prove is that pressing the SHIPPED button reaches a document carrying them — the seam
+   * between the panel's payload and the print surface.
+   *
+   * `window.print` is stubbed, so teardown's `afterprint` never fires and the detached container
+   * stays mounted long enough to read, exactly as the sibling journey does it.
+   */
+  await page.evaluate(() => {
+    window.print = () => {};
+  });
+  await panel.getByRole('button', { name: 'Print comparison' }).click();
+  const printed = await page.evaluate(
+    () => document.querySelector('.tsld-print-container .revision-print')?.textContent ?? '',
+  );
+  // Both plans — a printed comparison of two plans naming one is a false statement to exactly the
+  // reader the document exists for.
+  expect(printed).toContain(otherPlanName);
+  expect(printed).toContain('Riverside programme');
+  // The coverage, the frame and the re-code caveat, on paper as on screen.
+  expect(printed).toMatch(/matched by activity code/i);
+  expect(printed).toMatch(/Movement is measured in working days on/i);
+  expect(printed).toMatch(/an activity whose code changed/i);
+  // The rows print IN FULL — paper has no disclosure to open, so a collapsed list is unreadable.
+  expect(printed).toContain(otherPlanOnlyName);
+  expect(printed).toContain(uncodedName);
+  // And no reason code reaches paper, which is the rule the whole feature turns on.
+  expect(printed).not.toContain('NO_COMMON_CODES');
+
   // ── 9 · The accessibility scan, scoped by the STRUCTURAL attribute ─────────────────────────
   //
   // Never by copy: `:text-is()` is a Playwright selector-engine extension and is not valid CSS, so
