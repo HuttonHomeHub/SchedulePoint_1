@@ -273,3 +273,58 @@ The paragraph's conclusion — that no new actor type is needed — survives bot
 different reason than it gave: `STAFF` was added by ADR-0086 D5 and is already in the enum. The
 staff namespace is what the console's own feed keys on (`staff.%`), not the actor type, which is
 why `staff.access_denied` can be `USER` without disappearing from it.
+
+---
+
+## Readings — the deliverable
+
+The panel is the instrument; these are the numbers it exists to produce. Recorded verbatim as
+pasted, with the interpretation kept separate from the data.
+
+### 2026-09-08 — `revision-diff` / Fit / 2,000 activities
+
+Product owner's machine. Intel Arc Pro Graphics via ANGLE D3D11, 22 threads, ~32 GiB, Edge 152,
+1912×1068 css px at dpr 1, measured idle frame interval **16.70 ms**, attention held throughout.
+`web` 0.123.0. Scene: 2,160 bars (2,000 activities, 160 WBS summaries, 76 milestones), 3,200 links
+across 50 lanes, all 2,160 on screen at 1.66 px/day. Full run — 180 frames × 3.
+
+| quantity  | value                                |
+| --------- | ------------------------------------ |
+| baseline  | 98.33 pp (run-to-run spread 1.11 pp) |
+| treatment | 98.15 pp — 23.8 fps                  |
+| delta     | −0.19 pp                             |
+| verdict   | REPORTED, NOT GRADED (P3)            |
+
+**What this reading does say.** The two headline figures are the same fact stated twice, and that is
+worth writing down because they look contradictory: `droppedPct` counts intervals exceeding 1.5× the
+idle interval (25.05 ms here), and 23.8 fps is a mean interval of 42.0 ms, which trips that threshold
+on essentially every frame. 98.33 pp is not "98 % of frames never painted"; it is "essentially every
+frame ran long". A first read of this table flagged the pair as irreconcilable, wrongly.
+
+**What it does not say — and this is the load-bearing part.** The delta is **uninterpretable**, not
+merely ungraded. With the baseline at 98.33 pp the arithmetic ceiling leaves 1.67 pp of headroom
+against a 2.00 pp bar, so no treatment cost could have produced a failing delta. `−0.19 pp` must not
+be read as evidence that the overlay is cheap. Filed as `docs/TECH_DEBT.md` #260, together with the
+observation that this already happened once in `docs/specs/revision-compare-changes/m0-condition.md:199`
+and went unremarked.
+
+**What it is evidence for.** 23.8 fps at the whole-plan framing on real hardware, against ADR-0026
+§9's 30 fps floor at the 2,000-activity ceiling. P3 means no verdict is issued at Fit, and that rule
+is unchanged — but the number is a level rather than a difference, so saturation does not touch it.
+It is the first real-hardware figure at this framing since 2026-08-03.
+
+**Attribution — do not put this in #75.** This is the `revision-diff` scene, whose baseline is the
+painter plus the comparison harness. `docs/TECH_DEBT.md` #75 asks about `canvas-draw`, which is a
+different code path and a different question. The two readings that row is waiting for have not been
+taken.
+
+### Still owed
+
+| run                        | answers                                                                                                         |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `canvas-draw` / Week       | #75's 500-activity limb, which ADR-0026 §9 states and nothing has ever measured, and its 2,000 limb             |
+| `canvas-draw` / Fit        | #75's unattributed ~8 ms at the whole-plan framing                                                              |
+| `revision-diff` / **Week** | ADR-0127's paint cost, still UNANSWERED — the framing where P1 and P2 are graded and the delta is not saturated |
+
+The third is the one this session most needs: the Fit run above is the single framing that is
+deliberately never graded, so ADR-0127's open question is exactly as open as it was.

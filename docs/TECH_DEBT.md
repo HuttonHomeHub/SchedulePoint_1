@@ -4269,3 +4269,40 @@ Reading that same log **did** find a real one, which is fixed rather than filed:
 told the effective periods was silently short by one — for a number ADR-0087 records as
 irreversible. Its existing test used `objectContaining`, which cannot catch an omission; the
 replacement counts `*Days` keys against `RETENTION_TABLES.length` and was verified red.
+
+### 260. A saturated dropped-frame baseline makes the difference gate arithmetically unfailable
+
+**Status:** open · **Raised:** 2026-09-08 (first real-hardware probe reading) · **Size:** S · **Owner:** repo
+
+`droppedPct` is a share of frames, so it is bounded at 100. P1 asks whether the treatment's dropped
+percentage exceeds the baseline's by more than `barPp` (2.00). When the baseline is already near the
+ceiling the remaining headroom is smaller than the bar, and **P1 cannot fail no matter what the
+treatment costs** — a treatment that dropped every frame in the run would still score inside it.
+
+The product owner's first real-hardware reading is the case: `revision-diff` / Fit / 2,160 bars,
+baseline **98.33 pp**, so the largest possible delta is **1.67 pp** against a **2.00 pp** bar. The
+report prints `delta -0.19 pp`, which reads as "the overlay is free" and cannot mean that.
+
+**It has already happened once and nobody noticed.** `docs/specs/revision-compare-changes/m0-condition.md:199`
+records `scale` / Fit / 1646 as baseline 99.07 pp, treatment 100.00 pp, delta **+0.93 pp** — and
+`100.00 − 99.07 = 0.93` exactly. The treatment saturated the ceiling and the recorded delta is the
+saturation value, not a measurement. It sits in that table beside genuine deltas with nothing
+distinguishing it.
+
+**This is not the P3 rule, and P3 does not cover it.** `m0-condition.md:87-90` makes Fit report-only
+on the ADR-0058 grounds that gating a new feature on an already-failing state is the gate-deleted-on-
+day-one trap. That argument is about **P2, the absolute level**. Saturation is about **P1, the
+difference**, it is arithmetic rather than policy, and it is not confined to Fit: any machine whose
+Week baseline ran hot enough would reach the same dead zone with the gate still armed and still
+reporting PASS.
+
+**The shape of the fix is the guard the judge already has, one quantity along.** `judgeRun` refuses
+when `baselineSpreadPp >= barPp` — the instrument's noise exceeds the question's precision. The
+missing sibling refuses when `100 - baselineMeanPp < barPp` — the metric's remaining range is
+smaller than the question's precision. Both make a verdict meaningless; only one is implemented.
+`INDETERMINATE` already exists and already outranks PASS/FAIL, so this is a branch and a message
+rather than a new vocabulary.
+
+**Not built here.** `judge.ts` is shared by the panel and the CLI driver, so this is a shared-gate
+change and ADR-0105 makes the full spec mandatory rather than optional. The reading that exposed it
+is recorded in the same commit; the fix is not smuggled in beside it.
