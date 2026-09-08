@@ -136,10 +136,21 @@ a product idea that has not yet earned a roadmap line:
   problem. Three facts about it shape the design and none was recorded here: `packages/interchange/src/xer-adapter.ts:541`
   **does** map P6's `task_code` onto it and already reports a finding when absent
   (`:548`, falling back to the source task id — which makes that code **file-local**, so two exports
-  of one programme need not agree); the column is **nullable**; and it carries **no unique
-  constraint**, so "duplicated or reused" is a live possibility rather than a hypothetical. Its
-  reject/repair/report contract (ADR-0035) has to cover absent, duplicated within a side, and
-  present on one side only. Verified 2026-09-06 by reading the controller and
+  of one programme need not agree); the column is **nullable**; and **it is UNIQUE per plan**, by
+  `uq_activities_plan_code` — a partial index (`WHERE deleted_at IS NULL AND code IS NOT NULL`)
+  declared in raw SQL at `20260710092048_add_activities/migration.sql:81`.
+  **This paragraph asserted the opposite for one commit, on 2026-09-08, and the method is the
+  transferable part:** the claim was "verified" by grepping `@@unique`/`@unique`, which in this
+  repository structurally cannot see the answer — Prisma cannot express a partial unique, so every
+  one of them lives in `prisma/migrations/` and `schema.prisma` merely comments about them (it does,
+  twice, at `:1325` and `:2563`, and the grep missed those too). A constraint claim here is verified
+  against the migrations, never the schema alone. Caught by the spec agent re-deriving it rather
+  than trusting the brief — which is the rule working, one turn after the same rule caught this
+  entry.
+  So "duplicated within one side" is **not a case to repair; it is a case the database refuses**,
+  and the reject/repair/report contract (ADR-0035) narrows to two cases: a code that is absent, and
+  a code present on one side only — the second being indistinguishable from a re-code, which is the
+  genuinely hard one. Verified 2026-09-06 by reading the controller and
   the DTO, not the schema.
   **The measurement this entry said was owed has been TAKEN, and the entry is corrected rather than
   stepped over — for the third time in three days, in the same file.** It read: the compare overlay
