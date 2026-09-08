@@ -5,7 +5,7 @@
 - **Owner:** unassigned
 
 > **Nothing in this plan is written yet, and one thing in it is deliberately not sized: M4 is
-> atomic.** `parseSearch` is a router-level option (`router.js:634-635`) — there is no per-route
+> atomic.** `parseSearch` is a router-level option (`router.js:627-628`) — there is no per-route
 > form of it — so the flip cannot be sliced. Every other milestone exists to make that single commit
 > reviewable: M0 records what the current pair does, M2 makes every route's answer visible in a
 > suite, M3 lands the replacement dark. The M4 diff is then one line of source plus a set of
@@ -75,12 +75,12 @@ journey; both are probes, not capability claims.
   1. Assert the two coercion mechanisms separately, because they are separate and three docblocks
      say they are one: `?verified=1`, `?x=true`, `?x=false` are coerced by `toValue`
      (`qss.js:41-46`) with `JSON.parse` never consulted, and `?x=null`, `?x=[1,2]`,
-     `?token=<32 digits>` by `JSON.parse` (`searchParams.js:18-30`, whose `catch` keeps the raw
+     `?token=<32 digits>` by `JSON.parse` (`searchParams.js:18-33`, whose `catch` keeps the raw
      string). This is finding F1 turned into an executable assertion.
   2. Assert the stringifier's two paths (`searchParams.js:43-62`): the `jsonStart` fast path leaves
      `name:asc` alone, and the re-quoting path writes `'true'` as `"true"` and `'2026'` as `"2026"`.
   3. Assert the merge: a validator that returns `{}` for a key does **not** remove that key from
-     what a consumer sees (`router.js:685-696`, `useSearch.js:21-23`) — the fact the spec's F5 turns
+     what a consumer sees (`router.js:678-689`, `useSearch.js:21-23`) — the fact the spec's F5 turns
      on, and which nothing in the repository currently pins.
   4. Assert the round trip is value-preserving for every value the app itself writes, and **not**
      value-preserving for the all-digit token — the limit `router-search.test.ts:71-85` already
@@ -235,7 +235,7 @@ parser.
 ##### Task M2-T2 — the missing cases, against today's behaviour
 
 - **Description:** bring `router-search.test.ts` from three routes to eight, and add cases for the
-  seven undeclared params through the merge (`router.js:795-798`, `router.js:685-696`).
+  seven undeclared params through the merge (`router.js:788-791`, `router.js:678-689`).
 - **Complexity:** M
 - **Dependencies:** M2-T1
 - **Risks:** writing the cases against the behaviour we _want_ rather than the behaviour we _have_
@@ -317,7 +317,7 @@ twelve suites named in the spec §3, run individually first so a failure is legi
 > **Dependencies:** M0, M2, M3
 > **Risks:**
 >
-> - **Atomic by construction** (`router.js:634-635`) → mitigated by M0's oracle, M2's per-route
+> - **Atomic by construction** (`router.js:627-628`) → mitigated by M0's oracle, M2's per-route
 >   cases, M3's predicted diff, the full sweep, and a one-line revert.
 > - **`parseLocation` re-stringifies on every navigation** (`router.js:183-194`), so a mistake in
 >   either function shows up as a URL that rewrites itself → the property test in M3, plus a journey

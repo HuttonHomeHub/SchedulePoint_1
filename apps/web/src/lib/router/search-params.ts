@@ -11,7 +11,7 @@
  * repository say "the default `parseSearch` is `parseSearchWith(JSON.parse)`, which JSON-parses
  * every value". That is half the mechanism, and the missing half is the load-bearing one: the
  * **decode** step coerces `"true"`, `"false"` and canonical numeric strings (`qss.js:41-46`)
- * **before** the parser is consulted, and `JSON.parse` (`searchParams.js:18-30`) only ever sees
+ * **before** the parser is consulted, and `JSON.parse` (`searchParams.js:18-33`) only ever sees
  * values that are still strings. So `parseSearchWith(v => v)` — the obvious minimal fix, and the one
  * the register row proposed — would still deliver `?verified=1` as the number `1`. The helper has to
  * go, not its argument.

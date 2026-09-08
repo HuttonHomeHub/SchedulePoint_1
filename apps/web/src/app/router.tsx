@@ -500,7 +500,7 @@ export const router = createRouter({
   // so replacing one alone produces a URL that rewrites itself on the next navigation
   // (`parseLocation` re-stringifies every location — `router.js:183-194`).
   //
-  // These are router-level options, not per-route ones (`router.js:634-635`), which is why this is
+  // These are router-level options, not per-route ones (`router.js:627-628`), which is why this is
   // the whole fix in two lines and why it could never have been done route by route. See
   // `lib/router/search-params.ts` for what changes and, more usefully, for what does not: the
   // library pair never lost a value it wrote itself, so this only affects search strings the app

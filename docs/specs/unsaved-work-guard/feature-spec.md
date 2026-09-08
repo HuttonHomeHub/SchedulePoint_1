@@ -31,9 +31,9 @@ the working tree at `HEAD`.
 | V9  | The sharp permission case is **pen loss mid-edit**, not role.                                                                                 | `activity-editor-gating.ts:97` — `penManaged && !holdsPen` flips every definition scope to `writable: false`. `docs/TECH_DEBT.md` #64 records this happening under a live session ("the pen can be taken over by another user mid-edit (ADR-0028), which flips every definition field from enabled to disabled under whatever focus the user had"). At that instant the work is **unsaved and unsavable**.                 |
 | V10 | One `useBlocker` registration covers **all three** navigation kinds.                                                                          | `@tanstack/react-router@1.170.27` `dist/esm/useBlocker.js:97-100` calls `history.block({ blockerFn, enableBeforeUnload })`. In `@tanstack/history@1.162.1` `dist/esm/index.js`: push/replace at `:24-34`, back/forward/go (popstate) at `:221-238`, `beforeunload` at `:240-262`.                                                                                                                                          |
 | V11 | `enableBeforeUnload` accepts a **function**, and the unload path never calls `blockerFn`.                                                     | Type: `useBlocker.d.ts:35` — `enableBeforeUnload?: boolean \| (() => boolean)`. Consumed at `@tanstack/history` `index.js:247-257`: it reads `blocker.enableBeforeUnload`, treats `true` as block, and calls the function form. It does **not** await `blockerFn`. So a blocker registered with the default `true` prompts on **every** reload; the function form is the only way to prompt only when work is outstanding. |
-| V12 | A blocked Back is undone with `history.go(1)`.                                                                                                | `@tanstack/history` `index.js:230-233`. This is a real behaviour with a consequence (§2 edge cases E7), not a hypothetical.                                                                                                                                                                                                                                                                                                |
+| V12 | A blocked Back is undone with `history.go(-delta)`.                                                                                           | `@tanstack/history` `index.js:230-233`. This is a real behaviour with a consequence (§2 edge cases E7), not a hypothetical.                                                                                                                                                                                                                                                                                                |
 | V13 | `useBlocker`'s effect re-registers whenever `shouldBlockFn` or `enableBeforeUnload` change identity.                                          | `useBlocker.js:101-108` — the dependency array is `[shouldBlockFn, enableBeforeUnload, disabled, withResolver, history, router]`. An inline arrow re-registers every render.                                                                                                                                                                                                                                               |
-| V14 | The `beforeunload` listener is attached unconditionally by the history, so we add no listener of our own.                                     | `@tanstack/history` `index.js:297` — `win.addEventListener(beforeUnloadEvent, onBeforeUnload, { capture: true })`, at history construction.                                                                                                                                                                                                                                                                                |
+| V14 | The `beforeunload` listener is attached unconditionally by the history, so we add no listener of our own.                                     | `@tanstack/history` `index.js:306` — `win.addEventListener(beforeUnloadEvent, onBeforeUnload, { capture: true })`, at history construction.                                                                                                                                                                                                                                                                                |
 | V15 | The plan's pen is released on `pagehide` and on unmount.                                                                                      | `use-plan-edit-lock.ts:170-183` — a keepalive `fetch` DELETE on `pagehide` and in the effect cleanup. **This does not conflict with an unload prompt**: `pagehide` fires only when the page actually goes away, so a reader who chooses "stay" never releases.                                                                                                                                                             |
 | V16 | Two navigations must **never** be blocked, or a dead session traps the reader.                                                                | Sign-out: `account-chip.tsx:172-179` navigates to `/sign-in` **after** `signOut.mutate` succeeds. Session expiry: `app/router.tsx:135-141` — `_authed`'s `beforeLoad` throws `redirect({ to: '/sign-in', … })`.                                                                                                                                                                                                            |
 | V17 | The workspace mounts **one** activity editor.                                                                                                 | `Grep "<ActivityEditor"` over `apps/web/src` → one production match, `components/layout/workspace/activity-crud-dialogs.tsx:69`; every other match is a test. `ActivityEditorDialog`'s own docblock at `:880-885` says it has no production caller.                                                                                                                                                                        |
@@ -42,8 +42,8 @@ the working tree at `HEAD`.
 
 **One thing this spec has NOT verified and must not assert.** Whether a `redirect()` thrown from a
 route's `beforeLoad` reaches `history.block` at all, or is issued with `ignoreBlocker: true`. The
-only `ignoreBlocker: true` found in the installed router is `Transitioner.js:44-48` (a replace of the
-current location), and `link.js:302` threads the option from `Link`. **The redirect path was not
+only `ignoreBlocker: true` found in the installed router is `Transitioner.js:36-40` (a replace of the
+current location), and `link.js:290-297` threads the option from `Link`. **The redirect path was not
 traced.** This is M0-T1's job. The design is safe either way, because V16's two targets are
 allow-listed by the blocker itself (D5) — but the claim is recorded as open rather than guessed
 (ADR-0076 Class 3).
@@ -117,7 +117,7 @@ where they are going → **Keep editing** returns them, focus back on the link t
 they press **Save scheduling** → click the same plan → no dialog, navigation proceeds.
 
 **Browser Back.** Same, but the dialog is raised by a `popstate` the app cancels with
-`history.go(1)` (V12). "Keep editing" leaves the URL where it was.
+`history.go(-delta)` (V12). "Keep editing" leaves the URL where it was.
 
 **Reload / tab close.** The browser's own generic prompt. No custom copy is possible and none is
 attempted (§4.4).
@@ -266,12 +266,12 @@ positive case so it cannot be satisfied by an empty set.
 3. `shouldBlockFn` checks the allow-list (D5) and the live registry (D3).
 4. Blocked → the resolver sets `status: 'blocked'` and the guard renders its `ConfirmDialog`.
 5. **Keep editing** → `reset()` → the navigation is abandoned, `onBlocked` restores the location
-   (`index.js:290-292`).
+   (`index.js:299-301`).
 6. **Discard and leave** → `proceed()` → the navigation completes; the registrants unmount and
    deregister.
 
 **W2 — Back/Forward** — identical from step 3, except the history has already popped and undoes it
-with `go(1)` on a block (`index.js:230-233`).
+with `go(-delta)` on a block (`index.js:230-233`).
 
 **W3 — unload** — `onBeforeUnload` reads `enableBeforeUnload` (never `blockerFn` — V11); our function
 returns "is anything dirty?"; a `true` triggers `preventDefault()` + `returnValue = ''`
@@ -290,7 +290,7 @@ returns "is anything dirty?"; a `true` triggers `preventDefault()` + `returnValu
 | E4  | The registrant unmounts while the dialog is open                                                                               | Same as E3 — the registry empties, the dialog closes, navigation proceeds.                                                                                                                                                                                      |
 | E5  | Navigation to the **same** route (a search-param change — e.g. `?view=gantt`, `app/router.tsx:303`)                            | **Not blocked.** The editor survives a search-param change; blocking a view toggle for a form that is still on screen afterwards is pure noise. Discriminated on `next.fullPath === current.fullPath`.                                                          |
 | E6  | The reader presses Back twice quickly                                                                                          | The second pop arrives while the first dialog is open. The blocker is re-entered; the resolver is single-slot, so the second must not orphan the first's promise. Handled by refusing to open a second dialog while one is blocked (return `true` immediately). |
-| E7  | History-stack integrity after a refused Back                                                                                   | A refused Back is undone with `go(1)` (V12), which pushes the reader forward to where they were. The stack length is unchanged. **This is library behaviour, not ours** — it is listed so the journey asserts it rather than discovering it.                    |
+| E7  | History-stack integrity after a refused Back                                                                                   | A refused Back is undone with `go(-delta)` (V12), which returns the reader to where they were. The stack length is unchanged. **This is library behaviour, not ours** — it is listed so the journey asserts it rather than discovering it.                      |
 | E8  | The pen is lost while the dialog is open                                                                                       | The description re-derives from the live report, so it updates in place from "unsaved" to "unsaved and no longer savable". No second dialog.                                                                                                                    |
 | E9  | Focus after **Discard and leave**                                                                                              | The tree unmounts; focus goes wherever a completed navigation leaves it, which in this app is `<body>` for **every** navigation today (V19). This feature does not regress it and does not fix it; §4.7 files it.                                               |
 | E10 | `beforeunload` during an automated test                                                                                        | Playwright must handle the native dialog explicitly. The journey states this rather than being surprised by a hang.                                                                                                                                             |
@@ -326,7 +326,7 @@ None. No input is collected. The one derived value with a rule is the report:
 | Scenario                                                                            | Detection                                                                                                   | User-facing result                                                                                             | Status       |
 | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------ |
 | A registrant throws while computing its report                                      | The provider wraps each report read                                                                         | Treat as **dirty** and block. Failing open would silently discard work; failing closed costs one extra dialog. | n/a (client) |
-| The blocker is registered but the router's history is a memory history (tests, SSR) | `createMemoryHistory` has blockers but no `beforeunload` (`@tanstack/history` `index.js:335-343` vs `:297`) | In-app blocking works, unload does not. Documented; the unload half is journey-only.                           | n/a          |
+| The blocker is registered but the router's history is a memory history (tests, SSR) | `createMemoryHistory` has blockers but no `beforeunload` (`@tanstack/history` `index.js:344-352` vs `:297`) | In-app blocking works, unload does not. Documented; the unload half is journey-only.                           | n/a          |
 | Two dialogs would open at once (E6)                                                 | Guard's own re-entry check                                                                                  | Second navigation is refused silently.                                                                         | n/a          |
 | The reader's browser ignores `beforeunload` (no interaction yet)                    | Platform                                                                                                    | Nothing we can do; noted in §4.4 as a stated limit rather than a claim of coverage.                            | n/a          |
 
@@ -444,7 +444,7 @@ sequenceDiagram
       U->>D: Keep editing (or Escape)
       D->>B: reset()
       B-->>H: true (block)
-      H->>H: onBlocked() / go(1) for a pop
+      H->>H: onBlocked() / go(-delta) for a pop
       Note over U: URL unchanged, draft intact,<br/>focus back on the trigger
     else Discard and leave
       U->>D: Discard and leave
@@ -492,7 +492,7 @@ The brief asks this to be decided rather than assumed. It is decided as follows.
 | Case                                          | Mechanism                                            | Can we show our own copy?                                           | Coverage                                                                                                         |
 | --------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | In-app `Link` / `navigate()` / `history.push` | `blockerFn` (V10, `index.js:24-34`)                  | **Yes** — our `ConfirmDialog`                                       | Full                                                                                                             |
-| Browser **Back / Forward / Go**               | `blockerFn` via `popstate` (V10, `index.js:221-238`) | **Yes** — same dialog                                               | Full, with the `go(1)` undo (V12, E7)                                                                            |
+| Browser **Back / Forward / Go**               | `blockerFn` via `popstate` (V10, `index.js:221-238`) | **Yes** — same dialog                                               | Full, with the `go(-delta)` undo (V12, E7)                                                                       |
 | **Reload / tab close / window close**         | `enableBeforeUnload` (V11, `index.js:240-262`)       | **No** — the browser's generic string; the spec forbids custom text | Best-effort                                                                                                      |
 | **Hard `window.location` assignment**         | none                                                 | —                                                                   | **Not covered.** No such assignment exists in `apps/web/src` today; if one is added, the guard is silent for it. |
 
@@ -637,7 +637,7 @@ outline:
 >   is worse than no guard.
 > - **Decision 6** — **Which surfaces register**, as a rule plus a gate (D8/D9).
 > - **Rejected** — a hand-rolled `beforeunload` listener (would be a second, disagreeing source of
->   truth, and duplicates one the history already attaches at `index.js:297`); a `VITE_` flag
+>   truth, and duplicates one the history already attaches at `index.js:306`); a `VITE_` flag
 >   (ADR-0088 D1); an autosave (a different feature with a schema question behind it, and it does
 >   not remove the need for a guard — an in-flight autosave is still unsaved work).
 > - **Consequences** — closes `docs/TECH_DEBT.md` #63's second half; adds a Playwright config and a

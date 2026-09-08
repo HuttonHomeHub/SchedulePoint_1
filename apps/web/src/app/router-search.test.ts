@@ -32,7 +32,7 @@ vi.mock('@/config/env', async (importOriginal) => ({
  * **The mechanism, corrected** (#96 F1). This said the coercion was `parseSearchWith(JSON.parse)`
  * "parsing every value that happens to be valid JSON". Half true, and the missing half decided the
  * remedy: the **decode** step coerced `"true"`, `"false"` and canonical numeric strings
- * (`qss.js:41-46`) **before** the parser was consulted, and `JSON.parse` (`searchParams.js:18-30`)
+ * (`qss.js:41-46`) **before** the parser was consulted, and `JSON.parse` (`searchParams.js:18-33`)
  * only ever saw values that were still strings — so `parseSearchWith(v => v)`, the obvious minimal
  * fix, would have left `?verified=1` a number. #96 M4 replaced the codec instead.
  *
@@ -189,7 +189,7 @@ describe('the library screens’ filter params', () => {
   /**
    * **This validator still tests `typeof === "string"`, and the screens work anyway.** That is not
    * luck and it is not a second bug: `validateSearch`'s return is *added to* the parsed search
-   * rather than substituted for it (`router.js:685-696`), so a key this drops is still on the match
+   * rather than substituted for it (`router.js:678-689`), so a key this drops is still on the match
    * and still reaches `pickText` — which since #96 M1 coerces it. Pinned in
    * `router-search.characterisation.test.ts`, and proved end to end by
    * `apps/web/e2e-library/search-param-probe.spec.ts`.

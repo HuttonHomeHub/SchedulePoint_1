@@ -146,17 +146,17 @@ registration with two channels, and the app must not add a second listener.**
 Installed: `@tanstack/react-router@1.170.27` (`node_modules/.pnpm/@tanstack+react-router@1.170.27_…`),
 which delegates to `@tanstack/history@1.162.1`. Read, not assumed:
 
-| Fact                                                                                                                                                                                                            | Citation                                                                                                                      |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `useBlocker` exists, and with `withResolver: true` it returns a resolver carrying `status`, `current`, `next`, `action`, `proceed()` and `reset()` — enough to render **our own** dialog with **our own** copy. | `` `dist/esm/useBlocker.js`, lines **77-95** ``; corroborated by the `BlockerResolver` type in the sibling `useBlocker.d.ts`. |
-| It registers through `history.block(...)` in an effect and returns the unsubscribe as the cleanup.                                                                                                              | `` `dist/esm/useBlocker.js`, lines **97-100** ``.                                                                             |
-| `history.block()` **appends to an array** and returns an identity-filtered unsubscribe — several blockers may coexist.                                                                                          | `` `dist/esm/index.js`, lines **116-124** ``.                                                                                 |
-| The `beforeunload` listener is added **once, at history creation**, with `capture: true` — not by `useBlocker`.                                                                                                 | `` `dist/esm/index.js`, lines **297** ``.                                                                                     |
-| That listener is driven by the **same blocker array**, consulting each blocker's `enableBeforeUnload`, which may be a **function evaluated at unload time**.                                                    | `` `dist/esm/index.js`, lines **240-262** `` — specifically the `typeof shouldHaveBeforeUnload === "function"` branch.        |
-| In-app navigations consult blockers only for `PUSH`/`REPLACE`, and `navigate({ ignoreBlocker: true })` skips them entirely.                                                                                     | `` `dist/esm/index.js`, lines **19-26** ``.                                                                                   |
-| Back/Forward is handled on `popstate`, separately, and a blocked pop is rolled back with `win.history.go(1)`.                                                                                                   | `` `dist/esm/index.js`, lines **223-235** ``.                                                                                 |
-| `enableBeforeUnload` **defaults to `true`**.                                                                                                                                                                    | `` `dist/esm/useBlocker.js`, lines **35-36** ``.                                                                              |
-| `createMemoryHistory` has blockers but **no `beforeunload` listener at all**.                                                                                                                                   | `` `dist/esm/index.js`, lines **335-342** ``.                                                                                 |
+| Fact                                                                                                                                                                                                                                     | Citation                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `useBlocker` exists, and with `withResolver: true` it returns a resolver carrying `status`, `current`, `next`, `action`, `proceed()` and `reset()` — enough to render **our own** dialog with **our own** copy.                          | `` `dist/esm/useBlocker.js`, lines **77-95** ``; corroborated by the `BlockerResolver` type in the sibling `useBlocker.d.ts`. |
+| It registers through `history.block(...)` in an effect and returns the unsubscribe as the cleanup.                                                                                                                                       | `` `dist/esm/useBlocker.js`, lines **97-100** ``.                                                                             |
+| `history.block()` **appends to an array** and returns an identity-filtered unsubscribe — several blockers may coexist.                                                                                                                   | `` `dist/esm/index.js`, lines **116-124** ``.                                                                                 |
+| The `beforeunload` listener is added **once, at history creation**, with `capture: true` — not by `useBlocker`.                                                                                                                          | `` `dist/esm/index.js`, lines **306** ``.                                                                                     |
+| That listener is driven by the **same blocker array**, consulting each blocker's `enableBeforeUnload`, which may be a **function evaluated at unload time**.                                                                             | `` `dist/esm/index.js`, lines **240-262** `` — specifically the `typeof shouldHaveBeforeUnload === "function"` branch.        |
+| In-app navigations consult blockers only for `PUSH`/`REPLACE`, and `navigate({ ignoreBlocker: true })` skips them entirely.                                                                                                              | `` `dist/esm/index.js`, lines **19-26** ``.                                                                                   |
+| Back/Forward is handled on `popstate`, separately, and a blocked pop is rolled back with `win.history.go(-delta)` — `go(1)` until `@tanstack/history` 1.162.2, which reverses the actual delta so a multi-step Back is undone correctly. | `` `dist/esm/index.js`, lines **224-236** ``.                                                                                 |
+| `enableBeforeUnload` **defaults to `true`**.                                                                                                                                                                                             | `` `dist/esm/useBlocker.js`, lines **35-36** ``.                                                                              |
+| `createMemoryHistory` has blockers but **no `beforeunload` listener at all**.                                                                                                                                                            | `` `dist/esm/index.js`, lines **344-351** ``.                                                                                 |
 
 ### D5. One blocker, registered once, at the provider. Both channels read the same registry.
 
@@ -171,7 +171,7 @@ useBlocker({
 Three things this buys, each of which is otherwise a defect:
 
 1. **The app never writes `window.addEventListener('beforeunload', …)`.** The listener already exists
-   (`index.js:297`) and is already fed by the blocker array. A second listener would be a second
+   (`index.js:306`) and is already fed by the blocker array. A second listener would be a second
    source of truth for the same question — the D3 drift, one layer down.
 2. **`enableBeforeUnload` must be passed, and must be a function.** It defaults to `true`
    (`useBlocker.js:35-36`), so a permanently-registered blocker with no `enableBeforeUnload` prompts
@@ -191,7 +191,7 @@ Three things this buys, each of which is otherwise a defect:
 | Exit                                          | Channel                                                          | What the reader is shown                                      |
 | --------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
 | In-app link / `navigate()` (PUSH/REPLACE)     | Router blocker                                                   | Our `alertdialog`, naming every record, two outcomes          |
-| Browser Back / Forward                        | Router blocker (popstate path, `index.js:223-235`)               | Same dialog; a blocked pop is rolled forward                  |
+| Browser Back / Forward                        | Router blocker (popstate path, `index.js:224-236`)               | Same dialog; a blocked pop is rolled forward                  |
 | Reload, tab close, address bar, external link | `beforeunload`                                                   | The browser's generic string. No copy, no naming, no control. |
 | Post-save redirect, forced sign-out on 401    | Neither — `navigate({ ignoreBlocker: true })` (`index.js:19-26`) | Nothing                                                       |
 
@@ -343,7 +343,7 @@ release that clears everything, and against a blocker that was never registered.
 ### D14. `beforeunload` is **unprovable** in unit tests, and that is a structural fact, not an omission
 
 `createMemoryHistory` sets up blockers but adds no `beforeunload` listener at all
-(`` `dist/esm/index.js`, lines **335-342** ``, against the browser history's `:297`). So any test using
+(`` `dist/esm/index.js`, lines **344-351** ``, against the browser history's `:306`). So any test using
 memory history or jsdom exercises the branch that is _not_ the unload path — the ADR-0074 `e2e-csp`
 shape exactly, where the unit suite structurally cannot reach the branch that ships.
 
@@ -498,8 +498,8 @@ to do with unsaved user work — a reader grepping `dirty` finds them first.
 **O1 — Two blocked navigations at once.** While the prompt is open the backdrop is inert, so a second
 in-app navigation cannot be started — but the browser's own Back button is outside it. A second
 `popstate` calls the blocker again, and `useBlocker`'s `setResolver` **overwrites** the pending
-resolver (`useBlocker.js:78-86`), orphaning the first promise so its `win.history.go(1)` rollback
-(`index.js:223-235`) never runs.
+resolver (`useBlocker.js:78-86`), orphaning the first promise so its `win.history.go(-delta)` rollback
+(`index.js:224-236`) never runs.
 
 Reasoned from the source, **not observed**. The recommendation is deliberately not to design around
 it: reproduce it in the journey first (press Back twice with the prompt open; assert the URL). If it
@@ -558,7 +558,7 @@ register at filing time and record a collision rather than routing around it.
 3. Pass **`enableBeforeUnload` as a function**. Omitting it prompts on every reload
    (`useBlocker.js:35-36`); passing a boolean churns the registration (`useBlocker.js:101-108`).
 4. Do **not** add a `window.addEventListener('beforeunload', …)`. It already exists at
-   `index.js:297` and is fed by the same blocker array.
+   `index.js:306` and is fed by the same blocker array.
 5. Make `shouldBlockFn` and `enableBeforeUnload` referentially stable, and assert it (test 3).
 6. Register through `useUnsavedWork` only. Do not export the registry.
 7. Convert the editor's `dirtyScopeNames` into a **projection** of the registry (D3). Add cases to

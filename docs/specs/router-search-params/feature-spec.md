@@ -39,13 +39,13 @@ arrives as the number `1`.
 
 `?verified=1` **does** arrive as the number `1`. It is not `JSON.parse` that does it.
 
-`parseSearchWith` (`dist/esm/searchParams.js:18-30`) first calls `decode`, and only then tries the
+`parseSearchWith` (`dist/esm/searchParams.js:18-33`) first calls `decode`, and only then tries the
 parser **on values that are still strings**:
 
 - `decode` (`dist/esm/qss.js:55-65`) runs every value through `toValue`
   (`dist/esm/qss.js:41-46`), which returns `false` for `"false"`, `true` for `"true"`, and a
   **number** for any string whose canonical number form is itself (`+str * 0 === 0 && +str + "" === str`).
-- So by the time `searchParams.js:18-30` reaches `if (typeof value === "string")`, `1` is already
+- So by the time `searchParams.js:18-33` reaches `if (typeof value === "string")`, `1` is already
   the number `1` and the parser is **skipped**.
 
 Consequence for the design: **`parseSearchWith(v => v)` — the obvious reading of "a `parseSearch`
@@ -91,7 +91,7 @@ written and is stale now, which is the ordinary way a register row goes wrong.
 #### F5 — The row treats `validateSearch` as the whole story. It is not, and cannot be.
 
 `matchRoutes` composes each match's search as `preMatchSearch = { ...parentSearch, ...strictSearch }`
-(`router.js:685-696`), and `useSearch` returns `match.search` **whatever `strict` is set to**
+(`router.js:678-689`), and `useSearch` returns `match.search` **whatever `strict` is set to**
 (`useSearch.js:21-23`). Two consequences nothing in this repository documents:
 
 - **A validator cannot remove a param.** `libraryFilterSearch` "drops" a non-string `q`; the raw,
@@ -101,7 +101,7 @@ written and is stale now, which is the ordinary way a register row goes wrong.
   `gsort`, `ghide`, `gcollapsed` (plan-detail declares only `view`), and `categories`, `outcome`,
   `from`, `to` (`/orgs/$orgSlug/audit-log` and `/me/activity` declare **no** `validateSearch`).
   They work because of the merge above, and because `matchRoutesLightweight` merges the same way
-  when building a link (`router.js:795-798`). A design that "makes each route coerce what it wants"
+  when building a link (`router.js:788-791`). A design that "makes each route coerce what it wants"
   therefore has to say what happens to the params **no route declares**, which the row does not.
 
 #### F6 — a docblock claim that is false, found while counting
@@ -307,7 +307,7 @@ hand-composed URL literal (three — `use-session.ts:197`, `sign-up.tsx:32`,
 
 ### The corruption table (what happens today, per value shape)
 
-Read from `qss.js:41-46` (`toValue`), `searchParams.js:18-30` (`JSON.parse`, with the `catch`
+Read from `qss.js:41-46` (`toValue`), `searchParams.js:18-33` (`JSON.parse`, with the `catch`
 that keeps the raw string), and `searchParams.js:43-62` (the stringifier).
 
 | Value in a URL we did not serialise    | after `toValue`            | after `JSON.parse`       | reaches the reader as            | live?                            |
@@ -441,7 +441,7 @@ no row under either the durability or the blast-radius test). External Guests ar
 | Malformed date in `from`/`to`          | `asIsoDate` regex                                                                                               | filter ignored, nothing sent to the API          | n/a                             |
 | Token not recognised                   | server                                                                                                          | existing "that link is no longer valid" screen   | 404/410 at the API              |
 | A non-string reaches `stringifySearch` | development-time error; `String(v)` in production                                                               | none                                             | n/a                             |
-| Route validator throws                 | `SearchParamError` recorded on the match (`router.js:697-704`), load short-circuited (`load-client.js:152-156`) | an error screen instead of the route             | — **must stay unreachable**; D6 |
+| Route validator throws                 | `SearchParamError` recorded on the match (`router.js:690-697`), load short-circuited (`load-client.js:141-145`) | an error screen instead of the route             | — **must stay unreachable**; D6 |
 
 ---
 
@@ -533,7 +533,7 @@ individually because each asserts a URL or a search-driven state:
 flowchart LR
   URL["Browser URL<br/>?q=2026&view=gantt"] --> PS["parseSearch<br/>(router option)"]
   PS --> VS["validateSearch<br/>8 routes"]
-  VS --> MERGE["preMatchSearch<br/>{...raw, ...validated}<br/>router.js:685-696"]
+  VS --> MERGE["preMatchSearch<br/>{...raw, ...validated}<br/>router.js:678-689"]
   MERGE --> US["useSearch({strict:false})<br/>7 call sites"]
   US --> RD["readers<br/>4 helpers today, 1 after"]
   RD --> SCR["screens"]
@@ -622,7 +622,7 @@ Decisions, each with the evidence that produced it:
   quotes. Read, not assumed.
 - **D2 — the parser is built on `URLSearchParams`, never on `parseSearchWith`.** `decode`'s
   `toValue` (`qss.js:41-46`) coerces `true`/`false`/canonical numerics **before** any parser is
-  consulted (`searchParams.js:18-30`), so `parseSearchWith(v => v)` still delivers `?verified=1` as
+  consulted (`searchParams.js:18-33`), so `parseSearchWith(v => v)` still delivers `?verified=1` as
   a number. This is the correction to the row's own proposed remedy (F1).
 - **D3 — a repeated key resolves to its first value.** `URLSearchParams.get` semantics. Today
   `decode` builds an array (`qss.js:55-65`) and 15 of 18 readers fall to a default. Rejected: keep
@@ -636,8 +636,8 @@ Decisions, each with the evidence that produced it:
   changes is that there is one spelling instead of four.
 - **D6 — validators stay hand-written functions; no Zod `validateSearch`.** A standard-schema
   validator that rejects throws `SearchParamError`, which `matchRoutes` catches and records on the
-  match (`router.js:697-704`); the loader then short-circuits that match into its error lane
-  (`load-client.js:152-156`) rather than rendering the screen. That is the opposite of the rule
+  match (`router.js:690-697`); the loader then short-circuits that match into its error lane
+  (`load-client.js:141-145`) rather than rendering the screen. That is the opposite of the rule
   stated three times in `router.tsx` — a hand-edited URL must degrade rather than crash — so the
   validators stay functions that normalise and never throw.
 - **D7 — no `VITE_` flag.** ADR-0088 D1: a `VITE_` constant is inlined at build time, `.dockerignore`
@@ -665,7 +665,7 @@ Decisions, each with the evidence that produced it:
    (F1/D2) — it would have shipped, looked right, and left `?verified=1` a number.
 3. **Zod validators everywhere.** Rejected — D6.
 4. **A per-route opt-in (`parseSearch` per route).** The library has no such option; `parseSearch` is
-   a router-level option (`router.js:634-635`). Not available.
+   a router-level option (`router.js:627-628`). Not available.
 5. **Leave it; delete the row.** A defensible answer if CQ-1 falsifies L3 and CQ-2 is answered "not
    worth it". Named so the approval is a choice rather than a default.
 

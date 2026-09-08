@@ -3,22 +3,23 @@
     "better-auth": "1.7.1",
     "better-call": "1.4.0",
     "@better-fetch/fetch": "1.3.1",
-    "nodemailer": "9.0.5",
+    "nodemailer": "9.1.1",
     "zod": "4.4.3",
     "@nestjs/throttler": "6.5.0",
     "react-hook-form": "7.86.0",
     "lucide-react": "1.33.0",
     "axe-core": "4.13.0",
     "@axe-core/playwright": "4.13.0",
-    "@tanstack/react-router": "1.170.27",
-    "@tanstack/history": "1.162.1",
-    "@tanstack/router-core": "1.171.22",
+    "@tanstack/react-router": "1.170.33",
+    "@tanstack/history": "1.162.2",
+    "@tanstack/router-core": "1.171.28",
     "playwright-core": "1.62.1",
     "tailwindcss": "4.3.3"
   },
   "resolveVia": {
     "axe-core": "@axe-core/playwright",
-    "@tanstack/router-core": "@tanstack/react-router"
+    "@tanstack/router-core": "@tanstack/react-router",
+    "@tanstack/history": "@tanstack/react-router"
   },
   "claims": [
     {
@@ -77,11 +78,11 @@
       ]
     },
     {
-      "ref": "index.js:223-235",
+      "ref": "index.js:224-236",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "223-235",
-      "anchor": "win.history.go(1);",
+      "lines": "224-236",
+      "anchor": "win.history.go(-delta);",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
@@ -137,10 +138,10 @@
       ]
     },
     {
-      "ref": "index.js:290-292",
+      "ref": "index.js:299-301",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "290-292",
+      "lines": "299-301",
       "anchor": "onBlocked: () => {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -148,26 +149,26 @@
       ]
     },
     {
-      "ref": "index.js:297",
+      "ref": "index.js:306",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "297",
+      "lines": "306",
       "anchor": "win.addEventListener(beforeUnloadEvent, onBeforeUnload, { capture: true });",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
-      "ref": "index.js:335-342",
+      "ref": "index.js:344-351",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "335-342",
+      "lines": "344-351",
       "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
       "citedBy": ["docs/specs/unsaved-work-guard/architecture.md"]
     },
     {
-      "ref": "index.js:335-343",
+      "ref": "index.js:344-352",
       "package": "@tanstack/history",
       "path": "dist/esm/index.js",
-      "lines": "335-343",
+      "lines": "344-352",
       "anchor": "function createMemoryHistory(opts = { initialEntries: [\"/\"] }) {",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -175,10 +176,10 @@
       ]
     },
     {
-      "ref": "Transitioner.js:44-48",
+      "ref": "Transitioner.js:36-40",
       "package": "@tanstack/react-router",
       "path": "dist/esm/Transitioner.js",
-      "lines": "44-48",
+      "lines": "36-40",
       "anchor": "ignoreBlocker: true",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -186,10 +187,10 @@
       ]
     },
     {
-      "ref": "link.js:302",
+      "ref": "link.js:290-297",
       "package": "@tanstack/react-router",
       "path": "dist/esm/link.js",
-      "lines": "302",
+      "lines": "290-297",
       "anchor": "ignoreBlocker",
       "citedBy": [
         "docs/specs/unsaved-work-guard/feature-spec.md",
@@ -315,10 +316,10 @@
       ]
     },
     {
-      "ref": "load-client.js:152-156",
+      "ref": "load-client.js:141-145",
       "package": "@tanstack/router-core",
       "path": "dist/esm/load-client.js",
-      "lines": "152-156",
+      "lines": "141-145",
       "anchor": "const validationError = match.paramsError ?? match.searchError;",
       "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
     },
@@ -367,10 +368,10 @@
       ]
     },
     {
-      "ref": "router.js:634-635",
+      "ref": "router.js:627-628",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "634-635",
+      "lines": "627-628",
       "anchor": "parseSearch: options.parseSearch ?? defaultParseSearch",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -378,10 +379,10 @@
       ]
     },
     {
-      "ref": "router.js:685-696",
+      "ref": "router.js:678-689",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "685-696",
+      "lines": "678-689",
       "anchor": "const strictSearch = validateSearch(route.options.validateSearch, { ...parentSearch }) ?? void 0;",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -389,18 +390,18 @@
       ]
     },
     {
-      "ref": "router.js:697-704",
+      "ref": "router.js:690-697",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "697-704",
+      "lines": "690-697",
       "anchor": "if (!(err instanceof SearchParamError)) searchParamError = new SearchParamError(err.message, { cause: err });",
       "citedBy": ["docs/specs/router-search-params/feature-spec.md"]
     },
     {
-      "ref": "router.js:795-798",
+      "ref": "router.js:788-791",
       "package": "@tanstack/router-core",
       "path": "dist/esm/router.js",
-      "lines": "795-798",
+      "lines": "788-791",
       "anchor": "Object.assign(accumulatedSearch, validateSearch(route.options.validateSearch, accumulatedSearch));",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
@@ -408,11 +409,11 @@
       ]
     },
     {
-      "ref": "searchParams.js:18-30",
+      "ref": "searchParams.js:18-33",
       "package": "@tanstack/router-core",
       "path": "dist/esm/searchParams.js",
-      "lines": "18-30",
-      "anchor": "if (typeof value === \"string\") try {",
+      "lines": "18-33",
+      "anchor": "if (typeof value === \"string\") {",
       "citedBy": [
         "docs/specs/router-search-params/feature-spec.md",
         "docs/specs/router-search-params/implementation-plan.md"

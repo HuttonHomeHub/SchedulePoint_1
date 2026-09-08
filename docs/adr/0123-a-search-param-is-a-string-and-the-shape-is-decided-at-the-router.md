@@ -34,7 +34,7 @@ JSON-parses every value". That is half the mechanism, and the missing half decid
 
 The **decode** step coerces `"true"`, `"false"` and canonical numeric strings
 (`@tanstack/router-core` `qss.js:41-46`) **before** any parser is consulted, and `JSON.parse`
-(`searchParams.js:18-30`) only ever sees values that are still strings. So the obvious minimal fix —
+(`searchParams.js:18-33`) only ever sees values that are still strings. So the obvious minimal fix —
 `parseSearchWith(v => v)`, "a parser that leaves values alone", which is what #96's own text
 proposed — **would not have fixed `?verified=1` at all.** The helper has to go, not its argument.
 This is recorded executably in `apps/web/src/app/router-search.characterisation.test.ts`, whose 23
@@ -45,7 +45,7 @@ the run.
 ### The merge, measured (F5)
 
 `validateSearch`'s return is **added to** the parsed search, not substituted for it
-(`router.js:685-696`), and `useSearch` returns `match.search` whatever `strict` is set to
+(`router.js:678-689`), and `useSearch` returns `match.search` whatever `strict` is set to
 (`useSearch.js:21-23`). Two consequences, both established against a real `createRouter` over a real
 memory history rather than read off the source:
 
@@ -78,7 +78,7 @@ symptom this epic measured.
   contract: replacing the parser alone leaves the stringifier re-quoting `'2026'` on the way out, and
   `parseLocation` re-stringifies every location into every link built from it
   (`router.js:183-194`), so a mismatched pair shows up as a URL that rewrites itself. They are
-  **router-level** options (`router.js:634-635`) — there is no per-route override — which is why this
+  **router-level** options (`router.js:627-628`) — there is no per-route override — which is why this
   is two lines and why it could never have been done route by route.
 - **D2 — a repeated key resolves to its first value**, matching `URLSearchParams.get`. Today it
   arrives as an array and fifteen of the eighteen readers fall to a default. An array is the shape

@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
  * the eighteen params the app reads are declared by no `validateSearch` at all — `gsort`, `ghide`,
  * `gcollapsed` on the plan workspace, and `categories`, `outcome`, `from`, `to` on the two audit
  * screens. They work because a validator's return is *added to* the parsed search rather than
- * substituted for it (`router.js:685-696`), so a key nobody declares still arrives at its reader,
+ * substituted for it (`router.js:678-689`), so a key nobody declares still arrives at its reader,
  * already coerced by the codec. A census keyed on validators would report those seven as covered by
  * saying nothing about them.
  *
