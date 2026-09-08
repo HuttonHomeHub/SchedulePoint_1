@@ -14,6 +14,7 @@ import {
   classTitle,
   notAssessableSentence,
 } from '../model/change-sentences';
+import { otherPlanRowNote } from '../model/revision-sentences';
 
 import { useAnnounce } from '@/components/ui/announcer';
 
@@ -45,14 +46,24 @@ export interface RevisionChangesViewProps {
   readonly report: RevisionChangeReport | CrossPlanChangeReport;
   /** Select and reveal an activity in whichever view is showing. */
   readonly onActivateActivity: (activityId: string, name?: string) => void;
+  /**
+   * Cross-plan only: the OTHER plan's name, printed where a row's activation control would be.
+   *
+   * A `REMOVED` row across two plans has no bar on this diagram at all, so the control is omitted
+   * (ADR-0082) — and an omission with nothing in its place is indistinguishable from a control
+   * that failed to render. Naming the plan is the explanation the absence owes.
+   */
+  readonly otherPlanName?: string | undefined;
 }
 
 function ClassSection({
   assessment,
   onActivateActivity,
+  otherPlanName,
 }: {
   assessment: RevisionClassAssessment | CrossPlanClassAssessment;
   onActivateActivity: (activityId: string, name?: string) => void;
+  otherPlanName?: string | undefined;
 }): React.ReactElement {
   const headingId = useId();
   const count = classCountSentence(assessment);
@@ -110,6 +121,13 @@ function ClassSection({
                       <span className="text-muted-foreground truncate">
                         {row.from ?? '—'} → {row.to ?? '—'}
                       </span>
+                      {otherPlanName === undefined ? null : (
+                        // The explanation the omission owes: an omitted control with nothing in
+                        // its place is indistinguishable from one that failed to render.
+                        <span className="text-muted-foreground">
+                          {otherPlanRowNote(otherPlanName)}
+                        </span>
+                      )}
                     </li>
                   );
                 }
@@ -166,6 +184,7 @@ function ClassSection({
 export function RevisionChangesView({
   report,
   onActivateActivity,
+  otherPlanName,
 }: RevisionChangesViewProps): React.ReactElement {
   const announce = useAnnounce();
   const footerId = useId();
@@ -207,6 +226,7 @@ export function RevisionChangesView({
           key={assessment.changeClass}
           assessment={assessment}
           onActivateActivity={onActivateActivity}
+          otherPlanName={otherPlanName}
         />
       ))}
       <p id={footerId} className="text-muted-foreground border-t pt-2 text-xs">

@@ -18,7 +18,6 @@ import {
   frameSentence,
   membershipSentence,
   noCommonCodesSentence,
-  otherPlanRowNote,
   planLabel,
   RECODE_CAVEAT,
   HONESTY_FOOTER,
@@ -563,6 +562,11 @@ export function RevisionComparePanel({
                   <RevisionChangesView
                     report={compare.changes}
                     onActivateActivity={announceActivation}
+                    // The OTHER plan's name, so a row that lives only there explains its own
+                    // missing control rather than going silent. THIS is where the null-id rows
+                    // are — the delta's sections hold only matched activities, which always
+                    // resolve in the anchor plan.
+                    otherPlanName={crossPlan?.fromPlan.name}
                   />
                 ) : (
                   <>
@@ -585,7 +589,6 @@ export function RevisionComparePanel({
                           cap={compare.criticalPath.cap}
                           emptyMessage="Nothing entered the critical path."
                           onActivate={announceActivation}
-                          otherPlanName={crossPlan?.fromPlan.name}
                         />
                         <MovedSection
                           heading="Left the critical path"
@@ -595,7 +598,6 @@ export function RevisionComparePanel({
                           cap={compare.criticalPath.cap}
                           emptyMessage="Nothing left the critical path."
                           onActivate={announceActivation}
-                          otherPlanName={crossPlan?.fromPlan.name}
                         />
                         {/* The denominator. Without it "7 entered the critical path" could be 7 of 10 — a
                     real story — or 7 of 400, which is probably noise. Computed and transmitted from
@@ -667,7 +669,6 @@ function MovedSection({
   cap,
   emptyMessage,
   onActivate,
-  otherPlanName,
 }: {
   heading: string;
   icon: typeof ArrowDownToLine;
@@ -676,8 +677,6 @@ function MovedSection({
   cap: number;
   emptyMessage: string;
   onActivate: (activityId: string) => void;
-  /** Cross-plan only: the plan a row without an anchor id belongs to, named in its place. */
-  otherPlanName?: string | undefined;
 }): React.ReactElement {
   const headingId = useId();
   const note = truncationNote(rows.length, total, cap);
@@ -696,7 +695,7 @@ function MovedSection({
             // Keyed on the code cross-plan, where `activityId` is null for a row that lives only
             // in the other plan — several such rows would otherwise share one key.
             <li key={row.activityId ?? `code:${row.code ?? row.name}`} className="text-sm">
-              <MovedRow row={row} onActivate={onActivate} otherPlanName={otherPlanName} />
+              <MovedRow row={row} onActivate={onActivate} />
             </li>
           ))}
         </ul>
@@ -723,11 +722,9 @@ function MovedSection({
 function MovedRow({
   row,
   onActivate,
-  otherPlanName,
 }: {
   row: RevisionMovedActivity | CrossPlanMovedActivity;
   onActivate: (activityId: string) => void;
-  otherPlanName?: string | undefined;
 }): React.ReactElement {
   const detail = (
     <>
@@ -743,7 +740,7 @@ function MovedRow({
         {row.toEarlyStart === null && row.toEarlyFinish === null
           ? null
           : ` · now ${row.toEarlyStart ?? '—'} to ${row.toEarlyFinish ?? '—'}`}
-        {row.existsLive ? null : otherPlanName === undefined ? ' · not in the live plan' : null}
+        {row.existsLive ? null : ' · not in the live plan'}
       </span>
     </>
   );
@@ -761,18 +758,21 @@ function MovedRow({
    * activity is named by the comparison and has since been deleted, which IS a state, so the
    * control is **shaded with a reason**. Neither treatment is the other's default.
    */
-  if (row.activityId === null) {
-    return (
-      <div className="w-full px-1 py-0.5">
-        {detail}
-        {otherPlanName === undefined ? null : (
-          <span className="text-muted-foreground block text-xs">
-            {otherPlanRowNote(otherPlanName)}
-          </span>
-        )}
-      </div>
-    );
-  }
+  /**
+   * **UNREACHABLE from this section, and kept as a total case rather than deleted** — which the
+   * journey established rather than a reading.
+   *
+   * `entered` and `left` hold only MATCHED activities: a row is in one of them because it exists
+   * on both sides, so cross-plan it always resolves in the anchor plan. The rows that genuinely
+   * carry a null id are the presence rows — and this panel renders those as COUNTS, not as rows —
+   * and the change list's `REMOVED` class, which is where the reachable branch lives
+   * (`RevisionChangesView`). A first version threaded an `otherPlanName` prop down here to name
+   * the plan in the control's place; the journey proved the sentence never rendered, and it was a
+   * prop scaffolded for a caller that does not exist, which is the defect this panel's own
+   * docblock records being caught once. The branch stays because the TYPE permits a null and
+   * asserting otherwise would be the guess.
+   */
+  if (row.activityId === null) return <div className="w-full px-1 py-0.5">{detail}</div>;
 
   const activityId = row.activityId;
   const reasonId = `revision-row-reason-${activityId}`;
