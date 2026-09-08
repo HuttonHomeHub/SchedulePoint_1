@@ -114,8 +114,10 @@ export const SCENARIOS: readonly ScenarioDefinition[] = [
     ],
     gated: true,
     decision:
-      'Whether `View ▾ ▸ Compare on diagram` can be default-on. It ships off because this is ' +
-      'unanswered, not because it was judged too expensive.',
+      'Whether `View ▾ ▸ Compare on diagram` can be default-on. ANSWERED 2026-09-08 on the product ' +
+      "owner's own machine — delta -0.19 pp against a 2.00 pp bar at 60.0 fps, so the overlay costs " +
+      'nothing detectable at the working zoom, and they turned it on (ADR-0127 D8b). The scenario ' +
+      'stays: it is now the regression guard for that default rather than the question behind it.',
   },
   {
     id: 'canvas-draw',

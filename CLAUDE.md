@@ -4011,7 +4011,11 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   0.56 pp inside the 2.00 pp bar, which is what makes the verdict mean anything (D8a). **Fit still
   says nothing**: ungraded by P3, and `docs/TECH_DEBT.md` #260 records that a baseline of 98.33 pp
   leaves less headroom than the bar, so that framing's delta is arithmetically incapable of failing.
-  The default does not move on one framing. Two more defects
+  **The default moved anyway, and deliberately** (D8b, 2026-09-08): put to the product owner with
+  both halves — free at Week, unknown at Fit — they turned it on. What the default decides is
+  narrower than it sounds, which is what makes the unknown affordable: the overlay draws nothing
+  until a revision pair is chosen, so a planner who never compares pays nothing, and the default
+  settles only whether choosing a pair shows the difference or waits to be asked twice. Two more defects
   were found by running rather than reading: the edge loading was gated on `include=changes`, so
   `include=ghosts` alone received two empty edge sets and lit nothing (the ADR-0081 shape, caught by
   the API e2e on its first run); and the journey's own seed, re-typing a link to create one, changed

@@ -30,10 +30,12 @@ describe('useTsldCanvasUiState', () => {
 
   it('drives the lens view state (filter query / attrs / colour mode / baseline overlay)', () => {
     const { result } = renderHook(() => useTsldCanvasUiState());
-    // Defaults are the "no lens active" identity.
+    // Every lens is inert at its default EXCEPT `compareOverlay`, which went default-on 2026-09-08
+    // (ADR-0127 D8b) once the paint cost was measured at zero. It still draws nothing until a
+    // revision pair is chosen, so the exception costs a planner who never compares nothing at all.
     expect(result.current.lensState).toEqual({
       searchCursorId: null,
-      compareOverlay: false,
+      compareOverlay: true,
       filterQuery: '',
       filterAttrs: new Set(),
       colourMode: 'criticality',

@@ -160,9 +160,36 @@ The **Fit** framing is separately measured and says nothing: P3 leaves it ungrad
 `docs/TECH_DEBT.md` #260 records that at a baseline of 98.33 pp the difference metric is
 arithmetically incapable of failing, so its −0.19 pp delta is uninterpretable rather than reassuring.
 
-**This does not flip the default.** D8's toggle stays off. What blocked default-on was that the cost
-was unknown; it is now known at the working zoom and remains unknown at the whole-plan zoom, and
-whether that is enough is the product owner's call, not a conclusion this measurement licenses.
+**This does not itself flip the default.** What blocked default-on was that the cost was unknown; it
+is now known at the working zoom and remains unknown at the whole-plan zoom, and whether that is
+enough is the product owner's call, not a conclusion this measurement licenses. They made it — D8b.
+
+### D8b — default ON, 2026-09-08, on the product owner's decision
+
+Supersedes D8's default; D8's _reasoning_ is untouched, because that reasoning was never that the
+overlay is expensive. It was that the cost was **unmeasured**, and it said so in those words.
+
+`DEFAULT_LENS_STATE.compareOverlay` is `true`. The decision was put to the product owner with both
+halves — free at Week (D8a), and **unknown at Fit**, where P3 leaves the framing ungraded and
+`docs/TECH_DEBT.md` #260 shows the difference metric arithmetically unable to fail — and they turned
+it on.
+
+**What the default actually decides is narrower than "on".** The overlay draws nothing until a
+revision pair is chosen (`TsldPanel.tsx:1205`, `hasRevisionPair`), and the toggle already refuses
+with a stated reason when there is no pair or when the Gantt is showing. So a planner who never opens
+a comparison sees no difference of any kind, and pays nothing: the default decides only whether
+**choosing a pair shows the difference, or shows the plan and waits to be asked a second time.** That
+is the sense in which the Fit unknown is affordable — the expensive framing is reached only by
+somebody who has already asked for a comparison and then zoomed out to the whole plan.
+
+**One phrase is retired rather than left to rot.** `DEFAULT_LENS_STATE`'s docblock called itself "the
+no lens active identity", and that is no longer true — `compareOverlay` is the one member not inert
+at its default. The comment says so instead of continuing to describe the previous world.
+
+**The scenario stays in the probe and changes role.** `revision-diff` was built to answer whether
+this default could be taken; it is now the regression guard for the default that was. Its `decision`
+field says which, because a scenario whose stated question has been answered reads as dead weight to
+the next person and gets deleted.
 
 ## Consequences
 
