@@ -4002,10 +4002,16 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   **Composed into the export rather than filed as screen-only**, because it is the one lens whose
   whole purpose is to be handed to somebody who was not in the room; the derived scene-parity gate
   forced the decision instead of letting it be deferred with #167. **Default off, and the paint cost
-  is UNANSWERED**: the M0 harness works and refused to judge, because the baseline — the shipped
-  painter with no treatment — moved 0.56→1.85 pp at 1646 and 0.93→10.00 pp at 1920 between two runs
-  an hour apart with no code change, against a 2.00 pp bar. The environment is recorded as
-  **disqualified**; a headed run on real hardware is owed and outside this epic. Two more defects
+  was UNANSWERED until 2026-09-08**: the M0 harness worked and refused to judge, because the
+  baseline — the shipped painter with no treatment — moved 0.56→1.85 pp at 1646 and 0.93→10.00 pp at
+  1920 between two runs an hour apart with no code change, against a 2.00 pp bar, and the environment
+  is recorded as **disqualified**. The owed headed run was taken on the ADR-0128 panel and **the
+  overlay costs nothing detectable at the working zoom** — Week, 2,000 activities, baseline 0.19 pp,
+  treatment 0.00 pp at 60.0 fps, delta −0.19 pp, PASS on both limbs, the machine's own spread
+  0.56 pp inside the 2.00 pp bar, which is what makes the verdict mean anything (D8a). **Fit still
+  says nothing**: ungraded by P3, and `docs/TECH_DEBT.md` #260 records that a baseline of 98.33 pp
+  leaves less headroom than the bar, so that framing's delta is arithmetically incapable of failing.
+  The default does not move on one framing. Two more defects
   were found by running rather than reading: the edge loading was gated on `include=changes`, so
   `include=ghosts` alone received two empty edge sets and lit nothing (the ADR-0081 shape, caught by
   the API e2e on its first run); and the journey's own seed, re-typing a link to create one, changed

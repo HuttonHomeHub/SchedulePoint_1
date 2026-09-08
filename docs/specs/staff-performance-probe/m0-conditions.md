@@ -318,13 +318,45 @@ painter plus the comparison harness. `docs/TECH_DEBT.md` #75 asks about `canvas-
 different code path and a different question. The two readings that row is waiting for have not been
 taken.
 
+### 2026-09-08 — `revision-diff` / Week / 2,000 activities — **the one that answers ADR-0127**
+
+Same machine, 18 minutes later. Idle frame interval **16.60 ms**. Same 2,160-bar scene; at the Week
+framing the cull leaves **264 bars on screen at 12.00 px/day**. Full run — 180 frames × 3.
+
+| quantity  | value                               |
+| --------- | ----------------------------------- |
+| baseline  | 0.19 pp (run-to-run spread 0.56 pp) |
+| treatment | 0.00 pp — 60.0 fps                  |
+| delta     | −0.19 pp                            |
+| verdict   | **PASS** (P1 and P2)                |
+
+**ADR-0127's paint cost is answered: the overlay costs nothing detectable.** That entry closed with
+the cost UNANSWERED and a headed run on real hardware owed, because the container's own no-change
+baseline moved 0.56 → 1.85 pp and 0.93 → 10.00 pp between runs an hour apart — wider than the 2.00 pp
+bar, so the environment was disqualified from answering. This machine is not: its baseline spread is
+**0.56 pp against a 2.00 pp bar**, comfortably inside, which is what makes the verdict mean something
+rather than merely exist.
+
+**Both limbs, and neither is doing the other's work.** P1, the difference: −0.19 pp against ≤ +2.00.
+P2, the level: 60.0 fps against ADR-0026 §9's 30 fps floor at the 2,000-activity ceiling — double it.
+The treatment measuring marginally _faster_ than the baseline is noise well inside the 0.56 pp spread,
+not a claim that the overlay makes the diagram quicker.
+
+**Saturation does not apply here, and that was checked rather than assumed.** #260's trap needs the
+baseline near the ceiling; at 0.19 pp the headroom is 99.81 pp against a 2.00 pp bar, so a costly
+treatment had every opportunity to fail this gate and did not. That is what the Fit run could not
+say.
+
+**What it does not settle.** One framing, one machine, one afternoon. Fit remains ungraded by P3 and
+uninterpretable by #260, so nothing here describes the whole-plan zoom. And a PASS is a statement
+about cost, not a decision about the default — see below.
+
 ### Still owed
 
-| run                        | answers                                                                                                         |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `canvas-draw` / Week       | #75's 500-activity limb, which ADR-0026 §9 states and nothing has ever measured, and its 2,000 limb             |
-| `canvas-draw` / Fit        | #75's unattributed ~8 ms at the whole-plan framing                                                              |
-| `revision-diff` / **Week** | ADR-0127's paint cost, still UNANSWERED — the framing where P1 and P2 are graded and the delta is not saturated |
+| run                  | answers                                                                                             |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| `canvas-draw` / Week | #75's 500-activity limb, which ADR-0026 §9 states and nothing has ever measured, and its 2,000 limb |
+| `canvas-draw` / Fit  | #75's unattributed ~8 ms at the whole-plan framing                                                  |
 
-The third is the one this session most needs: the Fit run above is the single framing that is
-deliberately never graded, so ADR-0127's open question is exactly as open as it was.
+Both are `canvas-draw`, which is a different painter path from the `revision-diff` scene above.
+`docs/TECH_DEBT.md` #75 is waiting on exactly these two and on nothing that has been run so far.
