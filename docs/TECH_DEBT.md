@@ -589,6 +589,72 @@ would not exercise the code being budgeted.
    rather than scheduling work against an unattributed 8 ms — step 3's DevTools attribution comes
    first if it is ever picked up. Dirty-region repainting stays a reserved escalation, not a task.
 
+5. **Second real-hardware reading set, 2026-09-08 — taken on the ADR-0128 staff panel, and it
+   settles this row's own named residue while unsettling its verdict.** Same machine as the
+   2026-08-03 set as far as the report can tell (`ANGLE (Intel, Intel(R) Arc(TM) Pro Graphics
+(0x00007D55) Direct3D11)`, 22 threads), Edge 152, 60 Hz, DPR 1 — but at a **1912×1068** viewport
+   against that set's ~1036×600 canvas. `scale-scene`, full run, 180 frames × 3.
+
+   | framing | plan  | bars drawn | mean fps (slowest–fastest) | dropped  | interval p95 | §9 floor | against it |
+   | ------- | ----- | ---------- | -------------------------- | -------- | ------------ | -------- | ---------- |
+   | Week    | 500   | 243        | 59.8 (59.4–60.0)           | 0.19 pp  | 16.80 ms     | 45 fps   | **PASS**   |
+   | Week    | 2,000 | 267        | 60.0 (60.0–60.0)           | 0.00 pp  | 16.80 ms     | 30 fps   | **PASS**   |
+   | Fit     | 500   | 540        | 57.2 (54.0–59.7)           | 4.63 pp  | 33.40 ms     | 45 fps   | clears it  |
+   | Fit     | 2,000 | 1,792      | 23.3 (22.6–24.2)           | 97.22 pp | 66.70 ms     | 30 fps   | **short**  |
+
+   The two Fit rows are ungraded by P3 (`docs/specs/revision-compare-changes/m0-condition.md:87-90`),
+   so "clears it" and "short" are arithmetic against §9's floor, not verdicts the panel issued.
+
+   **(a) The 500-activity limb is measured, and it passes at both framings.** This row's own closing
+   sentence names it as "the genuinely open residue"; ADR-0026 §9 has stated a 45 fps floor for it
+   since 2026 and nothing had ever checked it. 59.8 fps at the working zoom and **57.2 fps even at
+   whole-plan** — where the cull has nothing left to remove and all 540 bars are drawn. At the scale
+   a planner's ordinary plan actually sits, the painter is not close to trouble anywhere.
+
+   **(b) Step 3's question is answered, and the answer is the design property it hoped for: the cost
+   is in the bars drawn, not in the plan.** That step asked for 500 as well as 2,000 precisely
+   because "two points tell you whether the cost scales with the plan or with the viewport, and only
+   the second is a design property worth having". The control is as clean as this instrument can
+   produce — **Week/500 draws 243 bars at 59.8 fps and Week/2000 draws 267 at 60.0 fps**: four times
+   the plan, 24 more bars, two tenths of a frame per second. Then Fit/500 draws 540 at 57.2 and
+   Fit/2000 draws 1,792 at 23.3. Plan size does not appear anywhere in that; bars drawn explains all
+   four. **So the remedy space is drawing cost — decimation at low px/day, dirty regions — and not
+   anything about plan size.** ADR-0026's reserved escalation is still reserved, but the question it
+   would answer is now the right one.
+
+   **(c) The foot verdict above no longer holds unconditionally, and is amended rather than
+   rewritten.** It reads "PASS at both zooms, at the 2,000 ceiling, on real hardware", from a Fit
+   row of ~53 fps and 10.2 % dropped. This run puts Fit/2,000 at **23.3 fps against a 30 fps floor**
+   — 6.7 fps short — and at 97.22 pp dropped. On the numbers in hand §9's gate is **met at Week at
+   both scales, met at Fit at 500, and missed at Fit at 2,000**.
+
+   **(d) That is NOT established as a regression, and must not be recorded as one.** The comparable
+   quantity moved 10.2 % → 97.22 %, and three differences are live between the two runs, none
+   eliminated:
+   - **Canvas area.** ~1036×600 then against a 1912×1068 viewport now — roughly **2.3× the pixels**.
+     This row's own leading hypothesis for the unattributed ~8 ms is "full-canvas raster/upload each
+     frame on an integrated GPU", and that cost is area-proportional, so the confound sits exactly on
+     the mechanism.
+   - **Scene.** Then, a 2,016-activity XER imported through the product's own importer. Now,
+     `scale-scene`'s 2,160 bars / 3,200 links / 50 lanes. This row already records that **the scene
+     dominates the number**.
+   - **Bars drawn.** Today's Fit/2,000 draws **1,792**. The 2026-08-03 set does not record bars drawn
+     at all — which is why the panel prints `on screen` on every limb — so the single quantity (b)
+     shows to explain everything is unknown for the run being compared against.
+
+   Week is consistent across both dates (0/600 dropped then, 0.00 pp now), which is what makes the
+   Fit gap worth explaining rather than dismissing: whatever changed did not change the working zoom.
+
+   **The discriminating experiment is cheap and is one run**: re-run Fit/2,000 with the browser
+   window at roughly 1036×600 and read `on screen`. If the fps recovers toward the 2026-08-03 figure,
+   canvas area is the cause and there is no regression; if it does not, the scene or the painter is,
+   and the comparison becomes worth pursuing. Until somebody runs it, the honest statement is that
+   **this run measures a machine and a viewport, and does not measure a change over time.**
+
+   **What is still unattributed is unchanged.** This panel reports frame pacing, not where the time
+   goes inside a frame; the ~8 ms between "JS finished" and "frame presented" needs a DevTools
+   Performance recording, exactly as step 3 says, and must still not be guessed.
+
 Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
 itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
 

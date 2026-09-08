@@ -4250,6 +4250,19 @@ A lighter-weight running log of smaller decisions is in
   software-rasterised and explicitly not the target envelope.
   Do not restate either the alarming or the reassuring half of this alone — both
   are half-truths, which is how the wrong one survived here for four weeks.
+  **Second reading set, 2026-09-08**, taken by the product owner on the ADR-0128
+  panel — the two runs #75 had been waiting on since 2026-08-03, at a
+  1912×1068 viewport against that set's ~1036×600 canvas. Two things change.
+  **The 500-activity limb is measured for the first time and passes at both
+  framings** (59.8 fps at Week, 57.2 at Fit, floor 45) — #75's own "genuinely
+  open residue", closed. And **cost tracks bars drawn, not plan size**: Week/500
+  draws 243 bars at 59.8 fps, Week/2000 draws 267 at 60.0 — four times the plan,
+  0.2 fps — while Fit/2000 draws 1,792 at **23.3 fps, 6.7 short of §9's 30 fps
+  floor**. So the "PASS at both zooms" verdict no longer holds unconditionally.
+  **It is NOT recorded as a regression**: canvas area (~2.3× the pixels), the
+  scene, and bars drawn (unrecorded in 2026-08-03's set) all differ, and one
+  re-run at ~1036×600 would discriminate. Week is unchanged across both dates.
+  The unattributed ~8 ms is still unattributed and still must not be guessed.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 

@@ -351,6 +351,30 @@ say.
 uninterpretable by #260, so nothing here describes the whole-plan zoom. And a PASS is a statement
 about cost, not a decision about the default — see below.
 
+### 2026-09-08 — `canvas-draw` / Week and Fit — **`#75`'s two owed readings**
+
+Same machine, idle interval 16.70 ms, 1912×1068 at dpr 1, full runs. Recorded in full in
+`docs/TECH_DEBT.md` #75 item 5, including the comparison against that row's 2026-08-03 set and the
+three confounds that stop it being read as a regression.
+
+| framing | plan  | bars drawn | mean fps | dropped  | interval p95 | §9 floor | verdict              |
+| ------- | ----- | ---------- | -------- | -------- | ------------ | -------- | -------------------- |
+| Week    | 500   | 243        | 59.8     | 0.19 pp  | 16.80 ms     | 45 fps   | PASS                 |
+| Week    | 2,000 | 267        | 60.0     | 0.00 pp  | 16.80 ms     | 30 fps   | PASS                 |
+| Fit     | 500   | 540        | 57.2     | 4.63 pp  | 33.40 ms     | 45 fps   | REPORTED, NOT GRADED |
+| Fit     | 2,000 | 1,792      | 23.3     | 97.22 pp | 66.70 ms     | 30 fps   | REPORTED, NOT GRADED |
+
+**The 500-activity limb existed as a stated floor and had never been measured by anything.** It
+passes at both framings, including whole-plan, where the cull has nothing left to remove.
+
+**Cost tracks bars drawn, not plan size** — the property #75 step 3 asked two limbs in order to
+establish. Week/500 draws 243 bars at 59.8 fps and Week/2000 draws 267 at 60.0: four times the plan,
+24 more bars, 0.2 fps. Fit/500 draws 540 at 57.2; Fit/2000 draws 1,792 at 23.3.
+
+**The p95 intervals are quantised to the refresh period** — 16.80, 33.40 and 66.70 ms are one, two
+and four vsyncs at 16.70 ms. They report how many frames were missed at the 95th percentile, not a
+smear, and two runs sharing a p95 share a frame count rather than a measurement.
+
 ### Still owed
 
 | run                  | answers                                                                                             |
