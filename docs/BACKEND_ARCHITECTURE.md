@@ -128,7 +128,7 @@ The dotted edges are **decided, not built**. Everything solid is live.
   deployment later without code changes.
 
 **Two jobs run today, and neither uses any of the above.** ADR-0087 **narrowed** ADR-0009 rather
-than superseding it: `RetentionSweepService` (the `csp_reports`/`mail_events` sweep) and
+than superseding it: `RetentionSweepService` (the `csp_reports`/`mail_events`/`perf_probe_results` sweep) and
 `HierarchyExpiryService` (ADR-0096's permanent deletion of expired recycle-bin rows) are each one
 `setInterval`, `.unref()`'d, with no timer at all when disabled — no Redis, no queue, no dependency.
 Their costs are **stated rather than hidden**: per replica, non-durable, no retry. Both are

@@ -173,6 +173,21 @@ decision is made; only the work is outstanding.
 > structural: knowing that a send **failed** after Better Auth's handoff
 > (`docs/TECH_DEBT.md` #94).
 
+> **The append-only audit log was on this list too, and shipped over a year ago.**
+> `audit_events` has existed since `20260803170000_audit_events`; ADR-0072 made it
+> append-only **in the database** (`BEFORE UPDATE OR DELETE` / `BEFORE TRUNCATE`
+> triggers, `ENABLE ALWAYS`) and ADR-0073 widened its coverage to seven families
+> under a route census. The row survived here justified by "row attribution and
+> structured logs are not an audit trail" — which is the **argument that was
+> accepted and acted on**, still being offered as a reason to start. `#14`'s own
+> ledger entry has said "(a) and (a2) are **closed** by ADR-0072" throughout; what
+> remains under that number is the in-process rate-limit store and the unencrypted
+> OAuth token columns, neither of which is a platform foundation. Removed by the
+> 2026-09-08 pass. **This is the second time this section has listed a shipped
+> capability as unbuilt** — see mail transport above — in the one file that decides
+> what gets built next, which is what makes it worth writing down twice rather than
+> quietly deleting.
+
 - `M` **Background processing** — BullMQ + Redis (ADR-0009). The candidate first
   consumer is schedule interchange import, which is synchronous today.
 - `M` **Caching** — Redis, cache-aside (ADR-0010). Measure first: no read path
@@ -181,8 +196,6 @@ decision is made; only the work is outstanding.
   requires file upload yet.
 - `M` **Metrics & tracing** — OpenTelemetry (ADR-0013). Includes choosing the
   backend, which is the actual decision.
-- `M` **Append-only audit log** (TECH_DEBT #14). Row attribution and structured
-  logs are not an audit trail.
 - `M` **Privacy operations** — **shaped by [ADR-0085](adr/0085-privacy-operations.md); do not start
   from this line.** That ADR reads the schema and finds the work is not "a hard-delete path": it is
   actor **anonymisation** (a hard delete would either cascade across 54 attribution columns or leave

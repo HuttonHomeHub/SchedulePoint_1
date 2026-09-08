@@ -10,6 +10,70 @@ get an ADR instead (and may be linked from here).
 
 ---
 
+## 2026-09-08 — Reconciliation pass: an agent was told the audit log does not exist
+
+Run because `check:reconcile-due` fired (eight ADRs since the 2026-08-30 pass, against a threshold of
+eight). The runbook's own step 6 says _"an agent asserting a stale invariant is worse than one
+asserting none"_, and this pass is the argument for that sentence.
+
+**`security-reviewer.md` carried, as a standing instruction, "there is no append-only audit log yet
+(#14)".** ADR-0072 shipped one on 2026-08-03 — `audit_events`, append-only **in the database** via
+`BEFORE UPDATE OR DELETE` / `BEFORE TRUNCATE` triggers declared `ENABLE ALWAYS` — and ADR-0073 widened
+it to seven families under a route census. This is not stale prose in a document nobody reads: it is a
+belief held by the agent this repository points at every endpoint, auth and data-access change, and it
+sits in the bullet headed _"Known and accepted, so don't re-report as new"_. An agent holding it would
+never check that a new privileged route reaches the log — which is the census's entire subject, and
+the thing ADR-0086 D5 inverts the usual rule for on the staff console.
+
+Two more defects in the same section, found by re-deriving rather than reading: the **`@Public()` list
+was missing three routes**, including the CSP report sink — the product's only unauthenticated
+**write** — and it knew nothing of **`StaffPrincipal`**, whose "staff reaching customer data is a
+compile error" property is exactly the structural argument the neighbouring `GuestPrincipal` bullet
+already makes. All three corrected.
+
+**The same wrong belief was in a second file.** `docs/BACKLOG.md` still listed "Append-only audit log
+(TECH_DEBT #14)" under **Platform foundations not yet built**, justified by "row attribution and
+structured logs are not an audit trail" — which is the argument that was _accepted and acted on_,
+still being offered as a reason to start. `#14`'s own ledger row has said "(a) and (a2) are **closed**
+by ADR-0072" throughout. **It is the second time that section has listed a shipped capability as
+unbuilt** — mail transport was the first, on 2026-08-05 — in the one file that decides what gets built
+next, so the correction is written up beside its predecessor rather than quietly deleted.
+
+**Retention drifted by exactly one table, and the shape of the miss is the interesting part.**
+ADR-0128 added `perf_probe_results` to `RETENTION_TABLES`, and `ARCHITECTURE.md`, `BACKEND_ARCHITECTURE.md`
+and `CLAUDE.md` §17 all still described a two-table sweep — `CLAUDE.md`'s framed as _"enforced on two
+tables and not on the third"_, which with three enforced is not merely stale but confusing. That epic
+had **already found and fixed this identical omission one layer down**: its `retention.configured` boot
+line named two tables when there were three, and its test used `objectContaining`, which cannot catch an
+omission. The code was fixed with a derived assertion; the prose saying the same wrong thing was not
+swept. `DEPLOYMENT.md` and `.env.example` **were** updated at the time, so this was a partial sweep
+rather than none — which is harder to notice than a clean miss.
+
+**`#247` re-verified and deliberately not fixed.** `A8` — the assertion refusing a row that is both
+`unverified` and carries a `Verified:` date — still cannot fire: measured, `Verified` appears **8
+times and 0 times at column 0**, which is all `fieldValue` can see, and the contradiction it exists to
+catch is live in `#117` right now. The fix is small and obvious. It is **not** taken here because
+`check-debt-status.mjs` is a shared gate, which is an ADR-0105 trigger making the full spec mandatory
+— the same rule that kept `#260`'s judge fix out of yesterday's commit.
+
+**Step 7 earned its place again.** A component review of the day's genuinely unreviewed diff passed
+with nothing blocking, and found that `test-helpers.tsx`'s toolbar fixture still defaults
+`compareOverlay: false` — diverging from production hours after ADR-0127 D8b flipped it, under a
+docblock quoting "the neutral starting point", which is the phrase that flip retired one file over.
+Annotated rather than changed: it pairs with `hasRevisionPair: false`, so both values render
+identically and altering it would be churn.
+
+**Also:** an orphaned entry in `scripts/dependency-claims.json` that the gate itself flagged (its cited
+row had been resolved); and this runbook's own claim that every `.claude/agents/` file carries a
+**SchedulePoint invariants** section, which greps to five false misses — those five head the same
+content **SchedulePoint context**.
+
+**Scope, stated rather than implied.** Steps 1–3 and 5–8 were completed. **Step 4 was a sample**: five
+of the register's forty-two `unverified` rows were re-checked against the code (`#75`, `#193`, `#247`,
+`#156`, `#253`) and all five were accurate — `#156` and `#253` correctly closed in the ledger, `#193`'s
+docblock half resolved and its export half still live, `#247` exactly right. The other thirty-seven
+were not re-verified this pass and remain `unverified`, which is what that status means.
+
 ## 2026-09-05 — A build contract is transitive, and its exclusion had a shelf life
 
 `check:build-contract` (ADR-0019) checked one level and `dependencies` only, with `devDependencies`

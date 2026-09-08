@@ -106,6 +106,13 @@ export function makeTsldToolbarContext(
     colourMode: 'criticality',
     setColourMode: vi.fn(),
     baselineOverlay: false,
+    // **Deliberately NOT production's resting state, which is `true` since ADR-0127 D8b.** This
+    // fixture is "every lens off", and it stays that way because it pairs with `hasRevisionPair:
+    // false` below — with no pair chosen the overlay draws nothing either way, so the two values
+    // render identically and a suite that wants the real default overrides it. Said here because
+    // the hook's own docblock retired the phrase "the no lens active identity" on the day the
+    // default flipped, and this file still is one; a reader taking this line for production's
+    // answer would get it wrong. Found by the 2026-09-08 reconciliation pass, step 7.
     compareOverlay: false,
     toggleCompareOverlay: vi.fn(),
     hasRevisionPair: false,
