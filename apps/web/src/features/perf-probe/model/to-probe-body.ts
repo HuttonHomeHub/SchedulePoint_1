@@ -25,10 +25,19 @@ export function toProbeBody(
   /** The operator's own note. `null` means not typed — distinct from an empty string. */
   machineLabel: string | null,
 ): ProbeResultBody | null {
-  // Anything that is not a completed measurement stores nothing — a refusal because nothing
-  // was measured, a cancellation because only part of it was. Written as "not measured" rather than
-  // as a list of the other kinds, so a fifth outcome cannot default into being stored.
-  if (outcome.kind !== 'measured') return null;
+  // A refusal stores nothing: there are no samples, the numbers that do exist are placeholders, and
+  // a row would put a reading in the installation's history that no machine ever produced.
+  //
+  // **A cancellation stores the limbs that finished.** That is the M3 change and it is narrower
+  // than it sounds: the runners drop an interrupted limb rather than truncating it, so what arrives
+  // here has collected every repeat and is a complete reading in every respect except that the
+  // operator did not wait for the next one. Discarding it was throwing away three full repeats of a
+  // 500-activity scale because a two-limb press was stopped during its second half.
+  //
+  // A cancelled press with nothing finished still stores nothing, and that falls out of the same
+  // rule rather than needing a branch of its own.
+  if (!recordsAnything(outcome)) return null;
+  if (outcome.context === null) return null;
 
   const { context } = outcome;
   const device = context.device;
@@ -55,6 +64,28 @@ export function toProbeBody(
     appVersion: context.appVersion,
     limbs: outcome.limbs.map(toLimb),
   };
+}
+
+/**
+ * Whether this outcome produces a row at all — **the one place that rule lives.**
+ *
+ * Exported because the panel asks the same question twice, to decide whether to say a reading was
+ * recorded and whether to offer Retry. Before M3 both asked `kind === 'measured'`, which was the
+ * same question spelt differently — and when a cancellation began producing a row, the store
+ * happened and the screen said nothing about it. The flag-on journey found that on its first run
+ * with the path exercised; no unit test could, because each of the three sites was correct in
+ * isolation and the disagreement lived only between them (the ADR-0093 shape).
+ */
+export function recordsAnything(
+  outcome: ProbeOutcome,
+): outcome is Extract<ProbeOutcome, { kind: 'measured' | 'cancelled' }> {
+  // A **type predicate**, so the compiler carries the rule as far as the caller does. Returning a
+  // bare boolean left `toProbeBody` reaching for `outcome.limbs` on a union that still included
+  // `refused`, and the honest options there are a cast or a second check — one of which lies and
+  // the other of which is the duplication this function exists to remove.
+  if (outcome.kind === 'refused') return false;
+  if (outcome.kind === 'cancelled' && outcome.limbs.length === 0) return false;
+  return true;
 }
 
 function toLimb(limb: LimbOutcome): ProbeLimbBody {
