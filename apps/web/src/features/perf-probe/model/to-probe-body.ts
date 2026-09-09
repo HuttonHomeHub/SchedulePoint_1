@@ -1,4 +1,9 @@
-import type { ProbeLimbBody, ProbeResultBody } from '../api/probe-results';
+import type {
+  ProbeLimbBody,
+  ProbePairBody,
+  ProbePhaseBody,
+  ProbeResultBody,
+} from '../api/probe-results';
 import type { LimbOutcome, ProbeOutcome } from '../runner/run-probe';
 
 /**
@@ -105,8 +110,40 @@ function toLimb(limb: LimbOutcome): ProbeLimbBody {
     thresholds: recording.thresholds,
     // Exactly one array, and it is the one the kind names — the same rule the server states as a
     // validator, because sending both is a 422 and sending neither trips a database CHECK.
+    //
+    // **Each window is rebuilt field by field, never forwarded.** The scenes return their own
+    // pacing types, and `revision-diff`'s carries a fifth field (`frames`, the count actually
+    // achieved) that `canvas-draw`'s does not. Structural typing let it through — an extra property
+    // is only an error on a fresh literal — so it rode onto the wire, met the global pipe's
+    // `forbidNonWhitelisted: true`, and every reading of that scenario came back
+    // `422 … property frames should not exist`. Half of what "Run all measurements" produces,
+    // measured and never stored, from the day the scenario shipped. Found by the staff journey the
+    // first time anything drove the store path for a second scenario; nothing below that tier could
+    // see it, because the API's own e2e writes its bodies by hand and therefore writes the shape
+    // the DTO declares rather than the shape the client sends.
     ...(recording.limbKind === 'difference'
-      ? { pairs: recording.pairs ?? [] }
-      : { runs: recording.runs ?? [] }),
+      ? { pairs: (recording.pairs ?? []).map(toPair) }
+      : { runs: (recording.runs ?? []).map(toPhase) }),
+  };
+}
+
+/** One baseline/treatment pair, rebuilt so neither half can carry a field the API forbids. */
+function toPair(pair: { baseline: ProbePhaseBody; treatment: ProbePhaseBody }): ProbePairBody {
+  return { baseline: toPhase(pair.baseline), treatment: toPhase(pair.treatment) };
+}
+
+/**
+ * One measured window, named field by field.
+ *
+ * A spread with the extra key deleted would work today and fail the next time a scene grows a
+ * field — which is precisely how this got here. Naming the four is what makes the wire shape a
+ * decision rather than a consequence of whatever the runner happened to return.
+ */
+function toPhase(phase: ProbePhaseBody): ProbePhaseBody {
+  return {
+    droppedPct: phase.droppedPct,
+    intervalP50: phase.intervalP50,
+    intervalP95: phase.intervalP95,
+    fps: phase.fps,
   };
 }

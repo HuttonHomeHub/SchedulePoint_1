@@ -91,8 +91,36 @@ export interface ProbeLimbBody {
   sceneSummary: string;
   counts: Record<string, number>;
   thresholds: Record<string, number | boolean | string>;
-  pairs?: readonly unknown[];
-  runs?: readonly unknown[];
+  pairs?: readonly ProbePairBody[];
+  runs?: readonly ProbePhaseBody[];
+}
+
+/**
+ * One measured window, **exactly** as the API declares it — four fields and no fifth.
+ *
+ * These two interfaces used to be `readonly unknown[]`, and that was the enabling condition of a
+ * defect the staff journey found on its first run with the sweep driving every scenario: the
+ * `revision-diff` scene's own pacing type carries a fifth field, `frames`, the global pipe runs
+ * `forbidNonWhitelisted: true`, and every reading of that scenario had therefore been answered
+ * `422 … property frames should not exist` since the day it shipped. Measured but never stored —
+ * which is, in as many words, the complaint this epic was opened on.
+ *
+ * The compiler could not have helped while the array said `unknown`, and it can now: `toProbeBody`
+ * builds each of these as a fresh object literal, so an extra property is an excess-property error
+ * at the boundary rather than a 422 on somebody's machine an hour later. That is the point of
+ * naming them here rather than mapping the fields quietly in the adapter.
+ */
+export interface ProbePhaseBody {
+  droppedPct: number;
+  intervalP50: number;
+  intervalP95: number;
+  fps: number;
+}
+
+/** One baseline/treatment pair — a `difference` limb's sample. */
+export interface ProbePairBody {
+  baseline: ProbePhaseBody;
+  treatment: ProbePhaseBody;
 }
 
 const KEY = ['staff', 'probe-results'] as const;
