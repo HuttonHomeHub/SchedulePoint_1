@@ -479,8 +479,11 @@ test.describe('The plan command surface', () => {
    */
   test('the same, with the activities panel expanded', async () => {
     test.setTimeout(240_000);
-    // Names read from `activity-bottom-panel.tsx:155,317` rather than guessed — this repository
-    // records three journeys broken by a locator matching copy nobody checked.
+    // Names read from `activity-bottom-panel.tsx:163,325` rather than guessed — this repository
+    // records three journeys broken by a locator matching copy nobody checked. (The names were
+    // read; the LINE NUMBERS were not — they said `:155,317` until 2026-09-09, which are two
+    // `hostsPlanSlots` props. A citation that is wrong about where it read something is a weaker
+    // claim than it reads as, in the comment whose whole subject is not guessing.)
     await page.getByRole('button', { name: 'Expand activities panel' }).click();
 
     // **The pinned positive for the STATE**, not just for the sweep's result. This case runs in
@@ -568,7 +571,7 @@ test.describe('The plan command surface', () => {
    *
    * The two `sweepObjectBar` cases above both run on the TSLD, and the Gantt case above them
    * sweeps the deck and the grid — so the bar was swept in one view and the view was swept without
-   * the bar. It is the same `SelectionActionsBar` (`plan-workspace-toolbar.tsx:1151`), which is
+   * the bar. It is the same `SelectionActionsBar` (`plan-workspace-toolbar.tsx:1331`), which is
    * exactly why nobody noticed: the component is shared, the CONTEXT is not. `ganttSelectionCtx`
    * makes `Zoom to selection` and `Isolate logic path` absent rather than shaded (ADR-0095), so
    * the bar renders a different item set here and a different set can wrap differently.

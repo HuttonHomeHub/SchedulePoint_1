@@ -2539,7 +2539,7 @@ tests and recorded in ADR-0100's Consequences). **Size:** S each.
 
 ### 165. Five screens photographed for the first time, and what they showed
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 **Raised 2026-08-22** (W1 of the post-theme consolidation). **Size:** S each. **(c) is CLOSED 2026-09-01 too** — fixed in `e560ac2c`, whose message names `#165c`, and this
 header was not updated: the already-fixed-and-unclosed shape at ITEM granularity, which is harder
@@ -2588,12 +2588,13 @@ useless, moved somewhere quieter.
    next plan with nothing saying why. **Proven by a test verified red, not reasoned about**; a fix
    that suppressed the Explorer by collapsing the drawer rather than by not rendering it would have
    passed every other assertion and shipped this.
-2. **`focusRailButton`'s fallback goes dead the moment the button is withheld.** A callback ref
-   fires with `null` on unmount, so the map holds `'explorer' → null` and `button?.focus()` becomes
-   a silent no-op — the WCAG 2.4.3 failure that function exists to prevent, arriving through the
-   door this change opened. It is not reachable today (#156: the `'context'` subject has no
-   production registrant), but the change is what creates the possibility, so a last rung that
-   always exists (`#main`, already `tabIndex={-1}` for the skip link) lands with it.
+2. ~~**`focusRailButton`'s fallback goes dead the moment the button is withheld.**~~ **STALE
+   2026-09-09 — the symbol is gone.** A callback ref fires with `null` on unmount, so the map held
+   `'explorer' → null` and `button?.focus()` became a silent no-op — the WCAG 2.4.3 failure that
+   function existed to prevent. `focusRailButton` has **zero occurrences in `apps/web/src`**: it
+   went with the tool rail (ADR-0109 D2), and #156 deleted the drawer subject that would have made
+   it reachable. The `#main` last rung landed anyway and is what survives. Recorded as stale rather
+   than fixed — nothing was done about this; its subject was deleted for other reasons.
 3. **The area's own suites used the broken state as their default fixture**, which is most of why
    nobody saw it. `app-shell.test.tsx` mocked `useParams: () => ({})` — no organisation — and then
    asserted the Project Explorer navigation IS present, so five of its six cases described the
@@ -2603,9 +2604,13 @@ useless, moved somewhere quieter.
 
 The **derived** half of the journey's absence check (`a[href*="/orgs/"]`) passed against the pre-fix
 code, which is the row's own finding restated as evidence: the rule existed and was applied to one
-cluster. `tool-rail.test.tsx`'s case for the other cluster is titled _"renders no destinations
-outside an organisation — there are none to show"_, forty lines below the button that was exempt
-from it.
+cluster, forty lines above a button that was exempt from it. _(This sentence quoted a
+`tool-rail.test.tsx` case titled "renders no destinations outside an organisation — there are none
+to show". Re-derived 2026-09-09: **neither the file nor that title exists.** ADR-0109 D2 deleted the
+tool rail; the destinations live in `org-destinations.tsx`, whose four cases are titled otherwise.
+The same dead citation was in `app-shell.tsx`'s own docblock and is corrected there too — a quoted
+test title is the most persuasive kind of evidence and the easiest to keep after its file goes,
+which is `#277`.)_
 
 Gated by `apps/web/e2e-shell/` (`pnpm --filter @repo/web test:e2e:shell`, its own CI step), which
 signs up and stops on the real `/onboarding` — the one moment in an account's life with no
@@ -2616,8 +2621,15 @@ closes and announces a drawer the reader cannot see, because that column is `hid
 guard disagreeing with a CSS class, pre-existing, filed as **#168** rather than absorbed into a
 change whose journey does not drive that viewport. And this row's own wording ("above an EMPTY 40 px
 actions row") reads as fully closed and is not: that row is moot on org-less routes now, and still
-renders as an empty bordered strip on **every organisation route** for a Contributor or Viewer —
+rendered as an empty bordered strip on **every organisation route** for a Contributor or Viewer —
 **#169**.
+
+> **Both of those are now closed, and this paragraph read as though they were live until
+> 2026-09-09.** #168 closed 2026-08-22 with ADR-0104; #169 closed 2026-08-31, its empty-strip half
+> having been closed incidentally by ADR-0109 D2's fold control. Neither closure came back to this
+> paragraph, so a reader arriving from #165 met two live-sounding defects and two numbers that
+> resolve to the ledger. Kept in place rather than deleted, because the pair is the record of what
+> this change knowingly did not do.
 
 **b. `My activity`'s filter row wraps ragged.** _(Re-shoot before designing: closing (a) widened
 `<main>` on this screen by ~298 px, so the W1 photograph this describes no longer shows the layout
@@ -2851,7 +2863,7 @@ then be changing underneath the citations it is checking.
 
 ### 184. Unsaved-work guard: the findings its gate pass did not block on
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 _A second, em-dash-styled row briefly shared this number (the bulk-delete focus race); it is now **#209**._
 
@@ -2882,9 +2894,13 @@ rest, recorded rather than carried in someone's head._
   registry changes, and the effect's dependency array could not move while a confirmation stood. It
   could fire only if something unrelated happened to re-render the component. Verified: with the
   pre-fix effect restored, `proceed` is not called at all in the new case.
-  The fix gives `useUnsavedWorkReports` its **first production caller** — the subscribing reader
-  this register recorded on 2026-08-31 as having none, kept "for a future consumer"; this is that
-  consumer. The two blocker callbacks deliberately keep reading imperatively, because making them
+  The fix gives `useUnsavedWorkReports` its **first production caller** (`navigation-guard.tsx:91`)
+  — the subscribing reader this register recorded on 2026-08-31 as having none, kept "for a future
+  consumer"; this is that consumer. _(For eight days the export's **own** docblock went on saying
+  "Dormant: nothing in the application calls this", citing this row and a `rg` from 2026-08-31. The
+  fixing commit recorded the change in the caller — `navigation-guard.tsx:82`, "until now it had no
+  production caller" — and did not sweep the definition, so the two files disagreed about the same
+  fact in the same tree. Corrected 2026-09-09.)_ The two blocker callbacks deliberately keep reading imperatively, because making them
   depend on a changing value would re-register the blocker on every registry change, which the
   suite counts. The announcement rides on the working subscription and says why the page moved:
   the visual channel needs nothing (the page moved, which is its own explanation) and the audible
@@ -2914,7 +2930,10 @@ rest, recorded rather than carried in someone's head._
 
 **From the security review, and it is about my own conduct**
 
-- **Coverage was deleted and not replaced.** An earlier commit on this branch (`33b12b8f`) drove
+- **Coverage was deleted and not replaced.** An earlier commit on this branch (recorded as
+  `33b12b8f`; **that object does not exist in this repository** — it was a pre-squash branch commit,
+  so the claim is unverifiable from the tree and is kept as testimony rather than evidence, noted
+  2026-09-09) drove
   `page.goBack()` with a dirty scope and asserted the confirmation, "Keep editing" and "Leave". When
   Back turned out not to reach the blocker, that whole case was replaced with the narrower
   reload-only journey — and the in-app confirmation lost its only browser-level coverage in the
@@ -2936,8 +2955,12 @@ rest, recorded rather than carried in someone's head._
   >
   > So this is ADR-0081's shape rather than a coverage gap — a capability with no entry point — and
   > writing a journey now would mean driving something the product cannot do. **What would close
-  > it** is the first non-modal registrant (an inline form, or a drawer-hosted editor — see #156),
-  > at which point the journey becomes both possible and owed. Filed here rather than as a new row
+  > it** is the first non-modal registrant — **an inline form, and only that**. _(This read "an
+  > inline form, or a drawer-hosted editor — see #156". #156 closed on 2026-09-01 by **deleting the
+  > whole drawer mechanism** (`app-shell.tsx:122-127`), so half of this item's stated route to
+  > closure was removed the same week it was written, leaving a condition that reads as two
+  > possibilities and has one. Corrected 2026-09-09.)_
+  > At that point the journey becomes both possible and owed. Filed here rather than as a new row
   > because it is the same finding one level down.
 
 **Why Back is unresolved**, since it belongs beside the above: instrumented in a real browser,
@@ -3328,7 +3351,7 @@ with `#194` because both are about this gate, and both should be settled in one 
 
 ### 197. Three rules with two or three implementations each, agreeing by discipline
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 _Filed 2026-08-26 by the ADR-0111 sweep's component half. None divergent enough to block; one
 already asymmetric. **Item 1 closed 2026-08-28** (fix-slice M-A); item 3's `usePopoverPanel` copy
@@ -3423,7 +3446,7 @@ the better pattern sitting one directory over.
 
 ### 202. Six non-blocking findings from the foot-row gate pass
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 _Triage 2026-08-28 (Phase 4): (e) closed as STALE — its coverage exists (see the item). The other
 five re-filed consciously: (a) is a distance cost whose order matches the visual arrangement, (b)
@@ -3499,12 +3522,21 @@ happening — recorded here so it is a decision rather than an omission.
 > nothing would also look like — a sweep of an unchanged workspace reads as coverage while testing
 > the state that was already covered. It now asserts the panel's table is visible before sweeping,
 > the table being the thing that is not rendered at all while collapsed. Both labels were read from
-> `activity-bottom-panel.tsx:155,317` rather than guessed.
+> `activity-bottom-panel.tsx:163,325` rather than guessed.
 >
-> **The Gantt half is still owed.** The bar exists there (`plan-workspace-toolbar.tsx:1151` renders
-> the same `SelectionActionsBar` for the Gantt selection), but selecting a row is a different route
-> — the canvas's parallel listbox does not exist in that view — so it is its own piece of work
-> rather than a third `await` on the end of this one.
+> **CLOSED 2026-09-09 — the Gantt half was owed and is built.** This paragraph said "still owed"
+> until the register sweep re-derived it. `e2e-workspace-fit/command-surface.spec.ts:579-604` is the
+> third state: it switches view, clicks a real row, pins the state positively on the `Actions for`
+> toolbar being visible, and then runs `sweepObjectBar('Gantt, panel collapsed')`. The route is the
+> different one this item predicted — a row click, not the canvas's parallel listbox, which does not
+> exist in that view.
+>
+> **Three citations in this item were wrong, and two of them were wrong inside the journey too.**
+> The bar renders at `plan-workspace-toolbar.tsx:1331`, not `:1151` (which is a `clearPlacement`
+> gate object); the two labels are at `activity-bottom-panel.tsx:163,325`, not `:155,317` (which are
+> `hostsPlanSlots` props). The spec repeated both — the second under a comment reading _"Names read
+> from `activity-bottom-panel.tsx:155,317` rather than guessed"_. The **names** were read and the
+> locators work; the **line numbers** were not, in the sentence claiming they were. All corrected.
 
 **(d) `LockView.badgeName` and `messageVisible` are optional fields on a flat interface.** Both are
 governed by rules about the tone ("only on `locked`", "only on `lost` and the incoming-request
@@ -3539,15 +3571,19 @@ place when not"), 4/4 green. Added after this row was filed; the row was not upd
 **(f) ~~`bg-foreground/5` now paints on the canvas-dock surface scope for the first time.~~
 WITHDRAWN 2026-08-31 — the premise lapsed within twelve hours of the row being filed.** There is no
 "canvas-dock surface scope": the foot row that hosts the object bar is
-`<Surface tone="chrome">` (`activity-bottom-panel.tsx:217`), which is the same scope `Deck` already
-sits in, so the pairing paints exactly where it always did. The row was filed on 2026-08-27 from
+`<Surface tone="chrome">` (`activity-bottom-panel.tsx:224-225`; this said `:217` until the
+2026-09-09 sweep), which is the same scope `Deck` already sits in — verified from the other side too,
+at `chrome-band.tsx:74` — so the pairing paints exactly where it always did. The row was filed on 2026-08-27 from
 ADR-0114 M7, when the foot row genuinely had no scope at all; ADR-0115 gave it `chrome` that
 evening, and nothing went back to re-read this item.
 
-The residual observation is still true and is **already filed as #204(b)**: an alpha-composited
+The residual observation is still true and its **class** is filed as #204(b): an alpha-composited
 utility like `bg-foreground/5` is invisible to `token-contrast.test.ts` whatever scope it sits in.
 Not re-filed here, because the same finding in two places is how a register starts disagreeing with
-itself.
+itself. _(This said "already filed as #204(b)" until 2026-09-09, which overstates it: #204(b) names
+`hover:bg-accent/60` and `bg-warning/15` and does **not** name `bg-foreground/5`. The reasoning
+transfers and the utility does not, so the honest word is the class. It is still live, at
+`toolbar-styles.ts:119`, consumed by `selection-actions.tsx:1005` and `Deck.tsx:237`.)_
 
 **Not worth a test either, and that is the decisive half.** The row concedes 1.4.11 does not apply
 to the card; a contrast assertion asserts a **floor**, and a floor on a 5 % decorative wash would
@@ -3556,7 +3592,7 @@ the chrome scope's existing text pairs.
 
 ### 204. Four things the foot-row-and-deck epic found and did not fix
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 _Triage 2026-08-28 (Phase 4): re-filed consciously. (a) is #131's tooltip-primitive question,
 narrowed there the same day (six universal glyphs; ADR-0105 spec item); (b) is a gated pairing;
@@ -3576,8 +3612,11 @@ already lapsed before the fix landed — ADR-0115/M4 restored `zoom-to-selection
 today. The class is still closed durably rather than by accident: `ToolbarButton`'s icon-only
 branch now speaks through the Tooltip primitive (hover + focus + long-press), so any future
 `showLabel: 'never'` item on ANY toolbar inherits the treatment by construction — the "real fix"
-this row asked for._ `zoom-to-selection` is `showLabel: 'never'` (foot-row-and-deck M1), so a sighted
-touch-only reader gets no visible name: `aria-label` carries it for assistive technology and `title`
+this row asked for. Re-derived 2026-09-09: `selection-actions.tsx:844` reads `showLabel: 'always'`
+and **not one** of that file's thirteen entries is `'never'`, so the sentence that follows is kept
+as the record of what was found and is **no longer true of the code**._ `zoom-to-selection` **was**
+`showLabel: 'never'` (foot-row-and-deck M1), so a sighted
+touch-only reader got no visible name: `aria-label` carries it for assistive technology and `title`
 carries it for a pointer, and a tap fires neither. **This is not a WCAG failure** — the accessible
 name is unconditional and independent of `title`, which the accessibility review checked rather than
 assumed — and it is the gap `#131` already documents on the command deck. What is new is the
@@ -3593,6 +3632,23 @@ from `hover:bg-destructive/90` shipping unchecked. Both classes already rendered
 `Deck` and the header pen badge before this epic, so nothing here introduced the gap; M2 increases
 how often the object bar's hover state paints on that ground. Wants a real-browser check of the
 composited value, not a matrix entry.
+
+> **HALF CLOSED 2026-09-09, and the surviving half is narrower and better stated than the item
+> managed.** A gate that did not exist when this was filed now covers one of the two named classes:
+> `styles/alpha-composite.test.ts` scans source for a `bg-<token>/<alpha>` sharing a class string
+> with a `text-<token>`, resolves the composite across all five surface scopes and asserts ≥ 4.5:1,
+> behind a pinned positive case. `badge.tsx:28` (`bg-warning/15 text-warning-text`) is exactly that
+> shape, so **the `Badge` half is gated**.
+>
+> **The toolbar half is live, and the reason is the discriminator rather than an oversight.**
+> `toolbar-styles.ts:203` (`hover:bg-accent/60`) and `:119` (`bg-foreground/5`) carry **no `text-`
+> token in the same class string**, so `findAlphaPairs` reaches `if (!fill || !ink) continue` and
+> skips both. That is the gate working as designed — it asserts a **contrast pair**, and a
+> decorative wash with no ink on it is not one. So this item is not "add two entries to a gate"; it
+> is the open question of whether a fill with no co-located ink is worth an assertion at all, which
+> is the same question #202(f) answers "no" for `bg-foreground/5` on 1.4.11 grounds. The residue is
+> the **hover** state specifically: `e2e-designed-ui/designed-ui.spec.ts:142` records that axe never
+> measures one, so no instrument in the repository sees `hover:bg-accent/60` in any scope.
 
 **(c) A scheduling-mode flip while focus sits on `Clear visual start` may drop focus to `<body>`.**
 M1 makes that control `isVisible: false` outside Visual mode, so a mode change unmounts it.
@@ -3638,7 +3694,7 @@ claims in documents and this was a claim in a **choice**, and nothing currently 
 
 ### 206. Health-check review suggestions consciously not folded at the M5 gate pass
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 _Triage 2026-08-28 (Phase 4): re-filed consciously. The print-header convention spans two print
 documents and wants one decision, not a fold; the Badge swap changes a shipped panel's look (a ux
@@ -3646,12 +3702,14 @@ call, not a correctness fix); the two AT listens are environment-blocked exactly
 (no screen reader in this container — owed to a human pass); the rest stand on their filed
 reasons._
 
-**Raised:** 2026-08-28 (schedule-health-check M5-T1) · **Size:** S ×5 · **Owner:** web
+**Raised:** 2026-08-28 (schedule-health-check M5-T1) · **Size:** S ×6 · **Owner:** web
 
 The M5 gate pass blocked on findings that were all folded (token pairing, NoticeStrip reuse,
 provenance on screen, the Viewer role sentence, `aria-describedby`, the announcement's four
 counts, the G4 regex holes, the 429 citation). Five suggestions were judged real and deferred
-rather than quietly dropped:
+rather than quietly dropped — **six bullets today**, because the M6 addendum was appended without
+updating this sentence or the size beside it (swept 2026-09-09). All six re-derived that day and
+all six are live:
 
 - **The footer's "Next conflict" mention is prose, not a control.** The spec said the report
   "links to the conflict review"; the shipped footer names it. Wiring a button means handing the
@@ -3661,6 +3719,14 @@ rather than quietly dropped:
   predecessor/successor split, the relationship-type breakdown, metric 9's forecast/actual split,
   CPLI's target source and date, BEI's due/completed counts. The expanded row is the obvious
   home; M6 (which touches metric 12's row) is the natural vehicle.
+  > **Still live, and a nearby closure is NOT this one** (re-derived 2026-09-09). All five details
+  > are computed API-side (`compute-health.ts:326-329`, `:459-462`, `:510-512`, `:556-562`) and the
+  > expanded row renders **offenders only** (`ScheduleHealthPanel.tsx:411-433`). `health-rows.ts`
+  > reads `metric.detail` at exactly one place, `:140-143`, and that is **metric 12** — the vehicle
+  > this item named, carrying none of the five it lists. An earlier pass read that as the item
+  > closing; it is the vehicle arriving empty, which is the opposite. **A sixth thing was found on
+  > the way**: metric 10's narrowing is a hardcoded string at `health-rows.ts:135-137` while the
+  > docblock at `:33-34` implies it is read from `detail.narrowing`.
 - **The printed document names the plan but not the organisation or project** — a submission-pack
   page with two plans named "Phase 1" from different projects is ambiguous. The Gantt programme
   shares the gap; fix both from one header convention.
@@ -3672,10 +3738,17 @@ rather than quietly dropped:
   `EarnedValuePanel` precedent; the hand-rolled path is also where the `text-destructive` token
   slip happened, which is the argument for the primitive.
   > **Assessed 2026-09-01, and the item's own framing is what needs correcting.** "Where `Badge`
-  > exists" reads as a swap, and it is not one: `Badge`'s variants are `default`/`secondary`/
-  > `outline`/`destructive`, which has **no member for a PASS and no member for a caution** — so
-  > closing this means adding at least two variants to a primitive every badge in the product is
-  > downstream of, and then deciding what a passing verdict looks like everywhere. That is a design
+  > exists" reads as a swap, and it is not one: `Badge` has **no member for a PASS** — so closing
+  > this means adding a variant to a primitive every badge in the product is
+  > downstream of, and then deciding what a passing verdict looks like everywhere.
+  > _(Corrected 2026-09-09. This said the variants are `default`/`secondary`/`outline`/`destructive`
+  > with "no member for a PASS **and no member for a caution**". **None of those four names exists**:
+  > `badge.tsx:25-29` declares `neutral`/`critical`/`warning`, replaced wholesale by ADR-0097. So the
+  > caution half is false — `warning` is exactly that — and the cost is **one** variant, not two. The
+  > conclusion survives on the PASS half alone: `TONE_CLASSES.pass` is `text-success-text`
+  > (`ScheduleHealthPanel.tsx:84`) with no `Badge` counterpart, and it is still a primitive
+  > public-contract change under ADR-0105. The assessment was written from a variant set the product
+  > had not carried for twelve days.)_ That is a design
   > decision plus a **primitive public-contract** change (ADR-0105), not the small fold the wording
   > implies. The triage line above already called it "a ux call, not a correctness fix"; this says
   > _why_ it cannot be done as a swap, so the next reader does not open it expecting one.
@@ -3688,19 +3761,29 @@ rather than quietly dropped:
 
 ### 211. Fix-slice M-G suggestions consciously not folded at the gate pass
 
-**Status:** unverified · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
+**Status:** open · **Verified:** 2026-09-09 · **Raised:** 2026-08-29 (fix-slice M-G — five specialist reviews over the combined diff; security,
 ux, frontend-performance and accessibility all passed with nothing blocking, and the two folded
 items were the accessibility review's CLAUDE.md correction and the performance review's
-long-press listener cleanup, both landed with the pass) · **Size:** S ×3 · **Owner:** web
+long-press listener cleanup, both landed with the pass) · **Size:** S ×2 · **Owner:** web
 
-Three suggestions judged real and filed rather than quietly dropped:
+Three suggestions judged real and filed rather than quietly dropped; **two survive** — the third
+closed on 2026-08-31 and the size beside this line still said three until 2026-09-09:
 
 - **The touch long-press has no visible affordance and no documentation a user would find** (ux).
   `useTooltip`'s 500 ms long-press names an icon-only control without firing it, and nothing in
-  the product mentions the gesture — the shortcuts sheet is keyboard-shaped and unmounted from
-  the Gantt-less panels anyway. It degrades gracefully (a tap still fires the command exactly as
-  before), so this is an unadvertised affordance rather than a defect; the right home is
+  the product mentions the gesture. It degrades gracefully (a tap still fires the command exactly
+  as before), so this is an unadvertised affordance rather than a defect; the right home is
   whatever touch-help surface exists when one does.
+  > **One clause is struck, and it was false on the day it was written** (2026-09-09). The item
+  > read "the shortcuts sheet is keyboard-shaped and **unmounted from the Gantt-less panels
+  > anyway**". The sheet has mounted **once for the whole workspace, above both views**, since
+  > ADR-0095 M5 closed `#137` on 2026-08-18 — eleven days before this row was raised
+  > (`plan-workspace-toolbar.tsx:1900-1911`, and `TsldPanel.tsx:3193-3198` records the removal). So
+  > the sheet **is** a candidate home, and the clause that excused not considering it described the
+  > previous arrangement. The finding survives on its other half: the sheet is keyboard-shaped, and
+  > this is a pointer gesture. Re-derived at the same time — `HierarchyTree` carries a **second**
+  > unadvertised long-press (`:16`, `:114`, `:203`, `:360`, `:385`) for row menus, so the class has
+  > two members and not one.
 - **A no-marks export shows a blank 22 px paper strip with no separator closing it off** (ux).
   `EXPORT_MARKER_ROW` is reserved unconditionally (deliberate — geometry stability, see
   DECISIONS.md 2026-08-29), so a plan with the data-date rule off and today outside the exported
