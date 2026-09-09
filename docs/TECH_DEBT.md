@@ -874,7 +874,7 @@ expected to take.
 
 ### 86. A `RESOURCE_DEPENDENT` activity's day factor is read from the wrong calendar
 
-**Status:** unverified · **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
+**Status:** open · **Verified:** 2026-09-09 · **Found:** 2026-08-03, by the component gate on the derived-duration fix. **Pre-existing** — the fix
 inherited it rather than introducing it.
 
 `effectiveHoursPerDay()` (`apps/web/src/lib/effective-hours-per-day.ts`) resolves the factor as the
@@ -918,10 +918,11 @@ engine is not involved and the recalc parity gate is untouched.
 >   `resourceId`) and a `resourceById` map, and `ResourceSummary.calendarId` exists
 >   (`packages/types/src/index.ts:1739`). But it does not compute the factor: it receives
 >   `activityHoursPerDay` as a **prop** from its host and forwards it to `AssignmentRow`
->   (`:318-320`). Correcting it means the panel deriving its own — which needs the activity's
+>   (`features/resources/components/ActivityResourcesPanel.tsx:317-319`). Correcting it means the
+>   panel deriving its own — which needs the activity's
 >   `type` and the `calendars` list plumbed in, two new props on a component that currently needs
 >   neither.
-> - `ActivitiesTable`'s **Duration column** cannot. It resolves per row (`:639`) and the table
+> - `ActivitiesTable`'s **Duration column** cannot. It resolves per row (`:663`) and the table
 >   never loads assignments, so the driving resource is not in scope at all; getting it would mean
 >   a bulk fetch this surface does not do today.
 > - The two activity editors are in between and need checking when the work is taken.
@@ -933,10 +934,25 @@ engine is not involved and the recalc parity gate is untouched.
 > **Two line citations drifted, and the row misses a call site** (2026-09-03 sweep).
 > `ActivityResourcesPanel`'s forward is at `:317-319`, not `:318-320`; `ActivitiesTable`'s Duration
 > column is at `:663`, not `:639`. More usefully: `ActivitiesTable` has a **second** call site
-> (`resourcesHoursPerDay`, the Resources dialog's join lag) on the same defect, which the row does
-> not mention. The defect itself is confirmed live and unfixed — `effectiveHoursPerDay()` takes no
-> activity type and no assignment input, so it has nothing to resolve a driver with — and the rest of
-> the scoping note verified exact, including the twelve call sites.
+> (`resourcesHoursPerDay`, `:302`, the Resources dialog's join lag) on the same defect, which the row
+> does not mention. The defect itself is confirmed live and unfixed — `effectiveHoursPerDay()` takes
+> no activity type and no assignment input, so it has nothing to resolve a driver with — and the rest
+> of the scoping note verified exact, including the twelve call sites.
+>
+> **Both citations were corrected in this note and left standing in the text above it for six days**,
+> which is the failure this sweep kept finding: a reader meets the wrong figure first and the
+> correction only if they read on. Applied in place 2026-09-09, along with the panel's real path —
+> it is `features/**resources**/components/`, not `features/activities/`, which is why a reader
+> checking the citation finds nothing at all rather than finding it moved.
+>
+> **Re-derived 2026-09-09 against the current tree**, because a citation sweep that does not re-run
+> its own count is the same defect one level up: twelve call sites across eight files
+> (`plan-dialogs`, `plan-workspace-toolbar`, `PlanScheduleSettings`, `lag-factor` ×2,
+> `use-float-paths-panel`, `ActivityEditorDialog` ×2, `ActivityCreateDialog` ×2, `ActivitiesTable`
+> ×2), and the server's fallback order confirmed at `schedule.service.ts:1278-1287` — driving
+> resource, then the activity's own calendar, then the plan's. The client's helper still takes
+> `{ activityCalendarId, planCalendarId }` and nothing else, so it structurally cannot express the
+> first rung.
 
 ### 88. An email link scanner reaches the verification URL before the recipient
 
@@ -1937,7 +1953,7 @@ observation on the host, not by a test.
 
 ### 118. Staff-console M6 review findings that were not folded
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 Six specialists reviewed the combined M1–M5 diff. Eight blocking findings were folded with
 regression tests verified red first (the denial audit row, the missing `nextCursor`, the undeclared
@@ -2006,9 +2022,17 @@ that fails on day one over a combination the product never produces, which ADR-0
 deleted rather than fixed.
 
 **What it actually needs** is a way to say "assert this pair in the scopes where it can occur" — a
-per-pair scope filter in `TEXT_PAIRS`. That is a change to a shared gate (ADR-0105), and it is the
-same shape as **#231** and **#227**: three deferred edits to the same family of checks, all wanting
-one question answered once.
+per-pair scope filter in `TEXT_PAIRS`. That is a change to a shared gate (ADR-0105).
+
+> **The "answer one question for three rows" argument has lapsed, and following it now misleads**
+> (2026-09-09). This paragraph ended _"the same shape as **#231** and **#227**: three deferred edits
+> to the same family of checks, all wanting one question answered once"_. Both of those **closed on
+> 2026-09-02** under ADR-0124 — and they were never the same family: #227 and #231 are the register
+> parser in `scripts/lib/doc-register.mjs`, and this one is `styles/token-contrast.test.ts`, which
+> shares no code with it. So a reader following the grouping lands on two closed rows about a
+> different file and concludes the question was answered. **This item now stands alone**, which
+> makes it smaller than the paragraph implied rather than larger: a per-pair scope filter in one
+> suite, with the naive addition already tried and its RED state already measured above.
 
 **Not a finding, recorded because it was measured and the measurement inverted the recommendation:**
 a partial index `(created_at, id) WHERE NOT email_verified` on `users`, serving the accounts panel.
@@ -4398,13 +4422,39 @@ one-line fix following the pattern now standing two directories away.
 
 ### 251. The `aria-disabled` shading recipe is hand-rolled in thirteen places
 
-**Status:** unverified · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-09 · **Raised:** 2026-09-06 (the revision-compare M4 gate pass) · **Size:** M · **Owner:** repo
 
 The M4 component review counted **thirteen** independent implementations of one recipe —
 `aria-disabled` + a click guard + an `sr-only` reason linked by `aria-describedby` — across
 `window-list-editor`, `field-gate`, `scope-save-bar`, `Deck`, `ToolbarSplitButton`, `ToolbarPopover`,
 `menu`, `plan-facts`, `GanttCell`, `BulkSelectionBar`, `CreateActivityPopover`, `tsld-toolbar-items`
 and now `RevisionComparePanel`, with no shared hook.
+
+> **Re-derived 2026-09-09, and three of the thirteen are not instances — each for a different and
+> individually good reason, which changes the row's premise and not only its count.** The recipe's
+> first element is `aria-disabled`, and these three carry **none**:
+>
+> - **`window-list-editor.tsx`** takes `readOnly` + a visible `readOnlyReason` linked to the group
+>   (`:47-48`, `:58-59`). That is **ADR-0083's rule**, deliberately not this one: a control with
+>   operations beyond changing its value gets `readOnly`, and shading it would be the defect.
+> - **`field-gate.tsx`** renders the reason as **real visible text and says so** — _"not `sr-only`
+>   … because a sighted keyboard user needs it"_ (`:31-32`). Also deliberate, also a different rule.
+> - **`Deck.tsx`** passes `disabled` + `disabledReason` down (`:275-276`, `:299-300`) and does not
+>   implement anything. It is a **consumer** of the shared implementation, not a copy of it.
+>
+> **So "with no shared hook" is not true as stated.** `ToolbarButton.tsx` already holds the whole
+> recipe centrally — `aria-disabled` over native `disabled` to keep the control focusable (`:151-152`),
+> the `sr-only` reason (`:179-180`), and the name/description composition (`:101-103`) — and every
+> toolbar consumer reaches it through props. `field-gate` is the equivalent for the form family.
+> The honest finding is narrower and more useful: the recipe is hand-rolled in the sites that are
+> **neither a toolbar item nor a form field**, which is where no shared home exists yet.
+>
+> **The replacement count is deliberately NOT asserted here.** Ten of the thirteen named sites do
+> carry `aria-disabled`, and 46 files reference it repo-wide, most of them passing it through a
+> primitive — so separating an implementation from a consumer needs a proper pass rather than a
+> `grep`, and the `Size: M` beside this row rests on a number nobody has established. Re-deriving it
+> is the first task when this is taken, not an assumption to inherit; putting a figure here that I
+> had not properly measured would be the defect this row is being corrected for.
 
 The count is **the reviewer's and has not been re-derived here**, which is why this row is
 `unverified` rather than `open` — a count nobody re-ran is exactly the claim ADR-0076 Class 1 is
