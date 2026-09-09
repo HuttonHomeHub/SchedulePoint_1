@@ -67,7 +67,12 @@ const ITERATIONS = 25;
  */
 const ROUTE_ITERATIONS = 21;
 
-/** The bar, inherited from ADR-0125 rather than invented for this epic. */
+/**
+ * The bar, inherited from ADR-0125 rather than invented for this epic.
+ *
+ * It is a **reference figure the report is printed against, not a gate** — see the verdict block at
+ * the foot of the measurement for why the assertions were removed (`docs/TECH_DEBT.md` #266).
+ */
 const P2_BAR_MS = 250;
 
 describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', () => {
@@ -94,7 +99,7 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
     await app?.close();
   });
 
-  it('measures both sides at 2,000 activities and judges against the committed bar', async () => {
+  it('measures both sides at 2,000 activities and reports against the committed bar', async () => {
     // ── Two 2,000-activity sides, from the generator the plan names ─────────────────────────────
     const dir = mkdtempSync(join(tmpdir(), 'rev-compare-p2-'));
     const revB = join(dir, 'rev-b.xer');
@@ -372,16 +377,43 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
     }
     process.stdout.write(`${report}  report written to ${reportPath}\n\n`);
 
-    expect(p95).toBeLessThanOrEqual(P2_BAR_MS);
     /**
-     * **The end-to-end figure is judged against the SAME bar**, not a looser one.
+     * **Both figures are REPORTED and neither is asserted, and that is a decision rather than a
+     * retreat** (product owner, 2026-09-09).
      *
-     * The committed rule turns on p95 at 2,000 activities per side, and the number that decides a
-     * rate budget has to be the one a caller actually experiences — everything the harness above
-     * excludes is real cost a client pays. Both are recorded and any divergence is stated rather
-     * than smoothed, which is ADR-0125's F3 lesson: a second run agreeing to the decimal would be
-     * more suspicious than one that does not.
+     * The committed rule turned on p95 at 2,000 activities per side against a 250 ms bar; it was
+     * measured, it cleared, and it decided that this route takes the global rate budget rather than
+     * a throttle of its own (ADR-0129). **A falsification condition is a measurement taken to
+     * settle a question, not a standing gate** — and left as a gate on a machine nobody controls,
+     * this one measured four different answers in one hour.
+     *
+     * In the suite the harness half read 211.0 ms and the end-to-end half 255.2 ms; run alone the
+     * end-to-end half read 191.2 ms and the harness half **5954.2 ms**, because in isolation its
+     * first five samples are 5937/5954/5902/6045/5748 ms before it settles to ~160 ms. Each
+     * configuration passed one half and failed the other, against 208.2 / 215.2 recorded in the
+     * ADR. Then CI failed at **5050.6 ms** on a pull request that changed **two markdown files**.
+     *
+     * So the assertions went, on two standing precedents rather than on convenience: both sibling
+     * M0 probes measure and report — `revision-delta-m0.e2e-spec.ts` says "This is REPORTED, not
+     * asserted equal" — and ADR-0128 decided this exact question for the canvas, that a performance
+     * judgement belongs on hardware that can take it and never in a CI container, whose own
+     * no-change baseline moves by more than the bar.
+     *
+     * **What is deliberately kept**: both p50/p95/worst figures and every sample, printed to
+     * stdout and to the report file, so a reader who wants the number has it; and the non-vacuity
+     * assertions above (`lastMatched`, `lastChanges`, and the end-to-end `matched`), which are
+     * about correctness rather than the clock. A benchmark over two identical schedules reports the
+     * fastest number the route can produce and says nothing about the case it exists for — that
+     * check stays.
+     *
+     * The bar was **not** widened, and the cold samples were **not** dropped. Choosing how many
+     * samples to discard after seeing which choice passes is tuning the instrument to the answer;
+     * a bar set to whatever stops a test flaking measures nothing. See `docs/TECH_DEBT.md` #266.
      */
-    expect(routeP95).toBeLessThanOrEqual(P2_BAR_MS);
+    process.stdout.write(
+      `  P2 VERDICT (reported, not asserted): harness p95 ${p95.toFixed(1)} ms, ` +
+        `end-to-end p95 ${routeP95.toFixed(1)} ms, against the ADR-0129 bar of ` +
+        `${String(P2_BAR_MS)} ms.\n\n`,
+    );
   }, 900_000);
 });

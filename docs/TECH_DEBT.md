@@ -4621,3 +4621,62 @@ anything, which it does not once the report is on stdout as well. Check whether 
 appear as pre-existing open alerts in the branch's code-scanning view first: this session could not,
 because the token in use gets `403 Resource not accessible by integration` on
 `/code-scanning/alerts`.
+
+### 266. A measurement probe still runs its full 900-second measurement in the blocking e2e job
+
+**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PRs #491/#493) · **Verified:** 2026-09-09 ·
+**Size:** S · **Owner:** api
+
+**The two defects this row was raised for are fixed** (product-owner decisions, 2026-09-09). It is
+kept open on what those decisions deliberately did not settle, recorded below.
+
+**What was found.** Two wall-clock assertions sat in gates every pull request must pass, on machines
+nobody controls, and one release run falsified the reasoning behind each.
+
+`revision-compare-imported-p2.e2e-spec.ts` was the only M0 probe **asserting** a bar (250 ms p95)
+inside the blocking e2e job; its siblings report instead (`revision-delta-m0.e2e-spec.ts`: "This is
+REPORTED, not asserted equal") and ADR-0128 had already decided the question — a performance
+judgement belongs on hardware that can take it, never in a container whose own baseline moves by
+more than the bar. Measured on one container within an hour: in the suite, harness 211.0 ms PASS /
+end-to-end **255.2 ms FAIL**; run alone, harness **5954.2 ms FAIL** / end-to-end 191.2 ms PASS —
+each configuration passing one half and failing the other, against 208.2 / 215.2 recorded in
+ADR-0129. Then CI failed it at **5050.6 ms on a pull request that changed two markdown files**.
+**Resolved by reporting rather than asserting**: both figures and every sample are still printed, the
+non-vacuity assertions stay, and neither the bar nor the cold samples were touched.
+
+`level.spec.ts`'s levelling ratio guard failed the same docs-only pull request at **4.88x
+(362ms -> 1764ms)** against a 4.0x bound, with 1,927 of 1,933 api tests passing. That guard is the
+considered replacement for an absolute bound #241 removed from the same file for flaking on a pull
+request that likewise touched no API code, and its docblock argues it is safe because _"the noise is
+in the numerator and the denominator, and divides out"_. **It does not.** A ratio cancels a constant
+**speed** factor; it does not cancel an **independent per-run perturbation**, and the two timings run
+sequentially in one process, so a GC pause or a slice of CPU steal landing in the second and not the
+first is additive. With the smaller run at ~360 ms, one ~400 ms hiccup moves the ratio by more than a
+whole point, against a bound holding 1.5x of headroom over the ~2.4x its docblock records measuring.
+**Resolved by taking the median of three doublings** — a perturbation must land the same way in two
+of three to move the verdict. **The 4.0x bound is unchanged**: the defect was the estimator's, not
+the threshold's, and a bar set to whatever stops a test flaking measures nothing.
+
+**That fix then failed CI itself, on the claim this row is about.** It shipped saying the cost was
+"~3x this one test's runtime, paid knowingly", and never asked what the runtime was _permitted_ to
+be: `vitest.config.mts` sets no `testTimeout`, so the default is 5,000 ms, and three pairs plus the
+warm-up measured **5,258 ms on a GitHub runner** — failing on the clock rather than on the ratio,
+while passing locally throughout because this container runs the whole file in 3.5 s. An unchecked
+cost claim (ADR-0076 Class 3) committed inside the fix for a row about unchecked measurement claims.
+Closed by an explicit 30 s timeout on that test, the `vitest.e2e.config.mts` convention, which
+bounds the harness rather than the thing being measured — the verdict is still the ratio.
+
+**What stays open, and it is not either of those.** The P2 probe still runs its whole measurement —
+two 2,000-activity imports, 25 harness iterations and 21 HTTP round trips, minutes of wall clock,
+a 900-second timeout — inside the default e2e include set, on **every** pull request, and now
+asserts nothing at all. It produces a report nobody reads on a run nobody triggered. The option
+costed and not taken was to give it its own script and CI step the way the ADR-0066 pairwise
+differential has one, so it runs deliberately and its wall-clock is attributed to a step a reader can
+see. That is the remaining work; it is small, and it is worth doing before the next probe copies this
+one's shape.
+
+**Also worth carrying: `ROUTE_ITERATIONS` is 21, so the p95 index is 19 — the second-worst sample.**
+The file's own docblock explains the count was raised from 7 so that "one cold sample cannot become
+the verdict", which was the right fix for the estimator being a literal maximum and still leaves the
+figure very close to one. That matters less now nothing is asserted, and it would matter again the
+moment anybody re-armed a gate on it.
