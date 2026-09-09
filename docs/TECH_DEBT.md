@@ -4391,36 +4391,41 @@ the already-safe `ctid` batch rather than an unchunked `IN` list, and the DTO's 
 subset of the database's CHECK constraints, so no DTO-valid payload can reach a 500 where a 422 was
 promised. What follows was judged real and not worth holding the release for.
 
-1. **`recordedByLabel` is declared `@ApiPropertyOptional`** though it is always present and merely
-   nullable — unlike its five siblings in the same DTO, which correctly use
-   `@ApiProperty({ nullable: true })`. A generated client types it as possibly absent.
-2. **`counts` and `thresholds` are typed as opaque objects on the response** while the request DTO
-   fully names their fields one file over. `samples` is legitimately opaque (its shape varies by
-   `limbKind`); these two are not.
-3. **`GET /staff/probe-results` does not declare its 422**, which `limit=0` reaches. Pre-existing
-   pattern on this controller (`GET /staff/accounts` has the same gap), so a sweep rather than a
-   fix here.
-4. **No `hasMore` signal on the history read.** The "no cursor" decision is argued and right for a
-   table only a human can write to, but a caller asking for 50 against 200 rows can only infer
-   there is more by comparing lengths.
-5. **`GET /staff/probe-results` shares every staff member's machine fingerprint with every other
-   staff member.** Intended, and appropriate for a small allowlisted population; worth revisiting
-   if `STAFF_EMAILS` ever grows.
-6. **The erasure affordance is structural only.** `recorded_by_label` and `gpu_renderer` are
-   nullable so a reading can be scrubbed; no scrub path exists anywhere in the product yet, which
-   matches ADR-0085's "decision only, nothing built" status rather than being a gap this epic added.
-7. **`scenes/revision-diff.ts`'s pure helpers (`changedSet`, `countVisible`) have no unit test**,
-   unlike the parallel canvas-draw module, whose equivalents do. They need no canvas, so the gap
-   looks like inconsistency rather than necessity.
-8. **`RecordingState` takes three booleans for one mutation status.** TanStack Query already
-   exposes it as a single `status`, and the three-boolean signature admits combinations the call
-   site happens never to produce.
-9. **The spec's "visible caption naming it a test picture"** on the measuring canvas was never
-   built. Not a WCAG failure — the canvas is `aria-hidden` and the progress sentence is the
-   accessible channel — but a documented sighted-user affordance that does not exist.
-10. **Several `Alert`s mount in the same commit as the panel's own live region.** `Alert` carries an
-    implicit live-region role, so the "one accessible channel" claim in the panel's docblock stops
-    holding at the moment a run ends. The content is redundant rather than contradictory.
+1. ~~**`recordedByLabel` is declared `@ApiPropertyOptional`**~~ — **closed** (probe-sweep M4). It now
+   uses `@ApiProperty({ nullable: true })`, matching its five siblings, and both new columns were
+   declared the same way rather than repeating the mistake.
+2. ~~**`counts` and `thresholds` are typed as opaque objects on the response**~~ — **closed**
+   (probe-sweep M7). The response now declares `ProbeCountsDto` / `ProbeThresholdsDto`, the same two
+   classes the request names one file over. The **TypeScript** type stays `Record<string, unknown>`
+   deliberately: the value is JSON read back from the database and is not re-validated on read, so a
+   narrower TS type would assert a guarantee the read path does not make. `samples` beside them
+   stays opaque, legitimately — its members differ by `limbKind`.
+3. ~~**`GET /staff/probe-results` does not declare its 422**~~ — **closed** (probe-sweep M7), and as
+   the **sweep this item asked for** rather than a spot fix: `GET /staff/accounts` carries the
+   declaration too. Fixing one and not its neighbour is this register's most-repeated shape, and the
+   row had already named the neighbour.
+
+**Items 1–3 were claimed closed by the probe-sweep plan before they were.** Its Done checklist said
+"#259 items 1–3 closed" while items 2 and 3 were untouched, and item 1 — which genuinely had been
+fixed, in M4 — left this row still printing it as an open finding. Two failures stacked: a plan
+asserting work it had not done, and a register describing a defect that no longer existed. Found by
+the M7 api review, not by anything failing. The plan is corrected in place; this is the register
+catching up. ADR-0071's rule needs its second half — noticing drift and stepping over it leaves the
+register exactly as wrong as not noticing. 4. **No `hasMore` signal on the history read.** The "no cursor" decision is argued and right for a
+table only a human can write to, but a caller asking for 50 against 200 rows can only infer
+there is more by comparing lengths. 5. **`GET /staff/probe-results` shares every staff member's machine fingerprint with every other
+staff member.** Intended, and appropriate for a small allowlisted population; worth revisiting
+if `STAFF_EMAILS` ever grows. 6. **The erasure affordance is structural only.** `recorded_by_label` and `gpu_renderer` are
+nullable so a reading can be scrubbed; no scrub path exists anywhere in the product yet, which
+matches ADR-0085's "decision only, nothing built" status rather than being a gap this epic added. 7. **`scenes/revision-diff.ts`'s pure helpers (`changedSet`, `countVisible`) have no unit test**,
+unlike the parallel canvas-draw module, whose equivalents do. They need no canvas, so the gap
+looks like inconsistency rather than necessity. 8. **`RecordingState` takes three booleans for one mutation status.** TanStack Query already
+exposes it as a single `status`, and the three-boolean signature admits combinations the call
+site happens never to produce. 9. **The spec's "visible caption naming it a test picture"** on the measuring canvas was never
+built. Not a WCAG failure — the canvas is `aria-hidden` and the progress sentence is the
+accessible channel — but a documented sighted-user affordance that does not exist. 10. **Several `Alert`s mount in the same commit as the panel's own live region.** `Alert` carries an
+implicit live-region role, so the "one accessible channel" claim in the panel's docblock stops
+holding at the moment a run ends. The content is redundant rather than contradictory.
 
     **Sharpened 2026-09-09 (probe-sweep M3).** The cancelled pair is now **byte-identical** in both
     channels, which is a strict improvement in truthfulness — before M3 one said "nothing was
@@ -4442,9 +4447,8 @@ promised. What follows was judged real and not worth holding the release for.
     ledger exists to prevent — the register disagreeing with itself about what a number means._
 
 11. **`revision-diff` narrates progress once for a whole multi-pair run** where `canvas-draw`
-    narrates per repeat, so a screen-reader user hears nothing for up to twenty-five seconds.
-12. **The on-screen "cannot be judged" alert prints only the first line** of the judge's message,
-    dropping the closing "This is NOT a pass" sentence that the paste-ready report does carry.
+narrates per repeat, so a screen-reader user hears nothing for up to twenty-five seconds. 12. **The on-screen "cannot be judged" alert prints only the first line** of the judge's message,
+dropping the closing "This is NOT a pass" sentence that the paste-ready report does carry.
 
 Numbers 1, 2 and 8 are the cheapest; 10 and 11 are the two a real screen-reader user would notice
 first.
@@ -4740,3 +4744,107 @@ The file's own docblock explains the count was raised from 7 so that "one cold s
 the verdict", which was the right fix for the estimator being a literal maximum and still leaves the
 figure very close to one. That matters less now nothing is asserted, and it would matter again the
 moment anybody re-armed a gate on it.
+
+### 271. The probe history is one capped page and says so only in words, because the read returns no total
+
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M6) · **Size:** S · **Owner:** api
+
+`staff-probe.service.ts:136-141` reads the newest 50 rows — `take: DEFAULT_LIMIT`, `DEFAULT_LIMIT`
+being 50 at `:14` — with **no total, no cursor and no more-pages flag**. So a client cannot tell
+"fifty is everything" from "fifty is a page", and on an installation that has taken more than fifty
+readings the oldest sittings simply stop being listed.
+
+**It was reached, in this epic, by two different instruments on the same afternoon, which is why it
+is a row rather than a note.**
+
+First it silently disarmed a gate. The staff journey's M3 assertion counted every row in the history
+before and after a stopped press and required the number to **rise** — and once the local database
+held fifty readings the count could not move, because a new reading displaces the oldest. It had
+passed for months on a fresh database, and it failed at 75 rows with the product behaving perfectly.
+A gate that stops being able to report is this epic's own subject one tier out. It is now replaced
+by a claim about the **shape of the newest sitting** — a stopped single press stores exactly one
+reading, its completed limb — which is sharper as well as immune to the cap.
+
+Then it made a screen say something false. M6-T3 added "This sitting has 2 of 4 readings. 2 were
+refused or never taken — nothing is stored for those", which is sound reasoning from an absence
+**only if the absence is real**. At the page boundary it is not: those readings are stored and
+merely unreturned. The oldest block on screen therefore no longer says why a reading is missing, and
+the list carries "Showing the most recent readings. Older sittings are not listed."
+
+**Both are honest patches around a missing fact, and the fact is what to build.** Deliberately
+**not** done here: it is an API contract change (DTO, OpenAPI, the api-reviewer step), which
+ADR-0105 says stops a tech-debt-sized change and wants a spec.
+
+**Which fix, settled by the M7 api review rather than left open.** This row first offered "a total,
+or a cursor with a `hasMore`" as equally weighted. They are not. A bare `total` makes the state
+**nameable** — the panel could say "showing 50 of 312" — and leaves it **unreachable**: `sweep_id` is
+deliberately unindexed and there is no `?sweepId=` filter, so a reader who is told there are older
+sittings still has no way to open one, and **Run the missing measurements** still cannot tell
+"genuinely never recorded" from "recorded, and past page one". Cursor pagination
+(`meta.nextCursor`/`meta.hasMore`, `docs/API.md`'s own standard, and the shape
+`list-audit-events-query.dto.ts` already uses on the closest structural sibling) is the only one of
+the two that lets somebody walk back into their own history — which is what the sittings screen
+exists for. This table is an append-only trail with no ceiling but the 365-day sweep, not a bounded
+computed report, so the `plan-health-check` / `revision-compare` "capped list, true total" precedent
+does not transfer.
+
+**And the budget is shared, which changes the urgency rather than the description.** The read is not
+scoped per staff member — deliberately, per #259 item 5 — so two or three people each pressing **Run
+all measurements** can consume the page in an afternoon, rather than "an installation that has taken
+more than fifty readings" over time.
+
+The client-side number is deliberately absent from the copy: the browser is not told the cap, and
+writing "50" into a sentence in `apps/web` would be a constant that goes stale the day the server's
+does — the kind of second statement of one fact this register keeps recording.
+
+### 272. A step can be stored having measured half of itself, and nothing in the vocabulary can say so
+
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** M · **Owner:** web
+
+`canvas-draw` measures two scales in one step. `runAbsoluteLimbs` can complete the first and be
+stopped inside the second, and ADR-0130 D2 says the completed limb is kept — correctly, that is the
+whole of M3. But `SweepStepStatus` has four values (`recorded` / `not recorded` / `refused` /
+`not taken`) and none of them means **"recorded, and short a limb"**, so that step is `recorded`.
+
+Three consequences follow, and the third is the one that matters. `missingSteps` does not offer it
+(its status is not `refused` or `not taken`), so **Run the missing measurements** cannot take the
+scale that was lost. The live sitting summary counts it as a step that landed. And once the tab is
+closed there is nothing anywhere — no row, no badge, no alert — distinguishing "canvas-draw at Week,
+both scales" from "canvas-draw at Week, missing its 2,000-activity scale". That undercuts US-2's own
+promise ("'I ran it' and 'it is in the history' stop being different things") one level below where
+the epic addressed it. Found by the M7 ux review.
+
+**M7's reading-count fix makes it visible without making it actionable, and the two interlock.**
+Counting a reading as a **row** rather than a step (ADR-0130's own correction) means such a sitting
+now reads "5 of 6 readings" instead of a confident "4 of 4" — so the loss is on screen. What is
+still missing is the remedy: the step is `recorded`, so nothing offers to take the scale again.
+
+**Not built here because it is a decision, not an implementation detail.** A fifth status has to
+answer what a re-run of a partially-recorded step does with the limb that already succeeded: store a
+second row for it (two rows for one scale in one sitting, and the reading count then over-reports),
+skip it (a press that measures less than it says), or replace it (an update on an append-shaped
+table). ADR-0105 says that stops a tech-debt-sized change. `run-sweep.test.ts`'s fixtures are all
+single-limb, so this case is untested as well as unsurfaced — a two-limb partial fixture is the
+first thing whatever spec picks this up should write.
+
+### 273. The oldest-block truncation rule rests on a premise the resume feature removed
+
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** S · **Owner:** web
+
+`probe-sittings.tsx` withholds the "N were refused or never taken" claim from the **oldest** block
+on screen, because that is the one the 50-row page boundary can cut (`docs/TECH_DEBT.md` #271). The
+rule was written with the reason "a sitting's readings are adjacent in time", and M6-T4 made that
+untrue in the same file: a resumed sitting's newest reading sorts near the top of a newest-first
+list while its original readings, written hours or days earlier, can fall past the cap. A
+**non-oldest** block could then be truncated and would print, with total confidence, that readings
+were refused when they are stored and merely unfetched — the exact defect the alert exists to
+prevent, one page along.
+
+Raised independently by the M7 ux and database reviews, and **it is not reachable today**: the
+resume reads its sitting id from the panel's in-memory outcome, so it is session-scoped, and a
+sitting's readings are minutes apart within one session. The premise therefore holds — by a property
+of React state lifetime, not by the reason the comment gave. The comment now says so.
+
+**It becomes reachable the moment a resume can be started from the stored history**, which is a
+natural companion to #271's cursor. Whatever picks that up owns this: the honest fix is to know
+whether a page was cut rather than to infer it from position, which is what #271 builds.

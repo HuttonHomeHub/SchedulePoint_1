@@ -1,14 +1,15 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import type { ProbeResultRow } from '../api/probe-results';
 import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe';
 import { formatProbeReport } from '../ui/probe-report';
+import { ProbeSittings } from '../ui/probe-sittings';
 
 import type { DeviceFacts } from './device';
-import { judgeStoredRow } from './judge-stored';
 import { SATURATED_CAVEAT, verdictNote } from './verdict-copy';
 
 /**
@@ -178,11 +179,16 @@ describe('a saturated delta carries its caveat on every surface that prints one'
   });
 
   it('the history — a stored row derives the same sentence on read', () => {
-    const judged = judgeStoredRow(storedRow());
+    // **Asserted against what a reader SEES, not against a helper.** This case used to call
+    // `judgeStoredRow`, a flattened derivation whose only caller was this file after M6 replaced
+    // the flat history table — so it was green about a surface nobody could reach, which is the
+    // ADR-0093 shape inside the gate written to prevent it (M7 component review). The helper is
+    // deleted; the property it claimed is now asserted on the rendered sittings table, which is
+    // where the sentence actually has to appear.
+    renderStored(storedRow());
 
-    expect(judged).not.toBeNull();
-    expect(judged?.verdict).toBe('REPORTED_ONLY');
-    expect(judged?.note).toContain(SATURATED_CAVEAT);
+    expect(screen.getByText('REPORTED, NOT GRADED')).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(SATURATED_CAVEAT.slice(0, 40)))).toBeInTheDocument();
   });
 
   it('an unsaturated reading says none of it, on any surface', () => {
@@ -201,9 +207,25 @@ describe('a saturated delta carries its caveat on every surface that prints one'
         treatment: { droppedPct: 0.6, intervalP50: 16, intervalP95: 17, fps: 60 },
       },
     ];
-    expect(judgeStoredRow(clean)?.note).not.toContain(SATURATED_CAVEAT);
+    renderStored(clean);
+    expect(screen.queryByText(new RegExp(SATURATED_CAVEAT.slice(0, 40)))).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The stored row, rendered by the surface that shows it.
+ *
+ * `ProbeSittings` takes the query rather than the rows, so the harness supplies a settled one — the
+ * same shape `DataTable`'s structurally-typed `query` prop accepts, and the same thing the sittings
+ * view builds per block.
+ */
+function renderStored(row: ProbeResultRow): void {
+  render(
+    <ProbeSittings
+      query={{ isPending: false, isError: false, data: [row], refetch: () => undefined } as never}
+    />,
+  );
+}
 
 /**
  * Every surface that prints a delta says so when the delta is a ceiling.
@@ -226,7 +248,21 @@ describe('a saturated delta carries its caveat on every surface that prints one'
  * surface needs one of its own.
  */
 describe('the enumeration', () => {
-  const CALLERS = ['model/judge-stored.ts', 'ui/probe-report.ts', 'ui/performance-probe-panel.tsx'];
+  const CALLERS = [
+    // `model/judge-stored.ts` was here until M7 and is deliberately gone. It held `judgeStoredRow`,
+    // a flattened derivation for the flat history table M6 deleted — so it was an enumerated
+    // "renderer" that rendered nothing, and this gate's own `calls.length > 0` assertion is what
+    // makes removing the function and leaving the entry impossible. The file still derives the
+    // judgement (`storedJudgedResult`); it no longer renders a sentence, and `probe-sittings.tsx`
+    // below is the surface that does.
+    'ui/probe-report.ts',
+    'ui/performance-probe-panel.tsx',
+    // M6: the sittings table renders a verdict per reading, so it is a fourth renderer of a delta
+    // and joins the enumeration rather than being an exception to it. It was added here BECAUSE
+    // this gate went red — which is the enumeration doing its job on the first new renderer since
+    // it was written.
+    'ui/probe-sittings.tsx',
+  ];
 
   const CLI = join(import.meta.dirname, '../../../../scripts/measure-revision-diff.mjs');
 

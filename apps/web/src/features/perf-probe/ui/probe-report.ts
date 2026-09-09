@@ -1,9 +1,11 @@
 import type { Verdict } from '../model/judge';
 import {
   NOT_RECORDED,
+  SITTING_SPREAD_LIMIT_MS,
+  describeSpread,
   sittingFromOutcome,
+  sittingSpreadMs,
   type Sitting,
-  type SittingContext,
   type SittingLimb,
 } from '../model/sitting';
 import { verdictLabel, verdictNote } from '../model/verdict-copy';
@@ -73,7 +75,7 @@ export function formatSitting(sitting: Sitting): string {
         : `You stopped this run. ${kept === 1 ? 'One reading' : `${String(kept)} readings`} had already finished and ${kept === 1 ? 'was' : 'were'} kept; the rest were not taken.`,
       'This is NOT a pass and NOT a failure.',
       '',
-      ...contextLines(sitting.context),
+      ...contextLines(sitting),
       ...(kept === 0 ? [] : ['', ...sitting.limbs.flatMap((limb) => [...limbLines(limb), ''])]),
     ]
       .join('\n')
@@ -89,14 +91,14 @@ export function formatSitting(sitting: Sitting): string {
       '',
       'No measurement was taken. This is NOT a pass and NOT a failure.',
       '',
-      ...contextLines(sitting.context),
+      ...contextLines(sitting),
     ].join('\n');
   }
 
   return [
     'SchedulePoint performance probe',
     '',
-    ...contextLines(sitting.context),
+    ...contextLines(sitting),
     '',
     ...sitting.limbs.flatMap((limb) => [...limbLines(limb), '']),
   ]
@@ -104,15 +106,26 @@ export function formatSitting(sitting: Sitting): string {
     .trimEnd();
 }
 
-function contextLines(context: SittingContext): string[] {
+function contextLines(sitting: Sitting): string[] {
+  const context = sitting.context;
+  // **Computed from the readings rather than declared on the context**, because it is a fact about
+  // the set and not about the machine — and because it must be absent, not zero, when there is only
+  // one reading to time.
+  const spread = sittingSpreadMs(sitting);
   return [
-    `  scenario   ${context.scenarioLabel} (${context.scenarioId})`,
-    `  framing    ${context.preset}`,
-    // **`(not recorded)` rather than the default**, on a stored reading where neither the size nor
-    // the frame count is a column. The default is exactly what a reader would otherwise assume and
-    // exactly what a non-default run would contradict; M4's `frames_per_phase` closes half of it.
-    `  run size   ${context.size ?? NOT_RECORDED} — ${context.frames === null ? NOT_RECORDED : `${String(context.frames)} frames`} x ${String(context.repeats)}`,
-    `  viewport   ${String(context.viewport.width)}x${String(context.viewport.height)} css px, dpr ${String(context.devicePixelRatio)}`,
+    // **Scenario, framing and protocol are NOT here**, and their absence is the point. A sitting is
+    // up to four presses under one `sweep_id`, so those three differ from reading to reading; they
+    // print on each reading's own block below. Leaving them here would have labelled a whole
+    // sitting with whichever reading sorted first, and nothing in the block would look wrong.
+    // **`varies` rather than one reading's figure**, when a sitting holds readings taken at more
+    // than one canvas. #261 records the same plan on the same machine measuring 23.3 fps at
+    // 1912x1068 and 39.5 fps at 1016x636, so stating one of two here would settle by accident the
+    // confound this line exists to expose. Each reading prints its own below.
+    `  viewport   ${
+      context.viewport === null
+        ? 'varies between readings — see each below'
+        : `${String(context.viewport.width)}x${String(context.viewport.height)} css px`
+    }, dpr ${String(context.devicePixelRatio)}`,
     `  display    idle frame interval ${context.idleInterval.toFixed(2)} ms`,
     // A masked adapter is printed AS masked. Writing "unknown GPU" would put a fiction in the one
     // field a reader trusts to explain an outlier (the product owner's Q1, answered 2026-09-07).
@@ -124,10 +137,21 @@ function contextLines(context: SittingContext): string[] {
     // Both recorded rather than acted on, and both explain an outlier nothing else would. A blur
     // is NOT a refusal — the window kept painting, something else took the keyboard — so it has to
     // be visible here or the fact is captured and never read.
-    `  attention  ${context.lostFocusDuringRun ? 'the window lost focus during the run' : 'held throughout'}`,
+    // A disjunction over the sitting, and each reading repeats its own below. A blur is NOT a
+    // refusal — the window kept painting, something else took the keyboard — so a sweep can hold
+    // three clean readings and one suspect, and only saying "held throughout" because the first
+    // one was clean is the falsehood this line used to be capable of.
+    `  attention  ${context.anyReadingLostFocus ? 'the window lost focus during the run' : 'held throughout'}`,
     `  motion     ${context.prefersReducedMotion ? 'reader prefers reduced motion' : 'no preference'}`,
     `  agent      ${context.userAgent}`,
     `  at         ${context.startedAt}`,
+    // **Printed only when it is news.** Every ordinary sitting spans minutes, and a line saying so
+    // on all of them would be read past; this fires for the case M6-T4 creates — a reading re-run
+    // under the same `sweep_id`, hours or days later — where the facts above were recorded with the
+    // earliest reading and the block would otherwise present them as true of all of them.
+    ...(spread !== null && spread > SITTING_SPREAD_LIMIT_MS
+      ? [`  spread     readings taken ${describeSpread(spread)} apart — NOT one sitting in time`]
+      : []),
     `  web        ${context.appVersion}`,
     // Carried where it exists rather than dropped to make the two adapters look symmetrical: the
     // browser does not learn it until the POST returns, and the block is copyable before that.
@@ -156,6 +180,21 @@ function verdictLines(
 function limbLines(limb: SittingLimb): string[] {
   const head = [
     `  ── ${limb.limbLabel} ──`,
+    // **The same three labels the sitting header used to carry, relocated rather than renamed.**
+    // Spec §4.6 keeps this file's line vocabulary and its own suite is the before/after oracle; a
+    // sitting spanning four presses makes these three per-reading facts, so they move down here and
+    // keep their words. A reader who greps a stored block for `framing` still finds it.
+    `  scenario   ${limb.scenarioLabel} (${limb.scenarioId})`,
+    `  framing    ${limb.preset}`,
+    // **`(not recorded)` rather than the default**, on a reading stored before `frames_per_phase`
+    // existed and for the size, which is still not a column. The default is exactly what a reader
+    // would otherwise assume and exactly what a non-default run would contradict.
+    `  run size   ${limb.size ?? NOT_RECORDED} — ${limb.frames === null ? NOT_RECORDED : `${String(limb.frames)} frames`} x ${String(limb.repeats)}`,
+    ...(limb.recordedAt === null ? [] : [`  taken      ${limb.recordedAt}`]),
+    `  viewport   ${String(limb.viewport.width)}x${String(limb.viewport.height)} css px`,
+    // Repeated per reading rather than only summarised on the sitting: the sitting says whether
+    // ANY reading lost the window, and this is the one that says which.
+    ...(limb.lostFocusDuringRun ? ['  attention  this reading lost focus'] : []),
     `  scene      ${limb.sceneSummary}`,
     // Reported on every limb, never only when it fails. A reading taken on an almost-empty canvas
     // is a reading about the cull, and ADR-0066 records that looking exactly like a good result.

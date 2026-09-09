@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1195 web
+> (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1196 web
 > source files with 42 Playwright suites beside the base journey, and
-> 129 ADRs.
+> 130 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4135,6 +4135,105 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   one framing, one machine, **Fit still ungraded** (`docs/TECH_DEBT.md` #260, whose 98.33 pp baseline
   is the opposite failure), and Week culls 2,160 bars to 264, which is ADR-0128's finding that cost
   tracks bars drawn rather than plan size. **No feature flag** (ADR-0088 D1).
+
+- **ADR-0130** _(Accepted; M0–M7 landed 2026-09-09)_ — One press takes every reading, and a sitting
+  is what a reading belongs to. ADR-0128 put the canvas benchmark on the staff console because the
+  number is about the operator's own machine; they used it the next day and reported two things —
+  _"some say they don't get recorded and some say reported but not graded"_ and _"why split the
+  tests"_. Both were true and **they were about two different mechanisms producing similar-sounding
+  sentences**, which reading the code separated before anything was designed: **two of the eight
+  combinations the picker offered produced a verdict**, and "not recorded" was never about gating at
+  all but about a refusal, a cancellation or a failed POST, each with its own wording. Four more
+  things fell out that nobody had reported.
+  **The load-bearing decision is that the sweep is a loop ABOVE the runner and nothing about the
+  measurement changes** — `runProbe`, `refuseRun`, `judgeAbsolute`'s rules and the scenes are
+  untouched, so a reading taken after the epic is comparable with one taken before it, which is the
+  single property `perf_probe_results` exists to preserve. A server-side sweep is refused rather
+  than deferred, and it is the thing ADR-0128 exists to refuse. All four controls take **one**
+  orchestration (a single run is a one-step sweep), and the plan is **derived from the registry**,
+  so a third scenario joins the sweep with no edit.
+  **The completed limb becomes the unit of durability.** A cancelled press used to throw away
+  finished work — stopping during the second limb of the two-limb scenario destroyed a **complete**
+  500-activity limb, three full repeats, nothing about it wrong — and nobody had reported it,
+  because a discarded measurement leaves nothing behind to report. Each step now POSTs as it lands,
+  a refusal does not end the sweep, and **the refusal rules are not weakened anywhere**: a number
+  from an unsuitable machine is worse than no number, so the remedy is to take the reading again.
+  **A sitting becomes a stored fact**, and `sweep_id` is the first **client-supplied** grouping
+  column on a table whose grouping was deliberately server-minted (amending ADR-0128 D5/D7) —
+  because only the client knows four presses were one act. Neither new column takes a `DEFAULT`:
+  `NULL` means _a single press_ and _a row that predates the column_, and the
+  `hours_per_day_minutes DEFAULT 1440` precedent licenses nothing, since 1440 was true of every
+  pre-existing row and neither of these is knowable for any. A sitting is then keyed by **which id
+  space grouped it**, namespaced rather than `sweepId ?? runId`, because a sweep whose other three
+  readings were refused stores exactly one row and counting rows would call it a single press.
+  **That decision is what made the epic's own worst defect reachable, and it shipped for two
+  milestones**: `runSweep` minted an id unconditionally, so every single **Measure one thing** press
+  grouped as a sweep and the history told the operator _"This sitting has 1 of 4 readings. 3 were
+  refused or never taken"_ — every clause false, on the commonest press there is, against a schema
+  whose own approved words said the opposite. **No test could see it**: every fixture in the model's
+  suite sets `sweepId: null` for a single press, because that is what the producer was supposed to
+  send, so a suite built from the contract was blind to a producer disobeying it.
+  **One presentation model with two adapters feeds one formatter**, which is what lets the
+  paste-ready block be produced for a reading taken last week — `docs/TECH_DEBT.md` #75's founding
+  failure, a measurement unreachable by the person who needs it, reproduced one tier in — and what
+  stops the screen and the copied artefact disagreeing. A field a stored row cannot supply is
+  `null`, never a guess and never an omission, and prints as an explicit marker. Three sitting facts
+  are **disjunctions or refusals rather than the first row's value**; the canvas says
+  `varies between readings` when they disagree, because stating one of two would settle
+  `docs/TECH_DEBT.md` #261's confound by accident on the screen built to expose it.
+  **Two remedies, because there are two failures.** `Retry recording` re-sends a body that exists;
+  **Run the missing measurements** re-runs only what produced nothing, under the **same** sitting id.
+  Re-measuring a `not recorded` step would spend twenty-five seconds obtaining **different** numbers
+  under the impression of re-sending the ones on screen. The merge replaces steps and never the
+  sitting, and a sitting that now spans more than an hour says so on the block and in the report.
+  **`saturated` is a fact, and #260's own prescribed remedy would not have caught #260's own
+  exhibit** — `judge.ts` returns `REPORTED_ONLY` for an ungated run **before** the spread check, and
+  the exhibit is ungated, so the misleading figure is the printed delta and not the withheld verdict.
+  Established by reading the judge, not inferred from the row.
+  **ADR-0128's three refusals hold**: no CI gate, no verdict column, and Fit stays reported and never
+  graded. **Neither #75 nor #261 is closed by this epic** — it removes the friction that stopped #75
+  being re-derived for a year; the readings are still owed and are the product owner's to take.
+  Five corrections are recorded, each found by running or reading rather than by anything failing:
+  the quick sweep is **13.07 s and the spec said ~30 s** in two places (Class 1, and the **spec** was
+  corrected because the code computes the answer); **every `revision-diff` reading had been
+  unstorable since that scenario shipped**, answered `422 … property frames should not exist` and
+  reported in the same words as a dropped socket, found by a journey reading the response body rather
+  than counting failures; a journey assertion that **had silently stopped being able to report**,
+  counting rows against a read capped at 50 so the total is invariant once fifty readings exist; a
+  screen **inferring absence from that same page** and saying readings were refused when they were
+  merely unreturned (`docs/TECH_DEBT.md` #271); and a release that would have shipped **no image
+  carrying its own DTO**, since M4 added two accepted body fields with no changeset while the client
+  sent one unconditionally.
+  **The gate pass earned its place for the eighth epic running.** Seven specialists; security,
+  backend-performance and database-architect passed having **re-derived the epic's own numbers from
+  the shipped code** (a 0.13–0.17 ms backward index scan at 100,000 rows, a `ctid` Tid Scan at ~3 ms
+  a batch, the migration proven safe against a populated table rebuilt from the 62 earlier ones).
+  The other four blocked, and **three of their findings are one correct rule applied one level too
+  low or one file over**: the `inert` guard covering this panel while the overlay covers the page —
+  the M5 review's own fix, at the wrong scope, so Tab from Stop reached a control hidden behind an
+  opaque full-screen canvas (WCAG 2.2 §2.4.11, invisible to axe twice over, since no rule covers
+  obscuring and the journey waits for the overlay to be **gone** before it scans); a saturation
+  enumeration **counting a renderer that renders nothing**, `judgeStoredRow` having lost its last
+  production caller at M6 while the gate written against "one renderer updated and not its
+  neighbour" went on asserting on it, green; and the epic's headline number wrong on the screen it
+  built to remove wrong numbers — the approved spec says "four **steps**, six **readings**, each a
+  row" **seven times**, and the code counted steps, captioning a complete sweep `4 readings` over a
+  table of six, under a docblock whose own arithmetic said eight. Two more were the plan and the
+  documents rather than the code (a Done checklist claiming three register items closed when two
+  were untouched, and `docs/API.md` never touched while `docs/DATABASE.md` got a full update for the
+  same change — its missing paragraph asserting the opposite of what is now true). The database
+  review found a wrong sentence **shipping in the OpenAPI spec** (`frames_per_phase` as "the frames
+  per repeat", which halves the count for a difference limb — the kind ADR-0129 P3 was measured on)
+  and one now **permanent**: the M4 migration's stated reason for re-citing #253 is false, the
+  Closed-numbers ledger existing precisely so an inbound citation stays resolvable, which is
+  ADR-0076 Class 3 inside a correction about a wrong citation — and a checksummed migration cannot
+  be edited, so the correction lives in `docs/DATABASE.md`. Two reviewers independently reached the
+  truncation rule's premise, which this epic's own resume feature made untrue fifty lines below
+  where it is asserted (`docs/TECH_DEBT.md` #273; not reachable today only because the resume reads
+  its id from in-memory state). Every fix carries a regression test verified red first; two findings
+  are recorded rather than rushed (#272/#273).
+  **The CPM engine is not imported** — in its honest form: there is nothing
+  here to hold parity for.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

@@ -242,7 +242,14 @@ describe('formatProbeReport', () => {
       context: { ...CONTEXT, size: 'quick', frames: 40, repeats: 1 },
       limbs: [limb({ kind: 'absolute', judged: judged({ verdict: 'REPORTED_ONLY' }) })],
     });
-    expect(out).toContain('run size   quick — 40 frames x 1');
+    // The line moved from the sitting header to the reading it describes (M6-T2: a sitting spans
+    // up to four presses, so the protocol is per reading), and it keeps its label.
+    expect(out).toContain('run size   quick — 40 frames');
+    // **The repeat count is now the limb's OWN collected count, not the operator's request.** This
+    // fixture's limb collected none, so the line says none — which is the honest reading of a block
+    // that is evidence rather than a statement of intent. They agree for every stored limb, because
+    // an interrupted limb is dropped rather than truncated (M3).
+    expect(out).toMatch(/run size {3}quick — 40 frames x 0/);
   });
   it('prints the non-vacuity counts on a PASS, not only when the judge refuses', () => {
     // The product owner's 2026-09-08 Week run came back PASS with no way to audit it from the block.

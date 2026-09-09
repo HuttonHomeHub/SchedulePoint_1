@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   useProbeResults,
@@ -18,12 +19,18 @@ import {
 } from '../model/scenarios';
 import { verdictLabel, verdictNote } from '../model/verdict-copy';
 import type { LimbOutcome, ProbeOutcome, RunSize } from '../runner/run-probe';
-import { runSweep, type SweepOutcome } from '../sweep/run-sweep';
+import {
+  mergeResumed,
+  missingSteps,
+  runSweep,
+  stepKey,
+  type SweepOutcome,
+} from '../sweep/run-sweep';
 import { describeDuration, estimateSweepSeconds } from '../sweep/sweep-duration';
 import { sweepPlan, type SweepStep } from '../sweep/sweep-plan';
 
-import { ProbeHistory } from './probe-history';
 import { formatProbeReport } from './probe-report';
+import { ProbeSittings } from './probe-sittings';
 
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -60,12 +67,7 @@ import { Panel } from '@/features/staff/ui/panel';
  * is the operator's basis for deciding whether to start something that asks them to leave the
  * machine alone.
  */
-type ConfirmKind = 'sweep' | 'check' | 'one';
-
-/** A step's identity, in one place so the panel and the renderer cannot disagree about it. */
-function stepKey(step: SweepStep): string {
-  return `${step.scenario.id}:${step.preset}`;
-}
+type ConfirmKind = 'sweep' | 'check' | 'one' | 'missing';
 
 /** `Step 2 of 4 · Canvas draw budget · whole plan` — what the overlay says it is doing. */
 function stepLabel(plan: readonly SweepStep[], step: SweepStep): string {
@@ -86,6 +88,13 @@ function stepLabel(plan: readonly SweepStep[], step: SweepStep): string {
 export function confirmationCopy(
   kind: ConfirmKind | null,
   one: { scenario: ScenarioDefinition; preset: ScenarioPreset; size: RunSize },
+  /**
+   * What a resume would re-measure — **passed in rather than derived**, because it is a fact about
+   * one sitting on screen and not about the registry. The other three kinds can be described from
+   * `sweepPlan()` alone; this one cannot, and defaulting it would let the dialog promise a shape it
+   * is not about to run.
+   */
+  missing: { plan: readonly SweepStep[]; size: RunSize } | null = null,
 ): string {
   const motion =
     'It covers the screen with a moving diagram — that movement IS the measurement, so it is not ' +
@@ -109,7 +118,33 @@ export function confirmationCopy(
     return (
       `This takes ${describeDuration(estimateSweepSeconds(plan, 'quick'))} and answers one ` +
       'question: does the probe work on this machine? Every reading runs once, so none of them ' +
-      `can be graded — there is no run-to-run spread to judge against. ${motion}`
+      // **Stop is named here too**, and it was the only one of the four that left it out (M7 ux
+      // review). The overlay and its Stop button render identically for a check, and a check can
+      // keep a completed limb exactly like a full run — so the one control whose confirmation said
+      // nothing about leaving was the one an operator is likeliest to be trying out.
+      `can be graded — there is no run-to-run spread to judge against. ${motion} ${stop}`
+    );
+  }
+
+  if (kind === 'missing') {
+    // No plan means nothing is missing, and the control that opens this dialog is not rendered in
+    // that state. Said rather than assumed: a promise about "0 readings" is the shape of sentence
+    // this epic exists to remove, and it costs one branch to make it unreachable.
+    if (missing === null || missing.plan.length === 0) {
+      return 'There are no missing readings to take.';
+    }
+    const count = missing.plan.length;
+    return (
+      `This takes ${describeDuration(estimateSweepSeconds(missing.plan, missing.size))} and takes ` +
+      `the ${count === 1 ? 'one reading' : `${String(count)} readings`} that ` +
+      `${count === 1 ? 'was' : 'were'} refused or never taken. ${motion} ${stop} ` +
+      // **The honest cost of joining the sitting, stated before it is paid.** The readings are
+      // stored under the SAME sitting id, which is what makes them one act — and time has passed
+      // since the others, on a machine that may since have been moved, resized or rebooted. The
+      // block flags a spread beyond an hour for the same reason; warning here is what lets an
+      // operator decide to start a fresh sitting instead.
+      'They join the sitting above rather than starting a new one, so it will hold readings taken ' +
+      'minutes or days apart — comparable only if this machine and this window are as they were.'
     );
   }
 
@@ -204,6 +239,36 @@ export function PerformanceProbePanel(): React.ReactElement {
   }, [focusRun, running]);
 
   /**
+   * The page behind the overlay is out of the focus order for as long as it is covered.
+   *
+   * **The panel's own `inert` was necessary and not sufficient** (WCAG 2.2 §2.4.11, M7
+   * accessibility review). `/staff` renders six more panels beside this one and several mount a
+   * `DataTable`, which is a focusable `role="region"`; the overlay is `fixed inset-0` over an
+   * opaque surface, so Tab from Stop landed on a control nobody could see. This is what a modal
+   * `<dialog>` would give for free — and the overlay is deliberately not one, because it announces
+   * nothing and traps nothing, so the property has to be asked for.
+   *
+   * Scoped to the panel's own document root rather than `document.body`, so the portalled overlay —
+   * a child of the body — keeps its Stop button. Restored in the cleanup, which is the half that
+   * matters: a leaked `inert` takes the whole console out of the keyboard's reach with nothing on
+   * screen looking wrong.
+   *
+   * `main` is located rather than assumed: this is a component, and a future host may not have one.
+   * Where there is none the panel-level `inert` still covers this panel's own controls, which is
+   * the state the M5 fix left and is strictly better than throwing.
+   */
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!running) return;
+    const page = panelRef.current?.closest('main');
+    if (!page) return;
+    page.setAttribute('inert', '');
+    return () => {
+      page.removeAttribute('inert');
+    };
+  }, [running]);
+
+  /**
    * Re-send one step's body after a failed POST.
    *
    * **Only a retry lives here now.** The sweep records each step as it completes (`run-sweep.ts`),
@@ -276,9 +341,23 @@ export function PerformanceProbePanel(): React.ReactElement {
    * two adapters rather than two formatters).
    */
   const start = useCallback(
-    async (plan: readonly SweepStep[], runSize: RunSize) => {
+    async (
+      plan: readonly SweepStep[],
+      runSize: RunSize,
+      /**
+       * The sitting this press continues, or `null` for a fresh one.
+       *
+       * A resume is an ordinary sweep over a shorter plan; the only two things it does differently
+       * are reuse the id and fold its results back in, and both are one expression each below.
+       */
+      resume: SweepOutcome | null = null,
+    ) => {
       setConfirming(null);
-      setOutcome(null);
+      // **A resume leaves the sitting on screen.** Clearing it would blank the readings the first
+      // press recorded for the duration of the run and, if the resume then threw, permanently — an
+      // operator would be shown a two-step sitting and could reasonably conclude the other two had
+      // been lost. They are in the database; only the screen would have forgotten them.
+      if (resume === null) setOutcome(null);
       setFailure(null);
       setCopied(false);
       cancelledRef.current = false;
@@ -303,7 +382,21 @@ export function PerformanceProbePanel(): React.ReactElement {
         const result = await runSweep({
           size: runSize,
           machineLabel: machineLabel.trim() === '' ? null : machineLabel.trim(),
-          newSweepId: () => crypto.randomUUID(),
+          // **The id IS the resume, and a single press has none.** `runSweep` mints through this
+          // callback precisely so the CALLER decides the sitting; nothing else in the orchestration
+          // has to know which press this is, which is what keeps one code path for all four
+          // controls.
+          //
+          // Three cases, in order. A resume keeps the sitting it is continuing — including when it
+          // is re-taking a single reading, where a fresh id would file the recovered reading as an
+          // orphan beside a sweep permanently missing a step. A press that asks for more than one
+          // reading IS a sitting. And a single **Measure one thing** press is not one: the schema's
+          // own words are that `NULL` means a single press and "a default would claim membership of
+          // a sitting that does not exist" (feature-spec.md:644). It claimed exactly that until
+          // M6-T4 — every single press grouped as a sweep, and the history told the operator it
+          // held "1 of 4 readings — 3 were refused or never taken", all of it false.
+          newSweepId: () =>
+            resume !== null ? resume.sweepId : plan.length > 1 ? crypto.randomUUID() : null,
           plan,
           runStep: (step) =>
             runProbe({
@@ -334,7 +427,7 @@ export function PerformanceProbePanel(): React.ReactElement {
           shouldStop: () => cancelledRef.current,
         });
 
-        setOutcome(result);
+        setOutcome(resume === null ? result : mergeResumed(resume, result));
         // **One refresh for the sitting, whatever it wrote** — see `useRefreshProbeResults`. Four
         // POSTs invalidating individually would be four extra audited reads for one press.
         if (result.steps.some((step) => step.status === 'recorded')) refreshHistory();
@@ -393,6 +486,10 @@ export function PerformanceProbePanel(): React.ReactElement {
   // sitting's own step statuses are the truth, which is why `run-sweep.ts` returns them.
   const recorded = outcome?.steps.filter((step) => step.status === 'recorded').length ?? 0;
   const unrecorded = outcome?.steps.filter((step) => step.status === 'not recorded').length ?? 0;
+  // **From the outcome's own steps, by the same rule the dialog and the button both read.** The
+  // alternative — the panel deciding separately what "missing" means — is two definitions of one
+  // set, where a control could offer to re-run a step the sweep would then not include.
+  const missing = outcome === null ? [] : missingSteps(outcome);
   const recordingStatus =
     outcome === null
       ? ''
@@ -412,6 +509,8 @@ export function PerformanceProbePanel(): React.ReactElement {
 
   return (
     <Panel title="Performance" status={status}>
+      {/* The anchor the `inert` effect walks up from. `display: contents`, so it adds no box. */}
+      <div ref={panelRef} className="contents" />
       <p className="text-muted-foreground text-sm">
         Measures how the schedule diagram paints <strong>on this machine</strong>. Nothing is
         measured on the server: the API runs headless in a container, where the canvas can fall back
@@ -575,10 +674,14 @@ export function PerformanceProbePanel(): React.ReactElement {
             copied={copied}
             onRetry={retryStore}
             retrying={retrying}
+            missingCount={missing.length}
+            onRunMissing={() => {
+              setConfirming('missing');
+            }}
           />
         )}
 
-        <ProbeHistory query={history} />
+        <ProbeSittings query={history} />
       </div>
 
       {/*
@@ -592,35 +695,54 @@ export function PerformanceProbePanel(): React.ReactElement {
         from `document.documentElement` gives the PAGE's inks on a ground that is not the page, and
         does so silently. The runner takes this element as a required parameter.
       */}
-      {running && (
-        <div className="bg-background/95 fixed inset-0 z-50 flex flex-col">
-          <Surface tone="canvas" ref={surfaceRef} className="relative flex-1 overflow-hidden">
-            <canvas ref={canvasRef} aria-hidden className="absolute inset-0" />
-          </Surface>
-          <div className="flex items-center justify-between gap-4 p-4">
-            {/*
+      {running &&
+        createPortal(
+          /*
+            **Portalled to the body, and that is what makes the `inert` below possible.**
+
+            The overlay covers the whole viewport, so what must be taken out of the focus order is
+            the whole page — and the page includes the six sibling panels `/staff` renders beside
+            this one, several of which mount a `DataTable`, which is a focusable `role="region"`.
+            Tabbing from Stop walked straight into one of them, entirely hidden behind the canvas:
+            WCAG 2.2 §2.4.11 Focus Not Obscured (Minimum), AA. Found by the M7 accessibility review.
+
+            That is the SAME defect the `inert` two hundred lines up records fixing at M5 — fixed
+            one level too low. The panel inerted its own controls, which was right about the
+            controls it could see and silent about everything it could not.
+
+            The portal is not decoration: inerting a common ancestor while the overlay is nested
+            inside it would take the Stop button with it, leaving a two-minute full-screen overlay
+            with nothing focusable in it at all — a strictly worse failure than the one being fixed.
+          */
+          <div className="bg-background/95 fixed inset-0 z-50 flex flex-col">
+            <Surface tone="canvas" ref={surfaceRef} className="relative flex-1 overflow-hidden">
+              <canvas ref={canvasRef} aria-hidden className="absolute inset-0" />
+            </Surface>
+            <div className="flex items-center justify-between gap-4 p-4">
+              {/*
               A bare icon, NOT `<Spinner>`. That primitive carries `role="status"`, which would put
               a second live region on screen alongside the panel's own — and two live regions during
               one run is how a progress announcement overwrites a verdict (ADR-0079's debounced
               count, ADR-0080's focus announcement). The panel's status region is the accessible
               channel; this is decoration and says so.
             */}
-            <span className="flex items-center gap-2 text-sm">
-              <Loader2 className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
-              {progress}
-            </span>
-            <Button
-              ref={cancelButtonRef}
-              variant="outline"
-              onClick={() => {
-                cancelledRef.current = true;
-              }}
-            >
-              Stop (keeps what is already measured)
-            </Button>
-          </div>
-        </div>
-      )}
+              <span className="flex items-center gap-2 text-sm">
+                <Loader2 className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
+                {progress}
+              </span>
+              <Button
+                ref={cancelButtonRef}
+                variant="outline"
+                onClick={() => {
+                  cancelledRef.current = true;
+                }}
+              >
+                Stop (keeps what is already measured)
+              </Button>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <ConfirmDialog
         open={confirming !== null}
@@ -632,13 +754,22 @@ export function PerformanceProbePanel(): React.ReactElement {
           if (confirming === 'sweep') void start(sweepPlan(), 'full');
           else if (confirming === 'check') void start(sweepPlan(), 'quick');
           else if (confirming === 'one') void start([{ scenario, preset }], size);
+          // **The size comes from the outcome, never from the size control.** The operator may have
+          // changed that select since; a `quick` reading stored beside three `full` ones under one
+          // sitting id is a sitting taken under two protocols, and only the Protocol column would
+          // ever say so.
+          else if (confirming === 'missing' && outcome !== null) {
+            void start(missing, outcome.size, outcome);
+          }
         }}
         title={
           confirming === 'sweep'
             ? 'Take every measurement now?'
             : confirming === 'check'
               ? 'Check the probe works?'
-              : 'Run the measurement now?'
+              : confirming === 'missing'
+                ? 'Take the missing readings now?'
+                : 'Run the measurement now?'
         }
         // **Each control names its OWN duration, derived from its own plan.** The panel used to say
         // "about twenty-five seconds" for everything, which was true of one shape and wrong for the
@@ -650,13 +781,19 @@ export function PerformanceProbePanel(): React.ReactElement {
         // equally ungraded by design — got twenty-five seconds of motion and then a verdict word
         // the reader had never been warned about (found by the M5 ux review). A sweep is warned
         // unconditionally, because half its steps are ungraded by construction.
-        description={confirmationCopy(confirming, { scenario, preset, size })}
+        description={confirmationCopy(
+          confirming,
+          { scenario, preset, size },
+          outcome === null ? null : { plan: missing, size: outcome.size },
+        )}
         confirmLabel={
           confirming === 'sweep'
             ? 'Run all measurements'
             : confirming === 'check'
               ? 'Check the probe'
-              : 'Run measurement'
+              : confirming === 'missing'
+                ? 'Run the missing measurements'
+                : 'Run measurement'
         }
         cancelLabel="Not now"
         confirmVariant="default"
@@ -812,12 +949,17 @@ function SittingResult({
   copied,
   onRetry,
   retrying,
+  missingCount,
+  onRunMissing,
 }: {
   outcome: SweepOutcome;
   onCopy: () => void;
   copied: boolean;
   onRetry: (key: string, body: ProbeResultBody) => void;
   retrying: ReadonlySet<string>;
+  /** How many readings were refused or never taken. Counted by the caller, from one definition. */
+  missingCount: number;
+  onRunMissing: () => void;
 }): React.ReactElement {
   const plan = outcome.steps.map((s) => s.step);
   return (
@@ -866,7 +1008,16 @@ function SittingResult({
           {retrying.has(stepKey(step.step)) && (
             // The in-flight state, which a reader needs or a pressed Retry looks like nothing
             // happening. Per step, because one mutation object serves up to four of them.
-            <p className="text-muted-foreground text-sm">Recording this reading…</p>
+            //
+            // **Announced, not just printed.** Pressing Retry moves focus away (it has to — the
+            // button unmounts), so without a live region a screen-reader user gets silence from
+            // the press until the outcome lands, which on a slow write is the same silence a dead
+            // button gives. `polite`, because it must not interrupt the panel's own status; the
+            // outcome still arrives there. Raised independently by the M7 accessibility and ux
+            // reviews.
+            <p role="status" className="text-muted-foreground text-sm">
+              Recording this reading…
+            </p>
           )}
 
           {step.status === 'not recorded' &&
@@ -887,6 +1038,31 @@ function SittingResult({
             )}
         </div>
       ))}
+
+      {/*
+        **The remedy, after every reason.** It sits below the step list rather than beside the
+        summary deliberately: each refused or never-taken step has just said in its own words why
+        it produced nothing, and an operator who has read those is the one in a position to decide
+        whether taking them again will go any better — a tab that is still going to be backgrounded
+        will refuse a second time.
+
+        **Only `refused` and `not taken` reach it.** A step that measured and failed to store keeps
+        its own `Retry recording`, which sends the figures already on screen; re-measuring it would
+        spend twenty-five seconds obtaining DIFFERENT figures under the impression of re-sending
+        these ones.
+      */}
+      {missingCount > 0 && (
+        <div className="space-y-2">
+          <Button variant="outline" onClick={onRunMissing}>
+            Run the missing measurements
+          </Button>
+          <p className="text-muted-foreground text-sm">
+            {missingCount === 1 ? 'This reading' : `These ${String(missingCount)} readings`}{' '}
+            {missingCount === 1 ? 'will be' : 'will be'} taken again and stored in this same
+            sitting.
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <Button variant="outline" onClick={onCopy}>

@@ -337,7 +337,9 @@ export class CreateProbeResultDto {
     maximum: 100_000,
     description:
       'The frame budget ONE PHASE ran for — the other half of the protocol `samples` carries ' +
-      '(that array’s length is the repeats; this is the frames per repeat). NULL means **not ' +
+      '(that array’s length is the repeats; this is the frames per PHASE). A repeat is one ' +
+      'phase for an absolute limb and a PAIR — baseline then treatment — for a difference ' +
+      'one, so the frame count behind a difference reading is repeats x this x 2. NULL means **not ' +
       'recorded**: it is inferable from `samples.length` via a client-side constant, and ' +
       'inferring it would write a fact derived from a bundle version into a column readers will ' +
       'trust. A NULL on a row recorded after 2026-09-09 is a producer bug, not a historic gap.',
