@@ -217,6 +217,20 @@ than smoothed. Worth recording that the fallback formula would have yielded a bu
 the global one it would have replaced — a second reason the threshold rule was the right instrument
 and the formula alone would have been the wrong one.
 
+**That figure is one reading of an instrument whose spread is comparable to its own bar, and the
+release found out how.** Re-run on the same container while PR #491 was in CI, the same code
+reported **255.2 ms end-to-end in the suite — a FAIL — and 191.2 ms alone, a PASS**, against 215.2
+here; and the harness half inverts, passing at 211.0 ms in the suite and failing at **5954.2 ms**
+alone, because run in isolation its first five samples are 5937/5954/5902/6045/5748 ms before it
+settles to ~160 ms. **Each configuration passes one half and fails the other.** CI's own runner then
+passed both, which is what let the epic merge — so the conclusion this decision rests on is
+unchanged and the confidence in the number is not. Two consequences are filed as
+`docs/TECH_DEBT.md` **#266** rather than fixed here, because changing how a committed falsification
+condition is enforced is a decision: this probe is the only M0 sibling that **asserts** a wall-clock
+bar inside the blocking e2e job, which ADR-0128 refuses to do in a container for exactly this
+reason; and the probe's own docblock attributes those cold opening samples to suite contention,
+which the isolated run falsifies — nothing else was running.
+
 **P3 — the overlay's paint cost on a cross-plan pair — is OWED** and cannot be taken in this
 container, whose own no-change baseline moved by five times the bar between two runs an hour apart.
 It is recorded against the ADR-0128 staff probe with its three-valued verdict rule and its

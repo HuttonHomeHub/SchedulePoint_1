@@ -4621,3 +4621,45 @@ anything, which it does not once the report is on stdout as well. Check whether 
 appear as pre-existing open alerts in the branch's code-scanning view first: this session could not,
 because the token in use gets `403 Resource not accessible by integration` on
 `/code-scanning/alerts`.
+
+### 266. A measurement probe asserts a wall-clock bar inside the blocking e2e job, and each configuration fails a different half
+
+**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PR #491) · **Size:** S · **Owner:** api
+
+`apps/api/test/revision-compare-imported-p2.e2e-spec.ts` is the only M0 probe in the repository that
+**asserts** a timing bar. Its two siblings measure and report — `revision-delta-m0.e2e-spec.ts:607`
+says "This is REPORTED, not asserted equal" — and ADR-0128 refuses to run performance judgements in
+a CI container at all, because such a container's own no-change baseline moves by more than the bar.
+This probe does both of the things that decision rules out, in the job every PR has to pass.
+
+**Measured on one container, same code, same 250 ms bar, within an hour:**
+
+|                                           | harness p95        | end-to-end p95    |
+| ----------------------------------------- | ------------------ | ----------------- |
+| in the suite (52 files ahead of it, warm) | 211.0 ms PASS      | **255.2 ms FAIL** |
+| alone (nothing else running)              | **5954.2 ms FAIL** | 191.2 ms PASS     |
+| recorded in ADR-0129                      | 208.2 ms PASS      | 215.2 ms PASS     |
+
+Each configuration passes one half and fails the other. CI's own runner passed both, which is what
+let the epic merge — so the decision the number supports (the global rate budget rather than a
+per-route throttle) is unchanged, and the confidence in the number is not. `p50` is 154–204 ms
+across every run, so only the tail crosses; with 21 end-to-end samples the p95 index lands on the
+second-worst reading, which makes it very nearly a maximum — the same estimator defect this epic's
+own M0 already corrected once for the other half of the probe.
+
+**The probe's docblock is also wrong about why its opening samples are slow, and that is the more
+useful half.** It attributes them to `--disable-console-intercept` breaking vitest's path filter, so
+that "the probe times itself while ~600 other tests hammer the same database … as the rest of the
+suite drained". Run alone, with nothing else on the machine, the first five samples are
+5937 / 5954 / 5902 / 6045 / 5748 ms and it then settles to ~160 ms. That is warm-up, not contention.
+So the remedy the epic adopted — write the report to a file so the probe needs no flag and can run
+alone — made it runnable alone and left the cold cost exactly where it was.
+
+**What would fix it, and why it is filed rather than done.** The precedent-backed option is
+report-not-assert: keep both figures in the record where the falsification condition needs them,
+keep the non-vacuity assertions (`matched > 0`, `changes > 0`, which are about correctness rather
+than timing), and stop gating a shared job on a container's clock. A warm-up discarded before
+sampling is the other option and is the one to be careful with, because choosing how many samples to
+drop _after_ seeing which choice passes is tuning the instrument to the answer. Either way it changes
+how a committed falsification condition is enforced, which is a decision for the product owner and
+not a defect fix — so it is written down rather than taken silently on the day a release was waiting.
