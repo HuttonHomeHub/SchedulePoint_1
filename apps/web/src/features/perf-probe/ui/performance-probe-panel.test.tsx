@@ -23,12 +23,24 @@ const runProbe = vi.fn<(input?: unknown) => Promise<ProbeOutcome>>();
  * proves it about the code that runs.
  */
 const recordMutate = vi.fn();
+/**
+ * The sweep awaits its store, so it uses `mutateAsync`; the RETRY control still uses `mutate`.
+ *
+ * Both are spied, and both resolve by default. A store that rejects is what turns a step into
+ * `not recorded`, which is the state with an action attached — so the rejecting case is set per
+ * test rather than globally.
+ */
+const recordMutateAsync = vi.fn<(body: unknown) => Promise<unknown>>(() => Promise.resolve({}));
 const recordState = { isPending: false, isError: false, isSuccess: false };
 const historyRows: unknown[] = [];
 const refreshHistory = vi.fn();
 
 vi.mock('../api/probe-results', () => ({
-  useRecordProbeResult: () => ({ mutate: recordMutate, ...recordState }),
+  useRecordProbeResult: () => ({
+    mutate: recordMutate,
+    mutateAsync: recordMutateAsync,
+    ...recordState,
+  }),
   // The history refresh is now the SITTING's rather than the row's, so the panel asks for it
   // explicitly. Mocked as a spy so the "one refetch per sitting" rule is assertable here.
   useRefreshProbeResults: () => refreshHistory,
@@ -198,8 +210,27 @@ const unjudgeable = (): ProbeOutcome => {
  * a confirmation whose button reads "OK" makes the reader re-derive what they are agreeing to. The
  * helper therefore scopes to the dialog rather than to the name.
  */
+/**
+ * Press the SINGLE-measurement control, which now lives behind the "Measure one thing" disclosure.
+ *
+ * The disclosure is opened explicitly rather than by rendering it open: a `<details>` that is shut
+ * hides its contents from `getByRole`, so a helper that did not open it would fail with "no such
+ * button" and read as the control being gone rather than as the harness not having looked.
+ */
+/**
+ * The single-measurement button, inside the "Measure one thing" disclosure.
+ *
+ * A helper rather than a repeated query, because the control moved once already and the tests that
+ * assert focus RETURNS to it need to ask for the same element the panel's ref points at.
+ */
+function runControl(): HTMLElement {
+  return screen.getByRole('button', { name: 'Run measurement' });
+}
+
 function runOnce(): void {
-  fireEvent.click(screen.getByRole('button', { name: 'Run measurement' }));
+  const disclosure = screen.getByText('Measure one thing');
+  fireEvent.click(disclosure);
+  fireEvent.click(runControl());
   const dialog = screen.getByRole('alertdialog');
   const confirm = [...dialog.querySelectorAll('button')].find(
     (b) => b.textContent === 'Run measurement',
@@ -211,6 +242,9 @@ function runOnce(): void {
 beforeEach(() => {
   runProbe.mockReset();
   recordMutate.mockReset();
+  recordMutateAsync.mockReset();
+  recordMutateAsync.mockResolvedValue({});
+  refreshHistory.mockReset();
   recordState.isPending = false;
   recordState.isError = false;
   recordState.isSuccess = false;
@@ -222,7 +256,7 @@ describe('PerformanceProbePanel', () => {
     // ADR-0081: a milestone claiming user-facing capability names its entry point. This is that
     // control, located by role and accessible name rather than by copy (ADR-0091's lesson).
     render(<PerformanceProbePanel />);
-    expect(screen.getByRole('button', { name: 'Run measurement' })).toBeInTheDocument();
+    expect(runControl()).toBeInTheDocument();
     expect(screen.getByText(/No measurement has been taken in this browser/)).toBeInTheDocument();
     expect(runProbe).not.toHaveBeenCalled();
   });
@@ -238,9 +272,12 @@ describe('PerformanceProbePanel', () => {
 
   it('confirms before covering the screen, and says the movement IS the measurement', () => {
     render(<PerformanceProbePanel />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run measurement' }));
+    fireEvent.click(runControl());
     const dialog = screen.getByRole('alertdialog');
-    expect(dialog).toHaveTextContent(/twenty-five seconds/);
+    // **The duration is derived, so the assertion is its shape rather than a constant.** The panel
+    // used to say "about twenty-five seconds" for every run — true of one shape and wrong for the
+    // others by a factor of two. Pinning the old words here would pin the defect.
+    expect(dialog).toHaveTextContent(/This takes about \d+ seconds/);
     expect(dialog).toHaveTextContent(/that movement IS the measurement/);
     expect(dialog).toHaveTextContent(/Keep this tab in front/);
     expect(runProbe).not.toHaveBeenCalled();
@@ -251,11 +288,9 @@ describe('PerformanceProbePanel', () => {
     // when the opener has moved — this repository's third-most-repeated defect (ADR-0080, ADR-0096,
     // ADR-0099 M10). Verified red by removing the `focusRun()` call from `onClose`.
     render(<PerformanceProbePanel />);
-    fireEvent.click(screen.getByRole('button', { name: 'Run measurement' }));
+    fireEvent.click(runControl());
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Run measurement' })).toHaveFocus(),
-    );
+    await waitFor(() => expect(runControl()).toHaveFocus());
   });
 
   it('returns focus to the Run control when a run finishes', async () => {
@@ -276,9 +311,7 @@ describe('PerformanceProbePanel', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /^Stop/ })).toHaveFocus());
 
     release(measured('PASS'));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Run measurement' })).toHaveFocus(),
-    );
+    await waitFor(() => expect(runControl()).toHaveFocus());
   });
 
   it('renders a REFUSED run as a refusal, with no pass or fail wording anywhere', async () => {
@@ -351,8 +384,8 @@ describe('PerformanceProbePanel', () => {
     });
     runOnce();
 
-    await waitFor(() => expect(recordMutate).toHaveBeenCalledTimes(1));
-    const body = recordMutate.mock.calls[0]?.[0] as Record<string, unknown>;
+    await waitFor(() => expect(recordMutateAsync).toHaveBeenCalledTimes(1));
+    const body = recordMutateAsync.mock.calls[0]?.[0] as Record<string, unknown>;
     // Trimmed, and a blank note becomes `null` rather than an empty string — the column keeps
     // "not typed" and "typed nothing" apart.
     expect(body.machineLabel).toBe('the Dell, docked');
@@ -375,7 +408,7 @@ describe('PerformanceProbePanel', () => {
     // `summarise` is for. `findAllByText` rather than narrowing: asserting which element says it
     // would be asserting about layout, and this test is about the POST.
     await screen.findAllByText(/The run was refused/);
-    expect(recordMutate).not.toHaveBeenCalled();
+    expect(recordMutateAsync).not.toHaveBeenCalled();
   });
 
   it('sends an unjudgeable limb, because the numbers are real even when the verdict is not', async () => {
@@ -383,26 +416,29 @@ describe('PerformanceProbePanel', () => {
     render(<PerformanceProbePanel />);
     runOnce();
 
-    await waitFor(() => expect(recordMutate).toHaveBeenCalledTimes(1));
-    const body = recordMutate.mock.calls[0]?.[0] as { limbs: { runs?: unknown[] }[] };
+    await waitFor(() => expect(recordMutateAsync).toHaveBeenCalledTimes(1));
+    const body = recordMutateAsync.mock.calls[0]?.[0] as { limbs: { runs?: unknown[] }[] };
     expect(body.limbs[0]?.runs).toHaveLength(1);
   });
 
   it('says a reading was measured and NOT recorded, and offers to try again', async () => {
     // Two different facts kept apart: the run was fine, the store was not. Collapsing them is what
     // turns a visible refusal into silent evidence loss.
-    recordState.isError = true;
+    // **The store REJECTS rather than a flag being set**, and that is the contract change: a sweep
+    // POSTs once per step, so `record.isError` is a fact about the LAST write and says nothing
+    // about the other three. The step's own status is the truth.
+    recordMutateAsync.mockRejectedValue(new Error('network'));
     runProbe.mockResolvedValue(measured('PASS'));
     render(<PerformanceProbePanel />);
     runOnce();
 
     const retry = await screen.findByRole('button', { name: 'Retry recording' });
-    // Two matches now, and that is the fix: the alert says it and so does the panel's live
-    // region, which was silent about the record state until the M5 accessibility review.
     expect(screen.getAllByText(/NOT recorded/).length).toBeGreaterThan(0);
     // The figures are still on screen — the measurement is not thrown away by a failed store.
     expect(screen.getByText('PASS')).toBeInTheDocument();
 
+    // The RETRY path is the one that still uses `mutate`: it is the one thing the sweep
+    // deliberately does not do for itself.
     recordMutate.mockClear();
     fireEvent.click(retry);
     expect(recordMutate).toHaveBeenCalledTimes(1);
@@ -461,7 +497,7 @@ describe('PerformanceProbePanel', () => {
     // expected most needs to tell those apart.
     expect((await screen.findAllByText(/the rest were not taken/)).length).toBeGreaterThan(0);
     await waitFor(() => {
-      expect(recordMutate).toHaveBeenCalled();
+      expect(recordMutateAsync).toHaveBeenCalled();
     });
   });
 
@@ -482,7 +518,7 @@ describe('PerformanceProbePanel', () => {
     expect(
       (await screen.findAllByText(/You stopped this run before anything finished/)).length,
     ).toBeGreaterThan(0);
-    expect(recordMutate).not.toHaveBeenCalled();
+    expect(recordMutateAsync).not.toHaveBeenCalled();
     expect(screen.queryByText('PASS')).not.toBeInTheDocument();
     expect(screen.queryByText('FAIL')).not.toBeInTheDocument();
   });
@@ -515,10 +551,17 @@ describe('PerformanceProbePanel', () => {
   });
 
   it('says a reading is being recorded while the write is in flight', async () => {
-    recordState.isPending = true;
+    // **Per step, not per mutation.** A sitting has up to four steps and one mutation object, so
+    // `record.isPending` would light every failed step's spinner because one of them is in flight
+    // — telling a reader the panel is retrying readings it has not touched.
+    recordMutateAsync.mockRejectedValue(new Error('network'));
     runProbe.mockResolvedValue(measured('PASS'));
+    // A retry that never settles, so the in-flight state is observable.
+    recordMutate.mockImplementation(() => undefined);
     render(<PerformanceProbePanel />);
     runOnce();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry recording' }));
 
     expect(await screen.findByText('Recording this reading…')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Retry recording' })).not.toBeInTheDocument();
@@ -527,7 +570,8 @@ describe('PerformanceProbePanel', () => {
   it('returns focus to Run when Retry unmounts itself', async () => {
     // Pressing Retry flips the mutation to pending, which replaces the branch holding the focused
     // button with a paragraph — focus to `<body>`, WCAG 2.4.3. Found by the M5 accessibility review.
-    recordState.isError = true;
+    recordMutateAsync.mockRejectedValue(new Error('network'));
+    recordMutate.mockImplementation(() => undefined);
     runProbe.mockResolvedValue(measured('PASS'));
     render(<PerformanceProbePanel />);
     runOnce();
@@ -542,7 +586,7 @@ describe('PerformanceProbePanel', () => {
 
     fireEvent.click(retry);
 
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Run measurement' }));
+    expect(document.activeElement).toBe(runControl());
   });
 
   it('announces a SUCCESSFUL recording, not only a failed one', async () => {
@@ -572,7 +616,7 @@ describe('PerformanceProbePanel', () => {
     runOnce();
 
     await screen.findByRole('button', { name: /^Stop/ });
-    const shielded = screen.getByRole('button', { name: 'Run measurement' }).closest('[inert]');
+    const shielded = runControl().closest('[inert]');
     expect(
       shielded,
       'the controls sit inside an inert subtree while the overlay covers them',
@@ -634,7 +678,7 @@ describe('PerformanceProbePanel', () => {
     render(<PerformanceProbePanel />);
     runOnce();
 
-    const run = screen.getByRole('button', { name: 'Run measurement' });
+    const run = runControl();
     expect(run).not.toBeDisabled();
     expect(run).toHaveAttribute('aria-disabled', 'true');
     release(measured('PASS'));
@@ -664,7 +708,7 @@ describe('the history refresh', () => {
     runOnce();
 
     await waitFor(() => {
-      expect(recordMutate).toHaveBeenCalled();
+      expect(recordMutateAsync).toHaveBeenCalled();
     });
     expect(refreshHistory).toHaveBeenCalledTimes(1);
   });
@@ -685,7 +729,7 @@ describe('the history refresh', () => {
     // Two channels carry it — the visible alert and the panel's live region — which is
     // `docs/TECH_DEBT.md` #259 item 10, filed and not this milestone's subject.
     await screen.findAllByText(/The run was refused/);
-    expect(recordMutate).not.toHaveBeenCalled();
+    expect(recordMutateAsync).not.toHaveBeenCalled();
     expect(refreshHistory).not.toHaveBeenCalled();
   });
 });
