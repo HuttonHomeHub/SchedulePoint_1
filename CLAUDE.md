@@ -4203,7 +4203,36 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   screen **inferring absence from that same page** and saying readings were refused when they were
   merely unreturned (`docs/TECH_DEBT.md` #271); and a release that would have shipped **no image
   carrying its own DTO**, since M4 added two accepted body fields with no changeset while the client
-  sent one unconditionally. **The CPM engine is not imported** — in its honest form: there is nothing
+  sent one unconditionally.
+  **The gate pass earned its place for the eighth epic running.** Seven specialists; security,
+  backend-performance and database-architect passed having **re-derived the epic's own numbers from
+  the shipped code** (a 0.13–0.17 ms backward index scan at 100,000 rows, a `ctid` Tid Scan at ~3 ms
+  a batch, the migration proven safe against a populated table rebuilt from the 62 earlier ones).
+  The other four blocked, and **three of their findings are one correct rule applied one level too
+  low or one file over**: the `inert` guard covering this panel while the overlay covers the page —
+  the M5 review's own fix, at the wrong scope, so Tab from Stop reached a control hidden behind an
+  opaque full-screen canvas (WCAG 2.2 §2.4.11, invisible to axe twice over, since no rule covers
+  obscuring and the journey waits for the overlay to be **gone** before it scans); a saturation
+  enumeration **counting a renderer that renders nothing**, `judgeStoredRow` having lost its last
+  production caller at M6 while the gate written against "one renderer updated and not its
+  neighbour" went on asserting on it, green; and the epic's headline number wrong on the screen it
+  built to remove wrong numbers — the approved spec says "four **steps**, six **readings**, each a
+  row" **seven times**, and the code counted steps, captioning a complete sweep `4 readings` over a
+  table of six, under a docblock whose own arithmetic said eight. Two more were the plan and the
+  documents rather than the code (a Done checklist claiming three register items closed when two
+  were untouched, and `docs/API.md` never touched while `docs/DATABASE.md` got a full update for the
+  same change — its missing paragraph asserting the opposite of what is now true). The database
+  review found a wrong sentence **shipping in the OpenAPI spec** (`frames_per_phase` as "the frames
+  per repeat", which halves the count for a difference limb — the kind ADR-0129 P3 was measured on)
+  and one now **permanent**: the M4 migration's stated reason for re-citing #253 is false, the
+  Closed-numbers ledger existing precisely so an inbound citation stays resolvable, which is
+  ADR-0076 Class 3 inside a correction about a wrong citation — and a checksummed migration cannot
+  be edited, so the correction lives in `docs/DATABASE.md`. Two reviewers independently reached the
+  truncation rule's premise, which this epic's own resume feature made untrue fifty lines below
+  where it is asserted (`docs/TECH_DEBT.md` #273; not reachable today only because the resume reads
+  its id from in-memory state). Every fix carries a regression test verified red first; two findings
+  are recorded rather than rushed (#272/#273).
+  **The CPM engine is not imported** — in its honest form: there is nothing
   here to hold parity for.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
