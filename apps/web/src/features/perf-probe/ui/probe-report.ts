@@ -79,11 +79,17 @@ function repeatsOf(limb: LimbOutcome): number {
 }
 
 /** The verdict line and its sentence, so no verdict ever prints bare. */
-function verdictLines(limb: LimbOutcome, verdict: Verdict, indeterminateReason?: string): string[] {
+function verdictLines(
+  limb: LimbOutcome,
+  verdict: Verdict,
+  indeterminateReason?: string,
+  saturated?: boolean,
+): string[] {
   const note = verdictNote(verdict, {
     gated: limb.recording.thresholds.gated === true,
     repeats: repeatsOf(limb),
     indeterminateReason,
+    saturated,
   });
   return [`  VERDICT: ${verdictLabel(verdict)}`, ...(note === null ? [] : [`  because ${note}`])];
 }
@@ -127,8 +133,14 @@ function limbLines(limb: LimbOutcome): string[] {
     ...changedOnScreenLine(limb),
     `  baseline   ${r.baselineMeanPp.toFixed(2)} pp   (run-to-run spread ${r.baselineSpreadPp.toFixed(2)} pp)`,
     `  treatment  ${r.treatmentMeanPp.toFixed(2)} pp   ${r.treatmentFps.toFixed(1)} fps`,
-    `  delta      ${r.deltaPp >= 0 ? '+' : ''}${r.deltaPp.toFixed(2)} pp`,
-    ...verdictLines(limb, r.verdict, r.indeterminateReason),
+    // The caveat rides ON the delta line, not only after the verdict three lines down. #260's
+    // defect is a figure that reads as "the overlay is free"; a reader who takes the number and
+    // stops is exactly the reader who needs telling, and they never reach the verdict block.
+    `  delta      ${r.deltaPp >= 0 ? '+' : ''}${r.deltaPp.toFixed(2)} pp` +
+      (r.saturated
+        ? `   [CEILING: only ${r.headroomPp.toFixed(2)} pp of headroom — see VERDICT]`
+        : ''),
+    ...verdictLines(limb, r.verdict, r.indeterminateReason, r.saturated),
   ];
 }
 

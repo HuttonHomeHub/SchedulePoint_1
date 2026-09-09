@@ -332,6 +332,19 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     );
   }
 
+  // **A saturated delta never appears without its caveat** (`docs/TECH_DEBT.md` #260).
+  //
+  // Reachable here rather than decorative: the default scenario is `revision-diff`, a DIFFERENCE
+  // limb, so this container's software rasteriser can genuinely pin the baseline at the ceiling —
+  // the M1-T3 driver run recorded `baseline 100.00 pp` at the whole-plan framing on this same
+  // hardware. It may equally not fire (that run measured 30 pp at Week), so the assertion is
+  // conditional in BOTH directions and asserts the pairing rather than forcing an outcome: a
+  // ceiling sentence with no figure beside it is as wrong as a figure with no sentence.
+  const CEILING = /property of the ceiling/;
+  if (CEILING.test(resultText)) {
+    expect(resultText, 'the caveat names the figure it qualifies').toMatch(/[+-]?\d+\.\d+\s*pp/);
+  }
+
   // And a refusal is never dressed as a verdict. This is the assertion the fourth verdict value
   // exists for, checked against the whole panel rather than the alert alone — the defect would be a
   // pass/fail word left somewhere else on the surface beside a correctly-worded refusal.
