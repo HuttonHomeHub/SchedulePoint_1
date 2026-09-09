@@ -1,6 +1,6 @@
 # Implementation Plan: Undo for a link edited from the Edit-link dialog
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) (Draft — **not yet approved**)
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) (Draft — Draft)
 - **Status:** Draft
 - **Owner:** unassigned
 - **Register row:** `docs/TECH_DEBT.md` #65

@@ -27,6 +27,12 @@
  * (ADR-0029's four cite `docs/specs/*.md` files that live in `docs/plans/`), and the regex cannot
  * invent a population, because everything it yields is intersected with what is on disk.
  *
+ * **The plan side is a contradiction rule, not a presence rule** (P1). A plan whose
+ * `**Feature spec:**` line is a bare link asserts nothing and is clean; one that annotates it must
+ * not name a state the spec does not hold. Measured, 46 of 90 plans annotate and 44 do not, so a
+ * presence rule would invent a field for authors to maintain — which is #274's own defect, one
+ * document along.
+ *
  * **Finding is generous; refusing is strict** (ADR-0124). The reader accepts `- `, `* `, `> ` and
  * bare header forms via {@link headerField}, because a header in the wrong shape is still a header
  * and a parser that skips it reports green over the gap. S5 is the separate strict pass that
@@ -342,12 +348,76 @@ export function collectFindings(ROOT) {
     );
   }
 
+  // ── P1 — no plan's `**Feature spec:**` annotation contradicts its spec's status ──────────────
+  //
+  // **A contradiction rule, not a presence rule, and the difference is measured.** 46 of the 90
+  // plans annotate that line and 44 do not; requiring an annotation would create a second field
+  // for authors to maintain, and #274's whole diagnosis is that a header drifted *by being
+  // nobody's step*. Adding another step nobody is forced to take reproduces the defect one file
+  // along. **A bare link is clean because it makes no claim.**
+  //
+  // The plan's own `**Status:**` field is deliberately out of scope (CQ-2): it is a different
+  // vocabulary about a different subject, and folding it in means deciding what `In progress`
+  // means for an epic that finished eight months ago. That is a second sweep and a second
+  // argument, and it is not what #274 is about.
+  const plans = [];
+  for (const slug of slugs) {
+    const path = `${SPECS}/${slug}/implementation-plan.md`;
+    if (!existsSync(resolve(ROOT, path))) continue;
+    const lines = stripFences(read(ROOT, path)).split('\n');
+    const line = lines.findIndex((l) => headerField(l, 'Feature spec') !== null);
+    plans.push({
+      slug,
+      path,
+      line: line + 1,
+      value: line === -1 ? null : headerField(lines[line], 'Feature spec'),
+    });
+  }
+  for (const plan of plans) {
+    if (plan.value === null) continue;
+    const spec = specs.find((s) => s.slug === plan.slug);
+    if (!spec || spec.value === null) continue;
+    const token = statusToken(spec.value);
+    // Strip the link and any code span: what is left is the annotation, if there is one.
+    const annotation = plan.value
+      .replace(/\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/`[^`]*`/g, '')
+      .trim()
+      .replace(/^[\s\u2014\u2013\-·:,]+/, '');
+    if (annotation === '') continue;
+    if (/not yet approved|awaiting|unapproved|\bdraft\b/i.test(annotation)) {
+      if (token === 'draft') continue;
+      problems.push(
+        `P1: ${plan.path}:${plan.line} says the spec is "${annotation.slice(0, 48)}", and ` +
+          `${spec.path}:${spec.line} says ${token}. The two files are one artefact; a reader who ` +
+          "checks the nearer one is misled. Mirror the spec's token, or drop the annotation — a " +
+          'bare link asserts nothing and is clean.',
+      );
+      continue;
+    }
+    const claimed = VOCABULARY.find((v) => new RegExp(`\\b${v}\\b`, 'i').test(annotation));
+    if (claimed && claimed !== token) {
+      problems.push(
+        `P1: ${plan.path}:${plan.line} annotates the spec "${claimed}" and ` +
+          `${spec.path}:${spec.line} says ${token}. Mirror the spec's token, or drop the annotation.`,
+      );
+    }
+  }
+
+  // ── C4 — the plan glob found something ───────────────────────────────────────────────────────
+  // P1 is a `.filter()` like every refusal above it, so an empty plan list would satisfy it
+  // silently. Same argument as C2, one document type along.
+  if (plans.length === 0) {
+    problems.push(`C4: no ${SPECS}/*/implementation-plan.md was found at all. P1 checked nothing.`);
+  }
+
   const draft = specs.filter((s) => s.value !== null && statusToken(s.value) === 'draft');
   const summary =
     `${specs.length} spec documents (${found} with a readable status, ${specs.length - found} without), ` +
     `${cited.size} cited by an ADR, ${draft.length} headed Draft ` +
     `(${draft.filter((s) => cited.has(s.slug)).length} of them cited), ` +
-    `${Object.keys(exempt).length} exempt, ${Object.keys(citedWithoutSpec).length} cited without a spec document.`;
+    `${Object.keys(exempt).length} exempt, ${Object.keys(citedWithoutSpec).length} cited without a spec document; ` +
+    `${plans.length} plans (${plans.filter((p) => p.value !== null).length} naming their spec).`;
 
   return { problems, summary, population: specs.length };
 }

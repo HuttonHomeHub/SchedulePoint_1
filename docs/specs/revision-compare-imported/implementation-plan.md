@@ -1,6 +1,6 @@
 # Implementation Plan: Revision Compare across two imported revisions
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft — awaiting approval
 - **Owner:** _(assigned on approval)_
 

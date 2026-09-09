@@ -1,6 +1,6 @@
 # Implementation Plan: Resource loading curves, cost accrual & weighted activity steps (M7 rung 5)
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) (Draft — awaiting approval)
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft
 - **Owner:** TBD
 

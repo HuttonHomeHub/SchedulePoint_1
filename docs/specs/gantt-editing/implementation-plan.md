@@ -1,7 +1,8 @@
 # Implementation Plan: Gantt editing — the Gantt as a working surface
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**; four CRITICAL
-  questions (Q1 arrows, Q2 typed dates, Q3 row menu, Q4 flag) change what M4, M2 and M5 contain.
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted. Its four CRITICAL
+  questions (Q1 arrows, Q2 typed dates, Q3 row menu, Q4 flag) were answered before the build, and
+  M4, M2 and M5 below record what they decided.
 - **Status:** Draft
 - **Owner:** —
 

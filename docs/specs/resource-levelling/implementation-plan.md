@@ -1,6 +1,6 @@
 # Implementation Plan: Resource Levelling (M7 resource rung)
 
-- **Feature spec:** `docs/specs/resource-levelling/feature-spec.md` (awaiting approval)
+- **Feature spec:** `docs/specs/resource-levelling/feature-spec.md` — Accepted
 - **Status:** Draft (awaiting approval — do not implement before the spec + ADR-0041 are approved)
 - **Owner:** TBD (engine/backend)
 

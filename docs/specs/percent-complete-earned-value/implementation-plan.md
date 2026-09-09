@@ -1,6 +1,6 @@
 # Implementation Plan: Percent-complete types & Earned Value (M7 cost/EV rung)
 
-- **Feature spec:** `docs/specs/percent-complete-earned-value/feature-spec.md` (awaiting approval)
+- **Feature spec:** `docs/specs/percent-complete-earned-value/feature-spec.md` — Accepted
 - **Status:** Draft (awaiting approval — do not implement before the spec + ADR-0042 are approved)
 - **Owner:** TBD (engine/backend)
 

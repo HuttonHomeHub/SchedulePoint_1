@@ -1,6 +1,6 @@
 # Implementation Plan: Drift gates — a computed observer for the register and for the pass
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft — awaiting approval
 - **Owner:** repo tooling
 

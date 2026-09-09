@@ -1,6 +1,6 @@
 # Implementation Plan: `check:claims` — the citation scan sees more than JavaScript
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) (awaiting approval)
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft
 - **Owner:** repo
 

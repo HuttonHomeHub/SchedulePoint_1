@@ -1,6 +1,6 @@
 # Implementation Plan: Make search take you there
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft — awaiting approval before implementation
 - **Owner:** _(to be assigned)_
 - **Flag:** `VITE_CANVAS_SEARCH_NAV`, **derived** from `CANVAS_LENSES_ENABLED`, default-off until M5

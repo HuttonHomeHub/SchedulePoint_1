@@ -1,6 +1,6 @@
 # Implementation Plan: The probe sweep, and a console that reads a sitting
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft
 - **Owner:** —
 

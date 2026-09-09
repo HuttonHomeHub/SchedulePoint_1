@@ -1,6 +1,6 @@
 # Implementation Plan: Gate conventions — what a register parser refuses, and what it merely finds
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft — awaiting approval
 - **Owner:** repo
 - **Closes:** `docs/TECH_DEBT.md` #222, #227, #231, #235 (convention half), #237 (class half)

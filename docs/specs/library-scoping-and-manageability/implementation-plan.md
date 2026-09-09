@@ -1,6 +1,6 @@
 # Implementation Plan: Calendar scoping tiers & resource-library manageability
 
-- **Feature spec:** [`feature-spec.md`](feature-spec.md) — **not yet approved**
+- **Feature spec:** [`feature-spec.md`](feature-spec.md) — Accepted
 - **Status:** Draft — awaiting approval
 - **Owner:** _(to be assigned)_
 - **Flag:** `VITE_LIBRARY_SCOPING` (compile-time, `flagDefaultOff` until T6.2)

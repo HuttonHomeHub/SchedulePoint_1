@@ -1,12 +1,12 @@
 # Implementation Plan: A spec header states its approval, and a citation is what closes it
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
-- **Status:** Draft
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Approved
+- **Status:** Approved
 - **Owner:** —
 
-> **Nothing in this plan runs until the spec is approved.** The product owner's decision was "gate
-> first, properly" over sweeping the headers now, so no header is edited before M2 — and M2 edits
-> them only after M1's red run has recorded what they said.
+> **Approved by the product owner, 2026-09-09** ("Approved — build it"), on the decision to gate
+> first rather than sweep now. So no header was edited before M2, and M2 edited them only after
+> M1's red run had recorded what they said — `./red-run.md`.
 
 ## Breakdown
 

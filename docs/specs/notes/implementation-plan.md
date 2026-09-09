@@ -1,6 +1,6 @@
 # Implementation Plan: Notes (threaded annotations on plans & activities)
 
-- **Feature spec:** `docs/specs/notes/feature-spec.md` (awaiting approval)
+- **Feature spec:** `docs/specs/notes/feature-spec.md` — Accepted
 - **Status:** Draft (awaiting approval — do not implement yet)
 - **Owner:** _TBD_
 

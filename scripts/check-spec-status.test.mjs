@@ -24,8 +24,16 @@ import { dirname, join, resolve } from 'node:path';
 
 import { runGate } from './check-spec-status.mjs';
 
-/** Build a throwaway repository root from a `{ 'path/from/root': contents }` map. */
-function tree(files) {
+/**
+ * Build a throwaway repository root from a `{ 'path/from/root': contents }` map.
+ *
+ * **Every spec directory gets a bare-link `implementation-plan.md` unless the fixture writes its
+ * own**, because C4 refuses an estate with no plans at all and would otherwise fire in every
+ * fixture built for a different assertion — a control leaking into twelve unrelated cases. A bare
+ * link is P1-clean by decision (it asserts nothing), so the default cannot mask a P1 finding.
+ * `noPlans` opts out, and exactly one case uses it: C4's own.
+ */
+function tree(files, { noPlans = false } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'spec-status-'));
   mkdirSync(join(root, 'docs/specs'), { recursive: true });
   mkdirSync(join(root, 'docs/adr'), { recursive: true });
@@ -33,6 +41,17 @@ function tree(files) {
     const full = join(root, path);
     mkdirSync(dirname(full), { recursive: true });
     writeFileSync(full, body);
+  }
+  if (noPlans) return root;
+  const slugs = new Set(
+    Object.keys(files)
+      .map((p) => /^docs\/specs\/([^/]+)\//.exec(p)?.[1])
+      .filter((v) => v !== undefined),
+  );
+  for (const slug of slugs) {
+    const p = join(root, 'docs/specs', slug, 'implementation-plan.md');
+    if (!Object.keys(files).some((k) => k.endsWith(`${slug}/implementation-plan.md`)))
+      writeFileSync(p, '# Plan\n\n- **Feature spec:** [`./feature-spec.md`](./feature-spec.md)\n');
   }
   return root;
 }
@@ -66,8 +85,8 @@ const it = (what, fn) => {
     process.exitCode = 1;
   }
 };
-const make = (files) => {
-  const root = tree(files);
+const make = (files, opts) => {
+  const root = tree(files, opts);
   roots.push(root);
   return root;
 };
@@ -340,6 +359,75 @@ it('S6 — the entry dies once the directory gains a spec document (C3)', () => 
     'scripts/spec-status.json': JSON.stringify({ citedWithoutSpec: { paperless: 'no spec doc' } }),
   });
   assert.ok(ids(gate(root)).includes('C3'));
+});
+
+// ── P1, the plan side ──────────────────────────────────────────────────────────────────────────
+const plan = (annotation = '') =>
+  `# Plan\n\n- **Feature spec:** [\`./feature-spec.md\`](./feature-spec.md)${annotation}\n`;
+
+it('P1 — a plan saying "not yet approved" beside an Accepted spec fails', () => {
+  // Red against deleting P1. This is #274's subject one file along, and it is the commoner half:
+  // 46 of the 90 plans annotate that line, and the annotation was written when the plan was.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Accepted', ' — shipped (ADR-0001)'),
+    'docs/specs/thing/implementation-plan.md': plan(' — **not yet approved**'),
+    'docs/adr/0001-thing.md': adrCiting('thing'),
+  });
+  const r = gate(root);
+  assert.deepEqual(ids(r), ['P1']);
+  assert.match(r.problems[0], /implementation-plan\.md:3/);
+});
+
+it('P1 — a BARE link is clean, because it asserts nothing', () => {
+  // Red against making P1 a presence rule (requiring every plan to annotate). 44 of 90 plans do
+  // not, and requiring it invents a second field for authors to maintain — which is #274's own
+  // diagnosis, that this drifted by being nobody's step, reproduced one document along.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Accepted', ' — shipped (ADR-0001)'),
+    'docs/specs/thing/implementation-plan.md': plan(),
+    'docs/adr/0001-thing.md': adrCiting('thing'),
+  });
+  assert.equal(gate(root).code, 0, gate(root).problems.join('\n'));
+});
+
+it('P1 — "not yet approved" beside a Draft spec is clean, because the two AGREE', () => {
+  // Red against firing on any pre-approval wording regardless of the spec. Without this half, P1
+  // becomes a rule about the plan's words rather than about the two documents disagreeing, and
+  // every honestly-unapproved epic fails.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Draft', ' — awaiting approval'),
+    'docs/specs/thing/implementation-plan.md': plan(' — **not yet approved**'),
+    'docs/specs/cited/feature-spec.md': head('Accepted', ' — shipped (ADR-0001)'),
+    'docs/adr/0001-cited.md': adrCiting('cited'),
+  });
+  assert.equal(gate(root).code, 0, gate(root).problems.join('\n'));
+});
+
+it('P1 — a plan claiming a DIFFERENT vocabulary token also fails', () => {
+  // Red against testing only for pre-approval wording. A plan saying "Approved" beside a spec
+  // saying "Accepted" is the same defect pointing the other way, and it is the shape that appears
+  // as an epic ships: somebody updates one file.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Accepted', ' — shipped (ADR-0001)'),
+    'docs/specs/thing/implementation-plan.md': plan(' — Approved 2026-01-01'),
+    'docs/adr/0001-thing.md': adrCiting('thing'),
+  });
+  const r = gate(root);
+  assert.deepEqual(ids(r), ['P1']);
+  assert.match(r.problems[0], /annotates the spec "approved"/);
+});
+
+it('C4 — an estate with no plans at all FAILS', () => {
+  // Red against deleting C4. P1 is a `.filter()` like every refusal above it, so an empty plan
+  // list satisfies it silently — the same argument as C2, one document type along.
+  const root = make(
+    {
+      'docs/specs/thing/feature-spec.md': head('Accepted', ' — shipped (ADR-0001)'),
+      'docs/adr/0001-thing.md': adrCiting('thing'),
+    },
+    { noPlans: true },
+  );
+  assert.deepEqual(ids(gate(root)), ['C4']);
 });
 
 // ── The real estate ────────────────────────────────────────────────────────────────────────────
