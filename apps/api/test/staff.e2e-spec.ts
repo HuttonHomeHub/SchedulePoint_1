@@ -1,6 +1,7 @@
 import { type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -37,6 +38,7 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let originalStaffEmails: string | undefined;
+  let throttlerStorage: ThrottlerStorage;
 
   beforeAll(async () => {
     process.env.LOG_LEVEL ??= 'silent';
@@ -56,6 +58,7 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     configureHttpApp(app as NestExpressApplication);
     await app.init();
     prisma = app.get(PrismaServiceToken);
+    throttlerStorage = app.get<ThrottlerStorage>(ThrottlerStorage);
   });
 
   afterAll(async () => {
@@ -65,6 +68,26 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
   });
 
   beforeEach(async () => {
+    /**
+     * **The throttle counter is shared mutable state between tests, and clearing it is isolation
+     * rather than a weakened bound.**
+     *
+     * `StaffController` carries `@Throttle({ default: { limit: 30, ttl: 60_000 } })` — a real
+     * security bound, with `staff-throttle.structural.spec.ts` pinning the literal — and the whole
+     * suite runs inside one 60-second window against one in-memory counter. So the file had
+     * silently reached the ceiling: it passed at 22 tests and any new coverage pushed **unrelated**
+     * tests into 429, each failing with a message about its own assertion rather than about the
+     * limit. Measured three ways before this was written, because the first two diagnoses were
+     * wrong — a global `RATE_LIMIT_LIMIT` (overridden per controller, so the change was inert) and
+     * "my test is greedy" (the baseline passed at exactly 22).
+     *
+     * The product bound is untouched: every test still runs its own requests under the real 30 per
+     * minute. What is removed is one test's spending counting against the next one's, which
+     * `docs/TESTING.md` already forbids in as many words — deterministic and isolated, no shared
+     * mutable state. Nothing in `apps/api/test` asserts a 429, so no assertion is disarmed by this.
+     */
+    (throttlerStorage as ThrottlerStorageService).storage.clear();
+
     await prisma.mailEvent.deleteMany();
     // `perf_probe_results` has no foreign key at all — deliberately, so a reading outlives the
     // account that took it — so it blocks nothing and `clearDomainData` does not sweep it. It is
@@ -434,8 +457,24 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     expect(JSON.stringify(row)).not.toContain('RTX 4070');
   });
 
-  it('reads the history newest first, and records reading it as a panel read', async () => {
+  it('reads the history newest first, records a panel read, and round-trips the sitting columns', async () => {
+    /**
+     * **M4's round trip rides on the requests this test already spends, and that is deliberate.**
+     *
+     * `StaffController` carries `@Throttle({ default: { limit: 30, ttl: 60_000 } })` — a real
+     * security bound with a structural test pinning the literal — and this file sits **exactly**
+     * at it: the suite passes at 22 tests and one more four-request test pushed three UNRELATED
+     * ones into 429, each failing with a message about its own assertion rather than about the
+     * limit. Raising the bound to fit a test is not available, and trimming M4's coverage to
+     * squeeze underneath would leave the next person the same trap.
+     *
+     * So the new facts are asserted where the posts already happen. One press carries the sitting
+     * columns and one does not, which is the pair that matters: only a mocked Prisma cannot see
+     * whether the column exists, the service writes it, and the response hands it back.
+     */
     const agent = await signedInStaff();
+    const sweepId = '018f3a5b-7c9d-7e2f-8a1b-2c3d4e5f6071';
+
     await agent
       .post('/api/v1/staff/probe-results')
       .set('Origin', ORIGIN)
@@ -444,7 +483,7 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     await agent
       .post('/api/v1/staff/probe-results')
       .set('Origin', ORIGIN)
-      .send(probeBody({ appVersion: '0.110.0' }))
+      .send(probeBody({ appVersion: '0.110.0', sweepId, framesPerPhase: 180 }))
       .expect(201);
     const before = await prisma.auditEvent.count({ where: { action: 'staff.panel_read' } });
 
@@ -458,6 +497,20 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
     expect(await prisma.auditEvent.count({ where: { action: 'staff.panel_read' } })).toBe(
       before + 1,
     );
+
+    // Newest first, so the two limbs of the second press lead — both carrying the sitting id,
+    // because it is a press-level fact denormalised across its rows.
+    const [first, second, third, fourth] = response.body.data;
+    expect(first.sweepId, 'every limb of one press carries the sitting id').toBe(sweepId);
+    expect(second.sweepId).toBe(sweepId);
+    expect(first.framesPerPhase).toBe(180);
+    expect(second.framesPerPhase).toBe(180);
+
+    // **Absent reads back as NULL, never as anything else.** A default would claim membership of a
+    // sitting that does not exist, which is the whole reason neither column has one.
+    expect(third.sweepId).toBeNull();
+    expect(fourth.sweepId).toBeNull();
+    expect(third.framesPerPhase).toBeNull();
   });
 
   it('honours the limit, and refuses one outside its bounds', async () => {
@@ -516,6 +569,17 @@ describe.skipIf(!hasDatabase)('Staff console (e2e)', () => {
       { scenarioId: 'Canvas Draw' },
       { preset: 'Week' },
       { limbs: [] },
+      // The column is `@db.Uuid`; a malformed value reaching it raises an error this route does
+      // not map, so the DTO must refuse first or a 422 becomes a 500.
+      { sweepId: 'not-a-uuid' },
+      // **The sharp one.** `Number.isInteger(1e12)` is `true`, so `@IsInt()` alone passes this,
+      // the value reaches an `int4` column and overflows — a 500 that loses the whole press. The
+      // DTO's `@Max` is what makes this line a 422, and removing it turns this case red.
+      { framesPerPhase: 1e12 },
+      // The database's own bound is sign only, on purpose: a range is a protocol, and a protocol
+      // in a CHECK means the day the product widens it the database silently refuses rows the
+      // product decided to accept. This is the DTO staying a strict subset of that CHECK.
+      { framesPerPhase: 0 },
     ];
 
     for (const overrides of bad) {

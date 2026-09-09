@@ -473,7 +473,7 @@ describe('PerformanceProbePanel', () => {
     // they said different things, and after it a live region still claiming "nothing was recorded"
     // while the screen says two readings were kept would be false in the one channel a
     // screen-reader user has. The duplicate ANNOUNCEMENT that follows from both being live regions
-    // is pre-existing and applies to a refusal too; it is `docs/TECH_DEBT.md` #267.
+    // is pre-existing and applies to a refusal too; it is `docs/TECH_DEBT.md` #259 item 10.
     expect(
       (await screen.findAllByText(/You stopped this run before anything finished/)).length,
     ).toBeGreaterThan(0);
