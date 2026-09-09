@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 
 import {
   fieldValue,
+  headerField,
   readRepoDoc,
   report,
   sections,
@@ -27,6 +28,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const traps = readRepoDoc(join(here, 'fixtures/traps.md'));
 const unterminated = readRepoDoc(join(here, 'fixtures/unterminated.md'));
 const depth = readRepoDoc(join(here, 'fixtures/depth.md'));
+const headers = readRepoDoc(join(here, 'fixtures/status-headers.md'));
 
 // ── Fixture preconditions ──────────────────────────────────────────────────────────────────────
 //
@@ -66,6 +68,23 @@ assert.ok(
 assert.ok(
   /\n# A level-one title\n\s*after the title/.test(depth),
   'depth.md must keep "after the title" AFTER the level-one heading — case (d) is vacuous without it',
+);
+
+// `status-headers.md`'s two malformed lines are the whole point of the file and Prettier repairs
+// both — the indented bullet becomes top-level, and the fence's contents survive but stop being
+// the thing under test if the fence is normalised away. `.prettierignore` covers this directory;
+// these assertions are what notice if that ever stops being true.
+assert.ok(
+  /\n  - \*\*Status:\*\* Draft\n/.test(headers),
+  'status-headers.md must keep its TWO-SPACE-INDENTED status line — the column-0 case is vacuous without it',
+);
+assert.ok(
+  /\n> \*\*Status:\*\* Approved\n/.test(headers),
+  'status-headers.md must keep its BLOCKQUOTED status line — 2 of 91 specs use it',
+);
+assert.ok(
+  headers.includes('- **Status:** **Draft — awaiting approval.**'),
+  'status-headers.md must keep its BOLD-VALUE status line — 3 of 91 specs use it',
 );
 
 let run = 0;
@@ -281,6 +300,94 @@ it('a caller-authored problem is printed even when the population is empty', () 
   assert.ok(
     lines.some((l) => l.includes('the table is unreadable')),
     `caller message missing: ${lines.join('')}`,
+  );
+});
+
+// ── headerField: the spec estate's header, in the shapes it really uses ────────────────────────
+//
+// **Every case below records the mutation that made it red**, because a case that passes against
+// both the correct and the broken reader proves nothing (ADR-0110 D5). The counts in the names are
+// M0's, measured across the 91 spec documents, so a reader can tell a real shape from a defensive
+// one.
+
+// `sections()` strips fences itself (`doc-register.mjs:110`), so this does NOT need to — and the
+// first version of this helper called `stripFences` here anyway, which made the fence case below
+// vacuous: the mutation "the caller stops stripping" changed nothing, because stripping twice is
+// stripping once. Caught by applying the mutation rather than by reading. The fence contract is now
+// asserted directly against raw text, where it can actually fail.
+const headerSection = (needle) => {
+  const s = sections(headers, 2).find((x) => x.heading.includes(needle));
+  assert.ok(s, `status-headers.md has no section matching ${needle}`);
+  return s.body;
+};
+
+it('headerField reads the BULLETED form — 87 of 91 specs', () => {
+  // Red against `fieldValue`, which anchors on the bare form: returns null here, so the gate would
+  // have read 2 of 91 files and reported confidently on the rest.
+  assert.equal(
+    headerField(headerSection('Bulleted'), 'Status'),
+    'Draft — awaiting approval before implementation',
+  );
+  assert.equal(fieldValue(headerSection('Bulleted'), 'Status'), null);
+});
+
+it('headerField reads the BLOCKQUOTED form — 2 of 91, operational-self-service', () => {
+  // Red against a reader accepting only `- `: `^(?:- )?` returns null for this line.
+  assert.equal(headerField(headerSection('Blockquoted'), 'Status'), 'Approved');
+});
+
+it('headerField still reads the BARE form, so the two readers agree where they overlap', () => {
+  // Red against dropping the optional-marker group's `?`. The overlap matters: a future reader who
+  // decides one function is enough must find them agreeing rather than merely both present.
+  assert.equal(headerField(headerSection('Bare'), 'Status'), 'Accepted (ADR-0130)');
+  assert.equal(fieldValue(headerSection('Bare'), 'Status'), 'Accepted (ADR-0130)');
+});
+
+it('headerField returns a BOLD value verbatim, leaving the vocabulary to the caller', () => {
+  // Red against a reader that strips emphasis. Three specs are headed `**Draft — …**`, and the
+  // literal grep that missed them is why #274 said 67 where the truth is 72. Normalising here would
+  // put a vocabulary decision inside a parser, where nothing could see it.
+  assert.equal(
+    headerField(headerSection('Bold value'), 'Status'),
+    '**Draft — awaiting approval.** Four CRITICAL questions in §1.',
+  );
+});
+
+it('headerField refuses an INDENTED field — a nested bullet is not a declaration', () => {
+  // Red against a `^\\s*` prefix, which is the obvious loosening and admits every nested list item
+  // in every spec. The column-0 rule is inherited from `fieldValue` deliberately.
+  assert.equal(headerField(headerSection('Indented'), 'Status'), null);
+});
+
+it('headerField refuses the field named MID-SENTENCE', () => {
+  // Red against an unanchored search. This is #219's defect — the prose that made an unanchored
+  // grep report 14 rows where the truth was 13 — in the estate this gate reads.
+  assert.equal(headerField(headerSection('Prose'), 'Status'), null);
+});
+
+it("headerField has NO fence opinion — stripping is the caller's job, and provably so", () => {
+  // **Asserted against raw text, because through `sections()` this case was vacuous.** That helper
+  // strips fences itself, so the obvious mutation — "the caller stops stripping" — changed nothing
+  // and the case passed against both. Found by applying the mutation, which is the whole reason
+  // this suite applies them (ADR-0110 D5).
+  //
+  // The contract, stated in both directions so neither half can rot: raw text containing a fenced
+  // status line DOES read as a declaration, and it is `stripFences` that makes it not one. Red
+  // against a reader that grew its own fence opinion — the first assertion returns null and the
+  // two readers begin disagreeing about the same file, which is worse than either opinion alone.
+  const raw = '```md\n- **Status:** Draft\n```\n';
+  assert.equal(headerField(raw, 'Status'), 'Draft');
+  assert.equal(headerField(stripFences(raw), 'Status'), null);
+  assert.ok(/```md\n- \*\*Status:\*\* Draft/.test(headers), 'the fenced example must survive');
+});
+
+it('headerField takes the FIRST status line, not the last', () => {
+  // Red against a last-wins loop. `one-row-header/feature-spec.md` carries two `- **Status:**`
+  // lines — the spec's at :3 and an embedded ADR draft's at :796 — so last-wins would report the
+  // embedded draft's status as the spec's, on a real file in this estate.
+  assert.equal(
+    headerField(stripFences(headers), 'Status'),
+    'Draft — awaiting approval before implementation',
   );
 });
 
