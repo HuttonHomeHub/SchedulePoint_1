@@ -95,6 +95,49 @@ condition above **in its own words** — PASS, ESCALATE, or the middle band.
 ## M0-T3 — re-verifying the problem statement
 
 Recorded when the work starts, per §19's rule that a spec's **problem** goes stale in the one
-direction nobody checks: somebody fixes it and the document keeps complaining.
+direction nobody checks: somebody fixes it and the document keeps complaining. Run 2026-09-09
+against `496bf837`, the day the work started.
 
-<!-- Results go here. -->
+### Every §1 claim, re-read rather than restated
+
+| §1 claim                                                    | Citation                       | Verified                                                                                     |
+| ----------------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------- |
+| `REPORTED_ONLY` renders as `REPORTED, NOT GRADED`           | `verdict-copy.ts:44`           | **holds** — the ternary is the whole function body                                           |
+| The gate is `size === 'full' && isGated(scenario, preset)`  | `run-probe.ts:255`             | **holds**, with the "reported, never gated" comment above it                                 |
+| `isGated` is `scenario.gated && preset !== 'fit'`           | `scenarios.ts:180`             | **holds** at `:181`                                                                          |
+| `quick = 40 × 1`, `full = 180 × 3`                          | `run-probe.ts:53-56`           | **holds**                                                                                    |
+| `toProbeBody` returns `null` only for a non-`measured` kind | `to-probe-body.ts:31`          | **holds** — `if (outcome.kind !== 'measured') return null;` and nothing else returns null    |
+| A cancelled press discards a finished limb                  | `run-probe.ts:401-403`, `:284` | **holds** — `if (shouldStop()) break;` at `:402`, `cancelled` returned before any body build |
+| The verdict is derived on read, never stored                | `probe-history.tsx:57`         | **holds** — `judgeStoredRow(row)` inside the cell                                            |
+| `INDETERMINATE` is checked before pass/fail                 | `judge.ts:190-211`             | **holds**, with `REPORTED_ONLY` returned above it at `:194`                                  |
+| `formatProbeReport` takes a live `ProbeOutcome`             | `probe-report.ts:18`           | **holds** at `:20`                                                                           |
+| The staff journey selects `quick`                           | `staff.spec.ts:305`            | **holds** — `selectOption('quick')`, with the reason in the comment at `:300`                |
+| The staff e2e CI step already exists                        | `ci.yml:739`                   | **holds** — `test:e2e:staff`, so no CI step is added                                         |
+
+### The three unmet predecessor criteria are still unmet
+
+Each was re-checked against the code, not against the previous check:
+
+1. **A history row does not name the viewport or the display refresh.** The nine `COLUMNS` headers
+   are Taken, Measurement, Scale, Framing, Verdict, On screen, Machine, Versions, By
+   (`probe-history.tsx:68-98`). Neither figure appears, and both are stored on every row.
+2. **The history is not grouped by scenario.** `grep -c group probe-history.tsx` returns **0**.
+3. **Nothing states that a narrow viewport is not comparable.** A feature-wide search for
+   `narrow` or `not comparable` outside test files returns **two comments in `device.ts`** and no
+   user-facing string anywhere — not in the panel, not in the copied report. `probe-report.ts:58`
+   prints the viewport as a raw `WxH css px, dpr N` line, which is the figure without the caveat.
+
+### One correction, and it is the kind this task exists to find
+
+§1(e) says the search "returns `probe-report.ts` and the two test files, never `probe-history.tsx`".
+Run today it returns **four** files — `probe-report.ts`, the two test files, and
+`performance-probe-panel.tsx`. The two extra hits are code comments at `:147` and `:344` describing
+the measurement surface, so the **conclusion is unaffected**: no user-facing narrow-viewport
+sentence exists. But the sentence enumerating the evidence was wrong, in the direction that would
+make a later reader think the panel had been checked and found empty when it had not been in the
+list at all.
+
+That is ADR-0076 Class 2 — a citation that describes a file wrongly — inside the spec written for
+this epic, three days old. Corrected in the spec rather than left, and recorded here rather than
+edited quietly, because the epic's own subject is instruments that report something and stop
+anybody looking.

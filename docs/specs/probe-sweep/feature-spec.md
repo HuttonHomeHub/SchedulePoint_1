@@ -108,7 +108,10 @@ viewport is "recorded, **with the panel stating** that a narrow viewport culls m
 comparable to a wide one". The verdict half was found missing at that epic's M5 gate pass and
 fixed; the rest was not. `ui/probe-history.tsx:68-98` has nine columns and none of them is viewport,
 display refresh or focus — a `grep` for `viewport|narrow|comparable` under
-`features/perf-probe/ui/` returns `probe-report.ts` and the two test files, never `probe-history.tsx`.
+`features/perf-probe/ui/` returns `probe-report.ts`, `performance-probe-panel.tsx` and the two test
+files, and never `probe-history.tsx` — and the panel's two hits are code comments about the
+measurement surface, not a sentence any reader sees. (This line named three files until M0-T3 ran it;
+the conclusion held and the evidence did not. See `m0-measurements.md` §M0-T3.)
 
 That omission stopped being cosmetic on 2026-09-08. `docs/TECH_DEBT.md` #261 records that the same
 plan, machine, browser and painter measured **23.3 fps at 1912×1068 and 39.5 fps at 1016×636** — a
