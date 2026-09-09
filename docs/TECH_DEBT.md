@@ -4848,3 +4848,38 @@ of React state lifetime, not by the reason the comment gave. The comment now say
 **It becomes reachable the moment a resume can be started from the stored history**, which is a
 natural companion to #271's cursor. Whatever picks that up owns this: the honest fix is to know
 whether a page was cut rather than to infer it from position, which is what #271 builds.
+
+### 274. Fifty shipped epics' specs still say they are awaiting approval
+
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M7 follow-up) · **Size:** S · **Owner:** repo
+
+`docs/specs/` holds **97** epic directories. **67** of their `feature-spec.md` files are still headed
+`**Status:** Draft — awaiting approval before implementation`, and **50 of those belong to epics that
+shipped an ADR** — so fifty specs currently assert that work which is live in production has not been
+approved to start. All **67** `implementation-plan.md` files carry the matching
+`**Feature spec:** … — not yet approved` line.
+
+**It is not cosmetic, and the reason is ADR-0105.** That decision makes a spec's approval state
+load-bearing: a tech-debt row covers stages 1–2 only while a change adds no new surface, and crossing
+a trigger means the work stops and the spec is written. A reader picking up follow-on work therefore
+consults the header — and is told either that the shipped feature was never approved, or that they
+must obtain an approval which already happened. Both readings are wrong and the document is where a
+reader looks first.
+
+**Measured, not estimated**, and the first measurement was wrong in a way worth recording. An earlier
+count in the same session reported **28** shipped-with-an-ADR rather than 50, because the loop that
+produced it piped the file list through `head -40` — the instrument truncated its own input and
+reported the remainder as the answer. It was caught only by re-deriving the figure before writing it
+into this row. Third time in one session that a throwaway check of mine was the defect rather than
+the thing it checked (the others: a `grep` for the #259 closures that missed them because Prettier had
+wrapped the line, and a duration probe whose `console.log` the reporter swallowed). The command behind
+the figures above is `grep -l 'Status:\*\* Draft' docs/specs/*/feature-spec.md` cross-referenced
+against `grep -rs "specs/<name>" docs/adr/*.md`, with **no** `head`.
+
+**Two ways to close it, and they are not equivalent.** Sweeping 67 headers by hand fixes today and
+decays immediately, because nothing makes the next author update one — this drifted to 67 of 97
+precisely by being nobody's step. A gate is the durable form: a spec whose directory is cited by a
+filed ADR may not still be headed Draft, which is computable from what is already on disk and needs no
+new convention. It belongs with the `check:*` family rather than in a sweep, and the sweep is then its
+red run. Deliberately not built inside the probe-sweep epic: a shared gate is an ADR-0105 trigger and
+wants its own spec.
