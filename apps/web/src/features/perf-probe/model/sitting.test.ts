@@ -202,6 +202,34 @@ describe('S2 — a sitting read from history carries every field the live report
     expect(sittings[1]?.limbs).toHaveLength(1);
   });
 
+  it('groups the readings of one SWEEP into one sitting, across presses', () => {
+    // The point of the column: four POSTs, four `runId`s minted by the server, one act by the
+    // operator. Nothing but `sweepId` records that they were one sitting.
+    const sittings = sittingsFromRows([
+      storedRow({ id: 'a', runId: 'run-1', sweepId: 'sweep-1', scenarioId: 'canvas-draw' }),
+      storedRow({ id: 'b', runId: 'run-2', sweepId: 'sweep-1', scenarioId: 'canvas-draw' }),
+      storedRow({ id: 'c', runId: 'run-3', sweepId: 'sweep-1', scenarioId: 'revision-diff' }),
+    ]);
+
+    expect(sittings).toHaveLength(1);
+    expect(sittings[0]?.limbs).toHaveLength(3);
+  });
+
+  it('never lets a run id and a sweep id with the same value become one sitting', () => {
+    // **Verified red against `sweepId ?? runId`**, which is what this looked like it should be.
+    // The two columns are separate id spaces — `run_id` minted per POST by the server, `sweep_id`
+    // per press by the client — so a bare coalesce puts both generators' values in one keyspace
+    // and asks a `Map` to tell them apart. The prefix makes that unrepresentable rather than
+    // improbable, and this case is the only thing that says so.
+    const shared = '11111111-1111-4111-8111-111111111111';
+    const sittings = sittingsFromRows([
+      storedRow({ id: 'a', runId: shared, sweepId: null }),
+      storedRow({ id: 'b', runId: 'run-other', sweepId: shared }),
+    ]);
+
+    expect(sittings).toHaveLength(2);
+  });
+
   it('keeps a row it cannot judge rather than hiding the reading', () => {
     // A newer release can store a scenario an older one does not know. The figures are still on
     // the row, so dropping the limb would hide a measurement to avoid admitting an unknown.

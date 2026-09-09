@@ -202,9 +202,25 @@ export function sittingsFromRows(rows: readonly ProbeResultRow[]): readonly Sitt
   });
 }
 
-/** The grouping key. One expression, so M4's `sweepId` lands in one place. */
+/**
+ * The grouping key — **namespaced, never `sweepId ?? runId`.**
+ *
+ * The obvious expression is wrong for a reason that has nothing to do with likelihood: the two
+ * columns are separate id spaces and nothing makes them disjoint. `run_id` is minted by the server
+ * per POST and `sweep_id` by the client per press, so a bare coalesce puts values from two
+ * generators into one keyspace and asks a `Map` to tell them apart. The prefix makes a collision
+ * unrepresentable rather than improbable, which is the only version of that claim worth writing
+ * down.
+ *
+ * It also carries a fact the caller needs: a key beginning `sweep:` is a sitting somebody pressed
+ * as one act, and `run:` is a single press or a reading taken before the column existed. That is
+ * the difference between "one of four readings" and "the only reading", and it is not recoverable
+ * from the row count — a sweep whose other three steps were refused stores exactly one row.
+ */
 export function groupKeyOf(row: ProbeResultRow): string {
-  return row.runId;
+  return row.sweepId === null || row.sweepId === undefined
+    ? `run:${row.runId}`
+    : `sweep:${row.sweepId}`;
 }
 
 function limbFromRow(row: ProbeResultRow): SittingLimb {
