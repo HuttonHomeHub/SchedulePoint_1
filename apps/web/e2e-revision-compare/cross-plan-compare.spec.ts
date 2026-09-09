@@ -99,10 +99,21 @@ test('a planner compares the open plan against another plan in the same project'
    * in first and the lists are what they open — but it makes a text locator ambiguous, and the
    * fix is to name what each control IS.
    */
-  const earlierOnly = coverage.getByRole('button', { name: /only in the earlier plan/i });
+  //
+  // The labels name the PLANS rather than saying "earlier"/"later", which is the M4 ux review's
+  // fix: with two plans on screen a reader has to map a positional word onto one of them, and the
+  // uncoded rows were merged into one list that named neither — withholding the one diagnostic
+  // fact this block exists to supply, which side the data-quality problem is on.
+  const earlierOnly = coverage.getByRole('button', {
+    name: new RegExp(`Only in ${otherPlanName}`),
+  });
   // The THIRD state: an uncoded row is neither added nor removed. Collapsing it into either count
-  // would be two facts arriving in one channel as one.
-  const noCode = coverage.getByRole('button', { name: /^no activity code/i });
+  // would be two facts arriving in one channel as one — and it is now split per side too.
+  // Not anchored on the plan name: the accessible name carries the COUNT too, and the two plan
+  // names share a prefix. Only ONE side has an uncoded row in this seed (the anchor's `Snagging`),
+  // and a zero-total list renders no button at all — so the bare label is unambiguous, and that
+  // per-side omission is itself asserted by the component's own suite.
+  const noCode = coverage.getByRole('button', { name: /No activity code in/ });
   await expect(earlierOnly).toBeVisible();
   await expect(noCode).toBeVisible();
 

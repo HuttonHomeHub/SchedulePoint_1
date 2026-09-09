@@ -2,7 +2,7 @@ import type { CrossPlanCorrelation, CrossPlanCorrelationRow } from '@repo/types'
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useId, useState } from 'react';
 
-import { correlationSentence, uncodedSentence } from '../model/revision-sentences';
+import { correlationSentence, truncationNote, uncodedSentence } from '../model/revision-sentences';
 
 /**
  * **How well two separately-imported plans matched, rendered ABOVE everything derived from it.**
@@ -34,6 +34,17 @@ import { correlationSentence, uncodedSentence } from '../model/revision-sentence
  */
 export interface RevisionCorrelationSummaryProps {
   correlation: CrossPlanCorrelation;
+  /**
+   * Both plans, so the per-side lists can name which side they are on.
+   *
+   * Taken as ids AND names rather than derived from the rows: a side with a zero count has no rows
+   * to derive a name from, and a heading that appeared only when the list was non-empty would make
+   * the absence of a heading mean two different things.
+   */
+  fromPlanId: string;
+  fromPlanName: string;
+  toPlanId: string;
+  toPlanName: string;
 }
 
 interface RowListProps {
@@ -57,7 +68,10 @@ function RowList({ label, rows, total, cap }: RowListProps): React.ReactElement 
         onClick={() => {
           setExpanded((v) => !v);
         }}
-        className="hover:bg-accent focus-visible:ring-ring -mx-1 flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left focus-visible:ring-2 focus-visible:outline-none"
+        // `pointer-coarse:min-h-(--control-h)` — the ADR-0118 D2 rule, which the panel's Print
+        // button already carries and which the dock disclosure rows were never swept for. Without
+        // it this row computes to exactly the WCAG 2.5.8 AA 24 px floor with no margin.
+        className="hover:bg-accent focus-visible:ring-ring -mx-1 flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left focus-visible:ring-2 focus-visible:outline-none pointer-coarse:min-h-(--control-h)"
       >
         {expanded ? (
           <ChevronDown aria-hidden="true" className="size-3.5 shrink-0" />
@@ -79,11 +93,13 @@ function RowList({ label, rows, total, cap }: RowListProps): React.ReactElement 
             server's count and `cap` is the server's cap. A diagram has no way to say this at all,
             which is why the overlay counts instead — a list can, so it does.
           */}
-          {total > rows.length ? (
-            <li className="italic">
-              Showing {rows.length} of {total} (the first {cap}).
-            </li>
-          ) : null}
+          {truncationNote(rows.length, total, cap) === null ? null : (
+            // Through the SHARED sentence module, not a second wording. The first version wrote
+            // its own "Showing N of M (the first C)" beside `MovedSection`'s
+            // "Showing the first C of M" — two sentences for one server-supplied pair, and the
+            // local one had no coverage anywhere. Found by the M4 component review.
+            <li className="italic">{truncationNote(rows.length, total, cap)}</li>
+          )}
         </ul>
       ) : null}
     </li>
@@ -92,6 +108,10 @@ function RowList({ label, rows, total, cap }: RowListProps): React.ReactElement 
 
 export function RevisionCorrelationSummary({
   correlation,
+  fromPlanId,
+  fromPlanName,
+  toPlanId,
+  toPlanName,
 }: RevisionCorrelationSummaryProps): React.ReactElement {
   const uncoded = uncodedSentence(correlation);
   const headingId = useId();
@@ -109,21 +129,34 @@ export function RevisionCorrelationSummary({
           has to map the label onto one of them and "from" does not help them do it.
         */}
         <RowList
-          label="Only in the earlier plan"
+          label={`Only in ${fromPlanName}`}
           rows={correlation.fromUnmatchedRows}
           total={correlation.fromUnmatched}
           cap={correlation.cap}
         />
         <RowList
-          label="Only in the later plan"
+          label={`Only in ${toPlanName}`}
           rows={correlation.toUnmatchedRows}
           total={correlation.toUnmatched}
           cap={correlation.cap}
         />
+        {/*
+          **Split by side, like its neighbours above.** A merged list with a combined total was the
+          first version, and it withheld the one piece of diagnostic information this block exists
+          to supply: a planner debugging a poor match could not tell whether the data-quality
+          problem was in the earlier import or the later one. `planId` was on every row from the
+          first commit and nothing rendered it. Found by the M4 ux review.
+        */}
         <RowList
-          label="No activity code"
-          rows={correlation.uncodedRows}
-          total={correlation.fromUncoded + correlation.toUncoded}
+          label={`No activity code in ${fromPlanName}`}
+          rows={correlation.uncodedRows.filter((r) => r.planId === fromPlanId)}
+          total={correlation.fromUncoded}
+          cap={correlation.cap}
+        />
+        <RowList
+          label={`No activity code in ${toPlanName}`}
+          rows={correlation.uncodedRows.filter((r) => r.planId === toPlanId)}
+          total={correlation.toUncoded}
           cap={correlation.cap}
         />
       </ul>

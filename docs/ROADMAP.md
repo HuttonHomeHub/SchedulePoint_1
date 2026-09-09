@@ -661,6 +661,21 @@ discriminators. Each becomes a spec/plan before build:
   authoritative-looking number from the wrong machine is worse than none. Two consequences are
   stated rather than discovered — the numbers are **client-reported**, and there is **no CI gate
   here and never will be**, because the question is about a real display.
+- **Comparing two imported revisions** — **shipping** (ADR-0129). The comparison a planner
+  actually pays for, and the one the product could not do: an import always targets a **new plan**,
+  so a re-issued P6 file arrives as a sibling plan and not as a baseline, and the three shipped
+  comparison tiers all match on activity **id**, which two independent imports share none of. They
+  are matched on **activity code** instead, exactly — no case folding, because the index that keeps
+  a code unique per plan is case-sensitive and folding would manufacture a collision the product
+  permits. The **coverage is stated first**, on screen, in the live region and on paper: "twelve
+  left the critical path" means one thing at 98 % coverage and something else at 40 %, and every
+  number below is worth exactly what the coverage says it is. Two plans with **no codes in common**
+  get a sentence and no delta rather than a confident list of everything removed and everything
+  added. The overlay draws it too — a matched activity's ghost sits at the lane of its own live
+  bar, because **time is shared between two plans and lane is not**, and work with no honest lane
+  is counted rather than placed somewhere arbitrary. One limit is stated rather than implied and
+  cannot be removed: matching on code cannot tell a **re-coded** activity from one removed and
+  another added.
 
 ## Guiding constraints
 

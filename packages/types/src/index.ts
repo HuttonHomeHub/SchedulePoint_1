@@ -2851,7 +2851,34 @@ export type RevisionPaidChangeClass = (typeof REVISION_PAID_CHANGE_CLASSES)[numb
 export type RevisionChangeClass = RevisionFreeChangeClass | RevisionPaidChangeClass;
 
 /** Why a class could not be assessed. NEVER coalesced into "no change". */
-export type RevisionNotAssessableReason = 'NOT_SNAPSHOTTED' | 'SIDE_NOT_SCHEDULED';
+/**
+ * Why a change class could not be assessed. **Never read a reason as "no changes"** — `rows` is
+ * empty and `total` is zero in both states, and only this field separates them.
+ *
+ * `CODE_IS_THE_CORRELATION_KEY` is reachable only on a CROSS-PLAN comparison, and it is the sharpest
+ * of the three: two separately-imported plans are matched ON the activity code, so for every matched
+ * pair the two codes are equal **by construction** and the "Code changed" class can never report a
+ * change. Left unsaid, that class prints a confident "no changes in this revision" for a question
+ * the product structurally cannot answer — every row individually true and the picture a lie, which
+ * is the defect this whole comparison exists to remove. The spec named this reason; it was found
+ * missing by the M4 ux review, which is why it says so here.
+ */
+export const REVISION_NOT_ASSESSABLE_REASONS = [
+  'NOT_SNAPSHOTTED',
+  'SIDE_NOT_SCHEDULED',
+  'CODE_IS_THE_CORRELATION_KEY',
+] as const;
+
+/**
+ * **A tuple rather than a bare union, so the API's `enum:` can be DERIVED.**
+ *
+ * `revision-compare.dto.ts`'s own header has claimed since it shipped that "every `enum:` is
+ * DERIVED from the `@repo/types` tuple that also derives the union type, never a hand-copied
+ * array" — and three of its enums were hand-copied, because no tuple existed to derive from. The
+ * M4 api review found the overclaim. This is the missing half, added rather than the claim
+ * softened: a member added here now reaches both DTOs without anybody editing them.
+ */
+export type RevisionNotAssessableReason = (typeof REVISION_NOT_ASSESSABLE_REASONS)[number];
 
 export interface RevisionChangeRow {
   /**

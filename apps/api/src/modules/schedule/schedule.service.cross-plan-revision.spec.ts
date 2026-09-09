@@ -106,7 +106,9 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
   let organizations: { resolveScope: ReturnType<typeof vi.fn> };
   let plans: { findActivePairInOrgWithProject: ReturnType<typeof vi.fn> };
   let baselines: {
-    findActiveByIdInPlan: ReturnType<typeof vi.fn>;
+    // Typed, for the reason its sibling below is: an untyped `vi.fn()` is a VOID procedure, so a
+    // `mockImplementation` returning a promise is a lint error against a correct test.
+    findActiveByIdInPlan: Mock<(id: string, org: string, planId: string) => Promise<unknown>>;
     loadSnapshotRowsForDelta: ReturnType<typeof vi.fn>;
     // Typed rather than `ReturnType<typeof vi.fn>`: an untyped mock is a VOID procedure, so
     // every `mockImplementation` returning a promise is a lint error against a correct test.
@@ -143,7 +145,9 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
         .mockResolvedValue([planRow(FROM_PLAN), planRow(TO_PLAN)]),
     };
     baselines = {
-      findActiveByIdInPlan: vi.fn().mockResolvedValue(null),
+      findActiveByIdInPlan: vi.fn((_id: string, _org: string, _planId: string) =>
+        Promise.resolve<unknown>(null),
+      ),
       loadSnapshotRowsForDelta: vi.fn().mockResolvedValue([]),
       // Both plans hold A100; the FROM plan additionally holds A200, which the TO plan does not.
       loadActiveActivitiesForDelta: vi.fn((_org: string, planId: string) =>
@@ -289,6 +293,66 @@ describe('ScheduleService.crossPlanRevisionCompare', () => {
     const result = await compare();
     expect(result.criticalPath.notAssessableReason).toBe('SIDE_NOT_SCHEDULED');
     expect(result.criticalPath.removed).toEqual([]);
+  });
+
+  it('reads the anchor plan\u2019s activities ONCE when the `to` side is live', async () => {
+    /**
+     * **The route's commonest shape, and it issued the identical 2,000-row query twice.**
+     *
+     * `to` defaults to `live`, and an imported plan has no baseline — so comparing two imports,
+     * which is the case this whole epic exists for, took the `toBaseline === null` branch and read
+     * the anchor plan's activities once for the `to` side and again for the id mapping,
+     * concurrently, in the same `Promise.all`. The M4 backend-performance review measured it at
+     * ~62.6 ms of a ~115.7 ms batch: roughly half the route's query cost, every request, for
+     * nothing. There was never a consistency reason for two reads.
+     *
+     * Asserted as a CALL COUNT rather than a timing, because a duplicate query is a fact about the
+     * code and a millisecond is a fact about the machine.
+     */
+    await compare();
+    const anchorReads = baselines.loadActiveActivitiesForDelta.mock.calls.filter(
+      ([, planId]) => planId === TO_PLAN,
+    );
+    expect(anchorReads).toHaveLength(1);
+    // And the OTHER plan is still read, so this cannot pass by reading nothing.
+    expect(
+      baselines.loadActiveActivitiesForDelta.mock.calls.filter(([, p]) => p === FROM_PLAN),
+    ).toHaveLength(1);
+  });
+
+  it('still reads the anchor plan separately when the `to` side is a BASELINE', async () => {
+    /**
+     * The other half, asserted separately because one passing does not imply the other: with a
+     * frozen `to` side the anchor's LIVE rows are a genuinely different set — a baseline can name
+     * an activity since deleted from the plan — so the second read is required, not redundant.
+     * A fix that shared the promise unconditionally would break `existsLive` and pass the case
+     * above.
+     */
+    baselines.findActiveByIdInPlan.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === 'baseline-of-anchor'
+          ? {
+              id,
+              name: 'Rev',
+              capturedAt: new Date(),
+              dataDate: null,
+              hoursPerDayMinutes: 1440,
+              capturedProjectFinish: new Date(),
+              revisionSnapshotLevel: 'FULL',
+              criticalPathDefinition: 'TOTAL_FLOAT',
+              criticalFloatThresholdMinutes: 0,
+              totalFloatMode: 'FINISH',
+              makeOpenEndsCritical: false,
+            }
+          : null,
+      ),
+    );
+    baselines.loadSnapshotRowsForDelta.mockResolvedValue([]);
+    await compare(READ, 'live', 'baseline-of-anchor');
+    expect(baselines.loadSnapshotRowsForDelta).toHaveBeenCalledWith('baseline-of-anchor', ORG_ID);
+    expect(
+      baselines.loadActiveActivitiesForDelta.mock.calls.filter(([, p]) => p === TO_PLAN),
+    ).toHaveLength(1);
   });
 
   it('omits every opt-in projection when none was asked for, and loads no edges', async () => {

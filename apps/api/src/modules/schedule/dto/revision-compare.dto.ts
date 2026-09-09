@@ -21,6 +21,7 @@ import {
   REVISION_COMPLETION_REASONS,
   REVISION_FREE_CHANGE_CLASSES,
   REVISION_PAID_CHANGE_CLASSES,
+  REVISION_NOT_ASSESSABLE_REASONS,
   REVISION_SETTINGS_VERDICTS,
   REVISION_SIDE_KINDS,
 } from '@repo/types';
@@ -41,6 +42,14 @@ import {
  *
  * Every `enum:` is DERIVED from the `@repo/types` tuple that also derives the union type, never a
  * hand-copied array — which would compile while silently missing a member added later.
+ *
+ * **That sentence was an overclaim until the M4 api review found it**: three enums here were
+ * hand-copied, not because anybody preferred it but because no backing tuple existed to derive
+ * from. `REVISION_NOT_ASSESSABLE_REASONS` was added rather than the claim softened, and it earned
+ * its keep immediately — a third reason joined that union in the same commit and reached both DTOs
+ * without either being edited. The `ADDED | REMOVED | CHANGED` link state remains a hand-copied
+ * literal, and is named here rather than left as a silent exception to a sentence that says
+ * "every".
  */
 
 export class RevisionSideDto implements RevisionSide {
@@ -286,7 +295,7 @@ export class RevisionClassAssessmentDto implements RevisionClassAssessment {
 
   @ApiProperty({
     nullable: true,
-    enum: ['NOT_SNAPSHOTTED', 'SIDE_NOT_SCHEDULED'],
+    enum: REVISION_NOT_ASSESSABLE_REASONS,
     description:
       'Null when assessed; a reason when it could not be. **NEVER read a reason as "no ' +
       'changes"** — `rows` is empty and `total` is zero in both states, and only this field ' +

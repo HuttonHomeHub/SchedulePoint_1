@@ -1738,6 +1738,9 @@ export class ScheduleService {
             fromScheduled: sideScheduled(fromBaseline, plan.scheduleComputedAt),
             toScheduled: sideScheduled(toBaseline, plan.scheduleComputedAt),
             bothSnapshotted,
+            // The plan's own revisions are matched on ACTIVITY ID, so a re-code is a real,
+            // reportable change here — the opposite of the cross-plan case.
+            codeIsTheCorrelationKey: false,
             includeProgress: includes.includes('progress'),
             calendarName: (id) => calendarNameById.get(id) ?? null,
             cap: REVISION_ROW_CAP,
@@ -1988,6 +1991,16 @@ export class ScheduleService {
     // `?include=ghosts` on its own received two empty edge sets and lit an overlay drawing nothing.
     const wantsEdges = wantsChanges || wantsGeometry;
 
+    /**
+     * ONE read of the anchor plan's live rows, shared by the two slots that need it. Started here
+     * rather than inside the array so both entries reference the same promise — writing the call
+     * twice is what produced the duplicate query the M4 review measured.
+     */
+    const anchorLiveRowsPromise = this.baselines.loadActiveActivitiesForDelta(
+      organization.id,
+      toPlanId,
+    );
+
     const [
       fromRawRows,
       toRawRows,
@@ -2008,18 +2021,24 @@ export class ScheduleService {
         ? this.baselines
             .loadSnapshotRowsForDelta(toBaseline.id, organization.id)
             .then(frozenRevisionSide)
-        : this.baselines
-            .loadActiveActivitiesForDelta(organization.id, toPlanId)
-            .then(liveRevisionSide),
+        : anchorLiveRowsPromise.then(liveRevisionSide),
       /**
-       * **The anchor plan's LIVE rows, read whether or not the `to` side is live.**
+       * **The anchor plan's LIVE rows, read whether or not the `to` side is live — but read ONCE.**
        *
        * `existsLive` and the id mapping are questions about the plan the reader has OPEN, never
        * about the comparison's `to` side: comparing two baselines can name an activity that has
        * since been deleted from the anchor, and a reveal control that navigates nowhere is worse
        * than one that is absent (ADR-0126 D9, ADR-0082).
+       *
+       * **The promise is shared with the `to` side above rather than issued twice**, and that is a
+       * measured repair rather than tidiness. `to` defaults to `live`, and an imported plan has no
+       * baseline — so the epic's OWN primary case took the `toBaseline === null` branch and issued
+       * the identical 2,000-row query twice, concurrently, in this same `Promise.all`. Measured by
+       * the M4 backend-performance review at ~62.6 ms of a ~115.7 ms batch: roughly half the
+       * route's query cost, on every request of its commonest shape, for nothing. There was never
+       * a consistency reason for two reads — they were in the same batch.
        */
-      this.baselines.loadActiveActivitiesForDelta(organization.id, toPlanId),
+      anchorLiveRowsPromise,
       this.resolveCalendar(organization.id, fromPlan.calendarId),
       wantsEdges
         ? fromBaseline
@@ -2232,6 +2251,16 @@ export class ScheduleService {
             fromScheduled,
             toScheduled,
             bothSnapshotted,
+            /**
+             * **The sides are matched ON the code here, so the `RECODED` class is unanswerable.**
+             *
+             * Every matched pair has equal codes by construction, so the class would otherwise
+             * print a confident "no changes in this revision" for a question the product
+             * structurally cannot answer — the defect this comparison exists to remove, reproduced
+             * inside it. Found by the M4 ux review; the spec had named the reason and nothing built
+             * it.
+             */
+            codeIsTheCorrelationKey: true,
             includeProgress: includes.includes('progress'),
             calendarName: (id) => calendarNameById.get(id) ?? null,
             cap: REVISION_ROW_CAP,

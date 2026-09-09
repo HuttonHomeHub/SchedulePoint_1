@@ -411,7 +411,16 @@ export function RevisionComparePanel({
           </p>
         ) : null}
 
-        {isPending && from !== null ? (
+        {/*
+          **Gated on "a pair is chosen", not on `from` alone.**
+
+          `from` is the SAME-PLAN picker's state and stays null for the whole life of a cross-plan
+          comparison, so `isPending && from !== null` was `true && false` on every cross-plan
+          request and the spinner never rendered: between choosing the other plan and the response
+          arriving the panel showed the pickers and nothing at all. Found by the M4 ux review; no
+          test set `comparePlanId` non-null with a request in flight.
+        */}
+        {isPending && (comparePlanId !== null || from !== null) ? (
           <p className="text-muted-foreground flex items-center gap-2 text-sm">
             <Spinner className="size-4" aria-hidden="true" />
             Comparing…
@@ -462,7 +471,13 @@ export function RevisionComparePanel({
                 is worth exactly what this says it is: "12 left the critical path" means one thing
                 at 98 % coverage and something else at 40 %. */}
             {crossPlan === null ? null : (
-              <RevisionCorrelationSummary correlation={crossPlan.correlation} />
+              <RevisionCorrelationSummary
+                correlation={crossPlan.correlation}
+                fromPlanId={crossPlan.fromPlan.id}
+                fromPlanName={crossPlan.fromPlan.name}
+                toPlanId={crossPlan.toPlan.id}
+                toPlanName={crossPlan.toPlan.name}
+              />
             )}
 
             {/* BOTH sides' instants. The screen used to state only the earlier one while the
@@ -772,7 +787,19 @@ function MovedRow({
    * docblock records being caught once. The branch stays because the TYPE permits a null and
    * asserting otherwise would be the guess.
    */
-  if (row.activityId === null) return <div className="w-full px-1 py-0.5">{detail}</div>;
+  if (row.activityId === null) {
+    // No control, and — unlike the first version of this branch — no bare row either. An omission
+    // with nothing in its place is indistinguishable from a control that failed to render, which
+    // is the very thing its reachable twin in `RevisionChangesView` says out loud. Aligned here so
+    // that if this branch ever DOES become reachable it cannot silently reintroduce the defect the
+    // docblock above describes it as being safe from (the M4 accessibility review's second nit).
+    return (
+      <div className="w-full px-1 py-0.5">
+        {detail}
+        <span className="text-muted-foreground block text-xs">Not in this plan</span>
+      </div>
+    );
+  }
 
   const activityId = row.activityId;
   const reasonId = `revision-row-reason-${activityId}`;

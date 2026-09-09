@@ -9,6 +9,7 @@ import type {
 
 import './RevisionComparePrintDocument.css';
 
+import { isCrossPlanCompare } from '../api/use-revision-compare';
 import {
   CHANGES_FOOTER,
   classCountSentence,
@@ -74,11 +75,26 @@ export function RevisionComparePrintDocument({
    * reader it exists for.** `planName` is a same-plan field, so the compiler forces the question
    * rather than letting one name print over a comparison of two.
    */
-  const crossPlan = 'correlation' in compare ? compare : null;
-  const subject =
-    crossPlan === null
-      ? (compare as { planName: string }).planName
-      : `${planLabel(crossPlan.fromPlan)} → ${planLabel(crossPlan.toPlan)}`;
+  /**
+   * The SHARED type guard, not a second copy of the predicate.
+   *
+   * The first version hand-rolled `'correlation' in compare` here while the panel imported
+   * `isCrossPlanCompare` — one test written twice, which is the drift that guard's own docblock
+   * warns about — and the hand-rolled form did not narrow the `else` branch, forcing an unsafe
+   * `as { planName: string }` cast three lines later. Using the guard removes both. Found by the
+   * M4 component review.
+   */
+  const crossPlan = isCrossPlanCompare(compare) ? compare : null;
+  /**
+   * The guard is called AGAIN here rather than reusing `crossPlan === null`, and the reason is a
+   * correction to the review that asked for this change: a type predicate narrows the expression it
+   * is applied to, and TypeScript cannot carry that narrowing through a separate `crossPlan === null`
+   * comparison. So the cast is removed by branching on the guard, not by having a nullable alias in
+   * scope. Two `in` checks, and no assertion anywhere.
+   */
+  const subject = isCrossPlanCompare(compare)
+    ? `${planLabel(compare.fromPlan)} → ${planLabel(compare.toPlan)}`
+    : compare.planName;
   const carrierChanged = carrierChangedSentence(compare.completion);
   return (
     <div className="revision-print">

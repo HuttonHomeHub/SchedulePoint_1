@@ -248,6 +248,8 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
           // Both sides are live imported plans, so every paid class IS recorded — which is the
           // cross-plan case's one advantage over a pre-ADR-0126 baseline.
           bothSnapshotted: true,
+          // The probe stands in for the cross-plan path, so it states that world's answer.
+          codeIsTheCorrelationKey: true,
           includeProgress: true,
           calendarName: () => null,
           cap: 500,

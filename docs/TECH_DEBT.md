@@ -4470,3 +4470,83 @@ has not moved since its citations were written is never re-read — and this pas
 patch release can falsify nine statements at once. `#181`'s "cite by symbol rather than line" note
 is adjacent but different: symbols would have survived the line shift here and would **not** have
 caught `go(1)` → `go(-delta)`, because the symbol is the same.
+
+### 263. Twelve non-blocking findings from the cross-plan revision-comparison gate pass
+
+**Status:** open · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
+
+Six specialists ran over the epic's combined diff. Seven findings blocked and were folded with
+red-first regression tests (see the M4 commit). These twelve did not, each with the reason it was
+left rather than rushed.
+
+**Two are measurement, and they are the ones worth reading.**
+
+**(a) The P2 figure did not reproduce.** `m0-condition.md` records p95 208.2 ms (harness) and
+215.2 ms (end-to-end) against a 250 ms bar, and the backend-performance review re-ran the same
+harness twice on a contended host and got **299.9 / 346.1 ms** and **383.9 / 521.3 ms** — both
+FAIL, on the same code, back to back. The reviewer's own reading is the right one: neither figure is
+"the true cost", and the point is that **a 16 % headroom established from a single unrepeated run
+is not evidence of stability**. The blocking duplicate read (folded) accounts for part of it; the
+rest is host contention. What is owed is a repeated-invocation P2 with cross-run variance reported,
+on a host class comparable to the other committed bars — not another single number.
+
+**(b) The P2 bar is conditioned on a plan-size envelope nothing enforces.** 2,000 activities per
+side is the benchmark; the loaders read the whole plan unconditionally and only the OUTPUT is capped
+at 200. This route does that read twice. A customer with materially larger plans leaves the measured
+envelope with no gate saying so. Bounded by the route being fully authenticated and dual-permission
+gated, and it mirrors the sibling's already-accepted posture.
+
+**Four are the API contract's own claims.**
+
+**(c)** The excess-property check does **not** fire inside `...(cond ? { … } : {})`, demonstrated by
+compilation — so the seven optional projection fields are not covered by the mechanism both DTOs'
+docblocks cite. Corrected in the cross-plan docblock rather than left; the shipped route's identical
+claim is untouched and inherits the gap. The concrete harm is independently covered by the G4 text
+scan. A `satisfies` on the three spread blocks would make the claim literally true.
+
+**(d)** `RevisionLinkChange['state']`'s `ADDED | REMOVED | CHANGED` is still a hand-copied `enum:`
+literal with no backing tuple, in a file whose header says every enum is derived.
+`REVISION_NOT_ASSESSABLE_REASONS` was added in M4 and closed the other two; this one is named rather
+than silently excepted.
+
+**(e)** `docs/API.md`'s **existing, untouched** description of the plan-nested route's
+`ghosts`/`links` says "Neither is capped", which `revision-ghosts.ts`'s own docblock contradicts
+("It shipped UNCAPPED for one review cycle and two independent reviews caught it"). Predates this
+epic; found while reading the same file.
+
+**(f)** `correlation.uncodedRows` shares ONE cap across both sides, so a from-side with more than
+200 uncoded rows shows a sample containing zero to-side rows while `toUncoded` reports a non-zero
+count. Both totals stay correct, so nothing is misreported — but the sample a reader is told to use
+to "see what was left out" can be entirely one-sided. The M4 fix split the _lists_ by side; the
+_cap_ is still shared.
+
+**Three are semantics worth a reader knowing.**
+
+**(g)** Anchor ids resolve against the anchor plan's **live** rows rather than the `to` revision, so
+a from-only row can resolve to an activity created after the `to` baseline was captured that happens
+to share a code. Documented intent (ADR-0126 D9), not a defect — but `activityId` does not mean
+"this same row, now" in that case.
+
+**(h)** Coverage-block rows are inert even for the anchor plan's own activities, while the same rows
+are activatable in the Changes view. Deliberate (verification versus action) and documented in the
+component, but a planner may expect to click through from the list they were told to read first.
+
+**(i)** The overlay's refusal "Choose two revisions in Compare revisions… first" speaks in same-plan
+terms even when reached through the cross-plan picker, where the planner chose a _plan_.
+
+**Three are placement and style.**
+
+**(j)** On screen the re-code caveat and the measurement frame sit after the whole delta, just above
+the footer; on paper they sit immediately after the correlation lists. Paper has it right — a reader
+told to check the coverage first may scroll past a long change list before meeting the caveat that
+qualifies it.
+
+**(k)** `RevisionComparePrintDocument.css` (and `HealthPrintDocument.css`) still carry hard-coded
+hex on a docblock claiming a `@media print` sheet cannot read a runtime token — which
+`print-document.css`, ADR-0103 and `docs/TECH_DEBT.md` #158 disproved, and which
+`PrintSurface.css`/`GanttPrintSurface.css` already migrated to the `--print*` family the container
+scopes. Shared debt with the health report; this epic touched the file without migrating it.
+
+**(l)** `revision-compare-imported-p2.e2e-spec.ts` still carries an O(n·m) `some()`-inside-`filter()`
+in its own stand-in correlation — a leftover from before M1 shipped the real one, which the file's
+docblock names. Harness only, never shipped, and it inflates the very figure (a) is about.

@@ -115,16 +115,20 @@ function ClassSection({
                   return (
                     <li
                       key={row.subjectId}
-                      className="flex w-full items-baseline gap-2 px-1 py-0.5 text-xs"
+                      // `min-w-0` on the row AND on each growing child: a flex item defaults to
+                      // `min-width: auto`, so `truncate` cannot engage inside one and a long
+                      // activity or plan name overflows the 380 px panel rather than clipping.
+                      // The sibling `RevisionCorrelationSummary` already pairs the two correctly.
+                      className="flex w-full min-w-0 items-baseline gap-2 px-1 py-0.5 text-xs"
                     >
-                      <span>{row.code ?? row.name}</span>
-                      <span className="text-muted-foreground truncate">
+                      <span className="min-w-0 truncate">{row.code ?? row.name}</span>
+                      <span className="text-muted-foreground min-w-0 truncate">
                         {row.from ?? '—'} → {row.to ?? '—'}
                       </span>
                       {otherPlanName === undefined ? null : (
                         // The explanation the omission owes: an omitted control with nothing in
                         // its place is indistinguishable from one that failed to render.
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground shrink-0">
                           {otherPlanRowNote(otherPlanName)}
                         </span>
                       )}
@@ -152,7 +156,7 @@ function ClassSection({
                         // lookup covers only the delta's rows (see `announceActivation`).
                         if (reachable) onActivateActivity(activityId, row.name);
                       }}
-                      className="hover:bg-muted/60 flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left text-xs aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                      className="hover:bg-muted/60 flex w-full min-w-0 items-baseline gap-2 rounded px-1 py-0.5 text-left text-xs aria-disabled:pointer-events-none aria-disabled:opacity-50"
                     >
                       {/* No weight. The code already reads as the row's subject because the
                           values beside it are `text-muted-foreground`; adding weight on top would
@@ -160,10 +164,27 @@ function ClassSection({
                           exists to catch exactly that. The heading below KEEPS its weight, because
                           it matches `MovedSection`'s h3 in the same panel and dropping it would
                           make one view's headings lighter than the other's for no reason. */}
-                      <span>{row.code ?? row.name}</span>
-                      <span className="text-muted-foreground truncate">
+                      <span className="min-w-0 truncate">{row.code ?? row.name}</span>
+                      <span className="text-muted-foreground min-w-0 truncate">
                         {row.from ?? '—'} → {row.to ?? '—'}
                       </span>
+                      {/*
+                        **The reason, VISIBLE — not only to a screen reader.**
+
+                        The delta view states the identical fact in plain text a sighted planner can
+                        read (`· not in the live plan`), and this view stated it only in an
+                        `sr-only` span: switching tabs turned a dimmed, unclickable row into one
+                        with nothing saying why. The panel's own rule is "shaded with a reason,
+                        never silently inert", and it was failing in one of its two
+                        implementations. Found by the M4 ux review. The `sr-only` sibling below
+                        stays, because it is the DESCRIPTION — folding the reason into the
+                        accessible name is the defect ADR-0117 records one control along.
+                      */}
+                      {reachable ? null : (
+                        <span className="text-muted-foreground shrink-0" aria-hidden="true">
+                          · not in the live plan
+                        </span>
+                      )}
                     </button>
                     {!reachable && (
                       <span id={reasonId} className="sr-only">

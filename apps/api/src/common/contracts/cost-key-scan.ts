@@ -50,6 +50,25 @@ const INLINE_KEY = /[{,]\s*([A-Za-z_$][\w$]*)[!?]?\s*:/g;
 const DECORATED_KEY = /\)\s+(?:public\s+|private\s+|readonly\s+)*([A-Za-z_$][\w$]*)[!?]?\s*:/g;
 
 /**
+ * A **quoted** or template-literal key — `{ "budgetImpact": 500 }`, `{ 'cost': v }`.
+ *
+ * **The fourth recorded bypass, and the easiest of the four to introduce by accident.** Bypasses
+ * 1–3 each needed a particular formatting; this one needs only string-literal key syntax, which a
+ * developer may reach for reflexively and which some formatters produce for keys containing
+ * punctuation. All three patterns above require the key to be a BARE identifier immediately after
+ * `{`, `,`, `)` or line start, so a quoted key fails their character class trivially.
+ *
+ * Demonstrated rather than reasoned about: `scanForCostKeys('return { ...r, "budgetImpact": 500 };')`
+ * returned `[]` before this existed.
+ *
+ * A **computed** key (`{ [k]: v }`, where `k` is built at runtime) is NOT covered and cannot be by
+ * any name check — the name does not exist in the source. That is stated here rather than left for
+ * a reader to discover, and it is why the runtime payload walk in the API e2e is the backstop
+ * rather than a duplicate of this.
+ */
+const QUOTED_KEY = /[{,]\s*['"`]([A-Za-z_$][\w$]*)['"`]\s*:/g;
+
+/**
  * Banned-named SHORTHAND properties (`{ narrowing, budgetImpact }`) — the second recorded bypass.
  * No `:` exists, so a key pattern structurally cannot see them. Restricted to banned names so this
  * does not flag every destructuring in a file.
@@ -59,7 +78,7 @@ const SHORTHAND = /[{,]\s*((?:cost|budget|rate|expense)[\w$]*)\s*[,}]/gi;
 /** Every cost-shaped key the text declares, in any of the three forms. */
 export function scanForCostKeys(text: string): string[] {
   const found: string[] = [];
-  for (const pattern of [DECLARATION_KEY, INLINE_KEY, DECORATED_KEY]) {
+  for (const pattern of [DECLARATION_KEY, INLINE_KEY, DECORATED_KEY, QUOTED_KEY]) {
     for (const match of text.matchAll(pattern)) {
       const key = match[1];
       if (key !== undefined && COST_SHAPED.test(key)) found.push(key);
@@ -81,7 +100,7 @@ export function scanForCostKeys(text: string): string[] {
  */
 export function allKeys(text: string): string[] {
   const keys: string[] = [];
-  for (const pattern of [DECLARATION_KEY, INLINE_KEY, DECORATED_KEY]) {
+  for (const pattern of [DECLARATION_KEY, INLINE_KEY, DECORATED_KEY, QUOTED_KEY]) {
     for (const match of text.matchAll(pattern)) {
       if (match[1] !== undefined) keys.push(match[1]);
     }

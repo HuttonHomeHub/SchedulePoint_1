@@ -20,9 +20,9 @@ browser-native team use. See the full product context in
 [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md).
 
 > **Current stage: the application is substantially built.** 23 API modules
-> (`apps/api/src/modules/`), 31 Prisma models across 62 migrations, 1184 web
+> (`apps/api/src/modules/`), 31 Prisma models across 62 migrations, 1185 web
 > source files with 42 Playwright suites beside the base journey, and
-> 128 ADRs.
+> 129 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4063,6 +4063,70 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   not `USER`. Both were read off a filename rather than a file. **The epic's deliverable is a
   NUMBER, not a panel** — #75 stays open until the readings are taken, and the unattributed ~8 ms at
   the whole-plan framing is a separate question this changes nothing about.
+
+- **ADR-0129** _(Accepted; M0–M4 landed 2026-09-08)_ — Identity across two imports is the code, and
+  the match is shown before what it produced. Three tiers of revision comparison ship and every one
+  is plan-nested and correlates on `activities.id` — right for a plan against its own baseline, and
+  incapable of the case a planner pays for. **An import always targets a NEW plan** (ADR-0050), so a
+  re-issued P6 file is a **sibling plan** sharing no activity ids at all, and an id-keyed comparison
+  reports every row of one as removed and every row of the other as added. **The blocker is identity,
+  not plumbing**: everything downstream already works across two plans, because
+  `computeRevisionDelta` cannot tell which side came from `baseline_activities` and which from
+  `activities` — the property that made baseline-vs-baseline free at ADR-0125. So a cross-plan
+  comparison is **a change of what fills the correlation slot and nothing else**, and the pure
+  functions are not modified: their existing suites pass unchanged and are the before/after oracle.
+  **The key is `code`, matched exactly** — folding would manufacture a duplicate the database
+  deliberately permits, since `uq_activities_plan_code` is a case-sensitive btree. **Duplication is
+  answered by that index rather than by repair code, and that is a recorded finding**: the backlog row
+  and this epic's own brief both asserted the column has no unique constraint, and named the method
+  that established it — grepping Prisma decorators, which **structurally cannot see the answer**,
+  because Prisma cannot express a partial unique and every one of them here lives in raw SQL. The
+  obligation that leaves is a test reading `pg_indexes` on the running database (never the migration
+  file, which would describe history), proved to discriminate by relaxing the index inside a
+  rolled-back transaction.
+  **The coverage is stated first** — on screen, in the live region and on paper — because every
+  number below is worth exactly what it says they are; every count including the zeroes, every
+  capped list beside its true total. **No codes in common is a 200 with a typed reason and NO
+  delta**, carried on the criticality block as well as at the top level: four empty sets and a null
+  reason read as "assessed, and nothing changed", the opposite of the truth. A **hard coverage
+  threshold was rejected** as a number tuned to no data. The route is **org-scoped** (ADR-0045's
+  precedent — two plan ids leave no honest `:planId`), both sides resolve org-scoped to a **uniform
+  404**, each revision against **its own plan**, and a same-plan pair is **422 before the revisions
+  are resolved**, because it is the wrong question whatever revisions it names and the two routes
+  correlate on **different keys**. The shipped route is byte-identical.
+  **The overlay draws what has an honest lane and counts what does not**, because **time is a shared
+  coordinate across two plans and lane is not**: an imported activity's lane is its position in the
+  source file until phase 3 repacks it by computed dates, and phase 3 is best-effort. A matched
+  ghost sits at the **anchor's** lane — literally where that bar is — and the `moved` test **drops
+  its lane clause**, without which the overlay silently becomes the whole-old-plan design rejected at
+  ADR-0127 CQ-2: busy, plausible, failing nothing. ADR-0127 D2 is **applied, not overturned** — the
+  lane is still never guessed. **`computeSchedule` is not called, not imported and not reachable**
+  (ADR-0125 D1's strong form, and **not** ADR-0116 D7's weaker sibling, named so nobody reaches for
+  the wrong one), enforced by a gate that covered the new module the day it was written because
+  `revision-sources.ts` derives its roster by prefix. **No schema change, and that is a statement**:
+  `database-architect` is not engaged because there is nothing to design.
+  **Three defects were found by reading or by driving rather than by anything failing.** The painter's
+  **link** layer is not shape-driven: it resolves an ADDED or CHANGED link by looking its
+  `dependencyId` up among the edges the diagram already draws, so a link handed to it under a
+  correlation key matched nothing, drew nothing and reported nothing while the total counted it — a
+  picture quietly missing rows in the one place a reader cannot check. The **undrawable sentence** is
+  false cross-plan ("the old revision did not record where they were" — it did; the position is not
+  comparable), the likeliest defect in the milestone precisely because reusing it feels like reuse.
+  And the **omission rule was wired to a branch that can never fire**: `entered`/`left` hold only
+  matched rows, so their null-id branch is unreachable and the plan-name prop threaded there was
+  scaffolded for a caller that does not exist — the journey proved it, not a reading. **The role-
+  invariance scanner was found to have a THIRD bypass** by being given a second consumer: a key
+  preceded by a decorator on the same line is at neither line start nor after a `{`, and the health
+  report's gate was green against that form only because its DTO happens not to use it.
+  **A re-code is indistinguishable from a removal plus an addition, permanently and by
+  construction**, and the product says so wherever added or removed rows appear. The same holds one
+  level down for a **re-typed link**, because the edge key must carry the type — one plan may hold an
+  FS and an SS between the same pair — while a **lag** change keeps the key and reads as CHANGED.
+  Written down because this epic's own journey asserted otherwise on its first run. **P3, the
+  overlay's paint cost, is OWED** on the product owner's hardware via the ADR-0128 staff probe, with
+  its three-valued verdict rule and a falsifiable prediction: because the cross-plan rule narrows
+  what is drawn, it should cost **no more** than the same-plan one, and materially more means the
+  lane clause leaked back in. Nothing is blocked on it. **No feature flag** (ADR-0088 D1).
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI

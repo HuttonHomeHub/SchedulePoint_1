@@ -20,6 +20,7 @@ import type {
 import {
   REVISION_FREE_CHANGE_CLASSES,
   REVISION_PAID_CHANGE_CLASSES,
+  REVISION_NOT_ASSESSABLE_REASONS,
   REVISION_SETTINGS_VERDICTS,
 } from '@repo/types';
 
@@ -244,7 +245,7 @@ export class CrossPlanClassAssessmentDto implements CrossPlanClassAssessment {
 
   @ApiProperty({
     nullable: true,
-    enum: ['NOT_SNAPSHOTTED', 'SIDE_NOT_SCHEDULED'],
+    enum: REVISION_NOT_ASSESSABLE_REASONS,
     description:
       'Null when assessed; a reason when it could not be. **NEVER read a reason as "no changes"** ' +
       '— `rows` is empty and `total` is zero in both states, and only this field separates them.',
@@ -390,11 +391,20 @@ export class CrossPlanRevisionCompareDto implements CrossPlanRevisionCompare {
    * A naming boundary, not a mapping one — the same trade the sibling DTO documents.
    *
    * What is load-bearing is the SERVICE's typed object literal: `implements` constrains the floor
-   * (this class cannot be missing or mistype a member) and says nothing about the ceiling. The
-   * guarantee that no extra field rides the wire comes from `crossPlanRevisionCompare` building its
-   * result against the declared type, where TypeScript's excess-property check rejects anything
-   * extra at that one site — and from the G4-style scan over this file, which is what makes the
-   * role-invariance claim checkable rather than asserted.
+   * (this class cannot be missing or mistype a member) and says nothing about the ceiling.
+   *
+   * **The excess-property check covers less than the sibling's docblock claims, and this says so.**
+   * TypeScript rejects an extra key in an object literal assigned to a declared type, and in each
+   * branch of a ternary assigned as a property value — so `criticalPath` and the required fields
+   * are covered. It does **not** fire inside `...(cond ? { … } : {})`, which is how `changes`,
+   * `ghosts`/`ghostsTotal`/`ghostsUndrawable` and `links`/`linksTotal`/`linksUndrawable` are
+   * attached. Demonstrated by compiling the shape rather than reasoned about (M4 api review), and
+   * inherited unchanged from the shipped route, which uses the same idiom under the same claim.
+   *
+   * What genuinely covers those seven fields is the **G4-style scan** over this file and the
+   * service's method slice: it reads source text, so a spread branch is not a hiding place for the
+   * concrete harm the check is invoked against — a cost-shaped field making a handover artefact
+   * role-dependent.
    */
   static from(model: CrossPlanRevisionCompare): CrossPlanRevisionCompareDto {
     return model;

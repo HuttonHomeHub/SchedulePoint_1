@@ -228,6 +228,11 @@ dependencies: a route carrying **two** plan ids has no honest `:planId` segment.
 | ------ | ------------------------------- | ---------------------------------------------------------------------------------- |
 | GET    | `…/cross-plan-revision-compare` | `fromPlanId`, `toPlanId` (required) · `from`, `to` (UUID or `live`) · `include[]`. |
 
+`include` is **repeated**, not comma-joined: `?include=changes&include=ghosts`. A comma-joined value
+is read as one value, is not in the vocabulary, and is rejected with **422** — the same shape the
+plan-nested route accepts. Stated here because it lived only in an inline comment and a test until
+the M4 api review asked where a caller was supposed to learn it.
+
 **Matched on `code`, exactly** — no case folding, because
 `uq_activities_plan_code` is a case-sensitive btree and folding would manufacture
 a collision the product permits. A duplicate code within one plan is not a case

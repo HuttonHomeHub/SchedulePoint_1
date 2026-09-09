@@ -104,6 +104,27 @@ describe('the cross-plan comparison carries no cost-shaped field', () => {
       ]);
     });
 
+    it('catches a QUOTED key — the fourth bypass, found by the M4 security review', () => {
+      // The easiest of the four to introduce by accident: bypasses 1-3 each needed a particular
+      // formatting, and this one needs only string-literal key syntax. Demonstrated returning `[]`
+      // before the pattern existed.
+      expect(scanForCostKeys('return build({ matched: 1, "budgetImpact": 500 });')).toEqual([
+        'budgetImpact',
+      ]);
+      expect(scanForCostKeys("return build({ matched: 1, 'costRate': 500 });")).toEqual([
+        'costRate',
+      ]);
+    });
+
+    it('does NOT claim to catch a computed key, and says so rather than implying otherwise', () => {
+      // A name check structurally cannot see a name that is not in the source. Pinned as a KNOWN
+      // limit so a reader does not infer coverage this gate cannot have — the runtime payload walk
+      // in the API e2e is the backstop, not a duplicate of this.
+      expect(scanForCostKeys('const k = "cost" + "Impact"; return build({ [k]: 500 });')).toEqual(
+        [],
+      );
+    });
+
     it('catches a declared class property, the form a DTO edit takes', () => {
       expect(scanForCostKeys('  @ApiProperty() budgetVariance!: number;')).toEqual([
         'budgetVariance',

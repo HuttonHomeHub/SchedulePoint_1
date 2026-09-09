@@ -88,6 +88,15 @@ export function notAssessableSentence(
         `One of these revisions has no calculated schedule, so ${subject} cannot be compared. ` +
         `Recalculate the plan and capture a baseline to compare dates.`
       );
+    case 'CODE_IS_THE_CORRELATION_KEY':
+      // Reached only on a cross-plan comparison. The sentence explains the mechanism in a
+      // planner's words rather than stating the limit as a bare fact, because a reader who does
+      // not know the two plans are MATCHED on code has no way to see why the question is
+      // unanswerable — and would otherwise read the previous, confident "no changes" as an answer.
+      return (
+        'These two plans are matched on activity code, so a change of code cannot be detected: ' +
+        'an activity whose code changed appears here as one removed and another added.'
+      );
   }
 }
 

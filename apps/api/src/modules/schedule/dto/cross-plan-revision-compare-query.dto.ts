@@ -66,7 +66,9 @@ export class CrossPlanRevisionCompareQueryDto {
       'and the correlation only. `changes` adds the change list; `progress` additionally assesses ' +
       'the progress class, off by default because it moves on nearly every activity every week; ' +
       '`ghosts` adds the CROSS-PLAN ghost projection and the changed logic, which only a canvas ' +
-      'needs.',
+      'needs. **Repeat the parameter to ask for more than one** — `?include=changes&include=ghosts`. ' +
+      'A comma-joined value (`?include=changes,ghosts`) is rejected with 422: it is read as one ' +
+      'value, and that value is not in the vocabulary.',
   })
   @IsOptional()
   // `?include=ghosts` arrives as a STRING, not a one-element array. Without this the single
