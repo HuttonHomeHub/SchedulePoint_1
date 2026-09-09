@@ -287,8 +287,14 @@ first seven samples came back at ~7,000 ms and then fell to ~150 ms as the rest 
 The change-row count varied for the same reason.
 
 **So the flag that makes a probe's output visible is the flag that makes its measurement worthless.**
-The probe now writes its report to a **file** (`P2_REPORT`, default the temp dir), needs no flag, and
-runs alone — which is why reading 4 can be trusted and the first three cannot.
+The probe now writes its report to a **file** in the run's own `mkdtempSync` directory, printing the
+path beside the report; it needs no flag and runs alone — which is why reading 4 can be trusted and
+the first three cannot. It first wrote to a fixed name in the OS temp directory behind a `P2_REPORT`
+environment override, and CodeQL flagged both on the epic's first CI run: the fixed name is a
+symlink target anybody on the host can pre-create (CWE-377), and the override is an environment
+value flowing unchecked into a filesystem write — the same `js/path-injection` sink
+`m0-attribution.e2e-spec.ts` had already been flagged for and already deleted. This probe copied
+that harness and reintroduced what it had removed.
 
 **The bar was never moved.** Reading 1's failure stands in the record; what changed is the estimator
 and then the isolation, both of which are defects in the instrument rather than concessions to it.

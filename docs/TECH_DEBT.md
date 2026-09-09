@@ -4592,3 +4592,32 @@ lock taken by `e2e-local.sh` for the life of a run, or simply a check for a runn
 Filed rather than built because the correct remedy is a small design decision (which resource is the
 lock on, and what does a caller see when it is held) and this row exists so the next person does not
 re-derive the diagnosis from four confusing failures.
+
+### 265. Two measurement harnesses write a fixed filename into the OS temp directory
+
+**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PR #491 CI) · **Size:** S · **Owner:** api
+
+CodeQL failed PR #491 on one high-severity `js/insecure-temporary-file` alert (CWE-377):
+`revision-compare-imported-p2.e2e-spec.ts` wrote its report to `join(tmpdir(),
+'m0-p2-result.txt')` — a name anybody on the host can guess and pre-create as a symlink, which the
+harness would then follow. That instance is fixed in the same PR: the report goes into the run's
+own `mkdtempSync` directory, the path is printed beside it, and the write is best-effort.
+
+**Two siblings carry the same shape and were deliberately not swept.**
+`revision-delta-m0.e2e-spec.ts:32` and `m0-attribution.e2e-spec.ts:58` both build
+`join(tmpdir(), '<fixed name>.txt')`. They are not new in that PR, so CodeQL does not report them
+as new alerts, and one of them **records the fixed path as a decision**: its docblock explains that
+an `M0_REPORT` environment override was removed after CodeQL flagged it as `js/path-injection`,
+because the configurability bought nothing. Overturning a recorded decision blind, inside a release
+PR, to change where a throwaway log lands is exactly the drive-by churn §2 warns about — so it is
+filed instead.
+
+**What is worth knowing before picking it up.** The P2 probe had copied that sibling and got the
+reasoning backwards: it kept the fixed temp name _and_ reintroduced the environment override the
+sibling had deleted, so it carried both defects at once and CodeQL happened to report the newer of
+the two. The fix that closes all three is the same three lines — `mkdtempSync`, print the path,
+swallow the write — and the only real question is whether losing a guessable path costs anybody
+anything, which it does not once the report is on stdout as well. Check whether the two siblings
+appear as pre-existing open alerts in the branch's code-scanning view first: this session could not,
+because the token in use gets `403 Resource not accessible by integration` on
+`/code-scanning/alerts`.

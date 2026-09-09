@@ -288,7 +288,22 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
      * contention is what made an earlier run's change-row count look bimodal. Every P2 figure
      * taken through the console was therefore measuring the suite, not the path.
      *
-     * A file needs no flag, so the probe can run alone. `P2_REPORT` overrides the location.
+     * A file needs no flag, so the probe can run alone. It lands in **this run's own
+     * `mkdtempSync` directory**, and the path is printed with the report.
+     *
+     * It did neither of those things on its first CI run, and CodeQL was right about both.
+     * `join(tmpdir(), 'm0-p2-result.txt')` is a fixed name in a world-writable directory, so
+     * anybody on the host can pre-create it as a symlink and the harness follows it — a high
+     * `js/insecure-temporary-file` alert (CWE-377). And the `P2_REPORT` override that sat in front
+     * of it was an environment value flowing unchecked into a filesystem write, which is the
+     * `js/path-injection` sink `m0-attribution.e2e-spec.ts:52-56` had already been flagged for and
+     * already removed, on the reasoning that the configurability bought nothing. This file copied
+     * that harness's shape and reintroduced the taint source it had deleted, so the override goes
+     * for the recorded reason rather than a new one.
+     *
+     * The write is also **best-effort and swallowed**, the third lesson from the same sibling: a
+     * measurement harness must never fail a build over where it puts its own notes. The stdout
+     * copy is the one that matters, which is what makes losing the guessable path cost nothing.
      */
     /**
      * **The same question asked end to end** — M1-T5 step 5.
@@ -349,7 +364,13 @@ describe.skipIf(!hasDatabase)('M0 P2 — the cross-plan compare path at scale', 
       '  correlation, the delta, the classifier, the ghosts, and serialisation.',
       '',
     ].join('\n');
-    writeFileSync(process.env.P2_REPORT ?? join(tmpdir(), 'm0-p2-result.txt'), report, 'utf8');
+    const reportPath = join(dir, 'm0-p2-result.txt');
+    try {
+      writeFileSync(reportPath, report, 'utf8');
+    } catch {
+      // The stdout copy below is the one that matters; a report file is a convenience.
+    }
+    process.stdout.write(`${report}  report written to ${reportPath}\n\n`);
 
     expect(p95).toBeLessThanOrEqual(P2_BAR_MS);
     /**
