@@ -3,7 +3,7 @@
 > Standards and philosophy for the SchedulePoint data layer: **PostgreSQL 17 +
 > Prisma**. The schema in
 > [`apps/api/prisma/schema.prisma`](../apps/api/prisma/schema.prisma) — 31
-> models across 62 committed migrations — is the single source of truth for the data model.
+> models across 63 committed migrations — is the single source of truth for the data model.
 > See ADR-0008.
 
 ## Philosophy
@@ -1743,10 +1743,42 @@ reach it. Updatable, deletable, expirable. **Do not add a trigger to it.**
   500-activity limb and a 2,000-activity one, so a per-run row would push them into `jsonb`, where
   the series this feature exists to produce (_this limb, across releases_) cannot be ordered or
   filtered. A `perf_probe_runs` parent was rejected rather than overlooked: it gives the retention
-  sweep a two-table **ordered** delete, the class `docs/TECH_DEBT.md` #253 records thirteen
-  hand-maintained copies of, and the ADR-0126 shape where a fourth child table broke 557 API e2e
-  tests at once on a RESTRICT foreign key. `run_id` is a plain correlation UUID (ADR-0073 C3.3),
-  minted server-side so a client cannot make one machine's numbers read as another's.
+  sweep a two-table **ordered** delete — the class `docs/TECH_DEBT.md` #256 records, where five e2e
+  resets hand-ordered the schema and were already wrong about one table — and the ADR-0126 shape
+  where a fourth child table broke 557 API e2e tests at once on a RESTRICT foreign key. `run_id` is
+  a plain correlation UUID (ADR-0073 C3.3), minted server-side so a client cannot make one machine's
+  numbers read as another's. (This cited #253 until 2026-09-09; that row is closed and ledgered, and
+  its number now points at an unrelated entry.)
+- **A second tier above it: `sweep_id` groups several presses into one SITTING** (2026-09-09,
+  `20260909120000_perf_probe_sweep_columns`), for the "Run all measurements" control that works
+  through the scenario x preset plan and POSTs per completed step. NULL means **this reading was a
+  single press** — true of every row written before the column and of every future single run — and
+  there is no DEFAULT, because one would claim membership of a sitting that does not exist.
+  **Unlike `run_id` it is client-supplied and does not inherit its cannot-be-forged property**:
+  only the client knows four presses were one sitting, and the capability that grants (grouping
+  rows the operator did not group) is strictly weaker than fabricating the numbers, which ADR-0128
+  already accepts of a compromised staff session. `UUID` rather than `TEXT` for a reason stronger
+  than storage: Postgres normalises `uuid` to canonical lowercase, so a client posting mixed casing
+  across steps still groups — under `TEXT` that silently becomes two sittings. No FK, no parent
+  table, no index: no query filters on it, and the grouping happens client-side over a page already
+  fetched.
+- **`frames_per_phase` is the protocol a reading was taken under**, and NULL means **not recorded**.
+  It is inferable from `samples.length` via a client-side constant, and inferring it would write a
+  fact derived from a bundle version into a column readers will trust. The NULL is permanently
+  ambiguous — written before the column, or a producer omitted it — so the rule is stated once and
+  only once: **a NULL on a row recorded after 2026-09-09 is a producer bug, not a historic gap.**
+  Its bound in the database is **sign only**; a range is a protocol, and a protocol in a CHECK means
+  the day the product widens it the database silently refuses rows the product decided to accept.
+  The ceiling lives on the DTO, where it is required rather than decorative — the column is `int4`
+  and `@IsInt()` passes `1e12`, which would reach Postgres as an unmapped 500.
+- **Its sanity bounds live in ONE constraint**, `ck_perf_probe_results_measurement_bounds`, extended
+  by DROP + ADD rather than joined by a per-column sibling — a constraint named for one column sets
+  the precedent that the next nullable int gets its own, fragmenting "where are this table's bounds"
+  into N places. Restating ten clauses to add an eleventh is ten chances to silently drop one, and
+  **`prisma migrate diff` cannot see CHECK constraints at all** — they are raw SQL, absent from
+  `schema.prisma` — so `apps/api/test/perf-probe-sweep-columns.e2e-spec.ts` reads
+  `pg_get_constraintdef` off the running database, and proves itself red by dropping a bound inside
+  a rolled-back transaction.
 - **No verdict column.** The verdict is derived on read from `samples` + `thresholds` by the same
   pure judge the panel used, so a stored verdict can never disagree with the numbers beside it —
   and re-judging historic rows under a corrected rule is possible. Changing the judge's _algorithm_
