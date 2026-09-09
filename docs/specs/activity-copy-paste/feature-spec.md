@@ -1,6 +1,6 @@
 # Feature Spec: Activity copy, paste and duplicate
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Accepted — shipped; ADR-0081 records this epic as the subject of its finding, not as its origin
 - **Author(s):** feature-analyst (Claude Code), with James Ewbank
 - **Date:** 2026-08-07
 - **Tracking issue / epic:** _(to be opened)_

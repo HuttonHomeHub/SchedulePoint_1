@@ -1,6 +1,6 @@
 # Feature Spec: TSLD toolbar & canvas refinements
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0056)
 - **Author:** feature-analyst
 - **Date:** 2026-07-27
 - **Roadmap link:** TSLD workspace quality (continuation of the ADR-0031 toolbar surface)

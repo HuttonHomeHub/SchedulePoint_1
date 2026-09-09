@@ -15,8 +15,7 @@
 > (b) changes what the feature is — a read model over two computed snapshots, with no causal claim
 > and no change vocabulary at all.
 
-- **Status:** **Awaiting the product owner's approval.** §6's four critical questions are answered,
-  the six specialist reviews are folded, and the two scope decisions are taken (§4.5).
+- **Status:** Accepted — shipped (ADR-0125) — the programme, continued by ADR-0126, ADR-0127 and ADR-0129
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-03
 - **Tracking issue / epic:** _(to be opened on approval)_

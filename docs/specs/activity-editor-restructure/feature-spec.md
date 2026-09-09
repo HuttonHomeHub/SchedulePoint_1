@@ -1,7 +1,6 @@
 # Feature Spec: Activity editor restructure (tabbed editor, per-scope save)
 
-- **Status:** Draft — critical questions answered 2026-07-28 (§1 "Resolved decisions"); awaiting
-  approval of the revised plan
+- **Status:** Accepted — shipped (ADR-0060)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-07-28
 - **Tracking issue / epic:** _(none yet)_

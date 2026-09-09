@@ -1,6 +1,6 @@
 # Feature Spec: Workspace modes — the mode cluster, three bands, and a `⋯` that empties
 
-- **Status:** Draft — **awaiting product-owner approval**
+- **Status:** Accepted — shipped (ADR-0091)
 - **Author(s):** Claude Code (feature-analyst), for James Ewbank
 - **Date:** 2026-08-12
 - **Tracking issue / epic:** _(to be raised)_

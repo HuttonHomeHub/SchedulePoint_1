@@ -1,6 +1,6 @@
 # Feature Spec: A spec header states its approval, and a citation is what closes it
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Approved — by the product owner, 2026-09-09 (“Approved — build it”)
 - **Author(s):** feature-analyst (Claude)
 - **Date:** 2026-09-09
 - **Tracking issue / epic:** —

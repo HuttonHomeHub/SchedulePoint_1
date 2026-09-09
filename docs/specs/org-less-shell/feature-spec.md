@@ -18,7 +18,7 @@
 > same core design independently — which is the part that makes it worth having — and found four
 > things the implementation had missed.
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0104) — written after the build, which is ADR-0105
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-22
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` **#165 finding (a)**

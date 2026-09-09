@@ -5,9 +5,9 @@ Stages 1–4 of docs/PROCESS.md. Stage 5 lives in implementation-plan.md.
 
 # Feature Spec: the Seed Catalogue & Test Playbook
 
-**Status:** Proposed — awaiting approval
-**Owner:** product owner (decisions recorded in §1 Open questions)
-**Date:** 2026-07-31
+- **Status:** Accepted — shipped (ADR-0066)
+  **Owner:** product owner (decisions recorded in §1 Open questions)
+  **Date:** 2026-07-31
 
 ---
 

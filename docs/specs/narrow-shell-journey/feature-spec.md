@@ -1,9 +1,8 @@
 # Feature Spec — the narrow-shell journey (`docs/TECH_DEBT.md` #172)
 
-**Status:** Approved with the correctness programme (product owner, 2026-08-28: "polish, improve
-and ensure features are correct rather than new features" — #172 is Phase 2's first row).
-**Author:** correctness programme, Phase 2. **ADR-0105 trigger:** a new Playwright config and CI
-step — which is why this spec exists before the journey does.
+- **Status:** Approved — with the correctness programme (product owner, 2026-08-28: “polish, improve and test”)
+  **Author:** correctness programme, Phase 2. **ADR-0105 trigger:** a new Playwright config and CI
+  step — which is why this spec exists before the journey does.
 
 ## 1. Business understanding
 

@@ -1,6 +1,6 @@
 # Feature Spec: Canvas axis markers — the date pills leave the scene
 
-- **Status:** Draft (approved for planning by the product owner; see §1 "Approval state")
+- **Status:** Accepted — shipped (ADR-0106)
 - **Author(s):** feature-analyst, from a `ui-architect` pass over `docs/TECH_DEBT.md` #148
 - **Date:** 2026-08-22
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #148

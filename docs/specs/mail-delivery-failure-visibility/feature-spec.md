@@ -1,6 +1,6 @@
 # Feature Spec: Mail delivery failure — who finds out, and when
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Accepted — shipped (ADR-0075)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-05
 - **Tracking issue / epic:** — (the open half of `docs/TECH_DEBT.md` #94)

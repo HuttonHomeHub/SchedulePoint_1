@@ -27,7 +27,7 @@
 > what "designed" means** — a second document answering that question is how two documents end up
 > disagreeing.
 
-- **Status:** Draft — awaiting approval. Twice superseded in scope on 2026-08-18; see §0.
+- **Status:** Accepted — its D1 diagnosis and the `--destructive-hover` fix shipped through ADR-0097; the default flip it proposed was overtaken by that ADR’s single-theme collapse and by ADR-0102
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-18
 - **Related ADR(s):** ADR-0055, ADR-0077, ADR-0074 (the two-file seam), ADR-0088 (a `VITE_` flag is

@@ -1,6 +1,6 @@
 # Feature Spec: Plan workspace redesign — "Drafting Table"
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0109)
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-24
 - **Tracking issue / epic:** _(to be raised)_

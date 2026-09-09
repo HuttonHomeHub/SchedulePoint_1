@@ -1,6 +1,6 @@
 # Feature Spec: Activity dialog unification — one field vocabulary for create and edit
 
-- **Status:** Draft **rev 3** — **awaiting approval**
+- **Status:** Accepted — shipped (ADR-0089)
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-11
 - **Tracking issue / epic:** TBD

@@ -1,6 +1,6 @@
 # Feature Spec: Two mode switches, named as two
 
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Accepted — shipped (ADR-0119)
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-30
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` **#201**

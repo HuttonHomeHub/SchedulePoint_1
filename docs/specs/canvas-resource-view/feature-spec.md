@@ -1,6 +1,6 @@
 # Feature Spec: Stage E — Resource view on the canvas
 
-- **Status:** Draft (awaiting approval)
+- **Status:** Accepted — shipped (ADR-0049)
 - **Author(s):** feature-analyst (Claude Code)
 - **Date:** 2026-07-20
 - **Tracking issue / epic:** _TBD_ — Canvas toolbar/workspace programme, Stage E

@@ -1,7 +1,6 @@
 # Feature Spec: TSLD canvas authoring flow & link routing quality
 
-- **Status:** **Delivered** — M1–M3 landed and released in `web-v0.62.0` (2026-07-31). Approved
-  2026-07-30; ADR-0064 and ADR-0065 are both Accepted, and **both flags shipped default-on**.
+- **Status:** Accepted — shipped (ADR-0064 and ADR-0065), both flags default-on.
   Where the body below says a flag is "default-off", it is recording the state at **introduction**
   — every flag in this repo starts off and is flipped in its own enablement task (T13 for
   `VITE_CANVAS_AUTHORING_FLOW`, T21 for `VITE_CANVAS_LINK_ROUTING`). The ADRs, not this spec, are

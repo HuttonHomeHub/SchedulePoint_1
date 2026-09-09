@@ -1,6 +1,6 @@
 # Feature Spec: The probe sweep, and a console that reads a sitting
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Accepted — shipped (ADR-0130)
 - **Author(s):** feature-analyst (Claude)
 - **Date:** 2026-09-09
 - **Tracking issue / epic:** —

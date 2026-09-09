@@ -1,6 +1,6 @@
 # Feature Spec: Per-assignment lag across all three resource surfaces
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Accepted — shipped (ADR-0071)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-02
 - **Tracking issue / epic:** _(to be raised)_

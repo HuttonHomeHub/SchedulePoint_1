@@ -1,6 +1,6 @@
 # Feature Spec: External-Guest per-plan share link (Stage F)
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0051)
 - **Author(s):** feature-analyst
 - **Date:** 2026-07-21
 - **Tracking issue / epic:** _tbd_ — Stage F of the staged toolbar programme (A→B→C1→D→E→C2→**F**)

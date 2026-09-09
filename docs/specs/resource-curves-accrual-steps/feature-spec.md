@@ -1,6 +1,6 @@
 # Feature Spec: Resource loading curves, cost accrual & weighted activity steps (M7 rung 5)
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0044)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-07-18
 - **Tracking issue / epic:** #TBD

@@ -1,6 +1,6 @@
 # Feature Spec: Data retention enforcement (the retention sweep)
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0087)
 - **Author(s):** feature-analyst
 - **Date:** 2026-08-10
 - **Tracking issue / epic:** —

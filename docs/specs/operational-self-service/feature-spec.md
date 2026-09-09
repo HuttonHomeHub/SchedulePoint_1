@@ -14,8 +14,8 @@
 
 # Feature Spec: Operational self-service
 
-> **Status:** Draft — awaiting approval (docs/PROCESS.md stage 1–4). **No application code is
-> written until this and the implementation plan are approved.**
+- **Status:** Draft — awaiting approval (docs/PROCESS.md stage 1–4). **No application code is written from this document until it is approved.**
+
 > **Date:** 2026-08-09
 > **Origin:** the product owner, on being handed a three-step host runbook: _"rather than doing all
 > these steps myself, can we build them into the app so they can run themselves for results, and
