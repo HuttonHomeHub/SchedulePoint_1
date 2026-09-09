@@ -1,6 +1,6 @@
 # Feature Spec: Better Auth 1.7 — account identity scoped by issuer
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0107)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-23
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #176

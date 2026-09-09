@@ -1,6 +1,6 @@
 # Implementation Plan: Two mode switches, named as two
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) (Draft — **not yet approved**)
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft — awaiting product-owner approval
 - **Owner:** unassigned
 - **Register row:** `docs/TECH_DEBT.md` #201

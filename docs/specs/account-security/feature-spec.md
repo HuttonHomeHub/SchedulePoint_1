@@ -1,6 +1,6 @@
 # Feature Spec: Account security — recovery, verification enforcement, and a Content-Security-Policy
 
-- **Status:** Draft — awaiting product-owner approval
+- **Status:** Accepted — shipped (ADR-0074)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-04
 - **Tracking issue / epic:** _(to be raised on approval)_

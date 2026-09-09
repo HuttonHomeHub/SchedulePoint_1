@@ -1,6 +1,6 @@
 # Feature Spec: Workspace chrome fit — one header row, one bottom band, one label treatment
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0110)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-25
 - **Tracking issue / epic:** _(to be assigned)_

@@ -1,6 +1,6 @@
 # Feature Spec: Revision Compare across two imported revisions
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0129)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-08
 - **Tracking issue / epic:** _(to be opened on approval)_

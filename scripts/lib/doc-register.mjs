@@ -158,6 +158,55 @@ export function fieldValue(body, field) {
 }
 
 /**
+ * The value of a `**Field:**` header line **as the spec estate really writes it**, or `null`.
+ *
+ * **This is not {@link fieldValue}, and widening that function was the wrong move rather than the
+ * lazy one.** `fieldValue` anchors on a bare `**Field:**` at column 0, and its docblock is emphatic
+ * that the anchor is its only guard — correctly, because `docs/TECH_DEBT.md` rows are written that
+ * way and two real declarations were once eaten by a broader rule. Measured across the 91 spec
+ * documents at M0, that form is **2 of 91**: 87 are `- **Status:**` and 2 are `> **Status:**`. So
+ * `fieldValue` used here would read two files and report confidently on the other eighty-nine —
+ * ADR-0124's Finding 0, which is a generous reader agreeing with itself.
+ *
+ * Two readers with two anchors, then, each pinned by fixtures, rather than one reader with a
+ * loosened anchor that changes a shipped gate's behaviour. `check:debt-status` is unaffected by
+ * construction: it does not call this.
+ *
+ * **What it accepts**, and nothing else:
+ * - `**Field:** value` — bare, at column 0
+ * - `- **Field:** value` / `* **Field:** value` — a top-level list item
+ * - `> **Field:** value` — a top-level block quote
+ *
+ * **What it refuses, and why each matters:**
+ * - an **indented** `  - **Field:**` — a nested list item is a detail of some other bullet, not a
+ *   declaration. The column-0 rule is inherited from `fieldValue` deliberately.
+ * - the field named **mid-sentence** — prose does not begin a line with the field.
+ * - anything inside a fence — the caller passes {@link stripFences} output; this reader has no
+ *   opinion about fences and must not grow one, or the two will disagree about the same file.
+ *
+ * **First match wins, and there is no line anchor.** Both are requirements rather than
+ * conveniences, on M0's evidence: 84 of the 91 status lines sit at line 3 and the rest at 8, 8, 9,
+ * 17, 18, 21 and 30, so a line anchor would miss seven; and `one-row-header/feature-spec.md` carries
+ * two `- **Status:**` lines — one for the spec at :3 and one for an ADR draft embedded at :796 — so
+ * a last-wins reader would report the embedded draft's status as the spec's.
+ *
+ * **The value is returned verbatim, bold and all.** Three specs are headed
+ * `- **Status:** **Draft — awaiting approval.**`, and it is the caller's job to normalise a leading
+ * token, not this reader's. A reader that stripped emphasis would be making a vocabulary decision in
+ * a parser, where nothing could see it.
+ */
+export function headerField(body, field) {
+  // One optional top-level marker, then the field at what is effectively column 0. `\s+` after the
+  // marker rather than `\s*`, so `-**Status:**` — which is not Markdown — is not quietly accepted.
+  const re = new RegExp(`^(?:[-*>]\\s+)?\\*\\*${field}:\\*\\*\\s*(.*)$`);
+  for (const raw of body.split('\n')) {
+    const m = re.exec(raw);
+    if (m) return (m[1] ?? '').trim();
+  }
+  return null;
+}
+
+/**
  * The rows of the first Markdown table under `headingText`, as arrays of trimmed cells.
  *
  * Cells are read **by index**, never by matching text against the whole row — a date in a prose

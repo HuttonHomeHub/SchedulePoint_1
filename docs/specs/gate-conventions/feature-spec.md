@@ -1,6 +1,6 @@
 # Feature Spec: Gate conventions — what a register parser refuses, and what it merely finds
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0124)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-02
 - **Tracking issue / epic:** _to be created_

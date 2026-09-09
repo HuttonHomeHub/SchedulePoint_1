@@ -8,8 +8,11 @@ that keep `main` releasable.
 
 # Implementation Plan: <Feature name>
 
-- **Feature spec:** <link to the approved spec>
-- **Status:** Draft | Approved | In progress | Done
+- **Feature spec:** <link to the spec> — link it plainly, or annotate it with the SAME state the
+  spec's own header holds. `check:spec-status` refuses a plan that says "not yet approved" beside a
+  spec that says `Accepted`; the two files are one artefact and a reader who checks the nearer one
+  should not be misled.
+- **Status:** Draft | Approved | Accepted — shipped (ADR-NNNN) | Superseded | Withdrawn
 - **Owner:** <name>
 
 ## Breakdown

@@ -1,6 +1,6 @@
 # Feature Spec: Audit-log coverage — readable failures, a filtered feed, and which mutations earn a row
 
-- **Status:** Draft — **awaiting approval before implementation**
+- **Status:** Accepted — shipped (ADR-0073)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-04
 - **Tracking issue / epic:** _TBD_ — continuation of the ADR-0072 epic

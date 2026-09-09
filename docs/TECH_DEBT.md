@@ -4057,6 +4057,7 @@ One line each. The story lives where the link points, not here.
 | 252 | `pnpm measure:draw` could not bundle: the seed barrel forced a Node-only module on a browser        | 2026-09-06 | `docs/specs/seed-browser-safe/`. `5a5f00da` moved the fixture tier into `packages/seed` and re-exported it from the barrel; that tier imports `@repo/engine-conformance`, which imports `node:fs`, so importing `scaleSpec` dragged a filesystem reader into a browser bundle and the benchmark this repository quotes for every canvas claim stopped bundling for a day. **No user was ever affected** — nothing under `apps/web/src` imports that package — which is exactly why nothing went red. Fixed additively with subpath exports (`./spec`, `./scale`, `./pairwise`, `./negative`, `./fixture`); the root export is untouched. The `--external:node:*` workaround was **removed**, not left, and the bundle verified to build without it. New gate `pnpm check:browser-safe` bundles every browser-side entry point for a browser and was verified red against the real defect — **and its own first run was wrong**, running esbuild from the repo root where it is unresolvable (a transitive Vite dependency) and reading only `stderr` where pnpm writes to `stdout`, so it failed all four entries while printing a blank, confident diagnosis about a widened barrel. A gate that always fails for a reason it misreports trains a reader to ignore it.                                                                                                                                                                                                                                                                                                                                                   |
 | 231 | `sections()` ended a row at the next SAME-level heading, so a `###` row read its neighbour's fields | 2026-09-02 | ADR-0124 and `docs/specs/gate-conventions/`. A section now ends at the next heading of the same level **or shallower**. The falsification condition predicted at most two moved boundaries and named one; **three** move, and the two it missed by reading are the large ones — `docs/RECONCILE.md`'s "Record the pass" (31 → 5 lines) and a `docs/DECISIONS.md` entry silently swallowing **1,160**. Its second half held exactly, so the repair-then-arm branch did not fire: a moved boundary only matters where a body carried a field belonging to another row, and only this document has a field reader. The fixtures then caught an **off-by-one in the fix itself** — every body kept the heading that terminated it, and both consumer gates still reported byte-identical output, because a heading line is not a column-0 field declaration. The row also named `check:doc-links` as a consumer (it imports only node built-ins) and missed `check:reconcile-due` (which does).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | 227 | Nothing asserted the register's heading form, so it drifted silently                                | 2026-09-02 | ADR-0124. A10, in **two limbs**: the first refuses a misshapen row heading, the second refuses a `###` that is not a row at all — which the first structurally cannot see, since its predicate only fires on lines already shaped like a row. That second case is not cosmetic: after the depth fix, any `###` inside the detailed region **terminates the row it sits in**. Nine repaired, of two kinds — eight rows in an `### #<n> —` form and one sub-heading demoted to `####`. Both limbs verified red. A10 deliberately does **not** narrow what the parser reads: ADR-0120 Finding 0 says a row in the wrong form is still a row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 274 | Fifty-four shipped epics' specs still said they were awaiting approval                              | 2026-09-09 | ADR-0131 and `docs/specs/spec-status-gate/`. A gate, not a sweep — the sweep alone fixes today's fifty-four and guarantees tomorrow's, because `docs/PROCESS.md` names the header as front matter and names no step that revisits it. The predicate is **citation**, and the refinement (cited by an _Accepted_ ADR) was measured and rejected: eleven ADRs are `Proposed` and four are live production surfaces. **Three of this row's own figures did not survive re-measurement** — the population is 91 and not 88 (three epics name their spec `spec.md`), the Draft count is 72 and not 67 (three headers are bold `**Draft — …**`, invisible to a string match), and the cited-Draft figure went 28 → 50 → **54**, each correction upward. Report-only, then swept 66 findings to 0, then armed and **watched failing** rather than assumed. Its own join first found **70 of 72** cited slugs, anchored on `docs/specs/` while ADRs link relatively — caught only because M0 had produced an independent number. **17 Draft specs remain and none is a finding**: no ADR cites them, which is the stated blind spot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 222 | `check:counts` read any "N ADRs" in a gated file as a claim about the repository                    | 2026-09-02 | ADR-0124. An **escape**, not a narrowing: an inline code span marks a mention, fenced blocks stay in scope. The row's own proposed remedy — narrow to "the shape a banner claim takes" — was **rejected on measurement**, because four of the six live claim sites are not in a banner (two inside a fenced repository-layout tree, two in plain prose) and narrowing would have silently stopped checking them: this gate's own failure mode, introduced by the fix for a different one. Measured before arming: 19 matches, **0** inside a code span. The failure message names the escape, so an author meets the remedy when the gate fires.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | 235 | The prepush 0/2/other exit convention collided with `tsc`, which exits 2 for type errors            | 2026-09-02 | ADR-0124. The **default is inverted**: a non-zero exit blocks unless the gate is named in `ADVISORY_GATES`. The earlier fix marked three gates never-advisory, which covers the three somebody thought of and leaves the default on the dangerous side for everything else; inverting makes the residual risk **harmless rather than closed** — an unanticipated exit 2 now blocks — and retires `run_strict` as a special case instead of it being the safe path nobody remembered to take. Measured: all thirteen `check:*` are node, and `report()` is the only producer of a 2. `check:advisory-agreement` asserts the list against the code both ways, reading it out of `prepush.sh` rather than restating it; verified red in both directions, and **its own first run was a false positive** on a test file that merely exercises `report()` — the same class as `#222`, inside the check written about it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | 237 | The journey sweep aggregated nothing, so one `EXIT=1` among forty scrolled past                     | 2026-09-02 | ADR-0124. The sweep ends with a named verdict and a matching exit status, and **refuses an empty population** — every assertion in it is over a list, and an empty list satisfies "nothing failed" perfectly (the ADR-0093 shape). Failures are **named, not counted**: "1 failure" is a number somebody scrolls past. Both branches exercised; the empty-population refusal verified in isolation, since reaching it through the real script requires the derivation itself to break.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -4848,3 +4849,82 @@ of React state lifetime, not by the reason the comment gave. The comment now say
 **It becomes reachable the moment a resume can be started from the stored history**, which is a
 natural companion to #271's cursor. Whatever picks that up owns this: the honest fix is to know
 whether a page was cut rather than to infer it from position, which is what #271 builds.
+
+### 275. A floor above the display's own refresh rate is unreachable, and the probe reports it as FAIL
+
+**Status:** open · **Raised:** 2026-09-09 (product owner, iPhone run on `web-v0.125.1`) · **Size:** S · **Owner:** web
+
+The probe measures the display's idle frame interval, stores it on every row and prints it in the
+block — and **the judge never reads it**. `grep -c idleInterval model/judge.ts` returns **0**. So a
+machine whose display cannot produce as many frames as the floor demands is failed for the display's
+cadence rather than for the painter's cost.
+
+**Observed, not hypothesised.** A run on iOS 18.7 Safari, `web-v0.125.1`, reported
+`idle frame interval 33.00 ms` — a 30 Hz cadence, so an arithmetic ceiling of **30.3 fps**. Against
+that:
+
+| Reading                       | Floor      | Measured | Verdict  | Reachable?                         |
+| ----------------------------- | ---------- | -------- | -------- | ---------------------------------- |
+| `canvas-draw` · 500 · week    | **45 fps** | 30.0     | **FAIL** | **no — 45 > 30.3 by construction** |
+| `revision-diff` · 2000 · week | 30 fps     | 30.0     | **FAIL** | only by rounding luck              |
+
+The second is the sharper one. `p1` passed (delta `+0.00 pp` against a 2.00 pp bar) and the printed
+fps is `30.0`, so `p2` failed on a value fractionally below 30 that the report rounds up — **the
+verdict was decided by the third decimal place of the display's refresh rate.** A floor set exactly
+at a device's ceiling is not a test of the painter; it is a coin toss.
+
+**The probe deliberately accepts such a display.** `MIN/MAX_PLAUSIBLE_INTERVAL_MS` is `3..40`
+(`model/pacing.ts:79-80`), so 33 ms is inside the plausible band on purpose — 30 Hz is a real
+display, not a broken clock. `refuseRun` is therefore right to admit it, and the judge is wrong to
+then hold it to a floor it cannot reach.
+
+**This is `docs/TECH_DEBT.md` #260 mirrored, and the vocabulary for it already exists.** #260 was a
+metric with no room left at the **ceiling**, making a gated delta arithmetically unfailable; this is
+a metric with no room at the **floor**, making an absolute gate arithmetically unpassable. ADR-0130
+D8 keeps INDETERMINATE as a first-class fourth verdict precisely for "this machine cannot answer the
+question", and `judgeAbsolute` already returns it when the repeats straddle the floor. The remedy is
+the same shape: compute the display's ceiling from the measured interval, and return INDETERMINATE —
+naming the ceiling, the floor and the arithmetic — rather than FAIL, whenever the ceiling is at or
+below the floor.
+
+**Why it is not a phone problem.** SchedulePoint is a desktop application and the reading that found
+this was taken for curiosity. But nothing here is about phones: **any** throttled display reaches it
+— macOS Low Power Mode, a laptop on battery, an external panel negotiated at 30 Hz, a remote or
+virtualised session, thermal throttling under a long run. On such a machine the 500-activity floor of
+45 fps is unreachable and the probe currently calls that a failure of the painter. That is a
+confidently wrong answer about somebody's hardware, which is the class ADR-0130's whole epic exists
+to remove.
+
+**One thing the run got right, and it is worth recording as the control.** Every `canvas-draw`
+reading on that device refused with `NON-VACUITY FAILED` — 70 bars where 108 were needed, 259 where
+270 were needed, 762 where 1080 were needed — because a 750×390 CSS viewport culls almost everything.
+That is the probe working exactly as ADR-0066 intended: it declined to produce a flattering number
+about a nearly-empty canvas. The contrast is the argument for this row — the same run refuses
+honestly where it cannot measure, and then fails a machine for a floor it was never able to reach.
+
+### 276. A failing gate's log is tailed to 12 lines, and three test files now share one gate
+
+**Status:** open · **Raised:** 2026-09-09 (devops review, ADR-0131 M3-T1) · **Size:** S · **Owner:** repo
+
+`scripts/prepush.sh:108,112` truncates a failing gate's captured output to `tail -12`.
+`check:doc-register` now chains **three** independent test files with `&&` —
+`doc-register.test.mjs`, `check-reconcile-due.test.mjs` and `check-spec-status.test.mjs`. Each keeps
+running past a failing case (`process.exitCode = 1` rather than throwing) and prints its own named
+summary, so **CI is unaffected**: the full log carries every `✗ <case>` line and every summary line,
+and which file failed is unambiguous.
+
+**Locally it can go ambiguous in one direction only.** If the first or second file fails, `&&`
+short-circuits and the third never runs — its absence from the log is itself informative, and
+nothing claims it passed. If the **third** file fails with more than about five cases red, its own
+`✗` lines push the two earlier scripts' one-line successes out of the 12-line tail, so a reader
+cannot tell from `prepush` output alone which stage even ran.
+
+**Not changed here, deliberately.** `scripts/prepush.sh` is a shared gate, so altering what
+"prepush green" means fires ADR-0105's trigger and wants its own spec — the same reason `#191` was
+filed rather than fixed. The property is also **pre-existing**: `check:doc-register` already chained
+two files before ADR-0131 added the third, which compounds it without introducing it.
+
+**The remedy when it is picked up** is one of two, and the choice is the decision: widen the tail on
+failure (or print the whole log, which is what a reader wants at the moment a gate fails), or give
+the new suite its own `check:*` key — which costs a second CI step, the trade M3-T1 deliberately
+declined. Do not do both.

@@ -1,6 +1,6 @@
 # Implementation Plan: Mail delivery failure — who finds out, and when
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft
 - **Owner:** unassigned (product owner to confirm)
 

@@ -1,6 +1,6 @@
 # Feature Spec: Append-only audit log
 
-- **Status:** Draft (awaiting approval)
+- **Status:** Accepted — shipped (ADR-0072)
 - **Author(s):** feature-analyst (Claude Code), building on a design pass by database-architect
 - **Date:** 2026-08-03
 - **Tracking issue / epic:** _TBD_

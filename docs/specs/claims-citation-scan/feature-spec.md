@@ -1,6 +1,6 @@
 # Feature Spec: `check:claims` — the citation scan sees more than JavaScript
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0076)
 - **Author(s):** feature-analyst
 - **Date:** 2026-09-02
 - **Tracking issue / epic:** `docs/TECH_DEBT.md` #240

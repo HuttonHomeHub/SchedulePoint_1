@@ -1,6 +1,6 @@
 # Implementation Plan: Undoing a phase delete
 
-- **Feature spec:** [./feature-spec.md](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [./feature-spec.md](./feature-spec.md) — Draft
 - **Status:** Draft — awaiting approval
 - **Owner:** unassigned
 - **Register row:** `docs/TECH_DEBT.md` #230

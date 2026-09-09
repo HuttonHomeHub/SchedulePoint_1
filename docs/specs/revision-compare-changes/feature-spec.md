@@ -1,7 +1,6 @@
 # Feature Spec: Revision Compare — the change list and the change picture (tiers 1 and 2)
 
-- **Status:** **Draft — awaiting the product owner's approval.** Three critical questions in §6.
-  Everything else has a stated default and is not blocking.
+- **Status:** Accepted — shipped (ADR-0127)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-09-06
 - **Tracking issue / epic:** _(to be opened on approval)_

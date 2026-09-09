@@ -1,6 +1,6 @@
 # Feature Spec: Notes (threaded annotations on plans & activities)
 
-- **Status:** Draft (awaiting approval)
+- **Status:** Accepted — shipped (ADR-0046)
 - **Author(s):** feature-analyst (Claude Code)
 - **Date:** 2026-07-19
 - **Tracking issue / epic:** _TBD_

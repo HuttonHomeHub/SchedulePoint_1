@@ -1,6 +1,6 @@
 # Implementation Plan: Schedule interchange (XER + MS Project import)
 
-- **Feature spec:** `docs/specs/schedule-interchange/feature-spec.md` (Stage C2; awaiting approval)
+- **Feature spec:** `docs/specs/schedule-interchange/feature-spec.md` — Accepted (Stage C2)
 - **Status:** Draft
 - **Owner:** TBD
 

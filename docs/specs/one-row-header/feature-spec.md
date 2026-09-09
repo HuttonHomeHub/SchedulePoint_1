@@ -1,6 +1,6 @@
 # Feature Spec: The one-row header
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Accepted — shipped (ADR-0112)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-26
 - **Tracking issue / epic:** _(none yet)_

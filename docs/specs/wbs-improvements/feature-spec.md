@@ -1,6 +1,6 @@
 # Feature Spec: WBS improvements — parent-side membership, dissolve, the implicit bucket, and the pinned WBS band
 
-- **Status:** Draft — **awaiting approval**
+- **Status:** Accepted — shipped (ADR-0063)
 - **Author(s):** feature-analyst (Claude Code), with James Ewbank
 - **Date:** 2026-07-30
 - **Tracking issue / epic:** _(to be opened)_

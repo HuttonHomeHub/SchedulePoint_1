@@ -1,6 +1,6 @@
 # Implementation Plan: Stacked resource histogram
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Status:** Draft — awaiting approval before implementation
 - **Owner:** _(unassigned)_
 

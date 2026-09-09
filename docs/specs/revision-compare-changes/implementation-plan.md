@@ -1,6 +1,6 @@
 # Implementation Plan: Revision Compare — the change list and the change picture (tiers 1 and 2)
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **Draft, awaiting approval**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Accepted
 - **Falsification conditions:** [`./m0-condition.md`](./m0-condition.md) — committed in its own
   commit **before** any harness exists
 - **Status:** Draft

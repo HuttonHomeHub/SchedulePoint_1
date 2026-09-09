@@ -1,6 +1,6 @@
 # Feature Spec: The calendar shift-pattern editor & the exception-window half of ADR-0036
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0067)
 - **Author(s):** feature-analyst (with James Ewbank)
 - **Date:** 2026-08-01
 - **Tracking issue / epic:** _(to be raised)_

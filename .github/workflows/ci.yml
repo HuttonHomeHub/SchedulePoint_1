@@ -78,6 +78,17 @@ jobs:
       - name: Check the tech-debt register
         run: pnpm check:debt-status
 
+      # A spec header is the first thing a reader sees, and most of them asserted that the live
+      # surface underneath had never been approved to build. Nobody was negligent: `docs/PROCESS.md`
+      # names the header as front matter and names no step that revisits it, so it drifted by being
+      # nobody's step (ADR-0058 → the gate replaces the vigilance). ADR-0105 makes the header
+      # load-bearing rather than cosmetic — it is where a reader learns whether stages 1-4 were
+      # completed for the work they are about to change. The rule, not a count, because a count in
+      # a comment goes stale the first time somebody files an ADR: a spec directory an ADR cites may
+      # not be headed Draft. Needs no database and no credentials.
+      - name: Check spec approval status
+        run: pnpm check:spec-status
+
       # The playbook says which plan proves what. Its rows name plans by id, and a row pointing at
       # a plan that no longer exists sends a reader to seed nothing and conclude the feature is
       # broken. The reverse — a plan nobody documented — is worse: it gets seeded, looks plausible

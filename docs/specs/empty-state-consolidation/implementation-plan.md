@@ -1,6 +1,6 @@
 # Implementation Plan: Empty-state consolidation
 
-- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — **not yet approved**
+- **Feature spec:** [`./feature-spec.md`](./feature-spec.md) — Draft
 - **Status:** Draft — awaiting product-owner approval
 - **Owner:** unassigned
 

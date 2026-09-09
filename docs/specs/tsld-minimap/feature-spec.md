@@ -1,6 +1,6 @@
 # Feature Spec: TSLD canvas minimap
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0100)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-08-20
 - **Tracking issue / epic:** _(none yet)_

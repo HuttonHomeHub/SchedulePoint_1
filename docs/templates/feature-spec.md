@@ -6,7 +6,7 @@ in. Delete guidance comments. NO application code is written at this stage.
 
 # Feature Spec: <Feature name>
 
-- **Status:** Draft | In review | Approved | Superseded
+- **Status:** Draft | Approved | Accepted — shipped (ADR-NNNN) | Superseded | Withdrawn
 - **Author(s):** <name(s)>
 - **Date:** YYYY-MM-DD
 - **Tracking issue / epic:** #

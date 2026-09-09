@@ -1,6 +1,6 @@
 # Feature Spec: Schedule interchange (XER + MS Project import)
 
-- **Status:** Draft (awaiting approval)
+- **Status:** Accepted — shipped (ADR-0050)
 - **Author(s):** feature-analyst (Product Owner / Solution Architect / Technical Lead hats)
 - **Date:** 2026-07-20
 - **Tracking issue / epic:** TBD (toolbar-placeholder burn-down — **Stage C2**)

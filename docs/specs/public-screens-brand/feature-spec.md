@@ -1,6 +1,6 @@
 # Feature Spec: The public screens — brand surface, and the four blocking defects
 
-- **Status:** Draft — awaiting approval
+- **Status:** Accepted — shipped (ADR-0077)
 - **Author(s):** feature-analyst (consolidating a prior ui-architect and ux-reviewer pass)
 - **Date:** 2026-08-06
 - **Tracking issue / epic:** _(to be raised)_
