@@ -1,5 +1,12 @@
 # @repo/web
 
+## 0.125.2
+
+### Patch Changes
+
+- [#502](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/502) [`f50e400`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/f50e40036a66e283dc88c83f7c028e6d66b0f5ef) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - No user-visible change. Repository tooling: `check:spec-status` makes a spec document's approval
+  state a computed rule rather than a remembered one (ADR-0131).
+
 ## 0.125.1
 
 ### Patch Changes
