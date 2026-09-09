@@ -22,6 +22,8 @@ import { ProbeHistory } from './probe-history';
 const row = (over: Partial<ProbeResultRow> = {}): ProbeResultRow => ({
   id: 'r1',
   runId: 'run-1',
+  sweepId: null,
+  framesPerPhase: 180,
   recordedAt: '2026-09-08T18:00:00.000Z',
   recordedByLabel: 'owner',
   scenarioId: 'canvas-draw',

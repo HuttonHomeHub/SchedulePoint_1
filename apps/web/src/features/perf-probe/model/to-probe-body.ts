@@ -62,6 +62,10 @@ export function toProbeBody(
     lostFocusDuringRun: context.lostFocusDuringRun,
     machineLabel,
     appVersion: context.appVersion,
+    // The protocol this reading ran at, taken from the run's own context. NOT inferred from
+    // `samples.length`: that would derive a stored fact from a client-side constant, and a reading
+    // whose protocol is unknown should say so rather than be given a plausible one.
+    framesPerPhase: context.frames,
     limbs: outcome.limbs.map(toLimb),
   };
 }

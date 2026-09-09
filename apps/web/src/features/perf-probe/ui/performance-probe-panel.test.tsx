@@ -25,8 +25,13 @@ const runProbe = vi.fn<(input?: unknown) => Promise<ProbeOutcome>>();
 const recordMutate = vi.fn();
 const recordState = { isPending: false, isError: false, isSuccess: false };
 const historyRows: unknown[] = [];
+const refreshHistory = vi.fn();
+
 vi.mock('../api/probe-results', () => ({
   useRecordProbeResult: () => ({ mutate: recordMutate, ...recordState }),
+  // The history refresh is now the SITTING's rather than the row's, so the panel asks for it
+  // explicitly. Mocked as a spy so the "one refetch per sitting" rule is assertable here.
+  useRefreshProbeResults: () => refreshHistory,
   useProbeResults: () => ({
     isPending: false,
     isError: false,
@@ -633,5 +638,54 @@ describe('PerformanceProbePanel', () => {
     expect(run).not.toBeDisabled();
     expect(run).toHaveAttribute('aria-disabled', 'true');
     release(measured('PASS'));
+  });
+});
+
+/**
+ * One refetch per sitting, not one per stored row.
+ *
+ * **This is a cost, not tidying.** A sweep POSTs once per step, and the history read is an AUDITED
+ * act — so invalidating inside the mutation writes four extra `staff.panel_read` rows into a table
+ * that refuses `DELETE` (ADR-0072) for one press, recording nothing but the client's own impatience.
+ *
+ * The property that must survive any rearrangement is the other one: a single run still refreshes,
+ * because a single run IS a one-step sitting. Its failure mode is a stored reading the operator
+ * cannot see, which reads as a lost measurement.
+ */
+describe('the history refresh', () => {
+  it('happens exactly once for a single run, and only after the store succeeds', async () => {
+    refreshHistory.mockClear();
+    recordMutate.mockImplementation((_body: unknown, opts?: { onSuccess?: () => void }) =>
+      opts?.onSuccess?.(),
+    );
+    runProbe.mockResolvedValue(measured('PASS'));
+
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    await waitFor(() => {
+      expect(recordMutate).toHaveBeenCalled();
+    });
+    expect(refreshHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh when nothing was stored', async () => {
+    // A refusal stores nothing, so there is nothing new to see and no audited read to spend.
+    refreshHistory.mockClear();
+    recordMutate.mockClear();
+    runProbe.mockResolvedValue({
+      kind: 'refused',
+      refusal: { reason: 'TAB_HIDDEN', sentence: 'The tab was hidden.' },
+      context: CONTEXT,
+    });
+
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // Two channels carry it — the visible alert and the panel's live region — which is
+    // `docs/TECH_DEBT.md` #259 item 10, filed and not this milestone's subject.
+    await screen.findAllByText(/The run was refused/);
+    expect(recordMutate).not.toHaveBeenCalled();
+    expect(refreshHistory).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,11 @@
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import { useProbeResults, useRecordProbeResult } from '../api/probe-results';
+import {
+  useProbeResults,
+  useRecordProbeResult,
+  useRefreshProbeResults,
+} from '../api/probe-results';
 import type { Verdict } from '../model/judge';
 import {
   SCENARIOS,
@@ -62,6 +66,7 @@ export function PerformanceProbePanel(): React.ReactElement {
 
   const record = useRecordProbeResult();
   const history = useProbeResults();
+  const refreshHistory = useRefreshProbeResults();
 
   const runButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
@@ -120,9 +125,13 @@ export function PerformanceProbePanel(): React.ReactElement {
     (result: ProbeOutcome) => {
       const body = toProbeBody(result, machineLabel.trim() === '' ? null : machineLabel.trim());
       if (body === null) return;
-      record.mutate(body);
+      // **The refresh is the SITTING's, not the row's** — see `useRefreshProbeResults`. A single
+      // run is a one-step sitting, so it refreshes exactly once here; a sweep will refresh once
+      // when its last step settles rather than once per POST. The property to preserve if this is
+      // ever rearranged: a stored reading the operator cannot see reads as a lost measurement.
+      record.mutate(body, { onSuccess: () => refreshHistory() });
     },
-    [machineLabel, record],
+    [machineLabel, record, refreshHistory],
   );
 
   const start = useCallback(async () => {
