@@ -59,7 +59,85 @@ const differenceLimb: LimbOutcome = {
   result: { kind: 'unjudgeable', message: 'NOTHING TO JUDGE' },
 };
 
+/**
+ * The shape the **runner** produces, which is not the shape the API declares.
+ *
+ * `scenes/revision-diff.ts`'s `PacingResult` carries a fifth field — `frames`, the count actually
+ * achieved — and `scenes/canvas-draw.ts`'s does not. Structural typing let it through, because an
+ * excess property is only an error on a fresh object literal, so it reached the wire and the global
+ * pipe's `forbidNonWhitelisted: true` answered every `revision-diff` reading with
+ * `422 … property frames should not exist`. Measured, and never once stored, from the day that
+ * scenario shipped.
+ *
+ * **`PAIR` above is why no test caught it**: it was written from the DTO, so it is four fields, and
+ * a fixture that is a shape the real producer does not produce can only ever confirm the adapter
+ * against itself. The cast below is the point of this fixture rather than a convenience.
+ */
+const PAIR_AS_MEASURED = {
+  baseline: { frames: 179, droppedPct: 0.5, intervalP50: 16.6, intervalP95: 17, fps: 60 },
+  treatment: { frames: 178, droppedPct: 1.2, intervalP50: 16.7, intervalP95: 18, fps: 59 },
+} as unknown as typeof PAIR;
+
 describe('toProbeBody', () => {
+  /**
+   * **Every window on the wire carries exactly the four fields the API declares.**
+   *
+   * Verified red against the previous adapter, which forwarded the runner's objects untouched: it
+   * emitted a fifth key and this assertion named it. The assertion is on the KEY SET rather than on
+   * the absence of `frames`, because the next scene to grow a field would otherwise reintroduce the
+   * defect with this test still green — which is how it got here the first time.
+   */
+  it('rebuilds each measured window, so no scene can put an extra field on the wire', () => {
+    const limb: LimbOutcome = {
+      ...differenceLimb,
+      recording: { ...differenceLimb.recording, pairs: [PAIR_AS_MEASURED] },
+    };
+
+    const body = toProbeBody({ kind: 'measured', context: CONTEXT, limbs: [limb] }, null);
+    const pair = body?.limbs[0]?.pairs?.[0];
+
+    expect(Object.keys(pair?.baseline ?? {}).sort()).toEqual([
+      'droppedPct',
+      'fps',
+      'intervalP50',
+      'intervalP95',
+    ]);
+    expect(Object.keys(pair?.treatment ?? {}).sort()).toEqual([
+      'droppedPct',
+      'fps',
+      'intervalP50',
+      'intervalP95',
+    ]);
+    // The figures still arrive — the rebuild strips a field, it does not launder the numbers.
+    expect(pair?.baseline.fps).toBe(60);
+    expect(pair?.treatment.intervalP95).toBe(18);
+  });
+
+  it('rebuilds an absolute limb’s runs on the same rule', () => {
+    const limb: LimbOutcome = {
+      ...differenceLimb,
+      recording: {
+        limbKind: 'absolute',
+        activityCount: 2160,
+        edgeCount: 3200,
+        counts: { visibleBars: 222 },
+        thresholds: { minFps: 30, gated: true, source: 'ADR-0026 §9' },
+        runs: [PAIR_AS_MEASURED.baseline],
+      },
+    };
+
+    const body = toProbeBody({ kind: 'measured', context: CONTEXT, limbs: [limb] }, null);
+
+    // `canvas-draw` does not carry the extra field today, and that is exactly why this case exists:
+    // the two scenes differed, only one was ever stored, and nothing said the rule applied to both.
+    expect(Object.keys(body?.limbs[0]?.runs?.[0] ?? {}).sort()).toEqual([
+      'droppedPct',
+      'fps',
+      'intervalP50',
+      'intervalP95',
+    ]);
+  });
+
   it('returns null for a refused run, because nothing was measured', () => {
     const outcome: ProbeOutcome = {
       kind: 'refused',

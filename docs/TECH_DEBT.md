@@ -3960,6 +3960,49 @@ instead of reporting a green that proved nothing. **Physical order is not someth
 hold**, so the pure unit spec is the gate and the e2e case is a capability proof — the first time
 anything here has restored a cascade batch end to end.
 
+### 269. A failed store says it failed and never why, and offers a Retry that some failures cannot use
+
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M5) · **Size:** S · **Owner:** web
+
+The performance panel renders one sentence for a reading that was measured and not stored — "These
+figures were measured but NOT recorded." — beside a **Retry recording** button. That copy is right
+for the case it was written for, a dropped socket or a 500, where pressing the button is exactly
+what an operator should do.
+
+It is wrong for a **4xx**. A 422 means the client sent a body the server refuses; the same body
+will be refused again, so the panel is inviting an operator to press a button that cannot work, and
+saying nothing that would let them tell the two situations apart. This is not hypothetical — it is
+how a real defect stayed invisible: every `revision-diff` reading had been answered
+`422 … property frames should not exist` since that scenario shipped, and the panel reported it in
+the same words it uses for a network blip. The diagnosis came from a journey reading the response,
+not from anything on screen.
+
+The fix that removed the 422 does not remove this. Two things are wanted and neither is large: the
+status (or a sentence derived from it) carried into the alert, and **Retry** withheld — with a
+reason, per ADR-0082 — where the failure is one a retry structurally cannot clear. What makes it a
+row rather than a fast-follow is that "which statuses are retryable?" is a decision, not an
+implementation detail: a 429 is a 4xx and _is_ worth retrying, after a wait.
+
+### 270. The frame count a run actually achieved is measured, carried, and then discarded
+
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M5) · **Size:** S · **Owner:** api
+
+`scenes/revision-diff.ts`'s `PacingResult` carries `frames` — the number of intervals the window
+really produced — and `toProbeBody` now drops it at the boundary, because the API declares four
+fields per window and rejects a fifth. That was the right immediate answer (the alternative was a
+schema change smuggled into a client fix) and it loses a real fact.
+
+M4's `frames_per_phase` records the budget a run was **asked** for. `frames` records what it
+**managed**. On a healthy machine they agree; on a stalled one they do not, and the difference is
+precisely the kind of evidence `docs/TECH_DEBT.md` #75 has been waiting for — a reading whose window
+ran short is a reading whose figures deserve less weight, and nothing stored today can say so.
+
+`canvas-draw` does not compute it at all, so closing this means deriving it in both scenes, adding a
+nullable column (**through `database-architect`**, per CLAUDE.md §19.3), and widening the DTO — a
+milestone-sized slice rather than a follow-up commit. Until then the honest position is the one that
+shipped: the field is not stored, rather than stored for one scenario and null for the other with
+nothing saying which.
+
 ### 268. An e2e suite's coverage was bounded by a throttle counter it shared between tests
 
 **Status:** open · **Raised:** 2026-09-09 (probe-sweep M4) · **Size:** S · **Owner:** repo

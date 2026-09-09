@@ -5,6 +5,7 @@ import {
   type UseMutationResult,
   type UseQueryResult,
 } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 import { apiFetch } from '@/lib/api/client';
 
@@ -12,6 +13,10 @@ import { apiFetch } from '@/lib/api/client';
 export interface ProbeResultRow {
   id: string;
   runId: string;
+  /** NULL means this reading was a single press, not that a sitting is missing. */
+  sweepId: string | null;
+  /** NULL means not recorded — see the column's own docblock in `schema.prisma`. */
+  framesPerPhase: number | null;
   recordedAt: string;
   recordedByLabel: string | null;
   scenarioId: string;
@@ -46,6 +51,22 @@ export interface ProbeResultBody {
   scenarioId: string;
   scenarioVersion: number;
   preset: string;
+  /**
+   * The sitting this press belongs to, when it belongs to one.
+   *
+   * Absent means a single press, which is a fact rather than a gap — the server stores NULL and the
+   * history reads it back as one. **Client-supplied, unlike `runId`**, because only the client knows
+   * that four presses were one sitting: the server holds no state across them.
+   */
+  sweepId?: string | null;
+  /**
+   * The frame budget one phase ran for. Absent on a reading taken before the column existed.
+   *
+   * **Sent from the run's own context, never re-derived here**: it is a property of the protocol
+   * that produced the numbers, and inferring it from `samples.length` would write a fact derived
+   * from a bundle version into a column readers will trust.
+   */
+  framesPerPhase?: number | null;
   viewportWidth: number;
   viewportHeight: number;
   devicePixelRatio: number;
@@ -70,8 +91,36 @@ export interface ProbeLimbBody {
   sceneSummary: string;
   counts: Record<string, number>;
   thresholds: Record<string, number | boolean | string>;
-  pairs?: readonly unknown[];
-  runs?: readonly unknown[];
+  pairs?: readonly ProbePairBody[];
+  runs?: readonly ProbePhaseBody[];
+}
+
+/**
+ * One measured window, **exactly** as the API declares it — four fields and no fifth.
+ *
+ * These two interfaces used to be `readonly unknown[]`, and that was the enabling condition of a
+ * defect the staff journey found on its first run with the sweep driving every scenario: the
+ * `revision-diff` scene's own pacing type carries a fifth field, `frames`, the global pipe runs
+ * `forbidNonWhitelisted: true`, and every reading of that scenario had therefore been answered
+ * `422 … property frames should not exist` since the day it shipped. Measured but never stored —
+ * which is, in as many words, the complaint this epic was opened on.
+ *
+ * The compiler could not have helped while the array said `unknown`, and it can now: `toProbeBody`
+ * builds each of these as a fresh object literal, so an extra property is an excess-property error
+ * at the boundary rather than a 422 on somebody's machine an hour later. That is the point of
+ * naming them here rather than mapping the fields quietly in the adapter.
+ */
+export interface ProbePhaseBody {
+  droppedPct: number;
+  intervalP50: number;
+  intervalP95: number;
+  fps: number;
+}
+
+/** One baseline/treatment pair — a `difference` limb's sample. */
+export interface ProbePairBody {
+  baseline: ProbePhaseBody;
+  treatment: ProbePhaseBody;
 }
 
 const KEY = ['staff', 'probe-results'] as const;
@@ -107,7 +156,6 @@ export function useRecordProbeResult(): UseMutationResult<
   Error,
   ProbeResultBody
 > {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: ProbeResultBody) =>
       apiFetch<ProbeResultRow[]>('/staff/probe-results', {
@@ -115,8 +163,28 @@ export function useRecordProbeResult(): UseMutationResult<
         body: JSON.stringify(body),
       }),
     retry: false,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: KEY });
-    },
+    // **No `onSuccess` invalidation, and that is a cost decision rather than tidying.**
+    //
+    // A sweep POSTs once per step, so invalidating here refetches the history four times for one
+    // press — and this read is an AUDITED act, so those are four extra `staff.panel_read` rows in a
+    // table that refuses `DELETE` (ADR-0072), recording nothing but the client's own impatience.
+    // The refetch moves to `useRefreshProbeResults`, called once when a sitting settles.
+    //
+    // A single run still refreshes, because a single run IS a one-step sweep and goes through the
+    // same completion hook. That is the property to preserve if this is ever changed back: the
+    // failure mode is a stored reading the operator cannot see, which reads as a lost measurement.
   });
+}
+
+/**
+ * Refresh the history once a sitting has settled.
+ *
+ * Separated from the mutation so the count of refetches is a property of the SITTING rather than of
+ * how many rows it happened to write — see the note above.
+ */
+export function useRefreshProbeResults(): () => void {
+  const queryClient = useQueryClient();
+  return useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: KEY });
+  }, [queryClient]);
 }
