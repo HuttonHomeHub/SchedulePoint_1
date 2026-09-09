@@ -245,6 +245,9 @@ const UNAUDITED_ROUTES: Record<string, Reason> = {
   // The revision comparison reads two persisted snapshots and does not call the engine at all.
   // ADR-0073's two tests both say no: nothing durable changes, and it has no blast radius.
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/revision-compare': REASONS.READ,
+  // Its cross-plan sibling, on the same two tests: nothing durable changes, and it has no blast
+  // radius. That it reads TWO plans rather than one changes neither answer.
+  'GET /api/v1/organizations/:orgSlug/cross-plan-revision-compare': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/resource-histogram': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/schedule/summary': REASONS.READ,
   'GET /api/v1/organizations/:orgSlug/plans/:planId/shares': REASONS.READ,

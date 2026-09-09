@@ -153,3 +153,132 @@ export async function seedRevision(
   );
   return { enteringName: 'Cladding', leavingName: 'Frame', removedName: 'Site hoarding' };
 }
+
+export interface SeededCrossPlanPair {
+  /** The OTHER plan's name — what a planner picks under **Compare with**. */
+  otherPlanName: string;
+  /** Coded in both plans, off the critical path in the other and on it here. */
+  enteringName: string;
+  /** Coded in both, on the critical path in the other and off it here. */
+  leavingName: string;
+  /** Coded in the OTHER plan only — it has no bar here, so it gets no activation control. */
+  otherPlanOnlyName: string;
+  /** Coded in THIS plan only. */
+  thisPlanOnlyName: string;
+  /** In this plan with no code at all — neither added nor removed. */
+  uncodedName: string;
+}
+
+/**
+ * Seed **two plans in one project** standing in for two imports of one programme, with a known,
+ * non-empty answer.
+ *
+ * ```
+ *   the OTHER plan (earlier):  A100 Groundworks 10d ──FS──▶ A200 Frame 10d   ← critical
+ *                             A300 Cladding 2d                              ← floats
+ *                             GONE Site hoarding 5d                         ← only here
+ *
+ *   THIS plan (the anchor):   A100 Groundworks 10d ─FS+2d─▶ A200 Frame 10d   ← no longer critical
+ *                             A300 Cladding 40d                            ← now critical
+ *                             NEW  Temporary works 5d                      ← only here
+ *                             (uncoded) Snagging 1d                        ← in neither set
+ * ```
+ *
+ * So the comparison must report **Cladding entered**, **Groundworks and Frame left**, one row
+ * present only in the other plan, one only here, one uncoded — and, because the two plans hold the
+ * same link with a DIFFERENT LAG, one CHANGED link for the overlay to draw.
+ *
+ * **The two plans' activity ids are unrelated**, which is the whole premise: a comparison keyed on
+ * id would report every row of one as removed and every row of the other as added. They are matched
+ * on `code`.
+ *
+ * **A comparison of two identical plans would satisfy every "it rendered" assertion while proving
+ * nothing** — the non-vacuity rule this epic applies to its own measurements, applied here.
+ *
+ * Seeds through the API and does NOT reload; its caller does (`docs/TECH_DEBT.md` #208).
+ */
+export async function seedCrossPlanPair(
+  page: Page,
+  orgSlug: string,
+  anchorPlanId: string,
+): Promise<SeededCrossPlanPair> {
+  const otherPlanName = 'Riverside programme Rev A';
+  await page.evaluate(
+    async ({ slug, anchorPlanId, otherPlanName }) => {
+      const call = async (path: string, method: string, body?: unknown) => {
+        const res = await fetch(`/api/v1/organizations/${slug}${path}`, {
+          method,
+          headers: { 'content-type': 'application/json' },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+        if (!res.ok) throw new Error(`${method} ${path} ${String(res.status)}`);
+        return res.status === 204 ? null : ((await res.json()) as { data: unknown }).data;
+      };
+      const act = (planId: string, name: string, durationDays: number, code?: string) =>
+        call(`/plans/${planId}/activities`, 'POST', {
+          name,
+          durationDays,
+          ...(code === undefined ? {} : { code }),
+        }) as Promise<{ id: string }>;
+
+      // The other plan lives in the SAME project, which is what the picker lists.
+      const anchor = (await call(`/plans/${anchorPlanId}`, 'GET')) as { projectId: string };
+      const other = (await call(`/projects/${anchor.projectId}/plans`, 'POST', {
+        name: otherPlanName,
+        plannedStart: '2026-01-05',
+      })) as { id: string };
+
+      // ── The OTHER plan: the chain is critical, Cladding floats, Site hoarding is only here ──
+      const oa = await act(other.id, 'Groundworks', 10, 'A100');
+      const ob = await act(other.id, 'Frame', 10, 'A200');
+      await act(other.id, 'Cladding', 2, 'A300');
+      await act(other.id, 'Site hoarding', 5, 'GONE');
+      await call(`/plans/${other.id}/dependencies`, 'POST', {
+        predecessorId: oa.id,
+        successorId: ob.id,
+        type: 'FS',
+      });
+      await call(`/plans/${other.id}/schedule/recalculate`, 'POST');
+
+      // ── THIS plan: the same link RE-TYPED, Cladding stretched, one new and one uncoded row ──
+      const aa = await act(anchorPlanId, 'Groundworks', 10, 'A100');
+      const ab = await act(anchorPlanId, 'Frame', 10, 'A200');
+      await act(anchorPlanId, 'Cladding', 40, 'A300');
+      await act(anchorPlanId, 'Temporary works', 5, 'NEW');
+      // No code at all: neither added nor removed, because the product does not know which.
+      await act(anchorPlanId, 'Snagging', 1);
+      await call(`/plans/${anchorPlanId}/dependencies`, 'POST', {
+        predecessorId: aa.id,
+        successorId: ab.id,
+        type: 'FS',
+        /*
+         * **A LAG change, not a type change, and the difference is worth writing down.**
+         *
+         * Cross-plan a link's key is `(predecessorCode, successorCode, type)` — the triple
+         * `uq_dependencies_pred_succ_type` guarantees is unique within a plan, and the type has to
+         * be in it because one plan may legitimately hold an FS and an SS between the same pair.
+         * So a **re-typed** link reads as one REMOVED plus one ADDED, exactly as a re-coded
+         * activity reads as one removed plus one added: the natural key changed, and nothing in
+         * the data says the two are the same edge. That is honest rather than wrong, and the first
+         * version of this seed re-typed the link and then asserted "1 changed link", which the
+         * product correctly reported as two.
+         *
+         * A lag change keeps the key and is therefore CHANGED — which is the case that exercises
+         * the anchor-id mapping, because only an ADDED or CHANGED link is looked up among the
+         * edges the diagram already draws.
+         */
+        lagDays: 2,
+      });
+      await call(`/plans/${anchorPlanId}/schedule/recalculate`, 'POST');
+    },
+    { slug: orgSlug, anchorPlanId, otherPlanName },
+  );
+  return {
+    otherPlanName,
+    enteringName: 'Cladding',
+    leavingName: 'Frame',
+    otherPlanOnlyName: 'Site hoarding',
+    thisPlanOnlyName: 'Temporary works',
+    uncodedName: 'Snagging',
+  };
+}

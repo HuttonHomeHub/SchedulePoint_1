@@ -304,6 +304,18 @@ export interface ClassifyOptions {
    * fully recorded side, so such a test reads "no constraint" as "never recorded" and back again.
    */
   readonly bothSnapshotted: boolean;
+  /**
+   * Whether the two sides were matched ON the activity code — true for a cross-plan comparison and
+   * false for a plan's own revisions, which are matched on id.
+   *
+   * When true the `RECODED` class **cannot** report anything: every matched pair has equal codes by
+   * construction, so `from.code !== to.code` is unreachable. Saying nothing would print a confident
+   * "no changes in this revision" for a question the product structurally cannot answer.
+   *
+   * **Required, not defaulted**, so every caller has to state which world it is in — a default of
+   * `false` would silently give a future cross-plan caller the confident-and-wrong answer.
+   */
+  readonly codeIsTheCorrelationKey: boolean;
   /** Whether the caller asked for the progress class (opt-in — it changes on nearly every row). */
   readonly includeProgress: boolean;
   /**
@@ -326,8 +338,15 @@ export function classifyRevisionChanges(
   to: RevisionSideInput,
   options: ClassifyOptions,
 ): ClassifiedReport {
-  const { fromScheduled, toScheduled, bothSnapshotted, includeProgress, calendarName, cap } =
-    options;
+  const {
+    fromScheduled,
+    toScheduled,
+    bothSnapshotted,
+    codeIsTheCorrelationKey,
+    includeProgress,
+    calendarName,
+    cap,
+  } = options;
   const fromById = new Map(from.rows.map((r) => [r.activityId, r]));
   const toById = new Map(to.rows.map((r) => [r.activityId, r]));
 
@@ -410,6 +429,16 @@ export function classifyRevisionChanges(
   const assess = (changeClass: ChangeClass): ClassAssessment => {
     if (datesUnavailable && dateBearing.has(changeClass)) {
       return { changeClass, notAssessableReason: 'SIDE_NOT_SCHEDULED', rows: [], total: 0 };
+    }
+    if (codeIsTheCorrelationKey && changeClass === 'RECODED') {
+      // Reported with a reason, never as zero. The class is unanswerable rather than empty, and
+      // the two look identical to a reader without this field.
+      return {
+        changeClass,
+        notAssessableReason: 'CODE_IS_THE_CORRELATION_KEY',
+        rows: [],
+        total: 0,
+      };
     }
     if (!bothSnapshotted && PAID_CHANGE_CLASSES.includes(changeClass as PaidChangeClass)) {
       // Reported, never omitted, and never as zero. `bothSnapshotted` false is permanent for the

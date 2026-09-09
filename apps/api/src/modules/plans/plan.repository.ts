@@ -80,6 +80,28 @@ export class PlanRepository {
   }
 
   /**
+   * Two active plans of one organisation, **each with its project named**, in ONE query.
+   *
+   * For the cross-plan revision comparison, which needs both plans and cannot infer either name:
+   * with two plans on screen the reader has nothing to fall back on. Resolved together for the same
+   * stated reason the comparison resolves its two revisions together — either miss is the same 404,
+   * so a single round trip leaks nothing and saves a sequential hop.
+   *
+   * Org-scoped (anti-IDOR). A caller must still check it got BOTH ids back: `findMany` answers a
+   * miss with a shorter array, not an error.
+   */
+  findActivePairInOrgWithProject(
+    ids: readonly string[],
+    organizationId: string,
+    db: Prisma.TransactionClient = this.prisma,
+  ): Promise<(Plan & { project: { id: string; name: string } })[]> {
+    return db.plan.findMany({
+      where: this.active({ id: { in: [...new Set(ids)] }, organizationId }),
+      include: { project: { select: { id: true, name: true } } },
+    });
+  }
+
+  /**
    * The default calendar of each named plan — the fallback half of an activity's effective calendar
    * (ADR-0037), and so of its day↔minute factor (ADR-0068).
    *

@@ -260,6 +260,15 @@ export interface TsldPanelProps {
   compareGhostsUndrawable?: number | undefined;
   /** Changed links with an endpoint no longer in the plan. Same rule: counted, never guessed. */
   compareLinksUndrawable?: number | undefined;
+  /**
+   * **Why a changed bar could not be drawn** — passed through to the overlay's spoken summary
+   * because the two comparisons have DIFFERENT true answers, and one is not the other's default.
+   *
+   * Same-plan the old side did not record a position. Cross-plan it did, and the position is not
+   * comparable: two independently imported plans derive their lane order separately. Reusing the
+   * same-plan wording would state something false about the other plan's data.
+   */
+  compareUndrawableReason?: 'NOT_RECORDED' | 'NOT_COMPARABLE' | undefined;
   hasRevisionPair?: boolean;
   /** The plan's start (`plannedStart`) — the diagram's day-zero origin. Null → not schedulable. */
   dataDate: string | null;
@@ -536,6 +545,7 @@ export function TsldPanel({
   compareLinks,
   compareGhostsUndrawable = 0,
   compareLinksUndrawable = 0,
+  compareUndrawableReason = 'NOT_RECORDED',
   hasRevisionPair = false,
   dependencies,
   dataDate: dataDateProp,
@@ -1247,8 +1257,15 @@ export function TsldPanel({
           drawn: compareLinkLines?.length ?? 0,
           undrawable: compareLinkLines ? compareLinksUndrawable : 0,
         },
+        compareUndrawableReason,
       ),
-    [compareGhostBars, compareGhostsUndrawable, compareLinkLines, compareLinksUndrawable],
+    [
+      compareGhostBars,
+      compareGhostsUndrawable,
+      compareLinkLines,
+      compareLinksUndrawable,
+      compareUndrawableReason,
+    ],
   );
 
   // The spoken twin of the ghost layer above (WCAG 1.4.1). Built by walking `baselineGhosts` itself

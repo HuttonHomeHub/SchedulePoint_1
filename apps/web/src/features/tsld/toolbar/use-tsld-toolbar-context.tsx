@@ -73,6 +73,7 @@ export function useTsldToolbarContext({
   toggleHealthCheck = () => {},
   toggleRevisionCompare = () => {},
   hasRevisionPair = false,
+  comparedWithPlanName,
   planView = DEFAULT_PLAN_VIEW_MODE,
   ganttColumns,
   barDateSource,
@@ -87,6 +88,13 @@ export function useTsldToolbarContext({
    * same reason `toggleRevisionCompare` above is a callback and not a model field.
    */
   hasRevisionPair?: boolean;
+  /**
+   * The OTHER plan's name when a CROSS-PLAN comparison is on screen. Threaded to the export so the
+   * picture's title names both plans — the overlay is composed into the deliverable, so a title
+   * naming one plan over ghosts drawn from another states something untrue to the one reader an
+   * export exists for.
+   */
+  comparedWithPlanName?: string | undefined;
   canvasUi: TsldCanvasUiState;
   openDialog: (kind: PlanDialogKind) => void;
   /** The on-canvas floating Legend panel's open state + toggle (ADR-0031 amendment) — the toolbar's
@@ -388,6 +396,7 @@ export function useTsldToolbarContext({
     todayIso,
     todayFraction: model.todayFraction,
     lateOverlayActive,
+    ...(comparedWithPlanName === undefined ? {} : { comparedWithPlanName }),
     canvasControlRef,
   });
 

@@ -212,6 +212,68 @@ that would close a cycle between two plans is rejected **409
 is **409 `DUPLICATE_CROSS_PLAN_DEPENDENCY`** (N33). Concurrent mirror creates are
 serialised by an **org-scoped advisory lock** so exactly one wins.
 
+### Cross-plan revision comparison
+
+`GET …/cross-plan-revision-compare` compares a revision of **one plan** against a
+revision of **another** in the same organisation. It exists because an import
+always targets a **new plan** (ADR-0050), so a re-issued P6 file arrives as a
+sibling plan and not as a baseline — and the plan-nested
+`…/plans/:planId/schedule/revision-compare`, which correlates on `activityId`,
+has nothing to say about two plans whose UUIDs name nothing in common.
+
+**Org-scoped, not plan-nested**, for the reason stated above for cross-plan
+dependencies: a route carrying **two** plan ids has no honest `:planId` segment.
+
+| Method | Path                            | Notes                                                                              |
+| ------ | ------------------------------- | ---------------------------------------------------------------------------------- |
+| GET    | `…/cross-plan-revision-compare` | `fromPlanId`, `toPlanId` (required) · `from`, `to` (UUID or `live`) · `include[]`. |
+
+`include` is **repeated**, not comma-joined: `?include=changes&include=ghosts`. A comma-joined value
+is read as one value, is not in the vocabulary, and is rejected with **422** — the same shape the
+plan-nested route accepts. Stated here because it lived only in an inline comment and a test until
+the M4 api review asked where a caller was supposed to learn it.
+
+**Matched on `code`, exactly** — no case folding, because
+`uq_activities_plan_code` is a case-sensitive btree and folding would manufacture
+a collision the product permits. A duplicate code within one plan is not a case
+this handles but one the **database refuses**, and an API e2e case asserts that
+index still exists rather than trusting it.
+
+**Read `correlation` first.** It reports `matched`, `fromUnmatched`,
+`toUnmatched`, `fromUncoded`, `toUncoded` — every count including the zeroes,
+because a missing count is indistinguishable from a zero one — plus the rows
+themselves, capped with their true totals. An activity present on one side only
+is reported as added or removed, and cross-plan that is **indistinguishable from
+a re-code**; an uncoded row is in **neither** set, because the product does not
+know which it is.
+
+**Every activity id resolves in `toPlanId`, the anchor** — the plan the reader
+has open. A row that exists only in the other plan carries a **null**
+`activityId`, and a client omits its activation control rather than shading it
+(ADR-0082): the action does not apply to the object.
+
+Refusals and their reasons:
+
+- **404** — the organisation, either plan, or either revision, **uniformly**. A
+  baseline of the **other** plan named on the wrong side is a 404 too: each
+  revision is resolved against its own plan, and a 403 would confirm the id names
+  a real row somewhere.
+- **422 `CROSS_PLAN_SAME_PLAN`** — both sides name one plan. Not a silent
+  success: the two routes correlate on **different keys**, so a re-coded activity
+  reads as `RECODED` on the plan-nested route and as removed-plus-added here.
+- **200 `notAssessableReason: NO_COMMON_CODES`** — the two plans share no code.
+  A 200 and not a 4xx: the question was well formed and the answer is a fact
+  about the data. No delta is returned, because running one would report every
+  old activity as removed and every new one as added.
+
+**No CPM computation.** Both sides are persisted columns, so `computeSchedule` is
+not called, not imported and not reachable from this route's module graph, and
+nothing is written, locked or pen-gated. That is a **stronger** sentence than the
+critical-path test's ("computes read-only, persists nothing"); the two must not be
+swapped. The route shares the **global** 100/60 s budget on a rule committed
+before the measurement (≤ 250 ms p95 ⇒ the global budget stands); measured
+215.2 ms p95 end-to-end at 2,000 activities per side.
+
 ### Programme recalculation (ADR-0045 §4)
 
 `POST …/plans/:planId/schedule/recalculate-programme` (`schedule:calculate` —

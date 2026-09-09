@@ -1,14 +1,25 @@
-import type { BaselineSummary, RevisionCompare, RevisionMovedActivity } from '@repo/types';
+import type {
+  BaselineSummary,
+  CrossPlanMovedActivity,
+  CrossPlanRevisionCompare,
+  PlanSummary,
+  RevisionCompare,
+  RevisionMovedActivity,
+} from '@repo/types';
 import { ArrowDownToLine, ArrowUpFromLine, CirclePlus, CircleMinus } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import { LIVE_REVISION } from '../api/use-revision-compare';
+import { isCrossPlanCompare, LIVE_REVISION } from '../api/use-revision-compare';
 import {
   carrierChangedSentence,
   completionSentence,
   comparisonAnnouncement,
   criticalPathUnavailable,
+  frameSentence,
   membershipSentence,
+  noCommonCodesSentence,
+  planLabel,
+  RECODE_CAVEAT,
   HONESTY_FOOTER,
   LEVELLING_CAVEAT,
   settingsCaveat,
@@ -18,6 +29,7 @@ import {
 import { printRevisionCompare } from '../print/RevisionComparePrintDocument';
 
 import { RevisionChangesView } from './RevisionChangesView';
+import { RevisionCorrelationSummary } from './RevisionCorrelationSummary';
 
 import { useAnnounce } from '@/components/ui/announcer';
 import { Button } from '@/components/ui/button';
@@ -31,8 +43,14 @@ export interface RevisionComparePanelProps {
   /** Every baseline the plan holds, newest first, or `null` until they arrive. */
   baselines: BaselineSummary[] | null;
   baselinesPending: boolean;
-  /** The comparison, or `null` before a pair is chosen or while one is in flight. */
-  compare: RevisionCompare | null;
+  /**
+   * The comparison, or `null` before a pair is chosen or while one is in flight.
+   *
+   * **One panel renders both kinds**, and the union is what makes the difference compiler-enforced
+   * rather than remembered: a cross-plan row's `activityId` is nullable, so every place that offers
+   * to reveal a row has to say what it does when there is nothing to reveal.
+   */
+  compare: RevisionCompare | CrossPlanRevisionCompare | null;
   isPending: boolean;
   isError: boolean;
   onRetry: () => void;
@@ -73,6 +91,18 @@ export interface RevisionComparePanelProps {
    * two siblings built to the same contract: the M4 component review caught all three.
    */
   onActivateActivity: (activityId: string) => void;
+  /**
+   * The other plans in this project, for the **Compare with** picker — or `null` until they arrive.
+   *
+   * The open plan is excluded by the CALLER, because only the caller knows which plan it is
+   * showing. Offering it would produce a same-plan pair, which the API refuses with a 422 telling
+   * the reader to use this very panel: a loop.
+   */
+  otherPlans: PlanSummary[] | null;
+  otherPlansPending: boolean;
+  /** The chosen other plan, or `null` for **This plan** — the default and the shipped behaviour. */
+  comparePlanId: string | null;
+  onComparePlanChange: (planId: string | null) => void;
 }
 
 /**
@@ -107,6 +137,10 @@ export function RevisionComparePanel({
   levelResources = false,
   onActivateActivity,
   onOpenBaselines,
+  otherPlans,
+  otherPlansPending,
+  comparePlanId,
+  onComparePlanChange,
 }: RevisionComparePanelProps): React.ReactElement {
   const announce = useAnnounce();
   /**
@@ -121,10 +155,12 @@ export function RevisionComparePanel({
   const toId = useId();
   const resultsId = useId();
   const footerId = useId();
+  const planId_ = useId();
+  const crossPlan = compare !== null && isCrossPlanCompare(compare) ? compare : null;
 
   // One announcement, once, when a comparison settles — never per render (the ADR-0079
   // stale-debounce lesson: a re-render must not re-arm the message).
-  const spokenRef = useRef<RevisionCompare | null>(null);
+  const spokenRef = useRef<RevisionCompare | CrossPlanRevisionCompare | null>(null);
   useEffect(() => {
     if (compare === null || spokenRef.current === compare) return;
     spokenRef.current = compare;
@@ -197,7 +233,9 @@ export function RevisionComparePanel({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => printRevisionCompare(compare)}
+              onClick={() => {
+                printRevisionCompare(compare);
+              }}
               // `h-7` overrides `size="sm"` for the panel's density; the coarse-pointer override is
               // ADR-0118 M4's rule, applied here rather than left for a sweep to find — the health
               // panel's twin shipped without it and the architecture gate caught it.
@@ -239,7 +277,87 @@ export function RevisionComparePanel({
           </div>
         ) : null}
 
-        {hasBaselines ? (
+        {/*
+          **Compare with** — its OWN row above the two revision pickers, not a third control beside
+          them. The dock's 380 px minimum was derived from the side-picker row binding at ≈ 400 px
+          (`use-revision-compare-panel-prefs.ts`), so a third free-standing picker on that row does
+          not fit — which is also why the comparison is anchored in the open plan and only the
+          OTHER side is free (CQ-1): one picker above two, rather than three abreast.
+
+          Rendered whenever there IS another plan, including when this plan has no baselines —
+          comparing against another plan needs no baseline at all, and hiding the control behind
+          the baseline state would put the capability out of reach of exactly the planner who
+          imported two revisions and captured neither.
+        */}
+        {otherPlansPending ? (
+          <p className="text-muted-foreground flex items-center gap-2 text-sm">
+            <Spinner className="size-4" aria-hidden="true" />
+            Loading plans…
+          </p>
+        ) : otherPlans !== null && otherPlans.length > 0 ? (
+          <div className="space-y-1">
+            <Label htmlFor={planId_}>Compare with</Label>
+            <Select
+              id={planId_}
+              className="w-full"
+              value={comparePlanId ?? ''}
+              onChange={(event) => {
+                onComparePlanChange(event.target.value === '' ? null : event.target.value);
+              }}
+            >
+              {/* The default, and named as what it is. A blank option meaning "this plan" would
+                  make the commonest choice the one with no name (the live-side rule, one control
+                  along). */}
+              <option value="">This plan (its own revisions)</option>
+              {otherPlans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
+
+        {/* "No other plans in this project" is its OWN sentence, and deliberately not "no changes"
+            — one says there is nothing else to compare against, the other is a real answer. It is
+            shown only when a planner might have expected the picker to be there, i.e. never on a
+            plan whose own revisions they are already comparing. */}
+        {!otherPlansPending && otherPlans !== null && otherPlans.length === 0 ? (
+          <p className="text-muted-foreground text-xs">
+            This project has no other plans to compare against.
+          </p>
+        ) : null}
+
+        {/*
+          **Comparing against another plan takes that plan AS IT STANDS NOW**, and says so rather
+          than offering a picker it cannot fill: this dock holds the OPEN plan's baselines, and
+          listing another plan's would mean a second load and a second picker on a 380 px column.
+          The anchor side keeps its full choice below, so a planner can still compare the other
+          plan against a baseline of this one — which is the pairing a re-import actually raises.
+        */}
+        {comparePlanId !== null ? (
+          <div className="space-y-1">
+            <Label htmlFor={toId}>This plan&apos;s side</Label>
+            <Select
+              id={toId}
+              className="w-full"
+              value={to}
+              onChange={(event) => {
+                onToChange(event.target.value);
+              }}
+            >
+              <option value={LIVE_REVISION}>Live (the plan as it stands now)</option>
+              {(baselines ?? []).map((baseline) => (
+                <option key={baseline.id} value={baseline.id}>
+                  {baseline.name}
+                </option>
+              ))}
+            </Select>
+            <p className="text-muted-foreground text-xs">
+              The other plan is compared as it stands now.
+            </p>
+          </div>
+        ) : hasBaselines ? (
           <div className="grid gap-3 @sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor={fromId}>Earlier revision</Label>
@@ -287,13 +405,22 @@ export function RevisionComparePanel({
           </div>
         ) : null}
 
-        {hasBaselines && from === null ? (
+        {comparePlanId === null && hasBaselines && from === null ? (
           <p className="text-muted-foreground text-sm">
             Choose an earlier revision to compare against.
           </p>
         ) : null}
 
-        {isPending && from !== null ? (
+        {/*
+          **Gated on "a pair is chosen", not on `from` alone.**
+
+          `from` is the SAME-PLAN picker's state and stays null for the whole life of a cross-plan
+          comparison, so `isPending && from !== null` was `true && false` on every cross-plan
+          request and the spinner never rendered: between choosing the other plan and the response
+          arriving the panel showed the pickers and nothing at all. Found by the M4 ux review; no
+          test set `comparePlanId` non-null with a request in flight.
+        */}
+        {isPending && (comparePlanId !== null || from !== null) ? (
           <p className="text-muted-foreground flex items-center gap-2 text-sm">
             <Spinner className="size-4" aria-hidden="true" />
             Comparing…
@@ -328,6 +455,31 @@ export function RevisionComparePanel({
             aria-describedby={footerId}
             className="space-y-3"
           >
+            {/* **Both plans, named, before anything else.** With two plans on screen the reader
+                can infer neither — and two re-imports of one programme routinely carry the same
+                plan name, which is why the project is named too. */}
+            {crossPlan === null ? null : (
+              // Muted, not a second headline. The completion sentence below already carries the
+              // panel's one headline weight, and two heavy lines in a row is the duplication the
+              // weight ratchet exists to catch — it fired on the first version of this line.
+              <p className="text-muted-foreground text-xs">
+                {planLabel(crossPlan.fromPlan)} → {planLabel(crossPlan.toPlan)}
+              </p>
+            )}
+
+            {/* **The coverage, rendered ABOVE the delta and announced first.** Every number below
+                is worth exactly what this says it is: "12 left the critical path" means one thing
+                at 98 % coverage and something else at 40 %. */}
+            {crossPlan === null ? null : (
+              <RevisionCorrelationSummary
+                correlation={crossPlan.correlation}
+                fromPlanId={crossPlan.fromPlan.id}
+                fromPlanName={crossPlan.fromPlan.name}
+                toPlanId={crossPlan.toPlan.id}
+                toPlanName={crossPlan.toPlan.name}
+              />
+            )}
+
             {/* BOTH sides' instants. The screen used to state only the earlier one while the
                 printout stated both — so a planner comparing two baselines on screen could not see
                 they were six weeks apart, and the page they handed somebody else could. That
@@ -347,25 +499,46 @@ export function RevisionComparePanel({
                   : ` (captured ${compare.to.computedAt.slice(0, 10)})`}
             </p>
 
-            {/* The headline, given the weight of one: this sentence IS the answer to the question
+            {/*
+              **No codes in common is a real answer, and it replaces the derived blocks rather than
+              rendering them empty.** Four empty sets and a null reason read as "assessed, and
+              nothing changed" — the opposite of the truth. The sentence names both plans and leads
+              with the check a planner can actually make, because the commonest cause by far is an
+              export written without activity IDs rather than two unrelated programmes.
+            */}
+            {crossPlan !== null && crossPlan.notAssessableReason === 'NO_COMMON_CODES' ? (
+              <NoticeStrip
+                tone="warning"
+                density="comfortable"
+                messageFit="grow"
+                message={noCommonCodesSentence(crossPlan)}
+              />
+            ) : (
+              <>
+                {/* The headline, given the weight of one: this sentence IS the answer to the question
                 the feature exists for, and it read as one more line of body copy below two heavier
                 section headings (the M4 ux review's hierarchy finding). */}
-            <p className="text-sm font-medium">{completionSentence(compare.completion)}</p>
-            {carrierChangedSentence(compare.completion) === null ? null : (
-              <p className="text-muted-foreground text-sm">
-                {carrierChangedSentence(compare.completion)}
-              </p>
-            )}
+                <p className="text-sm font-medium">{completionSentence(compare.completion)}</p>
+                {carrierChangedSentence(compare.completion) === null ? null : (
+                  <p className="text-muted-foreground text-sm">
+                    {carrierChangedSentence(compare.completion)}
+                  </p>
+                )}
 
-            {caveat === null ? null : (
-              <NoticeStrip tone="warning" density="compact" messageFit="grow" message={caveat} />
-            )}
+                {caveat === null ? null : (
+                  <NoticeStrip
+                    tone="warning"
+                    density="compact"
+                    messageFit="grow"
+                    message={caveat}
+                  />
+                )}
 
-            {levelResources ? (
-              <p className="text-muted-foreground text-xs">{LEVELLING_CAVEAT}</p>
-            ) : null}
+                {levelResources ? (
+                  <p className="text-muted-foreground text-xs">{LEVELLING_CAVEAT}</p>
+                ) : null}
 
-            {/* **A view of ONE comparison, not a second dock.** `RIGHT_DOCKS` holds one column at
+                {/* **A view of ONE comparison, not a second dock.** `RIGHT_DOCKS` holds one column at
                 a time, and a planner reading a revision wants the critical-path delta and the
                 change list to be two readings of the same pair — not two panels competing for the
                 same edge. Local state rather than a URL param: the dock's own open/closed state is
@@ -375,92 +548,113 @@ export function RevisionComparePanel({
                 navigation between tabs and a `tabpanel` relationship, and implementing half of that
                 pattern is how this repository has shipped a control that announces one contract and
                 honours another. */}
-            {compare.changes ? (
-              <div role="group" aria-label="Comparison view" className="flex gap-1">
-                <Button
-                  variant={view === 'delta' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  aria-pressed={view === 'delta'}
-                  onClick={() => {
-                    setView('delta');
-                  }}
-                >
-                  Critical path
-                </Button>
-                <Button
-                  variant={view === 'changes' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  aria-pressed={view === 'changes'}
-                  onClick={() => {
-                    setView('changes');
-                  }}
-                >
-                  Changes
-                </Button>
-              </div>
-            ) : null}
+                {compare.changes ? (
+                  <div role="group" aria-label="Comparison view" className="flex gap-1">
+                    <Button
+                      variant={view === 'delta' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      aria-pressed={view === 'delta'}
+                      onClick={() => {
+                        setView('delta');
+                      }}
+                    >
+                      Critical path
+                    </Button>
+                    <Button
+                      variant={view === 'changes' ? 'secondary' : 'ghost'}
+                      size="sm"
+                      aria-pressed={view === 'changes'}
+                      onClick={() => {
+                        setView('changes');
+                      }}
+                    >
+                      Changes
+                    </Button>
+                  </div>
+                ) : null}
 
-            {view === 'changes' && compare.changes ? (
-              <RevisionChangesView
-                report={compare.changes}
-                onActivateActivity={announceActivation}
-              />
-            ) : (
-              <>
-                {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
-                  <p className="text-muted-foreground text-sm">
-                    {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
-                  </p>
-                ) : compare.criticalPath.noCriticalPath ? (
-                  <p className="text-muted-foreground text-sm">
-                    Neither revision has a critical path, so nothing can have entered or left it.
-                  </p>
+                {view === 'changes' && compare.changes ? (
+                  <RevisionChangesView
+                    report={compare.changes}
+                    onActivateActivity={announceActivation}
+                    // The OTHER plan's name, so a row that lives only there explains its own
+                    // missing control rather than going silent. THIS is where the null-id rows
+                    // are — the delta's sections hold only matched activities, which always
+                    // resolve in the anchor plan.
+                    otherPlanName={crossPlan?.fromPlan.name}
+                  />
                 ) : (
                   <>
-                    <MovedSection
-                      heading="Entered the critical path"
-                      icon={ArrowDownToLine}
-                      rows={compare.criticalPath.entered}
-                      total={compare.criticalPath.enteredTotal}
-                      cap={compare.criticalPath.cap}
-                      emptyMessage="Nothing entered the critical path."
-                      onActivate={announceActivation}
-                    />
-                    <MovedSection
-                      heading="Left the critical path"
-                      icon={ArrowUpFromLine}
-                      rows={compare.criticalPath.left}
-                      total={compare.criticalPath.leftTotal}
-                      cap={compare.criticalPath.cap}
-                      emptyMessage="Nothing left the critical path."
-                      onActivate={announceActivation}
-                    />
-                    {/* The denominator. Without it "7 entered the critical path" could be 7 of 10 — a
+                    {criticalPathUnavailable(compare.criticalPath.notAssessableReason) !== null ? (
+                      <p className="text-muted-foreground text-sm">
+                        {criticalPathUnavailable(compare.criticalPath.notAssessableReason)}
+                      </p>
+                    ) : compare.criticalPath.noCriticalPath ? (
+                      <p className="text-muted-foreground text-sm">
+                        Neither revision has a critical path, so nothing can have entered or left
+                        it.
+                      </p>
+                    ) : (
+                      <>
+                        <MovedSection
+                          heading="Entered the critical path"
+                          icon={ArrowDownToLine}
+                          rows={compare.criticalPath.entered}
+                          total={compare.criticalPath.enteredTotal}
+                          cap={compare.criticalPath.cap}
+                          emptyMessage="Nothing entered the critical path."
+                          onActivate={announceActivation}
+                        />
+                        <MovedSection
+                          heading="Left the critical path"
+                          icon={ArrowUpFromLine}
+                          rows={compare.criticalPath.left}
+                          total={compare.criticalPath.leftTotal}
+                          cap={compare.criticalPath.cap}
+                          emptyMessage="Nothing left the critical path."
+                          onActivate={announceActivation}
+                        />
+                        {/* The denominator. Without it "7 entered the critical path" could be 7 of 10 — a
                     real story — or 7 of 400, which is probably noise. Computed and transmitted from
                     the first commit and rendered by nothing until the M4 ux review asked. */}
-                    <p className="text-muted-foreground text-xs">
-                      {membershipSentence(
-                        compare.criticalPath.remainedCriticalCount,
-                        compare.criticalPath.remainedNonCriticalCount,
-                      )}
-                    </p>
+                        <p className="text-muted-foreground text-xs">
+                          {membershipSentence(
+                            compare.criticalPath.remainedCriticalCount,
+                            compare.criticalPath.remainedNonCriticalCount,
+                          )}
+                        </p>
+                      </>
+                    )}
+
+                    {compare.criticalPath.addedTotal > 0 ||
+                    compare.criticalPath.removedTotal > 0 ? (
+                      // The TRUE totals, not the returned arrays' lengths: those are capped like their
+                      // `entered`/`left` siblings, so a plan with more than the cap in either set would
+                      // otherwise be under-reported by a number the client computed itself.
+                      <p className="text-muted-foreground text-xs">
+                        <CirclePlus className="mr-1 inline size-3" aria-hidden="true" />
+                        {compare.criticalPath.addedTotal} added ·{' '}
+                        <CircleMinus className="mr-1 inline size-3" aria-hidden="true" />
+                        {compare.criticalPath.removedTotal} removed. An activity present in only one
+                        revision is listed as added or removed — it did not enter or leave a path it
+                        was never on.
+                      </p>
+                    ) : null}
                   </>
                 )}
-
-                {compare.criticalPath.addedTotal > 0 || compare.criticalPath.removedTotal > 0 ? (
-                  // The TRUE totals, not the returned arrays' lengths: those are capped like their
-                  // `entered`/`left` siblings, so a plan with more than the cap in either set would
-                  // otherwise be under-reported by a number the client computed itself.
-                  <p className="text-muted-foreground text-xs">
-                    <CirclePlus className="mr-1 inline size-3" aria-hidden="true" />
-                    {compare.criticalPath.addedTotal} added ·{' '}
-                    <CircleMinus className="mr-1 inline size-3" aria-hidden="true" />
-                    {compare.criticalPath.removedTotal} removed. An activity present in only one
-                    revision is listed as added or removed — it did not enter or leave a path it was
-                    never on.
-                  </p>
-                ) : null}
               </>
+            )}
+
+            {/* The measurement frame — named because two plans need not share one. Same-plan this
+                goes without saying and is deliberately not said. */}
+            {crossPlan === null ? null : (
+              <p className="text-muted-foreground text-xs">{frameSentence(crossPlan.frame)}</p>
+            )}
+
+            {/* The re-code caveat: the one honest limit of matching on code, stated wherever added
+                or removed rows can appear rather than left for a planner to discover. */}
+            {crossPlan === null || crossPlan.notAssessableReason !== null ? null : (
+              <p className="text-muted-foreground text-xs">{RECODE_CAVEAT}</p>
             )}
 
             <p id={footerId} className="text-muted-foreground border-border border-t pt-2 text-sm">
@@ -493,7 +687,7 @@ function MovedSection({
 }: {
   heading: string;
   icon: typeof ArrowDownToLine;
-  rows: readonly RevisionMovedActivity[];
+  rows: readonly (RevisionMovedActivity | CrossPlanMovedActivity)[];
   total: number;
   cap: number;
   emptyMessage: string;
@@ -513,7 +707,9 @@ function MovedSection({
       ) : (
         <ul className="space-y-1">
           {rows.map((row) => (
-            <li key={row.activityId} className="text-sm">
+            // Keyed on the code cross-plan, where `activityId` is null for a row that lives only
+            // in the other plan — several such rows would otherwise share one key.
+            <li key={row.activityId ?? `code:${row.code ?? row.name}`} className="text-sm">
               <MovedRow row={row} onActivate={onActivate} />
             </li>
           ))}
@@ -542,7 +738,7 @@ function MovedRow({
   row,
   onActivate,
 }: {
-  row: RevisionMovedActivity;
+  row: RevisionMovedActivity | CrossPlanMovedActivity;
   onActivate: (activityId: string) => void;
 }): React.ReactElement {
   const detail = (
@@ -564,7 +760,49 @@ function MovedRow({
     </>
   );
 
-  const reasonId = `revision-row-reason-${row.activityId}`;
+  /**
+   * **Two different absences, and only one of them is a shaded control** (ADR-0082's
+   * discriminator, which this milestone is the second consumer of).
+   *
+   * `activityId === null` means the row lives ONLY in the other plan. Revealing it does not apply
+   * to the object at all — there is no bar in the diagram on screen to reveal — so the control is
+   * **omitted** and a plain sentence names the plan it is in. A shaded button would promise an
+   * action that could never become available however the reader changed the state.
+   *
+   * `activityId !== null && !existsLive` is the same-plan case and stays exactly as it was: the
+   * activity is named by the comparison and has since been deleted, which IS a state, so the
+   * control is **shaded with a reason**. Neither treatment is the other's default.
+   */
+  /**
+   * **UNREACHABLE from this section, and kept as a total case rather than deleted** — which the
+   * journey established rather than a reading.
+   *
+   * `entered` and `left` hold only MATCHED activities: a row is in one of them because it exists
+   * on both sides, so cross-plan it always resolves in the anchor plan. The rows that genuinely
+   * carry a null id are the presence rows — and this panel renders those as COUNTS, not as rows —
+   * and the change list's `REMOVED` class, which is where the reachable branch lives
+   * (`RevisionChangesView`). A first version threaded an `otherPlanName` prop down here to name
+   * the plan in the control's place; the journey proved the sentence never rendered, and it was a
+   * prop scaffolded for a caller that does not exist, which is the defect this panel's own
+   * docblock records being caught once. The branch stays because the TYPE permits a null and
+   * asserting otherwise would be the guess.
+   */
+  if (row.activityId === null) {
+    // No control, and — unlike the first version of this branch — no bare row either. An omission
+    // with nothing in its place is indistinguishable from a control that failed to render, which
+    // is the very thing its reachable twin in `RevisionChangesView` says out loud. Aligned here so
+    // that if this branch ever DOES become reachable it cannot silently reintroduce the defect the
+    // docblock above describes it as being safe from (the M4 accessibility review's second nit).
+    return (
+      <div className="w-full px-1 py-0.5">
+        {detail}
+        <span className="text-muted-foreground block text-xs">Not in this plan</span>
+      </div>
+    );
+  }
+
+  const activityId = row.activityId;
+  const reasonId = `revision-row-reason-${activityId}`;
   const shaded = !row.existsLive;
   return (
     <>
@@ -574,7 +812,7 @@ function MovedRow({
         aria-describedby={shaded ? reasonId : undefined}
         onClick={() => {
           if (shaded) return;
-          onActivate(row.activityId);
+          onActivate(activityId);
         }}
         className="hover:bg-accent focus-visible:ring-ring w-full rounded px-1 py-0.5 text-left focus-visible:ring-2 focus-visible:outline-none aria-disabled:opacity-50"
       >
@@ -602,7 +840,7 @@ function floatCell(days: number | null): string {
   return days === null ? 'unknown' : `${days} d`;
 }
 
-function floatPhrase(row: RevisionMovedActivity): string {
+function floatPhrase(row: RevisionMovedActivity | CrossPlanMovedActivity): string {
   if (row.floatMovementDays === null) return 'Float movement unknown';
   const magnitude = Math.abs(row.floatMovementDays);
   const unit = magnitude === 1 ? 'day' : 'days';

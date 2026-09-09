@@ -1,4 +1,4 @@
-import type { RevisionCompare, RevisionInclude } from '@repo/types';
+import type { CrossPlanRevisionCompare, RevisionCompare, RevisionInclude } from '@repo/types';
 import { queryOptions, useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/client';
@@ -78,4 +78,93 @@ export function useRevisionCompare(
   includes: readonly RevisionInclude[] = [],
 ): UseQueryResult<RevisionCompare> {
   return useQuery(revisionCompareQueryOptions(orgSlug, planId, from, to, enabled, includes));
+}
+
+/**
+ * **The CROSS-plan comparison** — a revision of one plan against a revision of another, matched on
+ * activity `code`.
+ *
+ * A separate hook rather than a widened one, mirroring the API: the two routes take different
+ * params and return different shapes, and a single hook branching internally would make the
+ * caller's `enabled` and cache key depend on a value it also has to reason about.
+ *
+ * **`toPlanId` is the ANCHOR** — the plan the reader has open — and every activity id in the
+ * response resolves there. A row that exists only in the other plan carries a null `activityId`,
+ * which is what a consumer branches on to decide whether an activation control applies at all.
+ */
+export function crossPlanRevisionCompareQueryOptions(
+  orgSlug: string,
+  toPlanId: string,
+  fromPlanId: string | null,
+  from: string,
+  to: string,
+  enabled = true,
+  includes: readonly RevisionInclude[] = [],
+) {
+  // Sorted, for the reason the sibling gives: a caller's array order is not information, and two
+  // orders of one set must be ONE cache entry rather than two identical requests.
+  const sorted = [...includes].sort();
+  return queryOptions({
+    queryKey: scheduleKeys.crossPlanRevisionCompare(
+      orgSlug,
+      toPlanId,
+      fromPlanId ?? '',
+      from,
+      to,
+      sorted,
+    ),
+    queryFn: () =>
+      apiFetch<CrossPlanRevisionCompare>(
+        `/organizations/${orgSlug}/cross-plan-revision-compare` +
+          `?fromPlanId=${encodeURIComponent(fromPlanId ?? '')}&toPlanId=${encodeURIComponent(toPlanId)}` +
+          `&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}` +
+          sorted.map((i) => `&include=${encodeURIComponent(i)}`).join(''),
+      ),
+    /**
+     * No other plan chosen is not a request to make — it is the state before the planner has
+     * picked one, which is a different fact from "the server refused" and renders differently.
+     *
+     * **The same-plan case is deliberately NOT gated here**, exactly as the sibling records: a
+     * disabled query in TanStack Query v5 stays `status: 'pending'` forever, so gating it would
+     * render "Comparing…" with a spinner permanently and no way out. The picker excludes the open
+     * plan, and the server's 422 is the backstop rather than dead code.
+     */
+    enabled: enabled && fromPlanId !== null,
+    staleTime: 30_000,
+  });
+}
+
+export function useCrossPlanRevisionCompare(
+  orgSlug: string,
+  toPlanId: string,
+  fromPlanId: string | null,
+  from: string,
+  to: string,
+  enabled = true,
+  includes: readonly RevisionInclude[] = [],
+): UseQueryResult<CrossPlanRevisionCompare> {
+  return useQuery(
+    crossPlanRevisionCompareQueryOptions(
+      orgSlug,
+      toPlanId,
+      fromPlanId,
+      from,
+      to,
+      enabled,
+      includes,
+    ),
+  );
+}
+
+/**
+ * Which kind of comparison a payload is, **decided by a field that only one of them has**.
+ *
+ * `correlation` is present exactly when the two sides came from two different plans, so this is a
+ * fact about the payload rather than a flag a caller has to keep in step with the request it made.
+ * A boolean prop threaded beside the data would be the thing that eventually disagrees with it.
+ */
+export function isCrossPlanCompare(
+  compare: RevisionCompare | CrossPlanRevisionCompare,
+): compare is CrossPlanRevisionCompare {
+  return 'correlation' in compare;
 }

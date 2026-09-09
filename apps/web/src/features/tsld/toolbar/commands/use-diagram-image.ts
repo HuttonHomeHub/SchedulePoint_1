@@ -74,6 +74,14 @@ export function useDiagramImage(args: {
    */
   todayFraction: number | undefined;
   lateOverlayActive: boolean;
+  /**
+   * The OTHER plan's name when a CROSS-PLAN comparison is on screen, so the exported title names
+   * BOTH. The overlay is composed into the picture (ADR-0103), so a title naming one plan over
+   * ghosts drawn from another is a false statement to exactly the reader an export exists for —
+   * and this is the seam where the hook learns which case it is in, because the canvas handle
+   * carries the geometry and not its provenance.
+   */
+  comparedWithPlanName?: string | undefined;
   canvasControlRef: React.RefObject<TsldCanvasHandle | null>;
 }): (
   extent: ExportExtent,
@@ -92,6 +100,7 @@ export function useDiagramImage(args: {
     todayIso,
     todayFraction,
     lateOverlayActive,
+    comparedWithPlanName,
     canvasControlRef,
   } = args;
 
@@ -210,7 +219,12 @@ export function useDiagramImage(args: {
         bandContent,
         palette: resolvePrintPalette(canvasSurface),
         scaledToFit,
-        meta: { planName: plan.name, dataDate, generatedAtIso: todayIso },
+        meta: {
+          planName: plan.name,
+          dataDate,
+          generatedAtIso: todayIso,
+          ...(comparedWithPlanName === undefined ? {} : { comparedWithPlanName }),
+        },
         // Placed against the EXPORT viewport, by the same `wbsBandBars` the live canvas calls with
         // the live one — so the band's columns line up with the diagram's in the picture for the
         // same reason they do on screen, not by a second calculation that agrees.

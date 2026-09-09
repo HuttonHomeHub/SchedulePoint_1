@@ -152,3 +152,4 @@ future maintainers (human or AI) the _why_, not just the _what_.
 | [0126](0126-a-baseline-freezes-the-plans-shape-or-a-comparison-invents-it.md)           | A baseline freezes the plan's shape, or a comparison invents it         | Accepted           |
 | [0127](0127-an-overlay-draws-what-it-knows-and-counts-what-it-does-not.md)              | An overlay draws what it knows, and counts what it does not             | Accepted           |
 | [0128](0128-a-measurement-belongs-on-the-machine-that-can-take-it.md)                   | A measurement belongs on the machine that can take it                   | Accepted           |
+| [0129](0129-identity-across-two-imports-is-the-code.md)                                 | Identity across two imports is the code, and the match is shown first   | Accepted           |

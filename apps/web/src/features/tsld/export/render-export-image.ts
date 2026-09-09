@@ -77,6 +77,16 @@ export interface ExportImageMeta {
   dataDate: string;
   /** The generated-at day (`YYYY-MM-DD`), shown in the subtitle. */
   generatedAtIso: string;
+  /**
+   * **The OTHER plan, when the picture carries a CROSS-PLAN comparison overlay.**
+   *
+   * The exported diagram composes the comparison lens (ADR-0103's rule: it is the one lens whose
+   * whole purpose is to be handed to somebody who was not in the room). Across two plans that makes
+   * the title line a **false statement** unless both are named — a reader sees one plan's name and
+   * ghosts drawn from a plan nobody mentioned, and has no way to know. Absent on a same-plan
+   * comparison, where the title already names the only plan involved.
+   */
+  comparedWithPlanName?: string | undefined;
 }
 
 export interface RenderExportImageInput {
@@ -268,7 +278,13 @@ function drawTitleBand(
     // Title.
     ctx.fillStyle = palette.ink;
     ctx.font = TITLE_FONT;
-    ctx.fillText(meta.planName, BAND_PAD, 28);
+    ctx.fillText(
+      meta.comparedWithPlanName === undefined
+        ? meta.planName
+        : `${meta.planName} vs ${meta.comparedWithPlanName}`,
+      BAND_PAD,
+      28,
+    );
     // Subtitle (data date · generated · scaled-to-fit note).
     ctx.fillStyle = palette.mutedInk;
     ctx.font = SUBTITLE_FONT;

@@ -21,6 +21,7 @@ import {
   REVISION_COMPLETION_REASONS,
   REVISION_FREE_CHANGE_CLASSES,
   REVISION_PAID_CHANGE_CLASSES,
+  REVISION_NOT_ASSESSABLE_REASONS,
   REVISION_SETTINGS_VERDICTS,
   REVISION_SIDE_KINDS,
 } from '@repo/types';
@@ -41,6 +42,14 @@ import {
  *
  * Every `enum:` is DERIVED from the `@repo/types` tuple that also derives the union type, never a
  * hand-copied array — which would compile while silently missing a member added later.
+ *
+ * **That sentence was an overclaim until the M4 api review found it**: three enums here were
+ * hand-copied, not because anybody preferred it but because no backing tuple existed to derive
+ * from. `REVISION_NOT_ASSESSABLE_REASONS` was added rather than the claim softened, and it earned
+ * its keep immediately — a third reason joined that union in the same commit and reached both DTOs
+ * without either being edited. The `ADDED | REMOVED | CHANGED` link state remains a hand-copied
+ * literal, and is named here rather than left as a silent exception to a sentence that says
+ * "every".
  */
 
 export class RevisionSideDto implements RevisionSide {
@@ -243,7 +252,7 @@ export class RevisionCriticalPathDeltaDto implements RevisionCriticalPathDelta {
  * `RevisionCompareDto.from` is a pass-through and `implements` constrains the floor rather than the
  * ceiling (the docblock on that method says so, and this is that trap sprung one epic later).
  */
-class RevisionChangeRowDto implements RevisionChangeRow {
+export class RevisionChangeRowDto implements RevisionChangeRow {
   @ApiProperty({ description: 'The activity a client may reveal. For a logic row, the SUCCESSOR.' })
   activityId!: string;
 
@@ -280,13 +289,13 @@ class RevisionChangeRowDto implements RevisionChangeRow {
   existsLive!: boolean;
 }
 
-class RevisionClassAssessmentDto implements RevisionClassAssessment {
+export class RevisionClassAssessmentDto implements RevisionClassAssessment {
   @ApiProperty({ enum: [...REVISION_FREE_CHANGE_CLASSES, ...REVISION_PAID_CHANGE_CLASSES] })
   changeClass!: RevisionChangeClass;
 
   @ApiProperty({
     nullable: true,
-    enum: ['NOT_SNAPSHOTTED', 'SIDE_NOT_SCHEDULED'],
+    enum: REVISION_NOT_ASSESSABLE_REASONS,
     description:
       'Null when assessed; a reason when it could not be. **NEVER read a reason as "no ' +
       'changes"** — `rows` is empty and `total` is zero in both states, and only this field ' +
@@ -304,7 +313,7 @@ class RevisionClassAssessmentDto implements RevisionClassAssessment {
   total!: number;
 }
 
-class RevisionChangeReportDto implements RevisionChangeReport {
+export class RevisionChangeReportDto implements RevisionChangeReport {
   @ApiProperty({
     type: [RevisionClassAssessmentDto],
     description:
@@ -316,7 +325,7 @@ class RevisionChangeReportDto implements RevisionChangeReport {
   @ApiProperty() cap!: number;
 }
 
-class RevisionGhostBarDto implements RevisionGhostBar {
+export class RevisionGhostBarDto implements RevisionGhostBar {
   @ApiProperty() activityId!: string;
   @ApiProperty() name!: string;
   @ApiProperty({ description: '`YYYY-MM-DD`. Both non-null: no old dates ⇒ no ghost.' })
@@ -334,7 +343,7 @@ class RevisionGhostBarDto implements RevisionGhostBar {
   @ApiProperty({ description: 'In the old revision and not in the new.' }) removed!: boolean;
 }
 
-class RevisionLinkChangeDto implements RevisionLinkChange {
+export class RevisionLinkChangeDto implements RevisionLinkChange {
   @ApiProperty() dependencyId!: string;
   @ApiProperty({ description: 'Carried because a REMOVED edge is in no live edge list.' })
   predecessorId!: string;

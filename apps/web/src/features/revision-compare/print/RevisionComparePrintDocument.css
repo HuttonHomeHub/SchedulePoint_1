@@ -36,6 +36,19 @@
   color: #333;
 }
 
+/* The correlation lists. Tight, because they can be long and they are supporting evidence for the
+   sentence above them rather than the document's subject — and `page-break-inside: avoid` on the
+   items so a two-line row does not straddle a page break, which reads as two rows. */
+.revision-print-list {
+  margin: 2px 0 8px;
+  padding-left: 18px;
+}
+
+.revision-print-list li {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
 .revision-print table {
   width: 100%;
   border-collapse: collapse;
