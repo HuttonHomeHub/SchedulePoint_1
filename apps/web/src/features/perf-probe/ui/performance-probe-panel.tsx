@@ -501,12 +501,13 @@ function LimbVerdict({
   judged,
 }: {
   limb: LimbOutcome;
-  judged: { verdict: Verdict; indeterminateReason?: string };
+  judged: { verdict: Verdict; indeterminateReason?: string; saturated?: boolean };
 }): React.ReactElement {
   const note = verdictNote(judged.verdict, {
     gated: limb.recording.thresholds.gated === true,
     repeats: (limb.recording.pairs ?? limb.recording.runs ?? []).length,
     indeterminateReason: judged.indeterminateReason,
+    saturated: judged.saturated,
   });
   return (
     <>

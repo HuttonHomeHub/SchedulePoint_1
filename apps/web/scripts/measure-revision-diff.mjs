@@ -105,7 +105,7 @@ execFileSync(
   { stdio: 'inherit' },
 );
 
-const { judgeRun, NothingToJudgeError, scenarioById, isGated } = await import(
+const { judgeRun, NothingToJudgeError, scenarioById, isGated, SATURATED_CAVEAT } = await import(
   pathToFileURL(judgeBundle).href
 );
 
@@ -217,7 +217,14 @@ try {
       `(run-to-run spread ${pct(judged.baselineSpreadPp)})`,
   );
   console.log(`  treatment mean dropped ${pct(judged.treatmentMeanPp)}`);
-  console.log(`  delta     ${judged.deltaPp >= 0 ? '+' : ''}${pct(judged.deltaPp)}`);
+  console.log(
+    `  delta     ${judged.deltaPp >= 0 ? '+' : ''}${pct(judged.deltaPp)}` +
+      // On the figure's own line, because #260's defect is a number somebody takes and stops
+      // at. The browser report does the same thing in the same words.
+      (judged.saturated
+        ? `   [CEILING: only ${pct(judged.headroomPp)} of headroom — see below]`
+        : ''),
+  );
   console.log('');
 
   if (judged.verdict === 'REPORTED_ONLY') {
@@ -226,6 +233,13 @@ try {
     console.log(
       '  P3 — Fit is REPORTED, NOT GATED (see m0-condition.md). No verdict at this preset.',
     );
+    // The stronger fact first, when there is one. "No verdict at this preset" withholds a
+    // judgement; this says the delta printed above cannot mean what it looks like
+    // (`docs/TECH_DEBT.md` #260). The sentence is imported, not restated.
+    if (judged.saturated) {
+      console.log('');
+      console.log(`  CEILING: ${SATURATED_CAVEAT}`);
+    }
     console.log('');
   } else {
     console.log(

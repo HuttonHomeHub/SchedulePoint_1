@@ -70,6 +70,10 @@ export function judgeStoredRow(row: ProbeResultRow): StoredVerdict | null {
         gated,
         repeats: row.samples.length,
         indeterminateReason: judged.indeterminateReason,
+        // Only a difference run has a ceiling to hit. `judgeAbsolute` returns no `saturated`, so
+        // this is `undefined` there rather than `false` — "not a difference run" and "measured and
+        // fine" are different facts, and the optional field keeps them apart.
+        saturated: 'saturated' in judged ? judged.saturated : undefined,
       }),
     };
   } catch (error) {

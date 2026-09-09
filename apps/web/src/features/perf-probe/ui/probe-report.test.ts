@@ -78,6 +78,10 @@ const judgedDifference = (over: Partial<JudgeResult> = {}): JudgeResult => ({
   treatmentMeanPp: 0.0,
   deltaPp: -0.19,
   baselineSpreadPp: 0.56,
+  // 100 - 0.19. The default fixture is the product owner's Week reading, which had the whole
+  // metric's range to move in — the case #260 is NOT about.
+  headroomPp: 99.81,
+  saturated: false,
   treatmentFps: 60.0,
   p1: true,
   p2: true,
