@@ -478,7 +478,16 @@ export function PerformanceProbePanel(): React.ReactElement {
         </div>
 
         <details className="border-border rounded-md border p-3">
-          <summary className="cursor-pointer text-sm font-medium">Measure one thing</summary>
+          {/*
+            No weight. The product has exactly one other disclosure summary
+            (`resource-strip-panel.tsx:335`) and it carries none, so a `font-medium` here
+            would make two `<summary>` elements in one product read differently for no
+            reason a reader could infer — and a `<summary>` already announces itself with a
+            marker and a pointer cursor, so the weight was a third channel saying what two
+            already said. Removed rather than absorbed into the ADR-0097 weight ceiling,
+            which is what that ratchet is for.
+          */}
+          <summary className="cursor-pointer text-sm">Measure one thing</summary>
           <div className="mt-3 flex flex-wrap items-end gap-4">
             <div className="flex flex-col gap-1">
               <Label htmlFor={scenarioSelectId}>Measurement</Label>

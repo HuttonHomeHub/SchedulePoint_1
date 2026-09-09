@@ -573,7 +573,16 @@ describe('weight is a governed axis', () => {
   // full-weight sibling is the one-off, not the match), and the VERDICT, which is the single thing
   // the whole feature exists to produce and would otherwise read as one more line of body copy
   // under a heading (the revision-compare 166 -> 167 precedent, verbatim).
-  const SCREEN_WEIGHT_CEILING = 171;
+  // ...and 171 -> 172 (probe sweep M5): ONE weight, on the sitting summary — the sentence that says
+  // what a press produced ("Sitting finished. 2 measured, 2 not recorded"), which is the answer to
+  // the question the whole control exists to ask and would otherwise read as one more line of body
+  // copy above the per-step blocks it summarises. That is the 166 -> 167 completion-statement
+  // precedent and the M3 verdict precedent, verbatim. It was TWO until this gate fired: the
+  // "Measure one thing" disclosure was drafted at `font-medium`, and the product's one other
+  // `<summary>` (`resource-strip-panel.tsx:335`) carries no weight at all — so it was the one-off,
+  // not the match, and a `<summary>` already announces itself with a marker and a pointer cursor.
+  // Removed rather than absorbed.
+  const SCREEN_WEIGHT_CEILING = 172;
 
   it(`no more than ${SCREEN_WEIGHT_CEILING} weights placed outside the primitives`, () => {
     const sites = weightSites().filter((site) => !site.startsWith('components/ui/'));
