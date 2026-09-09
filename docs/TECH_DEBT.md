@@ -4853,11 +4853,29 @@ whether a page was cut rather than to infer it from position, which is what #271
 
 **Status:** open · **Raised:** 2026-09-09 (probe-sweep M7 follow-up) · **Size:** S · **Owner:** repo
 
-`docs/specs/` holds **97** epic directories. **67** of their `feature-spec.md` files are still headed
-`**Status:** Draft — awaiting approval before implementation`, and **50 of those belong to epics that
-shipped an ADR** — so fifty specs currently assert that work which is live in production has not been
-approved to start. All **67** `implementation-plan.md` files carry the matching
-`**Feature spec:** … — not yet approved` line.
+`docs/specs/` holds **~98** epic directories. **67** of the **88** `feature-spec.md` files are still
+headed `Status: Draft — awaiting approval before implementation`, and **50 of those belong to epics
+that shipped an ADR** — so fifty specs currently assert that work which is live in production has not
+been approved to start.
+
+**Three of this row's original figures did not survive re-measurement, and the corrections are why
+the fix is a gate rather than a sweep.** They were found by the spec written for that gate
+(`docs/specs/spec-status-gate/`), which re-derived every figure before designing against it:
+
+- **The population is not 88.** Three epics name their spec `spec.md` rather than `feature-spec.md`
+  (`foot-row`, `object-bar-defects`, `workspace-foot-and-deck`). A gate globbing `feature-spec.md`
+  is **silently blind to all three** — and `foot-row/spec.md:3` is headed `Draft` while ADR-0114
+  cites that directory twice. The first blind spot contains a live instance of the defect.
+- **The header has three shapes**, not one: `- **Status:**` (85), bare `**Status:**` (2), and
+  `> **Status:**` (1). The shared parser's `fieldValue()` anchors on the bare form only, so reusing
+  it would read **2 of 88 files** and report green over the other eighty-six — ADR-0124's Finding 0,
+  reproduced in the commit that cites ADR-0124.
+- **This row's plan-side claim was false.** It said all 67 `implementation-plan.md` files carry
+  `**Feature spec:** … — not yet approved`. Measured: about **21 of ~81** do, in **six** different
+  phrasings, and roughly **thirty carry no approval annotation at all**. A rule keyed on that literal
+  string would find a quarter of the estate and report OK. ADR-0076 Class 3 — asserted in a
+  decision-bearing row without being checked — which is the same failure this row is about, one
+  document in.
 
 **It is not cosmetic, and the reason is ADR-0105.** That decision makes a spec's approval state
 load-bearing: a tech-debt row covers stages 1–2 only while a change adds no new surface, and crossing
@@ -4866,10 +4884,12 @@ consults the header — and is told either that the shipped feature was never ap
 must obtain an approval which already happened. Both readings are wrong and the document is where a
 reader looks first.
 
-**Measured, not estimated**, and the first measurement was wrong in a way worth recording. An earlier
-count in the same session reported **28** shipped-with-an-ADR rather than 50, because the loop that
-produced it piped the file list through `head -40` — the instrument truncated its own input and
-reported the remainder as the answer. It was caught only by re-deriving the figure before writing it
+**Measured, not estimated — and measured wrong twice, which is the row's most useful content.** An
+earlier count in the same session reported **28** shipped-with-an-ADR rather than 50, because the loop
+that produced it piped the file list through `head -40` — the instrument truncated its own input and
+reported the remainder as the answer. The three corrections above are the second occasion, found by
+the spec rather than by anything failing. Both are the same shape as the defect being catalogued: a
+confident figure in a document nobody re-derived. It was caught only by re-deriving the figure before writing it
 into this row. Third time in one session that a throwaway check of mine was the defect rather than
 the thing it checked (the others: a `grep` for the #259 closures that missed them because Prettier had
 wrapped the line, and a duration probe whose `console.log` the reporter swallowed). The command behind
