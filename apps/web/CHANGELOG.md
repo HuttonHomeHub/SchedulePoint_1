@@ -1,5 +1,87 @@
 # @repo/web
 
+## 0.125.1
+
+### Patch Changes
+
+- [#498](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/498) [`04c3dc2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/04c3dc235c187ade70e7b293e7f5bc666c73c650) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A recorded performance reading can be read back, and copied.
+  
+  The history row now names the canvas it was taken at, the measured display interval and whether
+  the window held focus — three facts stored on every row since the table shipped and rendered on
+  none, which is enough to decide a verdict rather than a rounding term. The table also says, in a
+  note linked to it, that a reading is only comparable to another taken at the same canvas size.
+  
+  The paste-ready block is no longer only available in the seconds after a run: it is built from one
+  presentation model that both a finished run and a stored reading can fill, and a Copy control on
+  each row produces it. Where a stored row genuinely cannot supply a field, the block says so rather
+  than printing the default a reader would otherwise assume.
+
+- [#500](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/500) [`2fb3be7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2fb3be76388830cb26704bc3c99db58abb653311) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - One press takes every reading the performance probe can take.
+  
+  The panel led with three selects and a Run button, so a complete set of readings was four separate
+  presses with three fields to set correctly each time — and the readings that resulted were four
+  unrelated rows. **Run all measurements** now walks every measurement at both framings under one
+  sitting id, announcing each step as it starts and as it settles, and **Check the probe works** does
+  the same at one repeat for anyone who wants to know the probe runs here before committing two
+  minutes to it. Both confirmations state their own duration, derived from the plan they are about to
+  run rather than from a constant. The three selects are still there, behind a **Measure one thing**
+  disclosure.
+  
+  A refused step no longer ends the sitting, and a step whose figures failed to store keeps them so a
+  retry can send them: what a press produced is reported per step, in a vocabulary that distinguishes
+  a reading the machine declined from one nobody attempted.
+  
+  It also repairs a defect that had made half of those readings unstorable since the revision-compare
+  measurement shipped: that scene reports one more field per measured window than the API accepts, so
+  every reading of it was refused. Each window is now built field by field at the boundary.
+
+- [#501](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/501) [`cb38638`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cb38638ad3e9b2c4566b0d4b9755c0b778bba452) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The staff performance panel groups its history into the sittings the readings were taken in, and
+  offers to take again the ones a sitting never got.
+  
+  Each block states the machine, the canvas, the display and the operator once, above a table of the
+  readings that vary; **Run the missing measurements** re-runs only the refused or never-taken steps
+  under the same sitting id. A sitting whose readings span more than an hour says so, on screen and
+  in the copied report.
+  
+  Two false statements are removed with it. A single measurement no longer files itself as a sweep
+  of one reading with three missing, and the oldest block no longer claims a reading was refused when
+  it may simply be beyond the read's fifty-row page.
+
+- [#501](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/501) [`cb38638`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cb38638ad3e9b2c4566b0d4b9755c0b778bba452) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The performance panel's gate pass, and four corrections that reach a reader.
+  
+  The full-screen measurement overlay now takes the whole page out of the keyboard's reach while it
+  covers it, rather than only this panel's own controls — six other panels sit beside it on the staff
+  console, and Tab from Stop was landing on a control hidden behind the canvas.
+  
+  A complete sweep is **six readings**, not four: the caption and the partial notice were counting
+  steps and calling them readings, over a table that shows one row per reading.
+  
+  The API's published spec is corrected in two places. `counts` and `thresholds` are named on the
+  response with the same shapes the request already names, both history reads declare the 422 an
+  out-of-range `limit` reaches, and `framesPerPhase`'s description no longer halves the frame count
+  for a paired measurement.
+  
+  Each sitting's Copy button, its own machine facts and its warnings are now reachable to assistive
+  technology from inside the table they belong to, and a retry announces that it is running.
+
+- [#498](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/498) [`04c3dc2`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/04c3dc235c187ade70e7b293e7f5bc666c73c650) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Stopping a performance run no longer throws away what it already measured.
+  
+  The canvas-draw measurement runs at two scales. Stopping during the second discarded a complete
+  first one — every repeat collected, nothing about it wrong — because the recording unit was the
+  whole press rather than the limb. A limb that collected all its repeats is now kept and stored; one
+  interrupted partway is dropped rather than truncated, so a short reading can never sit in the
+  history looking like a full one. The Stop button says what it keeps, and the result says how many
+  readings were kept and that the rest were not taken.
+
+- [#496](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/496) [`3f9b66b`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/3f9b66b0dfcfe438768c4a0ab1509bd4c489240f) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The performance probe refuses a verdict when the metric has no room left to give one.
+  
+  `droppedPct` is a share of frames and is bounded at 100, so a baseline sitting near the ceiling
+  leaves less headroom than the 2.00 pp bar the difference is judged against — and the difference
+  gate then cannot fail whatever the feature costs. The judge now computes that headroom on every
+  result and returns INDETERMINATE when a gated run is saturated; every surface that prints a delta,
+  including the command-line driver, says so beside the figure rather than leaving a number that
+  reads as "this cost nothing".
+
 ## 0.125.0
 
 ### Minor Changes
