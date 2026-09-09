@@ -4550,3 +4550,45 @@ scopes. Shared debt with the health report; this epic touched the file without m
 **(l)** `revision-compare-imported-p2.e2e-spec.ts` still carries an O(n·m) `some()`-inside-`filter()`
 in its own stand-in correlation — a leftover from before M1 shipped the real one, which the file's
 docblock names. Harness only, never shipped, and it inflates the very figure (a) is about.
+
+### 264. A contended sweep produced four false failures, and then a contended re-run confirmed three of them
+
+**Status:** open · **Raised:** 2026-09-09 (ADR-0129 M4) · **Size:** S · **Owner:** repo
+
+The ADR-0129 gate pass ran `scripts/e2e-sweep.sh` and got four failures: `account`, `audit`,
+`designed-chrome`, `narrow-shell`. Every one was an artefact of contention, and the way that was
+established is the point.
+
+**The first mistake is already documented.** ADR-0099 records that "a sweep measures the tree it
+runs against", and the sweep was started and then left running while the M4 fixes were edited into
+the very files it was testing. That alone invalidates the run.
+
+**The second mistake is the one worth a row.** To decide whether the four were regressions, three
+were re-run at the pre-epic commit `1809d83c~1` and reported FAIL, and one PASS — so three were
+written up as pre-existing and one as a real regression. **All four of those re-runs were themselves
+contended**, because the sweep was still running: it was not stopped until later. The "real
+regression" then passed on a settled tree, and `account` and `audit` passed in the clean sweep that
+followed. So a contended instrument was used to check a contended instrument's answer, and produced
+a confident wrong conclusion in both directions at once — one suite wrongly blamed on the epic, three
+wrongly excused as long-standing.
+
+**Nothing in the tooling stops this.** `scripts/e2e-local.sh` refuses to start while anything answers
+on ports 3000 or 5173 — a guard added after three consecutive false diagnoses in one session — and
+that guard did not fire, because the sweep starts and stops its own servers between suites, so a
+re-run launched in a gap finds the ports free and proceeds into the next suite's contention. The
+shared Postgres is the resource actually in conflict and nothing checks it.
+
+**A fifth instance landed while this row was being written.** The clean sweep that established the
+four were artefacts itself reported one failure — `e2e-undo`'s WBS-restore case, expecting 6
+activities and finding 1 after a `Ctrl+Z`, timing out a 20-second poll. It passes in isolation. The
+register already names the mechanism (ADR-0080: one undo is a restore, a recalculation and a
+refetch, and that chain outruns Playwright's default poll), so a slow host lengthens a chain that is
+already the longest in the suite. **43 of 44 green with one non-reproducing failure is the shape a
+contended sweep has**, and it is why the answer here has to be a lock rather than a longer timeout:
+raising the poll makes the symptom rarer and the diagnosis harder.
+
+**What would fix it:** a lock on the database rather than on the ports — a sentinel row, an advisory
+lock taken by `e2e-local.sh` for the life of a run, or simply a check for a running `e2e-sweep.sh`.
+Filed rather than built because the correct remedy is a small design decision (which resource is the
+lock on, and what does a caller see when it is held) and this row exists so the next person does not
+re-derive the diagnosis from four confusing failures.
