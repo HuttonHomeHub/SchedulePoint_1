@@ -307,6 +307,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // journey can never accidentally assert a verdict a container has no business producing.
   const probePanel = staff.getByRole('heading', { name: 'Performance' });
   await expect(probePanel).toBeVisible();
+  await openMeasureOne(staff);
   await staff.getByRole('combobox', { name: 'Length' }).selectOption('quick');
   // Typed BEFORE the run: the note travels with the reading rather than being editable afterwards
   // (insert-time only in v1 — an edit route needs `updated_at` and a version column).
@@ -454,6 +455,7 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     .count()
     .catch(() => 0);
 
+  await openMeasureOne(staff);
   await staff.getByRole('combobox', { name: 'Measurement' }).selectOption('canvas-draw');
   // **`full`, not `quick`, and that is the difference between a journey and a decoration.** At 40
   // frames a limb finishes in well under a second, so the second one was over before the click
@@ -534,6 +536,171 @@ test('a staff member reaches the console; a member cannot tell it exists', async
 
   await staffContext.close();
 });
+
+/**
+ * **The sweep, driven end to end — M5-T5, and it lands WITH the milestone that adds the control.**
+ *
+ * ADR-0081's rule: a milestone claiming user-facing capability names its entry point and its journey
+ * lands with it, not at enablement. This register records five capabilities that shipped with unit
+ * tests and no door, and the most recent found its own drawer unreachable in the default path while
+ * every unit test stayed green — because those tests mount the component and the defect was in the
+ * seam between the component and the shell.
+ *
+ * **A second `test()` rather than an extension of the first**, and the reason is measured rather
+ * than assumed: `playwright.staff.config.ts:30` sets `timeout: 120_000` PER TEST, and the first
+ * test already spends most of a minute. Adding a sweep to it would leave the sweep racing the
+ * budget rather than the product.
+ *
+ * **It presses "Check the probe works", not "Run all measurements"**, for the same measured reason:
+ * `sweep-duration.ts` puts a full sweep at ~126 s, which does not fit a 120 s per-test timeout at
+ * all. The short sweep exercises every seam that matters here — the plan, the loop, the per-step
+ * POST, the sitting id — and differs only in frame count.
+ */
+test('a staff member takes every reading in one press', async ({ browser }) => {
+  const staffContext = await browser.newContext();
+  const staff = await staffContext.newPage();
+
+  /**
+   * **Why a step was not recorded, rather than how many were not.**
+   *
+   * The panel tells an operator "measured but NOT recorded" and offers Retry, which is the right
+   * copy for them and useless for diagnosis: the first run of this test reported two of four steps
+   * unrecorded and there was nothing on the page, in the log, or in the API's piped output saying
+   * whether that was a 429, a 422 or a dropped socket. A count is not a cause — the register's own
+   * complaint about coarse instruments, met here by reading the responses the browser already has.
+   */
+  const storeFailures: number[] = [];
+  const storeFailureBodies: string[] = [];
+  staff.on('response', (response) => {
+    if (
+      response.request().method() !== 'POST' ||
+      !response.url().includes('/staff/probe-results') ||
+      response.ok()
+    ) {
+      return;
+    }
+    // The status is recorded **synchronously**, the body when it arrives. The assertion below reads
+    // the status list, so it can never race a `text()` promise that has not settled; the body is
+    // for the reader and is allowed to be late.
+    const status = response.status();
+    storeFailures.push(status);
+    void response
+      .text()
+      .then((body) => storeFailureBodies.push(`${String(status)} ${body.slice(0, 300)}`))
+      .catch(() => storeFailureBodies.push(`${String(status)} (body unavailable)`));
+  });
+
+  await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
+  await staff.goto('/staff');
+
+  // The console, or nothing to test. The verification branch is proved by the first test; this one
+  // asserts it is already in rather than repeating that machinery, and says so if it is not.
+  await expect(
+    staff.getByRole('heading', { name: 'Staff console' }),
+    'the first test verifies this account; this one assumes it',
+  ).toBeVisible({ timeout: 30_000 });
+
+  // **The entry point named in the spec, pressed.** If this locator ever stops matching, the
+  // capability has no door — which is the defect this test exists to prevent rather than to
+  // describe.
+  await staff.getByRole('button', { name: 'Check the probe works' }).click();
+
+  const dialog = staff.getByRole('alertdialog');
+  await expect(dialog).toBeVisible();
+  // Its own duration, derived — not the constant every confirmation used to quote.
+  await expect(dialog).toContainText(/This takes/);
+  // And the promise that it produces no verdicts, because every reading runs once.
+  await expect(dialog).toContainText(/none of them\s+can be graded|cannot be graded|can be graded/);
+  await dialog.getByRole('button', { name: 'Check the probe' }).click();
+
+  // A sweep is four steps, and a container drops frames badly, so the budget is generous and the
+  // assertion is about the KIND of outcome rather than a number — the shape the existing probe
+  // assertion already uses, which accepts a refusal as a correct answer.
+  const result = staff.locator('[data-perf-probe-result]');
+  await expect(result).toBeVisible({ timeout: 90_000 });
+
+  const text = (await result.textContent()) ?? '';
+  // Printed, because everything below branches on what the container managed and a skipped branch
+  // is indistinguishable from a passing one in a green report.
+  // eslint-disable-next-line no-console
+  console.log(`SWEEP OUTCOME: ${text.slice(0, 600).replace(/\s+/g, ' ')}`);
+  // eslint-disable-next-line no-console
+  console.log(
+    `SWEEP STORE FAILURES: ${storeFailureBodies.length === 0 ? 'none' : storeFailureBodies.join(' | ')}`,
+  );
+
+  /**
+   * **A 4xx is a defect; anything else is the container.**
+   *
+   * This is the one assertion here that does not accept whatever the machine managed, and the
+   * distinction is principled rather than convenient: a 5xx or a dropped socket is the environment,
+   * and a container is entitled to produce one — but a 4xx means the client sent a body the server
+   * refuses, which no amount of load can cause and no retry can fix, while the panel goes on
+   * offering **Retry recording** for it.
+   *
+   * Verified red, and not hypothetically: the first run of this test reported two of four steps
+   * "measured but NOT recorded", and the cause was `422 … property frames should not exist` on
+   * every `revision-diff` reading — half of what "Run all measurements" produces, unstorable since
+   * the day that scenario shipped, which is in as many words the complaint this epic was opened on.
+   */
+  expect(
+    storeFailures.filter((status) => status >= 400 && status < 500),
+    'the client sent a body the API refuses — a container cannot cause this and Retry cannot fix it',
+  ).toEqual([]);
+
+  // **The sitting summary names what happened to every step**, in the vocabulary the epic settled:
+  // measured, refused, or not taken — never a bare count that hides which.
+  expect(text).toMatch(/Sitting finished|You stopped this sitting/);
+
+  // The overlay must be gone: it is `fixed inset-0`, so a leaked one covers the console and every
+  // later assertion — including the axe sweep — would be about a canvas.
+  await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
+
+  // **What reached the database, which is a different question from what was measured.** A sweep
+  // records per step as each completes, so a container that refused one reading still stores the
+  // others — that is the whole reason an interruption is cheap.
+  const history = staff.getByRole('table', { name: /Readings recorded on this installation/ });
+  if (/measured/.test(text)) {
+    await expect(history).toBeVisible({ timeout: 20_000 });
+    // More than the header row. Asserted as a shape rather than a count, because how many of the
+    // four steps this container manages is a property of the container.
+    await expect(history.getByRole('row')).not.toHaveCount(1);
+  }
+
+  // The console is a real screen and gets the same accessibility bar as every other one — and this
+  // milestone added three controls, a disclosure and a per-step result block to it.
+  const results = await new AxeBuilder({ page: staff })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+
+  await staffContext.close();
+});
+
+/**
+ * Open the **Measure one thing** disclosure, whatever state it is already in.
+ *
+ * The three single-run selects moved behind a `<details>` in staff-probe M5, when the two sweep
+ * buttons became the panel's primary controls — "which of eight combinations do I want?" is the
+ * question an operator asks last. This journey went on driving them without opening it, and on the
+ * first run after that rework it timed out at `selectOption` with the accessibility snapshot
+ * showing a collapsed `"Measure one thing"` and **no combobox in the tree at all**.
+ *
+ * **Nothing below this tier could have reported it.** The panel's own unit suite opens the same
+ * disclosure — its helper's docblock says why, in as many words — so it passed throughout. One
+ * correct pattern applied to a control and not its neighbour, which is the shape this register
+ * records most often, arriving here through a control that MOVED rather than one never wired.
+ *
+ * Idempotent by asking whether the select is reachable rather than by clicking blind: a `<summary>`
+ * toggles, so a second unconditional click shuts it again and the failure names the select instead
+ * of the click that caused it.
+ */
+async function openMeasureOne(page: Page): Promise<void> {
+  const length = page.getByRole('combobox', { name: 'Length' });
+  if (await length.isVisible()) return;
+  await page.getByText('Measure one thing').click();
+  await expect(length).toBeVisible();
+}
 
 /**
  * One row of the retention table, located by the table it names.
