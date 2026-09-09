@@ -1,5 +1,38 @@
 # @repo/api
 
+## 0.61.1
+
+### Patch Changes
+
+- [#500](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/500) [`2fb3be7`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/2fb3be76388830cb26704bc3c99db58abb653311) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - A performance reading records which sitting it belongs to, and the protocol it was taken under.
+  
+  `perf_probe_results` gains two additive nullable columns — `sweep_id`, so the readings from one
+  press of **Run all measurements** are recoverable as one sitting, and `frames_per_phase`, the frame
+  budget a phase actually ran for. Neither is backfilled: a NULL `sweep_id` means the reading was a
+  single press, which is true of every row taken before this, and a NULL `frames_per_phase` means the
+  protocol was not recorded rather than that it was the default.
+  
+  The columns shipped dark. This releases the API that accepts them, which has to reach a host before
+  any client writes them: the global pipe rejects an unknown property with a 422 that loses the whole
+  POST, and `apps/web` and `apps/api` are independent images pulled independently.
+
+- [#501](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/501) [`cb38638`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/cb38638ad3e9b2c4566b0d4b9755c0b778bba452) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - The performance panel's gate pass, and four corrections that reach a reader.
+  
+  The full-screen measurement overlay now takes the whole page out of the keyboard's reach while it
+  covers it, rather than only this panel's own controls — six other panels sit beside it on the staff
+  console, and Tab from Stop was landing on a control hidden behind the canvas.
+  
+  A complete sweep is **six readings**, not four: the caption and the partial notice were counting
+  steps and calling them readings, over a table that shows one row per reading.
+  
+  The API's published spec is corrected in two places. `counts` and `thresholds` are named on the
+  response with the same shapes the request already names, both history reads declare the 422 an
+  out-of-range `limit` reaches, and `framesPerPhase`'s description no longer halves the frame count
+  for a paired measurement.
+  
+  Each sitting's Copy button, its own machine facts and its warnings are now reachable to assistive
+  technology from inside the table they belong to, and a retry announces that it is running.
+
 ## 0.61.0
 
 ### Minor Changes
