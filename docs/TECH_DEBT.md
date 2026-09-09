@@ -4901,3 +4901,30 @@ reading on that device refused with `NON-VACUITY FAILED` — 70 bars where 108 w
 That is the probe working exactly as ADR-0066 intended: it declined to produce a flattering number
 about a nearly-empty canvas. The contrast is the argument for this row — the same run refuses
 honestly where it cannot measure, and then fails a machine for a floor it was never able to reach.
+
+### 276. A failing gate's log is tailed to 12 lines, and three test files now share one gate
+
+**Status:** open · **Raised:** 2026-09-09 (devops review, ADR-0131 M3-T1) · **Size:** S · **Owner:** repo
+
+`scripts/prepush.sh:108,112` truncates a failing gate's captured output to `tail -12`.
+`check:doc-register` now chains **three** independent test files with `&&` —
+`doc-register.test.mjs`, `check-reconcile-due.test.mjs` and `check-spec-status.test.mjs`. Each keeps
+running past a failing case (`process.exitCode = 1` rather than throwing) and prints its own named
+summary, so **CI is unaffected**: the full log carries every `✗ <case>` line and every summary line,
+and which file failed is unambiguous.
+
+**Locally it can go ambiguous in one direction only.** If the first or second file fails, `&&`
+short-circuits and the third never runs — its absence from the log is itself informative, and
+nothing claims it passed. If the **third** file fails with more than about five cases red, its own
+`✗` lines push the two earlier scripts' one-line successes out of the 12-line tail, so a reader
+cannot tell from `prepush` output alone which stage even ran.
+
+**Not changed here, deliberately.** `scripts/prepush.sh` is a shared gate, so altering what
+"prepush green" means fires ADR-0105's trigger and wants its own spec — the same reason `#191` was
+filed rather than fixed. The property is also **pre-existing**: `check:doc-register` already chained
+two files before ADR-0131 added the third, which compounds it without introducing it.
+
+**The remedy when it is picked up** is one of two, and the choice is the decision: widen the tail on
+failure (or print the whole log, which is what a reader wants at the moment a gate fails), or give
+the new suite its own `check:*` key — which costs a second CI step, the trade M3-T1 deliberately
+declined. Do not do both.

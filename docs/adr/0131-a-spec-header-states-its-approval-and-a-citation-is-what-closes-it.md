@@ -197,7 +197,9 @@ which the gate accepts.
 **What it cannot see, stated here rather than discovered later.**
 
 1. **A spec no ADR cites**, which is **17 documents** headed `Draft` after the sweep — a quarter of
-   the original 72. Two of them are known to have shipped. The gate cannot know that, and a gate
+   the original 72, and all 17 verified uncited rather than assumed to be. Two are known to have
+   shipped and are named so the claim is checkable: `wbs-bucket-a11y` and `wbs-bucket-bracket`, both
+   in `docs/TECH_DEBT.md`'s Closed-numbers ledger (`#232` and `#71`), both still headed `Draft`. The gate cannot know that, and a gate
    that failed them would be a gate somebody deletes. **The trigger to revisit** is a reconciliation
    pass finding a shipped, uncited spec still headed `Draft`: that is a debt row, not a gate change,
    because every alternative predicate measured worse (D1).
