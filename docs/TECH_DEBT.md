@@ -541,8 +541,11 @@ would not exercise the code being budgeted.
    container harness the working zoom can be less than half the cost. **A Week-zoom run was called
    "still owed" here and this row's own table already carried it** (corrected 2026-09-01):
    `2,016, Week | 3.9 ms p95 | 0 / 600 frames dropped`, and it showed exactly what the sentence
-   guessed — the surface a planner actually uses is smooth. What is genuinely unmeasured is the
-   **500-activity** limb of §9's two-limb gate, which has no real-hardware reading at all. And
+   guessed — the surface a planner actually uses is smooth. ~~What is genuinely unmeasured is the
+   **500-activity** limb of §9's two-limb gate, which has no real-hardware reading at all.~~
+   **Struck 2026-09-09:** item 5(a) below measured it and it passes at both framings — 59.8 fps at
+   Week, 57.2 at Fit. This sentence sat above the item that disproved it for a day, in the row whose
+   own subject is a superseded figure surviving where a reader trusts it. And
    **DPR 1**: at 150%
    scaling the backing store is 2.25× larger, so this is the cheap end of this machine.
 
@@ -709,8 +712,12 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 > at a section that does not exist" is also literally false as written — §9 exists, and the same
 > sentence names it as the gate.
 >
-> **What stands, and is the half that matters:** 4 ms was never a budget, the gate is fps, and the
-> genuinely open residue is the 500-activity limb and the unattributed ~8 ms at Fit.
+> **What stands, and is the half that matters:** 4 ms was never a budget, and the gate is fps.
+> ~~The genuinely open residue is the 500-activity limb and the unattributed ~8 ms at Fit.~~
+> **Corrected 2026-09-09:** the 500-activity limb was measured on 2026-09-08 and passes at both
+> framings (item 5(a)). The residue is now the **unattributed ~8 ms**, **#261's unstated canvas
+> size**, and the **1036×646 / ~1036×600 disagreement** between ADR-0026 §9b and this row — which is
+> an input to item 5(f)'s model fit, so it is arithmetic and not bookkeeping.
 
 ### 76. Deferred follow-ups from the ADR-0064/0065 enablement review
 
@@ -4928,3 +4935,42 @@ two files before ADR-0131 added the third, which compounds it without introducin
 failure (or print the whole log, which is what a reader wants at the moment a gate fails), or give
 the new suite its own `check:*` key — which costs a second CI step, the trade M3-T1 deliberately
 declined. Do not do both.
+
+### 277. A citation of a symbol nobody remembers existed is invisible to a grep for deleted names
+
+**Status:** open · **Raised:** 2026-09-09 (verification sweep, batch 3) · **Size:** S · **Owner:** web
+
+`#193` swept the toolbar for citations of machinery ADR-0109 D1 deleted, and closed every item it
+named. **Nine citations of `autoLabelsFit` survived it, across three files, and the symbol has no
+definition anywhere** — every hit is inside a comment, proved by excluding comment lines and getting
+nothing back. Beside them sat a `{@link measureLabelWidth}` resolving to nothing, a
+`ToolbarOverflow.test.tsx` pointer to a file that no longer exists, and a `computeLadder` citation
+**fourteen lines above** the correction in the same file that was written to catch its sibling.
+
+**Why `#193`'s sweep could not have found them, and this is the transferable part.** That sweep
+grepped for the names it remembered deleting — `ToolbarOverflow`, `toolbar-ladder.ts`,
+`companionsOf`, the demotion pass. `autoLabelsFit` was an internal of the ladder, so nobody
+remembered it existed, so nobody searched for it. **A grep for remembered names is bounded by
+memory; the tree is not.** These were found instead by resolving every backticked identifier in a
+comment against the definitions in the tree — the instrument `#193` proposes and defers.
+
+**The citations were not decoration: four of them justified live registry decisions**
+(`tsld-toolbar-items.tsx` at the three band-rule sites and the promoted lens toggles), and two
+defined the semantics of a shipped prop (`toolbar-registry.ts`). So the stale text was doing work —
+a reader deciding whether to change `showLabel` was being handed a mechanism that has not existed
+since ADR-0109 D1.
+
+**Corrected 2026-09-09, and the corrections are the substance rather than the tidy-up.** `'auto'`
+now means _always label_ (`Toolbar.tsx`), because a row that wraps can always afford one. So the
+band-rule choices **survive with their reasons inverted**: they were chosen to escape `'auto'`'s
+all-or-nothing collective fate, and they are now the only way left to go icon-only on a narrow
+window. And `next-conflict-status`'s refusal to fold its count into a label **lost half its
+argument** — the width measurement it rested on is void, and what survives is ADR-0094's other
+half, that a live count in a label reduces the accessible name to a status.
+
+**What is still open.** No instrument exists to catch the next one. The candidate is the one `#193`
+names: resolve backticked identifiers in comments against the tree and report those with no
+definition. It is not free — the false-positive rate over prose is the whole question, and a gate
+that fires on every `` `some-file.md` `` gets deleted rather than fixed (ADR-0058). Measure the
+finding count on a candidate predicate **before** building it, exactly as ADR-0081 did before
+rejecting its own proposed gate on 129 findings.

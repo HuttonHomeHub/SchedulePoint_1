@@ -20,8 +20,10 @@ import { ToolbarPopover } from './ToolbarPopover';
  * component rather than assuming.** The first draft asserted only `toHaveAccessibleDescription`, and
  * it passed **green against the broken code** — because `title` also contributes to the accessible
  * description under the accname spec, so a tooltip and a linked description are indistinguishable
- * that way. `ToolbarOverflow.test.tsx` records exactly this caveat about its own suite, one file
- * over, and it was walked into anyway.
+ * that way. `ToolbarOverflow.test.tsx` recorded exactly this caveat about its own suite, one file
+ * over, and it was walked into anyway — **that file no longer exists**, deleted with the width
+ * ladder (ADR-0109 D1), so the caveat survives only here. Which is the argument for stating it
+ * here rather than pointing at a neighbour: a pointer outlives the thing it points at.
  *
  * So the load-bearing assertion is on the **mechanism**: `aria-describedby` present, resolving to an
  * element carrying the reason. That is what a keyboard user's screen reader announces on focus and

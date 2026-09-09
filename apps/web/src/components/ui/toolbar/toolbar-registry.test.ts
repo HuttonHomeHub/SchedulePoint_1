@@ -294,9 +294,14 @@ describe('defineToolbar — a segment’s members share a tier', () => {
   });
 
   it('rejects a pair whose tiers disagree, naming the group', () => {
-    // A tier-3 companion is in the STATIC overflow and never enters `computeLadder`'s companion lookup, so
-    // the segment would split: one half always in the `⋯`, the other only sometimes. That is the
-    // exact state `segment` exists to prevent, and it would look correct in the registry.
+    // A tier-3 companion would split the segment: one half reached one way, the other another.
+    // That is the exact state `segment` exists to prevent, and it would look correct in the
+    // registry.
+    //
+    // This paragraph described the split in terms of `computeLadder`'s companion lookup and the
+    // static `⋯` — both deleted with the width ladder (ADR-0109 D1), and the correction fourteen
+    // lines below in this same file already said so about `companionsOf` while this one went on
+    // citing its sibling. Same class as `docs/TECH_DEBT.md` #193, inside the file that records it.
     expect(() => defineToolbar([seg('left', 1), seg('right', 3)])).toThrow(/view-mode/);
   });
 });
