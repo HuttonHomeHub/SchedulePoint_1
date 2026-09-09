@@ -110,7 +110,15 @@ function contextLines(context: SittingContext): string[] {
     // up to four presses under one `sweep_id`, so those three differ from reading to reading; they
     // print on each reading's own block below. Leaving them here would have labelled a whole
     // sitting with whichever reading sorted first, and nothing in the block would look wrong.
-    `  viewport   ${String(context.viewport.width)}x${String(context.viewport.height)} css px, dpr ${String(context.devicePixelRatio)}`,
+    // **`varies` rather than one reading's figure**, when a sitting holds readings taken at more
+    // than one canvas. #261 records the same plan on the same machine measuring 23.3 fps at
+    // 1912x1068 and 39.5 fps at 1016x636, so stating one of two here would settle by accident the
+    // confound this line exists to expose. Each reading prints its own below.
+    `  viewport   ${
+      context.viewport === null
+        ? 'varies between readings — see each below'
+        : `${String(context.viewport.width)}x${String(context.viewport.height)} css px`
+    }, dpr ${String(context.devicePixelRatio)}`,
     `  display    idle frame interval ${context.idleInterval.toFixed(2)} ms`,
     // A masked adapter is printed AS masked. Writing "unknown GPU" would put a fiction in the one
     // field a reader trusts to explain an outlier (the product owner's Q1, answered 2026-09-07).
@@ -169,6 +177,7 @@ function limbLines(limb: SittingLimb): string[] {
     // would otherwise assume and exactly what a non-default run would contradict.
     `  run size   ${limb.size ?? NOT_RECORDED} — ${limb.frames === null ? NOT_RECORDED : `${String(limb.frames)} frames`} x ${String(limb.repeats)}`,
     ...(limb.recordedAt === null ? [] : [`  taken      ${limb.recordedAt}`]),
+    `  viewport   ${String(limb.viewport.width)}x${String(limb.viewport.height)} css px`,
     // Repeated per reading rather than only summarised on the sitting: the sitting says whether
     // ANY reading lost the window, and this is the one that says which.
     ...(limb.lostFocusDuringRun ? ['  attention  this reading lost focus'] : []),

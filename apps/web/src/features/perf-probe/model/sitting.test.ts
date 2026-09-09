@@ -289,6 +289,30 @@ describe('S2 — a sitting read from history carries every field the live report
     expect(sitting?.context.startedAt).toBe('2026-09-09T12:00:00.000Z');
   });
 
+  it('refuses to state one canvas for a sitting whose readings were taken at two', () => {
+    // #261 records the same plan on the same machine measuring 23.3 fps at 1912x1068 and 39.5 fps
+    // at 1016x636 — the most decision-relevant confound in the register. A sitting can hold two
+    // canvases now that M6-T4 re-runs a missing reading under the same `sweep_id`, and stating the
+    // first row's figure would settle that confound by accident. `null` means "more than one",
+    // which is a different fact from "unknown", and every reading carries its own.
+    const mixed = sittingsFromRows([
+      storedRow({ id: 'a', runId: 'r1', sweepId: 's1', viewportWidth: 1912, viewportHeight: 1068 }),
+      storedRow({ id: 'b', runId: 'r2', sweepId: 's1', viewportWidth: 1016, viewportHeight: 636 }),
+    ])[0];
+
+    expect(mixed?.context.viewport).toBeNull();
+    expect(mixed?.limbs.map((l) => l.viewport.width)).toEqual([1912, 1016]);
+    const block = mixed === undefined ? '' : formatSitting(mixed);
+    expect(block).toContain('varies between readings');
+
+    // And a sitting whose readings agree still states it once, prominently (CQ-6).
+    const agreed = sittingsFromRows([
+      storedRow({ id: 'a', runId: 'r1', sweepId: 's2' }),
+      storedRow({ id: 'b', runId: 'r2', sweepId: 's2' }),
+    ])[0];
+    expect(agreed?.context.viewport).not.toBeNull();
+  });
+
   it('keeps a row it cannot judge rather than hiding the reading', () => {
     // A newer release can store a scenario an older one does not know. The figures are still on
     // the row, so dropping the limb would hide a measurement to avoid admitting an unknown.

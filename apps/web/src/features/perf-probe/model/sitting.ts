@@ -39,7 +39,14 @@ export const NOT_RECORDED = '(not recorded)';
  * with whichever scenario happened to sort first, and nothing on screen would look wrong.
  */
 export interface SittingContext {
-  readonly viewport: { readonly width: number; readonly height: number };
+  /**
+   * The canvas every reading was taken at, or `null` when they disagree.
+   *
+   * `null` is not "unknown" — it is "this sitting has more than one", which the rows then say
+   * individually. Collapsing it to the first reading's value would state a confound the register
+   * calls the most decision-relevant one it has (#261) as if it were settled.
+   */
+  readonly viewport: { readonly width: number; readonly height: number } | null;
   readonly devicePixelRatio: number;
   readonly idleInterval: number;
   /**
@@ -112,6 +119,17 @@ export interface SittingLimb {
   readonly recordedAt: string | null;
   /** Focus is lost per reading, so the sitting's disjunction is not a substitute for this. */
   readonly lostFocusDuringRun: boolean;
+  /**
+   * The canvas this reading was taken at.
+   *
+   * On the limb as well as the sitting, because it is the single most decision-relevant confound
+   * in the register (`docs/TECH_DEBT.md` #261: the same plan on the same machine measured 23.3 fps
+   * at 1912x1068 and 39.5 fps at 1016x636) and because a sitting can no longer promise it is
+   * constant — M6-T4 re-runs a missing reading under the SAME `sweep_id`, and nothing stops the
+   * operator resizing the window in between. The sitting states it when its readings agree and
+   * says so when they do not; a row that differs is flagged against the sitting's.
+   */
+  readonly viewport: { readonly width: number; readonly height: number };
   readonly limbLabel: string;
   readonly sceneSummary: string;
   readonly visibleBars: number;
@@ -173,6 +191,7 @@ export function sittingFromOutcome(
       frames: context.frames,
       recordedAt: context.startedAt,
       lostFocusDuringRun: context.lostFocusDuringRun,
+      viewport: context.viewport,
       limbLabel: limb.limbLabel,
       sceneSummary: limb.sceneSummary,
       visibleBars: limb.visibleBars,
@@ -217,7 +236,9 @@ export function sittingsFromRows(rows: readonly ProbeResultRow[]): readonly Sitt
     return {
       outcome: 'measured' as const,
       context: {
-        viewport: { width: first.viewportWidth, height: first.viewportHeight },
+        // Stated when the readings agree, `null` when they do not — never the first row's value,
+        // which would print one reading's canvas over a sitting that holds two.
+        viewport: sharedViewport(group),
         devicePixelRatio: first.devicePixelRatio,
         idleInterval: first.idleIntervalMs,
         gpu: first.gpuRenderer,
@@ -280,6 +301,7 @@ function limbFromRow(row: ProbeResultRow): SittingLimb {
     frames: row.framesPerPhase ?? null,
     recordedAt: row.recordedAt,
     lostFocusDuringRun: row.lostFocusDuringRun,
+    viewport: { width: row.viewportWidth, height: row.viewportHeight },
     limbLabel: limbLabelOf(row.scenarioId, row.limbId),
     sceneSummary: row.sceneSummary,
     visibleBars: counts.visibleBars ?? 0,
@@ -299,6 +321,19 @@ function limbFromRow(row: ProbeResultRow): SittingLimb {
       message: 'This reading was taken by a newer version of the app and cannot be judged here.',
     },
   };
+}
+
+/** The viewport the whole group shares, or `null` when it holds more than one. */
+function sharedViewport(
+  group: readonly ProbeResultRow[],
+): { width: number; height: number } | null {
+  const first = group[0];
+  if (first === undefined) return null;
+  const same = group.every(
+    (row) =>
+      row.viewportWidth === first.viewportWidth && row.viewportHeight === first.viewportHeight,
+  );
+  return same ? { width: first.viewportWidth, height: first.viewportHeight } : null;
 }
 
 function scenarioLabelOf(scenarioId: string): string {
