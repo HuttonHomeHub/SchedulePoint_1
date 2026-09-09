@@ -978,6 +978,10 @@ spread exceeds the bar, the run cannot answer and is recorded as disqualified ra
 which is exactly what ADR-0127 D8 did, and why its refusal was credible.
 _Inherited limits, restated so they are not quietly dropped:_ **one framing, one machine**, and
 **Fit ungraded** (`docs/TECH_DEBT.md` #260).
+_Outcome (2026-09-09T08:20Z, product owner's hardware, `web-v0.125.0`):_ **PASS** — baseline 0.00 pp
+with a 0.00 pp run-to-run spread, treatment 0.00 pp at 60.0 fps, **delta +0.00 pp**, with the overlay
+drawing 37 of 264 on-screen bars and 49 of 372 links so the run was not vacuous. See
+`m0-condition.md` for the full reading and what it does not establish.
 _A committed prediction, so it can be falsified:_ because D-Ghost-2 **narrows** what is drawn
 relative to a naive port, the cross-plan overlay should cost **no more** than the same-plan one at
 equal activity counts. Materially more means the lane clause has leaked back in.

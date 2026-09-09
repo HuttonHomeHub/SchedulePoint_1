@@ -235,12 +235,38 @@ falsifies: nothing else was running. `docs/TECH_DEBT.md` **#266** carries the de
 still owed — the probe runs minutes of measurement on every pull request and now asserts nothing, so
 it wants its own CI step the way the ADR-0066 pairwise differential has one.
 
-**P3 — the overlay's paint cost on a cross-plan pair — is OWED** and cannot be taken in this
-container, whose own no-change baseline moved by five times the bar between two runs an hour apart.
-It is recorded against the ADR-0128 staff probe with its three-valued verdict rule and its
-falsifiable prediction: because D7 narrows what is drawn, the cross-plan overlay should cost no more
-than the same-plan one, and **materially more means the lane clause leaked back in**. Nothing is
-blocked on it — this epic adds no new default and no new flag.
+**P3 — the overlay's paint cost on a cross-plan pair — is TAKEN, and it PASSES** (product owner's
+hardware, 2026-09-09T08:20Z, `web-v0.125.0`). It could not be taken in this container, whose own
+no-change baseline moved by five times the bar between two runs an hour apart, so it went to the
+ADR-0128 staff probe: `revision-diff`, **Week** framing, 2,000 activities per side, 180 frames × 3,
+1912×948 CSS px on an Intel Arc Pro. **Baseline 0.00 pp, treatment 0.00 pp at 60.0 fps, delta
++0.00 pp** against ADR-0127's 2.00 pp bar.
+
+**The verdict is meaningful rather than merely favourable, and the reason is the second limb.** A
+delta inside the bar decides nothing on its own — ADR-0127 D8 recorded a run where the machine's own
+no-change baseline moved 0.56 → 1.85 pp and 0.93 → 10.00 pp, and the honest outcome there was
+INDETERMINATE. Here the **run-to-run spread is 0.00 pp**, well below the bar, so the instrument could
+resolve the question it was asked. It is also the mirror image of `docs/TECH_DEBT.md` **#260**: that
+row records a Fit-framing baseline of 98.33 pp leaving the delta arithmetically incapable of failing,
+whereas an **unsaturated** 0.00 pp baseline leaves the delta free to rise, and it did not.
+
+**And it was not vacuous** — the probe reports **37 of 264 on-screen bars changed (14.0 %) and 49 of
+372 links (13.2 %)**, so the overlay was drawing when it was measured. A pair with nothing to draw
+would have produced the same beautiful number for the wrong reason, which is why the plan made the
+drawn-ghost count a task step rather than a closing formality.
+
+**The prediction holds.** D7 narrows what is drawn, so the cross-plan overlay should cost **no more**
+than the same-plan one; ADR-0127 D8a's same-plan reading was baseline 0.19 pp / treatment 0.00 pp at
+60.0 fps, and this is 0.00 / 0.00 at 60.0 fps. **Materially more would have meant the lane clause
+leaked back in** — the epic's most dangerous defect, because it fails no gate and merely looks busy.
+It did not.
+
+**What this does NOT establish, restated so it is not quietly widened.** One framing, one machine.
+**Fit remains ungraded** (#260), and Week culls hard — 264 of 2,160 bars are on screen at 12.00 px/day
+— which is ADR-0128's second reading set saying the same thing: cost tracks **bars drawn**, not plan
+size. So "the overlay is free" is true of the framing a planner works at and is not a claim about
+every framing. And a 0.00 pp baseline cannot resolve a cost below one dropped frame in 540, which is
+far under the bar and therefore does not touch the verdict.
 
 **No feature flag.** ADR-0088 D1 established that a `VITE_` constant is inlined at build time and has
 never been an operator rollback; the rollback here is a commit boundary, and the panel's existing
