@@ -85,6 +85,14 @@ export interface SittingContext {
   readonly apiVersion: string | null;
   /** The operator's own note, typed before the run. Never edited afterwards (insert-time only). */
   readonly machineLabel: string | null;
+  /**
+   * Who took the readings — **absent on the live path by construction**, like `apiVersion`.
+   *
+   * The browser does not learn the label until the POST comes back, and the block is copyable
+   * before that. `null` on a stored row means the account was scrubbed (ADR-0085's anonymisation),
+   * which is a different fact from "not yet known" and reads as one at the call site.
+   */
+  readonly recordedByLabel: string | null;
 }
 
 /**
@@ -143,6 +151,16 @@ export interface SittingLimb {
 }
 
 export interface Sitting {
+  /** The grouping key — stable, and the React key the list needs. */
+  readonly id: string;
+  /**
+   * Whether this sitting was one deliberate act or a single press.
+   *
+   * Derived from WHICH id space grouped it rather than from the row count, because those answer
+   * different questions: a sweep whose other three readings were refused stores exactly one row,
+   * and counting rows would call it a single press. Only `sweep_id` records the operator's intent.
+   */
+  readonly kind: 'sweep' | 'run';
   readonly context: SittingContext;
   readonly limbs: readonly SittingLimb[];
   /** `refused` and `cancelled` still produce a block; it says what happened and stores nothing. */
@@ -161,6 +179,11 @@ export function sittingFromOutcome(
   const limbs = outcome.kind === 'measured' ? outcome.limbs : [];
 
   return {
+    // A live outcome is always one press. It has no server-minted `runId` yet — the POST has not
+    // returned — so the id is the run's own start instant, which is unique per press and stable
+    // for as long as this object lives.
+    id: `run:${context.startedAt}`,
+    kind: 'run' as const,
     outcome: outcome.kind,
     ...(outcome.kind === 'refused'
       ? { refusal: { reason: outcome.refusal.reason, sentence: outcome.refusal.sentence } }
@@ -182,6 +205,7 @@ export function sittingFromOutcome(
       appVersion: context.appVersion,
       apiVersion: null,
       machineLabel,
+      recordedByLabel: null,
     },
     limbs: limbs.map((limb) => ({
       scenarioId: context.scenarioId,
@@ -227,13 +251,15 @@ export function sittingsFromRows(rows: readonly ProbeResultRow[]): readonly Sitt
     else existing.push(row);
   }
 
-  return [...groups.values()].map((group) => {
+  return [...groups.entries()].map(([key, group]) => {
     // **The first row carries the MACHINE, and nothing that varies.** It used to carry the framing
     // and the protocol too, under a comment claiming every row in a press shares them — true of one
     // press and false of a sweep, which is four presses under one id. Those moved to the limb; what
     // is left here is genuinely constant, because it describes the computer rather than the run.
     const first = group[0] as ProbeResultRow;
     return {
+      id: key,
+      kind: key.startsWith('sweep:') ? ('sweep' as const) : ('run' as const),
       outcome: 'measured' as const,
       context: {
         // Stated when the readings agree, `null` when they do not — never the first row's value,
@@ -260,6 +286,7 @@ export function sittingsFromRows(rows: readonly ProbeResultRow[]): readonly Sitt
         appVersion: first.appVersion,
         apiVersion: first.apiVersion,
         machineLabel: first.machineLabel,
+        recordedByLabel: first.recordedByLabel,
       },
       limbs: group.map(limbFromRow),
     };
