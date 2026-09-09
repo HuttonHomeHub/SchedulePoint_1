@@ -244,5 +244,10 @@ unrelated fixtures fail, which is the honest cost of a control — so every fixt
 gets a bare-link plan by default and exactly one case opts out.
 
 **The CPM engine is not imported and no migration runs.** No product code changes at all: this is
-one script, one shared-parser export, one JSON register, one CI step, 62 spec headers, 30 plan
-annotations and five documents.
+one script, one shared-parser export, one JSON register, one CI step, 62 spec headers, **36**
+plan files — 29 of them the contradictions P1 names, the rest annotations that agreed with their
+spec and were reworded to the same words — and five documents.
+
+**"30 plan annotations" is what the first version of this paragraph said**, and the diff says 36. It
+is corrected here rather than quietly, because a count nobody re-derived is ADR-0076 Class 1 and
+this ADR is about a document asserting something nobody checked.
