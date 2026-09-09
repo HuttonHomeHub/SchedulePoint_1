@@ -132,7 +132,12 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   await squatterContext.close();
 
   // ---------------------------------------------------------------- The staff member
-  const staffContext = await browser.newContext();
+  // **`clipboard-write` is granted explicitly, and CI is why.** `navigator.clipboard.writeText`
+  // needs the permission; without it the promise REJECTS, the Copy handler takes its failure branch
+  // and no "Copied." is ever announced. That passed locally and failed on the runner — a divergence
+  // that says nothing about the product and everything about the harness, which is the class of
+  // false signal this suite exists to avoid producing.
+  const staffContext = await browser.newContext({ permissions: ['clipboard-write'] });
   const staff = await staffContext.newPage();
   await signUpOrIn(staff, STAFF_EMAIL, 'Ops Person');
 
@@ -498,14 +503,25 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     // **The whole point.** A stop after the first limb keeps that limb, so the sentence names what
     // survived and the history grows. "Nothing was measured" here would be the pre-M3 behaviour.
     expect(afterText).toMatch(/had already finished and (was|were) kept/);
-    await expect(staff.getByText(/Recorded\./).first()).toBeVisible({ timeout: 15_000 });
-    const rowsAfter = await staff
-      .getByRole('table', { name: /Readings recorded on this installation/ })
-      .getByRole('row')
-      .count();
-    expect(rowsAfter, 'a stopped press still added its completed reading').toBeGreaterThan(
-      rowsBefore,
-    );
+
+    // **Poll the table rather than counting it once after a proxy signal.** "Recorded." appearing
+    // means the POST resolved; it does not mean the history query has refetched and re-rendered,
+    // and counting rows in that gap is a race — which is how this assertion failed on one run in
+    // four with the product behaving correctly. `expect.poll` retries the count itself, so the
+    // thing asserted is the thing waited for.
+    await expect
+      .poll(
+        async () =>
+          staff
+            .getByRole('table', { name: /Readings recorded on this installation/ })
+            .getByRole('row')
+            .count(),
+        {
+          message: 'a stopped press still added its completed reading',
+          timeout: 15_000,
+        },
+      )
+      .toBeGreaterThan(rowsBefore);
   }
 
   await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
