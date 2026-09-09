@@ -224,12 +224,16 @@ here; and the harness half inverts, passing at 211.0 ms in the suite and failing
 alone, because run in isolation its first five samples are 5937/5954/5902/6045/5748 ms before it
 settles to ~160 ms. **Each configuration passes one half and fails the other.** CI's own runner then
 passed both, which is what let the epic merge — so the conclusion this decision rests on is
-unchanged and the confidence in the number is not. Two consequences are filed as
-`docs/TECH_DEBT.md` **#266** rather than fixed here, because changing how a committed falsification
-condition is enforced is a decision: this probe is the only M0 sibling that **asserts** a wall-clock
-bar inside the blocking e2e job, which ADR-0128 refuses to do in a container for exactly this
-reason; and the probe's own docblock attributes those cold opening samples to suite contention,
-which the isolated run falsifies — nothing else was running.
+unchanged and the confidence in the number is not. Then CI failed the probe at **5050.6 ms on a
+pull request that changed two markdown files**, which moved it from a filed observation to a gate
+blocking unrelated work. **The assertions are gone** (product-owner decision, 2026-09-09): both
+figures and every sample are still printed, the non-vacuity checks stay, and neither the bar nor the
+cold samples were touched — a falsification condition is a measurement taken to settle a question,
+not a standing gate, and both sibling M0 probes and ADR-0128 had already said so. The probe's own
+docblock had also attributed those cold opening samples to suite contention, which the isolated run
+falsifies: nothing else was running. `docs/TECH_DEBT.md` **#266** carries the detail and what is
+still owed — the probe runs minutes of measurement on every pull request and now asserts nothing, so
+it wants its own CI step the way the ADR-0066 pairwise differential has one.
 
 **P3 — the overlay's paint cost on a cross-plan pair — is OWED** and cannot be taken in this
 container, whose own no-change baseline moved by five times the bar between two runs an hour apart.

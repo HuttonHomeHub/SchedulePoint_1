@@ -4622,75 +4622,53 @@ appear as pre-existing open alerts in the branch's code-scanning view first: thi
 because the token in use gets `403 Resource not accessible by integration` on
 `/code-scanning/alerts`.
 
-### 266. Two wall-clock assertions sit in blocking gates, and one release run falsified the reasoning behind each
+### 266. A measurement probe still runs its full 900-second measurement in the blocking e2e job
 
-**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PR #491) · **Size:** S · **Owner:** api
+**Status:** open · **Raised:** 2026-09-09 (ADR-0129, PRs #491/#493) · **Verified:** 2026-09-09 ·
+**Size:** S · **Owner:** api
 
-`apps/api/test/revision-compare-imported-p2.e2e-spec.ts` is the only M0 probe in the repository that
-**asserts** a timing bar. Its two siblings measure and report — `revision-delta-m0.e2e-spec.ts:607`
-says "This is REPORTED, not asserted equal" — and ADR-0128 refuses to run performance judgements in
-a CI container at all, because such a container's own no-change baseline moves by more than the bar.
-This probe does both of the things that decision rules out, in the job every PR has to pass.
+**The two defects this row was raised for are fixed** (product-owner decisions, 2026-09-09). It is
+kept open on what those decisions deliberately did not settle, recorded below.
 
-**Measured on one container, same code, same 250 ms bar, within an hour:**
+**What was found.** Two wall-clock assertions sat in gates every pull request must pass, on machines
+nobody controls, and one release run falsified the reasoning behind each.
 
-|                                           | harness p95        | end-to-end p95    |
-| ----------------------------------------- | ------------------ | ----------------- |
-| in the suite (52 files ahead of it, warm) | 211.0 ms PASS      | **255.2 ms FAIL** |
-| alone (nothing else running)              | **5954.2 ms FAIL** | 191.2 ms PASS     |
-| recorded in ADR-0129                      | 208.2 ms PASS      | 215.2 ms PASS     |
+`revision-compare-imported-p2.e2e-spec.ts` was the only M0 probe **asserting** a bar (250 ms p95)
+inside the blocking e2e job; its siblings report instead (`revision-delta-m0.e2e-spec.ts`: "This is
+REPORTED, not asserted equal") and ADR-0128 had already decided the question — a performance
+judgement belongs on hardware that can take it, never in a container whose own baseline moves by
+more than the bar. Measured on one container within an hour: in the suite, harness 211.0 ms PASS /
+end-to-end **255.2 ms FAIL**; run alone, harness **5954.2 ms FAIL** / end-to-end 191.2 ms PASS —
+each configuration passing one half and failing the other, against 208.2 / 215.2 recorded in
+ADR-0129. Then CI failed it at **5050.6 ms on a pull request that changed two markdown files**.
+**Resolved by reporting rather than asserting**: both figures and every sample are still printed, the
+non-vacuity assertions stay, and neither the bar nor the cold samples were touched.
 
-Each configuration passes one half and fails the other. CI's own runner passed both, which is what
-let the epic merge — so the decision the number supports (the global rate budget rather than a
-per-route throttle) is unchanged, and the confidence in the number is not. `p50` is 154–204 ms
-across every run, so only the tail crosses; with 21 end-to-end samples the p95 index lands on the
-second-worst reading, which makes it very nearly a maximum — the same estimator defect this epic's
-own M0 already corrected once for the other half of the probe.
+`level.spec.ts`'s levelling ratio guard failed the same docs-only pull request at **4.88x
+(362ms -> 1764ms)** against a 4.0x bound, with 1,927 of 1,933 api tests passing. That guard is the
+considered replacement for an absolute bound #241 removed from the same file for flaking on a pull
+request that likewise touched no API code, and its docblock argues it is safe because _"the noise is
+in the numerator and the denominator, and divides out"_. **It does not.** A ratio cancels a constant
+**speed** factor; it does not cancel an **independent per-run perturbation**, and the two timings run
+sequentially in one process, so a GC pause or a slice of CPU steal landing in the second and not the
+first is additive. With the smaller run at ~360 ms, one ~400 ms hiccup moves the ratio by more than a
+whole point, against a bound holding 1.5x of headroom over the ~2.4x its docblock records measuring.
+**Resolved by taking the median of three doublings** — a perturbation must land the same way in two
+of three to move the verdict — at ~3x that one test's runtime, paid knowingly. **The 4.0x bound is
+unchanged**: the defect was the estimator's, not the threshold's, and a bar set to whatever stops a
+test flaking measures nothing.
 
-**The probe's docblock is also wrong about why its opening samples are slow, and that is the more
-useful half.** It attributes them to `--disable-console-intercept` breaking vitest's path filter, so
-that "the probe times itself while ~600 other tests hammer the same database … as the rest of the
-suite drained". Run alone, with nothing else on the machine, the first five samples are
-5937 / 5954 / 5902 / 6045 / 5748 ms and it then settles to ~160 ms. That is warm-up, not contention.
-So the remedy the epic adopted — write the report to a file so the probe needs no flag and can run
-alone — made it runnable alone and left the cold cost exactly where it was.
+**What stays open, and it is not either of those.** The P2 probe still runs its whole measurement —
+two 2,000-activity imports, 25 harness iterations and 21 HTTP round trips, minutes of wall clock,
+a 900-second timeout — inside the default e2e include set, on **every** pull request, and now
+asserts nothing at all. It produces a report nobody reads on a run nobody triggered. The option
+costed and not taken was to give it its own script and CI step the way the ADR-0066 pairwise
+differential has one, so it runs deliberately and its wall-clock is attributed to a step a reader can
+see. That is the remaining work; it is small, and it is worth doing before the next probe copies this
+one's shape.
 
-**What would fix it, and why it is filed rather than done.** The precedent-backed option is
-report-not-assert: keep both figures in the record where the falsification condition needs them,
-keep the non-vacuity assertions (`matched > 0`, `changes > 0`, which are about correctness rather
-than timing), and stop gating a shared job on a container's clock. A warm-up discarded before
-sampling is the other option and is the one to be careful with, because choosing how many samples to
-drop _after_ seeing which choice passes is tuning the instrument to the answer. Either way it changes
-how a committed falsification condition is enforced, which is a decision for the product owner and
-not a defect fix — so it is written down rather than taken silently on the day a release was waiting.
-
-**A second instance landed in the same release, and it falsifies a different argument.** With #491
-merged and #493 open — a pull request changing **two markdown files** — the unit job failed on
-`apps/api/src/modules/schedule/engine/level.spec.ts`:
-
-> doubling the contending set cost 4.88x (362ms -> 1764ms); above 4x means the pass has grown worse
-> than quadratic
-
-1,927 of 1,933 api tests passed and nothing algorithmic had changed. That guard is **not** careless
-— it is the considered replacement for an absolute bound that #241 removed from this same file, for
-flaking on a pull request that likewise touched no API code, and its docblock argues the replacement
-is safe because _"the noise is in the numerator and the denominator, and divides out"_.
-
-**The measurement says it does not divide out, and the reason is worth keeping.** A ratio cancels a
-constant **speed** factor — a slower machine makes both runs proportionally slower. It does not
-cancel an **independent per-run perturbation**: the two timings are sequential in one process, so a
-GC pause or a slice of CPU steal that lands in the second run and not the first is additive, not
-multiplicative. With the smaller run at 362 ms, one ~400 ms hiccup moves the ratio by more than a
-whole point on its own — and the bound has only 1.5× of headroom over the ~2.4× the docblock records
-measuring. So the guard is less hardware-independent than its own reasoning claims, and this is the
-second time this file has flaked on a documentation-only change.
-
-**The two instances are one class**: a wall-clock number asserted in a gate every pull request must
-pass, on a machine nobody controls. ADR-0128 already decided this question for the canvas — the
-measurement belongs on hardware that can take it, and never in CI — and neither of these gates was
-read against that decision. What is deliberately **not** proposed here is deleting either assertion:
-the levelling ratio is watching the shape #84 leaves unoptimised on purpose, and that is worth
-watching. The options are to widen the bound with a stated reason, to take the median of three
-doublings rather than one, or to move the judgement out of CI the way ADR-0128 did. All three are
-decisions, and choosing one by whichever makes today's run green is exactly what the rest of this row
-argues against.
+**Also worth carrying: `ROUTE_ITERATIONS` is 21, so the p95 index is 19 — the second-worst sample.**
+The file's own docblock explains the count was raised from 7 so that "one cold sample cannot become
+the verdict", which was the right fix for the estimator being a literal maximum and still leaves the
+figure very close to one. That matters less now nothing is asserted, and it would matter again the
+moment anybody re-armed a gate on it.

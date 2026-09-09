@@ -504,14 +504,48 @@ describe('levelSchedule — single-resource many-way contention performance (ADR
     // second does not, and charging those to the numerator alone flatters the ratio.
     timeOne(500);
 
-    const small = timeOne(1000);
-    const large = timeOne(2000);
-    const ratio = large / small;
+    /**
+     * **The MEDIAN of three doublings, because one pair does not cancel what the docblock above
+     * claims it cancels.**
+     *
+     * That argument — "the noise is in the numerator and the denominator, and divides out" — is
+     * true of a constant **speed** factor: a slower machine makes both runs proportionally slower
+     * and the ratio is unmoved. It is **not** true of an independent per-run perturbation. The two
+     * timings are sequential in one process, so a garbage collection or a slice of CPU steal that
+     * lands in the second run and not the first is *additive*, and a single ratio carries it whole.
+     *
+     * Measured rather than reasoned: on 2026-09-09 this test failed CI at **4.88x
+     * (362ms -> 1764ms)** on a pull request that changed **two markdown files** — 1,927 of 1,933
+     * api tests passing and nothing algorithmic touched. With the smaller run at ~360 ms, one
+     * ~400 ms hiccup moves the ratio by more than a whole point, against a bound holding only 1.5x
+     * of headroom over the ~2.4x recorded above. That is the second time this file has flaked on a
+     * change that could not have affected it (`docs/TECH_DEBT.md` #241 records the first, and the
+     * absolute bound it removed).
+     *
+     * Three independent pairs and the median: a perturbation has to land in the *same direction*
+     * in two of three doublings to move the verdict, which is a far rarer event than one hiccup.
+     * The bound itself is **unchanged at 4.0x** — this is the estimator's defect, not the
+     * threshold's, and widening the threshold would be the "a bar set to whatever stops it flaking
+     * measures nothing" move recorded in #266. The cost is ~3x this one test's runtime, paid
+     * knowingly (product-owner decision, 2026-09-09).
+     *
+     * All three pairs are reported on a failure, because a genuine slide to cubic makes every pair
+     * cross the bound and a flake makes one — and a reader cannot tell those apart from a median.
+     */
+    const pairs = [1, 2, 3].map(() => {
+      const small = timeOne(1000);
+      const large = timeOne(2000);
+      return { small, large, ratio: large / small };
+    });
+    const ratios = pairs.map((p) => p.ratio).sort((a, b) => a - b);
+    const ratio = ratios[1] ?? 0;
 
     expect(
       ratio,
-      `doubling the contending set cost ${ratio.toFixed(2)}x (${small.toFixed(0)}ms -> ${large.toFixed(0)}ms); ` +
-        'above 4x means the pass has grown worse than quadratic — see `docs/TECH_DEBT.md` #84',
+      `doubling the contending set cost a median ${ratio.toFixed(2)}x across three pairs ` +
+        `[${pairs.map((p) => `${p.ratio.toFixed(2)}x (${p.small.toFixed(0)}ms -> ${p.large.toFixed(0)}ms)`).join(', ')}]; ` +
+        'above 4x means the pass has grown worse than quadratic — see `docs/TECH_DEBT.md` #84. ' +
+        'A single pair crossing the bound with the other two clear is a runner hiccup, not a slide.',
     ).toBeLessThan(4);
   });
 });
