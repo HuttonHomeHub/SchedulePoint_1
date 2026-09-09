@@ -32,6 +32,22 @@ import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink';
  * Chromium only (TECH_DEBT #25a), serial.
  */
 
+/**
+ * A stored sitting's table, located by the ACT it names.
+ *
+ * The history stopped being one flat table at M6-T1: it is now one block per sitting, and each
+ * block's caption names what the operator did — `Sweep of 4 readings — …` or `One reading — …` —
+ * because that is the distinction `sweep_id` exists to record. The old caption ("Readings recorded
+ * on this installation") survives on exactly one path, the loading/error/empty projection, so a
+ * journey that went on asking for it would find the table only when there was nothing in it.
+ *
+ * That is what happened: both tests in this file failed on the first run after M6-T3, having passed
+ * every unit suite throughout. Located by role and name rather than by a `data-` hook deliberately
+ * — the caption IS the accessible name of the region a screen-reader user navigates to, so asking
+ * for it is asking the same question they do.
+ */
+const SITTING_TABLE = /^(Sweep of \d+ readings?|One reading) — /;
+
 const PASSWORD = 'correct-horse-battery';
 /** Must equal the config's `STAFF_EMAILS` entry, modulo case and padding — that is the point. */
 const STAFF_EMAIL = 'ops@schedulepoint.test';
@@ -393,35 +409,44 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     await expect(staff.getByText('Recorded. It appears in the history below.')).toBeVisible({
       timeout: 15_000,
     });
-    const history = staff.getByRole('table', {
-      name: /Readings recorded on this installation/,
-    });
-    await expect(history.getByRole('cell', { name: 'CI container' }).first()).toBeVisible();
+    const history = staff.getByRole('table', { name: SITTING_TABLE }).first();
     // More than the header row, asserted as a shape rather than as a count: a scenario may be
     // measured at more than one scale, and each scale is its own row.
     await expect(history.getByRole('row')).not.toHaveCount(1);
 
-    // **The three facts that decide whether a reading means anything** (M2-T1). All three were
-    // stored on every row since this table shipped and rendered on none, against an acceptance
-    // criterion the predecessor spec approved. Asserted here against a REAL stored row, because a
-    // component test renders whatever fixture it was handed and cannot tell you the column is fed
-    // by the field the API actually returns.
-    await expect(history.getByRole('columnheader', { name: 'Canvas' })).toBeVisible();
-    await expect(history.getByRole('columnheader', { name: 'Display' })).toBeVisible();
-    await expect(history.getByRole('columnheader', { name: 'Attention' })).toBeVisible();
+    // **The three facts that decide whether a reading means anything** (M2-T1) — asserted where
+    // they now LIVE rather than dropped. All three were stored on every row since this table
+    // shipped and rendered on none, against an acceptance criterion the predecessor spec approved;
+    // M6-T2 then moved them out of the columns and into the sitting's facts list, because a sweep
+    // repeated the machine, the canvas and the display on every one of its rows. The fact being on
+    // screen is the criterion; which element carries it is this milestone's business. Asserted
+    // against a REAL stored row, because a component test renders whatever fixture it was handed
+    // and cannot tell you the value is fed by the field the API actually returns.
+    await expect(staff.getByText('CI container').first()).toBeVisible();
     // A real viewport and a real measured interval, not zeroes or blanks: the shapes are what a
-    // wrong wiring would break, and a blank cell is what it would look like.
-    await expect(history.getByRole('cell', { name: /^\d+x\d+ @[\d.]+x$/ }).first()).toBeVisible();
-    await expect(history.getByRole('cell', { name: /^[\d.]+ ms$/ }).first()).toBeVisible();
-    await expect(history.getByRole('cell', { name: /^(Held|Lost focus)$/ }).first()).toBeVisible();
+    // wrong wiring would break, and a blank value is what it would look like.
+    await expect(staff.getByText(/^\d+×\d+ @[\d.]+x$/).first()).toBeVisible();
+    await expect(staff.getByText(/^[\d.]+ ms idle frame interval$/).first()).toBeVisible();
+    await expect(
+      staff.getByText(/^(held throughout|a reading lost focus — see the table)$/).first(),
+    ).toBeVisible();
+    // And the reading's own time, which is per row rather than per sitting since M6-T4: a resumed
+    // reading is stored under the same `sweep_id` hours later, so the sitting's one timestamp is
+    // true of its earliest reading and merely probable of the rest.
+    await expect(history.getByRole('columnheader', { name: 'Taken' })).toBeVisible();
 
     // **The entry point for M2-T3** (ADR-0081). The block is the deliverable `docs/TECH_DEBT.md`
     // #75 actually consumes, and until this milestone it could only be produced in the seconds
     // after a run. Clicking it here proves the control reaches a stored reading through the real
     // formatter — the clipboard write itself is asserted in the unit suite, since a headless
     // browser's clipboard permission is a property of the harness rather than of the product.
-    await expect(history.getByRole('button', { name: 'Copy' }).first()).toBeVisible();
-    await history.getByRole('button', { name: 'Copy' }).first().click();
+    //
+    // `Copy report` is the SITTING's control and sits beside its table rather than inside it, which
+    // is M6-T3's own decision: a block for one limb of a four-reading sweep is a partial answer
+    // that looks complete. The name is a full match, so it cannot resolve to the live result
+    // block's `Copy full report`.
+    await expect(staff.getByRole('button', { name: 'Copy report' }).first()).toBeVisible();
+    await staff.getByRole('button', { name: 'Copy report' }).first().click();
     await expect(staff.getByText('Copied.').first()).toBeVisible();
 
     // And the caveat that says what the Canvas column is FOR, linked to the table rather than
@@ -449,12 +474,6 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   //
   // `canvas-draw` is chosen deliberately. `revision-diff` has ONE limb, so a stop can never leave
   // anything behind and a journey driving it would assert an invariant it cannot violate.
-  const rowsBefore = await staff
-    .getByRole('table', { name: /Readings recorded on this installation/ })
-    .getByRole('row')
-    .count()
-    .catch(() => 0);
-
   await openMeasureOne(staff);
   await staff.getByRole('combobox', { name: 'Measurement' }).selectOption('canvas-draw');
   // **`full`, not `quick`, and that is the difference between a journey and a decoration.** At 40
@@ -506,24 +525,36 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     // survived and the history grows. "Nothing was measured" here would be the pre-M3 behaviour.
     expect(afterText).toMatch(/had already finished and (was|were) kept/);
 
-    // **Poll the table rather than counting it once after a proxy signal.** "Recorded." appearing
-    // means the POST resolved; it does not mean the history query has refetched and re-rendered,
-    // and counting rows in that gap is a race — which is how this assertion failed on one run in
-    // four with the product behaving correctly. `expect.poll` retries the count itself, so the
-    // thing asserted is the thing waited for.
+    // **What reached the database, asserted as the SHAPE of the newest sitting rather than as a
+    // total that grew.** This used to count every row in the history before and after and require
+    // the number to rise — and `staff-probe.service.ts:14` caps the read at 50 rows, so on any
+    // installation that has taken fifty readings the total is invariant: a new reading displaces
+    // the oldest and the count cannot move. It passed for months because a fresh local database
+    // has fewer, and it failed here at 75 rows with the product behaving perfectly. A gate that
+    // stops being able to report is exactly what this epic is about, one tier out.
+    //
+    // The replacement is sharper as well as sound. M3's claim is not "the history grew" but "the
+    // completed limb survived and the interrupted one did not", so the newest sitting is a single
+    // press holding EXACTLY ONE reading — the 500-activity limb — beside a header row. The suite
+    // runs `workers: 1, fullyParallel: false`, so the newest sitting is this press.
+    //
+    // Polled rather than counted once: "Recorded." means the POST resolved, not that the history
+    // query has refetched and re-rendered, and reading in that gap is a race that once failed this
+    // on one run in four.
     await expect
       .poll(
         async () =>
-          staff
-            .getByRole('table', { name: /Readings recorded on this installation/ })
-            .getByRole('row')
-            .count(),
+          staff.getByRole('table', { name: SITTING_TABLE }).first().getByRole('row').count(),
         {
-          message: 'a stopped press still added its completed reading',
+          message: 'a stopped press still stored its completed limb as a sitting of one',
           timeout: 15_000,
         },
       )
-      .toBeGreaterThan(rowsBefore);
+      .toBe(2);
+    await expect(
+      staff.getByRole('table', { name: /^One reading — / }).first(),
+      'a single press is a single press, not a sweep permanently missing three readings',
+    ).toBeVisible();
   }
 
   await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
@@ -659,12 +690,23 @@ test('a staff member takes every reading in one press', async ({ browser }) => {
   // **What reached the database, which is a different question from what was measured.** A sweep
   // records per step as each completes, so a container that refused one reading still stores the
   // others — that is the whole reason an interruption is cheap.
-  const history = staff.getByRole('table', { name: /Readings recorded on this installation/ });
+  const history = staff.getByRole('table', { name: SITTING_TABLE }).first();
   if (/measured/.test(text)) {
     await expect(history).toBeVisible({ timeout: 20_000 });
     // More than the header row. Asserted as a shape rather than a count, because how many of the
     // four steps this container manages is a property of the container.
     await expect(history.getByRole('row')).not.toHaveCount(1);
+    // **And the NEWEST sitting is named as ONE act.** A sweep's steps POST separately, so the thing
+    // that makes them one sitting is the client-minted `sweep_id` surviving four round trips into
+    // the grouping — invisible to every unit test here, because those hand the model rows that
+    // already carry it. If it did not survive, this reads `One reading` four times over.
+    //
+    // The newest rather than "exactly one": the history is installation-wide and a local database
+    // accumulates across runs, so a count is a fact about how many times this suite has been run.
+    // Asserted on `.first()` because the API returns newest first and this suite is serial.
+    await expect(staff.getByRole('table', { name: SITTING_TABLE }).first()).toHaveAccessibleName(
+      /^Sweep of \d+ readings? — /,
+    );
   }
 
   // The console is a real screen and gets the same accessibility bar as every other one — and this

@@ -111,13 +111,43 @@ describe('ProbeSittings', () => {
     // Two rows, both `canvas-draw`, at two framings — so TWO readings of the four, not two of two.
     // The first draft of this case asserted "1 of 4" and the test corrected the arithmetic: a
     // reading is a scenario at a framing, and `canvas-draw` contributes two of a sweep's four.
-    view(sweepRows().slice(0, 2));
+    // A SECOND, older sitting beneath it, so the one under test is not the oldest block. That
+    // matters since M6-T4: the read is capped at 50 rows and returns no total, so the oldest block
+    // rendered may be cut by the page boundary and is the one block that may not say why a reading
+    // is absent. Everything above it can.
+    view([
+      ...sweepRows().slice(0, 2),
+      row({ id: 'old', runId: 'r-old', sweepId: null, recordedAt: '2026-09-01T09:00:00.000Z' }),
+    ]);
 
     // Matched on the alert's whole text rather than by `getByText`: the sentence is assembled from
     // interpolated counts, so it is split across elements and a regex over one of them finds none.
     const alert = screen.getByRole('status');
     expect(alert.textContent).toContain('This sitting has 2 of 4 readings');
     expect(alert.textContent).toContain('2 were refused or never taken');
+  });
+
+  it('will not say WHY a reading is absent from the oldest block, because it cannot know', () => {
+    // `staff-probe.service.ts:14` caps the read at 50 rows and returns no total and no cursor, so
+    // a reading missing from the oldest sitting on screen may have been refused, may never have
+    // been taken, or may simply be on a page nobody asked for. "2 were refused or never taken" is
+    // then a false claim about somebody's data — the exact defect the alert exists to prevent, one
+    // page boundary along, and reachable because M6-T3 added the alert.
+    //
+    // Verified red by rendering the assertive sentence unconditionally.
+    view(sweepRows().slice(0, 2));
+
+    const alert = screen.getByRole('status');
+    expect(alert.textContent).toContain('This sitting has 2 of 4 readings');
+    expect(alert.textContent).toContain('fall outside this page');
+    expect(alert.textContent).not.toContain('were refused or never taken');
+  });
+
+  it('says the list is a page, so an absent sitting is not an absent reading', () => {
+    view(sweepRows());
+    expect(
+      screen.getByText('Showing the most recent readings. Older sittings are not listed.'),
+    ).toBeInTheDocument();
   });
 
   it('does not call a complete sweep partial', () => {
@@ -146,7 +176,9 @@ describe('ProbeSittings', () => {
   });
 
   it('copies the whole sitting, not the row that was clicked', () => {
-    const writeText = vi.fn(() => Promise.resolve());
+    // Typed, so the assertion below reads the argument rather than casting an `unknown` — a cast
+    // here would go on compiling if the button ever stopped passing the block at all.
+    const writeText = vi.fn((_text: string) => Promise.resolve());
     Object.assign(navigator, { clipboard: { writeText } });
     view(sweepRows());
 
@@ -155,7 +187,7 @@ describe('ProbeSittings', () => {
     // One control per sitting, and the block it writes carries every reading — a block for one
     // limb of a four-reading sweep would be a partial answer that looks complete.
     expect(writeText).toHaveBeenCalledTimes(1);
-    const block = writeText.mock.calls[0]?.[0] as unknown as string;
+    const block = writeText.mock.calls[0]?.[0] ?? '';
     expect(block).toContain('Canvas draw budget');
     expect(block).toContain('Revision compare overlay');
   });
@@ -194,5 +226,32 @@ describe('ProbeSittings', () => {
 
     expect(screen.getByText('Not readable by this version')).toBeInTheDocument();
     expect(screen.queryByText('FAIL')).not.toBeInTheDocument();
+  });
+
+  it('says a sitting was not taken in one sitting when its readings span more than an hour', () => {
+    // The state M6-T4 creates: a reading refused on the day, taken again under the SAME sweep id
+    // once the machine was free. The grouping stays right — the operator meant them as one act —
+    // and "these were taken together" becomes false, with the machine facts above them stated once
+    // from the earliest. Nothing else on the block contradicts that, so the block has to.
+    view([
+      row({ id: 'a', runId: 'r1', sweepId: 's1', recordedAt: '2026-09-08T18:00:00.000Z' }),
+      row({
+        id: 'b',
+        runId: 'r2',
+        sweepId: 's1',
+        preset: 'fit',
+        recordedAt: '2026-09-09T09:00:00.000Z',
+      }),
+    ]);
+
+    expect(screen.getByText(/taken 15 hours apart, not in one sitting/)).toBeInTheDocument();
+  });
+
+  it('stays silent for an ordinary sweep, whose readings are minutes apart', () => {
+    // A caveat printed on every sitting is a caveat read past on the day it matters. Verified red
+    // by rendering the alert unconditionally.
+    view(sweepRows());
+
+    expect(screen.queryByText(/not in one sitting/)).not.toBeInTheDocument();
   });
 });

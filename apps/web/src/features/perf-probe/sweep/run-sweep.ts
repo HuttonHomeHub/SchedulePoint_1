@@ -40,8 +40,23 @@ export interface SweepStepResult {
 }
 
 export interface SweepOutcome {
-  /** Minted once per press. Every step's rows carry it, which is what makes them one sitting. */
-  readonly sweepId: string;
+  /**
+   * Minted once per press, and `null` when this press is not a sitting.
+   *
+   * Every step's rows carry it, which is what makes them one sitting; a single press carries none,
+   * which is what stops it claiming to be a sitting of one with three readings missing.
+   */
+  readonly sweepId: string | null;
+  /**
+   * The protocol every step in this sitting ran under.
+   *
+   * **Carried on the outcome so a resume cannot pick a different one.** `missingSteps` re-runs
+   * under the same `sweepId`, and a `quick` reading stored beside a `full` one under a single id is
+   * a sitting whose rows were taken under two protocols — legible in the Protocol column and
+   * invisible in the sentence that names the sitting. Reading the size off the outcome makes the
+   * match structural rather than something the panel has to remember.
+   */
+  readonly size: RunSize;
   readonly steps: readonly SweepStepResult[];
   /** True when the operator stopped it. Steps after the stop are `not taken`, never `refused`. */
   readonly stopped: boolean;
@@ -50,8 +65,21 @@ export interface SweepOutcome {
 export interface RunSweepInput {
   readonly size: RunSize;
   readonly machineLabel: string | null;
-  /** Mints the sitting id. Injected so a test can assert one id across four steps. */
-  readonly newSweepId: () => string;
+  /**
+   * Mints the sitting id, or returns `null` when this press is not one.
+   *
+   * **`null` is a fact, not a gap**, and the schema says so: `sweep_id` is "NULL means this reading
+   * was a single press… a default would claim membership of a sitting that does not exist"
+   * (`docs/specs/probe-sweep/feature-spec.md:644`). This callback returned a string unconditionally
+   * until M6-T4, so a single **Measure one thing** press stored an id, grouped as a sweep, and the
+   * history told the operator their sitting held "1 of 4 readings — 3 were refused or never taken".
+   * All three of those clauses were false, on the commonest press there is.
+   *
+   * Injected rather than decided here for the reason the resume needs: only the caller knows
+   * whether this press continues a sitting, starts one, or is on its own. `plan.length` cannot
+   * tell — a resume of one missing reading is a one-step plan inside a four-reading sitting.
+   */
+  readonly newSweepId: () => string | null;
   readonly runStep: (step: SweepStep) => Promise<ProbeOutcome>;
   /** Resolves on a stored row, rejects on a failed POST. Never throws out of the sweep. */
   readonly store: (body: ProbeResultBody) => Promise<unknown>;
@@ -122,5 +150,66 @@ export async function runSweep(input: RunSweepInput): Promise<SweepOutcome> {
     if (outcome.kind === 'cancelled') stopped = true;
   }
 
-  return { sweepId, steps, stopped };
+  return { sweepId, size: input.size, steps, stopped };
+}
+
+/**
+ * The steps that produced nothing and can only be had by measuring again.
+ *
+ * **`not recorded` is deliberately NOT one of them.** That step has its figures and a body; it
+ * needs a POST, which **Retry recording** does in a fraction of a second. Re-measuring it would
+ * spend twenty-five seconds to obtain numbers already on screen, and — because a second press
+ * measures a second time — it would store a *different* reading under the same id while the
+ * operator believed they were re-sending the one in front of them. The two affordances answer two
+ * different failures and stay apart for the same reason `refused` and `not taken` do.
+ *
+ * `waiting` and `running` cannot appear on a finished sweep and are excluded by the same rule
+ * rather than by assuming they cannot: nothing was measured, but nothing was attempted either.
+ */
+export function missingSteps(outcome: SweepOutcome): SweepStep[] {
+  return outcome.steps
+    .filter((step) => step.status === 'refused' || step.status === 'not taken')
+    .map((step) => step.step);
+}
+
+/**
+ * Fold a resumed press back into the sitting it belongs to.
+ *
+ * **A resume replaces steps; it never replaces the sitting.** The obvious implementation — set the
+ * new outcome as the panel's state — would drop every reading the first press recorded from the
+ * screen, so an operator who resumed two of four steps would be shown a two-step sitting and could
+ * reasonably conclude the other two had been lost. They are in the database; only the screen would
+ * have forgotten them.
+ *
+ * The prior's `sweepId` and `size` win because they define the sitting: a resume is a second press
+ * inside the same act, which is precisely what `newSweepId: () => prior.sweepId` says at the call
+ * site. `stopped` takes the RESUMED press's value, because it is a fact about the most recent press
+ * and the prior's is spent — a sitting stopped and then completed is no longer a stopped sitting,
+ * and the steps say so themselves.
+ */
+export function mergeResumed(prior: SweepOutcome, resumed: SweepOutcome): SweepOutcome {
+  const byKey = new Map(resumed.steps.map((step) => [stepKey(step.step), step]));
+  return {
+    sweepId: prior.sweepId,
+    size: prior.size,
+    steps: prior.steps.map((step) => byKey.get(stepKey(step.step)) ?? step),
+    stopped: resumed.stopped,
+  };
+}
+
+/**
+ * A step's identity — **one definition, used by the merge, the panel and the renderer.**
+ *
+ * Scenario and framing, which is what a step IS: the plan is derived from the registry
+ * (`sweep-plan.ts`) and holds each pair exactly once, so this is a key rather than a heuristic.
+ * Object identity would not do — a resumed plan is rebuilt from the prior outcome's steps, and even
+ * where the references happen to survive, relying on that would make the merge fail silently the
+ * first time a plan was reconstructed rather than carried.
+ *
+ * It lives here rather than in the panel because `mergeResumed` and the panel's retry set are now
+ * two readers of one identity, and two spellings of it would agree until the day they did not —
+ * the ADR-0065 `routeOrthogonal` argument, and the reason this file owns the orchestration at all.
+ */
+export function stepKey(step: SweepStep): string {
+  return `${step.scenario.id}:${step.preset}`;
 }

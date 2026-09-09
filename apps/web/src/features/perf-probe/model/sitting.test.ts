@@ -5,7 +5,14 @@ import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe'
 import { formatProbeReport, formatSitting } from '../ui/probe-report';
 
 import type { DeviceFacts } from './device';
-import { NOT_RECORDED, sittingFromOutcome, sittingsFromRows } from './sitting';
+import {
+  NOT_RECORDED,
+  SITTING_SPREAD_LIMIT_MS,
+  describeSpread,
+  sittingFromOutcome,
+  sittingSpreadMs,
+  sittingsFromRows,
+} from './sitting';
 
 /**
  * One presentation model, two adapters, and the block a reader can still get a week later.
@@ -319,5 +326,91 @@ describe('S2 — a sitting read from history carries every field the live report
     const stored = sittingsFromRows([storedRow({ thresholds: { gated: true } })])[0];
     expect(stored?.limbs).toHaveLength(1);
     expect(stored?.limbs[0]?.result.kind).toBe('unjudgeable');
+  });
+});
+
+/**
+ * How far apart a sitting's readings were taken.
+ *
+ * **This exists because M6-T4 makes a sitting able to span time.** A resumed reading is stored
+ * under the same `sweep_id` — correctly, the operator meant them as one act — and that makes the
+ * machine facts stated once above them true of the earliest reading and merely probable of the
+ * rest. The number is what lets the block say so instead of implying one instant.
+ */
+describe('sittingSpreadMs', () => {
+  const at = (id: string, recordedAt: string) =>
+    storedRow({ id, runId: id, sweepId: 'sweep-1', recordedAt });
+
+  it('is null for a single reading, which is not the same as zero', () => {
+    // A spread of zero is a claim — "these were taken together" — and one reading supports no such
+    // claim. `null` renders as nothing; `0` would render as "taken 0 minutes apart", which is the
+    // shape of confident-and-unfounded sentence this whole epic removes.
+    const sitting = sittingsFromRows([at('a', '2026-09-09T12:00:00.000Z')])[0];
+    if (sitting === undefined) throw new Error('no sitting');
+    expect(sittingSpreadMs(sitting)).toBeNull();
+  });
+
+  it('is the span between the earliest and the latest, not between adjacent rows', () => {
+    // The API hands rows back newest-first, so a pairwise walk would give a negative number and a
+    // "first minus second" would give the wrong pair the moment a sitting held three.
+    const sitting = sittingsFromRows([
+      at('c', '2026-09-09T15:00:00.000Z'),
+      at('a', '2026-09-09T12:00:00.000Z'),
+      at('b', '2026-09-09T12:30:00.000Z'),
+    ])[0];
+    if (sitting === undefined) throw new Error('no sitting');
+    expect(sittingSpreadMs(sitting)).toBe(3 * 60 * 60 * 1000);
+  });
+
+  it('does not fire for an ordinary sweep', () => {
+    // The threshold is chosen for what it EXCLUDES: a full sweep is about two minutes and a
+    // stopped-and-resumed one perhaps ten, so a sitting taken in one go must stay silent or the
+    // sentence is read past on the day it matters.
+    const sitting = sittingsFromRows([
+      at('a', '2026-09-09T12:00:00.000Z'),
+      at('b', '2026-09-09T12:02:00.000Z'),
+    ])[0];
+    if (sitting === undefined) throw new Error('no sitting');
+    const spread = sittingSpreadMs(sitting);
+    expect(spread).not.toBeNull();
+    expect(spread ?? 0).toBeLessThan(SITTING_SPREAD_LIMIT_MS);
+  });
+});
+
+describe('the copied block carries the spread', () => {
+  const at = (id: string, recordedAt: string) =>
+    storedRow({ id, runId: id, sweepId: 'sweep-1', recordedAt });
+
+  it('says the readings were not one sitting in time, in the artefact somebody pastes', () => {
+    // **The block is the deliverable** (`docs/TECH_DEBT.md` #75), so a caveat that lives only on
+    // screen is a caveat that does not reach the person the reading is sent to. Verified red by
+    // dropping the line from `contextLines`.
+    const sitting = sittingsFromRows([
+      at('a', '2026-09-08T09:00:00.000Z'),
+      at('b', '2026-09-09T09:00:00.000Z'),
+    ])[0];
+    if (sitting === undefined) throw new Error('no sitting');
+    expect(formatSitting(sitting)).toContain('readings taken 24 hours apart');
+    expect(formatSitting(sitting)).toContain('NOT one sitting in time');
+  });
+
+  it('is silent for an ordinary sitting, so the line means something when it appears', () => {
+    const sitting = sittingsFromRows([
+      at('a', '2026-09-09T09:00:00.000Z'),
+      at('b', '2026-09-09T09:02:00.000Z'),
+    ])[0];
+    if (sitting === undefined) throw new Error('no sitting');
+    expect(formatSitting(sitting)).not.toContain('spread');
+  });
+});
+
+describe('describeSpread', () => {
+  it('says minutes, hours and days — never "about 2880 minutes"', () => {
+    // Deliberately not `describeDuration`, which forecasts a press and tops out in minutes by
+    // design. A spread is elapsed fact and is unbounded above, which is one of the two things the
+    // sentence exists to make visible.
+    expect(describeSpread(90 * 60 * 1000)).toBe('2 hours');
+    expect(describeSpread(3 * 24 * 60 * 60 * 1000)).toBe('3 days');
+    expect(describeSpread(61 * 60 * 1000)).toBe('1 hour');
   });
 });

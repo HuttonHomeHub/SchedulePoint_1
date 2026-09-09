@@ -4740,3 +4740,40 @@ The file's own docblock explains the count was raised from 7 so that "one cold s
 the verdict", which was the right fix for the estimator being a literal maximum and still leaves the
 figure very close to one. That matters less now nothing is asserted, and it would matter again the
 moment anybody re-armed a gate on it.
+
+### 271. The probe history is one capped page and says so only in words, because the read returns no total
+
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M6) · **Size:** S · **Owner:** api
+
+`staff-probe.service.ts:136-141` reads the newest 50 rows — `take: DEFAULT_LIMIT`, `DEFAULT_LIMIT`
+being 50 at `:14` — with **no total, no cursor and no more-pages flag**. So a client cannot tell
+"fifty is everything" from "fifty is a page", and on an installation that has taken more than fifty
+readings the oldest sittings simply stop being listed.
+
+**It was reached, in this epic, by two different instruments on the same afternoon, which is why it
+is a row rather than a note.**
+
+First it silently disarmed a gate. The staff journey's M3 assertion counted every row in the history
+before and after a stopped press and required the number to **rise** — and once the local database
+held fifty readings the count could not move, because a new reading displaces the oldest. It had
+passed for months on a fresh database, and it failed at 75 rows with the product behaving perfectly.
+A gate that stops being able to report is this epic's own subject one tier out. It is now replaced
+by a claim about the **shape of the newest sitting** — a stopped single press stores exactly one
+reading, its completed limb — which is sharper as well as immune to the cap.
+
+Then it made a screen say something false. M6-T3 added "This sitting has 2 of 4 readings. 2 were
+refused or never taken — nothing is stored for those", which is sound reasoning from an absence
+**only if the absence is real**. At the page boundary it is not: those readings are stored and
+merely unreturned. The oldest block on screen therefore no longer says why a reading is missing, and
+the list carries "Showing the most recent readings. Older sittings are not listed."
+
+**Both are honest patches around a missing fact, and the fact is what to build.** The read should
+carry a total (or a cursor with a `hasMore`), so the panel can say "showing 50 of 312" and offer the
+rest — at which point the oldest block regains the ability to explain itself, and no client has to
+infer a page boundary from an array length. Deliberately **not** done here: it is an API contract
+change (DTO, OpenAPI, the api-reviewer step, and a decision about whether this becomes cursor
+pagination or a count), which ADR-0105 says stops a tech-debt-sized change and wants a spec.
+
+The client-side number is deliberately absent from the copy: the browser is not told the cap, and
+writing "50" into a sentence in `apps/web` would be a constant that goes stale the day the server's
+does — the kind of second statement of one fact this register keeps recording.

@@ -389,3 +389,49 @@ function stringIn(source: Record<string, unknown>, key: string): string | null {
   const value = source[key];
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
+
+/**
+ * How long a sitting's readings span, in milliseconds — or `null` when the question does not arise.
+ *
+ * `null` means fewer than two readings carry a time, which is a different fact from a spread of
+ * zero and is rendered as nothing rather than as "0 minutes". A single reading has no spread; a
+ * sitting whose rows predate the column has none that can be computed.
+ */
+export function sittingSpreadMs(sitting: Sitting): number | null {
+  const times = sitting.limbs
+    .map((limb) => limb.recordedAt)
+    .filter((at): at is string => at !== null)
+    .map((at) => Date.parse(at))
+    .filter((ms) => Number.isFinite(ms));
+  if (times.length < 2) return null;
+  return Math.max(...times) - Math.min(...times);
+}
+
+/**
+ * When a sitting stops being one sitting in time.
+ *
+ * **An hour is a threshold rather than a measurement, and it is chosen for what it excludes.** A
+ * full sweep takes about two minutes and a stopped-and-resumed one perhaps ten, so an hour clears
+ * every ordinary sitting by a wide margin; what it catches is the case M6-T4 creates — a reading
+ * re-run under the same `sweep_id` days later, on a machine that has since been rebooted, updated
+ * or plugged into a different display. The grouping is still right (the operator meant them as one
+ * act) and the claim "these were taken together" is not, so the block says so rather than choosing
+ * between the two.
+ */
+export const SITTING_SPREAD_LIMIT_MS = 60 * 60 * 1000;
+
+/**
+ * A spread in words.
+ *
+ * Deliberately **not** `describeDuration` from `sweep-duration.ts`: that one forecasts how long a
+ * press will take and tops out in minutes by design ("about two minutes"), so a two-day gap would
+ * print as "about 2880 minutes". A spread is elapsed fact rather than forecast, and it is unbounded
+ * above — one of the two things this sentence exists to make visible.
+ */
+export function describeSpread(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${String(minutes)} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(ms / 3_600_000);
+  if (hours < 48) return `${String(hours)} hour${hours === 1 ? '' : 's'}`;
+  return `${String(Math.round(ms / 86_400_000))} days`;
+}

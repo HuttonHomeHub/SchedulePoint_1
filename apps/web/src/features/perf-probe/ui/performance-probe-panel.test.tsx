@@ -227,6 +227,25 @@ function runControl(): HTMLElement {
   return screen.getByRole('button', { name: 'Run measurement' });
 }
 
+/**
+ * Press **Run all measurements**, then confirm.
+ *
+ * Scoped to the dialog for the same reason `runOnce` is: the confirmation's action button carries
+ * the SAME accessible name as the opener, deliberately, so a reader does not have to re-derive what
+ * "OK" would mean.
+ */
+function runAll(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'Run all measurements' }));
+  confirmIn('Run all measurements');
+}
+
+function confirmIn(label: string): void {
+  const dialog = screen.getByRole('alertdialog');
+  const confirm = [...dialog.querySelectorAll('button')].find((b) => b.textContent === label);
+  if (!confirm) throw new Error(`the confirmation has no ${label} button`);
+  fireEvent.click(confirm);
+}
+
 function runOnce(): void {
   const disclosure = screen.getByText('Measure one thing');
   fireEvent.click(disclosure);
@@ -736,5 +755,148 @@ describe('the history refresh', () => {
     await screen.findAllByText(/The run was refused/);
     expect(recordMutateAsync).not.toHaveBeenCalled();
     expect(refreshHistory).not.toHaveBeenCalled();
+  });
+});
+
+describe('taking the readings a sitting never got', () => {
+  /**
+   * M6-T4 — taking again the readings a sitting never got.
+   *
+   * **These are the ADR-0081 half.** `missingSteps` and `mergeResumed` are proved from literals in
+   * `run-sweep.test.ts`, and that says nothing about whether a planner can reach either: this
+   * repository has shipped a whole milestone whose capability had no entry point five times, most
+   * recently one wired into a host and not the layout its flag selects. Only something that drives
+   * the panel can say the control exists, is reachable, and runs what it says it runs.
+   */
+  it('offers to take the readings that produced nothing, and not the ones that landed', async () => {
+    let call = 0;
+    runProbe.mockImplementation(() => {
+      call += 1;
+      return Promise.resolve(call === 2 ? refused() : measured('PASS'));
+    });
+    render(<PerformanceProbePanel />);
+    runAll();
+
+    await waitFor(() => {
+      expect(runProbe).toHaveBeenCalledTimes(4);
+    });
+    // Verified red by removing the `missingCount > 0` block: the sitting reports a refusal and
+    // offers nothing to do about it, which is the state this task exists to remove.
+    expect(
+      await screen.findByRole('button', { name: 'Run the missing measurements' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/This reading is taken again and stored in this same sitting/),
+    ).toBeInTheDocument();
+  });
+
+  it('does not offer it when every reading landed', async () => {
+    runProbe.mockResolvedValue(measured('PASS'));
+    render(<PerformanceProbePanel />);
+    runAll();
+
+    await waitFor(() => {
+      expect(runProbe).toHaveBeenCalledTimes(4);
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Run the missing measurements' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('stores the re-run reading in the SAME sitting, and keeps the ones already recorded', async () => {
+    const sweepIds: unknown[] = [];
+    recordMutateAsync.mockImplementation((body: unknown) => {
+      sweepIds.push((body as { sweepId?: unknown }).sweepId);
+      return Promise.resolve({});
+    });
+    let call = 0;
+    runProbe.mockImplementation(() => {
+      call += 1;
+      return Promise.resolve(call === 2 ? refused() : measured('PASS'));
+    });
+    render(<PerformanceProbePanel />);
+    runAll();
+    await waitFor(() => {
+      expect(runProbe).toHaveBeenCalledTimes(4);
+    });
+    // Three of four stored; the second was refused and there was nothing to store.
+    expect(sweepIds).toHaveLength(3);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run the missing measurements' }));
+    confirmIn('Run the missing measurements');
+
+    await waitFor(() => {
+      // One more press, not four: only the reading that produced nothing is taken again.
+      expect(runProbe).toHaveBeenCalledTimes(5);
+    });
+    await waitFor(() => {
+      expect(sweepIds).toHaveLength(4);
+    });
+
+    // **One sitting, not two.** This is the whole reason `newSweepId` is a callback: a resume that
+    // minted a fresh id would file the recovered reading as a separate one-reading sitting, and the
+    // history would show a sweep permanently missing a step beside an orphan that looks like a
+    // single press somebody took for no reason. Verified red by restoring `crypto.randomUUID()`.
+    expect(new Set(sweepIds).size).toBe(1);
+
+    // And the sitting on screen is still four readings. Setting the resume as the panel's state
+    // would show a one-step sitting and let an operator conclude the other three were lost.
+    await waitFor(() => {
+      expect(screen.queryByText(/The run was refused/)).not.toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Run the missing measurements' }),
+    ).not.toBeInTheDocument();
+    // **Counted, not read off the summary sentence.** A one-step outcome says "Recorded." and a
+    // four-step one says "Recorded." too, so a sentence assertion would pass equally against the
+    // sitting having been replaced — the shape ADR-0093 records, where a green suite cannot tell
+    // "everything is there" from "there is one thing". The step headings are per step.
+    const result = document.querySelector('[data-perf-probe-result]');
+    if (result === null) throw new Error('no result block');
+    expect(
+      within(result as HTMLElement).getAllByRole('heading', { level: 3, name: /^Step \d of 4/ }),
+    ).toHaveLength(4);
+  });
+
+  /**
+   * **A single press stores no sitting id, and a press for several stores one.**
+   *
+   * This is the assertion that would have caught the defect M6-T4 found by reading. `runSweep`
+   * called `newSweepId` unconditionally, so **Measure one thing** stored a `sweep_id`; the history
+   * derives a sitting's kind from which id space grouped its rows, so that press rendered as
+   * `Sweep of 1 reading` above "This sitting has 1 of 4 readings. 3 were refused or never taken".
+   *
+   * **No existing test could see it**, and the reason is worth keeping: every fixture in the
+   * model's suite sets `sweepId: null` for a single press, because that is what the producer was
+   * supposed to send. A suite built from what the contract says is blind to a producer that
+   * disobeys it, which is why this one asks the panel what it actually posts.
+   */
+  it('files a single press as a single press, and a sweep as a sitting', async () => {
+    const ids: unknown[] = [];
+    recordMutateAsync.mockImplementation((body: unknown) => {
+      ids.push((body as { sweepId?: unknown }).sweepId);
+      return Promise.resolve({});
+    });
+    runProbe.mockResolvedValue(measured('PASS'));
+
+    const { unmount } = render(<PerformanceProbePanel />);
+    runOnce();
+    await waitFor(() => {
+      expect(ids).toHaveLength(1);
+    });
+    // `null`, not a fresh uuid: the schema's own words are that NULL means a single press, and "a
+    // default would claim membership of a sitting that does not exist".
+    expect(ids[0]).toBeNull();
+    unmount();
+
+    ids.length = 0;
+    render(<PerformanceProbePanel />);
+    runAll();
+    await waitFor(() => {
+      expect(ids).toHaveLength(4);
+    });
+    // Four presses, one sitting — and every one of them a real id, not four nulls.
+    expect(ids.every((id) => typeof id === 'string')).toBe(true);
+    expect(new Set(ids).size).toBe(1);
   });
 });

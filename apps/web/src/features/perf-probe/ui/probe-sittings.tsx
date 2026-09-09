@@ -3,10 +3,15 @@ import { useState } from 'react';
 
 import type { ProbeResultRow } from '../api/probe-results';
 import type { Sitting, SittingLimb } from '../model/sitting';
-import { NOT_RECORDED, sittingsFromRows } from '../model/sitting';
-import { sweepPlan } from '../sweep/sweep-plan';
-
+import {
+  NOT_RECORDED,
+  SITTING_SPREAD_LIMIT_MS,
+  describeSpread,
+  sittingSpreadMs,
+  sittingsFromRows,
+} from '../model/sitting';
 import { verdictLabel, verdictNote } from '../model/verdict-copy';
+import { sweepPlan } from '../sweep/sweep-plan';
 
 import { formatSitting } from './probe-report';
 
@@ -96,8 +101,27 @@ export function ProbeSittings({
         />
       ) : (
         <div className="space-y-8">
-          {sittings.map((sitting) => (
-            <SittingBlock key={sitting.id} sitting={sitting} />
+          {/*
+            **The list is a page, and saying so is what stops the block below lying.** The read is
+            capped at 50 rows and returns no total and no cursor (`staff-probe.service.ts:14,136`),
+            so an installation that has taken more than fifty readings simply stops seeing the
+            oldest — with nothing on screen distinguishing that from having taken fifty. Stated
+            without a number, because the client is not told the cap and inventing one would be the
+            confident-wrong sentence this whole epic removes. `docs/TECH_DEBT.md` #271 is the real
+            fix: a total, so this can say "showing 50 of 312".
+          */}
+          <p className="text-muted-foreground text-sm">
+            Showing the most recent readings. Older sittings are not listed.
+          </p>
+          {sittings.map((sitting, index) => (
+            <SittingBlock
+              key={sitting.id}
+              sitting={sitting}
+              // **Only the oldest block can be cut by the page boundary**, because the read is
+              // ordered newest-first and a sitting's readings are adjacent in time. It is therefore
+              // the one block that must not claim a missing reading was refused.
+              mayBeTruncated={index === sittings.length - 1}
+            />
           ))}
         </div>
       )}
@@ -126,13 +150,40 @@ const settled = <T,>(data: T[]): SettledQuery<T> => ({
  * The heading is the table's caption rather than a separate `<h3>`, per spec §4.6 — a `DataTable`
  * already exposes a labelled region, and a heading above it would name the same thing twice.
  */
-function SittingBlock({ sitting }: { sitting: Sitting }): React.ReactElement {
+function SittingBlock({
+  sitting,
+  mayBeTruncated,
+}: {
+  sitting: Sitting;
+  /** True for the oldest block, whose missing readings may be on the next page rather than absent. */
+  mayBeTruncated: boolean;
+}): React.ReactElement {
   const readings = readingCount(sitting);
   const missing = sitting.kind === 'sweep' ? EXPECTED_READINGS - readings : 0;
+  const spread = sittingSpreadMs(sitting);
 
   return (
     <section className="space-y-3">
       <SittingFacts sitting={sitting} />
+
+      {/*
+        **A sitting that spans time says so, rather than the reader inferring it from the clock
+        column.** M6-T4 stores a re-run reading under the SAME `sweep_id`, which is right — the
+        operator meant them as one act — and it makes "these were taken together" false in a way
+        nothing else on the block contradicts: the machine facts above are stated once, over
+        readings that may have been taken on either side of a reboot, a resize or a release.
+
+        The threshold does the discriminating. A full sweep takes about two minutes and a
+        stopped-and-resumed one perhaps ten, so this is silent for every ordinary sitting and speaks
+        only for the case that is genuinely two occasions filed as one.
+      */}
+      {spread !== null && spread > SITTING_SPREAD_LIMIT_MS && (
+        <Alert tone="info">
+          These readings were taken {describeSpread(spread)} apart, not in one sitting. Each row
+          carries its own time below. The machine facts above were recorded with the earliest, so
+          compare these readings with that in mind.
+        </Alert>
+      )}
 
       {/*
         **`partial` is stated, never inferred from a short table.** Nothing is stored for a refused
@@ -144,8 +195,14 @@ function SittingBlock({ sitting }: { sitting: Sitting }): React.ReactElement {
       {missing > 0 && (
         <Alert tone="info">
           This sitting has {String(readings)} of {String(EXPECTED_READINGS)} readings.{' '}
-          {String(missing)} {missing === 1 ? 'was' : 'were'} refused or never taken — nothing is
-          stored for those, so they cannot be shown here.
+          {mayBeTruncated
+            ? // **The oldest block asserts nothing about WHY.** It cannot: a reading missing here
+              // may have been refused, may never have been taken, or may simply be on the next
+              // page of a capped read. Saying "refused or never taken" would be a false claim
+              // about somebody's data, which is exactly the defect the alert exists to prevent —
+              // one page boundary along.
+              `The rest are not shown: they were refused, were never taken, or fall outside this page.`
+            : `${String(missing)} ${missing === 1 ? 'was' : 'were'} refused or never taken — nothing is stored for those, so they cannot be shown here.`}
         </Alert>
       )}
 

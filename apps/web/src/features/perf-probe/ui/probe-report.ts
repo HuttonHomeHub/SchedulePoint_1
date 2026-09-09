@@ -1,9 +1,11 @@
 import type { Verdict } from '../model/judge';
 import {
   NOT_RECORDED,
+  SITTING_SPREAD_LIMIT_MS,
+  describeSpread,
   sittingFromOutcome,
+  sittingSpreadMs,
   type Sitting,
-  type SittingContext,
   type SittingLimb,
 } from '../model/sitting';
 import { verdictLabel, verdictNote } from '../model/verdict-copy';
@@ -73,7 +75,7 @@ export function formatSitting(sitting: Sitting): string {
         : `You stopped this run. ${kept === 1 ? 'One reading' : `${String(kept)} readings`} had already finished and ${kept === 1 ? 'was' : 'were'} kept; the rest were not taken.`,
       'This is NOT a pass and NOT a failure.',
       '',
-      ...contextLines(sitting.context),
+      ...contextLines(sitting),
       ...(kept === 0 ? [] : ['', ...sitting.limbs.flatMap((limb) => [...limbLines(limb), ''])]),
     ]
       .join('\n')
@@ -89,14 +91,14 @@ export function formatSitting(sitting: Sitting): string {
       '',
       'No measurement was taken. This is NOT a pass and NOT a failure.',
       '',
-      ...contextLines(sitting.context),
+      ...contextLines(sitting),
     ].join('\n');
   }
 
   return [
     'SchedulePoint performance probe',
     '',
-    ...contextLines(sitting.context),
+    ...contextLines(sitting),
     '',
     ...sitting.limbs.flatMap((limb) => [...limbLines(limb), '']),
   ]
@@ -104,7 +106,12 @@ export function formatSitting(sitting: Sitting): string {
     .trimEnd();
 }
 
-function contextLines(context: SittingContext): string[] {
+function contextLines(sitting: Sitting): string[] {
+  const context = sitting.context;
+  // **Computed from the readings rather than declared on the context**, because it is a fact about
+  // the set and not about the machine — and because it must be absent, not zero, when there is only
+  // one reading to time.
+  const spread = sittingSpreadMs(sitting);
   return [
     // **Scenario, framing and protocol are NOT here**, and their absence is the point. A sitting is
     // up to four presses under one `sweep_id`, so those three differ from reading to reading; they
@@ -138,6 +145,13 @@ function contextLines(context: SittingContext): string[] {
     `  motion     ${context.prefersReducedMotion ? 'reader prefers reduced motion' : 'no preference'}`,
     `  agent      ${context.userAgent}`,
     `  at         ${context.startedAt}`,
+    // **Printed only when it is news.** Every ordinary sitting spans minutes, and a line saying so
+    // on all of them would be read past; this fires for the case M6-T4 creates — a reading re-run
+    // under the same `sweep_id`, hours or days later — where the facts above were recorded with the
+    // earliest reading and the block would otherwise present them as true of all of them.
+    ...(spread !== null && spread > SITTING_SPREAD_LIMIT_MS
+      ? [`  spread     readings taken ${describeSpread(spread)} apart — NOT one sitting in time`]
+      : []),
     `  web        ${context.appVersion}`,
     // Carried where it exists rather than dropped to make the two adapters look symmetrical: the
     // browser does not learn it until the POST returns, and the block is copyable before that.
