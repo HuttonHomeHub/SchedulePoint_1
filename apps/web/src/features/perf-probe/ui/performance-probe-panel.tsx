@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   useProbeResults,
@@ -117,7 +118,11 @@ export function confirmationCopy(
     return (
       `This takes ${describeDuration(estimateSweepSeconds(plan, 'quick'))} and answers one ` +
       'question: does the probe work on this machine? Every reading runs once, so none of them ' +
-      `can be graded — there is no run-to-run spread to judge against. ${motion}`
+      // **Stop is named here too**, and it was the only one of the four that left it out (M7 ux
+      // review). The overlay and its Stop button render identically for a check, and a check can
+      // keep a completed limb exactly like a full run — so the one control whose confirmation said
+      // nothing about leaving was the one an operator is likeliest to be trying out.
+      `can be graded — there is no run-to-run spread to judge against. ${motion} ${stop}`
     );
   }
 
@@ -232,6 +237,36 @@ export function PerformanceProbePanel(): React.ReactElement {
     if (!running && wasRunning.current) focusRun();
     wasRunning.current = running;
   }, [focusRun, running]);
+
+  /**
+   * The page behind the overlay is out of the focus order for as long as it is covered.
+   *
+   * **The panel's own `inert` was necessary and not sufficient** (WCAG 2.2 §2.4.11, M7
+   * accessibility review). `/staff` renders six more panels beside this one and several mount a
+   * `DataTable`, which is a focusable `role="region"`; the overlay is `fixed inset-0` over an
+   * opaque surface, so Tab from Stop landed on a control nobody could see. This is what a modal
+   * `<dialog>` would give for free — and the overlay is deliberately not one, because it announces
+   * nothing and traps nothing, so the property has to be asked for.
+   *
+   * Scoped to the panel's own document root rather than `document.body`, so the portalled overlay —
+   * a child of the body — keeps its Stop button. Restored in the cleanup, which is the half that
+   * matters: a leaked `inert` takes the whole console out of the keyboard's reach with nothing on
+   * screen looking wrong.
+   *
+   * `main` is located rather than assumed: this is a component, and a future host may not have one.
+   * Where there is none the panel-level `inert` still covers this panel's own controls, which is
+   * the state the M5 fix left and is strictly better than throwing.
+   */
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!running) return;
+    const page = panelRef.current?.closest('main');
+    if (!page) return;
+    page.setAttribute('inert', '');
+    return () => {
+      page.removeAttribute('inert');
+    };
+  }, [running]);
 
   /**
    * Re-send one step's body after a failed POST.
@@ -474,6 +509,8 @@ export function PerformanceProbePanel(): React.ReactElement {
 
   return (
     <Panel title="Performance" status={status}>
+      {/* The anchor the `inert` effect walks up from. `display: contents`, so it adds no box. */}
+      <div ref={panelRef} className="contents" />
       <p className="text-muted-foreground text-sm">
         Measures how the schedule diagram paints <strong>on this machine</strong>. Nothing is
         measured on the server: the API runs headless in a container, where the canvas can fall back
@@ -658,35 +695,54 @@ export function PerformanceProbePanel(): React.ReactElement {
         from `document.documentElement` gives the PAGE's inks on a ground that is not the page, and
         does so silently. The runner takes this element as a required parameter.
       */}
-      {running && (
-        <div className="bg-background/95 fixed inset-0 z-50 flex flex-col">
-          <Surface tone="canvas" ref={surfaceRef} className="relative flex-1 overflow-hidden">
-            <canvas ref={canvasRef} aria-hidden className="absolute inset-0" />
-          </Surface>
-          <div className="flex items-center justify-between gap-4 p-4">
-            {/*
+      {running &&
+        createPortal(
+          /*
+            **Portalled to the body, and that is what makes the `inert` below possible.**
+
+            The overlay covers the whole viewport, so what must be taken out of the focus order is
+            the whole page — and the page includes the six sibling panels `/staff` renders beside
+            this one, several of which mount a `DataTable`, which is a focusable `role="region"`.
+            Tabbing from Stop walked straight into one of them, entirely hidden behind the canvas:
+            WCAG 2.2 §2.4.11 Focus Not Obscured (Minimum), AA. Found by the M7 accessibility review.
+
+            That is the SAME defect the `inert` two hundred lines up records fixing at M5 — fixed
+            one level too low. The panel inerted its own controls, which was right about the
+            controls it could see and silent about everything it could not.
+
+            The portal is not decoration: inerting a common ancestor while the overlay is nested
+            inside it would take the Stop button with it, leaving a two-minute full-screen overlay
+            with nothing focusable in it at all — a strictly worse failure than the one being fixed.
+          */
+          <div className="bg-background/95 fixed inset-0 z-50 flex flex-col">
+            <Surface tone="canvas" ref={surfaceRef} className="relative flex-1 overflow-hidden">
+              <canvas ref={canvasRef} aria-hidden className="absolute inset-0" />
+            </Surface>
+            <div className="flex items-center justify-between gap-4 p-4">
+              {/*
               A bare icon, NOT `<Spinner>`. That primitive carries `role="status"`, which would put
               a second live region on screen alongside the panel's own — and two live regions during
               one run is how a progress announcement overwrites a verdict (ADR-0079's debounced
               count, ADR-0080's focus announcement). The panel's status region is the accessible
               channel; this is decoration and says so.
             */}
-            <span className="flex items-center gap-2 text-sm">
-              <Loader2 className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
-              {progress}
-            </span>
-            <Button
-              ref={cancelButtonRef}
-              variant="outline"
-              onClick={() => {
-                cancelledRef.current = true;
-              }}
-            >
-              Stop (keeps what is already measured)
-            </Button>
-          </div>
-        </div>
-      )}
+              <span className="flex items-center gap-2 text-sm">
+                <Loader2 className="text-muted-foreground size-5 animate-spin" aria-hidden="true" />
+                {progress}
+              </span>
+              <Button
+                ref={cancelButtonRef}
+                variant="outline"
+                onClick={() => {
+                  cancelledRef.current = true;
+                }}
+              >
+                Stop (keeps what is already measured)
+              </Button>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <ConfirmDialog
         open={confirming !== null}
@@ -952,7 +1008,16 @@ function SittingResult({
           {retrying.has(stepKey(step.step)) && (
             // The in-flight state, which a reader needs or a pressed Retry looks like nothing
             // happening. Per step, because one mutation object serves up to four of them.
-            <p className="text-muted-foreground text-sm">Recording this reading…</p>
+            //
+            // **Announced, not just printed.** Pressing Retry moves focus away (it has to — the
+            // button unmounts), so without a live region a screen-reader user gets silence from
+            // the press until the outcome lands, which on a slow write is the same silence a dead
+            // button gives. `polite`, because it must not interrupt the panel's own status; the
+            // outcome still arrives there. Raised independently by the M7 accessibility and ux
+            // reviews.
+            <p role="status" className="text-muted-foreground text-sm">
+              Recording this reading…
+            </p>
           )}
 
           {step.status === 'not recorded' &&
@@ -993,8 +1058,8 @@ function SittingResult({
           </Button>
           <p className="text-muted-foreground text-sm">
             {missingCount === 1 ? 'This reading' : `These ${String(missingCount)} readings`}{' '}
-            {missingCount === 1 ? 'is' : 'are'} taken again and stored in this same sitting, so it
-            will hold readings taken at different times.
+            {missingCount === 1 ? 'will be' : 'will be'} taken again and stored in this same
+            sitting.
           </p>
         </div>
       )}

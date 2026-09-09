@@ -242,6 +242,90 @@ owner's to take.
 **The CPM engine is not imported.** The ADR-0034 recalculation parity gate is untouched by
 construction — in its honest form: there is nothing here to hold parity for.
 
+## The gate pass (M7)
+
+Seven specialists over the combined diff. **Security, backend-performance and database-architect
+passed with nothing blocking, and all three did it by re-deriving the epic's own numbers from the
+shipped code** rather than trusting its prose — the history read measured as a 0.13–0.17 ms backward
+index scan at 80,000–100,000 rows, the retention delete as a `ctid` Tid Scan at ~3 ms per batch, the
+migration proven safe against a populated table built from the 62 earlier migrations, and the DTO's
+bounds confirmed a strict subset of the database's CHECK. The other four blocked, on findings in
+code that had passed a human read.
+
+**Three of them are this register's most-repeated shape: one correct rule applied one level too low,
+or one file over.**
+
+**The `inert` guard was scoped to the panel while the overlay covers the page.** The M5
+accessibility review had already found and fixed exactly this defect — Shift+Tab walking into
+controls hidden behind an opaque full-screen canvas — and the fix inerted this panel's own controls.
+`/staff` renders **six more panels beside it**, several mounting a `DataTable`, which is a focusable
+`role="region"`; Tab from the Stop button landed on one of them, invisible, for up to two minutes.
+WCAG 2.2 §2.4.11, AA. **The existing axe sweep is structurally incapable of seeing it**, and not
+only because axe has no rule for it: the journey waits for the overlay to be _gone_ before scanning,
+so the one state the defect exists in is never examined. The overlay now portals to the body and the
+page goes `inert` — and the portal is load-bearing rather than tidy, because inerting a common
+ancestor with the overlay nested inside it would take the Stop button too, leaving a two-minute
+full-screen overlay with nothing focusable in it at all.
+
+**The saturation enumeration was counting a renderer that renders nothing.** `judgeStoredRow` was a
+flattened verdict derivation for the flat history table; M6 replaced that table and left the
+function with **only its own test as a caller**, while `saturation-renderers.test.ts` — the gate
+written against "one renderer updated and not its neighbour" — went on enumerating its file and
+asserting on it, green, about a surface no reader could reach. ADR-0093's shape inside the gate
+built to prevent it. It had also already drifted, labelling an unreadable row `CANNOT BE JUDGED`
+where the live cell says `Not readable by this version`: two wordings of one state, which is what
+dead code hides. Deleted, and the two behavioural cases **re-pointed at the rendered sittings
+table** rather than dropped — they now fail when the live surface drops `saturated`, which the
+version calling the dead helper could not have done. The gate's own `calls.length > 0` assertion is
+what makes deleting the function and leaving the entry impossible.
+
+**And the epic's own headline number was wrong on the screen it built to remove wrong numbers.** The
+approved spec says "four **steps**, six **readings**", "each a row", **seven times**; the code
+counted distinct scenario-and-framing pairs and called them readings, so a complete sweep captioned
+itself `Sweep of 4 readings` over a table of six and the partial notice said "2 of 4" against a
+denominator the spec puts at six. The docblock arguing for that answer did the arithmetic wrong too
+— it said counting rows would call a complete sweep "an **eight**-reading sitting", and 2+2+1+1 is
+six. Nobody did the sum in the comment arguing against doing the sum. The denominator is now derived
+from the registry's **limbs**, not its steps.
+
+**Two findings were the plan and the documents rather than the code.** The plan's Done checklist
+asserted `docs/TECH_DEBT.md` #259 items 1–3 closed while items 2 and 3 were untouched — and item 1,
+which genuinely had been fixed, left the register still printing it as an open finding. Two failures
+stacked: a plan claiming work it had not done, and a register describing a defect that no longer
+existed. Both are now closed, and item 3 as **the sweep it asked for** (`GET /staff/accounts`
+carries the declaration too), because fixing one route and not its named neighbour is the shape
+above, again. Separately `docs/API.md` had not been touched at all while `docs/DATABASE.md` received
+a full and accurate update for the same change — and the paragraph it was missing said the opposite
+of what is now true: that no cursor was needed because "the table has no automated producer". This
+epic gave it one.
+
+**The database review found a wrong sentence that ships in the OpenAPI spec**, and one that is now
+permanent. `frames_per_phase` was described as "the frames per repeat", which is right for an
+absolute limb and **halves** the count for a difference one, where a repeat is a baseline and a
+treatment back to back — and `revision-diff` is the scenario ADR-0129 P3 was measured on. It also
+found that the M4 migration's stated reason for re-citing #253 as #256 is **false**: #253 is in the
+Closed-numbers ledger, which exists precisely so an inbound citation stays resolvable, and following
+it lands on exactly the argument being cited. The better citation stands; the justification was an
+unverified claim about the register, i.e. ADR-0076 Class 3 **inside a correction whose whole subject
+is a citation being wrong**. The migration is checksummed and carries that sentence permanently, so
+the correction lives in `docs/DATABASE.md`.
+
+**Two reviewers reached the same finding independently**, which is how it earned a row rather than a
+comment: the truncation rule's premise ("a sitting's readings are adjacent in time") was made untrue
+by this epic's own resume feature, fifty lines below where it is asserted. It is not reachable today
+— the resume reads its id from in-memory state, so it is session-scoped — and it becomes reachable
+the moment a resume can be started from stored history. `docs/TECH_DEBT.md` **#273**.
+
+Everything else folded in place: the check confirmation was the only one of four that never said
+what Stop does; the spread notice told the reader a block "was not in one sitting" inside a block
+the product calls a sitting; each sitting's Copy button now carries its own caption in its
+accessible name, because N identical "Copy report" entries in a button list are not a choice; each
+block's own facts and warnings are linked to its table, which is the general note's own fix applied
+one level down; and the in-flight retry announces itself, since pressing Retry moves focus away and
+silence from a control that has unmounted is indistinguishable from a dead one. One non-blocking
+finding is recorded rather than built (`docs/TECH_DEBT.md` **#272**), because a fifth step status has
+to answer what a re-run does with the limb that already succeeded, and that is a decision.
+
 ## Corrections this ADR records
 
 Five, each found by running or reading something rather than by anything failing.

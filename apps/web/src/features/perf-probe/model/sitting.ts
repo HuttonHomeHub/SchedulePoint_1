@@ -173,7 +173,7 @@ export function sittingFromOutcome(
   outcome: ProbeOutcome,
   machineLabel: string | null = null,
 ): Sitting | null {
-  const context = outcome.kind === 'measured' ? outcome.context : outcome.context;
+  const context = outcome.context;
   if (context === null) return null;
 
   const limbs = outcome.kind === 'measured' ? outcome.limbs : [];

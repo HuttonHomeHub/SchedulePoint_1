@@ -2,6 +2,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
+// Imported for their OpenAPI shape only — the read path does not construct or validate them. One
+// declaration of each, so the request and the response cannot describe the same JSON differently.
+import { ProbeCountsDto, ProbeThresholdsDto } from './create-probe-result.dto';
+
 /**
  * One stored limb, read back.
  *
@@ -97,16 +101,29 @@ export class ProbeResultRowDto {
   })
   samples!: unknown[];
 
+  /**
+   * **Named on the way out, as it is on the way in** (`docs/TECH_DEBT.md` #259 item 2).
+   *
+   * These two were declared as opaque objects while the request DTO fully named their fields one
+   * file over, so a generated client got `Record<string, unknown>` for a shape the server had just
+   * validated field by field. `samples` beside them is legitimately opaque — its members differ by
+   * `limbKind` — and these are not.
+   *
+   * The **TypeScript** type stays `Record<string, unknown>` deliberately: this value is JSON read
+   * back from the database and is not re-validated on read, so a narrower TS type would assert a
+   * guarantee the read path does not make. The OpenAPI declaration is a claim about what every
+   * writer produced, which is checkable — every row on this table was written through
+   * `ProbeCountsDto`/`ProbeThresholdsDto`, and the DTO's bounds are a strict subset of the
+   * database's CHECK constraints.
+   */
   @ApiProperty({
-    type: 'object',
-    additionalProperties: true,
+    type: ProbeCountsDto,
     description: 'Non-vacuity numerators AND denominators, counted inside the viewport.',
   })
   counts!: Record<string, unknown>;
 
   @ApiProperty({
-    type: 'object',
-    additionalProperties: true,
+    type: ProbeThresholdsDto,
     description: 'The bars this limb was judged against, recorded WITH the measurement.',
   })
   thresholds!: Record<string, unknown>;

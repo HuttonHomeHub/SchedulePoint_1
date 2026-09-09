@@ -1747,8 +1747,16 @@ reach it. Updatable, deletable, expirable. **Do not add a trigger to it.**
   resets hand-ordered the schema and were already wrong about one table — and the ADR-0126 shape
   where a fourth child table broke 557 API e2e tests at once on a RESTRICT foreign key. `run_id` is
   a plain correlation UUID (ADR-0073 C3.3), minted server-side so a client cannot make one machine's
-  numbers read as another's. (This cited #253 until 2026-09-09; that row is closed and ledgered, and
-  its number now points at an unrelated entry.)
+  numbers read as another's. (This cited #253 until 2026-09-09, and the **reason
+  given for changing it was false**: #253 is closed and ledgered, and the Closed-numbers ledger
+  exists precisely so an inbound citation stays resolvable — its own preamble says so, naming
+  ADR-0047/#29 and ADR-0066/#79 as the cases it is for. Following #253 lands on exactly the argument
+  being cited, not on an unrelated entry. Citing the live successor #256 is still the better
+  citation, so the change stands on that; the justification was an unverified claim about the
+  register, which is ADR-0076 Class 3 inside a correction whose whole subject is a citation being
+  wrong. Found by the M7 database review. The migration file carries the false sentence
+  **permanently** — it is checksummed and must not be edited — so this is where the correction
+  lives.)
 - **A second tier above it: `sweep_id` groups several presses into one SITTING** (2026-09-09,
   `20260909120000_perf_probe_sweep_columns`), for the "Run all measurements" control that works
   through the scenario x preset plan and POSTs per completed step. NULL means **this reading was a

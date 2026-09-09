@@ -108,9 +108,10 @@ describe('ProbeSittings', () => {
     // Nothing is stored for a refused reading, so a sweep whose two middle steps were refused is
     // indistinguishable in the database from a sweep of two. The count is the only thing that can
     // say so — and a reader who is not told takes an incomplete sitting for a complete one.
-    // Two rows, both `canvas-draw`, at two framings — so TWO readings of the four, not two of two.
-    // The first draft of this case asserted "1 of 4" and the test corrected the arithmetic: a
-    // reading is a scenario at a framing, and `canvas-draw` contributes two of a sweep's four.
+    // Two rows — so TWO readings of the six, not two of two. A reading is a ROW: the approved spec
+    // says "four steps, six readings, each a row" seven times, and M6 shipped the vocabulary
+    // inverted, captioning a complete sweep "4 readings" over a table of six. Corrected at M7 with
+    // the denominator derived from the registry's limbs rather than from the step count.
     // A SECOND, older sitting beneath it, so the one under test is not the oldest block. That
     // matters since M6-T4: the read is capped at 50 rows and returns no total, so the oldest block
     // rendered may be cut by the page boundary and is the one block that may not say why a reading
@@ -123,8 +124,8 @@ describe('ProbeSittings', () => {
     // Matched on the alert's whole text rather than by `getByText`: the sentence is assembled from
     // interpolated counts, so it is split across elements and a regex over one of them finds none.
     const alert = screen.getByRole('status');
-    expect(alert.textContent).toContain('This sitting has 2 of 4 readings');
-    expect(alert.textContent).toContain('2 were refused or never taken');
+    expect(alert.textContent).toContain('This sitting has 2 of 6 readings');
+    expect(alert.textContent).toContain('4 were refused or never taken');
   });
 
   it('will not say WHY a reading is absent from the oldest block, because it cannot know', () => {
@@ -138,7 +139,7 @@ describe('ProbeSittings', () => {
     view(sweepRows().slice(0, 2));
 
     const alert = screen.getByRole('status');
-    expect(alert.textContent).toContain('This sitting has 2 of 4 readings');
+    expect(alert.textContent).toContain('This sitting has 2 of 6 readings');
     expect(alert.textContent).toContain('fall outside this page');
     expect(alert.textContent).not.toContain('were refused or never taken');
   });
@@ -182,7 +183,7 @@ describe('ProbeSittings', () => {
     Object.assign(navigator, { clipboard: { writeText } });
     view(sweepRows());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy report' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Copy report/ }));
 
     // One control per sitting, and the block it writes carries every reading — a block for one
     // limb of a four-reading sweep would be a partial answer that looks complete.
@@ -229,7 +230,10 @@ describe('ProbeSittings', () => {
   });
 
   it('says a sitting was not taken in one sitting when its readings span more than an hour', () => {
-    // The state M6-T4 creates: a reading refused on the day, taken again under the SAME sweep id
+    // "not at one time" rather than "not in one sitting": the block IS a sitting, named one by its
+    // own caption and its own model type, so telling the reader its contents are "not in one
+    // sitting" reads as self-contradiction rather than as the intended "not taken together" (M7 ux
+    // review). The state M6-T4 creates: a reading refused on the day, taken again under the SAME id
     // once the machine was free. The grouping stays right — the operator meant them as one act —
     // and "these were taken together" becomes false, with the machine facts above them stated once
     // from the earliest. Nothing else on the block contradicts that, so the block has to.
@@ -244,7 +248,7 @@ describe('ProbeSittings', () => {
       }),
     ]);
 
-    expect(screen.getByText(/taken 15 hours apart, not in one sitting/)).toBeInTheDocument();
+    expect(screen.getByText(/taken 15 hours apart, not at one time/)).toBeInTheDocument();
   });
 
   it('stays silent for an ordinary sweep, whose readings are minutes apart', () => {
@@ -252,6 +256,6 @@ describe('ProbeSittings', () => {
     // by rendering the alert unconditionally.
     view(sweepRows());
 
-    expect(screen.queryByText(/not in one sitting/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not at one time/)).not.toBeInTheDocument();
   });
 });

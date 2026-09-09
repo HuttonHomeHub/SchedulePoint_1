@@ -786,7 +786,7 @@ describe('taking the readings a sitting never got', () => {
       await screen.findByRole('button', { name: 'Run the missing measurements' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/This reading is taken again and stored in this same sitting/),
+      screen.getByText(/This reading will be taken again and stored in this same sitting/),
     ).toBeInTheDocument();
   });
 

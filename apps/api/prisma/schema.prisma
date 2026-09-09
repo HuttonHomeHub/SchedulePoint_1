@@ -3628,7 +3628,18 @@ model PerfProbeResult {
   /// client knows that four presses were one sitting; the server holds no session state across
   /// them and cannot observe it — the `app_version` position. What that grants (grouping rows the
   /// operator did not group) is strictly weaker than fabricating the numbers, which ADR-0128's
-  /// Consequences already accept of a compromised staff session.
+  /// Consequences already accept of a compromised staff session — with one manifestation worth
+  /// naming, since no constraint here can address it: the reader takes a sitting's machine facts
+  /// from its first row, so a forged grouping prints one machine's fingerprint over a mixed sitting.
+  /// Cross-row and unknowable to the server, which is further support for the rejected CHECKs.
+  ///
+  /// **REUSE ACROSS TIME IS A FEATURE, not a defect to constrain away.** "Run the missing
+  /// measurements" (ADR-0130 D6) re-runs a refused reading under this SAME id, deliberately, and
+  /// the two presses can be hours or days apart — the reader states the spread rather than hiding
+  /// it. So a uniqueness rule, a first-seen rule, or a "rows sharing a sweep id must fall within N
+  /// hours" window would each break shipped behaviour. Written here because it is the fourth CHECK
+  /// a later reader reaches for and the only one the migration does not enumerate; the M7 database
+  /// review found nothing on the server side recording it.
   ///
   /// `UUID` rather than `TEXT` for a reason stronger than storage: Postgres normalises `uuid` to
   /// canonical lowercase, so a client that posts `A1B2...` on one step and `a1b2...` on another
@@ -3711,7 +3722,12 @@ model PerfProbeResult {
   samples Json @db.JsonB
 
   /// The frame budget ONE PHASE ran for — the other half of the protocol `samples` carries. That
-  /// array's length is the repeats; this is the frames per repeat.
+  /// array's length is the repeats; this is the frames per **phase**, which is what the column is named. For an
+  /// absolute limb a repeat is one phase, so repeats x this is the frame count. For a DIFFERENCE
+  /// limb a repeat is a PAIR — a baseline and a treatment back to back (`run-probe.ts`'s
+  /// `runDifferenceLimbs` docblock) — so the frame count is repeats x this x 2. This said "the
+  /// frames per repeat", which is right for one limb kind and halves the other; `revision-diff` is
+  /// the scenario ADR-0129 P3 was measured on. Found by the M7 database review.
   ///
   /// NULL means **not recorded**, never a default and never guessed. It is inferable from
   /// `samples.length`, because a client-side constant ties frames to repeats — and inferring it

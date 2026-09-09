@@ -36,7 +36,7 @@ import { firstUrlIn, SmtpSink } from '../e2e-account/smtp-sink';
  * A stored sitting's table, located by the ACT it names.
  *
  * The history stopped being one flat table at M6-T1: it is now one block per sitting, and each
- * block's caption names what the operator did — `Sweep of 4 readings — …` or `One reading — …` —
+ * block's caption names what the operator did — `Sweep of 6 readings — …` or `One reading — …` —
  * because that is the distinction `sweep_id` exists to record. The old caption ("Readings recorded
  * on this installation") survives on exactly one path, the loading/error/empty projection, so a
  * journey that went on asking for it would find the table only when there was nothing in it.
@@ -445,20 +445,47 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     // is M6-T3's own decision: a block for one limb of a four-reading sweep is a partial answer
     // that looks complete. The name is a full match, so it cannot resolve to the live result
     // block's `Copy full report`.
-    await expect(staff.getByRole('button', { name: 'Copy report' }).first()).toBeVisible();
-    await staff.getByRole('button', { name: 'Copy report' }).first().click();
+    // Matched by prefix, not by the exact label: M7 gave each sitting's Copy button an
+    // `aria-label` carrying its own caption, because with N blocks on screen an assistive-technology
+    // user browsing by button list met a column of identical "Copy report" entries.
+    await expect(staff.getByRole('button', { name: /^Copy report/ }).first()).toBeVisible();
+    await staff
+      .getByRole('button', { name: /^Copy report/ })
+      .first()
+      .click();
     await expect(staff.getByText('Copied.').first()).toBeVisible();
 
-    // And the caveat that says what the Canvas column is FOR, linked to the table rather than
-    // merely placed above it — `DataTable` is a focusable region, so a landmark-navigating reader
-    // lands inside it having skipped whatever sits above.
+    // **Everything a reader needs to judge these numbers is reachable from INSIDE the region.**
+    // `DataTable` is a focusable `role="region"`, so a landmark-navigating reader lands in the table
+    // having skipped whatever sits above it — the caveat that says what the Canvas figure is for,
+    // and (since M7) the block's own machine facts, spread warning and partial notice. This used to
+    // read one id; `aria-describedby` is a space-separated LIST and now carries several, so a
+    // single-id assertion looked like a product defect and was the harness being one version behind.
     const describedBy = await staff
       .getByRole('region')
       .filter({ has: history })
       .first()
       .getAttribute('aria-describedby');
-    expect(describedBy, 'the table names its comparability note').not.toBeNull();
-    await expect(staff.locator(`#${String(describedBy)}`)).toContainText('per megapixel');
+    expect(describedBy, 'the table names what describes it').not.toBeNull();
+    const ids = String(describedBy).split(/\s+/).filter(Boolean);
+    expect(
+      ids.length,
+      'the sitting describes itself as well as citing the shared caveat',
+    ).toBeGreaterThan(1);
+
+    let described = '';
+    for (const id of ids) {
+      const target = staff.locator(`#${id}`);
+      // A dangling id is worse than a missing one: assistive technology reports a description that
+      // resolves to nothing, which a reader cannot tell from a description that was never there.
+      await expect(target, `#${id} resolves to an element`).toHaveCount(1);
+      described += `${(await target.textContent()) ?? ''}\n`;
+    }
+
+    expect(described, 'the shared comparability caveat').toContain('per megapixel');
+    // And the block's OWN facts, which differ per sitting and are what decide whether the numbers
+    // in this particular table mean anything.
+    expect(described, "this sitting's own machine facts").toContain('CI container');
   }
 
   // The overlay must be gone: it is `position: fixed; inset: 0`, so a leaked one would cover the

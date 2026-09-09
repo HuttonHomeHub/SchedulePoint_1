@@ -892,7 +892,7 @@ data is a compile error. Three properties follow, and they are unlike the rest o
 
 `POST /api/v1/staff/probe-results` is the surface's **first write** (ADR-0086 D6 claims one already
 existed; it did not). It records a canvas performance reading taken **in the operator's own
-browser**, and its shape is decided by two rules worth stating here:
+browser**, and its shape is decided by three rules worth stating here:
 
 - **One row per limb, one `runId` per press.** A scenario may be measured at more than one scale,
   and each scale is its own row. `201` returns the stored rows in limb order — an array, not a
@@ -902,6 +902,17 @@ browser**, and its shape is decided by two rules worth stating here:
   another's; a browser clock is neither trustworthy nor monotonic against the database's, and it is
   the retention predicate; and the API's version is a claim about a process the browser cannot
   observe.
+- **`sweepId` is the one grouping fact the client supplies, and `NULL` is a fact too** (ADR-0130).
+  It groups the presses of one **sitting** — one operator's decision to take every reading the probe
+  can take — which is unobtainable server-side, because only the client knows four separate POSTs
+  were one act. It is validated as a UUID and stored verbatim; the read does not filter on it, and
+  the grouping happens client-side over the page already fetched. **Absent means the reading was a
+  single press**, and a `DEFAULT` would claim membership of a sitting that does not exist. What a
+  forged or reused id can do is bounded and stated in ADR-0130 D3: it can misfile which sitting a
+  reading appears under, and nothing else — every row still carries its own server-set `runId`,
+  `recordedAt`, `apiVersion` and `recordedByLabel`. `framesPerPhase` rides beside it and says which
+  **protocol** produced the row; without it a thirteen-second check and a two-minute measurement are
+  indistinguishable months later, and only one of them was ever eligible for a verdict.
 
 **The server stores the samples and the thresholds they were measured against, and does not judge.**
 There is no `verdict` field and adding one would be a behavioural change rather than a convenience:
@@ -916,10 +927,15 @@ carries a value list, because it is a **structure discriminator** a reader dispa
 interpret the samples.
 
 `GET /api/v1/staff/probe-results?limit=` (1–100, default 50) reads the history newest first. **No
-cursor**, and that is a bound rather than an omission: the table has no automated producer, so a
-page is more history than the panel can usefully show. A per-limb history outgrowing one page is the
-trigger to add both a cursor and a second index, with `EXPLAIN (ANALYZE, BUFFERS)` numbers in the
-migration that adds it.
+cursor and no total**, and that stopped being a bound the day one press could write six rows. This
+paragraph said a page was "more history than the panel can usefully show" because the table has no
+automated producer; ADR-0130 gave it a control that writes a whole sitting per press, so fifty rows
+is roughly eight sittings, and the screen showing them cannot tell "fifty is everything" from "fifty
+is a page". `docs/TECH_DEBT.md` **#271** carries the fix and the argument for which one: a bare
+`total` names the state, and only a cursor (`meta.nextCursor`/`meta.hasMore`, this file's own
+standard) lets a reader walk back into older sittings — which is what the sittings screen exists
+for. Until then the client says the list is a page and refuses to explain an absence at its
+boundary, because at that boundary an absent reading is stored rather than missing.
 
 ## Pagination, filtering, sorting
 

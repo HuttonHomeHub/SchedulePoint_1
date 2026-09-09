@@ -1,5 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import type { ProbeResultRow } from '../api/probe-results';
 import type { Sitting, SittingLimb } from '../model/sitting';
@@ -117,9 +117,19 @@ export function ProbeSittings({
             <SittingBlock
               key={sitting.id}
               sitting={sitting}
-              // **Only the oldest block can be cut by the page boundary**, because the read is
-              // ordered newest-first and a sitting's readings are adjacent in time. It is therefore
-              // the one block that must not claim a missing reading was refused.
+              // **The oldest block is the one the page boundary can cut**, because the read is
+              // ordered newest-first. It is therefore the one block that must not claim a missing
+              // reading was refused.
+              //
+              // **The premise is narrower than it looks, and the narrowing is recorded rather than
+              // relied on.** This said "a sitting's readings are adjacent in time", which M6-T4
+              // made untrue: a resumed sitting's newest row sorts near the top while its original
+              // rows can fall past the fifty-row cap, so a NON-oldest block could in principle be
+              // truncated and would then print "N were refused or never taken" about stored data.
+              // It is not reachable today — `resume` is read from the panel's in-memory outcome, so
+              // it is session-scoped — and it becomes reachable the moment a resume can be started
+              // from the stored history, which is a natural companion to `docs/TECH_DEBT.md` #271.
+              // Raised independently by the M7 ux and database reviews; filed as #273.
               mayBeTruncated={index === sittings.length - 1}
             />
           ))}
@@ -158,13 +168,42 @@ function SittingBlock({
   /** True for the oldest block, whose missing readings may be on the next page rather than absent. */
   mayBeTruncated: boolean;
 }): React.ReactElement {
+  const factsId = useId();
+  const spreadId = useId();
+  const missingId = useId();
   const readings = readingCount(sitting);
   const missing = sitting.kind === 'sweep' ? EXPECTED_READINGS - readings : 0;
   const spread = sittingSpreadMs(sitting);
+  // Derived once: the table's caption and the Copy button's accessible name are the same sentence,
+  // so a reader hears the block named the same way twice rather than two descriptions of one thing.
+  const caption = sittingCaption(sitting, readings);
+
+  /**
+   * **This block's own facts reach a reader who lands INSIDE its table** — the same fix the
+   * general comparability note already had, applied one level down.
+   *
+   * `DataTable` is a focusable `role="region"`, so a landmark-navigating reader arrives at
+   * "Sweep of 6 readings — …" having skipped whatever sits above it. That was fine while the only
+   * thing above was a sentence identical for every sitting; it stopped being fine when the block
+   * grew facts that differ per sitting — which machine, whether readings are missing, whether it
+   * spans a reboot. Those are exactly what decides whether the numbers inside mean anything, and a
+   * reader who never sees them is the failure this whole epic is about. Found by the M7
+   * accessibility review, which also noted honestly that no single success criterion names it.
+   *
+   * Ids are per block (`useId`) and the list is assembled in reading order; a warning that is not
+   * rendered contributes nothing rather than an id pointing at no element, which reads to a screen
+   * reader as a missing description rather than an absent one.
+   */
+  const describedBy = [
+    factsId,
+    ...(spread !== null && spread > SITTING_SPREAD_LIMIT_MS ? [spreadId] : []),
+    ...(missing > 0 ? [missingId] : []),
+    COMPARABILITY_ID,
+  ].join(' ');
 
   return (
     <section className="space-y-3">
-      <SittingFacts sitting={sitting} />
+      <SittingFacts sitting={sitting} id={factsId} />
 
       {/*
         **A sitting that spans time says so, rather than the reader inferring it from the clock
@@ -178,8 +217,8 @@ function SittingBlock({
         only for the case that is genuinely two occasions filed as one.
       */}
       {spread !== null && spread > SITTING_SPREAD_LIMIT_MS && (
-        <Alert tone="info">
-          These readings were taken {describeSpread(spread)} apart, not in one sitting. Each row
+        <Alert tone="info" id={spreadId}>
+          These readings were taken {describeSpread(spread)} apart, not at one time. Each row
           carries its own time below. The machine facts above were recorded with the earliest, so
           compare these readings with that in mind.
         </Alert>
@@ -193,7 +232,7 @@ function SittingBlock({
         sitting for a complete one.
       */}
       {missing > 0 && (
-        <Alert tone="info">
+        <Alert tone="info" id={missingId}>
           This sitting has {String(readings)} of {String(EXPECTED_READINGS)} readings.{' '}
           {mayBeTruncated
             ? // **The oldest block asserts nothing about WHY.** It cannot: a reading missing here
@@ -207,25 +246,25 @@ function SittingBlock({
       )}
 
       <DataTable
-        caption={sittingCaption(sitting, readings)}
+        caption={caption}
         columns={READING_COLUMNS}
         query={settled([...sitting.limbs])}
         getRowKey={(limb) => `${limb.scenarioId}/${limb.preset}/${limb.limbLabel}`}
-        describedById={COMPARABILITY_ID}
+        describedById={describedBy}
         loadingLabel="Loading readings…"
         empty={<Alert tone="info">This sitting recorded no readings.</Alert>}
       />
 
-      <CopySittingButton sitting={sitting} />
+      <CopySittingButton sitting={sitting} label={caption} />
     </section>
   );
 }
 
 /** The facts every reading in this sitting shares — and only those. */
-function SittingFacts({ sitting }: { sitting: Sitting }): React.ReactElement {
+function SittingFacts({ sitting, id }: { sitting: Sitting; id: string }): React.ReactElement {
   const c = sitting.context;
   return (
-    <dl className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+    <dl id={id} className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
       <Fact term="Machine" value={c.machineLabel ?? c.gpu ?? '(masked or not recorded)'} />
       {/*
         **`varies between readings` rather than one of them.** `docs/TECH_DEBT.md` #261 records the
@@ -280,24 +319,41 @@ function sittingCaption(sitting: Sitting, readings: number): string {
 }
 
 /**
- * How many READINGS a sitting holds, which is not how many rows it holds.
+ * How many READINGS a sitting holds — **one per row, which is what the table shows.**
  *
- * `canvas-draw` measures two scales in one press, so a reading is a scenario at a framing and a row
- * is one limb of it. Counting rows would report a two-limb press as two readings and call a
- * complete sweep of four an eight-reading sitting.
+ * This counted distinct scenario-and-framing pairs until M7, so it counted **steps** and called
+ * them readings: a complete sweep captioned itself `Sweep of 4 readings` above a table of **six**,
+ * and the partial notice said "2 of 4" where the approved spec says six. That spec is unambiguous
+ * and says it seven times — "four **steps**, six **readings**", "each a row" (§US-1, §S1, §CQ-2) —
+ * so the code had the vocabulary inverted, on the one screen this epic built to remove
+ * confidently-wrong numbers. Found by the M7 ux review.
+ *
+ * The docblock that used to sit here argued for the wrong answer with wrong arithmetic, too: it
+ * said counting rows would "call a complete sweep of four an **eight**-reading sitting". It is
+ * 2 + 2 + 1 + 1 = **six**. Nobody did the sum in the comment arguing against doing the sum.
+ *
+ * **It also makes a real gap visible.** A step can be stored having completed one of its two limbs
+ * — a Stop between them keeps the finished one (M3) — and nothing in `SweepStepStatus` can say so,
+ * because that step is `recorded`. Counting rows means such a sitting reads "5 of 6 readings"
+ * instead of a confident "4 of 4"; the remedy for it is `docs/TECH_DEBT.md` #272.
  */
 function readingCount(sitting: Sitting): number {
-  return new Set(sitting.limbs.map((l) => `${l.scenarioId}/${l.preset}`)).size;
+  return sitting.limbs.length;
 }
 
 /**
- * How many readings a complete sweep produces — **derived from the plan, never written down.**
+ * How many readings a complete sweep produces — **derived from the registry, never written down.**
  *
- * A literal 4 here would be a second statement of the sweep's shape, and the two would part company
- * the day a scenario or a framing is added: this table would then call every complete sitting
- * partial, which is a false claim about somebody's data rather than a stale constant.
+ * A literal 6 here would be a second statement of the sweep's shape, and the two would part company
+ * the day a scenario, a framing or a **scale** is added: this table would then call every complete
+ * sitting partial, which is a false claim about somebody's data rather than a stale constant. It is
+ * the sum of each step's limbs rather than the step count, for the reason above — `canvas-draw`
+ * measures two scales in one press and each is its own row.
  */
-const EXPECTED_READINGS = sweepPlan().length;
+const EXPECTED_READINGS = sweepPlan().reduce(
+  (total, step) => total + step.scenario.limbs.length,
+  0,
+);
 
 /**
  * One row per limb, carrying the reading it belongs to.
@@ -407,7 +463,14 @@ function VerdictCell({ limb }: { limb: SittingLimb }): React.ReactElement {
  * block for one limb of a four-reading sweep would be a partial answer that looks complete. The
  * flat table had to put this on every row and say which; a sitting block does not.
  */
-function CopySittingButton({ sitting }: { sitting: Sitting }): React.ReactElement {
+function CopySittingButton({
+  sitting,
+  label,
+}: {
+  sitting: Sitting;
+  /** The block's caption, so N of these buttons are told apart by name and not by position. */
+  label: string;
+}): React.ReactElement {
   const [copied, setCopied] = useState(false);
 
   return (
@@ -415,6 +478,11 @@ function CopySittingButton({ sitting }: { sitting: Sitting }): React.ReactElemen
       <Button
         variant="outline"
         size="sm"
+        // **Named for its own sitting, because there are N of these on screen.** Every block has one,
+        // and with the bare label an assistive-technology user browsing by button list meets a
+        // column of identical "Copy report" entries with nothing to choose between them. The visible
+        // word stays short; the accessible name carries the caption the block is already titled by.
+        aria-label={`Copy report — ${label}`}
         onClick={() => {
           void navigator.clipboard.writeText(formatSitting(sitting)).then(
             () => setCopied(true),
