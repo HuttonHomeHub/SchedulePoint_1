@@ -22,7 +22,7 @@ browser-native team use. See the full product context in
 > **Current stage: the application is substantially built.** 23 API modules
 > (`apps/api/src/modules/`), 31 Prisma models across 63 migrations, 1196 web
 > source files with 42 Playwright suites beside the base journey, and
-> 130 ADRs.
+> 131 ADRs.
 > **These six numbers are now a computed gate, not a promise.** `pnpm check:counts`
 > re-derives every one of them and fails if this paragraph disagrees, so a stale
 > figure stops a build instead of misleading a reader (ADR-0076). It became a gate
@@ -4234,6 +4234,68 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   are recorded rather than rushed (#272/#273).
   **The CPM engine is not imported** — in its honest form: there is nothing
   here to hold parity for.
+
+- **ADR-0131** _(Accepted; M0–M5 landed 2026-09-09)_ — A spec header states its approval, and a
+  citation is what closes it. **Fifty-four spec documents behind shipped, ADR-filed work were headed
+  `Draft — awaiting approval before implementation`** — `audit-log`'s said it about a table that has
+  been append-only in the database since 2026-08-03, `gantt-editing`'s about a view released in
+  `web-v0.92.0`. Nobody was negligent, and that is the diagnosis: `docs/PROCESS.md` names the header
+  as front matter and names no step that revisits it, so it drifted **by being nobody's step**. That
+  is the ADR-0058 shape, which is why the answer is a gate rather than a sweep — a sweep fixes
+  today's fifty-four and guarantees tomorrow's. It matters because of **ADR-0105**: a reader
+  deciding whether a change needs a full spec opens the spec and reads the header, and a `Draft`
+  header over shipped work tells them stages 1–4 were never completed for the surface they are about
+  to change.
+  **The predicate is citation, and the refinement was measured and rejected.** Eleven ADRs are
+  `Proposed` and **four of them are live production surfaces** (0029 the app-shell, 0030 the
+  canvas-first workspace, 0031 the toolbar registry, 0032 canvas-first authoring), so keying on the
+  ADR's own status would silently miss the loudest cases. The objection then **defuses itself**:
+  following all eleven, 0029–0032 cite files that live in `docs/plans/`, 0082 and 0083 cite no spec
+  directory at all, and the rest cite shipped epics — the population of _cited by a Proposed ADR
+  whose work has not started_ is empty. The claim is narrow and true: an ADR citing a spec is the
+  record that its design became a decision, so it cannot also be awaiting approval to build. It does
+  **not** claim the work shipped (`docs/adr/0083-shaded-form-fields.md:3-5` is a filed ADR with
+  nothing built), which is why `Approved` is admitted for a cited spec and only `Draft` is refused.
+  **The join runs directory-first, and that is what made this ADR's own defect survivable.** The
+  first version anchored on `docs/specs/<slug>` and found **70 of 72** cited slugs — ADRs link their
+  spec **relatively** (`0044-…:139` writes `../specs/…`) — and C2, which only asks that the cited
+  set be non-empty, passed cheerfully on the 70. Silent under-inclusion, in the gate whose own spec
+  rejects a predicate for exactly that. It was caught only because M0 had produced an **independent**
+  number to compare against. Widened, the gate's figures land on M0's exactly: 91 spec documents, 72
+  cited, 72 `Draft`, 54 of those cited, 4 cited with nothing to read — two instruments sharing no
+  code, agreeing on every figure.
+  **`headerField` is a new export, not a widened `fieldValue`.** That function's anchor is the bare
+  column-0 form, which is **2 of 91** spec headers; using it would have read two files and reported
+  green over eighty-nine, which is ADR-0124's Finding 0 inside the commit citing ADR-0124. Widening
+  it would also have changed `check:debt-status` over a different document family. Both of the new
+  reader's properties are requirements on evidence: 84 status lines sit at line 3 and the rest at
+  8, 8, 9, 17, 18, 21 and 30, so a **line anchor misses seven**; and `one-row-header` carries two
+  status lines — the spec's at :3 and an embedded ADR draft's at :796 — so a **last-wins reader
+  reports the draft's status as the spec's**. Refusing the non-canonical forms is then a separate
+  strict pass, because a header in the wrong shape is still a header (ADR-0124).
+  **A vocabulary of five, not a blocklist of pre-approval wordings** — an unknown word fails loudly,
+  a blocklist fails silently the first time somebody invents a phrasing, which is how the estate
+  acquired `Reviewed`, `Delivered`, `Proposed` and `**Awaiting approval**`. The normaliser strips
+  emphasis because **#274's own count of 67 missed three bold `**Draft — …**` headers**: the fourth
+  string-matching miscount of this population, the cited-Draft figure alone going 28 → 50 → 54, each
+  correction upward.
+  **S6 is a departure from the approved spec's assertion table, and it is M0's.** The spec treated
+  the cited directories with no spec document as a documented blind spot; M0 measured four —
+  `canvas-decomposition`, `canvas-maximisation`, `design-system-rewrite`, `graphite`, all shipped
+  epics — and concluded _"it cannot be a silent skip: a silent skip is how the estate reached this
+  state."_ **The plan side is a contradiction rule, not a presence rule**, on the measurement that
+  46 of 90 plans annotate and 44 do not: a bare link asserts nothing, and requiring an annotation
+  would invent a second field nobody is forced to write, which is #274's defect one document along.
+  **Report-only, then swept, then armed and watched failing** (the ADR-0120 sequence): the gate
+  shipped deliberately absent from `package.json`, the red run against the un-swept estate is
+  committed, the sweep took 66 findings to 0, and a deliberately re-drafted header then produced
+  `FAIL` under `prepush.sh` — not `WARN`, which is the difference between registered and enforced.
+  **17 `Draft` specs remain and none is a finding**: no ADR cites them, which is the measured blind
+  spot and is a quarter of the original population. Every assertion was verified red against a named
+  mutation (ADR-0110 D5), 23 across 27 cases; **C0's fixture took two attempts and the first would
+  have passed against its own mutation**, because an empty spec directory also empties the cited set
+  so C2 fired and the run was red for the wrong reason. **The CPM engine is not imported and no
+  migration runs** — no product code changes at all.
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
