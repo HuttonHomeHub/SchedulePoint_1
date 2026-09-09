@@ -10,6 +10,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -309,6 +310,52 @@ export class CreateProbeResultDto {
   @MaxLength(32)
   @Matches(/^[a-z][a-z0-9-]*$/)
   preset!: string;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    format: 'uuid',
+    description:
+      'Groups several presses into one SITTING. NULL means this reading was a single press — ' +
+      'true of every row written before this column existed and of every future single run. ' +
+      '**Client-supplied, unlike `runId`**, because only the client knows that four presses were ' +
+      'one sitting: the server holds no state across them and cannot observe it. What that grants ' +
+      '(grouping rows the operator did not group) is strictly weaker than fabricating the numbers, ' +
+      'which a compromised staff session can already do.',
+  })
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null)
+  // **`@IsUUID()` is not optional here.** The column is `@db.Uuid`, so a malformed value that got
+  // past validation would reach Postgres and raise an error the route does not map — a 500 that
+  // loses the whole press. The DTO refuses first; the database is the backstop. No version
+  // argument: the column accepts any, and pinning '4' would refuse a future v7 mint for nothing.
+  @IsUUID()
+  sweepId?: string | null;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    minimum: 1,
+    maximum: 100_000,
+    description:
+      'The frame budget ONE PHASE ran for — the other half of the protocol `samples` carries ' +
+      '(that array’s length is the repeats; this is the frames per repeat). NULL means **not ' +
+      'recorded**: it is inferable from `samples.length` via a client-side constant, and ' +
+      'inferring it would write a fact derived from a bundle version into a column readers will ' +
+      'trust. A NULL on a row recorded after 2026-09-09 is a producer bug, not a historic gap.',
+  })
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  // **The ceiling is required rather than decorative, and this is the one comment to read if it is
+  // ever loosened.** The column is `int4`, and `@IsInt()` passes `1e12` — `Number.isInteger(1e12)`
+  // is `true` — so without a `@Max` that value reaches Postgres, raises an out-of-range error the
+  // route does not map, and returns a 500 that loses the press. The database's own bound is sign
+  // only, deliberately: a range is a protocol, and a protocol in a CHECK means the day the product
+  // widens it the database silently refuses rows the product decided to accept. So the DTO holds
+  // the range and must stay a STRICT SUBSET of the CHECK — 100_000 is about 28 minutes of phase at
+  // 60 Hz, far past any protocol a person waits for and comfortably inside int4.
+  @Max(100_000)
+  framesPerPhase?: number | null;
 
   @ApiProperty({ minimum: 200, maximum: 10_000 })
   @IsInt()

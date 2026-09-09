@@ -3960,34 +3960,37 @@ instead of reporting a green that proved nothing. **Physical order is not someth
 hold**, so the pure unit spec is the gate and the e2e case is a capability proof — the first time
 anything here has restored a cascade batch end to end.
 
-### 267. The performance panel announces its outcome twice, in two live regions
+### 268. An e2e suite's coverage was bounded by a throttle counter it shared between tests
 
-**Status:** open · **Raised:** 2026-09-09 (probe-sweep M3-T2) · **Size:** S · **Owner:** repo
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M4) · **Size:** S · **Owner:** repo
 
-`Panel` renders the probe's status into a `<p aria-live="polite" class="sr-only">`, fed by
-`summarise(outcome)`. The visible result then renders an `Alert`, whose tone maps to a role — and
-`info` maps to **`role="status"`**, which is also a live region. Both change at the same moment, so
-a screen-reader user hears the same event announced twice.
+`apps/api/test/staff.e2e-spec.ts` reached the ceiling of `StaffController`'s
+`@Throttle({ default: { limit: 30, ttl: 60_000 } })` and nobody knew, because the symptom does not
+name the cause: the suite passed at 22 tests, and adding a 23rd pushed **three unrelated tests**
+into 429, each failing with a message about the assertion it was making. The whole file runs inside
+one 60-second window against one in-memory counter, so a test's request budget was being spent by
+its neighbours.
 
-**It is pre-existing and it is not confined to the case that exposed it.** A refusal already said
-"The run was refused and nothing was measured. …" in one channel and "The run was refused — nothing
-was measured. …" in the other: two announcements, two wordings, one event. M3-T2 made the cancelled
-pair **byte-identical**, which is a strict improvement in truthfulness (a live region claiming
-"nothing was recorded" beside a screen saying two readings were kept would be false in the one
-channel a screen-reader user has) and makes the duplication easier to hear rather than harder.
+**Fixed for this file** by clearing the throttler storage in `beforeEach` — isolation, not a
+weakened bound. The product limit is untouched, every test still runs its own requests under the
+real 30 per minute, and nothing in `apps/api/test` asserts a 429, so no assertion was disarmed.
+`docs/TESTING.md` already forbids exactly this ("deterministic and isolated — no shared mutable
+state"); the counter was shared mutable state that nothing recognised as such.
 
-**What would close it** is a decision about which channel owns the outcome, not a wording change.
-The candidates: drop `summarise`'s outcome branches and let the `Alert` announce (loses the status
-line for a sighted reader who is not looking at the result region); render the visible result with
-`role="presentation"` and keep the live region (loses the `Alert`'s tone semantics); or give `Panel`
-a way to suppress its status when the body already announces. All three touch a shared primitive on
-a screen that is not this milestone's subject, so it is filed rather than taken — and named here
-because noticing drift and stepping over it leaves the register exactly as wrong as not noticing
-(ADR-0071).
+**Why it is still a row.** The fix is one file's `beforeEach`, and the same trap is set in every
+other e2e suite that hits a throttled route — `share`, and any later one. Nothing detects the
+condition: a suite silently loses headroom as it grows and then fails somewhere else. Two candidate
+answers, neither taken here: clear the storage in a shared e2e setup so no suite can inherit the
+problem, or assert the 429 deliberately in one place so the limiter has an owner and the rest can
+be isolated without guilt.
 
-**Not a WCAG failure as far as the criteria go**, and the row says so rather than overstating it:
-4.1.3 asks that a status message be programmatically determinable, which it is, twice. It is a
-usability defect against the panel's own rule that a reader should be told what happened once.
+**Three diagnoses were wrong before this one, and the sequence is the useful part.** First: "the
+global `RATE_LIMIT_LIMIT` is 100 and we are over it" — raised it in the suite's `beforeAll` and
+nothing changed, because the controller's own `@Throttle` overrides the global and the edit was
+**inert while reading as a fix**. Second: "my new test is greedy" — trimmed it from seven requests
+to five, still failed. Third: measured the baseline by stashing the new test, which passed at
+exactly 22. Only then was the shape visible. The first attempt is the one worth remembering: a
+change that looks like a remedy, sits in the tree, and does nothing.
 
 ## Closed numbers
 
@@ -4005,6 +4008,7 @@ One line each. The story lives where the link points, not here.
 
 | #   | What it was                                                                                         | Closed     | Where the record is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | --- | --------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 267 | (never a distinct defect) The performance panel announces its outcome twice                         | 2026-09-09 | **Filed in error and withdrawn the same day.** It is `docs/TECH_DEBT.md` #259 item 10, raised 2026-09-07 at the staff-performance-probe gate pass — noticed independently in the code by somebody who did not look for it in the register first. The analysis it carried (what M3 sharpened, and the three candidate remedies with their costs) is folded into #259 item 10, which is where the defect already lived. The number is ledgered rather than freed, because two live rows for one defect is exactly the failure this table exists to prevent.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 260 | A saturated dropped-frame baseline made the difference gate arithmetically unfailable               | 2026-09-09 | `docs/specs/probe-sweep/` M1 (the ADR is filed at M7 — the number is not reserved here, per ADR-0071). `judgeRun` computes `headroomPp`/`saturated` on **every** result and returns INDETERMINATE when a gated run is saturated. **Verified red first**: against the old judge the product owner's own reading — baseline 98.33 pp, delta −0.19 pp — returned `PASS` with the gate armed. Two corrections to the row itself, both found by building it. Its proposed placement ("where the spread guard sits") was **wrong**: its own headline exhibit is an **ungated** Fit run, which returns `REPORTED_ONLY` before any gated branch — so the fact is computed before the `!gated` return, only the verdict is gated, and the first unit case is the ungated one. And saturation is checked **before** the spread guard, because a ceiling compresses the spread beneath it: a baseline pinned near 100 on every repeat has almost no run-to-run spread, so the existing refusal reads the machine as perfectly quiet at the exact moment the metric has no room to express an answer — observed, not argued, in the M1-T3 run that records `baseline 100.00 pp (spread 0.00 pp)` and `delta +0.00 pp`, this defect at its purest. There were also **four** renderers of a delta and not the three the plan named: the CLI driver prints one and does not call `verdictNote`, so the structural enumeration written for the browser surfaces could not see it. `docs/specs/probe-sweep/m1-cli-oracle.md`.                                                                                                              |
 | 253 | Thirteen hand-maintained copies of the baseline-children delete sweep                               | 2026-09-06 | One `clearBaselineTree(prisma)` in `apps/api/test/`, called by `audit-reset.ts` and all twelve e2e specs, with the children **asked of `Prisma.dmmf` rather than listed** — listing them in one place instead of thirteen would still have to be remembered, and remembering is what failed when ADR-0126 added `baseline_dependencies` and broke **557 of 587** tests in thirteen files at once. Three things checked rather than assumed: the count is fourteen files (the row's thirteen plus the runner, as it said); the DMMF reports exactly three children, all RESTRICT, and **none holds a foreign key into another**, which the runner's comment asserted and nothing had verified — the helper re-derives that and **throws** rather than guessing if it ever stops holding; and the four lines were byte-identical in all thirteen, so this is a replacement rather than a merge of thirteen dialects. The **retention runner is deliberately unchanged**: its ordering is already gated by `hierarchy-expiry.structural.spec.ts` and its rule genuinely differs — it must not name an `onDelete: Cascade` child, where a test reset may. Two consumers, two correct rules, stated in both docblocks rather than merged behind a flag. `clear-baseline-tree.e2e-spec.ts` pins it, **verified red first** against the one regression the thirteen callers structurally cannot catch: a hard-coded list replacing the DMMF walk, which passes every one of them and then misses the fourteenth table.                                                                                                           |
 | 252 | `pnpm measure:draw` could not bundle: the seed barrel forced a Node-only module on a browser        | 2026-09-06 | `docs/specs/seed-browser-safe/`. `5a5f00da` moved the fixture tier into `packages/seed` and re-exported it from the barrel; that tier imports `@repo/engine-conformance`, which imports `node:fs`, so importing `scaleSpec` dragged a filesystem reader into a browser bundle and the benchmark this repository quotes for every canvas claim stopped bundling for a day. **No user was ever affected** — nothing under `apps/web/src` imports that package — which is exactly why nothing went red. Fixed additively with subpath exports (`./spec`, `./scale`, `./pairwise`, `./negative`, `./fixture`); the root export is untouched. The `--external:node:*` workaround was **removed**, not left, and the bundle verified to build without it. New gate `pnpm check:browser-safe` bundles every browser-side entry point for a browser and was verified red against the real defect — **and its own first run was wrong**, running esbuild from the repo root where it is unresolvable (a transitive Vite dependency) and reading only `stderr` where pnpm writes to `stdout`, so it failed all four entries while printing a blank, confident diagnosis about a widened barrel. A gate that always fails for a reason it misreports trains a reader to ignore it.                                                                                                                                                                                                                                                                                                                                                   |
@@ -4374,6 +4378,26 @@ promised. What follows was judged real and not worth holding the release for.
 10. **Several `Alert`s mount in the same commit as the panel's own live region.** `Alert` carries an
     implicit live-region role, so the "one accessible channel" claim in the panel's docblock stops
     holding at the moment a run ends. The content is redundant rather than contradictory.
+
+    **Sharpened 2026-09-09 (probe-sweep M3).** The cancelled pair is now **byte-identical** in both
+    channels, which is a strict improvement in truthfulness — before M3 one said "nothing was
+    recorded" while the other could say two readings were kept, and a live region making a false
+    statement is worse than one making a redundant one — and it makes the duplication easier to
+    hear rather than harder. `summarise()` and the visible `Alert` both render
+    `cancelledSentence()`. A refusal already had the same shape in two wordings.
+
+    **What would close it is a decision about which channel owns the outcome, not a wording
+    change.** Three candidates, none free: drop `summarise`'s outcome branches and let the `Alert`
+    announce (loses the status line for a sighted reader not looking at the result region); render
+    the visible result `role="presentation"` and keep the live region (loses the `Alert`'s tone
+    semantics); or give `Panel` a way to suppress its status when its body already announces. All
+    three touch a shared primitive.
+
+    _This was filed again as **#267** on 2026-09-09 by somebody who had noticed it in the code and
+    not looked for it in the register. That row is deleted and ledgered; the analysis is here,
+    where the defect already lived. Two rows for one defect is the failure the Closed-numbers
+    ledger exists to prevent — the register disagreeing with itself about what a number means._
+
 11. **`revision-diff` narrates progress once for a whole multi-pair run** where `canvas-draw`
     narrates per repeat, so a screen-reader user hears nothing for up to twenty-five seconds.
 12. **The on-screen "cannot be judged" alert prints only the first line** of the judge's message,

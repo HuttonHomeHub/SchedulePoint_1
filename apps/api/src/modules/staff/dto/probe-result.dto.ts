@@ -25,16 +25,39 @@ export class ProbeResultRowDto {
   })
   runId!: string;
 
+  @ApiProperty({
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Groups several presses into one SITTING. NULL means this reading was a single press — ' +
+      'true of every row written before the column existed and of every future single run. ' +
+      'Client-supplied, unlike `runId`: only the client knows four presses were one sitting.',
+  })
+  sweepId!: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      'The frame budget ONE PHASE ran for. NULL means **not recorded** — it is inferable from ' +
+      '`samples.length`, and inferring it would write a fact derived from a bundle version into ' +
+      'a field readers will trust.',
+  })
+  framesPerPhase!: number | null;
+
   @ApiProperty({ format: 'date-time', description: 'Server-stamped. The retention predicate.' })
   recordedAt!: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     nullable: true,
     description:
       'The staff member’s address **as it was**, denormalised on purpose: the account may not ' +
       'exist when anyone reads this, and a rename must not rewrite a measurement’s provenance. ' +
       'NULL is the ADR-0085 erasure scrub, not a producer omitting it.',
   })
+  // `@ApiProperty({ nullable: true })`, not `@ApiPropertyOptional` — `docs/TECH_DEBT.md` #259
+  // item 1. The field is ALWAYS PRESENT and merely nullable, which is what its five siblings in
+  // this DTO already say; the optional form made a generated client type it as possibly absent,
+  // so a consumer had to handle a state the server never produces.
   recordedByLabel!: string | null;
 
   @ApiProperty()
