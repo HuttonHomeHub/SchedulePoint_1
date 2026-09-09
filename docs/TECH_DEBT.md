@@ -4622,7 +4622,7 @@ appear as pre-existing open alerts in the branch's code-scanning view first: thi
 because the token in use gets `403 Resource not accessible by integration` on
 `/code-scanning/alerts`.
 
-### 266. A measurement probe asserts a wall-clock bar inside the blocking e2e job, and each configuration fails a different half
+### 266. Two wall-clock assertions sit in blocking gates, and one release run falsified the reasoning behind each
 
 **Status:** open · **Raised:** 2026-09-09 (ADR-0129, PR #491) · **Size:** S · **Owner:** api
 
@@ -4663,3 +4663,34 @@ sampling is the other option and is the one to be careful with, because choosing
 drop _after_ seeing which choice passes is tuning the instrument to the answer. Either way it changes
 how a committed falsification condition is enforced, which is a decision for the product owner and
 not a defect fix — so it is written down rather than taken silently on the day a release was waiting.
+
+**A second instance landed in the same release, and it falsifies a different argument.** With #491
+merged and #493 open — a pull request changing **two markdown files** — the unit job failed on
+`apps/api/src/modules/schedule/engine/level.spec.ts`:
+
+> doubling the contending set cost 4.88x (362ms -> 1764ms); above 4x means the pass has grown worse
+> than quadratic
+
+1,927 of 1,933 api tests passed and nothing algorithmic had changed. That guard is **not** careless
+— it is the considered replacement for an absolute bound that #241 removed from this same file, for
+flaking on a pull request that likewise touched no API code, and its docblock argues the replacement
+is safe because _"the noise is in the numerator and the denominator, and divides out"_.
+
+**The measurement says it does not divide out, and the reason is worth keeping.** A ratio cancels a
+constant **speed** factor — a slower machine makes both runs proportionally slower. It does not
+cancel an **independent per-run perturbation**: the two timings are sequential in one process, so a
+GC pause or a slice of CPU steal that lands in the second run and not the first is additive, not
+multiplicative. With the smaller run at 362 ms, one ~400 ms hiccup moves the ratio by more than a
+whole point on its own — and the bound has only 1.5× of headroom over the ~2.4× the docblock records
+measuring. So the guard is less hardware-independent than its own reasoning claims, and this is the
+second time this file has flaked on a documentation-only change.
+
+**The two instances are one class**: a wall-clock number asserted in a gate every pull request must
+pass, on a machine nobody controls. ADR-0128 already decided this question for the canvas — the
+measurement belongs on hardware that can take it, and never in CI — and neither of these gates was
+read against that decision. What is deliberately **not** proposed here is deleting either assertion:
+the levelling ratio is watching the shape #84 leaves unoptimised on purpose, and that is worth
+watching. The options are to widen the bound with a stated reason, to take the median of three
+doublings rather than one, or to move the judgement out of CI the way ADR-0128 did. All three are
+decisions, and choosing one by whichever makes today's run green is exactly what the rest of this row
+argues against.
