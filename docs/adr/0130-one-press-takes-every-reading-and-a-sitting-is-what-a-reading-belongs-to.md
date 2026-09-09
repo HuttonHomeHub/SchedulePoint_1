@@ -260,9 +260,16 @@ accessibility review had already found and fixed exactly this defect — Shift+T
 controls hidden behind an opaque full-screen canvas — and the fix inerted this panel's own controls.
 `/staff` renders **six more panels beside it**, several mounting a `DataTable`, which is a focusable
 `role="region"`; Tab from the Stop button landed on one of them, invisible, for up to two minutes.
-WCAG 2.2 §2.4.11, AA. **The existing axe sweep is structurally incapable of seeing it**, and not
-only because axe has no rule for it: the journey waits for the overlay to be _gone_ before scanning,
-so the one state the defect exists in is never examined. The overlay now portals to the body and the
+WCAG 2.2 §2.4.11, AA. **The existing axe sweep is structurally incapable of seeing it, twice over,
+and both halves were checked rather than taken from the review.** `axe.getRules()` on the installed
+axe-core 4.13.0 returns **105 rules and not one** whose id matches `obscur` or `focus-not` — no
+automated rule can decide at runtime that one element covers another. And both `AxeBuilder` calls in
+`e2e-staff/staff.spec.ts` sit immediately after `expect(getByRole('button', { name: /^Stop/ })).toHaveCount(0)`,
+so a scan runs only once the overlay is _gone_: the one state the defect exists in is never examined.
+Established by running that call and reading those two sites — and deliberately **not** added to
+`scripts/dependency-claims.json`, which registers `ref`/`path`/`lines`/`anchor` citations into a
+dependency's source (there are already several into axe-core). This is a claim about its public API,
+answered by calling it, with no file whose lines a bump would move. The overlay now portals to the body and the
 page goes `inert` — and the portal is load-bearing rather than tidy, because inerting a common
 ancestor with the overlay nested inside it would take the Stop button too, leaving a two-minute
 full-screen overlay with nothing focusable in it at all.
