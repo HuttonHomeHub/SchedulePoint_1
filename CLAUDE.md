@@ -4123,10 +4123,18 @@ Diagram | Gantt` — which are **two independent two-way switches**, and ADR-003
   level down for a **re-typed link**, because the edge key must carry the type — one plan may hold an
   FS and an SS between the same pair — while a **lag** change keeps the key and reads as CHANGED.
   Written down because this epic's own journey asserted otherwise on its first run. **P3, the
-  overlay's paint cost, is OWED** on the product owner's hardware via the ADR-0128 staff probe, with
-  its three-valued verdict rule and a falsifiable prediction: because the cross-plan rule narrows
-  what is drawn, it should cost **no more** than the same-plan one, and materially more means the
-  lane clause leaked back in. Nothing is blocked on it. **No feature flag** (ADR-0088 D1).
+  overlay's paint cost, is TAKEN and PASSES** (product owner's hardware, 2026-09-09, `web-v0.125.0`):
+  `revision-diff` at Week framing, 2,000 activities per side, **baseline 0.00 pp with a 0.00 pp
+  run-to-run spread, treatment 0.00 pp at 60.0 fps, delta +0.00 pp** against ADR-0127's 2.00 pp bar.
+  **The spread limb is what makes that a verdict rather than a shrug** — ADR-0127 D8 recorded a
+  machine whose no-change baseline moved 0.56 → 1.85 and 0.93 → 10.00 pp and was honestly reported
+  INDETERMINATE — and the run was **not vacuous**, the overlay drawing 37 of 264 on-screen bars and
+  49 of 372 links while it was measured. So the committed prediction holds: the cross-plan rule
+  narrows what is drawn, it costs no more than the same-plan overlay (D8a: 0.19 → 0.00 pp), and **the
+  lane clause did not leak back in**. What it does **not** establish is stated rather than widened —
+  one framing, one machine, **Fit still ungraded** (`docs/TECH_DEBT.md` #260, whose 98.33 pp baseline
+  is the opposite failure), and Week culls 2,160 bars to 264, which is ADR-0128's finding that cost
+  tracks bars drawn rather than plan size. **No feature flag** (ADR-0088 D1).
 
 - **ADR-0057** _(Accepted)_ — Real modules replace the reference template: deletes
   `apps/api/examples/reference-feature/`, `scripts/verify-template.sh` and the CI
