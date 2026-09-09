@@ -3960,6 +3960,35 @@ instead of reporting a green that proved nothing. **Physical order is not someth
 hold**, so the pure unit spec is the gate and the e2e case is a capability proof — the first time
 anything here has restored a cascade batch end to end.
 
+### 267. The performance panel announces its outcome twice, in two live regions
+
+**Status:** open · **Raised:** 2026-09-09 (probe-sweep M3-T2) · **Size:** S · **Owner:** repo
+
+`Panel` renders the probe's status into a `<p aria-live="polite" class="sr-only">`, fed by
+`summarise(outcome)`. The visible result then renders an `Alert`, whose tone maps to a role — and
+`info` maps to **`role="status"`**, which is also a live region. Both change at the same moment, so
+a screen-reader user hears the same event announced twice.
+
+**It is pre-existing and it is not confined to the case that exposed it.** A refusal already said
+"The run was refused and nothing was measured. …" in one channel and "The run was refused — nothing
+was measured. …" in the other: two announcements, two wordings, one event. M3-T2 made the cancelled
+pair **byte-identical**, which is a strict improvement in truthfulness (a live region claiming
+"nothing was recorded" beside a screen saying two readings were kept would be false in the one
+channel a screen-reader user has) and makes the duplication easier to hear rather than harder.
+
+**What would close it** is a decision about which channel owns the outcome, not a wording change.
+The candidates: drop `summarise`'s outcome branches and let the `Alert` announce (loses the status
+line for a sighted reader who is not looking at the result region); render the visible result with
+`role="presentation"` and keep the live region (loses the `Alert`'s tone semantics); or give `Panel`
+a way to suppress its status when the body already announces. All three touch a shared primitive on
+a screen that is not this milestone's subject, so it is filed rather than taken — and named here
+because noticing drift and stepping over it leaves the register exactly as wrong as not noticing
+(ADR-0071).
+
+**Not a WCAG failure as far as the criteria go**, and the row says so rather than overstating it:
+4.1.3 asks that a status message be programmatically determinable, which it is, twice. It is a
+usability defect against the panel's own rule that a reader should be told what happened once.
+
 ## Closed numbers
 
 Rows are **deleted** when done (see the rule at the top) — but the number is never reused, and this

@@ -60,14 +60,24 @@ export function formatProbeReport(
  */
 export function formatSitting(sitting: Sitting): string {
   if (sitting.outcome === 'cancelled') {
+    // **The kept limbs are printed.** A stopped press keeps every limb that finished (M3), so a
+    // block that stopped at the context would hand the operator a sentence about readings it then
+    // refused to show them — and the Copy button sits outside this branch, so it is reachable
+    // exactly when there is something to copy.
+    const kept = sitting.limbs.length;
     return [
-      'SchedulePoint performance probe — RUN CANCELLED',
+      'SchedulePoint performance probe — RUN STOPPED',
       '',
-      'You stopped this run, so it was not completed and nothing was recorded.',
+      kept === 0
+        ? 'You stopped this run before anything finished, so nothing was measured and nothing was recorded.'
+        : `You stopped this run. ${kept === 1 ? 'One reading' : `${String(kept)} readings`} had already finished and ${kept === 1 ? 'was' : 'were'} kept; the rest were not taken.`,
       'This is NOT a pass and NOT a failure.',
       '',
       ...contextLines(sitting.context),
-    ].join('\n');
+      ...(kept === 0 ? [] : ['', ...sitting.limbs.flatMap((limb) => [...limbLines(limb), ''])]),
+    ]
+      .join('\n')
+      .trimEnd();
   }
 
   if (sitting.outcome === 'refused') {

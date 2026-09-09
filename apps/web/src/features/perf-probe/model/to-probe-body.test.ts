@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe';
 
-import { toProbeBody } from './to-probe-body';
+import { recordsAnything, toProbeBody } from './to-probe-body';
 
 const CONTEXT: RunContext = {
   scenarioId: 'revision-diff',
@@ -102,5 +102,87 @@ describe('toProbeBody', () => {
 
     expect(body?.limbs).toHaveLength(1);
     expect(body?.limbs[0]?.thresholds).toMatchObject({ minFps: 30, gated: true });
+  });
+});
+
+/**
+ * M3 — a limb is the unit of durability.
+ *
+ * Cancelling used to discard the whole press. On the two-scale `canvas-draw` scenario that meant
+ * stopping during the second limb threw away a **complete** 500-activity limb: three full repeats,
+ * nothing about it wrong, gone because the recording unit was the press. Nobody reported it, which
+ * is why it is here rather than in a register row — a discarded measurement leaves no trace to
+ * report.
+ */
+describe('toProbeBody — a stopped run keeps what it finished', () => {
+  it('stores a limb that completed before the operator pressed Stop', () => {
+    // Verified red against the all-or-nothing discard: before M3 this returned `null`.
+    const body = toProbeBody(
+      { kind: 'cancelled', context: CONTEXT, limbs: [differenceLimb] },
+      'the machine',
+    );
+
+    expect(body).not.toBeNull();
+    expect(body?.limbs).toHaveLength(1);
+    expect(body?.limbs[0]?.limbId).toBe(differenceLimb.limbId);
+    // The context is the run's, not a placeholder: the machine, the framing and the clock are the
+    // same ones the completed limb was measured under.
+    expect(body?.viewportWidth).toBe(CONTEXT.viewport.width);
+    expect(body?.machineLabel).toBe('the machine');
+  });
+
+  it('stores nothing when the operator stopped before anything finished', () => {
+    // Falls out of the same rule rather than needing a branch of its own — and it is the case that
+    // keeps "cancelled" from quietly becoming "measured".
+    expect(toProbeBody({ kind: 'cancelled', context: CONTEXT, limbs: [] }, null)).toBeNull();
+  });
+
+  it('still stores nothing for a REFUSAL, however much was drawn', () => {
+    // Unchanged and asserted alongside, because the two now diverge: a refusal means the numbers
+    // that exist are placeholders, so there is nothing to keep at any granularity.
+    expect(
+      toProbeBody(
+        {
+          kind: 'refused',
+          refusal: { reason: 'TAB_HIDDEN', sentence: 'The tab was hidden.' },
+          context: CONTEXT,
+        },
+        null,
+      ),
+    ).toBeNull();
+  });
+});
+
+/**
+ * The rule about whether an outcome produces a row, asked once.
+ *
+ * **This exists because the journey found the defect and no unit test could have.** The panel asked
+ * `kind === 'measured'` in two places to decide whether to say a reading was recorded and whether
+ * to offer Retry. That was the same question as `toProbeBody`'s, spelt differently — and the moment
+ * a cancellation began producing a row the three disagreed: the store happened, the history grew,
+ * and the screen said nothing about it. Each site was correct in isolation; the defect lived only
+ * between them (the ADR-0093 shape), which is exactly what a per-file suite cannot see.
+ */
+describe('recordsAnything — the one place the rule lives', () => {
+  it('agrees with toProbeBody on every outcome shape', () => {
+    const cases: ProbeOutcome[] = [
+      { kind: 'measured', context: CONTEXT, limbs: [differenceLimb] },
+      { kind: 'cancelled', context: CONTEXT, limbs: [differenceLimb] },
+      { kind: 'cancelled', context: CONTEXT, limbs: [] },
+      {
+        kind: 'refused',
+        refusal: { reason: 'TAB_HIDDEN', sentence: 'The tab was hidden.' },
+        context: CONTEXT,
+      },
+    ];
+
+    // The predicate and the body must never disagree: a screen that says "recorded" over a `null`
+    // body, or stays silent over a real one, is the defect this pins in both directions.
+    for (const outcome of cases) {
+      expect(
+        recordsAnything(outcome),
+        `${outcome.kind} with ${'limbs' in outcome ? String(outcome.limbs.length) : '0'} limb(s)`,
+      ).toBe(toProbeBody(outcome, null) !== null);
+    }
   });
 });

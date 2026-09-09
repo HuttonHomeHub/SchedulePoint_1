@@ -420,15 +420,63 @@ describe('PerformanceProbePanel', () => {
     expect(await screen.findByText(/No readings recorded yet/)).toBeInTheDocument();
   });
 
+  it('says what a stopped run KEPT, and records it', async () => {
+    // M3-T2. Verified red against the previous copy, which said "nothing was measured and nothing
+    // was recorded" — a sentence that was true until a completed limb could survive a Stop, and
+    // false the moment one could. A screen saying that beside a row in the history is worse than
+    // saying nothing: it tells the reader to go and look for something that is there.
+    const base = measured('PASS');
+    if (base.kind !== 'measured') throw new Error('unreachable');
+    runProbe.mockResolvedValue({ kind: 'cancelled', context: CONTEXT, limbs: base.limbs });
+    render(<PerformanceProbePanel />);
+    runOnce();
+
+    // **Both channels, asserted separately.** A document-wide `findAllByText` passes when EITHER
+    // says it, which is precisely the defect this test exists to catch — and the first version of
+    // it did exactly that: run against the old visible copy with only the live region fixed, it
+    // went green. Caught by verifying red rather than by reading.
+    const kept = /One reading had already finished and was kept/;
+    // Settle on the outcome FIRST. `findAllByRole('status')` resolves against the running
+    // spinner — which is also `role="status"` — and would assert about the wrong element while
+    // looking like it waited for the right one.
+    await screen.findAllByText(kept);
+    const alerts = screen.getAllByRole('status');
+    expect(
+      alerts.filter((el) => kept.test(el.textContent ?? '')).length,
+      'the visible alert says what was kept',
+    ).toBeGreaterThan(0);
+    // The panel's own live region — `sr-only`, and the only channel a screen-reader user has if
+    // the alert is missed. It must agree, or the two say different things about one event.
+    expect(
+      document.querySelector('.sr-only[aria-live]')?.textContent ?? '',
+      'the live region agrees with the visible copy',
+    ).toMatch(kept);
+    // "The rest were not taken" — NOT "were refused". Two vocabularies: a reading not taken is one
+    // nobody tried, a refusal is one the machine declined, and a reader meeting less than they
+    // expected most needs to tell those apart.
+    expect((await screen.findAllByText(/the rest were not taken/)).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(recordMutate).toHaveBeenCalled();
+    });
+  });
+
   it('renders a CANCELLED run as its own state, and records nothing', async () => {
     // A stopped run used to return to the pristine "no measurement has been taken" wording, so a
     // reader could not tell it from never having pressed Run — and nothing said the press had
     // registered. Found by the M5 ux review.
-    runProbe.mockResolvedValue({ kind: 'cancelled', context: CONTEXT });
+    runProbe.mockResolvedValue({ kind: 'cancelled', context: CONTEXT, limbs: [] });
     render(<PerformanceProbePanel />);
     runOnce();
 
-    await screen.findByText(/You stopped this run before it finished/);
+    // Two elements carry it — the visible alert and the panel's own live region — and that they
+    // now match EXACTLY is the M3-T2 requirement rather than an accident: before this milestone
+    // they said different things, and after it a live region still claiming "nothing was recorded"
+    // while the screen says two readings were kept would be false in the one channel a
+    // screen-reader user has. The duplicate ANNOUNCEMENT that follows from both being live regions
+    // is pre-existing and applies to a refusal too; it is `docs/TECH_DEBT.md` #267.
+    expect(
+      (await screen.findAllByText(/You stopped this run before anything finished/)).length,
+    ).toBeGreaterThan(0);
     expect(recordMutate).not.toHaveBeenCalled();
     expect(screen.queryByText('PASS')).not.toBeInTheDocument();
     expect(screen.queryByText('FAIL')).not.toBeInTheDocument();
@@ -455,8 +503,10 @@ describe('PerformanceProbePanel', () => {
     fireEvent.click(stop);
     expect(shouldStop(), 'the runner is told at its next boundary').toBe(true);
 
-    resolveRun({ kind: 'cancelled', context: CONTEXT });
-    await screen.findByText(/You stopped this run before it finished/);
+    resolveRun({ kind: 'cancelled', context: CONTEXT, limbs: [] });
+    expect(
+      (await screen.findAllByText(/You stopped this run before anything finished/)).length,
+    ).toBeGreaterThan(0);
   });
 
   it('says a reading is being recorded while the write is in flight', async () => {

@@ -10,7 +10,7 @@ import {
   type ScenarioId,
   type ScenarioPreset,
 } from '../model/scenarios';
-import { toProbeBody } from '../model/to-probe-body';
+import { recordsAnything, toProbeBody } from '../model/to-probe-body';
 import { verdictLabel, verdictNote } from '../model/verdict-copy';
 import type { LimbOutcome, ProbeOutcome, RunSize } from '../runner/run-probe';
 
@@ -195,8 +195,11 @@ export function PerformanceProbePanel(): React.ReactElement {
    * found by the M5 accessibility review. The asymmetry is the defect: a reader heard the bad news
    * and never the good, on a screen whose whole purpose is saying what the state is now.
    */
+  // Asks the STORE's own rule rather than a second spelling of it — `kind === 'measured'` was
+  // that second spelling, and it stopped meaning the same thing the moment a stopped run could
+  // keep a limb.
   const recordingStatus =
-    !outcome || outcome.kind !== 'measured'
+    !outcome || !recordsAnything(outcome)
       ? ''
       : record.isPending
         ? ' Recording it now.'
@@ -319,7 +322,7 @@ export function PerformanceProbePanel(): React.ReactElement {
         failure `m4-schema-record.md` names as the thing every CHECK constraint on that table
         depends on not happening: a swallowed 422 turns a visible refusal into silent evidence loss.
       */}
-        {outcome !== null && outcome.kind === 'measured' && (
+        {outcome !== null && recordsAnything(outcome) && (
           <RecordingState
             pending={record.isPending}
             failed={record.isError}
@@ -375,7 +378,7 @@ export function PerformanceProbePanel(): React.ReactElement {
                 cancelledRef.current = true;
               }}
             >
-              Stop (ends at the next repeat)
+              Stop (keeps what is already measured)
             </Button>
           </div>
         </div>
@@ -419,7 +422,12 @@ export function PerformanceProbePanel(): React.ReactElement {
  */
 function summarise(outcome: ProbeOutcome): string {
   if (outcome.kind === 'cancelled') {
-    return 'You stopped the run, so it was not completed and nothing was recorded.';
+    // **The same sentence the visible copy uses, not a second wording of it.** Before M3 both said
+    // "nothing was recorded" and were right; after it, a live region still saying so while the
+    // screen says two readings were kept would be false in the one channel a screen-reader user
+    // has — the one-correct-pattern-applied-to-a-control-and-not-its-neighbour shape this register
+    // records six times over, and the M3-T2 risk names it in advance.
+    return cancelledSentence(outcome.limbs.length);
   }
   if (outcome.kind === 'refused') {
     return `The run was refused and nothing was measured. ${outcome.refusal.sentence}`;
@@ -445,9 +453,13 @@ function ProbeResult({
         // A stopped run is its own state, and it says so. Returning to the pristine "no measurement
         // has been taken" wording would leave a reader unable to tell a cancellation from never
         // having pressed Run at all.
-        <Alert tone="info">
-          You stopped this run before it finished, so nothing was measured and nothing was recorded.
-        </Alert>
+        //
+        // **"Not taken" and "refused" are two vocabularies and stay apart.** A reading not taken is
+        // one nobody tried; a refusal is one the machine declined. Collapsing them into a single
+        // "did not happen" sentence would lose the difference between "you stopped early" and
+        // "your tab was in the background", which are the two things a reader most needs to tell
+        // apart when a press produces less than they expected.
+        <Alert tone="info">{cancelledSentence(outcome.limbs.length)}</Alert>
       ) : outcome.kind === 'refused' ? (
         // Deliberately carries NO pass/fail wording anywhere. A refusal rendered as a verdict is
         // the defect this whole vocabulary exists to prevent, and there is a test for it.
@@ -485,6 +497,24 @@ function ProbeResult({
       </div>
     </div>
   );
+}
+
+/**
+ * What a stopped run kept, and what it did not get to.
+ *
+ * The count is of **completed** readings — the runners drop an interrupted limb rather than
+ * truncating it, so a number here is never a partial measurement dressed as a whole one. Singular
+ * and plural are separate strings rather than a bare "1 reading(s)", because this is the sentence a
+ * reader meets at the moment they are least sure what just happened.
+ */
+function cancelledSentence(kept: number): string {
+  if (kept === 0) {
+    return 'You stopped this run before anything finished, so nothing was measured and nothing was recorded.';
+  }
+  if (kept === 1) {
+    return 'You stopped this run. One reading had already finished and was kept; the rest were not taken.';
+  }
+  return `You stopped this run. ${String(kept)} readings had already finished and were kept; the rest were not taken.`;
 }
 
 /**

@@ -434,6 +434,82 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // console and every later assertion — including the axe sweep below — would be about a canvas.
   await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
 
+  // ── M3: a limb is the unit of durability ────────────────────────────────────────────────────
+  //
+  // Stopping used to discard the whole press, so on the two-scale `canvas-draw` scenario a stop
+  // during the second limb threw away a COMPLETE 500-activity limb — every repeat collected,
+  // nothing about it wrong. Nobody reported that, which is why it is not a register row: a
+  // discarded measurement leaves nothing behind to report.
+  //
+  // `canvas-draw` is chosen deliberately. `revision-diff` has ONE limb, so a stop can never leave
+  // anything behind and a journey driving it would assert an invariant it cannot violate.
+  const rowsBefore = await staff
+    .getByRole('table', { name: /Readings recorded on this installation/ })
+    .getByRole('row')
+    .count()
+    .catch(() => 0);
+
+  await staff.getByRole('combobox', { name: 'Measurement' }).selectOption('canvas-draw');
+  // **`full`, not `quick`, and that is the difference between a journey and a decoration.** At 40
+  // frames a limb finishes in well under a second, so the second one was over before the click
+  // landed and this whole section asserted nothing — established by running it, because the branch
+  // prints which path it took. At 180 x 3 there is a real window to stop inside. The second limb is
+  // never completed, so the cost is one 500-activity limb rather than a whole full measurement.
+  await staff.getByRole('combobox', { name: 'Length' }).selectOption('full');
+  await staff.getByRole('button', { name: 'Run measurement' }).click();
+  await staff.getByRole('alertdialog').getByRole('button', { name: 'Run measurement' }).click();
+
+  // Wait for the SECOND limb to start, which is the only observable proof that the first finished.
+  // Stopping on a timer would be a race with no evidence either way.
+  //
+  // `.first()` is load-bearing. The progress sentence renders TWICE — once visibly beside the Stop
+  // button and once in the panel's `sr-only` live region — so an unscoped `getByText` resolves to
+  // two elements and `waitFor` raises a strict-mode violation. The first version of this caught
+  // that and reported it as "the second limb never started", which is a real signal turned into a
+  // false one by a bare `.catch`. Found by making the diagnosis print what it saw instead of what
+  // it concluded.
+  let stopFailure = '';
+  const stopped = await staff
+    .getByText(/Drawing 2000 activities/)
+    .first()
+    .waitFor({ timeout: 90_000 })
+    .then(async () => {
+      await staff.getByRole('button', { name: /^Stop/ }).click();
+      return true;
+    })
+    .catch((error: unknown) => {
+      stopFailure = error instanceof Error ? (error.message.split('\n')[0] ?? '') : String(error);
+      return false;
+    });
+
+  await expect(staff.locator('[data-perf-probe-result]')).toBeVisible({ timeout: 60_000 });
+  const afterText = (await staff.locator('[data-perf-probe-result]').textContent()) ?? '';
+
+  // Printed, for the same reason the branch above is: a run that completed before the click landed
+  // is a legitimate outcome that exercises none of M3, and a green report cannot otherwise say so.
+  // eslint-disable-next-line no-console
+  console.log(
+    `M3 DIAGNOSIS: secondLimbSeen=${String(stopped)} resultSaysStopped=${String(
+      afterText.includes('You stopped this run'),
+    )}${stopFailure === '' ? '' : ` reason="${stopFailure}"`}`,
+  );
+
+  if (afterText.includes('You stopped this run')) {
+    // **The whole point.** A stop after the first limb keeps that limb, so the sentence names what
+    // survived and the history grows. "Nothing was measured" here would be the pre-M3 behaviour.
+    expect(afterText).toMatch(/had already finished and (was|were) kept/);
+    await expect(staff.getByText(/Recorded\./).first()).toBeVisible({ timeout: 15_000 });
+    const rowsAfter = await staff
+      .getByRole('table', { name: /Readings recorded on this installation/ })
+      .getByRole('row')
+      .count();
+    expect(rowsAfter, 'a stopped press still added its completed reading').toBeGreaterThan(
+      rowsBefore,
+    );
+  }
+
+  await expect(staff.getByRole('button', { name: /^Stop/ })).toHaveCount(0);
+
   // The console is a real screen and gets the same accessibility bar as every other one.
   const results = await new AxeBuilder({ page: staff })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
