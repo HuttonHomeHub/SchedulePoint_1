@@ -4654,9 +4654,17 @@ sequentially in one process, so a GC pause or a slice of CPU steal landing in th
 first is additive. With the smaller run at ~360 ms, one ~400 ms hiccup moves the ratio by more than a
 whole point, against a bound holding 1.5x of headroom over the ~2.4x its docblock records measuring.
 **Resolved by taking the median of three doublings** — a perturbation must land the same way in two
-of three to move the verdict — at ~3x that one test's runtime, paid knowingly. **The 4.0x bound is
-unchanged**: the defect was the estimator's, not the threshold's, and a bar set to whatever stops a
-test flaking measures nothing.
+of three to move the verdict. **The 4.0x bound is unchanged**: the defect was the estimator's, not
+the threshold's, and a bar set to whatever stops a test flaking measures nothing.
+
+**That fix then failed CI itself, on the claim this row is about.** It shipped saying the cost was
+"~3x this one test's runtime, paid knowingly", and never asked what the runtime was _permitted_ to
+be: `vitest.config.mts` sets no `testTimeout`, so the default is 5,000 ms, and three pairs plus the
+warm-up measured **5,258 ms on a GitHub runner** — failing on the clock rather than on the ratio,
+while passing locally throughout because this container runs the whole file in 3.5 s. An unchecked
+cost claim (ADR-0076 Class 3) committed inside the fix for a row about unchecked measurement claims.
+Closed by an explicit 30 s timeout on that test, the `vitest.e2e.config.mts` convention, which
+bounds the harness rather than the thing being measured — the verdict is still the ratio.
 
 **What stays open, and it is not either of those.** The P2 probe still runs its whole measurement —
 two 2,000-activity imports, 25 harness iterations and 21 HTTP round trips, minutes of wall clock,

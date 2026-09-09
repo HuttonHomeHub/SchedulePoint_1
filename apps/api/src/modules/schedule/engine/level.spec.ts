@@ -531,6 +531,17 @@ describe('levelSchedule — single-resource many-way contention performance (ADR
      *
      * All three pairs are reported on a failure, because a genuine slide to cubic makes every pair
      * cross the bound and a flake makes one — and a reader cannot tell those apart from a median.
+     *
+     * **The explicit timeout is part of the fix, and CI had to tell me so.** The first version of
+     * this change said the cost was "~3x this one test's runtime, paid knowingly" and never asked
+     * what the runtime was *permitted* to be: `vitest.config.mts` sets no `testTimeout`, so the
+     * default is **5,000 ms**, and three pairs plus the warm-up measured **5,258 ms** on a GitHub
+     * runner and failed — not on the ratio, on the clock. It passed locally throughout, because
+     * this container runs the whole file in 3.5 s. That is the same unchecked-cost claim
+     * `docs/TECH_DEBT.md` #266 was raised about, committed inside the fix for it. 30 s is the
+     * `vitest.e2e.config.mts` convention and leaves ~5x headroom over the slowest reading, which is
+     * a bound on the harness rather than on the thing being measured — the verdict is still the
+     * ratio.
      */
     const pairs = [1, 2, 3].map(() => {
       const small = timeOne(1000);
@@ -547,7 +558,7 @@ describe('levelSchedule — single-resource many-way contention performance (ADR
         'above 4x means the pass has grown worse than quadratic — see `docs/TECH_DEBT.md` #84. ' +
         'A single pair crossing the bound with the other two clear is a runner hiccup, not a slide.',
     ).toBeLessThan(4);
-  });
+  }, 30_000);
 });
 
 describe('levelSchedule — performance (2,000 activities, ADR-0041 §2)', () => {
