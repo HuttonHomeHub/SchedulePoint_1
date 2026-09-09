@@ -298,8 +298,15 @@ things carefully.)_
 > **CQ-4 (default stated — KEPT) — does `quick` survive?**
 >
 > **Default: yes, and it stops being a Length the operator picks per measurement.** It becomes what
-> **Check the probe works** is made of — a ~30 s sweep of all four steps that answers "does this
-> machine produce readings at all" before two minutes are spent. That is a real operator need for
+> **Check the probe works** is made of — a **~13 s** sweep of all four steps that answers "does this
+> machine produce readings at all" before two minutes are spent.
+>
+> _(The figure said ~30 s until M7. It was an estimate written before `sweep-duration.ts` existed,
+> and it was never re-derived once the derivation did. Measured by calling
+> `estimateSweepSeconds(sweepPlan(), 'quick')`: **13.07 s**, which `describeDuration` renders as "a
+> few seconds" — so the dialog the operator actually reads has been right throughout and only this
+> document was wrong. The **spec** is corrected rather than the code, because the code computes the
+> answer and the prose restated it. ADR-0076 Class 1: a number nobody re-derived.)_ That is a real operator need for
 > somebody who runs this rarely, and it is also the form the Playwright journey can drive
 > (`e2e-staff/staff.spec.ts:300-305` already relies on the property, and `run-probe.ts:47-52` states
 > it).
@@ -701,7 +708,7 @@ sitting above`.
 flowchart TD
   A["/staff · Performance panel"] --> B{Which control?}
   B -->|Run all measurements| C["Confirm: ~2 min, motion, Stop keeps what is recorded"]
-  B -->|Check the probe works| D["Confirm: ~30 s, no verdicts possible"]
+  B -->|Check the probe works| D["Confirm: ~13 s, no verdicts possible"]
   B -->|Measure one thing| E["Pick measurement, framing, length"]
   C --> F["Overlay: step n of 4"]
   D --> F

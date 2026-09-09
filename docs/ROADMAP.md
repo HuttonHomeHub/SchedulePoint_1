@@ -661,6 +661,21 @@ discriminators. Each becomes a spec/plan before build:
   authoritative-looking number from the wrong machine is worse than none. Two consequences are
   stated rather than discovered — the numbers are **client-reported**, and there is **no CI gate
   here and never will be**, because the question is about a real display.
+- **One press for every reading, and a sitting you can come back to** — **shipping** (ADR-0130).
+  ADR-0128 put the instrument on the console; the product owner used it the next day and reported
+  that the panel offered eight equal-looking choices of which **two** produced a verdict, and that
+  several told them a reading had not been recorded without saying which of three unrelated things
+  had happened. One press now takes every reading the probe can take, about two minutes, and a
+  thirteen-second **check** answers "does this machine produce readings at all" before that time is
+  spent. **The completed reading is the unit of durability**: each step is stored as it lands, a
+  refusal does not end the run, and a **Stop** keeps every reading that finished — which it did not
+  before, and nobody had reported that, because a discarded measurement leaves nothing behind to
+  report. The history is then **grouped into the sittings the readings were taken in**, with the
+  machine, the canvas and the display stated once above them and the paste-ready block obtainable
+  months later rather than only in the seconds after a run. A sitting that did not get every reading
+  can be **finished** rather than restarted, and if that happens a day later the block says the
+  readings were not taken together. Nothing about the measurement itself changed, which is the point:
+  a reading taken after this is comparable with one taken before it.
 - **Comparing two imported revisions** — **shipping** (ADR-0129). The comparison a planner
   actually pays for, and the one the product could not do: an import always targets a **new plan**,
   so a re-issued P6 file arrives as a sibling plan and not as a baseline, and the three shipped
