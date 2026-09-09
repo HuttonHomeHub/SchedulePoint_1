@@ -248,6 +248,26 @@ rule over the 17 legitimately-uncited drafts; a live exemption must **suppress**
 is a lie; and "not yet approved" beside a `Draft` spec must be **clean**, or P1 becomes a rule about
 the plan's words rather than about two documents disagreeing.
 
+**The test review then found two more cases that would have passed against their own mutation, and
+it found them by RUNNING the mutation rather than by reading.** P1's vocabulary-**agreement** branch
+had no case: changing `if (claimed && claimed !== token)` to `if (claimed)` — which fires the rule on
+every explicit annotation whether or not it agrees — left all 26 fixture cases green, and would have
+made the form `docs/templates/implementation-plan.md` recommends a finding in its own right. The
+asymmetry was the tell: of P1's five shapes the pre-approval arm's agreement case was pinned and the
+explicit-token arm's was not. And **four of C3's six register-validity branches had no case at all**,
+in the gate whose docblock says dead config is how a register stops being read — so the dead-config
+detectors were themselves unverified, confirmed by deleting one and watching the suite stay green.
+Five cases close both, each verified red against the mutation it names; the suite is 32 cases and 28
+mutations.
+
+**The same review found a stale number written into a test**, which is this ADR's own subject one
+tier down. The real-estate case asserted `/^9\d spec documents/` and `/7\d cited by an ADR/` —
+decade-wide windows that fail on ordinary correct growth at 100 specs or 80 citations, for a reason
+unrelated to any defect the gate exists to catch. **It is not hypothetical: the cited count moved
+72 → 73 inside this epic**, the moment ADR-0131 cited its own spec directory. The bounds are now
+floors, so the case fails only if the reader stops seeing most of the estate — which is the failure
+it exists for — and says nothing about growth, which is not its business.
+
 **C0's fixture took two attempts, and the first would have passed against its own mutation.** An
 empty spec directory also empties the cited set, so C2 fired, the run was red for the wrong reason,
 and the case proved nothing about `report()`'s population guard. The shipped fixture is built so

@@ -248,6 +248,13 @@ it('C0 — an empty spec estate FAILS rather than reporting green', () => {
   // empty directory also empties the cited set, so C2 fired, the run was red for the wrong reason
   // and the case would have passed against its own mutation. The cited slug is registered under
   // `citedWithoutSpec` so S6 is closed and the population is genuinely, legitimately zero.
+  //
+  // **C4 is silent here only INCIDENTALLY, and that is stated rather than left to be rediscovered.**
+  // `tree()` writes its default bare-link plan for every `docs/specs/<slug>/` path in the fixture
+  // map, including `paperless`, which has no spec document — so the plan glob is non-empty by
+  // accident of the helper rather than by design of this case. Narrowing that default to
+  // "only slugs with a spec document" would make this case fail C4 as well, and per the two
+  // attempts above that would cost another round of diagnosis to understand.
   const root = make({
     'docs/specs/paperless/design.md': '# Design\n',
     'docs/adr/0001.md': `[\`../specs/paperless/design.md\`](../specs/paperless/design.md)\n`,
@@ -294,7 +301,7 @@ it('C1b — a directory holding BOTH spec names is refused as ambiguous', () => 
     'docs/specs/thing/spec.md': head('Draft'),
     'docs/adr/0001-thing.md': adrCiting('thing'),
   });
-  assert.ok(ids(gate(root)).includes('C1b'));
+  assert.deepEqual(ids(gate(root)), ['C1b']);
 });
 
 it('C3 — an exemption for a slug nothing cites is refused as dead config', () => {
@@ -308,8 +315,65 @@ it('C3 — an exemption for a slug nothing cites is refused as dead config', () 
     'scripts/spec-status.json': JSON.stringify({ exempt: { loose: 'because' } }),
   });
   const r = gate(root);
-  assert.ok(ids(r).includes('C3'));
-  assert.match(r.problems.join('\n'), /no ADR cites/);
+  assert.deepEqual(ids(r), ['C3']);
+  assert.match(r.problems[0], /no ADR cites/);
+});
+
+it('C3 — an exemption naming a slug that is not a directory at all is refused', () => {
+  // Red against collapsing this branch into its `!withSpec` neighbour — verified by the M3 test
+  // review, which deleted it and watched all 26 fixture cases stay green. Four of C3's six
+  // register-validity branches had no case, in the gate whose own docblock says dead config is how
+  // a register stops being read: the dead-config detectors were themselves unverified.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Approved'),
+    'docs/adr/0001-thing.md': adrCiting('thing'),
+    'scripts/spec-status.json': JSON.stringify({ exempt: { ghost: 'nothing by this name' } }),
+  });
+  const r = gate(root);
+  assert.deepEqual(ids(r), ['C3']);
+  assert.match(r.problems[0], /not a directory/);
+});
+
+it('C3 — an exemption for a directory holding no spec document says which register it belongs in', () => {
+  // Red against dropping this branch: S3 could never fire on a slug with no header to read, so the
+  // entry is dead — and the message has to name `citedWithoutSpec`, or the reader deletes an entry
+  // that was merely filed in the wrong half.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Approved'),
+    'docs/specs/paperless/design.md': '# Design\n',
+    'docs/adr/0001.md': `${adrCiting('thing')}\n[\`../specs/paperless/design.md\`](../specs/paperless/design.md)\n`,
+    'scripts/spec-status.json': JSON.stringify({ exempt: { paperless: 'wrong register' } }),
+  });
+  const r = gate(root);
+  assert.ok(ids(r).includes('C3'), r.problems.join('\n'));
+  assert.match(r.problems.join('\n'), /citedWithoutSpec/);
+});
+
+it('C3 — a citedWithoutSpec entry naming no directory is refused', () => {
+  // Red against dropping the mirror of the first case above. The two registers rot independently.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Approved'),
+    'docs/adr/0001-thing.md': adrCiting('thing'),
+    'scripts/spec-status.json': JSON.stringify({ citedWithoutSpec: { ghost: 'gone' } }),
+  });
+  const r = gate(root);
+  assert.deepEqual(ids(r), ['C3']);
+  assert.match(r.problems[0], /not a directory/);
+});
+
+it('C3 — a citedWithoutSpec entry no ADR cites is refused', () => {
+  // Red against dropping it. This is the entry that outlives the citation rather than the spec
+  // document: the ADR stops naming the directory, S6 could never fire, and the register keeps a
+  // sentence explaining an exemption nothing needs.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Approved'),
+    'docs/specs/orphan/design.md': '# Design\n',
+    'docs/adr/0001-thing.md': adrCiting('thing'),
+    'scripts/spec-status.json': JSON.stringify({ citedWithoutSpec: { orphan: 'nobody cites it' } }),
+  });
+  const r = gate(root);
+  assert.deepEqual(ids(r), ['C3']);
+  assert.match(r.problems[0], /no ADR cites it/);
 });
 
 it('C3 — an exemption that IS live passes, and suppresses S3', () => {
@@ -340,6 +404,11 @@ it('S6 — a cited directory with no spec document is named, not skipped', () =>
 });
 
 it('S6 — registering it in citedWithoutSpec closes the finding', () => {
+  // Red against reading the wrong half of the register (checking `exempt` where the rule means
+  // `citedWithoutSpec`, or the reverse) — the two are different questions about different slugs.
+  // This case shipped without its mutation named, alone among the 27, which is the file's own
+  // convention broken in the file that states it. Its sibling above covers "was S6 deleted"; this
+  // one covers "does the register close it", and neither alone covers both.
   const root = make({
     'docs/specs/paperless/design.md': '# Design\n',
     'docs/specs/other/feature-spec.md': head('Approved'),
@@ -358,7 +427,7 @@ it('S6 — the entry dies once the directory gains a spec document (C3)', () => 
     'docs/adr/0001.md': adrCiting('paperless'),
     'scripts/spec-status.json': JSON.stringify({ citedWithoutSpec: { paperless: 'no spec doc' } }),
   });
-  assert.ok(ids(gate(root)).includes('C3'));
+  assert.deepEqual(ids(gate(root)), ['C3']);
 });
 
 // ── P1, the plan side ──────────────────────────────────────────────────────────────────────────
@@ -417,6 +486,22 @@ it('P1 — a plan claiming a DIFFERENT vocabulary token also fails', () => {
   assert.match(r.problems[0], /annotates the spec "approved"/);
 });
 
+it('P1 — a plan naming the SAME token as its spec is clean', () => {
+  // Red against `if (claimed && claimed !== token)` becoming `if (claimed)`, which fires P1 on
+  // every explicit annotation whether or not it agrees. **The M3 test review found this by running
+  // that mutation and watching all 26 cases stay green.** The asymmetry was the tell: the
+  // pre-approval arm's agreement case was pinned and this one was not, so of P1's four shapes —
+  // no annotation, wording+agree, wording+disagree, token+disagree — the fifth, token+AGREE, was
+  // the only combination missing, and it is exactly the one a dropped comparison destroys. Without
+  // it the recommended form in `docs/templates/implementation-plan.md` would itself be a finding.
+  const root = make({
+    'docs/specs/thing/feature-spec.md': head('Accepted', ' — shipped (ADR-0001)'),
+    'docs/specs/thing/implementation-plan.md': plan(' — Accepted (ADR-0001)'),
+    'docs/adr/0001-thing.md': adrCiting('thing'),
+  });
+  assert.equal(gate(root).code, 0, gate(root).problems.join('\n'));
+});
+
 it('C4 — an estate with no plans at all FAILS', () => {
   // Red against deleting C4. P1 is a `.filter()` like every refusal above it, so an empty plan
   // list satisfies it silently — the same argument as C2, one document type along.
@@ -431,15 +516,29 @@ it('C4 — an estate with no plans at all FAILS', () => {
 });
 
 // ── The real estate ────────────────────────────────────────────────────────────────────────────
-it('the gate reads the real estate and its own numbers agree with M0', () => {
+it('the gate reads the real estate, and only a SHRINKAGE is a finding', () => {
   // Not a fixture: the two instruments that have counted this population — M0's hand-run commands
   // and this gate — must agree, and #274's cautionary tale is a hand-count that was wrong and was
-  // believed. M0 measured 91 spec documents, 72 cited, 72 Draft. A disagreement here is a finding
-  // about one of the two methods, and finding the citation under-match is how that already paid.
+  // believed. M0 measured 91 spec documents and 72 cited, and finding the citation under-match
+  // (70 of 72, silently) is how that comparison already paid for itself.
+  //
+  // **The bounds are one-sided, and the first version's were not.** It asserted `/^9\d spec
+  // documents/` and `/7\d cited by an ADR/` — decade-wide windows that fail on ordinary correct
+  // growth the moment the estate reaches 100 specs or 80 citations, for a reason unrelated to any
+  // defect this gate exists to catch. That is ADR-0076 Class 1 written into a test: a number nobody
+  // will re-derive, in a suite whose subject is documents carrying stale numbers. **It is not
+  // hypothetical — the cited count moved 72 → 73 inside this epic**, the moment ADR-0131 cited its
+  // own spec directory, which is exactly the ordinary growth an upper bound punishes.
+  //
+  // So the assertion is a floor. It fails if the reader ever stops seeing most of the estate — the
+  // failure this case exists for — and says nothing about growth, which is not its business.
   const repoRoot = resolve(import.meta.dirname, '..');
   const r = gate(repoRoot);
-  assert.match(r.summary, /^9\d spec documents/, r.summary);
-  assert.match(r.summary, /7\d cited by an ADR/, r.summary);
+  const specs = Number(/^(\d+) spec documents/.exec(r.summary)?.[1]);
+  const cited = Number(/(\d+) cited by an ADR/.exec(r.summary)?.[1]);
+  assert.ok(Number.isFinite(specs) && Number.isFinite(cited), `unparseable summary: ${r.summary}`);
+  assert.ok(specs >= 91, `the estate reads ${specs} spec documents; M0 measured 91`);
+  assert.ok(cited >= 72, `the join reads ${cited} cited slugs; M0 measured 72`);
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });
