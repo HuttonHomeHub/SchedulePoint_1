@@ -2400,7 +2400,7 @@ rule.
 
 ### 149. The Graphite M10 gate pass's non-blocking findings
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 **Raised 2026-08-20.** Five specialists over the ADR-0099 epic diff. Security and
 frontend-performance passed outright, both having re-derived the epic's own numbers from the code
@@ -2426,13 +2426,24 @@ verified red first. What follows is what was deliberately **not** folded, with t
   a decision made elsewhere, not as never-having-been-true.
 - **`localStorage` is written at drag frame rate.** `useResizablePanelPrefs` persists on every
   `setSize`, i.e. ~60×/s while a splitter is moving. Pre-existing (the Explorer rail and the activity
-  panel have done this since ADR-0030); Graphite adds two more consumers of the same hook. Each write
-  is a `JSON.stringify` of a two-field object and nothing has been profiled as hot, so a debounce
-  would be an unmeasured optimisation — which is the thing this register keeps saying not to do.
-- **`Toolbar`'s `ResizeObserver` re-observes on every commit.** Deliberate and documented in place
-  (the item set changes without a dependency it could key on); `observe()` on an already-observed
-  node is a no-op per spec. It now iterates the union of what were two rows' `render` items, which is
-  a larger no-op, not a new cost.
+  panel have done this since ADR-0030). Each write is a `JSON.stringify` of a two-field object and
+  nothing has been profiled as hot, so a debounce would be an unmeasured optimisation — which is the
+  thing this register keeps saying not to do. **The item's own arithmetic is stale, in the direction
+  that matters** (re-derived 2026-09-09): it said "Graphite adds two more consumers", and the hook now
+  has **nine** — the Explorer, the activity panel, notes, float paths, the Gantt grid, schedule health,
+  the legend and revision compare. So does the hook's own docblock, which still opens "The single
+  implementation behind **both** the Project Explorer rail and the plan workspace's activity panel"
+  (`use-resizable-panel-prefs.ts:9-11`) seven consumers later. The remedy is unchanged — measure
+  before debouncing — but a reader costing it from either number is costing it from 2026-08-20.
+- ~~**`Toolbar`'s `ResizeObserver` re-observes on every commit.**~~ **CLOSED 2026-09-09, by
+  relocation rather than by the accepted no-op argument.** The item was recorded as deliberate — the
+  item set changes without a dependency the effect could key on, and `observe()` on an
+  already-observed node is a no-op per spec. `Toolbar` no longer owns an observer at all: ADR-0091 M7
+  moved the measurement up to one `ToolbarBandProvider` per band, because a row's own `clientWidth`
+  is leftover width the moment anything sits beside it. That effect's dependency array is **empty**
+  (`toolbar-band.tsx:62-75`), so it observes **once** for the band's lifetime — the concern is gone
+  structurally, not argued away. The item's closing sentence ("it now iterates the union of what were
+  two rows' `render` items") describes a pass ADR-0109 D1 deleted.
 - **The status bar says nothing when a computed plan has no critical activities.** Suggested as an
   inconsistency with `Finish`'s "Not calculated". Left alone, and the reason is that the state is
   very nearly unreachable: with the default TF ≤ 0 rule (ADR-0035) every computed network has a
@@ -3239,7 +3250,7 @@ and should be corrected whether or not the code goes. Decide the two questions s
 
 ### 194. "The epic's own gate pass removes it" has now failed twice as an instruction
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
 
 _Filed 2026-08-26 by the reconciliation pass, after the declaration it describes blocked this pass's
 own commit._
@@ -3250,7 +3261,11 @@ change under `apps/api/` or `packages/` fails CI. It is a good gate and it has n
 sweep; the git history holds exactly TWO armings — armed 2026-08-17, deactivated 2026-08-18, armed
 2026-08-25, deactivated 2026-08-26 — and `frontend-only.json`'s `history` array has two entries.
 This row's own title and table both said "twice"; only this sentence and the JSON `reason` field
-said three, and they were wrong)_:
+said three, and they were wrong. **The `reason` field went on saying three for six more days**,
+because that correction recorded the discrepancy and did not fix it — the ADR-0071 failure, in the
+row whose own subject is a written instruction nobody acts on. Swept 2026-09-09; the field now
+carries both the corrected count and a note that it was corrected late, for the same reason this
+parenthesis exists)_:
 
 | Epic                 | Released                    | Still armed until | What it then blocked                                  |
 | -------------------- | --------------------------- | ----------------- | ----------------------------------------------------- |
@@ -3701,7 +3716,7 @@ Three suggestions judged real and filed rather than quietly dropped:
 
 ### 215. Dense rows are 28 px on touch, and their height is a JavaScript constant
 
-**Status:** unverified · **Raised:** 2026-08-29 (ADR-0118 M4 gate pass) · **Size:** M · **Owner:** a row-rhythm pass
+**Status:** open · **Verified:** 2026-09-09 · **Raised:** 2026-08-29 (ADR-0118 M4 gate pass) · **Size:** M · **Owner:** a row-rhythm pass
 
 **ADR-0118 D1's second named exception, filed rather than solved.** `Button`'s `icon-sm` stays
 28 × 28 on both pointers, and the five of its consumers that sit in a dense row stay with it
@@ -3745,6 +3760,14 @@ and not a closed question.
 `[role="tree"]` from the coarse projection by ancestor selector — narrow, visible, and named — and
 `apps/web/src/styles/control-height.structural.test.ts` exempts `button.tsx::size-7` with the same
 reason. Neither hides anything else.
+
+**The 2026-09-01 recount was right and swept nothing** (found 2026-09-09). It corrected "six of its
+eight" to five here and left that phrase standing in **both** places a reader is most likely to meet
+it — `button.tsx`'s `icon-sm` docblock and the structural test's exemption comment, i.e. the variant
+itself and the gate that excuses it. Corrected in place. Re-derived at the same time: there are
+**five** `size="icon-sm"` call sites, and a **sixth** consumer that reaches the variant as
+`SheetHeader`'s default and is not a dense row at all — filed as **#278**, because the exception this
+row defends is about containers and that one is about a default.
 
 ### 216. The favicon's brand glyph is set in `system-ui`, and no gate can reach it
 
@@ -5031,3 +5054,46 @@ definition. It is not free — the false-positive rate over prose is the whole q
 that fires on every `` `some-file.md` `` gets deleted rather than fixed (ADR-0058). Measure the
 finding count on a candidate predicate **before** building it, exactly as ADR-0081 did before
 rejecting its own proposed gate on 129 findings.
+
+### 278. `SheetHeader`'s close button defaults to the dense-row exception, and four panels are not dense rows
+
+**Status:** open · **Raised:** 2026-09-09 (register sweep) · **Size:** S · **Owner:** a panel-chrome pass
+
+**ADR-0118 D1's second named exception is applied by CONTAINER in `#215` and by DEFAULT in
+`sheet.tsx`, and those are not the same rule.** `SheetHeader`'s signature is
+`closeButtonSize = 'icon-sm'` (`sheet.tsx:94`), with a docblock reading "`icon-sm` (default) or
+`icon` (the navigator rail)" (`:106`). That default was chosen when the rail was the exception. It
+is now the majority: **four consumers take the 28 px default and none of them is a dense list row** —
+Plan notes (`plan-workspace-toolbar.tsx:1385`), Float paths (`FloatPathsPanel.tsx:134`), Schedule
+health (`ScheduleHealthPanel.tsx:170`) and Revision compare (`RevisionComparePanel.tsx:226`) — while
+the one consumer that overrides (`navigator-rail.tsx:139`) is the one the docblock calls the
+exception.
+
+**This is #153's own remedy applied to a control and not its neighbour.** ADR-0118 M3 closed #153 by
+unifying the floating-canvas panel's three control sizes on `icon`, and `TsldLegendPanel.tsx:163-171`
+carries the reasoning in place: _"the ONE size every floating-canvas-panel control now takes"_. Four
+sibling panels reach their close through a shared header that never got the same treatment. Under a
+coarse pointer those four are **28 × 28 against a 44 px house rule** — and unlike a tree row, a
+`px-4 py-2` header is content-sized, so nothing would overflow.
+
+**Why it is filed rather than fixed, and the reason is the fine pointer.** `icon` is
+`size-10 pointer-coarse:size-(--control-h)` (`button.tsx:40`), so switching these four grows each
+header by **12 px on a mouse as well as 4 px more on touch** — a visible desktop change to four
+workspace panels, which is a design decision and not a defect fix. Three candidates, none costed:
+
+1. **Pass `closeButtonSize="icon"` at the four sites.** Smallest, and leaves the trap armed for the
+   fifth panel.
+2. **Flip the default and delete the prop.** If all five consumers want `icon`, the prop has no
+   remaining caller — the `icon-lg` disposal (ADR-0118 M3) and #149's `MenuItem.itemId` are both
+   precedents for deleting rather than debating. Worth a `grep` before it is worth an argument.
+3. **Split the variant.** `icon-sm` today conflates "a control inside a container whose height is
+   fixed elsewhere" with "a small control", and only the first earns D1's exception. A
+   coarse-floored small variant would serve panel chrome without touching a tree row — which is the
+   honest shape of the rule, and the largest of the three.
+
+**What no gate can currently see.** The coarse projection in
+`e2e-workspace-fit/command-surface.spec.ts` sweeps the command surface; these closes are inside
+panels that must be opened first, so they are outside its reach — not exempted, just unvisited. The
+`control-height.structural.test.ts` exemption for `button.tsx::size-7` is written in terms of dense
+rows and therefore does not describe this consumer either. Neither instrument is wrong; both are
+scoped to a population this consumer is not in.

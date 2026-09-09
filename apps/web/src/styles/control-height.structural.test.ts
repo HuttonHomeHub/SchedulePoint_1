@@ -56,7 +56,7 @@ function isOffendingClassString(text: string): boolean {
 const EXCEPTIONS = new Map<string, string>([
   [
     'button.tsx::size-7',
-    // `Button`'s `icon-sm`, ADR-0118 D1 exception 2: six of its eight consumers sit inside a
+    // `Button`'s `icon-sm`, ADR-0118 D1 exception 2: five of its six consumers sit inside a
     // container whose height is fixed independently of them — the sharpest a virtualizer's JS
     // constant — so raising it overflows the row rather than growing it (`docs/TECH_DEBT.md` #215).
     "Button's icon-sm — ADR-0118 D1 exception 2, dense rows whose height is fixed elsewhere",

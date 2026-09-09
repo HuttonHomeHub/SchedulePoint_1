@@ -2,7 +2,7 @@
   "active": false,
   "epic": null,
   "spec": null,
-  "reason": "No frontend-only epic is in flight. DEACTIVATED 2026-08-26 by the reconciliation pass, on the third occasion this declaration outlived its epic — which its own docblock predicts and its own reason field instructed against: `workspace-redesign` (ADR-0109) released as web-v0.103.0 on 2026-08-24, its successor epic closed and released on 2026-08-25, and the declaration stayed armed. It then did exactly what the docblock says a stale declaration does: it went wrong about a DIFFERENT change, blocking a repo-tooling commit that added `eslint --cache` to every workspace's lint script — nine package.json files, no product code, no possible effect on the engine's input — with a message about ADR-0109's parity argument. The previous instance blocked ADR-0096 the same way. Deactivating is the honest response; reasoning about a shipped milestone is not.",
+  "reason": "No frontend-only epic is in flight. DEACTIVATED 2026-08-26 by the reconciliation pass, on the SECOND occasion this declaration outlived its epic \u2014 which its own docblock predicts and its own reason field instructed against: `workspace-redesign` (ADR-0109) released as web-v0.103.0 on 2026-08-24 and the declaration stayed armed until 2026-08-26. It then did exactly what the docblock says a stale declaration does: it went wrong about a DIFFERENT change, blocking a repo-tooling commit that added `eslint --cache` to every workspace's lint script \u2014 nine package.json files, no product code, no possible effect on the engine's input \u2014 with a message about ADR-0109's parity argument. The previous instance blocked ADR-0096 the same way. Deactivating is the honest response; reasoning about a shipped milestone is not. (This field said \"the third occasion\" and named a successor epic that does not appear in `history`, until 2026-09-09. `docs/TECH_DEBT.md` #194 had already corrected the count to two out of two on 2026-09-03 and explicitly recorded that THIS field still said three \u2014 and left it saying three. Noticing drift and stepping over it leaves the artefact exactly as wrong as not noticing, which is the whole of #194's own subject one file along.)",
   "guarded": ["apps/api/", "packages/"],
   "history": [
     {
@@ -13,7 +13,7 @@
     {
       "epic": "workspace-redesign",
       "deactivated": "2026-08-26",
-      "note": "Outlived its epic by two days; blocked a lint-script change across nine package.json files. See docs/TECH_DEBT.md #194 — 'the epic's own gate pass removes it' has now failed twice as a written instruction, and wants a mechanism rather than a third sentence."
+      "note": "Outlived its epic by two days; blocked a lint-script change across nine package.json files. See docs/TECH_DEBT.md #194 \u2014 'the epic's own gate pass removes it' has now failed twice as a written instruction, and wants a mechanism rather than a third sentence."
     }
   ]
 }

@@ -399,7 +399,14 @@ card, and therefore the one a planner actually gets.
 | zoom             | mean fps under sustained pan | dropped frames | rAF JS p95 | §9 gate (≥ 30 fps @ 2,000) |
 | ---------------- | ---------------------------- | -------------- | ---------- | -------------------------- |
 | Week (53 px/day) | ~60                          | 0 / 600        | 3.9 ms     | **PASS**                   |
-| Fit (whole plan) | ~53                          | 54 / 527 (10%) | 8.9 ms     | **PASS**                   |
+| Fit (whole plan) | ~53                          | 54 / 527 (10%) | 8.9 ms     | **PASS** (see §9c)         |
+
+> **Do not read the Fit row on its own.** A second set (2026-09-08, §9c below) measures the same
+> framing at **23.3 fps against the same 30 fps floor**. This table is not withdrawn — it stands for
+> the set, the scene and the canvas it names — but its Fit verdict is **no longer unconditional**,
+> and `docs/TECH_DEBT.md` #75 points readers straight at this section. The marker is here rather
+> than only in §9c because a correction a reader has to scroll to find is a correction that does not
+> reach the reader who stopped at the table.
 
 **Canvas 2D is confirmed on real hardware. No WebGL escalation is warranted**, and the §9
 escalation criteria remain the documented fallback, unexercised.

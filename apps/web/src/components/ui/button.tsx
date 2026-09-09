@@ -47,7 +47,7 @@ const buttonVariants = cva(
         // Row-height icon button for dense lists. **Stays 28 px on BOTH pointers, and that is
         // ADR-0118 D1's second named exception rather than an oversight** — see D6a.
         //
-        // M3 gave it `pointer-coarse:size-(--control-h)` and had to take it back. Six of its eight
+        // M3 gave it `pointer-coarse:size-(--control-h)` and had to take it back. FIVE of its six
         // consumers sit in a container whose height is fixed independently of it, and the sharpest
         // is `HierarchyTree.tsx`: `ROW_HEIGHT = 28` is a **JavaScript constant** feeding both the
         // absolute row style and the virtualizer's `estimateSize`, so a 44 px button centred in a
@@ -59,11 +59,19 @@ const buttonVariants = cva(
         //
         // The exception's equivalent is stated per consumer rather than claimed for the variant,
         // because the advice this docblock USED to carry — "pair with a larger non-pointer target
-        // (long-press / keyboard)" — turned out to be honoured by exactly ONE of the eight
+        // (long-press / keyboard)" — turned out to be honoured by exactly ONE of them
         // (`HierarchyTree`'s `startLongPress` on the whole row, plus Menu/Shift+F10 on the focused
         // treeitem). Deleting that advice while introducing the size that needed it was the actual
         // defect. Growing the dense rows themselves under a coarse pointer is a row-rhythm
         // decision, not a padding one — `docs/TECH_DEBT.md` #215.
+        //
+        // The counts above said "six of its eight" and "one of the eight" until 2026-09-09. #215
+        // recounted to five on 2026-09-01 and swept neither this docblock nor
+        // `control-height.structural.test.ts` — the ADR-0071 shape, noticing and stepping over.
+        // Re-derived: five call sites pass `size="icon-sm"` (`explorer-column`, `GanttRowMenu`,
+        // `HierarchyTree`, `ActivitiesTable`, `CalendarRowMenu`), and a sixth consumer reaches it
+        // as `SheetHeader`'s DEFAULT — which is not a dense row at all, and is `docs/TECH_DEBT.md`
+        // #278.
         'icon-sm': 'size-7',
       },
     },
