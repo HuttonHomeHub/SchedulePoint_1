@@ -226,7 +226,16 @@ describe('a saturated delta carries its caveat on every surface that prints one'
  * surface needs one of its own.
  */
 describe('the enumeration', () => {
-  const CALLERS = ['model/judge-stored.ts', 'ui/probe-report.ts', 'ui/performance-probe-panel.tsx'];
+  const CALLERS = [
+    'model/judge-stored.ts',
+    'ui/probe-report.ts',
+    'ui/performance-probe-panel.tsx',
+    // M6: the sittings table renders a verdict per reading, so it is a fourth renderer of a delta
+    // and joins the enumeration rather than being an exception to it. It was added here BECAUSE
+    // this gate went red — which is the enumeration doing its job on the first new renderer since
+    // it was written.
+    'ui/probe-sittings.tsx',
+  ];
 
   const CLI = join(import.meta.dirname, '../../../../scripts/measure-revision-diff.mjs');
 

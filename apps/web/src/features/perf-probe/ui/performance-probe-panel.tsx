@@ -22,7 +22,7 @@ import { runSweep, type SweepOutcome } from '../sweep/run-sweep';
 import { describeDuration, estimateSweepSeconds } from '../sweep/sweep-duration';
 import { sweepPlan, type SweepStep } from '../sweep/sweep-plan';
 
-import { ProbeHistory } from './probe-history';
+import { ProbeSittings } from './probe-sittings';
 import { formatProbeReport } from './probe-report';
 
 import { Alert } from '@/components/ui/alert';
@@ -578,7 +578,7 @@ export function PerformanceProbePanel(): React.ReactElement {
           />
         )}
 
-        <ProbeHistory query={history} />
+        <ProbeSittings query={history} />
       </div>
 
       {/*

@@ -643,17 +643,22 @@ describe('PerformanceProbePanel', () => {
     historyRows.push(storedRow());
     render(<PerformanceProbePanel />);
 
-    // Scoped to the table: the scenario's label is also an `<option>` in the picker above, and a
-    // document-scoped assertion would pass on the picker alone — the ADR-0073 C2.5 finding.
-    const history = within(
-      await screen.findByRole('table', { name: /Readings recorded on this installation/ }),
-    );
+    // Scoped to the sitting's own table: the scenario's label is also an `<option>` in the picker
+    // above, and a document-scoped assertion would pass on the picker alone — the ADR-0073 C2.5
+    // finding. **The caption names the ACT** — one press is "One reading", a sweep is "Sweep of N"
+    // — because that is the distinction `sweep_id` exists to record.
+    const history = within(await screen.findByRole('table', { name: /One reading — / }));
     expect(history.getByText('PASS')).toBeInTheDocument();
     expect(history.getByText('Canvas draw budget')).toBeInTheDocument();
     expect(history.getByText('2000 activities')).toBeInTheDocument();
-    expect(history.getByText('web 0.121.0 · api 0.55.0')).toBeInTheDocument();
     // Both halves of the cull, so a reading taken on an almost-empty canvas cannot look good.
-    expect(history.getByText('222 of 2000')).toBeInTheDocument();
+    expect(history.getByText('222 at 12.00 px/day')).toBeInTheDocument();
+
+    // **The versions are a SITTING fact now, and are stated once rather than on every row.** That
+    // is the whole difference between this and the flat table it replaces, which repeated the
+    // machine, the versions, the operator and the canvas on each of a sweep's rows.
+    expect(screen.getByText('web 0.121.0 · api 0.55.0')).toBeInTheDocument();
+    expect(history.queryByText('web 0.121.0 · api 0.55.0')).not.toBeInTheDocument();
   });
 
   it('says a stored row is unreadable rather than dressing it as a failure', async () => {
