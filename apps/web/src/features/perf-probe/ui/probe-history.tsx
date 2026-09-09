@@ -1,11 +1,16 @@
 import type { UseQueryResult } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import type { ProbeResultRow } from '../api/probe-results';
 import { judgeStoredRow } from '../model/judge-stored';
 import { SCENARIOS } from '../model/scenarios';
+import { sittingsFromRows } from '../model/sitting';
+
+import { formatSitting } from './probe-report';
 
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { DataTable, type Column } from '@/components/ui/data-table';
 
 /**
@@ -158,7 +163,56 @@ const COLUMNS: Column<ProbeResultRow>[] = [
     cell: (row) => `web ${row.appVersion} · api ${row.apiVersion}`,
   },
   { header: 'By', cell: (row) => row.recordedByLabel ?? '(scrubbed)' },
+  {
+    header: 'Report',
+    // **The entry point for M2-T3** (ADR-0081: a milestone claiming a capability names the control
+    // that reaches it, or declares itself dark). Re-pointing `formatProbeReport` onto a model that
+    // a stored row can fill is worth nothing if the only way to reach a block is still to have
+    // just pressed Run.
+    //
+    // Per ROW, copying the whole SITTING that row belongs to — the readings of one press share a
+    // machine, a framing and a clock, so a block for one limb of a two-limb press would be a
+    // partial answer that looks complete. The button says which.
+    cell: (row) => <CopySittingButton row={row} />,
+  },
 ];
+
+/**
+ * Copy the paste-ready block for the sitting this row belongs to.
+ *
+ * The block is built from stored rows through the same formatter the live panel uses, so a reading
+ * copied a week later and one copied a second after the run cannot say different things about the
+ * same numbers — `docs/specs/probe-sweep/` M2-T3, and the reason `formatProbeReport` became a thin
+ * adapter over `formatSitting` rather than being duplicated.
+ */
+function CopySittingButton({ row }: { row: ProbeResultRow }): React.ReactElement {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <span className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          const sitting = sittingsFromRows([row])[0];
+          if (sitting === undefined) return;
+          void navigator.clipboard.writeText(formatSitting(sitting)).then(
+            () => setCopied(true),
+            () => setCopied(false),
+          );
+        }}
+      >
+        Copy
+      </Button>
+      {/* Announced, because a Copy button changes nothing visible and is otherwise silent to a
+          screen reader — the same WCAG 4.1.3 finding the live panel's copy control already carries
+          (found by that epic's M5 accessibility review). */}
+      <span aria-live="polite" className="text-muted-foreground text-xs">
+        {copied ? 'Copied.' : ''}
+      </span>
+    </span>
+  );
+}
 
 /** The verdict, glossed where a bare word would mislead. */
 function VerdictCell({ row }: { row: ProbeResultRow }): React.ReactElement {

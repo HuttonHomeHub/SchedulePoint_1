@@ -363,7 +363,24 @@ test('a staff member reaches the console; a member cannot tell it exists', async
   // This is the only place the POST is driven against a real API with the real guard, the real
   // validation pipe and the real audit producer. A component test sees whatever its mock returns,
   // which is exactly why the DTO's bounds and the transaction cannot be proven there.
-  if (resultText.includes('The run was refused')) {
+  //
+  // **Which branch ran is recorded on the run**, because everything below the `else` is skipped on
+  // a refusal and a skipped assertion is indistinguishable from a passing one in a green report.
+  // That is the ADR-0093 shape — a suite that cannot tell "covered" from "there was nothing to
+  // cover" proves neither — and it matters more from M2 on, where the branch carries the columns,
+  // the Copy control and the caveat association that are this milestone's whole deliverable.
+  const refused = resultText.includes('The run was refused');
+  // Printed rather than annotated. An annotation was written first and is not reachable in this
+  // workflow — the list reporter does not render one, so it never appeared in the terminal or in
+  // `.e2e-logs`, which is an instrument reporting where nobody reads. Established by running it.
+  // eslint-disable-next-line no-console
+  console.log(
+    refused
+      ? 'PROBE OUTCOME: REFUSED — the history assertions below were NOT exercised on this run.'
+      : 'PROBE OUTCOME: MEASURED — the history assertions below were exercised.',
+  );
+
+  if (refused) {
     await expect(staff.getByText('No readings recorded yet.')).toBeVisible();
     await expect(staff.getByRole('button', { name: 'Retry recording' })).toHaveCount(0);
   } else {
@@ -377,6 +394,40 @@ test('a staff member reaches the console; a member cannot tell it exists', async
     // More than the header row, asserted as a shape rather than as a count: a scenario may be
     // measured at more than one scale, and each scale is its own row.
     await expect(history.getByRole('row')).not.toHaveCount(1);
+
+    // **The three facts that decide whether a reading means anything** (M2-T1). All three were
+    // stored on every row since this table shipped and rendered on none, against an acceptance
+    // criterion the predecessor spec approved. Asserted here against a REAL stored row, because a
+    // component test renders whatever fixture it was handed and cannot tell you the column is fed
+    // by the field the API actually returns.
+    await expect(history.getByRole('columnheader', { name: 'Canvas' })).toBeVisible();
+    await expect(history.getByRole('columnheader', { name: 'Display' })).toBeVisible();
+    await expect(history.getByRole('columnheader', { name: 'Attention' })).toBeVisible();
+    // A real viewport and a real measured interval, not zeroes or blanks: the shapes are what a
+    // wrong wiring would break, and a blank cell is what it would look like.
+    await expect(history.getByRole('cell', { name: /^\d+x\d+ @[\d.]+x$/ }).first()).toBeVisible();
+    await expect(history.getByRole('cell', { name: /^[\d.]+ ms$/ }).first()).toBeVisible();
+    await expect(history.getByRole('cell', { name: /^(Held|Lost focus)$/ }).first()).toBeVisible();
+
+    // **The entry point for M2-T3** (ADR-0081). The block is the deliverable `docs/TECH_DEBT.md`
+    // #75 actually consumes, and until this milestone it could only be produced in the seconds
+    // after a run. Clicking it here proves the control reaches a stored reading through the real
+    // formatter — the clipboard write itself is asserted in the unit suite, since a headless
+    // browser's clipboard permission is a property of the harness rather than of the product.
+    await expect(history.getByRole('button', { name: 'Copy' }).first()).toBeVisible();
+    await history.getByRole('button', { name: 'Copy' }).first().click();
+    await expect(staff.getByText('Copied.').first()).toBeVisible();
+
+    // And the caveat that says what the Canvas column is FOR, linked to the table rather than
+    // merely placed above it — `DataTable` is a focusable region, so a landmark-navigating reader
+    // lands inside it having skipped whatever sits above.
+    const describedBy = await staff
+      .getByRole('region')
+      .filter({ has: history })
+      .first()
+      .getAttribute('aria-describedby');
+    expect(describedBy, 'the table names its comparability note').not.toBeNull();
+    await expect(staff.locator(`#${String(describedBy)}`)).toContainText('per megapixel');
   }
 
   // The overlay must be gone: it is `position: fixed; inset: 0`, so a leaked one would cover the

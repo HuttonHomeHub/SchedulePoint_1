@@ -1,6 +1,13 @@
 import type { Verdict } from '../model/judge';
+import {
+  NOT_RECORDED,
+  sittingFromOutcome,
+  type Sitting,
+  type SittingContext,
+  type SittingLimb,
+} from '../model/sitting';
 import { verdictLabel, verdictNote } from '../model/verdict-copy';
-import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe';
+import type { ProbeOutcome } from '../runner/run-probe';
 
 /**
  * The paste-ready block a **Copy** button produces.
@@ -15,86 +22,128 @@ import type { LimbOutcome, ProbeOutcome, RunContext } from '../runner/run-probe'
  * Pure: no clipboard, no DOM, no clock beyond what the run already recorded. That is what lets
  * every line below be asserted from a literal.
  */
-export function formatProbeReport(outcome: ProbeOutcome): string {
-  if (outcome.kind === 'cancelled') {
+export function formatProbeReport(
+  outcome: ProbeOutcome,
+  machineLabel: string | null = null,
+): string {
+  const sitting = sittingFromOutcome(outcome, machineLabel);
+  if (sitting === null) {
+    // No context at all — a refusal that never got as far as reading the machine. The block still
+    // says what happened rather than returning empty, because an empty clipboard is the one
+    // outcome a reader cannot distinguish from a broken button.
+    return outcome.kind === 'refused'
+      ? [
+          'SchedulePoint performance probe — RUN REFUSED',
+          '',
+          `  reason   ${outcome.refusal.reason}`,
+          `  ${outcome.refusal.sentence}`,
+          '',
+          'No measurement was taken. This is NOT a pass and NOT a failure.',
+        ].join('\n')
+      : [
+          'SchedulePoint performance probe — RUN CANCELLED',
+          '',
+          'You stopped this run, so it was not completed and nothing was recorded.',
+          'This is NOT a pass and NOT a failure.',
+        ].join('\n');
+  }
+  return formatSitting(sitting);
+}
+
+/**
+ * The block, from the one presentation model.
+ *
+ * **`formatProbeReport` is kept as a thin adapter over this**, deliberately: `probe-report.test.ts`
+ * is the before/after oracle for the whole re-pointing (M2-T3) and its assertions do not change, so
+ * it goes on calling the function it always called, with the outcomes it always passed. A formatter
+ * whose own suite had to be rewritten alongside it would prove nothing about the move.
+ */
+export function formatSitting(sitting: Sitting): string {
+  if (sitting.outcome === 'cancelled') {
     return [
       'SchedulePoint performance probe — RUN CANCELLED',
       '',
       'You stopped this run, so it was not completed and nothing was recorded.',
       'This is NOT a pass and NOT a failure.',
-      ...(outcome.context ? ['', ...contextLines(outcome.context)] : []),
+      '',
+      ...contextLines(sitting.context),
     ].join('\n');
   }
 
-  if (outcome.kind === 'refused') {
+  if (sitting.outcome === 'refused') {
     return [
       'SchedulePoint performance probe — RUN REFUSED',
       '',
-      `  reason   ${outcome.refusal.reason}`,
-      `  ${outcome.refusal.sentence}`,
+      `  reason   ${sitting.refusal?.reason ?? NOT_RECORDED}`,
+      `  ${sitting.refusal?.sentence ?? ''}`,
       '',
       'No measurement was taken. This is NOT a pass and NOT a failure.',
-      ...(outcome.context ? ['', ...contextLines(outcome.context)] : []),
+      '',
+      ...contextLines(sitting.context),
     ].join('\n');
   }
 
   return [
     'SchedulePoint performance probe',
     '',
-    ...contextLines(outcome.context),
+    ...contextLines(sitting.context),
     '',
-    ...outcome.limbs.flatMap((limb) => [...limbLines(limb), '']),
+    ...sitting.limbs.flatMap((limb) => [...limbLines(limb), '']),
   ]
     .join('\n')
     .trimEnd();
 }
 
-function contextLines(context: RunContext): string[] {
-  const d = context.device;
+function contextLines(context: SittingContext): string[] {
   return [
     `  scenario   ${context.scenarioLabel} (${context.scenarioId})`,
     `  framing    ${context.preset}`,
-    `  run size   ${context.size} — ${String(context.frames)} frames x ${String(context.repeats)}`,
-    `  viewport   ${String(context.viewport.width)}x${String(context.viewport.height)} css px, dpr ${String(d.devicePixelRatio)}`,
+    // **`(not recorded)` rather than the default**, on a stored reading where neither the size nor
+    // the frame count is a column. The default is exactly what a reader would otherwise assume and
+    // exactly what a non-default run would contradict; M4's `frames_per_phase` closes half of it.
+    `  run size   ${context.size ?? NOT_RECORDED} — ${context.frames === null ? NOT_RECORDED : `${String(context.frames)} frames`} x ${String(context.repeats)}`,
+    `  viewport   ${String(context.viewport.width)}x${String(context.viewport.height)} css px, dpr ${String(context.devicePixelRatio)}`,
     `  display    idle frame interval ${context.idleInterval.toFixed(2)} ms`,
     // A masked adapter is printed AS masked. Writing "unknown GPU" would put a fiction in the one
     // field a reader trusts to explain an outlier (the product owner's Q1, answered 2026-09-07).
-    `  gpu        ${d.gpu ?? (d.gpuMasked ? '(withheld by the browser)' : '(not available)')}`,
-    `  threads    ${d.hardwareConcurrency === null ? '(not reported)' : String(d.hardwareConcurrency)}`,
-    `  memory     ${d.deviceMemoryGb === null ? '(not reported)' : `~${String(d.deviceMemoryGb)} GiB`}`,
+    // A STORED row has one nullable column and cannot tell masked from unavailable, so it says
+    // neither — `gpuMasked` is null there and the neutral marker is the honest rendering.
+    `  gpu        ${context.gpu ?? (context.gpuMasked === null ? NOT_RECORDED : context.gpuMasked ? '(withheld by the browser)' : '(not available)')}`,
+    `  threads    ${context.hardwareConcurrency === null ? '(not reported)' : String(context.hardwareConcurrency)}`,
+    `  memory     ${context.deviceMemoryGb === null ? '(not reported)' : `~${String(context.deviceMemoryGb)} GiB`}`,
     // Both recorded rather than acted on, and both explain an outlier nothing else would. A blur
     // is NOT a refusal — the window kept painting, something else took the keyboard — so it has to
     // be visible here or the fact is captured and never read.
     `  attention  ${context.lostFocusDuringRun ? 'the window lost focus during the run' : 'held throughout'}`,
-    `  motion     ${d.prefersReducedMotion ? 'reader prefers reduced motion' : 'no preference'}`,
-    `  agent      ${d.userAgent}`,
+    `  motion     ${context.prefersReducedMotion ? 'reader prefers reduced motion' : 'no preference'}`,
+    `  agent      ${context.userAgent}`,
     `  at         ${context.startedAt}`,
     `  web        ${context.appVersion}`,
+    // Carried where it exists rather than dropped to make the two adapters look symmetrical: the
+    // browser does not learn it until the POST returns, and the block is copyable before that.
+    // A reading taken across a deploy is one a reader should be able to spot.
+    ...(context.apiVersion === null ? [] : [`  api        ${context.apiVersion}`]),
+    ...(context.machineLabel === null ? [] : [`  machine    ${context.machineLabel}`]),
   ];
-}
-
-/** Repeats behind a limb's figures — a difference limb counts pairs, an absolute one counts runs. */
-function repeatsOf(limb: LimbOutcome): number {
-  return (limb.recording.pairs ?? limb.recording.runs ?? []).length;
 }
 
 /** The verdict line and its sentence, so no verdict ever prints bare. */
 function verdictLines(
-  limb: LimbOutcome,
+  limb: SittingLimb,
   verdict: Verdict,
   indeterminateReason?: string,
   saturated?: boolean,
 ): string[] {
   const note = verdictNote(verdict, {
-    gated: limb.recording.thresholds.gated === true,
-    repeats: repeatsOf(limb),
+    gated: limb.gated,
+    repeats: limb.repeats,
     indeterminateReason,
     saturated,
   });
   return [`  VERDICT: ${verdictLabel(verdict)}`, ...(note === null ? [] : [`  because ${note}`])];
 }
 
-function limbLines(limb: LimbOutcome): string[] {
+function limbLines(limb: SittingLimb): string[] {
   const head = [
     `  ── ${limb.limbLabel} ──`,
     `  scene      ${limb.sceneSummary}`,
@@ -152,8 +201,8 @@ function limbLines(limb: LimbOutcome): string[] {
  * head line's `visibleBars` answers a different question (ADR-0066's cull), which is why both are
  * printed and neither substitutes for the other.
  */
-function changedOnScreenLine(limb: LimbOutcome): readonly string[] {
-  const c = limb.recording.counts;
+function changedOnScreenLine(limb: SittingLimb): readonly string[] {
+  const c = limb.counts;
   const { visibleChangedBars, visibleBars, visibleChangedLinks, visibleLinks } = c;
   if (
     visibleChangedBars === undefined ||

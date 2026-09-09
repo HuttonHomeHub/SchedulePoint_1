@@ -4,6 +4,8 @@ import {
   judgeAbsolute,
   judgeRun,
   NothingToJudgeError,
+  type AbsoluteJudgeResult,
+  type JudgeResult,
   type PhaseTiming,
   type RunPair,
   type Verdict,
@@ -27,6 +29,12 @@ import { verdictLabel, verdictNote } from './verdict-copy';
  * skew argument that keeps `scenario_id` shape-checked rather than value-checked). An unreadable row
  * renders as unreadable, never as a failure.
  */
+/** The judged shape, mirroring a live limb's `result` union so one formatter serves both. */
+export type StoredJudged =
+  | { readonly kind: 'difference'; readonly judged: JudgeResult }
+  | { readonly kind: 'absolute'; readonly judged: AbsoluteJudgeResult }
+  | { readonly kind: 'unjudgeable'; readonly message: string };
+
 export interface StoredVerdict {
   readonly verdict: Verdict;
   readonly label: string;
@@ -34,7 +42,18 @@ export interface StoredVerdict {
   readonly note: string | null;
 }
 
-export function judgeStoredRow(row: ProbeResultRow): StoredVerdict | null {
+/**
+ * The **full** judged shape for a stored row, in the same union a live limb carries.
+ *
+ * Extracted from {@link judgeStoredRow} rather than written beside it, because the copied block
+ * prints the figures and the table cell prints only the verdict — and two derivations of one
+ * judgement drift invisibly, each looking right alone (the ADR-0065 `routeOrthogonal` argument, and
+ * ADR-0121's `stackSeries`). So there is one call to the judge and two views of its answer.
+ *
+ * `null` when the row is a shape this bundle cannot read at all; `unjudgeable` when the judge
+ * REFUSED, which is a fact about the reading rather than an error to swallow.
+ */
+export function storedJudgedResult(row: ProbeResultRow): StoredJudged | null {
   const thresholds = row.thresholds;
   const minFps = numberAt(thresholds, 'minFps');
   const gated = thresholds.gated === true;
@@ -63,32 +82,42 @@ export function judgeStoredRow(row: ProbeResultRow): StoredVerdict | null {
             gated,
           });
 
-    return {
-      verdict: judged.verdict,
-      label: verdictLabel(judged.verdict),
-      note: verdictNote(judged.verdict, {
-        gated,
-        repeats: row.samples.length,
-        indeterminateReason: judged.indeterminateReason,
-        // Only a difference run has a ceiling to hit. `judgeAbsolute` returns no `saturated`, so
-        // this is `undefined` there rather than `false` — "not a difference run" and "measured and
-        // fine" are different facts, and the optional field keeps them apart.
-        saturated: 'saturated' in judged ? judged.saturated : undefined,
-      }),
-    };
+    return row.limbKind === 'difference'
+      ? { kind: 'difference', judged: judged as JudgeResult }
+      : { kind: 'absolute', judged: judged as AbsoluteJudgeResult };
   } catch (error) {
     // The judge refusing is a fact about the reading, not an error to swallow — it is why the
     // fourth verdict value exists. Anything else is a shape this bundle cannot read, and is
     // reported as unreadable rather than dressed as a result.
     if (error instanceof NothingToJudgeError) {
-      return {
-        verdict: 'INDETERMINATE',
-        label: 'CANNOT BE JUDGED',
-        note: firstLine(error.message),
-      };
+      return { kind: 'unjudgeable', message: firstLine(error.message) };
     }
     return null;
   }
+}
+
+export function judgeStoredRow(row: ProbeResultRow): StoredVerdict | null {
+  const result = storedJudgedResult(row);
+  if (result === null) return null;
+
+  if (result.kind === 'unjudgeable') {
+    return { verdict: 'INDETERMINATE', label: 'CANNOT BE JUDGED', note: result.message };
+  }
+
+  const judged = result.judged;
+  return {
+    verdict: judged.verdict,
+    label: verdictLabel(judged.verdict),
+    note: verdictNote(judged.verdict, {
+      gated: row.thresholds.gated === true,
+      repeats: row.samples.length,
+      indeterminateReason: judged.indeterminateReason,
+      // Only a difference run has a ceiling to hit. `judgeAbsolute` returns no `saturated`, so
+      // this is `undefined` there rather than `false` — "not a difference run" and "measured and
+      // fine" are different facts, and the optional field keeps them apart.
+      saturated: 'saturated' in judged ? judged.saturated : undefined,
+    }),
+  };
 }
 
 function numberAt(source: Record<string, unknown>, key: string): number | null {

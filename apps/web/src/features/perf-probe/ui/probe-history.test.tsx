@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { ProbeResultRow } from '../api/probe-results';
 
@@ -126,5 +126,46 @@ describe('the comparability caveat is associated, not merely present', () => {
     // normalisation had already turned into an ordinary space, and failed against correct markup.
     const note = document.getElementById(described?.getAttribute('aria-describedby') ?? '');
     expect(note?.textContent).toMatch(/per megapixel/);
+  });
+});
+
+describe('a stored reading can still be copied', () => {
+  it('offers a Copy control and writes the sitting block to the clipboard', () => {
+    // **The entry point** (ADR-0081). M2-T3 re-points the formatter onto a model a stored row can
+    // fill, and that is worth nothing if the only way to reach a block is still to have just
+    // pressed Run — which is the shape this register records five times over: a capability that
+    // landed with unit tests and no door.
+    const writeText = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+      writable: true,
+    });
+
+    table([row()]);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const block = writeText.mock.calls[0]?.[0] ?? '';
+    // The block, not a summary of it: the machine, the framing, the canvas and the verdict are
+    // what make a figure arguable a month later.
+    expect(block).toContain('SchedulePoint performance probe');
+    expect(block).toContain('viewport   1912x1068');
+    expect(block).toContain('── 2000 activities ──');
+    expect(block).toContain('VERDICT');
+  });
+
+  it('announces the copy, because the button changes nothing visible', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.resolve() },
+      configurable: true,
+      writable: true,
+    });
+
+    table([row()]);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+    // WCAG 4.1.3 — the same finding the live panel's copy control already carries.
+    expect(await screen.findByText('Copied.')).toBeInTheDocument();
   });
 });
