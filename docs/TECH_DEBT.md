@@ -4903,3 +4903,55 @@ filed ADR may not still be headed Draft, which is computable from what is alread
 new convention. It belongs with the `check:*` family rather than in a sweep, and the sweep is then its
 red run. Deliberately not built inside the probe-sweep epic: a shared gate is an ADR-0105 trigger and
 wants its own spec.
+
+### 275. A floor above the display's own refresh rate is unreachable, and the probe reports it as FAIL
+
+**Status:** open · **Raised:** 2026-09-09 (product owner, iPhone run on `web-v0.125.1`) · **Size:** S · **Owner:** web
+
+The probe measures the display's idle frame interval, stores it on every row and prints it in the
+block — and **the judge never reads it**. `grep -c idleInterval model/judge.ts` returns **0**. So a
+machine whose display cannot produce as many frames as the floor demands is failed for the display's
+cadence rather than for the painter's cost.
+
+**Observed, not hypothesised.** A run on iOS 18.7 Safari, `web-v0.125.1`, reported
+`idle frame interval 33.00 ms` — a 30 Hz cadence, so an arithmetic ceiling of **30.3 fps**. Against
+that:
+
+| Reading                       | Floor      | Measured | Verdict  | Reachable?                         |
+| ----------------------------- | ---------- | -------- | -------- | ---------------------------------- |
+| `canvas-draw` · 500 · week    | **45 fps** | 30.0     | **FAIL** | **no — 45 > 30.3 by construction** |
+| `revision-diff` · 2000 · week | 30 fps     | 30.0     | **FAIL** | only by rounding luck              |
+
+The second is the sharper one. `p1` passed (delta `+0.00 pp` against a 2.00 pp bar) and the printed
+fps is `30.0`, so `p2` failed on a value fractionally below 30 that the report rounds up — **the
+verdict was decided by the third decimal place of the display's refresh rate.** A floor set exactly
+at a device's ceiling is not a test of the painter; it is a coin toss.
+
+**The probe deliberately accepts such a display.** `MIN/MAX_PLAUSIBLE_INTERVAL_MS` is `3..40`
+(`model/pacing.ts:79-80`), so 33 ms is inside the plausible band on purpose — 30 Hz is a real
+display, not a broken clock. `refuseRun` is therefore right to admit it, and the judge is wrong to
+then hold it to a floor it cannot reach.
+
+**This is `docs/TECH_DEBT.md` #260 mirrored, and the vocabulary for it already exists.** #260 was a
+metric with no room left at the **ceiling**, making a gated delta arithmetically unfailable; this is
+a metric with no room at the **floor**, making an absolute gate arithmetically unpassable. ADR-0130
+D8 keeps INDETERMINATE as a first-class fourth verdict precisely for "this machine cannot answer the
+question", and `judgeAbsolute` already returns it when the repeats straddle the floor. The remedy is
+the same shape: compute the display's ceiling from the measured interval, and return INDETERMINATE —
+naming the ceiling, the floor and the arithmetic — rather than FAIL, whenever the ceiling is at or
+below the floor.
+
+**Why it is not a phone problem.** SchedulePoint is a desktop application and the reading that found
+this was taken for curiosity. But nothing here is about phones: **any** throttled display reaches it
+— macOS Low Power Mode, a laptop on battery, an external panel negotiated at 30 Hz, a remote or
+virtualised session, thermal throttling under a long run. On such a machine the 500-activity floor of
+45 fps is unreachable and the probe currently calls that a failure of the painter. That is a
+confidently wrong answer about somebody's hardware, which is the class ADR-0130's whole epic exists
+to remove.
+
+**One thing the run got right, and it is worth recording as the control.** Every `canvas-draw`
+reading on that device refused with `NON-VACUITY FAILED` — 70 bars where 108 were needed, 259 where
+270 were needed, 762 where 1080 were needed — because a 750×390 CSS viewport culls almost everything.
+That is the probe working exactly as ADR-0066 intended: it declined to produce a flattering number
+about a nearly-empty canvas. The contrast is the argument for this row — the same run refuses
+honestly where it cannot measure, and then fails a machine for a floor it was never able to reach.
