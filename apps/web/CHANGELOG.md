@@ -1,5 +1,28 @@
 # @repo/web
 
+## 0.125.0
+
+### Minor Changes
+
+- [#491](https://github.com/HuttonHomeHub/SchedulePoint_1/pull/491) [`5d84bd0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5d84bd051d0606a95db589e5fb9365c3414886af) Thanks [@HuttonHomeHub](https://github.com/HuttonHomeHub)! - Compare the open plan against another plan in the same project.
+  
+  Two revisions of one programme that arrived as two imports are two sibling plans
+  sharing no activity ids, so the existing comparison had nothing to say about them.
+  A **Compare with** picker in the Compare revisions dock now matches them on
+  activity code and shows the match coverage first — every number below it is worth
+  exactly what the coverage says it is. The difference is drawn on the diagram too,
+  and the printed handover names both plans.
+  
+  Two limits are stated rather than implied: an activity whose code changed between
+  the two looks the same as one removed and another added, and work that exists in
+  only one plan is counted rather than drawn, because two independent imports do not
+  share a lane order.
+
+### Patch Changes
+
+- Updated dependencies [[`5d84bd0`](https://github.com/HuttonHomeHub/SchedulePoint_1/commit/5d84bd051d0606a95db589e5fb9365c3414886af)]:
+  - @repo/types@0.31.0
+
 ## 0.124.0
 
 ### Minor Changes
