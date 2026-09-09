@@ -204,6 +204,16 @@ which the gate accepts.
 2. **Whether an `Approved` spec's work actually shipped.** The gate refuses `Draft` and stops.
 3. **Whether the prose after the token is true.** `Accepted — shipped (ADR-0131)` is checked for the
    ADR resolving to a file, never for it being the right ADR.
+
+   **The stronger rule was written, run, and rejected on what it found.** Asking that every
+   `ADR-NNNN` a header names must also _cite_ that spec directory reports **2 of 58** — and both are
+   correct prose rather than defects: `corporate-brand` names ADR-0102 as the decision that overtook
+   the flip it proposed, and `revision-compare` names ADR-0126/0127/0129 as the epics that continued
+   the programme. Neither cites the directory, and neither should. So S4 stays at "the ADR resolves",
+   and the stronger rule's real value was as a **one-off audit**: the other 56 attributions were
+   each confirmed to come from an ADR that genuinely cites the spec, which is what makes the sweep's
+   ADR numbers evidence rather than a grep's output.
+
 4. **`docs/plans/`**, the historical tree, and per-milestone sub-specs
    (`engine-conformance-framework/M<n>-…`, seven files) — excluded by the root-only glob, because
    folding them in means deciding what a milestone's approval state is, which nothing in
