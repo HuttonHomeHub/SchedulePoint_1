@@ -25,22 +25,20 @@ import { SCENARIOS } from './scenarios';
 /** What a stored row cannot supply, stated once so both the adapter and the formatter agree. */
 export const NOT_RECORDED = '(not recorded)';
 
+/**
+ * The facts that are **constant across a sitting** — and nothing else.
+ *
+ * That is a requirement rather than a tidy-up. A sitting is now up to four presses under one
+ * `sweep_id`, so the measurement, the framing and the protocol differ from reading to reading;
+ * the spec's own definition (§4.6 / CQ-5) is "a short definition list of the facts that are
+ * constant across the sitting" beside "one table of the readings that vary", and the varying half
+ * is exactly measurement / scale / framing / protocol.
+ *
+ * The tempting shortcut was to read them off the first row of the group. For a single press that
+ * is correct and for a sweep it is a confident falsehood: it would label a four-reading sitting
+ * with whichever scenario happened to sort first, and nothing on screen would look wrong.
+ */
 export interface SittingContext {
-  readonly scenarioId: string;
-  readonly scenarioLabel: string;
-  readonly preset: string;
-  /**
-   * The run length as the operator chose it, and the frame budget behind it.
-   *
-   * **`null` on a stored reading, and that is a real gap rather than an oversight**: neither the
-   * size nor the frame count is a column on `perf_probe_results` — only `samples.length` survives,
-   * which is the repeats. M4 adds `frames_per_phase` and closes half of it. Until then a stored
-   * block says so rather than inventing the default, because the default is exactly what a reader
-   * would assume and exactly what a non-default run would contradict.
-   */
-  readonly size: string | null;
-  readonly frames: number | null;
-  readonly repeats: number;
   readonly viewport: { readonly width: number; readonly height: number };
   readonly devicePixelRatio: number;
   readonly idleInterval: number;
@@ -57,7 +55,15 @@ export interface SittingContext {
   readonly gpuMasked: boolean | null;
   readonly hardwareConcurrency: number | null;
   readonly deviceMemoryGb: number | null;
-  readonly lostFocusDuringRun: boolean;
+  /**
+   * Whether **any** reading in this sitting lost the window.
+   *
+   * Derived rather than copied, and it is the one sitting fact that is a disjunction instead of a
+   * shared value: focus is lost per reading, so a sweep can hold three clean readings and one
+   * suspect. Reporting the first row's value would call the whole sitting clean on the strength of
+   * a reading that happened to sort first. Each reading carries its own beside it.
+   */
+  readonly anyReadingLostFocus: boolean;
   readonly prefersReducedMotion: boolean;
   readonly userAgent: string;
   readonly startedAt: string;
@@ -74,7 +80,38 @@ export interface SittingContext {
   readonly machineLabel: string | null;
 }
 
+/**
+ * One row of the sitting's table — a limb, carrying the reading it belongs to.
+ *
+ * Measurement, framing and protocol are denormalised onto it rather than left on the sitting,
+ * because a sitting spans up to four presses and those three differ across them. The spec's table
+ * columns (§4.6) are exactly these plus the figures, so a row is self-describing and a reader can
+ * sort or scan it without holding a header in their head.
+ */
 export interface SittingLimb {
+  readonly scenarioId: string;
+  readonly scenarioLabel: string;
+  readonly preset: string;
+  /**
+   * The run length as the operator chose it, and the frame budget behind it.
+   *
+   * **`null` on a reading stored before M4**, and that is a real gap rather than an oversight: the
+   * size is still not a column, and `frames_per_phase` only exists from M4 on. A block says so
+   * rather than inventing the default, because the default is exactly what a reader would assume
+   * and exactly what a non-default run would contradict.
+   */
+  readonly size: string | null;
+  readonly frames: number | null;
+  /**
+   * When this reading was taken, per reading rather than per sitting.
+   *
+   * A sitting's `startedAt` is its earliest; a sweep spans minutes, and one re-run under the same
+   * `sweep_id` (M6-T4) can span rather more. Keeping each reading's own is what lets the block
+   * report a spread instead of implying the whole sitting happened at one instant.
+   */
+  readonly recordedAt: string | null;
+  /** Focus is lost per reading, so the sitting's disjunction is not a substitute for this. */
+  readonly lostFocusDuringRun: boolean;
   readonly limbLabel: string;
   readonly sceneSummary: string;
   readonly visibleBars: number;
@@ -111,12 +148,6 @@ export function sittingFromOutcome(
       ? { refusal: { reason: outcome.refusal.reason, sentence: outcome.refusal.sentence } }
       : {}),
     context: {
-      scenarioId: context.scenarioId,
-      scenarioLabel: context.scenarioLabel,
-      preset: context.preset,
-      size: context.size,
-      frames: context.frames,
-      repeats: context.repeats,
       viewport: context.viewport,
       devicePixelRatio: context.device.devicePixelRatio,
       idleInterval: context.idleInterval,
@@ -124,7 +155,9 @@ export function sittingFromOutcome(
       gpuMasked: context.device.gpuMasked,
       hardwareConcurrency: context.device.hardwareConcurrency,
       deviceMemoryGb: context.device.deviceMemoryGb,
-      lostFocusDuringRun: context.lostFocusDuringRun,
+      // One press, so the disjunction is that press's own value — but it is computed by the same
+      // rule the stored adapter uses rather than passed through, so the two cannot drift.
+      anyReadingLostFocus: context.lostFocusDuringRun,
       prefersReducedMotion: context.device.prefersReducedMotion,
       userAgent: context.device.userAgent,
       startedAt: context.startedAt,
@@ -133,6 +166,13 @@ export function sittingFromOutcome(
       machineLabel,
     },
     limbs: limbs.map((limb) => ({
+      scenarioId: context.scenarioId,
+      scenarioLabel: context.scenarioLabel,
+      preset: context.preset,
+      size: context.size,
+      frames: context.frames,
+      recordedAt: context.startedAt,
+      lostFocusDuringRun: context.lostFocusDuringRun,
       limbLabel: limb.limbLabel,
       sceneSummary: limb.sceneSummary,
       visibleBars: limb.visibleBars,
@@ -169,19 +209,14 @@ export function sittingsFromRows(rows: readonly ProbeResultRow[]): readonly Sitt
   }
 
   return [...groups.values()].map((group) => {
-    // The first row carries the context: every row in a press shares its machine, its framing and
-    // its clock, so reading them from one row rather than reconciling several is correct AND is
-    // what makes a disagreement impossible rather than merely unlikely.
+    // **The first row carries the MACHINE, and nothing that varies.** It used to carry the framing
+    // and the protocol too, under a comment claiming every row in a press shares them — true of one
+    // press and false of a sweep, which is four presses under one id. Those moved to the limb; what
+    // is left here is genuinely constant, because it describes the computer rather than the run.
     const first = group[0] as ProbeResultRow;
     return {
       outcome: 'measured' as const,
       context: {
-        scenarioId: first.scenarioId,
-        scenarioLabel: scenarioLabelOf(first.scenarioId),
-        preset: first.preset,
-        size: null,
-        frames: null,
-        repeats: first.samples.length,
         viewport: { width: first.viewportWidth, height: first.viewportHeight },
         devicePixelRatio: first.devicePixelRatio,
         idleInterval: first.idleIntervalMs,
@@ -189,10 +224,18 @@ export function sittingsFromRows(rows: readonly ProbeResultRow[]): readonly Sitt
         gpuMasked: null,
         hardwareConcurrency: first.hardwareConcurrency,
         deviceMemoryGb: first.deviceMemoryGb,
-        lostFocusDuringRun: first.lostFocusDuringRun,
+        // A disjunction over the whole sitting, not the first row's value: one suspect reading
+        // among four makes the sitting suspect, and a reader looking at the facts list needs to
+        // know to go and find which.
+        anyReadingLostFocus: group.some((row) => row.lostFocusDuringRun),
         prefersReducedMotion: first.reducedMotion,
         userAgent: first.userAgent,
-        startedAt: first.recordedAt,
+        // The EARLIEST, not the first row's — the rows arrive newest-first from the API, so taking
+        // `first` would date a sitting by its last reading.
+        startedAt: group.reduce(
+          (earliest, row) => (row.recordedAt < earliest ? row.recordedAt : earliest),
+          first.recordedAt,
+        ),
         appVersion: first.appVersion,
         apiVersion: first.apiVersion,
         machineLabel: first.machineLabel,
@@ -229,6 +272,14 @@ function limbFromRow(row: ProbeResultRow): SittingLimb {
   const minFps = numberIn(row.thresholds, 'minFps') ?? 0;
 
   return {
+    scenarioId: row.scenarioId,
+    scenarioLabel: scenarioLabelOf(row.scenarioId),
+    preset: row.preset,
+    // Still not a column, and still `null` rather than the default a reader would assume.
+    size: null,
+    frames: row.framesPerPhase ?? null,
+    recordedAt: row.recordedAt,
+    lostFocusDuringRun: row.lostFocusDuringRun,
     limbLabel: limbLabelOf(row.scenarioId, row.limbId),
     sceneSummary: row.sceneSummary,
     visibleBars: counts.visibleBars ?? 0,

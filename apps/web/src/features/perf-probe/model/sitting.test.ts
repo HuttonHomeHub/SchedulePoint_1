@@ -157,14 +157,18 @@ describe('S2 — a sitting read from history carries every field the live report
   });
 
   it('says "(not recorded)" for what a stored row cannot supply, never a default', () => {
-    const stored = sittingsFromRows([storedRow()])[0];
+    // **A row stored BEFORE M4**, which is the only row that cannot supply the frame count now
+    // that `frames_per_phase` is a column. Asserting it against a post-M4 row would have been
+    // asserting that a fact the table records is missing.
+    const stored = sittingsFromRows([storedRow({ framesPerPhase: null })])[0];
     const block = stored === undefined ? '' : formatSitting(stored);
 
-    // Neither the size nor the frame count is a column on `perf_probe_results`. The default is
-    // exactly what a reader would assume and exactly what a non-default run would contradict, so
-    // the block says it does not know. M4's `frames_per_phase` closes half of this.
-    expect(stored?.context.size).toBeNull();
-    expect(stored?.context.frames).toBeNull();
+    // The size is still not a column and `frames_per_phase` is null on a row stored before M4. The
+    // default is exactly what a reader would assume and exactly what a non-default run would
+    // contradict, so the block says it does not know — and it says so PER READING, because a
+    // sitting can hold four readings taken at different protocols.
+    expect(stored?.limbs[0]?.size).toBeNull();
+    expect(stored?.limbs[0]?.frames).toBeNull();
     expect(block).toContain(`run size   ${NOT_RECORDED}`);
     // And it keeps what it DOES know on the same line — the repeats survive as `samples.length`.
     expect(block).toMatch(/run size .* x 2/);
@@ -228,6 +232,61 @@ describe('S2 — a sitting read from history carries every field the live report
     ]);
 
     expect(sittings).toHaveLength(2);
+  });
+
+  it("reports each reading's own measurement and framing, never the first row's", () => {
+    // **The case the `group[0]` shortcut would have passed.** A sweep is four presses under one
+    // sitting, so the measurement and the framing differ across it; taking them from whichever row
+    // sorted first labels three readings with a fourth one's identity and nothing on screen looks
+    // wrong. Spec §4.6 states it as a rule — the facts list is what is CONSTANT across the sitting
+    // — and this is that rule as an assertion.
+    const sittings = sittingsFromRows([
+      storedRow({ id: 'a', runId: 'r1', sweepId: 's1', scenarioId: 'canvas-draw', preset: 'week' }),
+      storedRow({ id: 'b', runId: 'r2', sweepId: 's1', scenarioId: 'canvas-draw', preset: 'fit' }),
+      storedRow({
+        id: 'c',
+        runId: 'r3',
+        sweepId: 's1',
+        scenarioId: 'revision-diff',
+        preset: 'week',
+      }),
+    ]);
+
+    const sitting = sittings[0];
+    expect(sittings).toHaveLength(1);
+    expect(sitting?.limbs.map((l) => `${l.scenarioId}/${l.preset}`)).toEqual([
+      'canvas-draw/week',
+      'canvas-draw/fit',
+      'revision-diff/week',
+    ]);
+    // And the block names them per reading rather than once at the top.
+    const block = sitting === undefined ? '' : formatSitting(sitting);
+    expect(block).toContain('framing    fit');
+    expect(block).toContain('framing    week');
+  });
+
+  it('calls a sitting suspect when ANY of its readings lost focus, not just the first', () => {
+    // Focus is lost per reading. A sweep can hold three clean readings and one suspect, and the
+    // first row's value would call the whole sitting clean on the strength of whichever sorted
+    // first — the one sitting fact that is a disjunction rather than a shared value.
+    const sitting = sittingsFromRows([
+      storedRow({ id: 'a', runId: 'r1', sweepId: 's1', lostFocusDuringRun: false }),
+      storedRow({ id: 'b', runId: 'r2', sweepId: 's1', lostFocusDuringRun: true }),
+    ])[0];
+
+    expect(sitting?.context.anyReadingLostFocus).toBe(true);
+    expect(sitting?.limbs.map((l) => l.lostFocusDuringRun)).toEqual([false, true]);
+  });
+
+  it('dates a sitting by its EARLIEST reading, not by whichever row arrived first', () => {
+    // The API returns newest-first, so `group[0]` is the LAST reading of a sweep. A sitting dated
+    // by its last reading reads as having happened later than it did.
+    const sitting = sittingsFromRows([
+      storedRow({ id: 'b', runId: 'r2', sweepId: 's1', recordedAt: '2026-09-09T12:05:00.000Z' }),
+      storedRow({ id: 'a', runId: 'r1', sweepId: 's1', recordedAt: '2026-09-09T12:00:00.000Z' }),
+    ])[0];
+
+    expect(sitting?.context.startedAt).toBe('2026-09-09T12:00:00.000Z');
   });
 
   it('keeps a row it cannot judge rather than hiding the reading', () => {

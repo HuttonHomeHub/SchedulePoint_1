@@ -106,12 +106,10 @@ export function formatSitting(sitting: Sitting): string {
 
 function contextLines(context: SittingContext): string[] {
   return [
-    `  scenario   ${context.scenarioLabel} (${context.scenarioId})`,
-    `  framing    ${context.preset}`,
-    // **`(not recorded)` rather than the default**, on a stored reading where neither the size nor
-    // the frame count is a column. The default is exactly what a reader would otherwise assume and
-    // exactly what a non-default run would contradict; M4's `frames_per_phase` closes half of it.
-    `  run size   ${context.size ?? NOT_RECORDED} — ${context.frames === null ? NOT_RECORDED : `${String(context.frames)} frames`} x ${String(context.repeats)}`,
+    // **Scenario, framing and protocol are NOT here**, and their absence is the point. A sitting is
+    // up to four presses under one `sweep_id`, so those three differ from reading to reading; they
+    // print on each reading's own block below. Leaving them here would have labelled a whole
+    // sitting with whichever reading sorted first, and nothing in the block would look wrong.
     `  viewport   ${String(context.viewport.width)}x${String(context.viewport.height)} css px, dpr ${String(context.devicePixelRatio)}`,
     `  display    idle frame interval ${context.idleInterval.toFixed(2)} ms`,
     // A masked adapter is printed AS masked. Writing "unknown GPU" would put a fiction in the one
@@ -124,7 +122,11 @@ function contextLines(context: SittingContext): string[] {
     // Both recorded rather than acted on, and both explain an outlier nothing else would. A blur
     // is NOT a refusal — the window kept painting, something else took the keyboard — so it has to
     // be visible here or the fact is captured and never read.
-    `  attention  ${context.lostFocusDuringRun ? 'the window lost focus during the run' : 'held throughout'}`,
+    // A disjunction over the sitting, and each reading repeats its own below. A blur is NOT a
+    // refusal — the window kept painting, something else took the keyboard — so a sweep can hold
+    // three clean readings and one suspect, and only saying "held throughout" because the first
+    // one was clean is the falsehood this line used to be capable of.
+    `  attention  ${context.anyReadingLostFocus ? 'the window lost focus during the run' : 'held throughout'}`,
     `  motion     ${context.prefersReducedMotion ? 'reader prefers reduced motion' : 'no preference'}`,
     `  agent      ${context.userAgent}`,
     `  at         ${context.startedAt}`,
@@ -156,6 +158,20 @@ function verdictLines(
 function limbLines(limb: SittingLimb): string[] {
   const head = [
     `  ── ${limb.limbLabel} ──`,
+    // **The same three labels the sitting header used to carry, relocated rather than renamed.**
+    // Spec §4.6 keeps this file's line vocabulary and its own suite is the before/after oracle; a
+    // sitting spanning four presses makes these three per-reading facts, so they move down here and
+    // keep their words. A reader who greps a stored block for `framing` still finds it.
+    `  scenario   ${limb.scenarioLabel} (${limb.scenarioId})`,
+    `  framing    ${limb.preset}`,
+    // **`(not recorded)` rather than the default**, on a reading stored before `frames_per_phase`
+    // existed and for the size, which is still not a column. The default is exactly what a reader
+    // would otherwise assume and exactly what a non-default run would contradict.
+    `  run size   ${limb.size ?? NOT_RECORDED} — ${limb.frames === null ? NOT_RECORDED : `${String(limb.frames)} frames`} x ${String(limb.repeats)}`,
+    ...(limb.recordedAt === null ? [] : [`  taken      ${limb.recordedAt}`]),
+    // Repeated per reading rather than only summarised on the sitting: the sitting says whether
+    // ANY reading lost the window, and this is the one that says which.
+    ...(limb.lostFocusDuringRun ? ['  attention  this reading lost focus'] : []),
     `  scene      ${limb.sceneSummary}`,
     // Reported on every limb, never only when it fails. A reading taken on an almost-empty canvas
     // is a reading about the cull, and ADR-0066 records that looking exactly like a good result.
