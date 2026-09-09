@@ -2019,9 +2019,16 @@ rather than a date — build it when unverified accounts on the deployed install
 figures — and recorded in `20260809180000_audit_events_staff_index/migration.sql` so the question is
 not reopened from scratch.
 
-### 118a. `audit_events`' 12-month `auth.*` period is still unenforced, and the sweep may never enforce it
+### 118a. `audit_events`' 12-month `auth.*` period is unenforced, and that is ADR-0085 D1's decision
 
-**Status:** unverified
+**Status:** standing · **Verified:** 2026-09-09
+
+> **Restatused from `unverified` to `standing` on 2026-09-09: this is a decision nobody can pick up,
+> not work somebody owes.** Verified intact — the `BEFORE UPDATE OR DELETE` and `BEFORE TRUNCATE`
+> triggers are `ENABLE ALWAYS` (`20260803170000_audit_events/migration.sql:110-122`) and **no later
+> migration relaxes them**; `retention-boundary.structural.spec.ts:43-65` asserts `RETENTION_TABLES`
+> **by equality** with `audit_events` in the forbidden set. ADR-0085 D1 refused to trade the
+> structural guarantee for the period, and D6's build trigger has not fired.
 
 The half of #118 item 1 that the retention sweep **cannot** close, split out rather than quietly
 carried along with the half it did close — because "retention is enforced" is now true of two tables
@@ -2049,7 +2056,13 @@ same place. Recorded here so the next reader meets the conflict rather than the 
 
 ### 118b. The CSP period bounds staleness, not data age — and the sweep does not change that
 
-**Status:** unverified
+**Status:** standing · **Verified:** 2026-09-09
+
+> **Restatused to `standing` on 2026-09-09 for the same reason as #118a: a recorded consequence, not
+> owed work.** Still exactly true — `retention-policy.ts:72-73` sweeps on `last_seen_at` at 30 days
+> with the consequence stated in its own docblock at `:58-71`, and the guard against "tightening" it
+> is live as a test: `retention-sweep.e2e-spec.ts:97`, _"KEEPS a violation that is old but still
+> being reported"_.
 
 Carried forward from #118 item 1 unchanged, because building the sweep neither fixed it nor made it
 worse, and closing item 1 without saying so would have read as a fix.
@@ -2145,9 +2158,17 @@ dated flag work precisely because the date was the wrong instrument.
 
 **Do not** substitute unit-level flag-off suites for it (ADR-0088 D5, D7).
 
-### 120. The first retention drain leaves 10–20% dead tuples for several ticks, and nothing says so
+### 120. Nothing reports `n_dead_tup` at runtime, so a retention drain's bloat is invisible while it happens
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
+
+> **The title ended "and nothing says so" until 2026-09-09, and that half is false.**
+> `docs/adr/0087-scheduled-retention-sweep.md:244-249` states the behaviour, gives the figures and
+> cites this row by number. The arithmetic still holds (`BATCH_SIZE = 1000`, `RUN_CAP = 50_000`,
+> unchanged), and no `reloptions` override or `VACUUM` call exists. What is genuinely open is
+> **remedy 1 only**: `n_dead_tup` / `pg_stat_user_tables` appear **nowhere** in `apps/api/src` or
+> `apps/web/src`, and `RetentionTableDto` exposes `oldestAt`/`oldestAgeDays`/`overdue` and no bloat
+> figure — so an operator watching a drain cannot see it happening.
 
 Measured, not suspected. The backend-performance review seeded `csp_reports` to 500,000 rows
 (~207 MB), vacuumed, then drove a full `RUN_CAP`-bounded drain — 50 sequential 1,000-row batches,
@@ -2442,9 +2463,15 @@ is a rule with no gate behind it, one layer up from the rule it enforces.
 did not match, and reported nothing. Found by re-reading rather than by anything failing, which is
 the ADR-0058 rule doing its job on a document written about instruments not being reached for.
 
-### 154. Minimap M4: the two "reasoned, not observed" AT verifications remain owed
+### 154. Three AT verifications are owed, and this row is now where the whole class is filed
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
+
+> **It has grown from two to three, and became a class rather than a row.** Beside the minimap's own
+> two, `docs/TECH_DEBT.md:3591` files another owed listen explicitly as "the #154 shape", and
+> `Toolbar.tsx:49`, `toolbar-segments.test.tsx:140` and `docs/adr/0119-…:86` all now defer nested
+> `role="group"` AT behaviour here. None is reachable from this environment — there is no screen
+> reader in the build container — so all three need a person on real hardware.
 
 **Raised 2026-08-21** (minimap M4-T3). **Size:** S.
 
@@ -2745,7 +2772,14 @@ repository had no hyphenated output anywhere to copy from.
 
 ### 181. `check:claims` matches a citation by ref string, so a coinciding line in a different version passes
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
+
+> **The mechanism is unchanged and the figures were stale twice.** `check-claims.mjs:382` builds the
+> ref from **basename + line range only** and `:393-395` matches on that string alone; no claim in
+> `scripts/dependency-claims.json` carries a `version`, and `verifiedAgainst` holds one version per
+> package. The row says "all 78 entries" and its 2026-09-03 sweep said 97; the register actually
+> holds **96 claims across 15 packages**. The worked example no longer reproduces (`better-auth` is
+> pinned 1.7.1), which is a fact about the pin rather than about the blind spot.
 
 _Found 2026-08-23, by the gate accepting a citation it should have refused._
 
@@ -3005,9 +3039,17 @@ read from `distinctControlHeights` rather than from the label tops.
 > The falsification record for hypotheses 1 and 3 stands and is still the useful part, as does the
 > instrument's blind spot: `labelOf` selects `<span>` only, so an `<input>` control is invisible to it.
 
-### 191. The local pre-push gate costs 8 minutes and 96% of it is two steps
+### 191. The local pre-push gate is one expensive step, and it is `pnpm test`
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
+
+> **The title said "8 minutes and 96% of it is two steps" until 2026-09-09, and that is now false.**
+> `eslint --cache --cache-strategy content` landed in all nine lint scripts (`apps/web/package.json`,
+> `apps/api`, `apps/seed-cli`, every `packages/*`), so the lint half of the pair is seconds warm and
+> candidate 1 is **done**. This is a one-step row now. Its counts had also drifted twice: **626** web
+> test files (the row said 552, the 2026-09-03 sweep said 600) and **16** `check:*` gates (the row
+> said ten, the sweep said fourteen) — which is why the standing advice below is stronger than when
+> it was written, not weaker: sixteen gates still cost seconds between them.
 
 _Filed 2026-08-25 by the reconciliation pass, at the product owner's request to check whether we
 over-test locally._
@@ -3090,9 +3132,24 @@ of the gate that catches what a reviewer cannot see.
 > derived and a hard count in prose beside a growing set is ADR-0076 Class 1 by construction; that
 > figure had already been wrong twice.
 
-### 193. Four more toolbar docblocks and five exports describe deleted machinery
+### 193. Four toolbar exports have no production caller, and are deliberately kept
 
-**Status:** unverified
+**Status:** open · **Verified:** 2026-09-09
+
+> **The docblock half of this row is CLOSED (2026-09-09).** All four named docblocks and both named
+> residues were corrected, and the last one this row identified — `toolbar-registry.test.ts`'s
+> `computeLadder` companion lookup, sitting fourteen lines above the correction meant to catch it —
+> was fixed in the same pass. The corrected list of four dead exports was re-verified exact, and the
+> row's own correction about `TOOLBAR_LAYOUT_BANDS` (module-private, read by a live feature, not an
+> export) is right.
+>
+> **What survives is the export question alone**, and it is a deliberate keep rather than a task:
+> ADR-0110 M5 kept the ladder machinery because the reduced strip does not fit at 1280 or 1440, and
+> removing an export is a public-contract change (ADR-0105).
+>
+> **The class this row discovered is now `#277`**, which found nine citations of `autoLabelsFit` —
+> a symbol with no definition anywhere — that this row's own grep was structurally unable to find,
+> because it searched the names somebody remembered deleting.
 
 _Filed 2026-08-25 by RECONCILE step 7 (component review), which swept further than the pass had._
 
