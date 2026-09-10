@@ -78,7 +78,7 @@ export function ResendVerificationButton({
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-3">
       {send.isSuccess ? (
-        <Alert tone="info" tabIndex={-1} ref={outcomeRef}>
+        <Alert purpose="event" tone="info" tabIndex={-1} ref={outcomeRef}>
           If that address needs verifying, an email is on its way. It can take a minute to arrive —
           check your spam folder before trying again.
         </Alert>

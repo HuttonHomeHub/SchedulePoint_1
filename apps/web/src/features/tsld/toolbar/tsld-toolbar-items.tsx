@@ -145,13 +145,18 @@ type ViewToggleGroupId = 'zoom' | 'structure' | 'markers' | 'insight' | 'panels'
  * both. The trade was put to the product owner with the measured numbers rather than taken here,
  * and the answer was labels — nothing is deleted, the four are one click away in the `⋯`.
  *
- * **Tier 3 rather than a low `priority`, and the distinction is load-bearing.** `autoLabelsFit`
- * sums the WHOLE bar (`Toolbar.tsx`), so a merely width-demoted item still pays for its label and
- * demoting it would buy nothing at all. `partitionByTier` takes tier 3 out of `bar` entirely.
- *
- * The other route — making the label sum read only the inline set — is exactly the feedback loop
- * {@link measureLabelWidth}'s docblock exists to prevent: labelling widens the row, the widened row
+ * **Tier 3 rather than a low `priority`, and the distinction was load-bearing when this was
+ * written.** `autoLabelsFit` summed the WHOLE bar, so a merely width-demoted item still paid for
+ * its label and demoting it bought nothing; `partitionByTier` takes tier 3 out of `bar` entirely.
+ * The other route — making the label sum read only the inline set — was the feedback loop
+ * `measureLabelWidth`'s docblock existed to prevent: labelling widens the row, the widened row
  * overflows, overflowing narrows it, and the narrower row can afford labels again.
+ *
+ * **Both of those functions were deleted with the width ladder (ADR-0109 D1), and neither has
+ * existed since.** The paragraph is kept because it records why the tier exists and what the
+ * rejected alternative cost; read it as history, not as a description of a live mechanism. The
+ * `{@link measureLabelWidth}` that stood here resolved to nothing — a broken TSDoc link of exactly
+ * the `isWidthConstrained` class `docs/TECH_DEBT.md` #193 records.
  *
  * `showLabel: 'never'` was measured and rejected: it drops an item's label cost while keeping its
  * 32 px and its gap, so the three Row-1 candidates save 308 px against a 360 px gap — not enough,
@@ -385,10 +390,12 @@ function lensTogglesIn(group: ViewToggleGroupId): readonly LensToggle[] {
  * The Row-1 registry items for the promoted lens toggles (workspace-chrome M4) — **derived** from
  * the same `LensToggle` records `View ▾` reads, never restated.
  *
- * `showLabel: { atLeast: 'comfortable' }` rather than `'auto'`: `autoLabelsFit` is all-or-nothing
- * for a whole row, so an `'auto'` item follows its neighbours' collective fate and can label itself
- * at a narrow band that happens to have slack — the trap ADR-0091 D3a records for the zoom cluster.
- * These two carry a name a planner searches for, so a band rule is what they need.
+ * `showLabel: { atLeast: 'comfortable' }` rather than `'auto'`. The original reason — that
+ * `autoLabelsFit` was all-or-nothing for a whole row, so an `'auto'` item could label itself at a
+ * narrow band that happened to have slack — **lapsed with the width ladder (ADR-0109 D1)**.
+ * `'auto'` now means always label, so it would label these two at *every* width. These carry a
+ * name a planner searches for and should still go icon-only on a narrow window, so a band rule
+ * remains what they need; only the argument for it has changed.
  */
 function promotedLensItems(): readonly ToolbarItem<TsldToolbarContext>[] {
   return LENS_TOGGLES.filter((t) => t.enabled && t.promotion !== undefined).map((t) => {
@@ -2257,9 +2264,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'` — `autoLabelsFit` is all-or-nothing for the whole row, so
-      // these would follow their neighbours' collective fate and label at a narrow band that
-      // happened to have slack, which is exactly what the 1440 measurement forbids.
+      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
+      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
+      // label, so it would label these at every width. The 1440 measurement still forbids that,
+      // so the band rule stands on the measurement rather than on the deleted mechanism.
       showLabel: { atLeast: 'comfortable' },
       order: 10,
       priority: 100,
@@ -2278,9 +2286,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'` — `autoLabelsFit` is all-or-nothing for the whole row, so
-      // these would follow their neighbours' collective fate and label at a narrow band that
-      // happened to have slack, which is exactly what the 1440 measurement forbids.
+      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
+      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
+      // label, so it would label these at every width. The 1440 measurement still forbids that,
+      // so the band rule stands on the measurement rather than on the deleted mechanism.
       showLabel: { atLeast: 'comfortable' },
       order: 11,
       priority: 100,
@@ -2297,9 +2306,10 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
       tier: 2,
       // D3a (ADR-0091): labelled at `comfortable`, icon-only below. Un-folding these four puts
       // 430 px back on Row 1, which overflows it at 1440 on its own; icon-only costs 128 px.
-      // A band rule, not `'auto'` — `autoLabelsFit` is all-or-nothing for the whole row, so
-      // these would follow their neighbours' collective fate and label at a narrow band that
-      // happened to have slack, which is exactly what the 1440 measurement forbids.
+      // A band rule, not `'auto'`. The stated reason — `autoLabelsFit` being all-or-nothing for
+      // the whole row — went with the width ladder (ADR-0109 D1); `'auto'` now means always
+      // label, so it would label these at every width. The 1440 measurement still forbids that,
+      // so the band rule stands on the measurement rather than on the deleted mechanism.
       showLabel: { atLeast: 'comfortable' },
       order: 12,
       priority: 100,
@@ -2580,12 +2590,16 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // label, on the same reasoning that moved `search-status` into the search field a few lines up:
     // a read-out is not a command and does not belong in a `role="toolbar"`.
     //
-    // The two destinations are not comparable, and the measurement is what shows it. The search
-    // field is a `render` item — pinned, painted at every width. A **label** is painted only when
-    // `autoLabelsFit` is true, and `docs/specs/workspace-layout/m2-item-widths.md` records that at
-    // 1920 it is false: every `'auto'` item on this row measures 32 px, icon-only. So folding the
-    // count into the label would make it invisible **at the width this whole epic exists to fix**,
-    // on the product owner's own monitor — deleting information under cover of tidying.
+    // The two destinations are not comparable. The search field is a `render` item — pinned,
+    // painted at every width.
+    //
+    // **The measurement that used to finish this argument has lapsed.** It read: a label paints
+    // only when `autoLabelsFit` is true, and `m2-item-widths.md` records that at 1920 it is false,
+    // so folding the count into the label would hide it at the width the epic exists to fix.
+    // ADR-0109 D1 deleted the ladder and `autoLabelsFit` with it; labels now always paint, so the
+    // fold would no longer hide anything. What still refuses it is ADR-0094's other half, which
+    // was never about width: a live count folded into a label reduces the control's accessible
+    // name to a status, re-read on every cycle.
     //
     // The chip costs nothing to keep: `isVisible` is false unless a conflict is being cycled, so it
     // occupies no width at rest and none of the M2 arithmetic depends on it. It stays, and

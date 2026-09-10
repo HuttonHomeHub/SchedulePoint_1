@@ -399,7 +399,14 @@ card, and therefore the one a planner actually gets.
 | zoom             | mean fps under sustained pan | dropped frames | rAF JS p95 | §9 gate (≥ 30 fps @ 2,000) |
 | ---------------- | ---------------------------- | -------------- | ---------- | -------------------------- |
 | Week (53 px/day) | ~60                          | 0 / 600        | 3.9 ms     | **PASS**                   |
-| Fit (whole plan) | ~53                          | 54 / 527 (10%) | 8.9 ms     | **PASS**                   |
+| Fit (whole plan) | ~53                          | 54 / 527 (10%) | 8.9 ms     | **PASS** (see §9c)         |
+
+> **Do not read the Fit row on its own.** A second set (2026-09-08, §9c below) measures the same
+> framing at **23.3 fps against the same 30 fps floor**. This table is not withdrawn — it stands for
+> the set, the scene and the canvas it names — but its Fit verdict is **no longer unconditional**,
+> and `docs/TECH_DEBT.md` #75 points readers straight at this section. The marker is here rather
+> than only in §9c because a correction a reader has to scroll to find is a correction that does not
+> reach the reader who stopped at the table.
 
 **Canvas 2D is confirmed on real hardware. No WebGL escalation is warranted**, and the §9
 escalation criteria remain the documented fallback, unexercised.
@@ -444,6 +451,53 @@ budget ought to be re-expressed as frame pacing — rested on that misreading. I
 pacing. Recorded rather than tidied away, because it is exactly the failure ADR-0058 was written
 about, landing on the row created to enforce it. Citations elsewhere are left as they are (an ADR is
 never rewritten); this section is where they resolve.
+
+### 9c. Amendment (2026-09-09) — a second reading set, and §9b's Fit verdict no longer holds unconditionally
+
+§9b closed with "Canvas 2D is confirmed on real hardware." A second set was taken on 2026-09-08,
+through the ADR-0128 staff panel rather than a pasted DevTools script, and **it does not agree at
+Fit**. Recorded here because `docs/TECH_DEBT.md` #75 points readers at this section, so a reader
+following that pointer was landing on a verdict later evidence had unsettled.
+
+**Method and machine.** Same adapter as far as the report can tell — `ANGLE (Intel, Intel(R) Arc(TM)
+Pro Graphics (0x00007D55) Direct3D11)`, 22 threads — Edge 152, 60 Hz, DPR 1, **1912×1068 viewport**.
+Scene is `scale-scene` (2,160 bars / 3,200 links / 50 lanes), full run, 180 frames × 3.
+
+| framing | plan  | bars drawn | mean fps         | dropped  | interval p95 | §9 floor | against it |
+| ------- | ----- | ---------- | ---------------- | -------- | ------------ | -------- | ---------- |
+| Week    | 500   | 243        | 59.8 (59.4–60.0) | 0.19 pp  | 16.80 ms     | 45 fps   | **PASS**   |
+| Week    | 2,000 | 267        | 60.0 (60.0–60.0) | 0.00 pp  | 16.80 ms     | 30 fps   | **PASS**   |
+| Fit     | 500   | 540        | 57.2 (54.0–59.7) | 4.63 pp  | 33.40 ms     | 45 fps   | clears it  |
+| Fit     | 2,000 | 1,792      | 23.3 (22.6–24.2) | 97.22 pp | 66.70 ms     | 30 fps   | **short**  |
+
+The two Fit rows are **ungraded by that panel's own criterion**, so "clears it" and "short" are
+arithmetic against §9's floor rather than verdicts the instrument issued.
+
+**§9b's PASS is not retracted.** It stands for the set, the scene and the canvas it names. What is
+withdrawn is the unconditional reading of it: on the numbers now in hand §9's gate is **met at Week
+at both scales, met at Fit at 500, and missed at Fit at 2,000**.
+
+**This is NOT a regression, and must not be recorded as one.** Three differences are live between
+the two runs and none is eliminated: canvas area (roughly 2.3× the pixels), scene (an imported XER
+then, a synthetic scale scene now), and **bars drawn — which the 2026-08-03 set does not record at
+all**, so the one quantity that explains all four rows above is unknown for the run being compared
+against. A same-day discriminating run at 1016×636 puts Fit/2,000 at **39.5 fps, 47.78 pp, 1,218
+bars**, recovering about 73 % of the gap: mostly canvas area, not entirely.
+
+**What the second set settles.** The **500-activity limb**, which §9 has demanded since 2026 and
+nothing had ever measured, passes at both framings — 59.8 fps at Week and 57.2 even at whole-plan,
+where the cull has nothing left to remove. And cost tracks **bars drawn, not plan size**: Week/500
+draws 243 bars at 59.8 fps while Week/2000 draws 267 at 60.0 — four times the plan, two tenths of a
+frame per second. So the reserved escalation is still reserved, and the question it would answer is
+now the right one: drawing cost at low px/day, not anything about plan size.
+
+**A discrepancy this section cannot settle, recorded rather than resolved.** §9b above states the
+2026-08-03 canvas as **1036×646 CSS px**; `docs/TECH_DEBT.md` #75 and #261 both state **~1036×600**
+for the same session. One is wrong and the measurement cannot now be re-derived. It is not
+cosmetic: that area is an input to #75's two-term model of the unattributed ~8 ms (0.669 Mpx against
+0.622 Mpx, a 7.6 % difference in one of only three points in a fit that already has zero degrees of
+freedom), and #261 exists precisely because canvas size decides the verdict. Any arithmetic over the
+2026-08-03 area carries that uncertainty until somebody re-takes the reading.
 
 ## Alternatives considered
 

@@ -79,7 +79,7 @@ export function ResetPasswordScreen(): React.ReactElement {
               screen's cannot. The action stays OUTSIDE the alert — an alert reports, a button
               acts, and burying the only way forward inside a coloured block makes it read as part
               of the message rather than the next step (ADR-0077 §9). */}
-          <Alert tone="success" tabIndex={-1} ref={outcomeRef}>
+          <Alert purpose="event" tone="success" tabIndex={-1} ref={outcomeRef}>
             Your password has been changed, and every other session has been signed out.
           </Alert>
           <Link to="/sign-in" className={buttonVariants()}>

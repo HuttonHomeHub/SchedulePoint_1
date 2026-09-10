@@ -27,13 +27,27 @@ const ALLOWED = new Set([
   // The primitives themselves — the definition, not a consumer.
   'components/ui/card.tsx',
   // Portalled or top-layer: outside every scope by construction (diagnosis.md §4.3).
-  'components/ui/combobox.tsx',
   'components/ui/dialog.tsx',
   'components/ui/menu.tsx',
   'components/ui/toolbar/use-popover-panel.tsx',
   // The tooltip portals through the SAME `portalTarget()` as the two above (fix-slice M-C's one
   // overlay leaf), so it is outside every scope for exactly their reason.
   'components/ui/tooltip.tsx',
+  // **These three were in the group above and do not belong there** (`docs/TECH_DEBT.md` #279,
+  // 2026-09-10). None of them calls `createPortal`, uses `portalTarget()`, or reaches a portal
+  // through `usePopoverPanel` or `useTooltip` — checked, all three, by grep. They render in place.
+  //
+  // `CreateActivityPopover` is the one that proves the point: it renders at `TsldPanel.tsx:2946`,
+  // **inside** the `<Surface tone="canvas">` opened at `:2864`, painting `bg-card` (`:73`) with
+  // `text-muted-foreground` (`:109`). That is a reset fill inside a scope — the exact thing this
+  // gate exists to enumerate — and it is correct today only because the canvas scope happens to
+  // measure 6.00:1 for that pair. Unasserted, because `--card` is in no matrix pair at all.
+  //
+  // They stay allowed because none of them is a live contrast failure, and a gate turned red over
+  // a passing combination gets deleted rather than fixed (ADR-0058). What changes is the REASON:
+  // "outside every scope by construction" is a structural claim that was not true of them, and a
+  // wrong reason in an allow-list is how the next entry gets added for the same wrong reason.
+  'components/ui/combobox.tsx',
   'features/tsld/components/TsldLegendPanel.tsx',
   'features/tsld/components/CreateActivityPopover.tsx',
   // Rendered inside a dialog, which is top-layer.

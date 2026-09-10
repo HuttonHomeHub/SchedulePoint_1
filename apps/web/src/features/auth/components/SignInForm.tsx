@@ -41,7 +41,7 @@ export function SignInForm({ onSuccess }: { onSuccess: () => void }): React.Reac
         {/* `info`, not `error` (ADR-0077 §9). The credentials were right; what is missing is a step
             the reader can complete, and the two buttons below are how. An error tone would say the
             attempt was wrong, which is the one thing this state establishes it was not. */}
-        <Alert tone="info" tabIndex={-1} ref={unverifiedRef}>
+        <Alert purpose="event" tone="info" tabIndex={-1} ref={unverifiedRef}>
           {/* A heading, not a paragraph: this is the replacement content's title, and a reader
               navigating by headings would otherwise not find it. */}
           <h2 className="text-sm font-medium">Confirm your email address first</h2>

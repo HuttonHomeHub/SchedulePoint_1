@@ -484,7 +484,9 @@ export function FormProblemCount({
   if (count < 2) return null;
 
   return (
-    <Alert tone="error" className={className}>
+    // `event`, and fixed here for the same reason as `ServerError`: a problem count exists only in
+    // response to a submit the reader just pressed. It is never true of a form nobody has touched.
+    <Alert purpose="event" tone="error" className={className}>
       {count} problems — check the highlighted fields below.
     </Alert>
   );

@@ -594,6 +594,17 @@ discriminators. Each becomes a spec/plan before build:
   closed the day before. The epic also found two defects that are **not** touch defects (#213) and
   an approved plan clause whose own risk table claimed it shipped (#214 — both halves built and closed 2026-09-01, the Gantt half having gone unbuilt a second time).
 
+- **The staff console stops interrupting** — **shipped** (ADR-0132, 2026-09-09, the tech-debt
+  drive). `Alert` gains a required `purpose: 'event' | 'condition'` with no default — ADR-0117's
+  shape for ADR-0117's reason — so a message says whether it reports something that just happened or
+  states a condition that was already true. `tone` keeps deciding urgency and `role` is still not a
+  prop. Six caveats on `/staff` stop being live regions, **two of them assertive** and produced by a
+  query settling; two of those six were already announced correctly by the panel's own polite region,
+  so removing the duplicate costs nothing. The discriminator is written into the primitive — _would
+  this sentence read the same to somebody who arrived five minutes later and did nothing?_ — because
+  no gate can read intent, and the register's note that raised it was wrong about the count (25 sites,
+  not 33) and about the number of offenders (six, not four).
+
 - **Icon-only commands name themselves everywhere** — **shipped** (ADR-0117, 2026-08-28, the
   fix-slice epic). The product's first Tooltip primitive: a hand-rolled APG hook meeting
   WCAG 1.4.13 in full, opening on hover, on focus, and on a coarse-pointer long-press that shows

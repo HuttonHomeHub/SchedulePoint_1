@@ -80,8 +80,10 @@ describe('TSLD toolbar quick-wins (flag on)', () => {
     // This assertion used to expect the prefixed form, and it changed for a reason worth stating
     // rather than editing over. ADR-0091 D3a gave this item `showLabel: { atLeast: 'comfortable' }`,
     // and jsdom has no layout, so `Toolbar` never re-measures and keeps its initial `comfortable`
-    // band — under which this item is labelled. Under the previous `'auto'` policy the same absence
-    // of layout made `autoLabelsFit` false and rendered it icon-only. So the change here reflects a
+    // band — under which this item is labelled. Under the `'auto'` policy of the day the same
+    // absence of layout made `autoLabelsFit` false and rendered it icon-only. (That function and
+    // the ladder it belonged to were deleted by ADR-0109 D1; `'auto'` now means always label, so
+    // this paragraph is history.) So the change here reflects a
     // different DEFAULT in a layout-less environment, not a change to what a planner sees: at a real
     // 1920 the control is labelled either way, and `item-widths` measures it at 120 px labelled and
     // 32 px icon-only at 1440.

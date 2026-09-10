@@ -352,8 +352,11 @@ you; without it, invitations to external clients will land in spam.
 
 - Use SSL/TLS mode **Full (strict)** so every leg is HTTPS: the browser→Cloudflare
   leg (which makes the `Secure` auth cookie valid) **and** the Cloudflare→origin
-  leg (so `X-Forwarded-Proto: https` reaches the API and links resolve as HTTPS).
-  Give Nginx Proxy Manager a valid certificate (e.g. Let's Encrypt) for the origin.
+  leg. Give Nginx Proxy Manager a valid certificate (e.g. Let's Encrypt) for the origin.
+  _(This bullet used to add "so `X-Forwarded-Proto: https` reaches the API" — which the third
+  bullet below has contradicted since 2026-08-25, five lines further down the same list. Full
+  (strict) is still right and earns its place on the cookie and the origin leg; it does **not**
+  by itself make that header say `https`, and the operator step that does is in that bullet.)_
 - Ensure the proxy forwards `Host`, `X-Forwarded-For`, and `X-Forwarded-Proto`
   (Nginx Proxy Manager's "Websockets support" + default forwarding is fine); the
   web container already sets these when proxying to the API.

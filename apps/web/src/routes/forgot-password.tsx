@@ -70,7 +70,7 @@ export function ForgotPasswordScreen(): React.ReactElement {
             sent, and this endpoint deliberately cannot know — it answers identically for a known
             and an unknown address, and on a deployment with no working relay nothing goes out at
             all. The tone has to be as non-committal as the sentence. */}
-        <Alert tone="info" tabIndex={-1} ref={outcomeRef}>
+        <Alert purpose="event" tone="info" tabIndex={-1} ref={outcomeRef}>
           If that address has an account, a reset link is on its way. The link works once and
           expires in an hour.
         </Alert>

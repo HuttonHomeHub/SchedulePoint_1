@@ -114,12 +114,17 @@ export function useUnsavedWorkRegistry(): Registry | null {
 /**
  * Re-render when the registry changes. Only for consumers that must paint from it.
  *
- * **Dormant: nothing in the application calls this** — only its own suite and
- * `ActivityEditor.registers-unsaved-work.test.tsx` do (`docs/TECH_DEBT.md` #184, re-verified
- * 2026-08-31 by `rg useUnsavedWorkReports apps/web/src`). Both current readers of the registry are
- * *called* rather than rendered — the navigation blocker asks `hasUnsavedWork` at the moment of
+ * **It has one production caller: `navigation-guard.tsx:91`.** This docblock said "Dormant:
+ * nothing in the application calls this" until 2026-09-09 — false since 2026-09-01, when
+ * `docs/TECH_DEBT.md` #184's silent-auto-proceed fix subscribed the guard so it could announce
+ * what is at risk before proceeding. That commit recorded the change **in the caller**
+ * (`navigation-guard.tsx:82`, "until now it had no production caller") and did not sweep the
+ * definition, so the export said it had none in the same tree as the line that gave it one.
+ *
+ * The rest of the note stands and is why the distinction is worth keeping: the registry's other
+ * readers are *called* rather than rendered — the blocker asks `hasUnsavedWork` at the moment of
  * navigating, and the editor's confirmation reads its own report — so neither needs to repaint when
- * the registry changes.
+ * the registry changes, and this hook remains the only subscribing one.
  *
  * It is kept rather than deleted because a surface that PAINTS from the registry (a "you have
  * unsaved work" indicator in the chrome) needs exactly this, and the `useSyncExternalStore` +

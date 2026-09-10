@@ -57,7 +57,15 @@ export type SurfaceTone = 'chrome' | 'panel' | 'brand' | 'auth' | 'canvas' | 'ca
  * to clear five conditions to add one, because they add no vocabulary. They RESTORE the page
  * family for their subtree and then change one thing: their own fill.
  *
- * That is what keeps ADR-0055's promise that "a `Card` means the same thing everywhere" true
+ * **Except that none of that is wired, and this docblock described an intention as a fact**
+ * (measured 2026-09-10, `docs/TECH_DEBT.md` #279). There is no `[data-surface='card']` or
+ * `[data-surface='popover']` rule in `globals.css`, so a reset restores nothing; `RESET_TONES` has
+ * **zero production callers**, so nobody has met the consequence; and what a reset actually renders
+ * is `bg-background text-foreground`, which inside `chrome` resolves to the **chrome** fill and ink
+ * — the opposite of "restore the page family and change one thing". The sentence below states what
+ * the mechanism is FOR and is kept for that reason; it does not describe today's behaviour.
+ *
+ * That is what would keep ADR-0055's promise that "a `Card` means the same thing everywhere" true
  * inside a rebinding world. Without it, a `Card` landing inside `chrome` composites
  * `text-muted-foreground` — which IS rebound, to a grey validated against navy — on `--card`,
  * which is not. Two halves of one pair, governed by different scopes: the exact defect the closure

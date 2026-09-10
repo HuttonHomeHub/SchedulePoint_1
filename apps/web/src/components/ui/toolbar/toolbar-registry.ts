@@ -144,11 +144,15 @@ export type ToolbarLabelPolicy =
   | 'auto'
   | 'never'
   /**
-   * Labelled at this band and wider, icon-only below it (ADR-0091 D3a). Distinct from `'auto'`,
-   * which is a *projected-width* decision taken **all-or-nothing for the whole row**
-   * (`autoLabelsFit`) — so an `'auto'` item follows the collective fate of its neighbours and will
-   * label at a narrow band that happens to have slack. A band rule is the opposite: it is per-item
-   * and it is about the shape of the window, which is what D3a's 1440 finding was measured against.
+   * Labelled at this band and wider, icon-only below it (ADR-0091 D3a).
+   *
+   * **Still distinct from `'auto'`, but no longer for the reason this paragraph gave.** It said
+   * `'auto'` was a projected-width decision taken all-or-nothing for the whole row via
+   * `autoLabelsFit`. ADR-0109 D1 deleted the width ladder and that function with it; `'auto'` now
+   * means **always label** (`Toolbar.tsx`), because a row that wraps can always afford one. So the
+   * distinction survives and inverts: `'auto'` never withholds a label at any width, and a band
+   * rule is the only way left to go icon-only on a narrow window — which is what D3a's 1440
+   * finding was measured against.
    */
   | { atLeast: ToolbarLayoutMode };
 
@@ -381,9 +385,12 @@ export interface ToolbarItem<Ctx> {
    * consumers remain on the TSLD surface, and both are deliberate:
    *
    * - **`next-conflict-status`** — the "Conflict 2 of 7 · reason" chip. The plan folded this into
-   *   the button's label too; measurement refused it. A label paints only when `autoLabelsFit` is
-   *   true, and at 1920 it is false, so the fold would hide the count at the width the epic exists
-   *   to fix. The chip is `isVisible`-gated on a conflict being cycled, so it costs no width at rest.
+   *   the button's label too and measurement refused it, but **that measurement's premise has
+   *   lapsed**: it turned on a label painting only when `autoLabelsFit` was true, and ADR-0109 D1
+   *   deleted the ladder, so labels now always paint. What survives of ADR-0094's objection is the
+   *   half that was never about layout — folding a live count into the label reduces the control's
+   *   **accessible name to a status**, so it is read afresh on every cycle. The chip is
+   *   `isVisible`-gated on a conflict being cycled, so it costs no width at rest.
    * - **the flag-off search stub** — an inert `<input>` awaiting wiring, which is not a read-out at
    *   all but is correctly excluded from the roving order for the same reason.
    *

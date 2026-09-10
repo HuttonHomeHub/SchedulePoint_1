@@ -68,6 +68,16 @@ export interface NoticeStripProps
  * because the surface around it already announces every transition through the app's single polite
  * region and a second live region would say the same sentence twice. A tone→role mapping would get
  * that third case wrong by construction.
+ *
+ * **`Alert` answers the same question the opposite way, and the disagreement is deliberate**
+ * (ADR-0132). It derives the role from `tone` and takes a `purpose` that decides only WHETHER it is
+ * a live region — two outcomes. This primitive's callers span **three** (`alert`, `status`, and
+ * none), which two values cannot express, and it has no tone vocabulary rich enough to derive from.
+ * The reverse also holds: `Alert` carries several sentences with markup inside a bordered, iconned
+ * block, and this is one truncating line — so neither is the other's home. Recorded here as well as
+ * there because the two docblocks contradicted each other for months and had never been read side
+ * by side, which is exactly the "two call sites answer this differently" failure `Alert`'s own
+ * docblock warns about, happening BETWEEN primitives where nothing was watching.
  */
 export function NoticeStrip({
   message,
