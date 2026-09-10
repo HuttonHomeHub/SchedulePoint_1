@@ -5679,3 +5679,44 @@ Option 2 is the one worth costing: this register's own rule is that when you fin
 
 **The immediate damage was nil** — the four citations were registered and the gate is green again in
 the following commit — but "nil this time" is the reason a silent failure survives.
+
+### 281. A long-lived branch with no open pull request gets no CI at all, and `prepush` reads as though it were CI
+
+**Status:** open · **Raised:** 2026-09-10 (observed, on this branch) · **Size:** S · **Owner:** repo
+
+**Measured tonight: fourteen commits reached `origin` and CI ran on none of them.**
+`.github/workflows/ci.yml:3-7` triggers on `push` to **`main`** and on `pull_request` targeting
+**`main`** — nothing else. This repository's one long-lived agent branch is neither, so between the
+merge of a pull request and the opening of the next one it accumulates pushes that no workflow ever
+sees. The most recent run on the branch was `6c79e737` at 21:34; the head is fourteen commits past
+it. That is not a misconfiguration — a branch nobody is reviewing is a reasonable thing not to spend
+minutes on — and it is invisible, which is the part worth a row.
+
+**What makes it more than a note is that `docs/TESTING.md`'s "Before you push" reads as sufficient.**
+`pnpm prepush` runs format, lint, typecheck, the unit suites and sixteen `check:*` gates. CI's
+`quality` job runs those **plus a build**, and its `e2e` job then runs a real Postgres, the API
+Supertest suite, the pairwise differential against the seed catalogue, a schema-drift check and
+**forty-four** Playwright journey steps; a third job builds and smoke-boots both container images.
+So a green `prepush` is a strict subset, and nothing anywhere says by how much. Tonight's own
+evidence: `prepush` was green while three journeys touching the changed surface had not been run at
+all, and they had to be run by hand (`e2e-public`, `e2e-staff`, `e2e-account` — all three passed,
+which is luck confirming a judgement rather than a process).
+
+**The two failure modes are different and only one is loud.** A branch that breaks something CI would
+catch reveals it at the next pull request, in a batch, with fourteen commits to bisect — annoying but
+self-correcting. The quiet one is a session that runs `prepush`, sees "All green", and reports the
+work as verified: the sentence is true and means less than the reader takes it to mean.
+
+**Candidates, none built** (`ci.yml` and `prepush.sh` are both shared gates, so ADR-0105 fires and
+this wants a spec rather than an edit):
+
+1. **Say what `prepush` is not.** One line in its own final output naming what CI adds — the cheapest
+   by far, and it fixes the sentence rather than the coverage.
+2. **Trigger CI on push to the agent branch.** Honest coverage, and it spends minutes on every
+   intermediate commit of a branch that is force-pushed and reset regularly (§8).
+3. **Open the pull request early**, which is what `CLAUDE.md` §8 already says — _"Open a PR early;
+   keep it small"_ — and which this branch's shape works against, since it is reset from `main`
+   after each squash-merge and carries work for a whole session before there is anything to review.
+
+Option 1 is the one worth costing. Option 3 is already the written rule and has the shape #194
+records: an instruction that is correct, is not followed, and has no mechanism behind it.
