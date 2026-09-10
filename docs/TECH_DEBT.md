@@ -2071,6 +2071,16 @@ deleted rather than fixed.
 **What it actually needs** is a way to say "assert this pair in the scopes where it can occur" — a
 per-pair scope filter in `TEXT_PAIRS`. That is a change to a shared gate (ADR-0105).
 
+> **Specced 2026-09-10, and the filter is REFUSED — see #279.** Two things this item could not see
+> from one pair: the population is **34**, not one (17 of the matrix's 32 pairs anchor on
+> `--background`, and inside a reset `--background` _is_ the reset fill, times two resets); and the
+> mechanism ADR-0097 D6.3 decided on to close exactly this — the `card`/`popover` **reset** —
+> **has no CSS rule, no production caller, and would paint the chrome fill if it had one**. So the
+> filter would be a way of writing the hole down. This item's own analysis is otherwise confirmed in
+> every particular, including the part that matters most: the naive addition really does go red at
+> 2.00:1 in `chrome` and `brand`, and it really is **latent** — re-measured with the gate itself,
+> and a spec claim that it was live was checked and withdrawn.
+
 > **The "answer one question for three rows" argument has lapsed, and following it now misleads**
 > (2026-09-09). This paragraph ended _"the same shape as **#231** and **#227**: three deferred edits
 > to the same family of checks, all wanting one question answered once"_. Both of those **closed on
@@ -5241,3 +5251,88 @@ panels that must be opened first, so they are outside its reach — not exempted
 `control-height.structural.test.ts` exemption for `button.tsx::size-7` is written in terms of dense
 rows and therefore does not describe this consumer either. Neither instrument is wrong; both are
 scoped to a population this consumer is not in.
+
+### 279. The reset that closes the split-pair defect has no CSS rule, no caller, and would paint the wrong thing
+
+**Status:** open · **Raised:** 2026-09-10 (specced for #118 item 4, then measured) · **Size:** M · **Owner:** a surface pass
+
+**#118 item 4 asked for a per-pair scope filter. Specced properly, the answer is that the mechanism
+this repository already decided on was never built** — and the filter is a way of writing down a hole
+rather than closing it.
+
+**Verified by running, because the spec that found it had no shell and said so.** Every figure below
+was re-derived here, and one of its claims did not survive that:
+
+- **`<Surface tone="card">` renders `data-surface="card"` and there is no `[data-surface='card']`
+  rule in `globals.css`** — nor `popover`. The attribute matches nothing.
+- **`RESET_TONES` has zero production callers.** Its only occurrence is its own declaration
+  (`surface.tsx:67`).
+- **What it does render is `bg-background text-foreground`** (`surface.tsx`, the `className`
+  default). Inside a `chrome` scope both names are rebound, so a component asking for a card would
+  get the **chrome** fill and ink — the opposite of the docblock's promise that a reset "RESTORES
+  the page family for their subtree and then change one thing: their own fill". A mechanism with no
+  callers, which would be wrong if it had one.
+- **Two documents instruct authors to use it** — `surface.tsx` and `reset-fills.structural.test.ts`
+  — so the instruction is live and unfollowable. ADR-0097 **D6.3** says the reset _closes_ the split
+  pair; it was decided as a runtime restoration and shipped as an exemption list in a test file.
+
+**The measured numbers, taken with the real gate** by adding the pairs and reading the failures:
+
+| pair                            | ratio  | fails in          |
+| ------------------------------- | ------ | ----------------- |
+| `--card` / `--foreground`       | 1.04:1 | `chrome`, `brand` |
+| `--card` / `--muted-foreground` | 2.00:1 | `chrome`, `brand` |
+| `--popover` / `--foreground`    | 1.04:1 | `chrome`, `brand` |
+
+**The population is 34, not one.** `TEXT_PAIRS` + `NON_TEXT_PAIRS` hold **32** pairs and **17** of
+them anchor on `--background` (6 text, 11 non-text) — counted, not estimated. Inside a reset,
+`--background` _is_ the reset fill, so each of the two resets contributes 17 ungated split pairs.
+That is why #118 item 4 reads as one missing row and is not.
+
+**One claim in the spec is OVERSTATED and is corrected here rather than inherited.** It calls the
+1.04:1 pair "not hypothetical" on the strength of `tabs.tsx:169` writing `bg-card text-foreground`.
+That line is real; the containment is not. **There is exactly one `<Tabs` consumer in the product** —
+`ActivityEditorDialog.tsx:650` — and it is a modal `<Dialog>`, which sits in the browser's top layer
+and is inside no surface scope at all. **No `bg-card` occurs anywhere in a `chrome` or `brand`
+subtree.** So every one of the 34 is **latent**, which is what #118 item 4 concluded and what
+`surface.tsx:62-65` already says in its own words ("latent rather than live only because no `<Card>`
+currently renders inside a `<Surface>`"). The correction strengthens that row rather than replacing
+it — and it is ADR-0076 Class 3 inside a document that flagged its own inability to run anything.
+
+**What IS live, and passes by luck:** `CreateActivityPopover` paints `bg-card` (`:73`) with
+`text-muted-foreground` (`:109`) and renders at `TsldPanel.tsx:2946`, **inside** the
+`<Surface tone="canvas">` opened at `:2864`. It measures 6.00:1 and is asserted nowhere.
+
+**The allow-list's stated reason was wrong for three of its entries, and is corrected.**
+`reset-fills.structural.test.ts` grouped `combobox`, `TsldLegendPanel` and `CreateActivityPopover`
+under _"Portalled or top-layer: outside every scope by construction"_. **None of the three portals by
+any mechanism** — no `createPortal`, no `portalTarget()`, no `usePopoverPanel`, no `useTooltip`;
+checked by grep, all three. One of them is the live in-scope instance above. They remain allowed,
+because none is a contrast failure and a gate turned red over a passing combination gets deleted
+rather than fixed (ADR-0058); what changed is the reason, because a wrong reason in an allow-list is
+how the next entry is added for the same wrong reason.
+
+_The spec also called `tabs.tsx`'s classification wrong and that part does **not** hold: the gate's
+own comment already says it is "NOT portalled" and correct only because nothing renders it inside a
+`<Surface>` — the same conclusion reached here independently. Recorded so the correction is not
+inherited wholesale._
+
+A hand-maintained containment list is still the argument against building a filter on top of one.
+
+**Why a per-pair scope filter is refused rather than deferred.** It cannot distinguish "this pair
+cannot occur here" from "this pair fails here and we would rather not know" — both are the same edit
+and both leave a green suite. A required written reason does not discriminate either: the
+`adr-coverage.json` and `flag-retirement.json` precedents work because their populations are
+re-derived and a stale entry **fails**, not because anybody reads the prose. And there is no cheap
+sound gate for the containment claim a filter would rest on — it is DOM containment across portals,
+slots and composition, and the approximation already in the tree is wrong three times out of
+thirteen.
+
+**What to build instead**, per `docs/specs/contrast-pair-scopes/`: the two CSS blocks that rebind the
+closure names back onto the page family, `Card` and the five `bg-popover` sites rendering through
+`Surface`, and then `SCOPES` gains `card` and `popover` — at which point all 34 pairs fall out of the
+sweep that already exists, with no new field and no exclusion list. **Deliberately not started
+here**: it touches `globals.css`, `Card`, `Menu`, `Combobox` and `Tooltip`'s containers, and needs
+accessibility, component and ux review plus a pixel-identical screenshot set as its falsification
+condition. That is an epic, not a follow-up, and its M0 must re-derive these numbers by running
+before anything is edited.
