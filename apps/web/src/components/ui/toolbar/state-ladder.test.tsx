@@ -74,9 +74,12 @@ describe('both renderers hand a plain command its resolved kind', () => {
   });
 });
 
-describe('the state ladder paints four distinct states', () => {
+describe('the state ladder paints five distinct states', () => {
   describe('ToolbarButton', () => {
-    const renderAt = (props: { pressed?: boolean; activeKind?: 'armed' | 'selected' }) => {
+    const renderAt = (props: {
+      pressed?: boolean;
+      activeKind?: 'armed' | 'selected' | 'primary';
+    }) => {
       const { unmount } = render(
         <ToolbarButton
           itemId="probe"
@@ -96,15 +99,38 @@ describe('the state ladder paints four distinct states', () => {
       return cls;
     };
 
-    it('rest, selected and armed are three different treatments', () => {
+    it('rest, selected, armed and primary are four different treatments', () => {
       const rest = renderAt({});
       const selected = renderAt({ pressed: true, activeKind: 'selected' });
       const armed = renderAt({ pressed: true, activeKind: 'armed' });
+      const primary = renderAt({ pressed: true, activeKind: 'primary' });
 
       expect(
-        new Set([rest, selected, armed]).size,
-        `rest=${rest} selected=${selected} armed=${armed}`,
-      ).toBe(3);
+        new Set([rest, selected, armed, primary]).size,
+        `rest=${rest} selected=${selected} armed=${armed} primary=${primary}`,
+      ).toBe(4);
+    });
+
+    it('PRIMARY takes the amber fill and ARMED takes amber ink on the band', () => {
+      // **The pair that shipped collapsed**, which is why this is a case of its own and not a fourth
+      // clause above. `primary` is reserved to the pen and `armed` to the four modal tools, and the
+      // console epic's M5 wired the pen to `armed` — so the row's loudest control and the tool
+      // beside it painted the same picture, in the one group where they sit next to each other.
+      // Distinctness (the case above) would not have caught it: with `primary` unused, there were
+      // only ever three treatments to be distinct.
+      //
+      // Asserted as PROPERTIES so a re-value stays free: the pen is the row's one amber slab, an
+      // armed tool keeps the band's own fill and carries amber ink. The negative on `text-primary`
+      // is the half that discriminates — both class strings contain the word.
+      const primary = renderAt({ pressed: true, activeKind: 'primary' });
+      const armed = renderAt({ pressed: true, activeKind: 'armed' });
+
+      expect(primary).toContain('bg-primary');
+      expect(primary).toContain('text-primary-foreground');
+      expect(primary.split(/\s+/)).not.toContain('text-primary');
+
+      expect(armed).not.toContain('bg-primary');
+      expect(armed.split(/\s+/)).toContain('text-primary');
     });
 
     it('SELECTED takes a fill and ARMED takes ink — they are not interchangeable', () => {
@@ -192,7 +218,7 @@ describe('the state ladder paints four distinct states', () => {
     const renderAt = (props: {
       pressed: boolean;
       open: boolean;
-      activeKind?: 'armed' | 'selected';
+      activeKind?: 'armed' | 'selected' | 'primary';
     }) => {
       const { unmount } = render(
         <ToolbarSplitButton

@@ -13,7 +13,8 @@ import { cva } from 'class-variance-authority';
  * - `tone: 'control'` — the interactive default (buttons, popover/overflow triggers): medium weight,
  *   foreground text, hover wash when idle.
  * - `tone: 'info'` — a non-interactive read-out chip (Project-finish): muted, no hover.
- * - `state` — one of `rest` / `open` / `selected` / `armed`. It replaced a boolean `active` at
+ * - `state` — one of `rest` / `open` / `selected` / `armed` / `primary`. It replaced a boolean
+ *   `active` at
  *   the console epic's M3, because that boolean painted ONE 1.34:1 wash for three different facts;
  *   see the variant's own docblock for the ladder and why each state looks as it does.
  * - `disabled` — dimmed + inert cursor (the control stays focusable via `aria-disabled`, so this is
@@ -218,6 +219,27 @@ export const toolbarControlVariants = cva(
        * | `open` | its panel or menu is showing | `--secondary`, 3.15:1 | `aria-expanded`, and the panel itself |
        * | `selected` | it is the chosen one of alternatives, or its lens is on | `--secondary`, 3.15:1 | a 2 px `--background` underline, 3.15:1 on that fill |
        * | `armed` | it is a MODAL TOOL and the next canvas gesture belongs to it | none — amber ink, 7.91:1 | a 2 px `--primary` underline |
+       * | `primary` | it is the PEN, and nothing else ever | `--primary`, 7.91:1 | it leads its row; its label is a verb |
+       *
+       * **`primary` exists so the pen and an armed tool can never look alike, and it is reserved to
+       * one control by rule rather than by nobody happening to use it.** The pen is the precondition
+       * for the eleven authoring commands beside it, so it is the loudest thing on the row and the
+       * only amber slab; an armed tool is amber INK and an amber underline on the band's own navy.
+       * Read the two rows above together — they differ in fill, in ink and in whether a rule is
+       * drawn, which is three channels rather than a hue.
+       *
+       * It carries **no underline**: its label is already a verb that changes (`Start editing` →
+       * `Stop editing`) and its `aria-pressed` says the same thing again, so a third mark would be
+       * a mark for a fact two channels already carry — while the underline is exactly what `armed`
+       * and `selected` use, which is the collision this state exists to avoid.
+       *
+       * **It shipped missing, and the milestone that needed it wired the pen to `armed` instead.**
+       * The approved plan's M3-T2 names five states in as many words; M3 built four and nothing
+       * recorded the difference, so M5 reached for the nearest one and reproduced the two-identical-
+       * pictures defect the paragraph below records having already been fixed once — with both
+       * controls unfilled and identical rather than both filled and identical. Found by the
+       * component review, not by a gate: `state-ladder.structural.test.ts` pins which items are
+       * `armed` and could not see a pen that declared no `activeKind` at all.
        *
        * **Armed keeps the band's fill and takes an amber outline**, which is the product owner's
        * choice from two rendered studies rather than a default. An amber-FILLED armed tool sat
@@ -270,6 +292,7 @@ export const toolbarControlVariants = cva(
         selected:
           'bg-secondary text-secondary-foreground shadow-[inset_0_-2px_0_0_var(--background)]',
         armed: 'text-primary shadow-[inset_0_-2px_0_0_var(--primary)]',
+        primary: 'bg-primary text-primary-foreground',
       },
       disabled: { true: 'cursor-default opacity-50', false: '' },
     },

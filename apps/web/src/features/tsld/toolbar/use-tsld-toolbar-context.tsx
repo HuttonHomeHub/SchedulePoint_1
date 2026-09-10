@@ -45,6 +45,7 @@ import {
   reportFindingCount,
   type InterchangeExportFormat,
 } from '@/features/interchange';
+import type { PenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, useSetPlanSchedulingMode } from '@/features/plans';
 import { useRecalculateCommand } from '@/features/schedule/api/use-schedule';
 import type { BarDateSource } from '@/lib/bar-dates';
@@ -63,6 +64,7 @@ export type PlanDialogKind =
  */
 export function useTsldToolbarContext({
   model,
+  penLock,
   plan,
   canvasUi,
   openDialog,
@@ -81,6 +83,13 @@ export function useTsldToolbarContext({
   setPlanView = () => {},
 }: {
   model: PlanWorkspaceModel;
+  /**
+   * The resolved pen (console epic M5) — passed in rather than resolved here, because
+   * `usePenLockView` is called exactly once by the workspace and its result feeds both the deck's
+   * `Start editing` / `Stop editing` control and the foot row's badge, sentence and hand-off
+   * actions. The hook holds local state, so a second call would let those halves disagree.
+   */
+  penLock?: PenLockView;
   plan: LoadedPlan;
   /**
    * Whether the comparison dock has BOTH sides of a pair chosen (ADR-0127). Passed in rather than
@@ -566,6 +575,11 @@ export function useTsldToolbarContext({
       // Comments toggle pressed state (entry-route win 1) — the docked notes panel's open flag.
       notesOpen: model.notesOpen,
       canEditSchedule,
+      // The pen's own view (ADR-0028), so the `pen` registry item can lead the DO row it unlocks.
+      // Spread rather than assigned, so the field is ABSENT (not `undefined`) when no pen is passed
+      // — `exactOptionalPropertyTypes` requires that, and it keeps every existing caller that builds
+      // a context without one compiling unchanged.
+      ...(penLock ? { penLock } : {}),
       lateOverlayActive,
 
       // Insight lenses (VITE_CANVAS_LENSES) — read the lens view state + wire its setters; the Baseline
@@ -890,6 +904,7 @@ export function useTsldToolbarContext({
     setShowHelp,
     canRecalc,
     canEditSchedule,
+    penLock,
     // External-Guest share links (ADR-0051 F-M4) — re-identify when the share permission flips.
     model.canShare,
     editPlan,

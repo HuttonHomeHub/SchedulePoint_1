@@ -9,6 +9,7 @@ import { CanvasDock, CanvasDockProvider } from './canvas-dock';
 import { PlanChromeDialogs } from './plan-chrome-dialogs';
 import { PlanDialogs } from './plan-dialogs';
 import { PlanFactsProvider } from './plan-facts-host';
+import { PenStatusHost } from './plan-slot-host';
 import { PlanShortcutsHelp } from './PlanShortcutsHelp';
 import { ResourceStripPanel } from './resource-strip-panel';
 import { docksToClose, type RightDock } from './right-docks';
@@ -80,7 +81,7 @@ import {
   type SelectionContextInput,
 } from '@/features/plan-actions/build-selection-context';
 import { SelectionActionsBar } from '@/features/plan-actions/selection-actions';
-import { CompactPenStatus } from '@/features/plan-lock';
+import { HANDOFF_ACTIONS, PenStatusCluster, usePenLockView } from '@/features/plan-lock';
 import { PLAN_STATUS_LABELS, plansQueryOptions } from '@/features/plans';
 import {
   LIVE_REVISION,
@@ -509,8 +510,13 @@ export function ToolbarPlanWorkspace({
   const ganttViewState = useGanttViewState();
   const updateParents = useUpdateActivityParents(model.orgSlug, model.planId);
 
+  // **One call, two surfaces** (console epic M5). Its result goes to the deck's pen item through
+  // the toolbar context and to the foot row's cluster through the status portal.
+  const penLock = usePenLockView(model.pen, model.currentUserId ?? undefined);
+
   const ctx = useTsldToolbarContext({
     model,
+    penLock,
     plan,
     canvasUi,
     openDialog: setDialog,
@@ -1814,10 +1820,23 @@ export function ToolbarPlanWorkspace({
                     segmentLabels={PLAN_MODE_SEGMENT_LABELS}
                   />
                 </div>
-                <CompactPenStatus
-                  pen={model.pen}
-                  {...(model.currentUserId ? { currentUserId: model.currentUserId } : {})}
-                />
+                {/* **The pen's VERB left this row for the command deck** (console epic M5): it is
+                    the control that unlocks the eleven authoring commands, and it sat three
+                    sections away from them. Its badge, its `role="status"` sentence and its seven
+                    hand-off actions render in the plan's foot row instead — the product owner's
+                    answer to CQ-4, measured at M0-T4 as costing that row nothing at 1646.
+
+                    The cluster is portalled from here rather than rendered by the foot, because
+                    `usePenLockView` is called ONCE (below) and its result feeds both this and the
+                    deck's control. The hook holds local state, so a second call would let the two
+                    halves disagree about the same lock. */}
+                <PenStatusHost>
+                  <PenStatusCluster
+                    penLock={penLock}
+                    only={HANDOFF_ACTIONS}
+                    portalSentence={false}
+                  />
+                </PenStatusHost>
               </div>
             </ChromePortal>
 

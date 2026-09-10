@@ -37,7 +37,7 @@ export interface ToolbarButtonProps {
    * next canvas gesture; `'selected'` (the default) is a toggle or a chosen segment. Ignored unless
    * {@link pressed} is true — a control that is not pressed is at rest whatever kind it would be.
    */
-  activeKind?: 'armed' | 'selected';
+  activeKind?: 'armed' | 'selected' | 'primary';
   /**
    * The command's work is in flight → `aria-busy="true"`. Paired with (not replaced by) an animated
    * icon: the app reduces every animation to 0.01 ms under `prefers-reduced-motion`, so a spin is

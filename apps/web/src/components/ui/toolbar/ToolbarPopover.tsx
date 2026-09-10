@@ -49,7 +49,7 @@ export function ToolbarPopover({
    * `selected` paints `open`'s fill plus an underline, so an engaged trigger keeps its mark while
    * the panel is showing instead of losing it exactly when the planner opened the panel to check.
    */
-  activeKind?: 'armed' | 'selected';
+  activeKind?: 'armed' | 'selected' | 'primary';
   /** Native tooltip on the trigger. Absent ⇒ no title. */
   title?: string;
   /**

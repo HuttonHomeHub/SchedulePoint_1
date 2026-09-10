@@ -30,7 +30,7 @@ export interface ToolbarSplitButtonProps {
    * an inconsistency: every split button in this product arms a modal tool (Add, Link), so the
    * common case is the armed one and a future toggle-shaped split button says so explicitly.
    */
-  activeKind?: 'armed' | 'selected';
+  activeKind?: 'armed' | 'selected' | 'primary';
   /**
    * Gates **both halves**. Correct while a split button's two halves are two faces of one command
    * (`Add ▾`, `Link ▾`), which was every consumer until ADR-0091 C4.

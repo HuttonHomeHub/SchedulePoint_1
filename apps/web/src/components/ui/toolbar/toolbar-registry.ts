@@ -217,7 +217,7 @@ export interface ToolbarItemRenderApi extends ToolbarLayoutEnv {
    * to be handed the same fact a plain command gets, or the ladder holds on eight of the deck's
    * controls and not the other fifteen — which is this repository's most-recorded defect shape.
    */
-  activeKind: 'armed' | 'selected';
+  activeKind: 'armed' | 'selected' | 'primary';
   /**
    * Spread these onto the item's single focusable control so it joins the toolbar's roving-tabindex
    * model (APG). Carries the managed `tabIndex`, the marker attributes the toolbar queries, and the
@@ -366,7 +366,7 @@ export interface ToolbarItem<Ctx> {
    * Absent ⇒ `'selected'`, because a toggle is the common case and a modal tool is the exception
    * that has to say so.
    */
-  activeKind?: 'armed' | 'selected';
+  activeKind?: 'armed' | 'selected' | 'primary';
   /**
    * Whether the command's work is currently in flight → `aria-busy` on the control. Absent ⇒ never
    * busy. Deliberately separate from {@link isEnabled}: a busy command is usually also disabled, but
@@ -434,7 +434,7 @@ export interface ResolvedToolbarItem<Ctx> {
   enabled: boolean;
   active: boolean;
   /** The resolved {@link ToolbarItem.activeKind} — `'selected'` where the item declares none. */
-  activeKind: 'armed' | 'selected';
+  activeKind: 'armed' | 'selected' | 'primary';
   disabledReason: string | undefined;
   /** The resolved {@link ToolbarItem.srDescription}, or `undefined`. */
   srDescription: string | undefined;

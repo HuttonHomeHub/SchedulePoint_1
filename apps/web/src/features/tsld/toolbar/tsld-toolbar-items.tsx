@@ -45,6 +45,7 @@ import {
   X,
   GitCompareArrows,
   HeartPulse,
+  PenLine,
 } from 'lucide-react';
 import { useId, useRef } from 'react';
 
@@ -104,6 +105,8 @@ import { ACTIVITY_TYPE_LABELS } from '@/features/activities';
 import { DEPENDENCY_TYPE_LABELS } from '@/features/dependencies';
 import { GANTT_COLUMN_LABELS } from '@/features/gantt/layout/grid-columns';
 import { HIDEABLE_COLUMNS } from '@/features/gantt/model/gantt-view-state';
+import { PlanPenControl } from '@/features/plan-lock';
+import { lockCopy } from '@/features/plan-lock/lib/lock-copy';
 import { cn } from '@/lib/utils';
 
 /**
@@ -2108,6 +2111,38 @@ function undoRedoToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
  * *Edit plan*); `today` is a viewport **Go-to-today** jump (today at the left inset, not centred),
  * distinct from the "Today line" display toggle in `View▾` (which only shows/hides the marker).
  */
+/**
+ * Which of the pen's two verbs this lock state offers.
+ *
+ * **One derivation, read by `isEnabled` and `isActive`.** The component review found the enabled
+ * rule written twice — once here and once inside `PlanPenControl` — agreeing only because both were
+ * typed by hand on the same afternoon; a later edit to either would leave the registry saying the
+ * control is shut while the component rendered it live with no reason attached. `PlanPenControl`
+ * now reads the RESOLVED item, so this is the single source and the component has no opinion.
+ *
+ * **"I hold the pen" is the view's TONE, not `actions.includes('stop')`, and that distinction is a
+ * defect the accessibility review found rather than a nicety.** `resolveLockView` drops `stop` from
+ * the action list in one branch — you are editing and a peer has asked for the pen, where the foot
+ * row offers `Hand over` and `Keep editing` instead — while `holdsPen` (`state === 'HELD_BY_ME'`)
+ * and therefore `canEditSchedule` and `authoringEnabled` all stay **true**. Reading the action list
+ * here shaded the pen, labelled it `Start editing` and described it as _"Jane is asking to edit this
+ * plan"_ — **beside eleven live authoring commands**, on the one control whose whole job is to say
+ * who may author. A keyboard reader tabbed from a dimmed "Start editing" straight into an enabled
+ * "Add activity". That array answers _which buttons does the FOOT ROW render_; it was never an
+ * answer to _do I hold the pen_, and the two coincide in twelve of the thirteen branches, which is
+ * why it read as correct.
+ *
+ * The tone answers the question directly and is true in **both** `HELD_BY_ME` sub-branches.
+ * `resolveLockView` and `HANDOFF_ACTIONS` are untouched: this is a one-surface correction.
+ */
+function penVerbs(ctx: TsldToolbarContext): { canStart: boolean; canStop: boolean } {
+  const actions = ctx.penLock?.controlsProps.actions ?? [];
+  return {
+    canStart: actions.includes('start'),
+    canStop: ctx.penLock?.view?.tone === 'editing',
+  };
+}
+
 export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
   // Toolbar quick-wins (VITE_TOOLBAR_QUICK_WINS) shared item shapes — the id/group/row/tier/order/
   // label/icon each remaining id carries in BOTH its real (flag-on) item and its
@@ -2682,6 +2717,53 @@ export function buildTsldToolbarItems(): ToolbarItem<TsldToolbarContext>[] {
     // actions (baselines, calendar, export…) stay live on the same row because they don't need the pen.
     // Add activity — a plain toggle button flag-off (byte-for-byte unchanged); flag-on the canvas-first
     // Add split-button (ADR-0032 M4), a menu-button that also picks the draw kind (task / milestone).
+    /**
+     * **The pen, at the head of the row it unlocks** (console epic M5-T2).
+     *
+     * `order: -1` puts it first in `tools`, ahead of Add — the eleven authoring commands beside it
+     * are exactly what it shades. It was three sections away on the plan's identity line until now,
+     * which `UX_STANDARDS.md`'s own rule ("a control belongs beside the condition it answers")
+     * argues against: the condition this one answers is "may I author?".
+     *
+     * **`penGated` is absent, and a test says so.** This is the control that GRANTS the pen; gating
+     * it on holding one would shade it in precisely the state it exists for.
+     *
+     * A `render` item rather than an `onActivate` one because its accessible name is the verb and
+     * changes with the lock — and `ToolbarItem.label` is a plain string that ADR-0094 records
+     * refusing to make context-bearing. The registry label is the static handle; the rendered
+     * control carries `Start editing` / `Stop editing`.
+     */
+    {
+      id: 'pen',
+      group: 'tools',
+      order: -1,
+      tier: 1,
+      showLabel: 'always',
+      label: 'Editing control',
+      icon: <PenLine className="size-4" />,
+      isVisible: (ctx) => ctx.penLock?.penManaged === true,
+      // Shaded, never absent, in the eleven branches offering neither verb: an item that disappears
+      // takes a roving stop with it and shifts every command on the DO row sideways.
+      isEnabled: (ctx) => penVerbs(ctx).canStart || penVerbs(ctx).canStop,
+      disabledReason: (ctx) => ctx.penLock?.view?.message ?? lockCopy.loading,
+      // **`primary`, never `armed`** — the state the approved plan (M3-T2) named and M3 shipped
+      // without, so M5's first version reached for `armed` and made the pen and an armed tool one
+      // picture. That is the collision `toolbar-styles.ts` records having already fixed once, in
+      // the opposite direction. See that CVA's state-ladder docblock.
+      isActive: (ctx) => penVerbs(ctx).canStop,
+      activeKind: 'primary',
+      render: (ctx, api) =>
+        ctx.penLock ? (
+          <PlanPenControl
+            isPending={ctx.penLock.controlsProps.isPending}
+            onStart={ctx.penLock.controlsProps.onStart}
+            onStop={ctx.penLock.controlsProps.onStop}
+            api={api}
+          />
+        ) : (
+          <></>
+        ),
+    },
     {
       id: 'add-activity',
       group: 'tools',

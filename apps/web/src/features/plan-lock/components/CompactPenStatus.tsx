@@ -1,9 +1,9 @@
-import { useId } from 'react';
+import { Fragment, useId } from 'react';
 
 import type { PlanPen } from '../api/use-plan-edit-lock';
 import { lockCopy } from '../lib/lock-copy';
-import { type LockTone } from '../lib/lock-view';
-import { usePenLockView } from '../lib/use-pen-lock-view';
+import { type LockAction, type LockTone } from '../lib/lock-view';
+import { type PenLockView, usePenLockView } from '../lib/use-pen-lock-view';
 
 import { EditLockControls } from './EditLockControls';
 
@@ -18,6 +18,21 @@ export interface CompactPenStatusProps {
   /** Fixed clock for the asides (tests). Live-ticks when omitted. */
   now?: number;
 }
+
+/**
+ * Every lock action except the pen's own verb — what the foot row renders since the console epic's
+ * M5 moved `start`/`stop` to the command deck. Named rather than inlined so the two halves are one
+ * partition of `LockAction` and a new action cannot land in neither.
+ */
+export const HANDOFF_ACTIONS = [
+  'request',
+  'waiting',
+  'takeover',
+  'override',
+  'handover',
+  'keep',
+  'dismiss',
+] as const satisfies readonly LockAction[];
 
 /** Tone → a subtle chip tint. Colour is never the sole signal (the badge text carries state). */
 const TONE_TINT: Record<LockTone, string> = {
@@ -88,13 +103,49 @@ const TONE_TINT: Record<LockTone, string> = {
  * the controls**. `CompactPenStatus.test.tsx` therefore passes unedited, which is the evidence that
  * the split changed no behaviour rather than the belief that it did not.
  */
+/**
+ * **The self-resolving form — unchanged public API** (console epic M5-T1).
+ *
+ * Every pre-M5 caller and every existing test hands this a `pen` and gets a component that resolves
+ * its own view, which is why `CompactPenStatus.test.tsx` passes through the split with its
+ * assertions untouched — the extraction's oracle (the ADR-0078 barrel-preserving argument).
+ *
+ * The plan workspace no longer uses it: it calls {@link usePenLockView} **once** and hands the
+ * result to {@link PenStatusCluster} here and to the deck's `PlanPenControl`, because the hook holds
+ * local state and a second call would let the two halves disagree about the same lock.
+ */
 export function CompactPenStatus({
   pen,
   currentUserId,
   now,
 }: CompactPenStatusProps): React.ReactElement | null {
-  const { penManaged, view, containerRef, controlsProps } = usePenLockView(pen, currentUserId, now);
+  const penLock = usePenLockView(pen, currentUserId, now);
+  return <PenStatusCluster penLock={penLock} />;
+}
+
+/**
+ * The pen's **facts and hand-off**, rendered from a view somebody else resolved: the badge, the
+ * `role="status"` sentence and — since M5 — the seven actions that are not `start`/`stop`, which
+ * moved to the command deck as the control that unlocks the row beside it.
+ */
+export function PenStatusCluster({
+  penLock,
+  only,
+  portalSentence,
+}: {
+  penLock: PenLockView;
+  /** Which lock actions to render. Absent ⇒ all of them. */
+  only?: readonly LockAction[];
+  /**
+   * Portal the sentence into the plan's status slot (the default, and what every pre-M5 caller
+   * means). Set `false` when the **whole cluster** is already being portalled there — nesting the
+   * same portal inside itself would target one outlet twice.
+   */
+  portalSentence?: boolean;
+}): React.ReactElement | null {
+  const { penManaged, view, containerRef, controlsProps } = penLock;
   const sentenceId = useId();
+  const Slot = portalSentence === false ? Fragment : PenStatusHost;
 
   if (!penManaged) return null;
 
@@ -103,11 +154,11 @@ export function CompactPenStatus({
   if (!view) {
     return (
       <div ref={containerRef} tabIndex={-1} className={base}>
-        <PenStatusHost>
+        <Slot>
           <div role="status" aria-busy="true" className={base}>
             <span className="text-muted-foreground">{lockCopy.loading}</span>
           </div>
-        </PenStatusHost>
+        </Slot>
       </div>
     );
   }
@@ -139,7 +190,7 @@ export function CompactPenStatus({
             reader can do next, and only the sentence separates them. */}
         {view.badgeName ? `${view.badge} · ${view.badgeName}` : view.badge}
       </Badge>
-      <PenStatusHost>
+      <Slot>
         <div
           id={sentenceId}
           role="status"
@@ -189,8 +240,17 @@ export function CompactPenStatus({
             ) : null}
           </span>
         </div>
-      </PenStatusHost>
-      <EditLockControls {...controlsProps} />
+      </Slot>
+      <EditLockControls
+        {...controlsProps}
+        // **Absent ⇒ every action**, which is what keeps `CompactPenStatus` byte-identical for its
+        // own suite and every pre-M5 caller. The plan workspace passes `HANDOFF_ACTIONS`, because
+        // there the verb renders in the command deck instead (CQ-4). Deciding the subset at the
+        // call site rather than here is what preserves the extraction's oracle: three of that
+        // suite's cases are about `start`/`stop`, and a default that dropped them would have made
+        // this a behaviour change wearing a refactor's clothes.
+        {...(only ? { only } : {})}
+      />
     </div>
   );
 }
