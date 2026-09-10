@@ -4506,6 +4506,22 @@ A lighter-weight running log of smaller decisions is in
   scene, and bars drawn (unrecorded in 2026-08-03's set) all differ, and one
   re-run at ~1036×600 would discriminate. Week is unchanged across both dates.
   The unattributed ~8 ms is still unattributed and still must not be guessed.
+  **Third reading set, 2026-09-10** (#75 item 6), same machine and — verified
+  against the tree, not assumed — **the same painter and the same scene**, at a
+  1912×948 viewport. Do not quote the 23.3 fps figure above on its own: Fit/2000
+  now measures **35.2 fps, above the same 30 fps floor it missed two days
+  earlier**, on a viewport 120 px shorter. That is #261 (the gate names no canvas
+  size) shown across an **11 %** area change rather than the 2:1 one it was
+  raised on, so the honest state of §9 at Fit/2,000 is **unanswerable until the
+  size is named** — neither the pass nor the fail should be quoted as the
+  verdict. It also **falsifies #75 item 5(f)'s two-term model** with the very
+  out-of-sample point that item asked for: predicted 39.22 ms, measured 28.41,
+  residual −28 %. So the "~4.26 ms per megapixel" area term, and its striking
+  agreement with the unattributed ~8 ms, do **not** stand — that agreement was
+  labelled "not evidence" when written and it was right. What survives all three
+  sittings unchanged is **Week: 60.0 fps, 0.00 pp dropped, at both 500 and
+  2,000** — the surface a planner works on — and **cost tracking bars drawn
+  rather than plan size**.
 - Single-currency, single-locale assumptions are **not** baked in — i18n/L10n is
   on the roadmap and code should avoid hard-coding currency/locale.
 

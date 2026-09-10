@@ -431,8 +431,9 @@ documented ≤ 10 (ADR-0053 §3).
 
 ### 75. The draw budget, measured on real hardware — and the budget itself was misquoted
 
-**Status:** open · **Verified:** 2026-09-10 · **Blocked on the product owner** (the outstanding
-readings are presses only they can make; do not fabricate them)
+**Status:** open · **Verified:** 2026-09-10 · **No longer blocked on the product owner** — the
+outstanding presses were taken 2026-09-10 (item 6). What remains is a decision (#261's canvas size)
+and an attribution (the ~8 ms, which needs a DevTools recording), neither of which is a press.
 
 > **Correction, 2026-08-03 — read this before the rest of the row.** This entry was opened as "is
 > ≤ 4 ms p95 the right draw budget?", and ADR-0065, the runbook and every discussion since have
@@ -749,6 +750,75 @@ would not exercise the code being budgeted.
    goes inside a frame; the ~8 ms between "JS finished" and "frame presented" needs a DevTools
    Performance recording, exactly as step 3 says, and must still not be guessed.
 
+6. **Third real-hardware reading set, 2026-09-10 — and it falsifies item 5(f)'s model with the very
+   point 5(f) asked for.** Same machine (`ANGLE (Intel, Intel(R) Arc(TM) Pro Graphics (0x00007D55)
+Direct3D11)`, 22 threads), Edge 152, 60 Hz idle interval 16.70 ms, DPR 1, attention held — at a
+   **1912×948** viewport, `web-v0.125.3`. `scale-scene`, full run, 180 frames × 3.
+
+   **The painter and the scene are unchanged between the two sittings**, which is what makes them
+   comparable at all: `apps/web/src/features/tsld/render/paint.ts` last changed in `d4270f22`
+   (2026-09-06) and `apps/web/src/features/perf-probe/scenes/` in `39de20bc` (2026-09-07), both
+   **before** the 2026-09-08 set. The only change under `features/tsld/render/` since is
+   `a11y.ts`/`a11y.test.ts` in `5d84bd05`, the parallel DOM layer, which is not on the paint path.
+
+   | framing | plan  | bars drawn | mean fps | dropped  | interval p95 | §9 floor | against it |
+   | ------- | ----- | ---------- | -------- | -------- | ------------ | -------- | ---------- |
+   | Week    | 500   | 243        | 60.0     | 0.00 pp  | 16.80 ms     | 45 fps   | **PASS**   |
+   | Week    | 2,000 | 267        | 60.0     | 0.00 pp  | 16.80 ms     | 30 fps   | **PASS**   |
+   | Fit     | 500   | 540        | 60.0     | 0.00 pp  | 16.80 ms     | 45 fps   | clears it  |
+   | Fit     | 2,000 | 1,658      | 35.2     | 70.37 pp | 33.40 ms     | 30 fps   | clears it  |
+
+   As before the two Fit rows are ungraded by P3, so "clears it" is arithmetic against §9's floor and
+   not a verdict the panel issued.
+
+   **(a) The model is falsified, and the residual is 28 %.** Item 5(f) fitted
+   `frame = a + b·bars + c·area` to three exactly-determining points and said in terms that it
+   "cannot be falsified by the data that produced it", naming the missing experiment: "a fourth
+   Fit/2,000 run at an intermediate window — roughly 1450×850 — would give the model its first degree
+   of freedom". 1912×948 is that window in area (1.813 Mpx, between 2.042 and 0.646). Refitting the
+   published coefficients reproduces them exactly (intercept −2.18 ms, 20.3 µs/bar, 4.26 ms/Mpx),
+   so the model below is 5(f)'s and not a paraphrase of it:
+
+   | Fit/2,000 @1912×948 | frame time   | fps      |
+   | ------------------- | ------------ | -------- |
+   | model prediction    | 39.22 ms     | 25.5     |
+   | **measured**        | **28.41 ms** | **35.2** |
+   | residual            | −10.81 ms    | −27.6 %  |
+
+   The model over-predicts. Put the other way: an 11.2 % smaller viewport drawing 7.5 % fewer bars
+   should have bought **3.70 ms** and bought **14.51 ms**. **The area term does not survive**, and
+   with it goes 5(f)'s "striking agreement" between its 8.7 ms area term and this row's
+   long-standing unattributed ~8 ms — which 5(f) had already labelled "not evidence". It was right
+   to.
+
+   **(b) The likely reason is that the fitted quantity is not continuous, and the tail says so
+   discretely.** A frame is presented on a refresh boundary, so `1000 / mean fps` is a blend of
+   integer multiples of the 16.70 ms period rather than a smooth function of draw cost. Expressed
+   that way the four Fit points read 1.05, 1.52, 1.70 and 2.57 periods — and the **interval p95
+   stepped from 4 periods (66.70 ms) to 2 (33.40 ms)** across an 11 % area change. A quantity that
+   moves in whole vsyncs cannot be linear in bars and pixels, and near a boundary a small change in
+   draw cost flips a large fraction of frames from N periods to N+1, which is exactly the
+   over-sensitivity observed. **This is a hypothesis with a mechanism and a discrete observation
+   supporting it, not an attribution** — the same standing this row gives the ~8 ms, and it must not
+   be promoted without the DevTools recording step 3 has always asked for.
+
+   **(c) §9's Fit/2,000 verdict has now flipped twice, and this time on an 11 % parameter.** 5(c)
+   recorded the gate as "missed at Fit at 2,000" from 23.3 fps. Today the same plan, same painter,
+   same machine, same scene measures **35.2 fps — above the same 30 fps floor**. Two days apart, the
+   only recorded difference a viewport 120 px shorter. #261 argued that an unstated canvas size
+   decides the verdict from a 2:1 comparison (1912×1068 against 1016×636); it is now shown by a
+   **1912×1068 against 1912×948**, which is close to the difference between one operator's window
+   and another's. **On the readings in hand §9's gate is met at Week at both scales and at Fit at
+   500, and at Fit at 2,000 it is unanswerable until #261 names the size.** That is a stronger
+   statement than 5(c)'s and it supersedes it.
+
+   **(d) What did NOT move is the finding.** Week is identical across all three sittings — 60.0 fps,
+   0.00 pp dropped, 16.80 ms p95, at both 500 and 2,000 — which is the surface a planner works on.
+   Item 5(b)'s conclusion also survives intact and is strengthened by a third point: Week/500 draws
+   243 bars and Week/2,000 draws 267, four times the plan for 24 more bars and no measurable
+   difference. **The cost is in the bars drawn, not in the plan**, and the remedy space is still
+   drawing cost at low px/day rather than anything about plan size.
+
 Raised by ADR-0065 T21; the product owner accepted the routing cost and asked for the benchmark
 itself to be examined. Related: #59 (the unmeasured envelope, which this supersedes in part).
 
@@ -772,6 +842,12 @@ itself to be examined. Related: #59 (the unmeasured envelope, which this superse
 > framings (item 5(a)). The residue is now the **unattributed ~8 ms**, **#261's unstated canvas
 > size**, and the **1036×646 / ~1036×600 disagreement** between ADR-0026 §9b and this row — which is
 > an input to item 5(f)'s model fit, so it is arithmetic and not bookkeeping.
+>
+> **Amended 2026-09-10 (item 6).** The third clause is now worth less than it was: 5(f)'s model is
+> falsified out of sample, so an input to a fit that no longer stands is bookkeeping after all. The
+> first two clauses are unchanged and the second has grown — #261's unstated size now flips the
+> Fit/2,000 verdict across an **11 %** viewport change, not a 2:1 one, so it is the largest open
+> item on this row rather than a footnote to it.
 
 > **Status re-derived 2026-09-10, and what changed is a document rather than a number.** No new
 > reading was taken and none is claimed. What was checked is the row's relationship to the ADR it
@@ -5041,6 +5117,25 @@ should be faced deliberately rather than arrived at by whoever next resizes a wi
 Fit-zoom work, alongside #75's unattributed time. Recording it is the point: the parameter has been
 absent since 2026 and was invisible until two runs disagreed.
 
+**Strengthened 2026-09-10 by a third reading, and the margin is much smaller than this row assumed.**
+#75 item 6 measures the same plan, same painter, same scene, same machine at **1912×948**:
+**35.2 fps, above the same 30 fps floor** that 1912×1068 missed at 23.3 fps. So the verdict does not
+merely turn on a 2:1 viewport difference — it turns on **120 px of window height, an 11 % area
+change**, which is well inside the range two operators would differ by without either of them
+resizing anything deliberately. A reader could dismiss the original exhibit as an extreme
+comparison; this one cannot be dismissed that way.
+
+It also removes the reason to wait. This row said the decision "belongs to whoever picks up the
+Fit-zoom work" — but with the verdict flipping across an ordinary window difference, **there is no
+stable answer to "does the painter pass §9 at 2,000?" for anyone to pick that work up against**, and
+#75 item 6(c) now records the honest state as _unanswerable until the size is named_ rather than
+missed. Naming it is a prerequisite for the Fit work, not a companion to it.
+
+The consequence the original text asked to be faced deliberately is unchanged in kind and softer in
+degree: at a full-screen window on the §16 envelope the floor was missed at 23.3 fps and is now
+cleared at 35.2 fps at a slightly shorter one, so the candidate size decides whether §9 currently
+passes. That is precisely why it must be a decision and not a reading.
+
 ### 262. A dependency bump changed documented library behaviour, and only a citation gate noticed
 
 **Status:** open · **Raised:** 2026-09-08 (the cited-package bump) · **Size:** S · **Owner:** repo
@@ -5742,3 +5837,63 @@ this wants a spec rather than an edit):
 
 Option 1 is the one worth costing. Option 3 is already the written rule and has the shape #194
 records: an instruction that is correct, is not followed, and has no mechanism behind it.
+
+### 282. P3's reason for never grading Fit rests on a figure no reading since has come near
+
+**Status:** open · **Raised:** 2026-09-10 (the third real-hardware reading set, #75 item 6) ·
+**Size:** S · **Owner:** repo
+
+`docs/specs/revision-compare-changes/m0-condition.md:87-90` states P3 — the rule that the whole-plan
+framing is measured, reported and **never graded** — and gives its reason in one clause: _"The
+baseline at Fit already drops **10.2 %** of frames — a pre-existing overage #75 records and nobody
+has attributed."_
+
+**No Fit baseline this repository has recorded since is anywhere near 10.2 pp.** That figure is
+#75's 2026-08-03 reading at a ~1036×600 canvas. Every Fit baseline measured after it:
+
+| when       | canvas    | scenario      | baseline dropped |
+| ---------- | --------- | ------------- | ---------------- |
+| 2026-08-03 | ~1036×600 | imported XER  | 10.2 pp          |
+| 2026-09-08 | 1912×1068 | `scale-scene` | 97.22 pp         |
+| 2026-09-08 | 1016×636  | `scale-scene` | 47.78 pp         |
+| 2026-09-10 | 1912×948  | `scale-scene` | 69.63 / 70.37 pp |
+
+**P3's conclusion is not weakened by this — it is strengthened**, which is why this is a wrong number
+rather than a wrong rule. Its argument is ADR-0058's "a gate that fails on day one gets deleted
+rather than fixed", and a baseline at 69.63 pp fails harder than one at 10.2. The defect is that a
+reader who checks the premise — which is what this register keeps asking people to do — finds a
+figure matching nothing, and has no way to tell a stale citation from a typo.
+
+**The 2026-09-10 sitting also gives P3 its first internal consistency check, and it passes.** The
+`revision-diff` Fit baseline (69.63 pp) and the `canvas-draw` Fit figure (70.37 pp) are the same
+painter on the same scene at the same canvas, taken from two different scenarios minutes apart, and
+they agree to **0.74 pp** — well inside that sitting's own 3.89 pp run-to-run spread. Two scenarios
+that share nothing but the painter landing that close is the strongest evidence the panel has
+produced that its Fit numbers mean something.
+
+**And there is now a measured answer being withheld.** ADR-0127 D8 turned the revision overlay
+default-on with its Fit cost recorded as _unknown_; D8b says so in as many words. It is no longer
+unknown: at 1912×948 the overlay costs **+5.56 pp** (69.63 → 75.19, 34.1 fps), which is above
+ADR-0127's own 2.00 pp bar and **1.43× that sitting's 3.89 pp spread** — suggestive, not conclusive,
+and ungraded, so no verdict was issued. Crucially this is _not_ #260's dead arithmetic: a 69.63 pp
+baseline leaves **30.37 pp of headroom**, so unlike the 98.33 pp exhibit that closed #260 the
+difference here had room to be expressed and was.
+
+**What would close it** is two edits and one decision, and only the third is work:
+
+1. **Correct P3's premise** to name a measured baseline and the canvas it was taken at, or to state
+   a range — the honest form, since #261 is unresolved and the figure varies from 47.78 to 97.22 pp
+   across canvas sizes alone.
+2. **Record the overlay's Fit cost in ADR-0127 D8**, replacing "unknown" with the number and its
+   standing. Leaving "unknown" in place once it has been measured is the drift class this register
+   exists for.
+3. **Decide whether P3 still holds** now that headroom at Fit is demonstrably ~30 pp rather than
+   ~0 pp. P3 was written against a baseline that would make a difference gate meaningless; that is
+   #260's condition, and the panel now computes `saturated` explicitly and returns INDETERMINATE for
+   it. If saturation is detected rather than assumed, "never grade Fit" may be doing work
+   `judgeRun` already does better. **Not decided here** — it changes an accepted condition, and it
+   is downstream of #261 naming a canvas size.
+
+Related: #75 (the readings), #261 (the unstated canvas size, which makes every figure above
+incomparable to the others), #260 (closed — the saturation detection that may supersede P3's
+mechanism).
