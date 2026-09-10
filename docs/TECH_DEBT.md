@@ -1538,7 +1538,7 @@ non-blocking by its reviewer and is recorded rather than rushed, per the ADR-006
 
 ### 246. The register's diagnoses survive and its citations rot
 
-**Status:** open · **Raised:** 2026-09-03 (the 32-row verification sweep) · **Size:** M ·
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-03 (the 32-row verification sweep) · **Size:** M ·
 **Owner:** repo
 
 The 2026-09-03 sweep verified all 32 substantive `unverified` rows against the code. The
@@ -1602,7 +1602,12 @@ rows this sweep checked and found accurate carry no machine-readable trace of ha
 
 ### 248. The DCMA what-if drops the levelling pass, and nothing says so
 
-**Status:** open · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-03 (the revision-compare review) · **Size:** S · **Owner:** repo
+
+**Re-verified 2026-09-10 — the defect is unchanged and its CITATION has drifted**, which is this
+row's neighbour #246 happening to #248: the destructure is now at **`schedule.service.ts:952`**, not
+`:822`, and still reads `{ activities, edges, options, meta }`. A reader following the old line
+lands in `buildEngineGraph`'s cross-plan guard and finds nothing.
 
 `schedule.service.ts:822` destructures `{ activities, edges, options, meta }` from
 `buildEngineGraph` — and the builder's return type also carries
@@ -1701,11 +1706,17 @@ a field the register writes and its own gate cannot read.
 
 ### 245. The assertions inside `check-debt-status.mjs` have no re-runnable coverage
 
-**Status:** open · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-02 (the ADR-0124 test-engineer gate pass) · **Size:** M ·
 **Owner:** repo
 
 `scripts/lib/doc-register.test.mjs` opens by calling itself _"the ONLY safety net both gates have"_,
 and it covers the shared **module** — `sections`, `fieldValue`, `stripFences`, `tableRows`, `report`.
+**Re-verified 2026-09-10, and the gap has become an ASYMMETRY rather than an absence.** `scripts/`
+now holds `check-reconcile-due.test.mjs` and `check-spec-status.test.mjs` — both written after this
+row — while `check-debt-status.mjs`, the gate with the most assertions and the one this row names,
+still has none. So the pattern of a gate owning its own test file is established and this file is
+the exception, which is a stronger argument for closing it than the row could make when filed.
+
 It does not cover the assertions that live in `check-debt-status.mjs` itself: A9's field limb, both
 A10 limbs, the `CANONICAL` regex and the ledger/compact classification.
 
@@ -1834,7 +1845,15 @@ is.
 
 ### 234. Fifteen page and panel loading states are spinners where the shape is known
 
-**Status:** open · **Found:** 2026-09-01 (empty-state consolidation §1.8) · **Size:** M · **Owner:** a loading-state pass
+**Status:** open · **Verified:** 2026-09-10 · **Found:** 2026-09-01 (empty-state consolidation §1.8) · **Size:** M · **Owner:** a loading-state pass
+
+**Re-verified 2026-09-10, and the row's own count is NOT reproducible from it**: it says "fifteen"
+and enumerates none, while `animate-spin` appears **55** times across non-test `.tsx`. Those are not
+the same quantity — the row means fifteen _first-load_ states where the shape is known, and an
+inline busy indicator on an action is the correct answer under the very standard it cites. So the
+number cannot be checked without the list, and the list was never written down. **That is the
+finding**: a row sized `M` on a count nobody can reproduce is one whoever picks it up must re-survey
+before they can scope it, which is most of the work.
 
 `docs/UX_STANDARDS.md:60` asks for a _"Skeleton matching final layout (first load) / inline busy
 (actions)"_ — two answers, with the discriminator being whether the content has a **known shape**,
@@ -2150,7 +2169,13 @@ version, and a version bump fails CI) is unaffected.
 > back to `/` rather than being repaired. Six cases in `router-search.test.ts` compose the **real**
 > parser with the **real** validator, four of them verified red first. The remaining sub-items stand.
 
-**Status:** open · **Owner:** web · **Raised:** 2026-08-06 (ADR-0077 M6-T2)
+**Status:** open · **Verified:** 2026-09-10 · **Owner:** web · **Raised:** 2026-08-06 (ADR-0077 M6-T2)
+
+**Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
+a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
+follow-up landing its items — not item by item. Any single entry below may have been fixed
+incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
+person picking it up checks that one, which is cheap because every entry names its file.
 
 Six non-blocking findings from the five specialist gates over the ADR-0077 diff, recorded rather than
 rushed. Each is real; none blocks the epic.
@@ -2202,7 +2227,13 @@ swapped, which is why it is written down rather than remembered.
 
 ### 105. Two follow-ups from the canvas status & feedback gate pass
 
-**Status:** open · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
+**Status:** open · **Verified:** 2026-09-10 · **Owner:** web · **Raised:** 2026-08-07 (canvas status & feedback, M6)
+
+**Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
+a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
+follow-up landing its items — not item by item. Any single entry below may have been fixed
+incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
+person picking it up checks that one, which is cheap because every entry names its file.
 
 Non-blocking findings from the three specialist gates over the epic diff. Both are real; neither
 blocked the epic.
@@ -2275,7 +2306,13 @@ on the canvas, and undoable by the ADR-0048 command the composite already regist
 
 ### 116. Consolidation-pass findings that were not folded
 
-**Status:** open · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
+**Status:** open · **Verified:** 2026-09-10 · **Owner:** web · **Raised:** 2026-08-08 (the A–D consolidation pass)
+
+**Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
+a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
+follow-up landing its items — not item by item. Any single entry below may have been fixed
+incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
+person picking it up checks that one, which is cheap because every entry names its file.
 
 Five specialists reviewed the combined #108/#113/#111 diff. Ten findings were folded with regression
 tests; these are the ones deliberately left, each with the reason, so they are not rediscovered as
@@ -3506,7 +3543,13 @@ not change — so something other than this guard reverts the pop. Recorded rath
 
 ### 208. A journey that seeds through the API must tell the client itself
 
-**Status:** open (audited 2026-08-31 — see below; kept as the standing rule, not as owed work)
+**Status:** open · **Verified:** 2026-09-10 · (audited 2026-08-31 — see below; kept as the standing
+rule, not as owed work)
+
+**Re-verified 2026-09-10 as a rule rather than a defect**, which is what this row is: it records a
+standing constraint on how journeys seed, not a site to fix, so there is nothing to grep for. It is
+dated so the next sweep can tell it was considered rather than skipped — the distinction the
+`unverified` status exists to make.
 
 _Renumbered from #183 on the 2026-08-28 reconciliation pass (the #207 note explains why)._
 
@@ -4381,7 +4424,13 @@ browser tab.
 ### 218. Two review suggestions from the typeface gate pass, not folded
 
 **Raised:** 2026-08-29 (`docs/specs/typeface-outward-artefacts/`, gate pass) · **Size:** S ·
-**Status:** open
+**Status:** open · **Verified:** 2026-09-10
+
+**Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
+a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
+follow-up landing its items — not item by item. Any single entry below may have been fixed
+incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
+person picking it up checks that one, which is cheap because every entry names its file.
 
 Neither is blocking and neither was folded; both are recorded so they are decisions rather than
 things that were dropped.
@@ -4443,7 +4492,13 @@ question, and the trigger is what to look at.
 
 ### 228. Stacked-histogram gate-pass suggestions, consciously not folded
 
-**Status:** open · **Raised:** 2026-08-31 (ADR-0121 D8) · **Size:** S
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-08-31 (ADR-0121 D8) · **Size:** S
+
+**Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
+a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
+follow-up landing its items — not item by item. Any single entry below may have been fixed
+incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
+person picking it up checks that one, which is cheap because every entry names its file.
 
 Six specialists reviewed the stacked-resource-histogram diff. Every blocking finding was folded with
 a regression test verified red first (ADR-0121 D8). These are the non-blocking ones, each left with
@@ -4485,7 +4540,9 @@ touched; the last two want a decision rather than an edit.
 
 ### 223. The canvas resource strip does not export or print, and the gate for that cannot see it
 
-**Status:** open · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram UX review)
+**Status:** open · **Verified:** 2026-09-10 · **Owner:** web · **Raised:** 2026-08-31 (stacked-histogram UX review)
+
+**Re-verified 2026-09-10**: `use-diagram-image.ts` still contains **zero** occurrences of `stripRef`.
 
 The Stage-E resource strip (ADR-0049, `VITE_CANVAS_RESOURCE_VIEW`) is painted from `TsldCanvas`'s
 own `stripRef`, which is a **separate ref from `sceneRef`**. `use-diagram-image.ts` has **zero**
@@ -4513,7 +4570,7 @@ again the next time a layer gets its own ref.
 
 ### 229. Two latent primitive keyboard residuals, carried out of #196
 
-**Status:** open · **Raised:** 2026-08-31 (register verification sweep) · **Size:** XS each
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-08-31 (register verification sweep) · **Size:** XS each
 
 #196 closed on its headline — the `preventDefault` + `stopPropagation` ordering, and the third and
 fourth clamp copies moving to `overlay-position.ts`. These two survived it, and are recorded rather
@@ -4551,7 +4608,7 @@ slice rather than alone.
 
 ### 269. A failed store says it failed and never why, and offers a Retry that some failures cannot use
 
-**Status:** open · **Raised:** 2026-09-09 (probe-sweep M5) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M5) · **Size:** S · **Owner:** web
 
 The performance panel renders one sentence for a reading that was measured and not stored — "These
 figures were measured but NOT recorded." — beside a **Retry recording** button. That copy is right
@@ -4574,7 +4631,7 @@ implementation detail: a 429 is a 4xx and _is_ worth retrying, after a wait.
 
 ### 270. The frame count a run actually achieved is measured, carried, and then discarded
 
-**Status:** open · **Raised:** 2026-09-09 (probe-sweep M5) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M5) · **Size:** S · **Owner:** api
 
 `scenes/revision-diff.ts`'s `PacingResult` carries `frames` — the number of intervals the window
 really produced — and `toProbeBody` now drops it at the boundary, because the API declares four
@@ -4594,7 +4651,7 @@ nothing saying which.
 
 ### 268. An e2e suite's coverage was bounded by a throttle counter it shared between tests
 
-**Status:** open · **Raised:** 2026-09-09 (probe-sweep M4) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M4) · **Size:** S · **Owner:** repo
 
 `apps/api/test/staff.e2e-spec.ts` reached the ceiling of `StaffController`'s
 `@Throttle({ default: { limit: 30, ttl: 60_000 } })` and nobody knew, because the symptom does not
@@ -4608,6 +4665,11 @@ weakened bound. The product limit is untouched, every test still runs its own re
 real 30 per minute, and nothing in `apps/api/test` asserts a 429, so no assertion was disarmed.
 `docs/TESTING.md` already forbids exactly this ("deterministic and isolated — no shared mutable
 state"); the counter was shared mutable state that nothing recognised as such.
+
+**Re-verified 2026-09-10 by counting rather than reading**: `staff.e2e-spec.ts` is still the ONLY
+suite in `apps/api/test/` that touches `ThrottlerStorage`, and both suites this row names by
+implication — `share.e2e-spec.ts` and `share-guest.e2e-spec.ts` — still have zero references. The
+trap is set exactly where the row says, and one file is still inoculated against it.
 
 **Why it is still a row.** The fix is one file's `beforeEach`, and the same trap is set in every
 other e2e suite that hits a throttled route — `share`, and any later one. Nothing detects the
@@ -4899,7 +4961,12 @@ the next epic that touches three or more of them.
 
 ### 256. Every e2e reset hand-orders the whole schema, and five had it wrong
 
-**Status:** open · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-07 (closing #253) · **Size:** M · **Owner:** repo
+
+**Re-verified 2026-09-10 by counting**: **41** e2e specs still call `deleteMany` directly, while
+**17** files use the `clearBaselineTree` helper #253 created — so the shared helper covers its one
+parent and the hand-written topological sort of everything else survives in the rest, exactly as
+this row describes.
 
 #253 removed the duplication for **one** parent (`baseline`) by asking `Prisma.dmmf` for its
 children. The rest of each reset is still a hand-written topological sort of the whole schema, one
@@ -4972,7 +5039,9 @@ write nobody reviewed on its own terms.
 
 ### 254. The revision-compare benchmark never exercises the projections it is quoted for
 
-**Status:** open · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+
+**Re-verified 2026-09-10**: `grep -c 'include=' apps/api/scripts/measure-revision-compare.mts` returns **0**.
 
 `apps/api/scripts/measure-revision-compare.mts` requests `revision-compare?from=…&to=live` with
 **no `?include=`**, so the 250 ms p95 bar quoted in `docs/API.md` covers only the four-query
@@ -4994,7 +5063,13 @@ falsification condition committed before it runs, like every other measurement i
 
 ### 255. Six non-blocking findings from the revision-compare gate pass
 
-**Status:** open · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-06 (revision-compare M8) · **Size:** S · **Owner:** repo
+
+**Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
+a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
+follow-up landing its items — not item by item. Any single entry below may have been fixed
+incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
+person picking it up checks that one, which is cheap because every entry names its file.
 
 Each was judged real and not worth holding the release for.
 
@@ -5058,7 +5133,13 @@ when hurried. The trigger is the third scenario, or the first bug found in eithe
 
 ### 259. Twelve non-blocking findings from the staff performance-probe gate pass
 
-**Status:** open · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-07 (staff-performance-probe M5) · **Size:** S · **Owner:** repo
+
+**Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
+a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
+follow-up landing its items — not item by item. Any single entry below may have been fixed
+incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
+person picking it up checks that one, which is cheap because every entry names its file.
 
 Six specialists over the combined diff. Security and backend-performance passed with nothing
 blocking, both having re-derived the epic's own measurements from the shipped code rather than
@@ -5222,7 +5303,7 @@ passes. That is precisely why it must be a decision and not a reading.
 
 ### 262. A dependency bump changed documented library behaviour, and only a citation gate noticed
 
-**Status:** open · **Raised:** 2026-09-08 (the cited-package bump) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-08 (the cited-package bump) · **Size:** S · **Owner:** repo
 
 `@tanstack/history` 1.162.2 changed `win.history.go(1)` to **`win.history.go(-delta)`** when rolling
 back a blocked Back. The old code always stepped forward one, which is wrong for a multi-step Back;
@@ -5257,7 +5338,13 @@ caught `go(1)` → `go(-delta)`, because the symbol is the same.
 
 ### 263. Twelve non-blocking findings from the cross-plan revision-comparison gate pass
 
-**Status:** open · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-08 (ADR-0129 M4) · **Size:** M · **Owner:** repo
+
+**Depth of the 2026-09-10 re-verification, stated because the date alone would overclaim:** this is
+a list of deferred findings, and it was checked as a LIST — that the epic which filed it has had no
+follow-up landing its items — not item by item. Any single entry below may have been fixed
+incidentally by neighbouring work without anyone striking it. Treat each as unverified until the
+person picking it up checks that one, which is cheap because every entry names its file.
 
 Six specialists ran over the epic's combined diff. Seven findings blocked and were folded with
 red-first regression tests (see the M4 commit). These twelve did not, each with the reason it was
@@ -5337,7 +5424,7 @@ docblock names. Harness only, never shipped, and it inflates the very figure (a)
 
 ### 264. A contended sweep produced four false failures, and then a contended re-run confirmed three of them
 
-**Status:** open · **Raised:** 2026-09-09 (ADR-0129 M4) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (ADR-0129 M4) · **Size:** S · **Owner:** repo
 
 The ADR-0129 gate pass ran `scripts/e2e-sweep.sh` and got four failures: `account`, `audit`,
 `designed-chrome`, `narrow-shell`. Every one was an artefact of contention, and the way that was
@@ -5467,7 +5554,7 @@ moment anybody re-armed a gate on it.
 
 ### 271. The probe history is one capped page and says so only in words, because the read returns no total
 
-**Status:** open · **Raised:** 2026-09-09 (probe-sweep M6) · **Size:** S · **Owner:** api
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M6) · **Size:** S · **Owner:** api
 
 `staff-probe.service.ts:136-141` reads the newest 50 rows — `take: DEFAULT_LIMIT`, `DEFAULT_LIMIT`
 being 50 at `:14` — with **no total, no cursor and no more-pages flag**. So a client cannot tell
@@ -5519,7 +5606,7 @@ does — the kind of second statement of one fact this register keeps recording.
 
 ### 272. A step can be stored having measured half of itself, and nothing in the vocabulary can say so
 
-**Status:** open · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** M · **Owner:** web
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (probe-sweep M7) · **Size:** M · **Owner:** web
 
 `canvas-draw` measures two scales in one step. `runAbsoluteLimbs` can complete the first and be
 stopped inside the second, and ADR-0130 D2 says the completed limb is kept — correctly, that is the
@@ -5571,10 +5658,11 @@ whether a page was cut rather than to infer it from position, which is what #271
 
 ### 275. A floor above the display's own refresh rate is unreachable, and the probe reports it as FAIL
 
-**Status:** open · **Raised:** 2026-09-09 (product owner, iPhone run on `web-v0.125.1`) · **Size:** S · **Owner:** web
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (product owner, iPhone run on `web-v0.125.1`) · **Size:** S · **Owner:** web
 
 The probe measures the display's idle frame interval, stores it on every row and prints it in the
-block — and **the judge never reads it**. `grep -c idleInterval model/judge.ts` returns **0**. So a
+block — and **the judge never reads it**. `grep -c idleInterval model/judge.ts` returns **0**.
+**Re-run 2026-09-10: still 0.** So a
 machine whose display cannot produce as many frames as the floor demands is failed for the display's
 cadence rather than for the painter's cost.
 
@@ -5623,9 +5711,10 @@ honestly where it cannot measure, and then fails a machine for a floor it was ne
 
 ### 276. A failing gate's log is tailed to 12 lines, and three test files now share one gate
 
-**Status:** open · **Raised:** 2026-09-09 (devops review, ADR-0131 M3-T1) · **Size:** S · **Owner:** repo
+**Status:** open · **Verified:** 2026-09-10 · **Raised:** 2026-09-09 (devops review, ADR-0131 M3-T1) · **Size:** S · **Owner:** repo
 
 `scripts/prepush.sh:108,112` truncates a failing gate's captured output to `tail -12`.
+**Re-verified 2026-09-10 at both lines, unchanged.**
 `check:doc-register` now chains **three** independent test files with `&&` —
 `doc-register.test.mjs`, `check-reconcile-due.test.mjs` and `check-spec-status.test.mjs`. Each keeps
 running past a failing case (`process.exitCode = 1` rather than throwing) and prints its own named

@@ -103,68 +103,38 @@ a product idea that has not yet earned a roadmap line:
   so nothing can set it yet), and a **coarse-pointer** pass —
   `docs/TECH_DEBT.md` #133. `PROJECT_BRIEF.md` §8's "edit supported" is
   **substantially** met and deliberately not claimed closed.
-- `M` **Revision Compare — comparing two IMPORTED revisions, which is the half that is left.**
-  **All three tiers now ship, and this entry went stale within hours of the last two — for the
-  second time in two days.** The version before this one said the change list and the change
-  picture were unbuilt and named their blocker as `grep -c 'model BaselineDependency'` returning
-  **0**, "re-verified 2026-09-06". It returns **1**: that grep is what ADR-0126 M5 shipped, the
-  same day, and the entry was re-verified hours before the thing it verified stopped being true.
-  That is this file's own recurring failure — the entry above records four instances of it — so
-  the shipped halves are removed per the convention at the top and only what is genuinely owed is
-  kept.
-  **Shipped:** tier 3's `how much` (ADR-0125), the change list (ADR-0126) and the change picture
-  (ADR-0127, `View ▾ ▸ Compare on diagram`, **off by default**), released `api-v0.59.0` /
-  `web-v0.122.0`.
-  **REFUSED, not deferred — do not re-open it as a scoping decision.** Tier 3's `which change` half
-  attributes the slip to individual edits, and the ADR-0100-pattern gate this entry itself demanded
-  was applied and **failed**: replayed in six orders on the seed catalogue's fixture the same change
-  scored 30, 18, 2 or 0 working days by position alone (12.9 pp spread against a 10 pp bar, unstable
-  top three), while the sum was order-free and stable at 139 d in every permutation. Re-open it only
-  with a design that supplies the ordering the measurement showed is missing.
-  **What is left is the interchange comparison — Rev B against Rev C, both exported from P6.** That
-  is the version somebody pays for, and it is the one thing the three shipped tiers cannot do.
-  **Its blocker is NOT the one the previous text named, and is worth stating precisely because the
-  stale version would send somebody to the schema:** `GET …/schedule/revision-compare` is
-  **plan-nested**, and `RevisionCompareQueryDto` types both `from` and `to` as a baseline **of that
-  plan** (`to` additionally accepting the literal `live`). Two files imported separately land as
-  **two plans** (ADR-0050: "import target is always a new plan"), and nothing in the model lets a
-  comparison span them. So this needs a cross-plan comparison — which is a real design question
-  about identity, since matching an activity across two independent imports cannot use the id and
-  has to use the source code. **That field is `Activity.code`, not `activity_code`** — corrected
-  2026-09-08 by reading the schema, the name this entry used existing nowhere in it, which is the
-  stale-entry failure recorded twice above happening to the entry's own remedy rather than to its
-  problem. Three facts about it shape the design and none was recorded here: `packages/interchange/src/xer-adapter.ts:541`
-  **does** map P6's `task_code` onto it and already reports a finding when absent
-  (`:548`, falling back to the source task id — which makes that code **file-local**, so two exports
-  of one programme need not agree); the column is **nullable**; and **it is UNIQUE per plan**, by
-  `uq_activities_plan_code` — a partial index (`WHERE deleted_at IS NULL AND code IS NOT NULL`)
-  declared in raw SQL at `20260710092048_add_activities/migration.sql:81`.
-  **This paragraph asserted the opposite for one commit, on 2026-09-08, and the method is the
-  transferable part:** the claim was "verified" by grepping `@@unique`/`@unique`, which in this
-  repository structurally cannot see the answer — Prisma cannot express a partial unique, so every
-  one of them lives in `prisma/migrations/` and `schema.prisma` merely comments about them (it does,
-  twice, at `:1325` and `:2563`, and the grep missed those too). A constraint claim here is verified
-  against the migrations, never the schema alone. Caught by the spec agent re-deriving it rather
-  than trusting the brief — which is the rule working, one turn after the same rule caught this
-  entry.
-  So "duplicated within one side" is **not a case to repair; it is a case the database refuses**,
-  and the reject/repair/report contract (ADR-0035) narrows to two cases: a code that is absent, and
-  a code present on one side only — the second being indistinguishable from a re-code, which is the
-  genuinely hard one. Verified 2026-09-06 by reading the controller and
-  the DTO, not the schema.
-  **The measurement this entry said was owed has been TAKEN, and the entry is corrected rather than
-  stepped over — for the third time in three days, in the same file.** It read: the compare overlay
-  ships default-OFF because its paint cost is unanswered, and needs a headed run on the product
-  owner's hardware. That run happened on 2026-09-08, on the ADR-0128 staff panel built for exactly
-  this: at the **Week** framing on 2,000 activities the baseline is 0.19 pp dropped, the treatment
-  0.00 pp at **60.0 fps**, delta **−0.19 pp** against a 2.00 pp bar — and, decisively, the machine's
-  own run-to-run spread is **0.56 pp**, inside the bar, so the instrument could resolve the question
-  the container was disqualified from answering. **PASS on both limbs**, recorded as ADR-0127 D8a,
-  and the product owner then turned the overlay **default-on** (D8b). This is no longer a blocker.
-  **What is still unknown is the Fit framing**, and that is a different claim from the one this
-  paragraph used to make: P3 leaves that framing ungraded by policy, and `docs/TECH_DEBT.md` #260
-  records that at a baseline of 98.33 pp the difference metric has less headroom than the bar, so a
-  delta there is arithmetically incapable of failing. Do not read a Fit number as reassurance.
+- ~~`M` **Revision Compare — comparing two IMPORTED revisions.**~~ **SHIPPED, and this entry was
+  stale for the FIFTH time — 2026-09-10.** Every tier now exists, including the one this row spent
+  most of its length arguing was the half that was left.
+
+  **What the entry said was owed, and what is true.** It read _"What is left is the interchange
+  comparison — Rev B against Rev C, both exported from P6. That is the version somebody pays for,
+  and it is the one thing the three shipped tiers cannot do"_, and then correctly named its blocker
+  as identity: the route is plan-nested, two imports land as two plans (ADR-0050), and matching
+  across them cannot use the id. **ADR-0129 built exactly that**, filed at
+  `docs/adr/0129-identity-across-two-imports-is-the-code.md`. Verified 2026-09-10 by finding the
+  parts rather than by reading the ADR: `CrossPlanRevisionCompareController`
+  (`organizations/:orgSlug/cross-plan-revision-compare`, org-scoped because two plan ids leave no
+  honest `:planId`), the web panel, its print document, and `apps/web/e2e-revision-compare`.
+
+  **The entry even researched the design that shipped.** Its last paragraphs settle that the key is
+  `Activity.code`, that the column is nullable, and that `uq_activities_plan_code` makes duplication
+  a case the database refuses rather than one to repair — which is ADR-0129's correlation rule
+  almost verbatim. So this is not an entry that failed to anticipate the work; it is an entry that
+  specified the work, watched it ship, and went on describing it as owed.
+
+  **Why it is rewritten rather than deleted.** Two facts inside it are still load-bearing and live
+  nowhere else. **A re-code is indistinguishable from a removal plus an addition, permanently and by
+  construction** — the row reasoned its way to that before ADR-0129 stated it as a product promise.
+  And its method note stands as the sharpest one in this file: a constraint claim is verified against
+  `prisma/migrations/`, **never** against `schema.prisma`, because Prisma cannot express a partial
+  unique and a grep for `@@unique` structurally cannot see the answer.
+
+  **The pattern is the reason this stays visible.** The entry above records four instances of this
+  file describing shipped work as owed; this is the fifth, and the first where the entry had already
+  been corrected twice _for the same defect_. `docs/BACKLOG.md` decides what gets picked up next, so
+  a stale entry does not merely mislead — it spends somebody's day. Nothing observes it: no gate
+  reads this file, and `check:debt-status` covers `docs/TECH_DEBT.md` alone.
 
 - `M` **Internationalisation / localisation.** The code avoids hard-coded
   currency and date formats (`Intl` throughout, per-plan `currencyCode`), so
